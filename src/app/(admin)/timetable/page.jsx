@@ -1,0 +1,80 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { entities, auth } from '@/lib/entities';
+
+const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const COLORS = [
+  'bg-blue-100 text-blue-800 border-blue-200',
+  'bg-green-100 text-green-800 border-green-200',
+  'bg-purple-100 text-purple-800 border-purple-200',
+  'bg-orange-100 text-orange-800 border-orange-200',
+  'bg-pink-100 text-pink-800 border-pink-200',
+  'bg-teal-100 text-teal-800 border-teal-200',
+];
+
+export default function Timetable() {
+  const [groups, setGroups] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterTerme, setFilterTerme] = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      entities.Group.list('name', 100),
+      entities.Teacher.list('full_name', 100),
+    ]).then(([g, t]) => { setGroups(g); setTeachers(t); setLoading(false); });
+  }, []);
+
+  const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';
+  const filtered = groups.filter(g => !filterTerme || g.terme === filterTerme);
+
+  const groupsByDay = DAYS.reduce((acc, day) => {
+    acc[day] = filtered.filter(g => g.jours?.toLowerCase().includes(day.toLowerCase().slice(0, 3)));
+    return acc;
+  }, {});
+
+  const hasAny = Object.values(groupsByDay).some(arr => arr.length > 0);
+
+  return (
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Emploi du temps</h1>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterTerme} onChange={e => setFilterTerme(e.target.value)}>
+          <option value="">Tous les termes</option>
+          {['Sept–Déc','Jan–Mar','Avr–Juin','Été'].map(t => <option key={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-muted-foreground">Chargement...</div>
+      ) : !hasAny ? (
+        <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
+          Aucun groupe avec horaires définis. Ajoutez des groupes avec jours et horaires depuis la page Groupes.
+        </div>
+      ) : (
+        <div className="grid grid-cols-7 gap-3">
+          {DAYS.map((day) => (
+            <div key={day}>
+              <div className="text-center text-xs font-bold uppercase tracking-wide text-muted-foreground pb-2 mb-2 border-b border-border">{day}</div>
+              <div className="space-y-2">
+                {groupsByDay[day].length === 0 ? (
+                  <div className="h-8 rounded border border-dashed border-border" />
+                ) : (
+                  groupsByDay[day].map((g, i) => (
+                    <div key={g.id} className={`p-2 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
+                      <p className="font-semibold">{g.name}</p>
+                      <p className="opacity-75">{g.horaire}</p>
+                      <p className="opacity-60">{teacherName(g.teacher_id)}</p>
+                      {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
