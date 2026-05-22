@@ -36,5 +36,10 @@ export async function GET(request) {
     return NextResponse.redirect(`${origin}/login?error=callback_failed`);
   }
 
+  // Apply any pending role (e.g. invited teacher/parent) before the middleware
+  // runs on the redirect target. Without this, the middleware reads role='pending'
+  // from the just-created profile and bounces the user to /unauthorized.
+  await supabase.rpc('apply_pending_role');
+
   return NextResponse.redirect(`${origin}${next}`);
 }
