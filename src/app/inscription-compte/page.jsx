@@ -43,15 +43,36 @@ function InscriptionCompteInner() {
     let cancelled = false;
     (async () => {
       const sb = getBrowserClient();
-      const code = searchParams.get('code');
+      const tokenHash = searchParams.get('token_hash');
+      const otpType   = searchParams.get('type');
+      const code      = searchParams.get('code');
 
-      if (code) {
-        // Drop any pre-existing session in this browser (commonly the
-        // inviter's) before exchanging the invite code. Without this, the
-        // shared cookie + cached singleton user object can mask the
-        // invitee's session and leak the inviter's email into the form.
+      // Drop any pre-existing local session before consuming the invite —
+      // commonly the inviter's session in the same browser. Without this,
+      // the singleton client can keep returning the inviter's user object
+      // even after the new session is installed.
+      if (tokenHash || code) {
         await sb.auth.signOut({ scope: 'local' });
+      }
 
+      if (tokenHash) {
+        // Preferred path: the email template links directly to
+        //   /inscription-compte?token_hash=…&type=invite
+        // verifyOtp is a single POST and avoids the cross-domain cookie
+        // chain that breaks the ?code= flow in incognito / Safari.
+        const { error } = await sb.auth.verifyOtp({
+          token_hash: tokenHash,
+          type:       otpType || 'invite',
+        });
+        if (cancelled) return;
+        if (error) {
+          setPhase('expired');
+          return;
+        }
+      } else if (code) {
+        // Fallback: classic /verify → ?code= redirect from the default
+        // Supabase email template. Works when third-party cookies are
+        // allowed; breaks otherwise.
         const { error } = await sb.auth.exchangeCodeForSession(code);
         if (cancelled) return;
         if (error) {
@@ -60,9 +81,9 @@ function InscriptionCompteInner() {
         }
       }
 
-      // After the exchange, the session belongs to the invitee. (If there
-      // was no `code`, the page was likely refreshed mid-flow — fall back
-      // to whatever session is in cookies, e.g. an existing pending user.)
+      // The session now belongs to the invitee. (Refresh-mid-flow lands
+      // here with no token params; we fall back to whatever session is in
+      // cookies, e.g. a still-pending user mid-activation.)
       const { data: { user } } = await sb.auth.getUser();
       if (cancelled) return;
       if (!user) {
