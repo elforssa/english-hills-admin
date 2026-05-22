@@ -78,7 +78,16 @@ export async function POST(request) {
 
   // "User already registered" is fine — we still upsert the pending role so
   // the next sign-in (or apply_pending_role RPC) bumps them to the new role.
-  if (inviteError && !/already (registered|exists)/i.test(inviteError.message)) {
+  // Supabase has used several wordings here ("already registered", "already
+  // been registered", "email already exists") plus an `email_exists` code
+  // and a 422 status — match any of them.
+  const isAlreadyRegistered = !!inviteError && (
+    inviteError.code === 'email_exists' ||
+    inviteError.status === 422 ||
+    /already.*(registered|exists)/i.test(inviteError.message || '') ||
+    /email.*already.*exists/i.test(inviteError.message || '')
+  );
+  if (inviteError && !isAlreadyRegistered) {
     // eslint-disable-next-line no-console
     console.error('[invite] inviteUserByEmail failed:', inviteError);
     return NextResponse.json(
@@ -104,6 +113,6 @@ export async function POST(request) {
     email,
     role,
     userId: inviteData?.user?.id ?? null,
-    alreadyRegistered: !!inviteError,
+    alreadyRegistered: isAlreadyRegistered,
   });
 }
