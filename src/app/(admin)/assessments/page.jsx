@@ -27,7 +27,8 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   };
 
   const handleSubmit = async (ev) => {
-    ev.preventDefault(); setSaving(true);
+    ev.preventDefault();
+    setSaving(true);
     const data = {
       ...form,
       note_oral: parseFloat(form.note_oral) || null,
@@ -35,9 +36,21 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
       note_devoirs: parseFloat(form.note_devoirs) || null,
       note_finale: parseFloat(noteFinale()),
     };
-    if (form.id) { await entities.Assessment.update(form.id, data); toast.success('Note mise à jour'); }
-    else { await entities.Assessment.create(data); toast.success('Note créée'); }
-    onSave();
+    try {
+      if (form.id) {
+        await entities.Assessment.update(form.id, data);
+        toast.success('Note mise à jour');
+      } else {
+        await entities.Assessment.create(data);
+        toast.success('Note créée');
+      }
+      onSave();
+    } catch {
+      // entities.js already toasted the error — keep the modal open so the
+      // user can correct the form and retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

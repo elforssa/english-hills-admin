@@ -26,11 +26,23 @@ function TestModal({ test, groups, students, onSave, onClose }) {
     set('student_name', s?.full_name || '');
   };
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    setSaving(true);
     const data = { ...form, score: form.score !== '' ? parseFloat(form.score) : null };
-    if (form.id) { await entities.PlacementTest.update(form.id, data); toast.success('Test mis à jour'); }
-    else { await entities.PlacementTest.create(data); toast.success('Test créé'); }
-    onSave();
+    try {
+      if (form.id) {
+        await entities.PlacementTest.update(form.id, data);
+        toast.success('Test mis à jour');
+      } else {
+        await entities.PlacementTest.create(data);
+        toast.success('Test créé');
+      }
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

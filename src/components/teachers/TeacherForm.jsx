@@ -33,9 +33,19 @@ export default function TeacherForm() {
     e.preventDefault();
     setSaving(true);
     const data = { ...form, taux_horaire: parseFloat(form.taux_horaire) || null, salaire_mensuel: parseFloat(form.salaire_mensuel) || null };
-    if (isEdit) { await entities.Teacher.update(id, data); toast.success('Enseignant mis à jour'); }
-    else { await entities.Teacher.create(data); toast.success('Enseignant créé'); }
-    router.push('/teachers');
+    try {
+      if (isEdit) {
+        await entities.Teacher.update(id, data);
+        toast.success('Enseignant mis à jour');
+      } else {
+        await entities.Teacher.create(data);
+        toast.success('Enseignant créé');
+      }
+      router.push('/teachers');
+    } catch {
+      // entities.js already toasted — stay on the form for retry.
+      setSaving(false);
+    }
   };
 
   return (

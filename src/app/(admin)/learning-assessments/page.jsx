@@ -42,13 +42,21 @@ function AssessmentModal({ students, onSave, onClose }) {
   const dominant = Object.entries(intelligenceScores).sort((a, b) => b[1] - a[1])[0]?.[0];
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true);
-    await entities.LearningAssessment.create({
-      ...form,
-      intelligences: intelligenceScores,
-      dominant_intelligence: dominant,
-    });
-    toast.success('Évaluation enregistrée'); onSave();
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await entities.LearningAssessment.create({
+        ...form,
+        intelligences: intelligenceScores,
+        dominant_intelligence: dominant,
+      });
+      toast.success('Évaluation enregistrée');
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

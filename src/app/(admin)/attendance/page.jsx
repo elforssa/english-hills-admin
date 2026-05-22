@@ -53,17 +53,22 @@ export default function Attendance() {
   const handleSave = async () => {
     if (!selectedGroup) return;
     setSaving(true);
-    for (const student of groupStudents) {
-      const status = statuses[student.id] || 'Présent';
-      const existing = attendance.find(a => a.student_id === student.id);
-      if (existing) {
-        await entities.Attendance.update(existing.id, { status });
-      } else {
-        await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
+    try {
+      for (const student of groupStudents) {
+        const status = statuses[student.id] || 'Présent';
+        const existing = attendance.find(a => a.student_id === student.id);
+        if (existing) {
+          await entities.Attendance.update(existing.id, { status });
+        } else {
+          await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
+        }
       }
+      toast.success('Présences enregistrées');
+    } catch {
+      // entities.js already toasted the failing row.
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    toast.success('Présences enregistrées');
   };
 
   const groupName = (gid) => groups.find(g => g.id === gid)?.name || gid;

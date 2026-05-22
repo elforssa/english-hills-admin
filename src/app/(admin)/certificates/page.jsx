@@ -28,9 +28,17 @@ function CertificateModal({ students, onSave, onClose }) {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true);
-    await entities.Certificate.create(form);
-    toast.success('Certificat créé'); onSave();
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await entities.Certificate.create(form);
+      toast.success('Certificat créé');
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

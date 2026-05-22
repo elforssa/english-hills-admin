@@ -165,19 +165,25 @@ export const auth = {
 export { NotAuthenticatedError };
 
 // -----------------------------------------------------------------------------
-// users — admin invite helper. Real implementation requires the Supabase
-// service-role key behind an API route (POST /api/admin/invite-user calling
-// supabase.auth.admin.inviteUserByEmail). The stub below logs the request and
-// resolves so callers (currently Settings.jsx) don't crash. Replace the body
-// with a `fetch('/api/admin/invite-user', { ... })` once the route is built.
+// users — admin invite helper. Calls POST /api/admin/invite-user which is
+// gated by role and uses the service-role key server-side to send the
+// invitation email + queue the pending_roles row.
 // -----------------------------------------------------------------------------
 export const users = {
   async inviteUser(email, role) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      '[users.inviteUser] Stub — wire to /api/admin/invite-user when ready.',
-      { email, role }
-    );
-    return { skipped: true, email, role };
+    const res = await fetch('/api/admin/invite-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, role }),
+    });
+    let payload = {};
+    try { payload = await res.json(); } catch { /* non-JSON response */ }
+    if (!res.ok) {
+      const err = new Error(payload.error || `Invite failed (${res.status})`);
+      err.status = res.status;
+      err.details = payload.details;
+      throw err;
+    }
+    return payload;
   },
 };

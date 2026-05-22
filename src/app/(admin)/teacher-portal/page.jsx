@@ -25,11 +25,23 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   };
 
   const handleSubmit = async (ev) => {
-    ev.preventDefault(); setSaving(true);
+    ev.preventDefault();
+    setSaving(true);
     const data = { ...form, note_oral: parseFloat(form.note_oral)||null, note_ecrit: parseFloat(form.note_ecrit)||null, note_devoirs: parseFloat(form.note_devoirs)||null, note_finale: parseFloat(noteFinale()) };
-    if (form.id) { await entities.Assessment.update(form.id, data); toast.success('Note mise à jour'); }
-    else { await entities.Assessment.create(data); toast.success('Note créée'); }
-    onSave();
+    try {
+      if (form.id) {
+        await entities.Assessment.update(form.id, data);
+        toast.success('Note mise à jour');
+      } else {
+        await entities.Assessment.create(data);
+        toast.success('Note créée');
+      }
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -277,14 +289,19 @@ export default function TeacherPortal() {
   const handleSave = async () => {
     if (!selectedGroup) return;
     setSaving(true);
-    for (const student of groupStudents) {
-      const status = statuses[student.id] || 'Présent';
-      const existing = attendance.find(a => a.student_id === student.id);
-      if (existing) await entities.Attendance.update(existing.id, { status });
-      else await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
+    try {
+      for (const student of groupStudents) {
+        const status = statuses[student.id] || 'Présent';
+        const existing = attendance.find(a => a.student_id === student.id);
+        if (existing) await entities.Attendance.update(existing.id, { status });
+        else await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
+      }
+      toast.success('Présences enregistrées');
+    } catch {
+      // entities.js already toasted the failing row.
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    toast.success('Présences enregistrées');
   };
 
   if (loading) {

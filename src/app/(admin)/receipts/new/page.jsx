@@ -19,9 +19,14 @@ export default function ReceiptNew() {
 
   const handleSubmit = async (data) => {
     setSaving(true);
-    const receipt = await entities.Receipt.create(data);
-    toast.success('Reçu enregistré avec succès');
-    router.push(`/receipts/${receipt.id}/print`);
+    try {
+      const receipt = await entities.Receipt.create(data);
+      toast.success('Reçu enregistré avec succès');
+      router.push(`/receipts/${receipt.id}/print`);
+    } catch {
+      // entities.js already toasted — stay on the form so the user can retry.
+      setSaving(false);
+    }
   };
 
   return (

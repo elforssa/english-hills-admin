@@ -76,10 +76,15 @@ function UserManagement({ currentUser }) {
       toast.error('Seul le directeur peut attribuer ce rôle.');
       return;
     }
-    await entities.User.update(userId, { role: editRole });
-    toast.success('Rôle mis à jour');
-    setEditingId(null);
-    load();
+    try {
+      await entities.User.update(userId, { role: editRole });
+      toast.success('Rôle mis à jour');
+      setEditingId(null);
+      load();
+    } catch {
+      // entities.js already toasted — leave the inline editor open so the
+      // user can retry without losing their selection.
+    }
   };
 
   const availableRoles = isDirector
@@ -168,21 +173,24 @@ function InviteUserForm({ currentUser }) {
     }
     setLoading(true);
     const trimmedEmail = email.trim();
-    const baseRole = (role === 'admin' || role === 'director') ? 'admin' : 'user';
 
-    const existing = await entities.PendingRole.filter({ email: trimmedEmail });
-    if (existing && existing.length > 0) {
-      await entities.PendingRole.update(existing[0].id, { role });
-    } else {
-      await entities.PendingRole.create({ email: trimmedEmail, role });
+    try {
+      // The /api/admin/invite-user route handles both the auth invitation
+      // and the pending_roles upsert (via service-role key, server-side).
+      const result = await users.inviteUser(trimmedEmail, role);
+      setInvited(prev => [...prev, { email: trimmedEmail, role }]);
+      if (result?.alreadyRegistered) {
+        toast.success(`${trimmedEmail} est déjà inscrit — son rôle a été mis à jour vers "${ROLES.find(r => r.value === role)?.label}".`);
+      } else {
+        toast.success(`Invitation envoyée à ${trimmedEmail} avec le rôle "${ROLES.find(r => r.value === role)?.label}".`);
+      }
+      setEmail('');
+      setRole('student');
+    } catch (err) {
+      toast.error(err?.message || "Échec de l'envoi de l'invitation.");
+    } finally {
+      setLoading(false);
     }
-
-    await users.inviteUser(trimmedEmail, baseRole);
-    setInvited(prev => [...prev, { email: trimmedEmail, role }]);
-    toast.success(`Invitation envoyée à ${trimmedEmail} avec le rôle "${ROLES.find(r => r.value === role)?.label}".`);
-    setEmail('');
-    setRole('student');
-    setLoading(false);
   };
 
   return (
@@ -278,20 +286,25 @@ function CurrentTermSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    if (termConfig) {
-      await entities.AppConfig.update(termConfig.id, { value: terme });
-    } else {
-      const created = await entities.AppConfig.create({ key: 'current_term', value: terme, label: 'Terme actuel' });
-      setTermConfig(created);
+    try {
+      if (termConfig) {
+        await entities.AppConfig.update(termConfig.id, { value: terme });
+      } else {
+        const created = await entities.AppConfig.create({ key: 'current_term', value: terme, label: 'Terme actuel' });
+        setTermConfig(created);
+      }
+      if (anneeConfig) {
+        await entities.AppConfig.update(anneeConfig.id, { value: annee });
+      } else {
+        const created = await entities.AppConfig.create({ key: 'current_year', value: annee, label: 'Année scolaire' });
+        setAnneeConfig(created);
+      }
+      toast.success('Terme et année mis à jour');
+    } catch {
+      // entities.js already toasted — caller stays on the page.
+    } finally {
+      setSaving(false);
     }
-    if (anneeConfig) {
-      await entities.AppConfig.update(anneeConfig.id, { value: annee });
-    } else {
-      const created = await entities.AppConfig.create({ key: 'current_year', value: annee, label: 'Année scolaire' });
-      setAnneeConfig(created);
-    }
-    setSaving(false);
-    toast.success('Terme et année mis à jour');
   };
 
   return (

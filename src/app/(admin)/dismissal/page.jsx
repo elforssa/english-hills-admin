@@ -40,18 +40,23 @@ export default function Dismissal() {
     e.preventDefault();
     setSaving(true);
     const adult = adults.find(a => a.id === form.adult_id);
-    await entities.DismissalLog.create({
-      ...form,
-      adult_name: adult?.full_name || form.adult_name,
-      timestamp: new Date().toISOString(),
-      confirmed: true,
-    });
-    toast.success('Sortie enregistrée');
-    setShowForm(false);
-    setSelectedStudent('');
-    setForm({ student_id: '', student_name: '', adult_id: '', adult_name: '', staff_name: '' });
-    setSaving(false);
-    load();
+    try {
+      await entities.DismissalLog.create({
+        ...form,
+        adult_name: adult?.full_name || form.adult_name,
+        timestamp: new Date().toISOString(),
+        confirmed: true,
+      });
+      toast.success('Sortie enregistrée');
+      setShowForm(false);
+      setSelectedStudent('');
+      setForm({ student_id: '', student_name: '', adult_id: '', adult_name: '', staff_name: '' });
+      load();
+    } catch {
+      // entities.js already toasted — keep the form open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   const today = new Date().toLocaleDateString('fr-MA');

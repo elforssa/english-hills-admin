@@ -28,24 +28,31 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
   const selectedGroup = groups.find(g => g.id === form.group_id);
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true);
-    if (form.id) {
-      await entities.Enrollment.update(form.id, form);
-      const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
-      const studentStatus = statusMap[form.status];
-      if (form.student_id && studentStatus) {
-        const updateData = { status: studentStatus };
-        if (form.status === 'Validated' && form.group_id) {
-          updateData.groupe_id = form.group_id;
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (form.id) {
+        await entities.Enrollment.update(form.id, form);
+        const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
+        const studentStatus = statusMap[form.status];
+        if (form.student_id && studentStatus) {
+          const updateData = { status: studentStatus };
+          if (form.status === 'Validated' && form.group_id) {
+            updateData.groupe_id = form.group_id;
+          }
+          await entities.Student.update(form.student_id, updateData);
         }
-        await entities.Student.update(form.student_id, updateData);
+        toast.success('Mis à jour');
+      } else {
+        await entities.Enrollment.create(form);
+        toast.success('Inscription créée');
       }
-      toast.success('Mis à jour');
-    } else {
-      await entities.Enrollment.create(form);
-      toast.success('Inscription créée');
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
     }
-    onSave();
   };
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">

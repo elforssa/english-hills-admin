@@ -42,19 +42,30 @@ function PortfolioModal({ students, onSave, onClose }) {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
-    set('file_url', file_url);
-    set('file_name', file.name);
-    setUploading(false);
-    toast.success('Fichier uploadé');
+    try {
+      const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
+      set('file_url', file_url);
+      set('file_name', file.name);
+      toast.success('Fichier uploadé');
+    } catch (err) {
+      toast.error(err?.message || "Échec de l'upload du fichier.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await entities.Portfolio.create(form);
-    toast.success('Portfolio ajouté');
-    onSave();
+    try {
+      await entities.Portfolio.create(form);
+      toast.success('Portfolio ajouté');
+      onSave();
+    } catch {
+      // entities.js already toasted — keep modal open for retry.
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

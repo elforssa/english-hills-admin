@@ -19,6 +19,13 @@ import { sendEmail } from '@/lib/email';
 // fanning a single call out to the whole address book.
 const MAX_RECIPIENTS = 50;
 
+// Per-user rate limit on this endpoint. Both windows must pass: this caps
+// burst (10/min) and sustained abuse (100/hour) without blocking normal use.
+const RATE_LIMITS = [
+  { scope: 'email_send:minute', max: 10,  windowSeconds: 60 },
+  { scope: 'email_send:hour',   max: 100, windowSeconds: 60 * 60 },
+];
+
 const emailField = z.string().trim().email();
 
 const SendEmailSchema = z.object({
@@ -39,6 +46,26 @@ export async function POST(request) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  // Gate: per-user rate limit (atomic, DB-backed).
+  for (const limit of RATE_LIMITS) {
+    const { data: allowed, error: rlError } = await supabase.rpc('check_rate_limit', {
+      p_scope: limit.scope,
+      p_max_requests: limit.max,
+      p_window_seconds: limit.windowSeconds,
+    });
+    if (rlError) {
+      // eslint-disable-next-line no-console
+      console.error('[POST /api/email/send] rate-limit RPC failed:', rlError);
+      return NextResponse.json({ error: 'Rate limiter unavailable' }, { status: 503 });
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Too many emails. Please wait before sending again.' },
+        { status: 429, headers: { 'Retry-After': String(limit.windowSeconds) } },
+      );
+    }
   }
 
   let raw;

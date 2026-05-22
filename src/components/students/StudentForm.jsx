@@ -33,14 +33,19 @@ export default function StudentForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    if (isEdit) {
-      await entities.Student.update(id, form);
-      toast.success('Apprenant mis à jour');
-    } else {
-      await entities.Student.create(form);
-      toast.success('Apprenant créé');
+    try {
+      if (isEdit) {
+        await entities.Student.update(id, form);
+        toast.success('Apprenant mis à jour');
+      } else {
+        await entities.Student.create(form);
+        toast.success('Apprenant créé');
+      }
+      router.push('/students');
+    } catch {
+      // entities.js already toasted — stay on the form for retry.
+      setSaving(false);
     }
-    router.push('/students');
   };
 
   return (
