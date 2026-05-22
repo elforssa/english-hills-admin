@@ -46,6 +46,12 @@ function InscriptionCompteInner() {
       const code = searchParams.get('code');
 
       if (code) {
+        // Drop any pre-existing session in this browser (commonly the
+        // inviter's) before exchanging the invite code. Without this, the
+        // shared cookie + cached singleton user object can mask the
+        // invitee's session and leak the inviter's email into the form.
+        await sb.auth.signOut({ scope: 'local' });
+
         const { error } = await sb.auth.exchangeCodeForSession(code);
         if (cancelled) return;
         if (error) {
@@ -54,9 +60,9 @@ function InscriptionCompteInner() {
         }
       }
 
-      // Either the code-exchange succeeded or the older hash-token flow
-      // already populated the session via detectSessionInUrl. Either way,
-      // we need a user now to proceed.
+      // After the exchange, the session belongs to the invitee. (If there
+      // was no `code`, the page was likely refreshed mid-flow — fall back
+      // to whatever session is in cookies, e.g. an existing pending user.)
       const { data: { user } } = await sb.auth.getUser();
       if (cancelled) return;
       if (!user) {
