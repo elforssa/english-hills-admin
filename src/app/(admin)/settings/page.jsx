@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { entities, auth, users } from '@/lib/entities';
-import { getBrowserClient } from '@/lib/supabase';
-import { Building2, Users, UserPlus, Edit2, Check, X, Shield, Save, CalendarDays } from 'lucide-react';
+import { Building2, Users, UserPlus, Edit2, Check, X, Save, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -77,19 +76,18 @@ function UserManagement({ currentUser }) {
       return;
     }
     try {
-      await entities.User.update(userId, { role: editRole });
+      await users.updateRole(userId, editRole);
       toast.success('Rôle mis à jour');
       setEditingId(null);
       load();
-    } catch {
-      // entities.js already toasted — leave the inline editor open so the
-      // user can retry without losing their selection.
+    } catch (err) {
+      toast.error(err?.message || 'Échec de la mise à jour du rôle.');
     }
   };
 
   const availableRoles = isDirector
     ? ROLE_CONFIG
-    : ROLE_CONFIG.filter(r => r.value !== 'director');
+    : ROLE_CONFIG.filter(r => !['director', 'admin'].includes(r.value));
 
   return (
     <div className="bg-card border border-border rounded-xl p-6">
@@ -156,27 +154,34 @@ function InviteUserForm({ currentUser }) {
   const isDirector = currentUser?.role === 'director';
   const isAdmin = currentUser?.role === 'admin' || isDirector;
 
-  const ROLES = [
-    { value: 'student', label: 'Apprenant' },
-    { value: 'parent', label: 'Parent' },
-    { value: 'teacher', label: 'Enseignant' },
-    { value: 'admin', label: 'Admin' },
-    ...(isDirector ? [{ value: 'director', label: 'Directeur' }] : []),
-  ];
+  const ROLES = isDirector
+    ? [
+        { value: 'student', label: 'Apprenant' },
+        { value: 'parent',  label: 'Parent' },
+        { value: 'teacher', label: 'Enseignant' },
+        { value: 'admin',   label: 'Admin' },
+        { value: 'director', label: 'Directeur' },
+      ]
+    : [
+        { value: 'student', label: 'Apprenant' },
+        { value: 'parent',  label: 'Parent' },
+        { value: 'teacher', label: 'Enseignant' },
+      ];
 
   const handleInvite = async (e) => {
     e.preventDefault();
     if (!email) return;
-    if ((role === 'admin' || role === 'director') && !isDirector) {
-      toast.error('Seul le directeur peut attribuer ce rôle.');
+    if (!ROLES.some(r => r.value === role)) {
+      toast.error("Vous n'êtes pas autorisé à attribuer ce rôle.");
       return;
     }
     setLoading(true);
     const trimmedEmail = email.trim();
 
     try {
-      // The /api/admin/invite-user route handles both the auth invitation
-      // and the pending_roles upsert (via service-role key, server-side).
+      // The /api/admin/invite route handles caller-role enforcement, the
+      // pending_roles upsert, and sends the Supabase invite email
+      // (server-side, via the service-role key).
       const result = await users.inviteUser(trimmedEmail, role);
       setInvited(prev => [...prev, { email: trimmedEmail, role }]);
       if (result?.alreadyRegistered) {
@@ -345,7 +350,6 @@ function CurrentTermSettings() {
 export default function Settings() {
   const [tab, setTab] = useState('center');
   const [currentUser, setCurrentUser] = useState(null);
-  const [selfRoleLoading, setSelfRoleLoading] = useState(false);
   const [centerInfo, setCenterInfo] = useState(() => {
     try {
       if (typeof window === 'undefined') return CENTER_INFO_DEFAULT;
@@ -384,60 +388,12 @@ export default function Settings() {
     toast.success('Informations du centre mises à jour');
   };
 
-  const isDirectorEmail = currentUser?.role === 'director';
-
-  const handleSetSelfRole = async (role) => {
-    setSelfRoleLoading(true);
-    const sb = getBrowserClient();
-    const { data: ok, error } = await sb.rpc('simulate_role', { target_role: role });
-    if (error || !ok) {
-      setSelfRoleLoading(false);
-      toast.error('Impossible de simuler ce rôle. Vous devez être directeur.');
-      return;
-    }
-    toast.success(`Rôle changé : ${getRoleLabel(role)}. Rechargement...`);
-    setTimeout(() => window.location.reload(), 1000);
-  };
-
-  const [hasDirector, setHasDirector] = useState(true);
-  const [claimingDirector, setClaimingDirector] = useState(false);
-
-  useEffect(() => {
-    entities.User.list('full_name', 200).then(list => {
-      setHasDirector(list.some(u => u.role === 'director'));
-    });
-  }, []);
-
-  const handleClaimDirector = async () => {
-    setClaimingDirector(true);
-    const sb = getBrowserClient();
-    const { data: ok, error } = await sb.rpc('claim_director_if_none');
-    if (error || !ok) {
-      setClaimingDirector(false);
-      toast.error('Impossible de revendiquer le rôle directeur. Un directeur existe peut-être déjà.');
-      return;
-    }
-    toast.success('Vous êtes maintenant Directeur. Rechargement...');
-    setTimeout(() => window.location.reload(), 1000);
-  };
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (currentUser?.role === 'director') {
-      sessionStorage.setItem('eh_director_email', currentUser.email);
-    }
-  }, [currentUser]);
-
-  const isDirectorBySession = typeof window !== 'undefined'
-    && currentUser?.email
-    && sessionStorage.getItem('eh_director_email') === currentUser.email;
-  const isDirectorRole = currentUser?.role === 'director' || isDirectorBySession;
+  const isDirectorRole    = currentUser?.role === 'director';
   const isAdminOrDirector = isDirectorRole || currentUser?.role === 'admin';
 
   const tabs = [
     { id: 'center', label: 'Informations' },
     { id: 'term', label: 'Terme actuel' },
-    ...(isDirectorRole ? [{ id: 'myrole', label: 'Mon rôle' }] : []),
     ...(isAdminOrDirector ? [
       { id: 'users', label: 'Utilisateurs' },
       { id: 'invite', label: 'Inviter' },
@@ -449,46 +405,6 @@ export default function Settings() {
     <div className="p-4 lg:p-8 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Paramètres du centre</h1>
 
-      {!hasDirector && currentUser?.role !== 'director' && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-amber-900">Aucun directeur n&apos;est encore assigné</p>
-            <p className="text-xs text-amber-700 mt-0.5">Cliquez pour vous attribuer le rôle de Directeur.</p>
-          </div>
-          <button
-            onClick={handleClaimDirector}
-            disabled={claimingDirector}
-            className="flex-shrink-0 px-4 py-2 text-sm font-semibold text-white rounded-lg bg-primary hover:opacity-90 disabled:opacity-50"
-          >
-            {claimingDirector ? '...' : 'Devenir Directeur'}
-          </button>
-        </div>
-      )}
-
-      {isDirectorRole && (
-        <div className="mb-6 p-4 bg-card border border-border rounded-xl">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Simulation de rôle</p>
-          <div className="flex flex-wrap gap-2">
-            {ROLE_CONFIG.map(r => (
-              <button
-                key={r.value}
-                disabled={selfRoleLoading || currentUser?.role === r.value}
-                onClick={() => handleSetSelfRole(r.value)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all disabled:opacity-50"
-                style={{
-                  borderColor: currentUser?.role === r.value ? r.color : 'hsl(var(--border))',
-                  backgroundColor: currentUser?.role === r.value ? r.color + '18' : 'white',
-                  color: currentUser?.role === r.value ? r.color : 'hsl(var(--muted-foreground))',
-                }}
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: r.color }} />
-                {r.label}
-                {currentUser?.role === r.value && <span className="text-xs">(actuel)</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-fit mb-6 flex-wrap">
         {tabs.map(t => (
           <button
@@ -509,7 +425,7 @@ export default function Settings() {
                 <Building2 size={18} style={{ color: '#1E4D8B' }} />
                 <h2 className="font-semibold">Informations du centre</h2>
               </div>
-              {isDirectorEmail && !editingCenter && (
+              {isDirectorRole && !editingCenter && (
                 <button
                   onClick={startEditCenter}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border hover:bg-muted transition"
@@ -517,7 +433,7 @@ export default function Settings() {
                   <Edit2 size={13} /> Modifier
                 </button>
               )}
-              {isDirectorEmail && editingCenter && (
+              {isDirectorRole && editingCenter && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={saveCenter}
@@ -594,36 +510,6 @@ export default function Settings() {
 
       {tab === 'term' && <CurrentTermSettings />}
 
-      {tab === 'myrole' && (
-        <div className="bg-card border border-border rounded-xl p-6 max-w-md">
-          <div className="flex items-center gap-3 mb-5">
-            <Shield size={18} style={{ color: '#1E4D8B' }} />
-            <h2 className="font-semibold">Mon rôle dans le système</h2>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            Rôle actuel : <span className="font-semibold text-foreground">{getRoleLabel(currentUser?.role || '')}</span>
-          </p>
-          <p className="text-xs text-muted-foreground mb-4">Sélectionnez un rôle pour simuler l&apos;accès :</p>
-          <div className="space-y-2">
-            {ROLE_CONFIG.map(r => (
-              <button
-                key={r.value}
-                disabled={selfRoleLoading || currentUser?.role === r.value}
-                onClick={() => handleSetSelfRole(r.value)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-all text-left disabled:opacity-40"
-                style={{
-                  borderColor: currentUser?.role === r.value ? r.color : undefined,
-                  backgroundColor: currentUser?.role === r.value ? r.color + '15' : undefined,
-                }}
-              >
-                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: r.color }} />
-                <span className="text-sm font-medium">{r.label}</span>
-                {currentUser?.role === r.value && <span className="ml-auto text-xs font-semibold" style={{ color: r.color }}>Actuel</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       {tab === 'users' && <UserManagement currentUser={currentUser} />}
       {tab === 'invite' && <InviteUserForm currentUser={currentUser} />}
 

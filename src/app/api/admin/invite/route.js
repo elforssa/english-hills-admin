@@ -1,12 +1,15 @@
 // =============================================================================
-// POST /api/admin/invite-user
+// POST /api/admin/invite
 //
 // Sends a Supabase Auth invitation email and queues a pending_roles row so
-// the invitee picks up the assigned role on first login.
+// the invitee's role is applied on first sign-in. The invite link lands on
+// /inscription-compte, where the user sets their password and full name.
 //
 // Auth model:
 //   • Caller must have profile.role in {admin, director}.
-//   • Only a director may invite as admin or director.
+//   • Director may grant any of {director, admin, teacher, parent, student}.
+//   • Admin may grant {teacher, parent, student} only — granting admin or
+//     director from an admin session returns 403.
 //
 // Body shape:
 //   { email: string, role: 'student'|'parent'|'teacher'|'admin'|'director' }
@@ -61,7 +64,7 @@ export async function POST(request) {
   // ── Gate 3: only directors may grant privileged roles ──────────────────
   if (PRIVILEGED_ROLES.includes(role) && profile.role !== 'director') {
     return NextResponse.json(
-      { error: 'Only a director may grant admin or director roles' },
+      { error: 'Seul le directeur peut attribuer ce rôle.' },
       { status: 403 },
     );
   }
@@ -69,28 +72,27 @@ export async function POST(request) {
   // ── Perform invite via service-role client ─────────────────────────────
   const admin = getServiceRoleClient();
 
-  const redirectTo = new URL('/login/callback', request.url).toString();
+  const redirectTo = new URL('/inscription-compte', request.url).toString();
   const { data: inviteData, error: inviteError } =
     await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
 
-  // "User already registered" is fine — we still upsert the pending role.
+  // "User already registered" is fine — we still upsert the pending role so
+  // the next sign-in (or apply_pending_role RPC) bumps them to the new role.
   if (inviteError && !/already (registered|exists)/i.test(inviteError.message)) {
     // eslint-disable-next-line no-console
-    console.error('[invite-user] inviteUserByEmail failed:', inviteError);
+    console.error('[invite] inviteUserByEmail failed:', inviteError);
     return NextResponse.json(
       { error: inviteError.message || 'Failed to send invitation' },
       { status: 500 },
     );
   }
 
-  // Upsert the pending role so the chosen role is applied on first login
-  // (or next call to apply_pending_role for an existing user).
   const { error: pendingError } = await admin
     .from('pending_roles')
     .upsert({ email, role }, { onConflict: 'email' });
   if (pendingError) {
     // eslint-disable-next-line no-console
-    console.error('[invite-user] pending_roles upsert failed:', pendingError);
+    console.error('[invite] pending_roles upsert failed:', pendingError);
     return NextResponse.json(
       { error: 'Invitation sent but role queueing failed', details: pendingError.message },
       { status: 500 },

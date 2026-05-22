@@ -165,25 +165,42 @@ export const auth = {
 export { NotAuthenticatedError };
 
 // -----------------------------------------------------------------------------
-// users — admin invite helper. Calls POST /api/admin/invite-user which is
-// gated by role and uses the service-role key server-side to send the
-// invitation email + queue the pending_roles row.
+// users — server-backed admin helpers. Both endpoints validate the caller's
+// role server-side and use the service-role key to perform the privileged
+// operation.
 // -----------------------------------------------------------------------------
+async function postJson(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let payload = {};
+  try { payload = await res.json(); } catch { /* non-JSON response */ }
+  if (!res.ok) {
+    const err = new Error(payload.error || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.details = payload.details;
+    throw err;
+  }
+  return payload;
+}
+
 export const users = {
+  /**
+   * Invite a new user by email. Sends an invitation link landing on
+   * /inscription-compte and queues a pending_roles row so the role is
+   * applied automatically on first sign-in.
+   */
   async inviteUser(email, role) {
-    const res = await fetch('/api/admin/invite-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, role }),
-    });
-    let payload = {};
-    try { payload = await res.json(); } catch { /* non-JSON response */ }
-    if (!res.ok) {
-      const err = new Error(payload.error || `Invite failed (${res.status})`);
-      err.status = res.status;
-      err.details = payload.details;
-      throw err;
-    }
-    return payload;
+    return postJson('/api/admin/invite', { email, role });
+  },
+
+  /**
+   * Change an existing user's role. Caller permission matrix is enforced
+   * server-side (admin → teacher/parent/student only; director → any).
+   */
+  async updateRole(userId, role) {
+    return postJson('/api/admin/update-role', { userId, role });
   },
 };

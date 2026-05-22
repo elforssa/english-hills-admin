@@ -1,21 +1,31 @@
 // =============================================================================
 // Magic-link callback — Supabase sends users here after clicking the email
-// link. We exchange the one-time code for a session cookie and bounce to
-// /dashboard (or the original returnTo URL if provided).
+// link. We exchange the one-time code for a session cookie, apply any
+// queued pending_role, then redirect to the role-appropriate dashboard.
+//
+// `?next=<path>` overrides the role-based default when it is a safe
+// internal path (open-redirect guard below).
 // =============================================================================
 
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase';
 
-const DEFAULT_NEXT = '/dashboard';
+const PORTAL_FOR_ROLE = {
+  director: '/dashboard',
+  admin:    '/dashboard',
+  teacher:  '/teacher-portal',
+  parent:   '/parent-portal',
+  student:  '/student-portal',
+};
 
 // Open-redirect guard. We only honour `next` when it is an internal,
 // absolute-path URL with no host component. Anything else (protocol-relative
-// //evil.com, scheme://, backslash tricks) is replaced with DEFAULT_NEXT.
+// //evil.com, scheme://, backslash tricks) is replaced with the role-based
+// default.
 function safeNext(raw) {
-  if (typeof raw !== 'string' || raw.length === 0) return DEFAULT_NEXT;
-  if (!raw.startsWith('/')) return DEFAULT_NEXT;
-  if (raw.startsWith('//') || raw.startsWith('/\\')) return DEFAULT_NEXT;
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  if (!raw.startsWith('/')) return null;
+  if (raw.startsWith('//') || raw.startsWith('/\\')) return null;
   return raw;
 }
 
@@ -36,10 +46,24 @@ export async function GET(request) {
     return NextResponse.redirect(`${origin}/login?error=callback_failed`);
   }
 
-  // Apply any pending role (e.g. invited teacher/parent) before the middleware
-  // runs on the redirect target. Without this, the middleware reads role='pending'
-  // from the just-created profile and bounces the user to /unauthorized.
-  await supabase.rpc('apply_pending_role');
+  // Apply any pending role queued for this invitee. The RPC returns the
+  // applied role (or null when no row exists).
+  let appliedRole = null;
+  const { data } = await supabase.rpc('apply_pending_role');
+  appliedRole = data || null;
 
-  return NextResponse.redirect(`${origin}${next}`);
+  if (!appliedRole) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      appliedRole = profile?.role || null;
+    }
+  }
+
+  const target = next || PORTAL_FOR_ROLE[appliedRole] || '/unauthorized';
+  return NextResponse.redirect(`${origin}${target}`);
 }

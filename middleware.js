@@ -14,6 +14,7 @@ const PUBLIC_PATHS = new Set([
   '/login',
   '/login/callback',
   '/inscription',
+  '/inscription-compte',
   '/unauthorized',
 ]);
 
@@ -24,11 +25,6 @@ const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
   '/learning-assessments', '/groups', '/timetable', '/dashboard',
   '/', '/settings',
-];
-
-const RECEPTIONIST_ROUTES = [
-  '/dashboard', '/', '/students', '/students-directory', '/dismissal',
-  '/attendance', '/settings',
 ];
 
 function matchesAny(path, allowed) {
@@ -135,14 +131,6 @@ export async function middleware(request) {
     if (pathname === '/student-portal' || pathname === '/settings') return response;
     const url = request.nextUrl.clone();
     url.pathname = '/student-portal';
-    url.search = '';
-    return NextResponse.redirect(url);
-  }
-
-  if (role === 'receptionist') {
-    if (matchesAny(pathname, RECEPTIONIST_ROUTES)) return response;
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
     url.search = '';
     return NextResponse.redirect(url);
   }

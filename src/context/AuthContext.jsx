@@ -8,10 +8,6 @@
 //      insert a row with role='pending' as a safety net.
 //   3. PendingRole sweep: if the user's email has a PendingRole entry,
 //      apply that role to the profile and delete the PendingRole row.
-//   4. Director simulation flag: when the resolved role is 'director',
-//      mirror the email into sessionStorage under 'eh_director_email' so
-//      the sidebar can show a "switch back to director" link after the
-//      director temporarily changes role.
 //
 // Public surface (kept minimal per spec): { user, role, isLoading, logout }.
 // =============================================================================
@@ -27,8 +23,6 @@ import {
   useState,
 } from 'react';
 import { getBrowserClient } from '@/lib/supabase';
-
-const DIRECTOR_FLAG_KEY = 'eh_director_email';
 
 const AuthContext = createContext(null);
 
@@ -107,13 +101,6 @@ export function AuthProvider({ children }) {
 
     const resolvedRole = profile?.role || 'pending';
 
-    // Director simulation flag (preserved from existing Settings.jsx logic).
-    if (typeof window !== 'undefined') {
-      if (resolvedRole === 'director' && authUser.email) {
-        sessionStorage.setItem(DIRECTOR_FLAG_KEY, authUser.email);
-      }
-    }
-
     setUser({
       id:                profile?.id || authUser.id,
       auth_id:           authUser.id,
@@ -155,7 +142,6 @@ export function AuthProvider({ children }) {
       console.error('signOut failed:', err);
     }
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(DIRECTOR_FLAG_KEY);
       window.location.href = '/login';
     }
   }, []);

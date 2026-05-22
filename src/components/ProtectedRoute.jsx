@@ -11,8 +11,6 @@
 //                                         anything else → /teacher-portal
 //   • parent / student                  → access granted to their portal +
 //                                         /settings; anything else → portal
-//   • receptionist                      → access granted to RECEPTIONIST_ROUTES;
-//                                         anything else → /
 //   • unknown role                      → /unauthorized
 //
 // Optional `allowedRoles` prop short-circuits the global map: when supplied,
@@ -29,11 +27,6 @@ import { useAuth } from '@/context/AuthContext';
 const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
   '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings',
-];
-
-const RECEPTIONIST_ROUTES = [
-  '/dashboard', '/', '/students', '/students-directory', '/dismissal',
-  '/attendance', '/settings',
 ];
 
 function matchesAny(path, allowedList) {
@@ -92,14 +85,6 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     if (role === 'student') {
       if (pathname !== '/student-portal' && pathname !== '/settings') {
         router.replace('/student-portal');
-      }
-      return;
-    }
-
-    // Receptionist
-    if (role === 'receptionist') {
-      if (!matchesAny(pathname, RECEPTIONIST_ROUTES)) {
-        router.replace('/');
       }
       return;
     }

@@ -15,22 +15,22 @@ const ADMIN = ['admin', 'director'];
 const STAFF = ['admin', 'director', 'teacher'];
 
 const NAV = [
-  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher', 'receptionist'] },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
   { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
   {
-    label: 'Apprenants', icon: Users, roles: [...ADMIN, 'receptionist'],
+    label: 'Apprenants', icon: Users, roles: ADMIN,
     children: [
       { href: '/students-directory', label: 'Annuaire', roles: ADMIN },
-      { href: '/students', label: 'Liste des apprenants', roles: [...ADMIN, 'receptionist'] },
+      { href: '/students', label: 'Liste des apprenants', roles: ADMIN },
       { href: '/students/new', label: 'Ajouter un apprenant', roles: ADMIN },
-      { href: '/dismissal', label: 'Sortie des jeunes', roles: [...ADMIN, 'receptionist'] },
+      { href: '/dismissal', label: 'Sortie des jeunes', roles: ADMIN },
     ],
   },
   {
-    label: 'Académique', icon: BookOpen, roles: [...ADMIN, 'teacher', 'receptionist'],
+    label: 'Académique', icon: BookOpen, roles: [...ADMIN, 'teacher'],
     children: [
       { href: '/groups', label: 'Groupes & niveaux', roles: [...ADMIN, 'teacher'] },
-      { href: '/attendance', label: 'Présences', roles: [...ADMIN, 'teacher', 'receptionist'] },
+      { href: '/attendance', label: 'Présences', roles: [...ADMIN, 'teacher'] },
       { href: '/timetable', label: 'Emploi du temps', roles: [...ADMIN, 'teacher'] },
       { href: '/placement-tests', label: 'Tests de niveau', roles: ADMIN },
       { href: '/assessments', label: 'Notes & bulletins', roles: [...ADMIN, 'teacher'] },
@@ -153,7 +153,7 @@ function NavItem({ item, onNavigate }) {
   );
 }
 
-function SidebarContent({ onNavigate, userRole, userEmail, wasDirector, onLogout }) {
+function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
   const canSee = (item) => !item.roles || item.roles.includes(userRole);
 
   const filteredNav = NAV
@@ -174,23 +174,12 @@ function SidebarContent({ onNavigate, userRole, userEmail, wasDirector, onLogout
            userRole === 'admin' ? 'Administrateur' :
            userRole === 'teacher' ? 'Enseignant' :
            userRole === 'parent' ? 'Parent' :
-           userRole === 'student' ? 'Apprenant' :
-           userRole === 'receptionist' ? 'Réceptionniste' : 'Plateforme'}
+           userRole === 'student' ? 'Apprenant' : 'Plateforme'}
         </p>
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
         {filteredNav.map((item, i) => <NavItem key={i} item={item} onNavigate={onNavigate} />)}
-        {wasDirector && !['admin', 'director'].includes(userRole) && (
-          <Link
-            href="/settings"
-            onClick={onNavigate}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-white transition-all duration-150 mt-2 border-t border-white/10 pt-3"
-          >
-            <Shield size={15} className="opacity-60" />
-            Paramètres (rôle)
-          </Link>
-        )}
       </nav>
 
       <div className="px-3 py-4 border-t border-white/8 space-y-0.5">
@@ -222,11 +211,6 @@ export default function Sidebar() {
   const userRole  = role || '';
   const userEmail = user?.email || '';
 
-  const directorEmail = typeof window !== 'undefined'
-    ? sessionStorage.getItem('eh_director_email')
-    : null;
-  const wasDirector = !!directorEmail && directorEmail === userEmail && userRole !== 'director';
-
   return (
     <>
       <button
@@ -248,7 +232,6 @@ export default function Sidebar() {
               onNavigate={() => setMobileOpen(false)}
               userRole={userRole}
               userEmail={userEmail}
-              wasDirector={wasDirector}
               onLogout={logout}
             />
           </div>
@@ -263,7 +246,6 @@ export default function Sidebar() {
           onNavigate={() => {}}
           userRole={userRole}
           userEmail={userEmail}
-          wasDirector={wasDirector}
           onLogout={logout}
         />
       </div>
