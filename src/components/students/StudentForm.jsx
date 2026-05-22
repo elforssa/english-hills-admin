@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { entities, auth } from '@/lib/entities';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
@@ -13,6 +14,7 @@ export default function StudentForm() {
   const params = useParams();
   const id = params?.id;
   const router = useRouter();
+  const qc = useQueryClient();
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -41,6 +43,7 @@ export default function StudentForm() {
         await entities.Student.create(form);
         toast.success('Apprenant créé');
       }
+      qc.invalidateQueries({ queryKey: ['Student'] });
       router.push('/students');
     } catch {
       // entities.js already toasted — stay on the form for retry.
