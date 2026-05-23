@@ -5,13 +5,9 @@ import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Printer, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
+import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
-const STATUT_CONFIG = {
-  'Soldé': 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
-  'Acompte versé': 'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
-  'En attente': 'bg-blue-50 text-blue-700 ring-1 ring-blue-100',
-  'En retard': 'bg-red-50 text-red-700 ring-1 ring-red-100',
-};
+const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 
 export default function Finance() {
   const [payments, setPayments] = useState([]);

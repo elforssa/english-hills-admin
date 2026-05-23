@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Brain, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -23,6 +24,7 @@ const KOLB_COLORS = {
 };
 
 function AssessmentModal({ students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', date_assessment: new Date().toISOString().split('T')[0],
     kolb_style: 'Diverging', dominant_intelligence: 'Linguistique', teacher_notes: '',

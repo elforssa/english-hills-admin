@@ -7,15 +7,9 @@ import { Plus, Search, Printer, Download, CheckSquare, Square } from 'lucide-rea
 import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
+import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
 const PAGE_SIZE = 25;
-
-const STATUT_CONFIG = {
-  'Soldé': 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
-  'Acompte versé': 'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
-  'En attente': 'bg-blue-50 text-blue-700 ring-1 ring-blue-100',
-  'En retard': 'bg-red-50 text-red-700 ring-1 ring-red-100',
-};
 
 function buildReceiptPDF(doc, r, yStart) {
   const restant = (r.montant_total || 0) - (r.montant_paye || 0);
@@ -223,7 +217,7 @@ export default function Receipts() {
                         <td className="px-4 py-3">
                           {(() => {
                             const statusKey = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
-                            return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[statusKey] || STATUT_CONFIG['En attente']}`}>{statusKey}</span>;
+                            return <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${PAYMENT_STATUS_COLORS[statusKey] || PAYMENT_STATUS_COLORS['En attente']}`}>{statusKey}</span>;
                           })()}
                         </td>
                         <td className="px-4 py-3">

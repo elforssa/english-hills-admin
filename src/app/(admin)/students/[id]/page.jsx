@@ -1,7 +1,5 @@
 'use client';
 
-'use client';
-
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -9,14 +7,7 @@ import { entities, auth } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { ArrowLeft, Edit, FileText, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-
-const STATUS_COLORS = {
-  Enrolled: 'bg-green-100 text-green-700',
-  Trial: 'bg-blue-100 text-blue-700',
-  Prospect: 'bg-yellow-100 text-yellow-700',
-  Inactive: 'bg-gray-100 text-gray-500',
-  Alumni: 'bg-purple-100 text-purple-700',
-};
+import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
 export default function StudentDetail() {
   const params = useParams();
@@ -81,7 +72,7 @@ export default function StudentDetail() {
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{student.full_name}</h1>
-          <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[student.status]}`}>{student.status}</span>
+          <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>
         </div>
         <Link href={`/students/${id}/edit`} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
           <Edit size={14} /> Modifier
@@ -167,7 +158,7 @@ export default function StudentDetail() {
                   <td className="py-2">{(p.montant_total || 0).toLocaleString('fr-MA')} MAD</td>
                   <td className="py-2">{(p.montant_paye || 0).toLocaleString('fr-MA')} MAD</td>
                   <td className="py-2">{restant.toLocaleString('fr-MA')} MAD</td>
-                  <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.statut_paiement === 'Soldé' ? 'bg-green-100 text-green-700' : p.statut_paiement === 'En retard' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.statut_paiement || '—'}</span></td>
+                  <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_STATUS_COLORS[p.statut_paiement] || 'bg-yellow-100 text-yellow-700'}`}>{p.statut_paiement || '—'}</span></td>
                   <td className="py-2"><Link href={`/receipts/${p.id}/print`} className="text-xs text-muted-foreground hover:text-primary"><FileText size={13} /></Link></td>
                 </tr>
               );})}

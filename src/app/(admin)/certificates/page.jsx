@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Award, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -11,6 +12,7 @@ const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
 
 function CertificateModal({ students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', niveau_complete: 'A1',
     terme: 'Sept–Déc', annee: '2025-2026',

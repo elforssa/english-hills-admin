@@ -5,15 +5,10 @@ import { entities, auth } from '@/lib/entities';
 import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import MessagesTab from '@/components/portals/MessagesTab';
+import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
-const STATUS_COLORS = {
-  'Présent': 'bg-green-100 text-green-700', 'Absent': 'bg-red-100 text-red-700',
-  'Retard': 'bg-yellow-100 text-yellow-700', 'Justifié': 'bg-blue-100 text-blue-700',
-};
-const PAY_COLORS = {
-  'Soldé': 'bg-green-100 text-green-700', 'En attente': 'bg-blue-100 text-blue-700',
-  'En retard': 'bg-red-100 text-red-700', 'Acompte versé': 'bg-amber-100 text-amber-700',
-};
+const STATUS_COLORS = ATTENDANCE_STATUS_COLORS;
+const PAY_COLORS = PAYMENT_STATUS_COLORS;
 
 export default function ParentPortal() {
   const [user, setUser] = useState(null);

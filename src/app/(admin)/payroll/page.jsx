@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Calculator, CheckCircle, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -45,6 +46,7 @@ function calcPayroll(teacher, heures) {
 }
 
 function PayrollModal({ teachers, onSave, onClose }) {
+  useScrollLock();
   const [teacherId, setTeacherId] = useState('');
   const [mois, setMois] = useState(MONTHS[new Date().getMonth()]);
   const [annee, setAnnee] = useState(String(new Date().getFullYear()));

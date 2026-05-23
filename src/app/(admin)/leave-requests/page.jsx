@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, CheckCircle, XCircle, Trash2, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const STATUS_COLORS = {
   'En attente': 'bg-yellow-100 text-yellow-700',
@@ -15,6 +16,7 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function LeaveModal({ leave, teachers, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState(leave || { teacher_id: '', teacher_name: '', date_debut: '', date_fin: '', type_conge: 'Congé annuel', status: 'En attente', remplacant: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));

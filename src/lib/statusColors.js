@@ -25,8 +25,8 @@ export const ATTENDANCE_STATUS_COLORS = {
 
 export const STUDENT_STATUS_COLORS = {
   'Enrolled':  'bg-green-100  text-green-700',
-  'Trial':     'bg-purple-100 text-purple-700',
-  'Prospect':  'bg-blue-100   text-blue-700',
-  'Alumni':    'bg-gray-100   text-gray-600',
-  'Inactive':  'bg-red-100    text-red-700',
+  'Trial':     'bg-blue-100   text-blue-700',
+  'Prospect':  'bg-yellow-100 text-yellow-700',
+  'Inactive':  'bg-gray-100   text-gray-500',
+  'Alumni':    'bg-purple-100 text-purple-700',
 };

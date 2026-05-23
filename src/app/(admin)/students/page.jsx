@@ -7,16 +7,9 @@ import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityList } from '@/lib/queries';
+import { STUDENT_STATUS_COLORS } from '@/lib/statusColors';
 
 const PAGE_SIZE = 20;
-
-const STATUS_COLORS = {
-  Enrolled: 'bg-green-100 text-green-700',
-  Trial: 'bg-blue-100 text-blue-700',
-  Prospect: 'bg-yellow-100 text-yellow-700',
-  Inactive: 'bg-gray-100 text-gray-500',
-  Alumni: 'bg-purple-100 text-purple-700',
-};
 
 export default function Students() {
   // Cached + deduped across pages. Sibling pages (e.g. /students/[id]) that
@@ -113,7 +106,7 @@ export default function Students() {
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                 </Link>
               ))}
             </div>
@@ -139,7 +132,7 @@ export default function Students() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/students/${s.id}`} className="text-xs font-medium text-primary hover:underline">Voir</Link>

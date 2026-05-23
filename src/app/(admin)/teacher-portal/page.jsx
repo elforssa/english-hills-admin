@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import MessagesTab from '@/components/portals/MessagesTab';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState(assessment || {
     student_id: '', group_id: '', terme: 'Sept–Déc', note_oral: '', note_ecrit: '', note_devoirs: '',
     poids_oral: 40, poids_ecrit: 30, poids_devoirs: 30, niveau_actuel: 'A1', commentaire: '',

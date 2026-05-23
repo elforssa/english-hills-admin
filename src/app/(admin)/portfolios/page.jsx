@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Upload, FileText, Video, Mic, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const PROJECT_TYPES = ['Oral Presentation', 'Written Essay', 'Audio Recording', 'Video Project', 'PDF Document', 'Other'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
@@ -22,6 +23,7 @@ const TYPE_ICONS = {
 };
 
 function PortfolioModal({ students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', terme: 'Sept–Déc', annee: '2025-2026',
     niveau: 'A1', project_type: 'Oral Presentation', title: '', description: '',

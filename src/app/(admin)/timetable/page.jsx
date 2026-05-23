@@ -53,49 +53,49 @@ export default function Timetable() {
           Aucun groupe avec horaires définis. Ajoutez des groupes avec jours et horaires depuis la page Groupes.
         </div>
       ) : (
-        {/* Desktop: 7-column grid */}
-        <div className="hidden lg:grid grid-cols-7 gap-3">
-          {DAYS.map((day) => (
-            <div key={day}>
-              <div className="text-center text-xs font-bold uppercase tracking-wide text-muted-foreground pb-2 mb-2 border-b border-border">{day}</div>
-              <div className="space-y-2">
-                {groupsByDay[day].length === 0 ? (
-                  <div className="h-8 rounded border border-dashed border-border" />
-                ) : (
-                  groupsByDay[day].map((g, i) => (
-                    <div key={g.id} className={`p-2 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
+        <>
+          <div className="hidden lg:grid grid-cols-7 gap-3">
+            {DAYS.map((day) => (
+              <div key={day}>
+                <div className="text-center text-xs font-bold uppercase tracking-wide text-muted-foreground pb-2 mb-2 border-b border-border">{day}</div>
+                <div className="space-y-2">
+                  {groupsByDay[day].length === 0 ? (
+                    <div className="h-8 rounded border border-dashed border-border" />
+                  ) : (
+                    groupsByDay[day].map((g, i) => (
+                      <div key={g.id} className={`p-2 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
+                        <p className="font-semibold">{g.name}</p>
+                        <p className="opacity-75">{g.horaire}</p>
+                        <p className="opacity-60">{teacherName(g.teacher_id)}</p>
+                        {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="lg:hidden space-y-4">
+            {DAYS.filter(day => groupsByDay[day].length > 0).map((day) => (
+              <div key={day} className="bg-card border border-border rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-muted border-b border-border">
+                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{day}</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  {groupsByDay[day].map((g, i) => (
+                    <div key={g.id} className={`p-2.5 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
                       <p className="font-semibold">{g.name}</p>
-                      <p className="opacity-75">{g.horaire}</p>
-                      <p className="opacity-60">{teacherName(g.teacher_id)}</p>
+                      {g.horaire && <p className="opacity-75 mt-0.5">{g.horaire}</p>}
+                      {g.teacher_id && <p className="opacity-60">{teacherName(g.teacher_id)}</p>}
                       {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
                     </div>
-                  ))
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Mobile: vertical day list */}
-        <div className="lg:hidden space-y-4">
-          {DAYS.filter(day => groupsByDay[day].length > 0).map((day) => (
-            <div key={day} className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="px-4 py-2 bg-muted border-b border-border">
-                <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{day}</span>
-              </div>
-              <div className="p-3 space-y-2">
-                {groupsByDay[day].map((g, i) => (
-                  <div key={g.id} className={`p-2.5 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
-                    <p className="font-semibold">{g.name}</p>
-                    {g.horaire && <p className="opacity-75 mt-0.5">{g.horaire}</p>}
-                    {g.teacher_id && <p className="opacity-60">{teacherName(g.teacher_id)}</p>}
-                    {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

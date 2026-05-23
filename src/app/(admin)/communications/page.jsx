@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
 import { MessageSquare, Megaphone, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function AnnouncementModal({ groups, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({ title: '', body: '', audience: 'all', group_id: '', pinned: false });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -71,6 +73,7 @@ function AnnouncementModal({ groups, onSave, onClose }) {
 }
 
 function MessageModal({ students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({ to_user_email: '', to_name: '', subject: '', body: '', type: 'message' });
   const [sending, setSending] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));

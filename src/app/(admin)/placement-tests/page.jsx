@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -16,6 +17,7 @@ const STATUS_COLORS = {
 };
 
 function TestModal({ test, groups, students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState(test || { student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
