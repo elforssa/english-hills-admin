@@ -47,11 +47,24 @@ function InscriptionCompteInner() {
       const otpType   = searchParams.get('type');
       const code      = searchParams.get('code');
 
+      // Hash-based implicit flow: Supabase's default {{ .ConfirmationURL }}
+      // template appends #access_token=…&refresh_token=… to the URL.
+      // searchParams can't read hash fragments, so we parse window.location.hash.
+      let hashAccessToken   = null;
+      let hashRefreshToken  = null;
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        hashAccessToken  = hashParams.get('access_token');
+        hashRefreshToken = hashParams.get('refresh_token');
+      }
+
+      const hasToken = !!(tokenHash || code || hashAccessToken);
+
       // Drop any pre-existing local session before consuming the invite —
       // commonly the inviter's session in the same browser. Without this,
       // the singleton client can keep returning the inviter's user object
       // even after the new session is installed.
-      if (tokenHash || code) {
+      if (hasToken) {
         await sb.auth.signOut({ scope: 'local' });
       }
 
@@ -69,6 +82,20 @@ function InscriptionCompteInner() {
           setPhase('expired');
           return;
         }
+      } else if (hashAccessToken) {
+        // Hash-based implicit flow (default Supabase email template).
+        // Install the invitee's tokens directly — no cookie exchange needed.
+        const { error } = await sb.auth.setSession({
+          access_token:  hashAccessToken,
+          refresh_token: hashRefreshToken || '',
+        });
+        if (cancelled) return;
+        if (error) {
+          setPhase('expired');
+          return;
+        }
+        // Clean up the hash so tokens aren't exposed in browser history.
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
       } else if (code) {
         // Fallback: classic /verify → ?code= redirect from the default
         // Supabase email template. Works when third-party cookies are
