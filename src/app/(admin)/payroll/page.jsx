@@ -56,24 +56,26 @@ function PayrollModal({ teachers, onSave, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!teacher || !calc) return;
+    if (!teacher) return;
     setSaving(true);
-    await entities.Payroll.create({
-      teacher_id: teacher.id,
-      teacher_name: teacher.full_name,
-      contract_type: teacher.contract_type,
-      mois, annee,
-      heures_travaillees: parseFloat(heures) || 0,
-      taux_horaire: teacher.taux_horaire || 0,
-      salaire_brut: calc.brut,
-      cotisation_cnss: calc.cnss,
-      cotisation_amo: calc.amo,
-      ir_retenu: calc.ir,
-      salaire_net: calc.net,
-      statut: 'Brouillon',
-    });
-    toast.success('Fiche de paie créée');
-    onSave();
+    try {
+      const res = await fetch('/api/admin/payroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacher_id: teacher.id, mois, annee, heures: parseFloat(heures) || 0 }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Erreur lors de la création');
+        setSaving(false);
+        return;
+      }
+      toast.success('Fiche de paie créée');
+      onSave();
+    } catch {
+      toast.error('Erreur réseau');
+      setSaving(false);
+    }
   };
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Bell, Send, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -21,6 +22,7 @@ const TYPE_COLORS = {
 };
 
 function SendNotifModal({ students, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState({ type: 'general', recipient_email: '', recipient_name: '', subject: '', message: '' });
   const [sending, setSending] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
-import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText } from 'lucide-react';
+import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
+import { exportToCsv } from '@/utils/exportCsv';
 import MessagesTab from '@/components/portals/MessagesTab';
 
 const STATUS_COLORS = {
@@ -89,9 +90,26 @@ export default function ParentPortal() {
 
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Espace Parents</h1>
-        <p className="text-muted-foreground text-sm mt-1">Bienvenue, {user?.full_name}</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Espace Parents</h1>
+          <p className="text-muted-foreground text-sm mt-1">Bienvenue, {user?.full_name}</p>
+        </div>
+        {selectedStudent && (
+          <button
+            onClick={() => {
+              const rows = [
+                ...attendance.map(a => ({ Type: 'Présence', Date: a.session_date, Détail: a.status, Note: '' })),
+                ...assessments.map(a => ({ Type: 'Note', Date: a.terme, Détail: `Finale: ${a.note_finale ?? '—'}/20`, Note: a.commentaire || '' })),
+                ...receipts.map(r => ({ Type: 'Paiement', Date: r.date, Détail: r.statut_paiement, Note: `${(r.montant_paye || 0).toLocaleString('fr-MA')} MAD` })),
+              ];
+              exportToCsv(rows, `bilan-${selectedStudent.full_name}-${new Date().toISOString().slice(0,10)}.csv`);
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted"
+          >
+            <Download size={14} /> Télécharger le bilan
+          </button>
+        )}
       </div>
 
       {students.length > 1 && (

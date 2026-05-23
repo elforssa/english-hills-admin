@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { entities, integrations } from '@/lib/entities';
+import { integrations } from '@/lib/entities';
 import { CheckCircle, Upload, ArrowLeft } from 'lucide-react';
 
 const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -35,24 +35,37 @@ export default function PublicEnrollment() {
     e.preventDefault();
     if (form._hp) return;
     setSubmitting(true);
-    const student = await entities.Student.create({
-      full_name: form.full_name,
-      date_naissance: form.date_naissance,
-      telephone: form.telephone,
-      email: form.email,
-      age_category: form.age_category,
-      niveau_cefr: form.niveau_cefr || undefined,
-      notes: form.notes,
-      status: 'Prospect',
-    });
-    await entities.Enrollment.create({
-      student_id: student.id,
-      status: 'Submitted',
-      date_inscription: new Date().toISOString().split('T')[0],
-      documents_urls: docUrls,
-      notes: form.notes,
-    });
-    setDone(true);
+    try {
+      const res = await fetch('/api/public/inscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name:      form.full_name,
+          date_naissance: form.date_naissance || undefined,
+          telephone:      form.telephone,
+          email:          form.email          || undefined,
+          age_category:   form.age_category   || undefined,
+          niveau_cefr:    form.niveau_cefr    || undefined,
+          notes:          form.notes          || undefined,
+          documents_urls: docUrls.length > 0 ? docUrls : undefined,
+        }),
+      });
+      if (res.status === 429) {
+        alert('Trop de soumissions depuis votre connexion. Veuillez réessayer dans une heure.');
+        setSubmitting(false);
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Une erreur est survenue. Veuillez réessayer.');
+        setSubmitting(false);
+        return;
+      }
+      setDone(true);
+    } catch {
+      alert('Erreur réseau. Vérifiez votre connexion et réessayez.');
+      setSubmitting(false);
+    }
   };
 
   if (done) return (

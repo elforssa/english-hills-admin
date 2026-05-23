@@ -21,6 +21,8 @@ export default function Attendance() {
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [statuses, setStatuses] = useState({});
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
 
   const [enrollments, setEnrollments] = useState([]);
 
@@ -39,6 +41,15 @@ export default function Attendance() {
       const s = {};
       a.forEach(r => { s[r.student_id] = r.status; });
       setStatuses(s);
+    });
+    // Load full history for the selected group (past sessions)
+    entities.Attendance.filter({ group_id: selectedGroup }, '-session_date', 500).then(all => {
+      const byDate = {};
+      all.forEach(r => {
+        if (!byDate[r.session_date]) byDate[r.session_date] = [];
+        byDate[r.session_date].push(r);
+      });
+      setHistory(Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])));
     });
   }, [selectedGroup, sessionDate]);
 
@@ -87,6 +98,14 @@ export default function Attendance() {
     <div className="p-4 lg:p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Gestion des présences</h1>
+        {selectedGroup && (
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className={`text-sm font-medium px-3 py-1.5 rounded-md border transition-colors ${showHistory ? 'bg-primary text-white border-transparent' : 'border-border hover:bg-muted'}`}
+          >
+            {showHistory ? 'Saisie du jour' : 'Historique'}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -103,7 +122,40 @@ export default function Attendance() {
         </div>
       </div>
 
-      {!selectedGroup ? (
+      {showHistory && selectedGroup ? (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-border">
+            <h2 className="font-semibold text-sm">Historique des séances — {groupName(selectedGroup)}</h2>
+          </div>
+          {history.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">Aucune séance enregistrée.</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {history.map(([date, records]) => {
+                const presentsCount = records.filter(r => r.status === 'Présent').length;
+                const absentsCount  = records.filter(r => r.status === 'Absent').length;
+                return (
+                  <div key={date} className="flex items-center justify-between px-5 py-3">
+                    <div>
+                      <button
+                        onClick={() => { setSessionDate(date); setShowHistory(false); }}
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        {date}
+                      </button>
+                      <p className="text-xs text-muted-foreground mt-0.5">{records.length} apprenants</p>
+                    </div>
+                    <div className="flex gap-3 text-xs">
+                      <span className="text-green-600 font-medium">{presentsCount} présents</span>
+                      <span className="text-red-600 font-medium">{absentsCount} absents</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : !selectedGroup ? (
         <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
           Sélectionnez un groupe pour marquer les présences.
         </div>
@@ -111,7 +163,7 @@ export default function Attendance() {
         <div className="bg-card border border-border rounded-lg p-12 text-center text-muted-foreground">
           Aucun apprenant dans ce groupe. Assignez des apprenants depuis leur fiche.
         </div>
-      ) : (
+      ) : !showHistory && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold">{groupName(selectedGroup)} — {sessionDate}</h2>
@@ -158,3 +210,4 @@ export default function Attendance() {
     </div>
   );
 }
+

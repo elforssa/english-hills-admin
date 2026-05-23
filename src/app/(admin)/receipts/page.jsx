@@ -181,7 +181,12 @@ export default function Receipts() {
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? <SkeletonTable rows={10} cols={9} /> :
-          filtered.length === 0 ? <div className="p-8 text-center text-muted-foreground text-sm">Aucun reçu.</div> : (
+          filtered.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">
+              Aucun reçu.{' '}
+              <a href="/receipts/new" className="text-primary font-medium hover:underline">Créer le premier →</a>
+            </div>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

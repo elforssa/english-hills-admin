@@ -114,6 +114,12 @@ export default function Groups() {
         {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
           <>
             <div className="sm:hidden divide-y divide-border">
+              {filtered.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground text-sm">
+                  Aucun groupe.{' '}
+                  <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
+                </div>
+              )}
               {filtered.map(g => (
                 <div key={g.id} className="p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -144,6 +150,12 @@ export default function Groups() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                      Aucun groupe.{' '}
+                      <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
+                    </td></tr>
+                  )}
                   {filtered.map(g => (
                     <tr key={g.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{g.name}</td>

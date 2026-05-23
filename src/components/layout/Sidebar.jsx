@@ -225,7 +225,7 @@ export default function Sidebar() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="fixed inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="relative flex flex-col w-64 min-h-screen z-50" style={{ backgroundColor: '#1E3560' }}>
+          <div className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: '#1E3560' }}>
             <button onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" className="absolute top-4 right-4 text-white/60 hover:text-white">
               <X size={18} />
             </button>

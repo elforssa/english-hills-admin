@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { useScrollLock } from '@/hooks/useScrollLock';
 import { toast } from 'sonner';
 import Pagination from '@/components/ui/pagination';
 
@@ -20,6 +21,7 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
+  useScrollLock();
   const [form, setForm] = useState(enrollment || { student_id: '', group_id: '', status: 'Submitted', date_inscription: new Date().toISOString().split('T')[0], notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));

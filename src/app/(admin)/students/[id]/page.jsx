@@ -1,9 +1,12 @@
 'use client';
 
+'use client';
+
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
 import { ArrowLeft, Edit, FileText, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -45,9 +48,11 @@ export default function StudentDetail() {
   }, [id]);
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer cet apprenant ?')) return;
-    await entities.Student.delete(id);
-    toast.success('Apprenant supprimé');
+    if (!confirm('Archiver cet apprenant ? Son historique sera conservé.')) return;
+    const sb = getBrowserClient();
+    const { error } = await sb.rpc('soft_delete_student', { p_student_id: id });
+    if (error) { toast.error('Erreur : ' + error.message); return; }
+    toast.success('Apprenant archivé');
     router.push('/students');
   };
 

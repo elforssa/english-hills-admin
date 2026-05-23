@@ -83,7 +83,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
           { label: 'Apprenants', value: stats.students, icon: Users, href: '/students', color: '#1E4D8B', bg: '#EEF2FF' },
           { label: 'Enseignants', value: stats.teachers, icon: GraduationCap, href: '/teachers', color: '#7c3aed', bg: '#F5F3FF' },

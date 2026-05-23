@@ -234,7 +234,10 @@ export default function Assessments() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filteredAssessments.length === 0 && (
-                    <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground text-sm">Aucune évaluation trouvée.</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                      Aucune évaluation trouvée.{' '}
+                      <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer la première →</button>
+                    </td></tr>
                   )}
                   {filteredAssessments.map(a => (
                     <tr key={a.id} className="hover:bg-muted/30">
