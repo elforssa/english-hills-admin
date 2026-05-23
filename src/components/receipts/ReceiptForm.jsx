@@ -41,6 +41,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     const autoStatus = restant <= 0 ? 'Soldé' : form.statut_paiement;
     onSubmit({
       ...form,
+      student_id: form.student_id || null,
       montant_total: parseFloat(form.montant_total) || 0,
       montant_paye: parseFloat(form.montant_paye) || 0,
       statut_paiement: autoStatus,

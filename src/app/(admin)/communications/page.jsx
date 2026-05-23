@@ -16,7 +16,7 @@ function AnnouncementModal({ groups, onSave, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const user = await auth.me();
-    await entities.Announcement.create({ ...form, author: user?.full_name || 'Admin' });
+    await entities.Announcement.create({ ...form, group_id: form.group_id || null, author: user?.full_name || 'Admin' });
     toast.success('Annonce publiée'); onSave();
   };
 

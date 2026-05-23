@@ -28,7 +28,7 @@ function TestModal({ test, groups, students, onSave, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const data = { ...form, score: form.score !== '' ? parseFloat(form.score) : null };
+    const data = { ...form, student_id: form.student_id || null, groupe_affecte_id: form.groupe_affecte_id || null, score: form.score !== '' ? parseFloat(form.score) : null };
     try {
       if (form.id) {
         await entities.PlacementTest.update(form.id, data);

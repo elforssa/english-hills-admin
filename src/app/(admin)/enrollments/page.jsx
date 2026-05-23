@@ -31,8 +31,9 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = { ...form, student_id: form.student_id || null, group_id: form.group_id || null };
       if (form.id) {
-        await entities.Enrollment.update(form.id, form);
+        await entities.Enrollment.update(form.id, payload);
         const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
         const studentStatus = statusMap[form.status];
         if (form.student_id && studentStatus) {
@@ -44,7 +45,7 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
         }
         toast.success('Mis à jour');
       } else {
-        await entities.Enrollment.create(form);
+        await entities.Enrollment.create(payload);
         toast.success('Inscription créée');
       }
       onSave();

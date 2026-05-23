@@ -14,8 +14,9 @@ function GroupModal({ group, teachers, onSave, onClose }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
-    if (form.id) { await entities.Group.update(form.id, form); toast.success('Groupe mis à jour'); }
-    else { await entities.Group.create(form); toast.success('Groupe créé'); }
+    const payload = { ...form, teacher_id: form.teacher_id || null };
+    if (form.id) { await entities.Group.update(form.id, payload); toast.success('Groupe mis à jour'); }
+    else { await entities.Group.create(payload); toast.success('Groupe créé'); }
     onSave();
   };
   return (

@@ -26,8 +26,9 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
-    if (form.id) { await entities.LeaveRequest.update(form.id, form); toast.success('Mis à jour'); }
-    else { await entities.LeaveRequest.create(form); toast.success('Demande créée'); }
+    const payload = { ...form, teacher_id: form.teacher_id || null };
+    if (form.id) { await entities.LeaveRequest.update(form.id, payload); toast.success('Mis à jour'); }
+    else { await entities.LeaveRequest.create(payload); toast.success('Demande créée'); }
     onSave();
   };
 

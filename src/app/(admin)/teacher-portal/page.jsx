@@ -27,7 +27,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   const handleSubmit = async (ev) => {
     ev.preventDefault();
     setSaving(true);
-    const data = { ...form, note_oral: parseFloat(form.note_oral)||null, note_ecrit: parseFloat(form.note_ecrit)||null, note_devoirs: parseFloat(form.note_devoirs)||null, note_finale: parseFloat(noteFinale()) };
+    const data = { ...form, student_id: form.student_id || null, group_id: form.group_id || null, note_oral: parseFloat(form.note_oral)||null, note_ecrit: parseFloat(form.note_ecrit)||null, note_devoirs: parseFloat(form.note_devoirs)||null, note_finale: parseFloat(noteFinale()) };
     try {
       if (form.id) {
         await entities.Assessment.update(form.id, data);

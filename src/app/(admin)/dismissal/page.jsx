@@ -43,6 +43,8 @@ export default function Dismissal() {
     try {
       await entities.DismissalLog.create({
         ...form,
+        student_id: form.student_id || null,
+        adult_id: form.adult_id || null,
         adult_name: adult?.full_name || form.adult_name,
         timestamp: new Date().toISOString(),
         confirmed: true,
