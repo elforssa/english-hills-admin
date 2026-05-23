@@ -50,7 +50,7 @@ export default function ParentPortal() {
     Promise.all([
       entities.Attendance.filter({ student_id: selectedStudent.id }),
       entities.Assessment.filter({ student_id: selectedStudent.id }),
-      entities.Receipt.filter({ nom_prenom: selectedStudent.full_name }),
+      entities.Receipt.filter({ student_id: selectedStudent.id }),
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }),
     ]).then(([att, ass, rec, port, la]) => {

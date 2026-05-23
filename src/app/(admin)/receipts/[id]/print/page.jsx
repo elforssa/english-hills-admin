@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { entities, auth } from '@/lib/entities';
 import { Printer, ArrowLeft, Download, Trash2 } from 'lucide-react';
+import jsPDF from 'jspdf';
 
 const STATUT_CONFIG = {
   'Soldé': { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
@@ -28,6 +29,69 @@ export default function ReceiptPrint() {
   }, [id]);
 
   const handlePrint = () => window.print();
+
+  const handleDownload = () => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a5' });
+    const restant = (receipt.montant_total || 0) - (receipt.montant_paye || 0);
+    const statusKey = receipt.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
+    let y = 15;
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 77, 139);
+    doc.text('English Hills Language Center', 74, y, { align: 'center' }); y += 7;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    doc.text('Centre Almaz, Casablanca · contact@english-hills.com', 74, y, { align: 'center' }); y += 8;
+    doc.setDrawColor(30, 77, 139); doc.setLineWidth(0.5); doc.line(10, y, 138, y); y += 6;
+
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
+    doc.text(`Reçu de paiement — ${receipt.date || ''}`, 10, y); y += 5;
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120);
+    doc.text(`Réf. #${(receipt.id || '').slice(-8).toUpperCase()}  ·  ${statusKey}`, 10, y); y += 7;
+    doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(10, y, 138, y); y += 5;
+
+    const rows = [
+      ['Nom et prénom', receipt.nom_prenom],
+      ['Téléphone', receipt.telephone],
+      ...(receipt.email ? [['Email', receipt.email]] : []),
+      ...(receipt.date_naissance ? [['Date de naissance', receipt.date_naissance]] : []),
+      ['Catégorie', receipt.categorie],
+      ['Niveau', receipt.niveau],
+      ['Type de cours', receipt.type_cours],
+      ...(receipt.jours ? [['Jours', receipt.jours]] : []),
+      ...(receipt.plage_horaire ? [['Horaire', receipt.plage_horaire]] : []),
+    ];
+
+    doc.setFontSize(9);
+    rows.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
+      doc.text(label + ' :', 10, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(String(val || '—'), 58, y);
+      y += 6;
+    });
+
+    y += 2; doc.line(10, y, 138, y); y += 6;
+    const financial = [
+      ['Montant total', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`],
+      ['Montant payé', `${(receipt.montant_paye || 0).toLocaleString('fr-MA')} MAD`],
+      ['Restant', `${restant.toLocaleString('fr-MA')} MAD`],
+      ['Mode de paiement', receipt.mode_paiement],
+      ['Statut', statusKey],
+    ];
+    financial.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
+      doc.text(label + ' :', 10, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(String(val || '—'), 58, y);
+      y += 6;
+    });
+
+    y += 4; doc.line(10, y, 138, y); y += 8;
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
+    doc.text('Signature du responsable : ________________________', 10, y);
+
+    const safeName = (receipt.nom_prenom || 'recu').replace(/\s+/g, '-').toLowerCase();
+    doc.save(`reçu-${safeName}-${receipt.date || 'english-hills'}.pdf`);
+  };
 
   const handleDelete = async () => {
     if (!confirm('Supprimer ce reçu définitivement ?')) return;
@@ -64,7 +128,7 @@ export default function ReceiptPrint() {
           Imprimer
         </button>
         <button
-          onClick={handlePrint}
+          onClick={handleDownload}
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
         >
           <Download size={15} />

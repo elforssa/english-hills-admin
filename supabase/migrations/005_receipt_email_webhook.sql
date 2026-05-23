@@ -14,15 +14,21 @@
 --        supabase secrets set RESEND_API_KEY=re_...
 --        supabase secrets set RESEND_FROM_ADDRESS='English Hills <noreply@english-hills.com>'
 --
---   3. Tell Postgres the service-role JWT it should use to call the function.
---      Run ONCE against your project's database (as the postgres user):
+--   3. Tell Postgres the settings it needs. Run ONCE as the postgres user:
+--
 --        alter database postgres
 --          set app.settings.service_role_key
 --          to '<paste the service_role JWT here>';
---      (The JWT is at Settings → API in the Supabase dashboard.)
 --
--- If the setting is missing the trigger logs a NOTICE and returns NEW without
--- raising, so receipt INSERTs still succeed even before secrets are wired.
+--        alter database postgres
+--          set app.settings.edge_function_url
+--          to 'https://<ref>.supabase.co/functions/v1/sendReceiptEmail';
+--
+--      Both values are at Settings → API in the Supabase dashboard.
+--
+-- If either setting is missing the trigger logs a NOTICE and returns NEW
+-- without raising, so receipt INSERTs still succeed even before secrets are
+-- wired.
 -- =============================================================================
 
 create extension if not exists pg_net with schema extensions;
@@ -34,11 +40,15 @@ security definer
 set search_path = public, extensions
 as $$
 declare
-  edge_url    constant text := 'https://hopcezradkhrixwwswxn.supabase.co/functions/v1/sendReceiptEmail';
-  service_key text          := nullif(current_setting('app.settings.service_role_key', true), '');
+  edge_url    text := nullif(current_setting('app.settings.edge_function_url', true), '');
+  service_key text := nullif(current_setting('app.settings.service_role_key', true), '');
 begin
   if service_key is null then
     raise notice 'app.settings.service_role_key not set; receipt email webhook skipped for receipt %', new.id;
+    return new;
+  end if;
+  if edge_url is null then
+    raise notice 'app.settings.edge_function_url not set; receipt email webhook skipped for receipt %', new.id;
     return new;
   end if;
 

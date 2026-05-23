@@ -34,7 +34,7 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
+      <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Demande de congé</h2>
           <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
@@ -47,7 +47,7 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
               {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className={labelClass}>Du *</label><input type="date" className={inputClass} value={form.date_debut} onChange={e => set('date_debut', e.target.value)} required /></div>
             <div><label className={labelClass}>Au *</label><input type="date" className={inputClass} value={form.date_fin} onChange={e => set('date_fin', e.target.value)} required /></div>
           </div>

@@ -21,13 +21,13 @@ function GroupModal({ group, teachers, onSave, onClose }) {
   };
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl">
+      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">{form.id ? 'Modifier le groupe' : 'Nouveau groupe'}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2"><label className={labelClass}>Nom du groupe *</label><input className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} required /></div>
             <div><label className={labelClass}>Niveau</label>
               <select className={inputClass} value={form.niveau} onChange={e => set('niveau', e.target.value)}>
