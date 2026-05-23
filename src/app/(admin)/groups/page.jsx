@@ -56,7 +56,7 @@ function GroupModal({ group, teachers, onSave, onClose }) {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               {saving ? '...' : 'Enregistrer'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground hover:text-foreground">Annuler</button>
@@ -98,7 +98,7 @@ export default function Groups() {
           <h1 className="text-2xl font-bold">Groupes & niveaux</h1>
           <p className="text-muted-foreground text-sm mt-1">{groups.length} groupes</p>
         </div>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Nouveau groupe
         </button>
       </div>
@@ -123,7 +123,7 @@ export default function Groups() {
                       <p className="text-xs text-muted-foreground">{g.jours} {g.horaire} {g.salle ? `· ${g.salle}` : ''}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{g.niveau}</span>
+                      <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span>
                       <span className="text-xs text-muted-foreground">{g.terme}</span>
                     </div>
                   </div>
@@ -147,7 +147,7 @@ export default function Groups() {
                   {filtered.map(g => (
                     <tr key={g.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{g.name}</td>
-                      <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{g.niveau}</span></td>
+                      <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">{g.categorie}</td>
                       <td className="px-4 py-3 text-muted-foreground">{teacherName(g.teacher_id)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{g.jours} {g.horaire}</td>

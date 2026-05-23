@@ -37,7 +37,7 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Demande de congé</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -60,7 +60,7 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
           <div><label className={labelClass}>Remplaçant</label><input className={inputClass} value={form.remplacant || ''} onChange={e => set('remplacant', e.target.value)} /></div>
           <div><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
           <div className="flex gap-3">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>{saving ? '...' : 'Enregistrer'}</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">{saving ? '...' : 'Enregistrer'}</button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
           </div>
         </form>
@@ -109,7 +109,7 @@ export default function LeaveRequests() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Congés & absences</h1>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Nouvelle demande
         </button>
       </div>

@@ -104,8 +104,7 @@ export default function StudentsDirectory() {
         <div className="flex border border-border rounded-xl overflow-hidden bg-white">
           {['grid','list'].map(v => (
             <button key={v} onClick={() => setView(v)}
-              className={`px-3 py-2 text-xs font-medium transition-colors ${view === v ? 'text-white' : 'text-muted-foreground hover:bg-muted'}`}
-              style={view === v ? { backgroundColor: '#1E4D8B' } : {}}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${view === v ? 'text-white bg-primary' : 'text-muted-foreground hover:bg-muted'}`}
             >
               {v === 'grid' ? '⊞ Grille' : '≡ Liste'}
             </button>

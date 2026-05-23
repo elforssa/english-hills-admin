@@ -99,7 +99,7 @@ export default function Attendance() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Date de séance</label>
-          <input type="date" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={sessionDate} onChange={e => setSessionDate(e.target.value)} />
+          <input type="date" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={sessionDate} onChange={e => setSessionDate(e.target.value)} max={new Date().toISOString().split('T')[0]} />
         </div>
       </div>
 

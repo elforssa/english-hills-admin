@@ -25,6 +25,11 @@ const ASSIGNABLE_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
 const ADMIN_ASSIGNABLE = ['student', 'parent', 'teacher'];
 const ADMIN_TARGETABLE_CURRENT_ROLES = ['student', 'parent', 'teacher', 'pending'];
 
+const RATE_LIMITS = [
+  { scope: 'role_update:minute', max: 10,  windowSeconds: 60 },
+  { scope: 'role_update:hour',   max: 50,  windowSeconds: 60 * 60 },
+];
+
 const Schema = z.object({
   userId: z.string().uuid(),
   role: z.enum(ASSIGNABLE_ROLES),
@@ -46,6 +51,26 @@ export async function POST(request) {
     .maybeSingle();
   if (callerErr || !callerProfile || !['admin', 'director'].includes(callerProfile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // ── Gate 3: per-user rate limit ────────────────────────────────────────
+  for (const limit of RATE_LIMITS) {
+    const { data: allowed, error: rlError } = await supabase.rpc('check_rate_limit', {
+      p_scope: limit.scope,
+      p_max_requests: limit.max,
+      p_window_seconds: limit.windowSeconds,
+    });
+    if (rlError) {
+      // eslint-disable-next-line no-console
+      console.error('[update-role] rate-limit RPC failed:', rlError);
+      return NextResponse.json({ error: 'Rate limiter unavailable' }, { status: 503 });
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Trop de requêtes. Veuillez réessayer dans quelques minutes.' },
+        { status: 429, headers: { 'Retry-After': String(limit.windowSeconds) } },
+      );
+    }
   }
 
   // ── Parse body ─────────────────────────────────────────────────────────
@@ -72,7 +97,7 @@ export async function POST(request) {
     .eq('id', userId)
     .maybeSingle();
   if (targetErr || !target) {
-    return NextResponse.json({ error: 'Utilisateur introuvable' }, { status: 404 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // ── Authorization matrix ───────────────────────────────────────────────
@@ -105,17 +130,25 @@ export async function POST(request) {
     }
   }
 
-  // ── Apply change ───────────────────────────────────────────────────────
-  const { error: updateErr } = await admin
+  // ── Apply change (optimistic lock on current role to prevent TOCTOU) ───
+  const { data: updated, error: updateErr } = await admin
     .from('profiles')
     .update({ role: nextRole })
-    .eq('id', userId);
+    .eq('id', userId)
+    .eq('role', target.role)
+    .select('id');
   if (updateErr) {
     // eslint-disable-next-line no-console
     console.error('[update-role] profiles update failed:', updateErr);
     return NextResponse.json(
       { error: 'Échec de la mise à jour du rôle', details: updateErr.message },
       { status: 500 },
+    );
+  }
+  if (!updated || updated.length === 0) {
+    return NextResponse.json(
+      { error: 'Le rôle de cet utilisateur a été modifié entre-temps. Veuillez réessayer.' },
+      { status: 409 },
     );
   }
 

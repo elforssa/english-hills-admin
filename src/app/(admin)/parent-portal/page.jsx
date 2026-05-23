@@ -31,7 +31,7 @@ export default function ParentPortal() {
     auth.me().then(async (u) => {
       setUser(u);
       const allStudents = await entities.Student.list('full_name', 200);
-      const myStudents = allStudents.filter(s => s.parent_email === u?.email || s.email === u?.email);
+      const myStudents = allStudents.filter(s => (s.parent_email && s.parent_email === u?.email) || (s.email && s.email === u?.email));
       setStudents(myStudents);
       if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
       const [annParents, annAll] = await Promise.all([
@@ -127,7 +127,7 @@ export default function ParentPortal() {
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0" style={{ backgroundColor: '#1E4D8B' }}>
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-primary">
                 {selectedStudent.full_name?.[0]}
               </div>
               <div>
@@ -241,7 +241,7 @@ export default function ParentPortal() {
                     <div key={k} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-44 flex-shrink-0">{k}</span>
                       <div className="flex-1 bg-muted rounded-full h-1.5">
-                        <div className="h-1.5 rounded-full" style={{ width: `${v * 10}%`, backgroundColor: '#1E4D8B' }} />
+                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${v * 10}%` }} />
                       </div>
                       <span className="text-xs font-bold w-4">{v}</span>
                     </div>

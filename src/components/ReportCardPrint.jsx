@@ -19,7 +19,7 @@ export default function ReportCardPrint({ student, assessment, groupName, onClos
       <style>{`@media print { .no-print { display: none !important; } body { margin: 0; } .print-page { box-shadow: none !important; margin: 0 !important; } }`}</style>
       <div className="w-full max-w-2xl">
         <div className="no-print flex justify-between items-center mb-3">
-          <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md" style={{ backgroundColor: '#1E4D8B' }}>
+          <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary">
             <Printer size={14} /> Imprimer
           </button>
           <button onClick={onClose} className="p-2 rounded-md bg-white text-gray-500 hover:text-gray-800"><X size={16} /></button>
@@ -47,7 +47,7 @@ export default function ReportCardPrint({ student, assessment, groupName, onClos
 
           <table className="w-full text-sm mb-6">
             <thead>
-              <tr style={{ backgroundColor: '#1E4D8B' }}>
+              <tr className="bg-primary">
                 <th className="text-left px-4 py-2 text-white font-semibold rounded-tl-md">Compétence</th>
                 <th className="text-center px-4 py-2 text-white font-semibold">Coefficient</th>
                 <th className="text-center px-4 py-2 text-white font-semibold">Note /20</th>

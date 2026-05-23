@@ -22,6 +22,11 @@ import { getServerClient, getServiceRoleClient } from '@/lib/supabase';
 const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
 const PRIVILEGED_ROLES = ['admin', 'director'];
 
+const RATE_LIMITS = [
+  { scope: 'invite:minute', max: 5,  windowSeconds: 60 },
+  { scope: 'invite:hour',   max: 20, windowSeconds: 60 * 60 },
+];
+
 const InviteSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   role: z.enum(ALLOWED_ROLES),
@@ -43,6 +48,26 @@ export async function POST(request) {
     .maybeSingle();
   if (profileError || !profile || !PRIVILEGED_ROLES.includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // ── Gate 3: per-user rate limit ────────────────────────────────────────
+  for (const limit of RATE_LIMITS) {
+    const { data: allowed, error: rlError } = await supabase.rpc('check_rate_limit', {
+      p_scope: limit.scope,
+      p_max_requests: limit.max,
+      p_window_seconds: limit.windowSeconds,
+    });
+    if (rlError) {
+      // eslint-disable-next-line no-console
+      console.error('[invite] rate-limit RPC failed:', rlError);
+      return NextResponse.json({ error: 'Rate limiter unavailable' }, { status: 503 });
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Trop de requêtes. Veuillez réessayer dans quelques minutes.' },
+        { status: 429, headers: { 'Retry-After': String(limit.windowSeconds) } },
+      );
+    }
   }
 
   // ── Parse + validate body ──────────────────────────────────────────────

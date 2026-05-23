@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { entities, auth } from '@/lib/entities';
-import { Printer, ArrowLeft, Download, Trash2 } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Trash2, Edit } from 'lucide-react';
+import Link from 'next/link';
 import jsPDF from 'jspdf';
 
 const STATUT_CONFIG = {
@@ -108,7 +109,7 @@ export default function ReceiptPrint() {
 
   return (
     <div className="min-h-screen bg-gray-100 print:bg-white">
-      <div className="print:hidden sticky top-0 z-10 flex items-center gap-3 px-6 py-3 bg-white border-b border-border shadow-sm">
+      <div className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-3 px-6 py-3 bg-white border-b border-border shadow-sm">
         <button onClick={() => router.push('/receipts')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft size={15} /> Retour
         </button>
@@ -134,6 +135,13 @@ export default function ReceiptPrint() {
           <Download size={15} />
           Télécharger PDF
         </button>
+        <Link
+          href={`/receipts/${id}/edit`}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
+        >
+          <Edit size={15} />
+          Modifier
+        </Link>
         <button
           onClick={handleDelete}
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
@@ -164,7 +172,7 @@ export default function ReceiptPrint() {
               </p>
             </div>
             <div className="text-right">
-              <div className="inline-block text-white text-xs font-bold px-4 py-1.5 rounded-lg mb-3" style={{ backgroundColor: '#1E4D8B' }}>
+              <div className="inline-block text-white text-xs font-bold px-4 py-1.5 rounded-lg mb-3 bg-primary">
                 REÇU DE PAIEMENT
               </div>
               <p className="text-xs text-gray-500">Date : <span className="font-bold text-gray-800">{receipt.date}</span></p>
@@ -197,7 +205,7 @@ export default function ReceiptPrint() {
                 <DataField label="Catégorie" value={receipt.categorie} />
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Niveau</p>
-                  <span className="inline-block text-xs font-bold text-white px-3 py-1 rounded-lg" style={{ backgroundColor: '#1E4D8B' }}>{receipt.niveau}</span>
+                  <span className="inline-block text-xs font-bold text-white px-3 py-1 rounded-lg bg-primary">{receipt.niveau}</span>
                 </div>
                 <DataField label="Type de cours" value={receipt.type_cours} />
                 {receipt.duree_cours && <DataField label="Durée" value={receipt.duree_cours} />}
@@ -246,7 +254,7 @@ export default function ReceiptPrint() {
             </div>
           </div>
 
-          <div className="px-10 py-4 text-center" style={{ backgroundColor: '#1E4D8B' }}>
+          <div className="px-10 py-4 text-center bg-primary">
             <p className="text-xs font-medium text-white/80">English Hills Language Center · Centre Almaz, Casablanca</p>
             <p className="text-xs text-white/50 mt-0.5 italic">Learn Today, Lead Tomorrow · english-hills.com</p>
           </div>

@@ -36,7 +36,6 @@ const SendEmailSchema = z.object({
   subject:   z.string().trim().min(1).max(998),  // RFC 5322 line-length cap
   body:      z.string().min(1).max(200_000),
   html:      z.boolean().optional(),
-  from_name: z.string().trim().min(1).max(100).optional(),
   reply_to:  emailField.optional(),
 });
 
@@ -47,6 +46,14 @@ export async function POST(request) {
   if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
+
+  // Look up caller's display name server-side so callers can't spoof it.
+  const { data: callerProfile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .maybeSingle();
+  const callerName = callerProfile?.full_name || null;
 
   // Gate: per-user rate limit (atomic, DB-backed).
   for (const limit of RATE_LIMITS) {
@@ -86,18 +93,17 @@ export async function POST(request) {
     );
   }
 
-  const { to, subject, body, html, from_name, reply_to } = parsed.data;
+  const { to, subject, body, html, reply_to } = parsed.data;
 
   try {
     const options = {};
     if (html)      options.html = true;
     if (reply_to)  options.replyTo = reply_to;
-    if (from_name && process.env.RESEND_FROM_ADDRESS) {
-      // Only allow overriding the display name if we already have a verified
-      // sender domain. Otherwise Resend will reject the request.
+    if (callerName && process.env.RESEND_FROM_ADDRESS) {
+      // Use the server-side display name so callers can't spoof it.
       const verified = process.env.RESEND_FROM_ADDRESS;
       const addrMatch = verified.match(/<([^>]+)>/) || [null, verified];
-      options.from = `${from_name} <${addrMatch[1]}>`;
+      options.from = `${callerName} <${addrMatch[1]}>`;
     }
     const result = await sendEmail(to, subject, body, options);
     return NextResponse.json({ success: true, id: result?.id });

@@ -104,7 +104,7 @@ export default function StudentForm() {
           </div>
         </div>
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: '#1E4D8B' }}>
+          <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
           <button type="button" onClick={() => router.push('/students')} className="px-5 py-2.5 text-sm text-muted-foreground hover:text-foreground">Annuler</button>

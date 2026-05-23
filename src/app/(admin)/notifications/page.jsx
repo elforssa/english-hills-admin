@@ -43,9 +43,8 @@ function SendNotifModal({ students, onSave, onClose }) {
       toast.success('Notification envoyée');
       onSave();
     } catch (err) {
-      await entities.Notification.create({ ...form, sent: false, error: err.message });
-      toast.error("Erreur d'envoi");
-      onSave();
+      setSending(false);
+      toast.error("Erreur d'envoi : " + (err.message || 'Veuillez réessayer.'));
     }
   };
 
@@ -54,7 +53,7 @@ function SendNotifModal({ students, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Envoyer une notification</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSend} className="p-6 space-y-4">
           <div>
@@ -87,7 +86,7 @@ function SendNotifModal({ students, onSave, onClose }) {
             <textarea className={`${inputClass} h-24 resize-none`} value={form.message} onChange={e => set('message', e.target.value)} required />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
               <Send size={14} /> {sending ? 'Envoi...' : 'Envoyer'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -121,7 +120,7 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold">Centre de notifications</h1>
           <p className="text-muted-foreground text-sm mt-1">{sent} envoyées · {failed} en erreur</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Envoyer une notification
         </button>
       </div>

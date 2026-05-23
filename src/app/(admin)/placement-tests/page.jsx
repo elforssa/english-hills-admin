@@ -50,7 +50,7 @@ function TestModal({ test, groups, students, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">{form.id ? 'Modifier le test' : 'Nouveau test de niveau'}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground hover:text-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -87,7 +87,7 @@ function TestModal({ test, groups, students, onSave, onClose }) {
             <div className="col-span-2"><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               {saving ? '...' : 'Enregistrer'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -123,7 +123,7 @@ export default function PlacementTests() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Tests de niveau</h1>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Planifier un test
         </button>
       </div>
@@ -140,7 +140,7 @@ export default function PlacementTests() {
                   <p className="text-xs text-muted-foreground">{t.date_test} {t.heure ? `à ${t.heure}` : ''} {t.examinateur ? `· ${t.examinateur}` : ''}</p>
                   <div className="flex items-center gap-3 mt-2">
                     {t.score != null && <span className="text-xs font-semibold">Score: {t.score}</span>}
-                    {t.niveau_recommande && <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{t.niveau_recommande}</span>}
+                    {t.niveau_recommande && <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{t.niveau_recommande}</span>}
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(t)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
@@ -167,7 +167,7 @@ export default function PlacementTests() {
                       <td className="px-4 py-3 text-muted-foreground">{t.examinateur || '—'}</td>
                       <td className="px-4 py-3 font-semibold">{t.score ?? '—'}</td>
                       <td className="px-4 py-3">
-                        {t.niveau_recommande ? <span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{t.niveau_recommande}</span> : '—'}
+                        {t.niveau_recommande ? <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{t.niveau_recommande}</span> : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[t.status] || 'bg-gray-100 text-gray-500'}`}>{t.status}</span>

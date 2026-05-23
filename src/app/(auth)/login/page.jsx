@@ -233,6 +233,17 @@ function LoginInner() {
                   </div>
                 )}
 
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => switchTo('magic')}
+                    className="text-xs font-medium hover:underline"
+                    style={{ color: '#1E4D8B' }}
+                  >
+                    Mot de passe oublié ?
+                  </button>
+                </div>
+
                 <button
                   type="submit"
                   disabled={status === 'signing-in' || !email || !password}

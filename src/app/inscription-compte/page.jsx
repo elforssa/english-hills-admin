@@ -233,8 +233,7 @@ function InscriptionCompteInner() {
               </div>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition"
-                style={{ backgroundColor: '#1E4D8B' }}
+                className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition bg-primary"
               >
                 Retour à la connexion
               </Link>

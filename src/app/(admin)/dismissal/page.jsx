@@ -71,7 +71,7 @@ export default function Dismissal() {
           <h1 className="text-2xl font-bold">Sortie des jeunes apprenants</h1>
           <p className="text-muted-foreground text-sm mt-1">{todayLogs.length} sorties enregistrées aujourd&apos;hui</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
           <Plus size={15} /> Enregistrer une sortie
         </button>
       </div>
@@ -105,7 +105,7 @@ export default function Dismissal() {
               <input className={inputClass} value={form.staff_name} onChange={e => setForm(f => ({ ...f, staff_name: e.target.value }))} required />
             </div>
             <div className="flex gap-3">
-              <button type="submit" disabled={saving || studentAdults.length === 0} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: '#1E4D8B' }}>
+              <button type="submit" disabled={saving || studentAdults.length === 0} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
                 {saving ? '...' : 'Confirmer la sortie'}
               </button>
               <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>

@@ -60,7 +60,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">{form.id ? "Modifier l'évaluation" : 'Nouvelle évaluation'}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground hover:text-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

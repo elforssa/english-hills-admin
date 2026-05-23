@@ -64,7 +64,7 @@ function AssessmentModal({ students, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Évaluation des styles d&apos;apprentissage</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
@@ -114,7 +114,7 @@ function AssessmentModal({ students, onSave, onClose }) {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               {saving ? '...' : 'Enregistrer'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -151,7 +151,7 @@ export default function LearningAssessments() {
           <h1 className="text-2xl font-bold">Styles d&apos;apprentissage</h1>
           <p className="text-muted-foreground text-sm mt-1">Kolb + Intelligences multiples</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Nouvelle évaluation
         </button>
       </div>

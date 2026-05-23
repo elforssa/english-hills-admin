@@ -25,7 +25,7 @@ function AnnouncementModal({ groups, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Nouvelle annonce</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -59,7 +59,7 @@ function AnnouncementModal({ groups, onSave, onClose }) {
             Épingler cette annonce
           </label>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               <Megaphone size={14} /> {saving ? '...' : 'Publier'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -103,7 +103,7 @@ function MessageModal({ students, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Nouveau message</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSend} className="p-6 space-y-4">
           <div>
@@ -134,7 +134,7 @@ function MessageModal({ students, onSave, onClose }) {
             <textarea className={`${inputClass} h-24 resize-none`} value={form.body} onChange={e => set('body', e.target.value)} required />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               <Send size={14} /> {sending ? '...' : 'Envoyer'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -175,7 +175,7 @@ export default function Communications() {
           <button onClick={() => setMessageModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
             <MessageSquare size={14} /> Message
           </button>
-          <button onClick={() => setAnnouncementModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+          <button onClick={() => setAnnouncementModal(true)} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
             <Megaphone size={14} /> Annonce
           </button>
         </div>

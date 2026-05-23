@@ -66,7 +66,7 @@ export default function StudentPortal() {
 
       {student && (
         <div className="bg-card border border-border rounded-xl p-5 mb-5 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0" style={{ backgroundColor: '#1E4D8B' }}>
+          <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-primary">
             {student.full_name?.[0]}
           </div>
           <div>

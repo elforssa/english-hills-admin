@@ -66,9 +66,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           type="button"
           onClick={() => onChange(opt)}
           className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-            value === opt ? 'text-white border-transparent shadow-sm' : 'bg-white text-foreground border-border hover:border-primary/40 hover:bg-primary/5'
+            value === opt ? 'bg-primary text-white border-transparent shadow-sm' : 'bg-white text-foreground border-border hover:border-primary/40 hover:bg-primary/5'
           }`}
-          style={value === opt ? { backgroundColor: '#1E4D8B' } : {}}
         >
           {opt}
         </button>
@@ -88,8 +87,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       <div>
         <SectionTitle>Reçu</SectionTitle>
         <div className="max-w-xs">
-          <label className={labelClass}>Date <span className="text-red-400">*</span></label>
-          <input type="date" className={inputClass} value={form.date} onChange={(e) => set('date', e.target.value)} required />
+          <label htmlFor="rf-date" className={labelClass}>Date <span className="text-red-400">*</span></label>
+          <input id="rf-date" type="date" className={inputClass} value={form.date} onChange={(e) => set('date', e.target.value)} required />
         </div>
       </div>
 
@@ -97,20 +96,20 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         <SectionTitle>Données d&apos;inscription</SectionTitle>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Nom et prénom <span className="text-red-400">*</span></label>
-            <input type="text" className={inputClass} placeholder="ex. Karim Benali" value={form.nom_prenom} onChange={(e) => set('nom_prenom', e.target.value)} required />
+            <label htmlFor="rf-nom" className={labelClass}>Nom et prénom <span className="text-red-400">*</span></label>
+            <input id="rf-nom" type="text" className={inputClass} placeholder="ex. Karim Benali" value={form.nom_prenom} onChange={(e) => set('nom_prenom', e.target.value)} required />
           </div>
           <div>
-            <label className={labelClass}>Téléphone <span className="text-red-400">*</span></label>
-            <input type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} required />
+            <label htmlFor="rf-tel" className={labelClass}>Téléphone <span className="text-red-400">*</span></label>
+            <input id="rf-tel" type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} required />
           </div>
           <div>
-            <label className={labelClass}>Email</label>
-            <input type="email" className={inputClass} placeholder="ex. client@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
+            <label htmlFor="rf-email" className={labelClass}>Email</label>
+            <input id="rf-email" type="email" className={inputClass} placeholder="ex. client@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </div>
           <div>
-            <label className={labelClass}>Date de naissance</label>
-            <input type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} />
+            <label htmlFor="rf-dob" className={labelClass}>Date de naissance</label>
+            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} />
           </div>
         </div>
       </div>
@@ -128,8 +127,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
               <ToggleGroup options={niveaux} value={form.niveau} onChange={(v) => set('niveau', v)} />
             </div>
             <div>
-              <label className={labelClass}>Durée du cours (H/mois)</label>
-              <input type="text" className={inputClass} placeholder="ex. 20h/mois" value={form.duree_cours} onChange={(e) => set('duree_cours', e.target.value)} />
+              <label htmlFor="rf-duree" className={labelClass}>Durée du cours (H/mois)</label>
+              <input id="rf-duree" type="text" className={inputClass} placeholder="ex. 20h/mois" value={form.duree_cours} onChange={(e) => set('duree_cours', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -138,12 +137,12 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
               <ToggleGroup options={typesCours} value={form.type_cours} onChange={(v) => set('type_cours', v)} />
             </div>
             <div>
-              <label className={labelClass}>Jours</label>
-              <input type="text" className={inputClass} placeholder="ex. Lun, Mer, Ven" value={form.jours} onChange={(e) => set('jours', e.target.value)} />
+              <label htmlFor="rf-jours" className={labelClass}>Jours</label>
+              <input id="rf-jours" type="text" className={inputClass} placeholder="ex. Lun, Mer, Ven" value={form.jours} onChange={(e) => set('jours', e.target.value)} />
             </div>
             <div>
-              <label className={labelClass}>Plage horaire</label>
-              <input type="text" className={inputClass} placeholder="ex. 18h – 19h30" value={form.plage_horaire} onChange={(e) => set('plage_horaire', e.target.value)} />
+              <label htmlFor="rf-horaire" className={labelClass}>Plage horaire</label>
+              <input id="rf-horaire" type="text" className={inputClass} placeholder="ex. 18h – 19h30" value={form.plage_horaire} onChange={(e) => set('plage_horaire', e.target.value)} />
             </div>
           </div>
         </div>
@@ -154,12 +153,12 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         <div className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Montant total du cours (MAD) <span className="text-red-400">*</span></label>
-              <input type="number" className={inputClass} placeholder="ex. 1500" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} required min="0" />
+              <label htmlFor="rf-total" className={labelClass}>Montant total du cours (MAD) <span className="text-red-400">*</span></label>
+              <input id="rf-total" type="number" className={inputClass} placeholder="ex. 1500" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} required min="0" />
             </div>
             <div>
-              <label className={labelClass}>Montant payé ce jour (MAD) <span className="text-red-400">*</span></label>
-              <input type="number" className={inputClass} placeholder="ex. 750" value={form.montant_paye} onChange={(e) => set('montant_paye', e.target.value)} required min="0" />
+              <label htmlFor="rf-paye" className={labelClass}>Montant payé ce jour (MAD) <span className="text-red-400">*</span></label>
+              <input id="rf-paye" type="number" className={inputClass} placeholder="ex. 750" value={form.montant_paye} onChange={(e) => set('montant_paye', e.target.value)} required min="0" />
             </div>
           </div>
 

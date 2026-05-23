@@ -76,8 +76,7 @@ export default function TeacherForm() {
             <div className="flex gap-2 flex-wrap mt-1">
               {NIVEAUX.map(n => (
                 <button key={n} type="button" onClick={() => toggleArr('niveaux_autorises', n)}
-                  className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${form.niveaux_autorises.includes(n) ? 'text-white border-transparent' : 'bg-white text-foreground border-border'}`}
-                  style={form.niveaux_autorises.includes(n) ? { backgroundColor: '#1E4D8B' } : {}}>
+                  className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${form.niveaux_autorises.includes(n) ? 'bg-primary text-white border-transparent' : 'bg-white text-foreground border-border'}`}>
                   {n}
                 </button>
               ))}
@@ -98,7 +97,7 @@ export default function TeacherForm() {
           <div className="col-span-2"><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-20 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
         </div>
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50" style={{ backgroundColor: '#1E4D8B' }}>
+          <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
           <button type="button" onClick={() => router.push('/teachers')} className="px-5 py-2.5 text-sm text-muted-foreground hover:text-foreground">Annuler</button>

@@ -219,7 +219,7 @@ export default function Dashboard() {
                 const sc = PAYMENT_STATUS[statusKey] || PAYMENT_STATUS['En attente'];
                 return (
                   <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white" style={{ backgroundColor: '#1E4D8B' }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white bg-primary">
                       {r.nom_prenom?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div className="flex-1 min-w-0">

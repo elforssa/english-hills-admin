@@ -437,8 +437,7 @@ export default function Settings() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={saveCenter}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition"
-                    style={{ backgroundColor: '#1E4D8B' }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg transition bg-primary"
                   >
                     <Save size={13} /> Enregistrer
                   </button>
@@ -499,7 +498,7 @@ export default function Settings() {
             <ul className="space-y-2">
               {centerInfo.programs.map((p, i) => (
                 <li key={i} className="flex items-center gap-2 text-sm">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#1E4D8B' }} />
+                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-primary" />
                   {p}
                 </li>
               ))}

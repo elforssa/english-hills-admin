@@ -30,7 +30,7 @@ export default function Teachers() {
           <h1 className="text-2xl font-bold">Enseignants</h1>
           <p className="text-muted-foreground text-sm mt-1">{teachers.length} enseignants</p>
         </div>
-        <Link href="/teachers/new" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <Link href="/teachers/new" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Ajouter
         </Link>
       </div>
@@ -59,7 +59,7 @@ export default function Teachers() {
               {t.niveaux_autorises?.length > 0 && (
                 <div className="flex gap-1 mt-3 flex-wrap">
                   {t.niveaux_autorises.map(n => (
-                    <span key={n} className="text-xs font-bold text-white px-1.5 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{n}</span>
+                    <span key={n} className="text-xs font-bold text-white px-1.5 py-0.5 rounded bg-primary">{n}</span>
                   ))}
                 </div>
               )}

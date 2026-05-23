@@ -17,6 +17,28 @@
 import { getBrowserClient } from './supabase';
 
 const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 365; // ~1 year
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+const ALLOWED_TYPES = {
+  'image/jpeg': [0xFF, 0xD8, 0xFF],
+  'image/png':  [0x89, 0x50, 0x4E, 0x47],
+  'application/pdf': [0x25, 0x50, 0x44, 0x46],
+};
+
+async function validateFile(file) {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Le fichier dépasse la taille maximale de 10 Mo.');
+  }
+  const allowedMimes = Object.keys(ALLOWED_TYPES);
+  if (!allowedMimes.includes(file.type)) {
+    throw new Error(`Type de fichier non autorisé. Formats acceptés : JPEG, PNG, PDF.`);
+  }
+  const magic = ALLOWED_TYPES[file.type];
+  const header = new Uint8Array(await file.slice(0, magic.length).arrayBuffer());
+  if (!magic.every((byte, i) => header[i] === byte)) {
+    throw new Error('Le contenu du fichier ne correspond pas à son extension.');
+  }
+}
 
 /**
  * uploadFile(bucket, file, folder?) → Promise<{ url, path, bucket }>
@@ -32,6 +54,8 @@ const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 365; // ~1 year
 export async function uploadFile(bucket, file, folder = '') {
   if (!bucket) throw new Error('uploadFile: missing bucket');
   if (!file)   throw new Error('uploadFile: missing file');
+
+  await validateFile(file);
 
   const sb       = getBrowserClient();
   const safeName = (file.name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');

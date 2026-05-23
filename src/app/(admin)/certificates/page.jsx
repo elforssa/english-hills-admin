@@ -46,7 +46,7 @@ function CertificateModal({ students, onSave, onClose }) {
       <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold">Générer un certificat</h2>
-          <button onClick={onClose} className="text-muted-foreground text-xl">×</button>
+          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -83,7 +83,7 @@ function CertificateModal({ students, onSave, onClose }) {
             <input className={inputClass} value={form.directeur} onChange={e => set('directeur', e.target.value)} />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90" style={{ backgroundColor: '#1E4D8B' }}>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
               {saving ? '...' : 'Créer le certificat'}
             </button>
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
@@ -100,7 +100,7 @@ function CertificatePrintView({ cert }) {
     <div>
       <style>{`@media print { .no-print { display: none !important; } body { margin: 0; } }`}</style>
       <div className="no-print flex gap-2 mb-4">
-        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary">
           <Printer size={14} /> Imprimer
         </button>
       </div>
@@ -160,7 +160,7 @@ export default function Certificates() {
           <h1 className="text-2xl font-bold">Certificats de réussite</h1>
           <p className="text-muted-foreground text-sm mt-1">{certs.length} certificats émis</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto" style={{ backgroundColor: '#1E4D8B' }}>
+        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
           <Plus size={15} /> Nouveau certificat
         </button>
       </div>
@@ -197,7 +197,7 @@ export default function Certificates() {
                 {certs.map(c => (
                   <tr key={c.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3 font-medium">{c.student_name}</td>
-                    <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded" style={{ backgroundColor: '#1E4D8B' }}>{c.niveau_complete}</span></td>
+                    <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{c.niveau_complete}</span></td>
                     <td className="px-4 py-3 text-muted-foreground">{c.terme}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.annee}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.date_emission}</td>

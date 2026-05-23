@@ -145,7 +145,7 @@ export default function PublicEnrollment() {
             <textarea className={`${inputClass} h-20 resize-none`} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Horaires préférés, objectifs, questions..." />
           </div>
 
-          <button type="submit" disabled={submitting || uploading} className="w-full py-3 text-sm font-bold text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all" style={{ backgroundColor: '#1E4D8B' }}>
+          <button type="submit" disabled={submitting || uploading} className="w-full py-3 text-sm font-bold text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all bg-primary">
             {submitting ? 'Envoi en cours...' : 'Soumettre ma demande'}
           </button>
 
