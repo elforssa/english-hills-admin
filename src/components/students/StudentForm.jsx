@@ -85,13 +85,26 @@ export default function StudentForm() {
       return;
     }
 
+    // Convert empty strings back to null for DB enum/nullable fields
+    const payload = {
+      ...parsed.data,
+      age_category:   parsed.data.age_category   || null,
+      niveau_cefr:    parsed.data.niveau_cefr    || null,
+      status:         parsed.data.status         || null,
+      date_naissance: parsed.data.date_naissance || null,
+      telephone:      parsed.data.telephone      || null,
+      email:          parsed.data.email          || null,
+      parent_email:   parsed.data.parent_email   || null,
+      notes:          parsed.data.notes          || null,
+    };
+
     setSaving(true);
     try {
       if (isEdit) {
-        await entities.Student.update(id, form);
+        await entities.Student.update(id, payload);
         toast.success('Apprenant mis à jour');
       } else {
-        await entities.Student.create(form);
+        await entities.Student.create(payload);
         toast.success('Apprenant créé');
       }
       qc.invalidateQueries({ queryKey: ['Student'] });
