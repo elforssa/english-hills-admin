@@ -104,7 +104,7 @@ export default function Finance() {
             {termStats.map(t => (
               <div key={t.terme} className="bg-muted rounded-lg p-3 text-center">
                 <p className="text-xs text-muted-foreground mb-1">{t.terme}</p>
-                <p className="font-bold text-sm" style={{ color: '#1E4D8B' }}>{t.rate}%</p>
+                <p className="font-bold text-sm" style={{ color: 'var(--brand)' }}>{t.rate}%</p>
                 <p className="text-xs text-muted-foreground">{t.enc.toLocaleString('fr-MA')} MAD</p>
               </div>
             ))}

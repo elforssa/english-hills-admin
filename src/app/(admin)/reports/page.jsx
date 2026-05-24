@@ -23,7 +23,7 @@ import { useEntityList } from '@/lib/queries';
 
 // Brand palette — matches the rest of the platform.
 const COLORS = {
-  primary:  '#1E4D8B',
+  primary:  'var(--brand)',
   success:  '#059669',
   warning:  '#d97706',
   danger:   '#B91C2E',

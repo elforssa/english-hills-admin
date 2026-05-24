@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
+import { Button } from '@/components/ui/button';
 import { Plus, Search, Printer, Download, CheckSquare, Square } from 'lucide-react';
 import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
@@ -24,7 +25,7 @@ function buildReceiptPDF(doc, r, yStart) {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100, 100, 100);
-  doc.text('Bouskoura / Sidi Maarouf, Casablanca', 105, y, { align: 'center' });
+  doc.text('Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca', 105, y, { align: 'center' });
   y += 10;
 
   doc.setFontSize(11);
@@ -151,9 +152,11 @@ export default function Receipts() {
           <h1 className="text-2xl font-bold">Reçus de paiement</h1>
           <p className="text-muted-foreground text-sm mt-1">{receipts.length} reçus</p>
         </div>
-        <Link href="/receipts/new" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90">
-          <Plus size={15} /> Nouveau reçu
-        </Link>
+        <Button asChild>
+          <Link href="/receipts/new">
+            <Plus size={15} /> Nouveau reçu
+          </Link>
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5 items-center">
@@ -187,7 +190,7 @@ export default function Receipts() {
                   <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground">
                     <th className="px-4 py-3 w-8">
                       <button onClick={toggleAll} className="text-muted-foreground hover:text-foreground transition-colors">
-                        {allChecked ? <CheckSquare size={16} style={{ color: '#1E4D8B' }} /> : someChecked ? <CheckSquare size={16} className="opacity-50" /> : <Square size={16} />}
+                        {allChecked ? <CheckSquare size={16} style={{ color: 'var(--brand)' }} /> : someChecked ? <CheckSquare size={16} className="opacity-50" /> : <Square size={16} />}
                       </button>
                     </th>
                     {['Apprenant','Date','Catégorie','Niveau','Total','Payé','Restant','Mode','Statut',''].map(h => (
@@ -203,7 +206,7 @@ export default function Receipts() {
                       <tr key={r.id} className={`hover:bg-muted/30 transition-colors ${isChecked ? 'bg-blue-50/50' : ''}`}>
                         <td className="px-4 py-3">
                           <button onClick={() => toggleOne(r.id)} className="text-muted-foreground hover:text-foreground transition-colors">
-                            {isChecked ? <CheckSquare size={16} style={{ color: '#1E4D8B' }} /> : <Square size={16} />}
+                            {isChecked ? <CheckSquare size={16} style={{ color: 'var(--brand)' }} /> : <Square size={16} />}
                           </button>
                         </td>
                         <td className="px-4 py-3 font-medium">{r.nom_prenom}</td>

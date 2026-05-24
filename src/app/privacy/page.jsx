@@ -22,14 +22,14 @@ export default function PrivacyPolicy() {
 
         <div className="text-center mb-8">
           <Image src="/eh-logo.png" alt="English Hills" width={140} height={56} priority className="h-14 w-auto mx-auto mb-4" />
-          <h1 className="text-2xl font-bold" style={{ color: '#1E4D8B' }}>Politique de confidentialité</h1>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--brand)' }}>Politique de confidentialité</h1>
           <p className="text-gray-500 text-sm mt-1">Conformément à la loi 09-08 (CNDP, Maroc)</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 prose prose-sm max-w-none text-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 mt-0">1. Responsable du traitement</h2>
           <p>
-            English Hills Language Center, sis à Bouskoura / Sidi Maarouf, Casablanca, Maroc,
+            English Hills Language Center, sis à Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca, Maroc,
             est responsable du traitement de vos données personnelles collectées via le formulaire
             de pré-inscription et les services associés.
           </p>
@@ -85,7 +85,9 @@ export default function PrivacyPolicy() {
           </p>
           <p className="font-medium">
             English Hills Language Center<br />
-            Bouskoura / Sidi Maarouf, Casablanca, Maroc<br />
+            Almaz 2, Hills Business Center<br />
+            Bâtiment B, Bureau 6<br />
+            Casablanca, Maroc<br />
             Email&nbsp;: <a href="mailto:contact@english-hills.com" className="text-primary underline">contact@english-hills.com</a>
           </p>
           <p>
@@ -105,7 +107,7 @@ export default function PrivacyPolicy() {
           </p>
 
           <p className="text-xs text-gray-400 mt-8 pt-4 border-t border-gray-200">
-            English Hills Language Center · Bouskoura / Sidi Maarouf, Casablanca
+            English Hills Language Center · Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca
           </p>
         </div>
       </div>

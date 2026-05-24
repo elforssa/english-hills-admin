@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 
 export default function Teachers() {
   const [teachers, setTeachers] = useState([]);
@@ -30,9 +31,11 @@ export default function Teachers() {
           <h1 className="text-2xl font-bold">Enseignants</h1>
           <p className="text-muted-foreground text-sm mt-1">{teachers.length} enseignants</p>
         </div>
-        <Link href="/teachers/new" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
-          <Plus size={15} /> Ajouter
-        </Link>
+        <Button asChild className="self-start sm:self-auto">
+          <Link href="/teachers/new">
+            <Plus size={15} /> Ajouter
+          </Link>
+        </Button>
       </div>
 
       <div className="relative mb-5 max-w-sm">

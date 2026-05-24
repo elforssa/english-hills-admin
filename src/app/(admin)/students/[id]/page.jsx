@@ -136,7 +136,7 @@ export default function StudentDetail() {
 
       <Section title={`Paiements (${payments.length})`}>
         <div className="flex justify-end mb-3">
-          <Link href={`/receipts/new?student_id=${student.id}&student_name=${encodeURIComponent(student.full_name)}`} className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted" style={{ color: '#1E4D8B' }}>
+          <Link href={`/receipts/new?student_id=${student.id}&student_name=${encodeURIComponent(student.full_name)}`} className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted" style={{ color: 'var(--brand)' }}>
             <FileText size={12} /> Nouveau reçu
           </Link>
         </div>

@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
     <p style="font-size: 13px; color: #888; border-top: 1px solid #f0f0f0; padding-top: 16px; margin: 0;">
       Pour toute question, contactez-nous à <a href="mailto:contact@english-hills.com" style="color: #1E4D8B;">contact@english-hills.com</a><br>
-      English Hills Language Center — Bouskoura / Sidi Maarouf, Casablanca
+      English Hills Language Center — Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca
     </p>
   </div>
 </div>

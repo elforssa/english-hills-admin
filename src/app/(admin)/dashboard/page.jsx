@@ -69,7 +69,7 @@ export default function Dashboard() {
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Tableau de bord</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Bouskoura / Sidi Maarouf, Casablanca</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
         </div>
         {isAdmin && (
           <Link
@@ -85,7 +85,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Apprenants', value: stats.students, icon: Users, href: '/students', color: '#1E4D8B', bg: '#EEF2FF' },
+          { label: 'Apprenants', value: stats.students, icon: Users, href: '/students', color: 'var(--brand)', bg: '#EEF2FF' },
           { label: 'Enseignants', value: stats.teachers, icon: GraduationCap, href: '/teachers', color: '#7c3aed', bg: '#F5F3FF' },
           { label: 'Groupes actifs', value: stats.groups, icon: BookOpen, href: '/groups', color: '#0891b2', bg: '#ECFEFF' },
           ...(isAdmin ? [
@@ -121,7 +121,7 @@ export default function Dashboard() {
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">{loading ? '—' : monthlyData.count} reçu(s) ce mois</p>
           </div>
-          <Link href="/finance" className="text-xs font-semibold hover:underline flex items-center gap-1 self-start sm:self-auto" style={{ color: '#1E4D8B' }}>
+          <Link href="/finance" className="text-xs font-semibold hover:underline flex items-center gap-1 self-start sm:self-auto" style={{ color: 'var(--brand)' }}>
             Voir Finance <ArrowRight size={11} />
           </Link>
         </div>
@@ -143,7 +143,7 @@ export default function Dashboard() {
           <div>
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
               <span>Taux de recouvrement mensuel</span>
-              <span className="font-bold" style={{ color: '#1E4D8B' }}>
+              <span className="font-bold" style={{ color: 'var(--brand)' }}>
                 {Math.round((monthlyData.encaisse / monthlyData.total) * 100)}%
               </span>
             </div>
@@ -171,7 +171,7 @@ export default function Dashboard() {
           <div className="p-4 space-y-2">
             {[
               ...(isAdmin ? [
-                { href: '/receipts/new', label: 'Nouveau reçu de paiement', icon: FileText, color: '#1E4D8B' },
+                { href: '/receipts/new', label: 'Nouveau reçu de paiement', icon: FileText, color: 'var(--brand)' },
                 { href: '/students/new', label: 'Ajouter un apprenant', icon: UserPlus, color: '#7c3aed' },
               ] : []),
               { href: '/attendance', label: 'Marquer les présences', icon: ClipboardCheck, color: '#0891b2' },
@@ -199,7 +199,7 @@ export default function Dashboard() {
         {isAdmin && <div className="lg:col-span-2 bg-card border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="font-semibold text-sm text-foreground">Reçus récents</h2>
-            <Link href="/receipts" className="text-xs font-semibold hover:underline flex items-center gap-1" style={{ color: '#1E4D8B' }}>
+            <Link href="/receipts" className="text-xs font-semibold hover:underline flex items-center gap-1" style={{ color: 'var(--brand)' }}>
               Voir tout <ArrowRight size={11} />
             </Link>
           </div>
@@ -219,7 +219,7 @@ export default function Dashboard() {
             <div className="p-8 text-center">
               <FileText size={32} className="mx-auto text-muted-foreground/30 mb-3" />
               <p className="text-sm text-muted-foreground">Aucun reçu pour l&apos;instant.</p>
-              <Link href="/receipts/new" className="text-sm font-semibold mt-2 inline-block" style={{ color: '#1E4D8B' }}>Créer le premier →</Link>
+              <Link href="/receipts/new" className="text-sm font-semibold mt-2 inline-block" style={{ color: 'var(--brand)' }}>Créer le premier →</Link>
             </div>
           ) : (
             <div className="divide-y divide-border">

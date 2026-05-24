@@ -34,6 +34,18 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 35% 20%;
     --sidebar-ring: 216 64% 50%;
+
+    /* Brand colors as hex (for inline style use). The same primary is also
+       exposed via --primary (HSL) for Tailwind utilities (text-primary etc). */
+    --brand:          #1E4D8B;
+    --brand-darker:   #1a3f75;
+    --brand-deep:     #1E3A6E;
+    --brand-sidebar:  #1E3560;
+    /* Hero CTA / auth / print-header gradient. */
+    --brand-gradient: linear-gradient(135deg, var(--brand) 0%, var(--brand-darker) 100%);
+    /* 8%-alpha tint, used for stat-card backgrounds and badge fills.
+       Match the legacy '#1E4D8B15' literal byte-for-byte. */
+    --brand-tint:     #1E4D8B15;
   }
 }
 

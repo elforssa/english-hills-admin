@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Plus, Search, Download, Upload, UserSearch } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
@@ -65,9 +66,11 @@ export default function Students() {
           >
             <Upload size={15} /> Import CSV
           </Link>
-          <Link href="/students/new" className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90">
-            <Plus size={15} /> Ajouter
-          </Link>
+          <Button asChild>
+            <Link href="/students/new">
+              <Plus size={15} /> Ajouter
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -101,7 +104,7 @@ export default function Students() {
             <p className="text-xs text-muted-foreground mt-1">
               Essayez d&apos;élargir vos filtres, ou ajoutez un nouvel apprenant.
             </p>
-            <Link href="/students/new" className="inline-flex items-center gap-1 text-sm font-semibold mt-3 hover:underline" style={{ color: '#1E4D8B' }}>
+            <Link href="/students/new" className="inline-flex items-center gap-1 text-sm font-semibold mt-3 hover:underline" style={{ color: 'var(--brand)' }}>
               <Plus size={14} /> Ajouter un apprenant
             </Link>
           </div>

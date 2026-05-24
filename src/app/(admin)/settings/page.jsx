@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { entities, auth, users } from '@/lib/entities';
-import { Building2, Users, UserPlus, Edit2, Check, X, Save, CalendarDays } from 'lucide-react';
+import { Building2, Users, UserPlus, Edit2, Check, X, Save, CalendarDays, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -15,7 +15,7 @@ const CENTER_INFO_DEFAULT = {
   email: 'contact@english-hills.com',
   phone1: '+212 5XX-XXXXXX',
   phone2: '+212 6XX-XXXXXX',
-  address: 'Bouskoura / Sidi Maarouf, Casablanca',
+  address: 'Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca',
   website: 'https://english-hills.com',
   facebook: 'https://facebook.com/englishhills',
   instagram: 'https://instagram.com/englishhills',
@@ -32,7 +32,7 @@ const CENTER_INFO_KEY = 'eh_center_info';
 
 const ROLE_CONFIG = [
   { value: 'director', label: 'Directeur', color: '#B91C2E' },
-  { value: 'admin', label: 'Admin', color: '#1E4D8B' },
+  { value: 'admin', label: 'Admin', color: 'var(--brand)' },
   { value: 'teacher', label: 'Enseignant', color: '#7c3aed' },
   { value: 'parent', label: 'Parent', color: '#0891b2' },
   { value: 'student', label: 'Apprenant', color: '#059669' },
@@ -92,7 +92,7 @@ function UserManagement({ currentUser }) {
   return (
     <div className="bg-card border border-border rounded-xl p-6">
       <div className="flex items-center gap-3 mb-5">
-        <Users size={18} style={{ color: '#1E4D8B' }} />
+        <Users size={18} style={{ color: 'var(--brand)' }} />
         <h2 className="font-semibold">Gestion des utilisateurs</h2>
       </div>
       {!isAdmin && (
@@ -237,8 +237,11 @@ function InviteUserForm({ currentUser }) {
           </div>
         </div>
 
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
-          <strong>✅ Automatique :</strong> Le rôle <strong>{ROLES.find(r => r.value === role)?.label}</strong> sera appliqué automatiquement dès que l&apos;invité se connecte pour la première fois.
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex gap-2">
+          <CheckCircle size={14} className="shrink-0 mt-0.5 text-green-700" />
+          <div>
+            <strong>Automatique&nbsp;:</strong> Le rôle <strong>{ROLES.find(r => r.value === role)?.label}</strong> sera appliqué automatiquement dès que l&apos;invité se connecte pour la première fois.
+          </div>
         </div>
 
         <button
@@ -315,7 +318,7 @@ function CurrentTermSettings() {
   return (
     <div className="bg-card border border-border rounded-xl p-6 max-w-md">
       <div className="flex items-center gap-3 mb-5">
-        <CalendarDays size={18} style={{ color: '#1E4D8B' }} />
+        <CalendarDays size={18} style={{ color: 'var(--brand)' }} />
         <h2 className="font-semibold">Terme & année scolaire actuel(le)</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-5">
@@ -427,7 +430,7 @@ export default function Settings() {
           <div className="bg-card border border-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <Building2 size={18} style={{ color: '#1E4D8B' }} />
+                <Building2 size={18} style={{ color: 'var(--brand)' }} />
                 <h2 className="font-semibold">Informations du centre</h2>
               </div>
               {isDirectorRole && !editingCenter && (
@@ -520,13 +523,13 @@ export default function Settings() {
       {tab === 'roles' && (
         <div className="bg-card border border-border rounded-xl p-6">
           <div className="flex items-center gap-3 mb-5">
-            <Users size={18} style={{ color: '#1E4D8B' }} />
+            <Users size={18} style={{ color: 'var(--brand)' }} />
             <h2 className="font-semibold">Rôles et permissions</h2>
           </div>
           <div className="space-y-3">
             {[
               { role: 'director', label: 'Directeur', desc: 'Accès complet + attribution de tous les rôles', color: '#B91C2E' },
-              { role: 'admin', label: 'Admin', desc: 'Gestion complète de la plateforme, présences, sortie des jeunes, inscriptions', color: '#1E4D8B' },
+              { role: 'admin', label: 'Admin', desc: 'Gestion complète de la plateforme, présences, sortie des jeunes, inscriptions', color: 'var(--brand)' },
               { role: 'teacher', label: 'Enseignant', desc: 'Ses groupes, présences, notes, portfolios apprenants', color: '#7c3aed' },
               { role: 'parent', label: 'Parent', desc: "Données de son enfant uniquement (présences, notes, paiements, portfolio)", color: '#0891b2' },
               { role: 'student', label: 'Apprenant', desc: 'Sa progression, portfolio, présences', color: '#059669' },

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Bell, Send, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -22,7 +23,6 @@ const TYPE_COLORS = {
 };
 
 function SendNotifModal({ students, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({ type: 'general', recipient_email: '', recipient_name: '', subject: '', message: '' });
   const [sending, setSending] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -51,13 +51,12 @@ function SendNotifModal({ students, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Envoyer une notification</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSend} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Envoyer une notification</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSend} className="space-y-4">
           <div>
             <label className={labelClass}>Type</label>
             <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
@@ -87,15 +86,15 @@ function SendNotifModal({ students, onSave, onClose }) {
             <label className={labelClass}>Message *</label>
             <textarea className={`${inputClass} h-24 resize-none`} value={form.message} onChange={e => set('message', e.target.value)} required />
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={sending}>
               <Send size={14} /> {sending ? 'Envoi...' : 'Envoyer'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -122,9 +121,9 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold">Centre de notifications</h1>
           <p className="text-muted-foreground text-sm mt-1">{sent} envoyées · {failed} en erreur</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Envoyer une notification
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">

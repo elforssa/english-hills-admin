@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import Image from 'next/image';
 import { integrations } from '@/lib/entities';
-import { CheckCircle, Upload, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Upload, ArrowLeft, Check } from 'lucide-react';
 
 const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
@@ -141,12 +141,12 @@ export default function PublicEnrollment() {
   if (done) return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#f0f4fa' }}>
       <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow-xl">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1E4D8B15' }}>
-          <CheckCircle size={32} style={{ color: '#1E4D8B' }} />
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-primary/10">
+          <CheckCircle size={32} className="text-primary" />
         </div>
-        <h2 className="text-2xl font-bold mb-2" style={{ color: '#1E4D8B' }}>Demande reçue !</h2>
+        <h2 className="text-2xl font-bold mb-2 text-primary">Demande reçue !</h2>
         <p className="text-gray-600 text-sm">Votre demande de pré-inscription a été soumise. Notre équipe vous contactera dans les 48h pour confirmer votre inscription.</p>
-        <p className="text-xs text-gray-400 mt-4">English Hills Language Center · Bouskoura / Sidi Maarouf, Casablanca</p>
+        <p className="text-xs text-gray-400 mt-4">English Hills Language Center · Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
       </div>
     </div>
   );
@@ -171,8 +171,8 @@ export default function PublicEnrollment() {
 
           <div className="text-center mb-8">
             <Image src="/eh-logo.png" alt="English Hills" width={140} height={56} priority className="h-14 w-auto mx-auto mb-4" />
-            <h1 className="text-2xl font-bold" style={{ color: '#1E4D8B' }}>Pré-inscription</h1>
-            <p className="text-gray-500 text-sm mt-1">English Hills Language Center · Bouskoura / Sidi Maarouf, Casablanca</p>
+            <h1 className="text-2xl font-bold text-primary">Pré-inscription</h1>
+            <p className="text-gray-500 text-sm mt-1">English Hills Language Center · Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
             <p className="text-xs text-gray-400 mt-1 italic">&quot;Learn Today, Lead Tomorrow&quot;</p>
           </div>
 
@@ -253,7 +253,7 @@ export default function PublicEnrollment() {
                   <span className="text-xs text-gray-400">PDF, JPG, PNG acceptés</span>
                 </label>
                 {uploading && <p className="text-xs text-blue-600 mt-2">Upload en cours...</p>}
-                {docUrls.length > 0 && <p className="text-xs text-green-600 mt-2">✓ {docUrls.length} document(s) joint(s)</p>}
+                {docUrls.length > 0 && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><Check size={12} /> {docUrls.length} document(s) joint(s)</p>}
               </div>
             </div>
 

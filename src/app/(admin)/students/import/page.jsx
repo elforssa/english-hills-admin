@@ -232,7 +232,7 @@ export default function StudentImportPage() {
             <button
               onClick={() => setCsvText(SAMPLE_CSV)}
               className="text-xs font-semibold underline mt-1"
-              style={{ color: '#1E4D8B' }}
+              style={{ color: 'var(--brand)' }}
             >
               Charger un exemple
             </button>

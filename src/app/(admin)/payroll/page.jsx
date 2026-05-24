@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Calculator, CheckCircle, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -46,7 +47,6 @@ function calcPayroll(teacher, heures) {
 }
 
 function PayrollModal({ teachers, onSave, onClose }) {
-  useScrollLock();
   const [teacherId, setTeacherId] = useState('');
   const [mois, setMois] = useState(MONTHS[new Date().getMonth()]);
   const [annee, setAnnee] = useState(String(new Date().getFullYear()));
@@ -81,13 +81,12 @@ function PayrollModal({ teachers, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Nouvelle fiche de paie</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nouvelle fiche de paie</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Enseignant *</label>
             <select className={inputClass} value={teacherId} onChange={e => setTeacherId(e.target.value)} required>
@@ -119,18 +118,16 @@ function PayrollModal({ teachers, onSave, onClose }) {
               {calc.cnss > 0 && <div className="flex justify-between"><span className="text-muted-foreground">CNSS (4.48%)</span><span className="text-red-600">-{calc.cnss.toLocaleString('fr-MA')} MAD</span></div>}
               {calc.amo > 0 && <div className="flex justify-between"><span className="text-muted-foreground">AMO (2.26%)</span><span className="text-red-600">-{calc.amo.toLocaleString('fr-MA')} MAD</span></div>}
               <div className="flex justify-between"><span className="text-muted-foreground">IR retenu</span><span className="text-red-600">-{calc.ir.toLocaleString('fr-MA')} MAD</span></div>
-              <div className="flex justify-between border-t border-border pt-2 font-bold"><span>Salaire net</span><span style={{ color: '#1E4D8B' }}>{calc.net.toLocaleString('fr-MA')} MAD</span></div>
+              <div className="flex justify-between border-t border-border pt-2 font-bold"><span>Salaire net</span><span style={{ color: 'var(--brand)' }}>{calc.net.toLocaleString('fr-MA')} MAD</span></div>
             </div>
           )}
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
-              {saving ? '...' : 'Créer la fiche'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Créer la fiche'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -172,15 +169,15 @@ export default function PayrollPage() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Paie & RH</h1>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle fiche de paie
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground mb-1">Total payé (ce mois)</p>
-          <p className="text-xl font-bold" style={{ color: '#1E4D8B' }}>{totalNet.toLocaleString('fr-MA')} MAD</p>
+          <p className="text-xl font-bold" style={{ color: 'var(--brand)' }}>{totalNet.toLocaleString('fr-MA')} MAD</p>
         </div>
         <div className="bg-card border border-border rounded-lg p-4">
           <p className="text-xs text-muted-foreground mb-1">En attente de paiement</p>
@@ -201,7 +198,7 @@ export default function PayrollPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[p.statut]}`}>{p.statut}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">{p.mois} {p.annee} · {p.contract_type}</p>
-                  <p className="text-sm font-bold mt-1" style={{ color: '#1E4D8B' }}>Net: {(p.salaire_net || 0).toLocaleString('fr-MA')} MAD</p>
+                  <p className="text-sm font-bold mt-1" style={{ color: 'var(--brand)' }}>Net: {(p.salaire_net || 0).toLocaleString('fr-MA')} MAD</p>
                   <div className="flex gap-2 mt-2">
                     {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded">Valider</button>}
                     {p.statut === 'Validé' && <button onClick={() => handlePay(p.id)} className="text-xs px-2.5 py-1.5 bg-green-50 text-green-700 rounded">Marquer payé</button>}
@@ -228,7 +225,7 @@ export default function PayrollPage() {
                       <td className="px-4 py-3">{(p.salaire_brut || 0).toLocaleString('fr-MA')}</td>
                       <td className="px-4 py-3 text-red-600">{((p.cotisation_cnss || 0) + (p.cotisation_amo || 0)).toLocaleString('fr-MA')}</td>
                       <td className="px-4 py-3 text-red-600">{(p.ir_retenu || 0).toLocaleString('fr-MA')}</td>
-                      <td className="px-4 py-3 font-bold" style={{ color: '#1E4D8B' }}>{(p.salaire_net || 0).toLocaleString('fr-MA')}</td>
+                      <td className="px-4 py-3 font-bold" style={{ color: 'var(--brand)' }}>{(p.salaire_net || 0).toLocaleString('fr-MA')}</td>
                       <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.statut]}`}>{p.statut}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">

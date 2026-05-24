@@ -193,7 +193,7 @@ function InscriptionCompteInner() {
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#1E3A6E' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--brand-deep)' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -213,7 +213,7 @@ function InscriptionCompteInner() {
         <div className="bg-white rounded-2xl shadow-2xl p-7">
           {phase === 'exchanging' && (
             <div className="flex flex-col items-center py-6 text-center">
-              <Loader2 size={22} className="animate-spin mb-3" style={{ color: '#1E4D8B' }} />
+              <Loader2 size={22} className="animate-spin mb-3" style={{ color: 'var(--brand)' }} />
               <p className="text-sm text-muted-foreground">Vérification du lien d&apos;invitation…</p>
             </div>
           )}
@@ -253,7 +253,7 @@ function InscriptionCompteInner() {
                   Redirection en cours…
                 </p>
               </div>
-              <Loader2 size={18} className="animate-spin mx-auto" style={{ color: '#1E4D8B' }} />
+              <Loader2 size={18} className="animate-spin mx-auto" style={{ color: 'var(--brand)' }} />
             </div>
           )}
 
@@ -390,7 +390,7 @@ function InscriptionCompteInner() {
         </div>
 
         <p className="text-center text-xs text-white/40 mt-6">
-          Bouskoura / Sidi Maarouf, Casablanca
+          Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca
         </p>
       </div>
     </div>

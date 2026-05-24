@@ -138,7 +138,7 @@ function LoginInner() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#1E3A6E' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--brand-deep)' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -174,7 +174,7 @@ function LoginInner() {
               <button
                 onClick={() => { setEmail(''); switchTo('password'); }}
                 className="text-xs font-medium hover:underline"
-                style={{ color: '#1E4D8B' }}
+                style={{ color: 'var(--brand)' }}
               >
                 Retour à la connexion par mot de passe
               </button>
@@ -238,7 +238,7 @@ function LoginInner() {
                     type="button"
                     onClick={() => switchTo('magic')}
                     className="text-xs font-medium hover:underline"
-                    style={{ color: '#1E4D8B' }}
+                    style={{ color: 'var(--brand)' }}
                   >
                     Mot de passe oublié ?
                   </button>
@@ -269,7 +269,7 @@ function LoginInner() {
                   type="button"
                   onClick={() => switchTo('magic')}
                   className="text-xs font-medium hover:underline inline-flex items-center gap-1.5"
-                  style={{ color: '#1E4D8B' }}
+                  style={{ color: 'var(--brand)' }}
                 >
                   <KeyRound size={12} />
                   Connexion par lien magique
@@ -338,7 +338,7 @@ function LoginInner() {
                   type="button"
                   onClick={() => switchTo('password')}
                   className="text-xs font-medium hover:underline"
-                  style={{ color: '#1E4D8B' }}
+                  style={{ color: 'var(--brand)' }}
                 >
                   Retour à la connexion par mot de passe
                 </button>
@@ -348,7 +348,7 @@ function LoginInner() {
         </div>
 
         <p className="text-center text-xs text-white/40 mt-6">
-          Bouskoura / Sidi Maarouf, Casablanca
+          Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca
         </p>
       </div>
     </div>

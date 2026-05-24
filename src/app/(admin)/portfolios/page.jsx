@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
-import { Plus, Upload, FileText, Video, Mic, Trash2, Eye } from 'lucide-react';
+import { Plus, Upload, FileText, Video, Mic, Trash2, Eye, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const PROJECT_TYPES = ['Oral Presentation', 'Written Essay', 'Audio Recording', 'Video Project', 'PDF Document', 'Other'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
@@ -23,7 +24,6 @@ const TYPE_ICONS = {
 };
 
 function PortfolioModal({ students, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', terme: 'Sept–Déc', annee: '2025-2026',
     niveau: 'A1', project_type: 'Oral Presentation', title: '', description: '',
@@ -71,13 +71,12 @@ function PortfolioModal({ students, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Ajouter un projet portfolio</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Ajouter un projet portfolio</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Apprenant *</label>
             <select className={inputClass} value={form.student_id} onChange={e => handleStudentChange(e.target.value)} required>
@@ -121,7 +120,7 @@ function PortfolioModal({ students, onSave, onClose }) {
             <label className={labelClass}>Fichier</label>
             <input type="file" onChange={handleFile} className="w-full text-sm text-muted-foreground" />
             {uploading && <p className="text-xs text-primary mt-1">Upload en cours...</p>}
-            {form.file_url && <p className="text-xs text-green-600 mt-1">✓ {form.file_name}</p>}
+            {form.file_url && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Check size={12} /> {form.file_name}</p>}
           </div>
           <div>
             <label className={labelClass}>Note enseignant</label>
@@ -137,15 +136,13 @@ function PortfolioModal({ students, onSave, onClose }) {
               Visible à l&apos;apprenant
             </label>
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving || uploading} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
-              {saving ? '...' : 'Enregistrer'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving || uploading}>{saving ? '...' : 'Enregistrer'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -194,9 +191,9 @@ export default function Portfolios() {
           <h1 className="text-2xl font-bold">Portfolios numériques</h1>
           <p className="text-muted-foreground text-sm mt-1">{portfolios.length} projets au total</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Ajouter un projet
-        </button>
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5">
@@ -225,8 +222,8 @@ export default function Portfolios() {
             return (
               <div key={p.id} className="bg-card border border-border rounded-xl p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#1E4D8B15' }}>
-                    <Icon size={16} style={{ color: '#1E4D8B' }} />
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--brand-tint)' }}>
+                    <Icon size={16} style={{ color: 'var(--brand)' }} />
                   </div>
                   <div className="flex gap-1">
                     {p.file_url && (
@@ -254,7 +251,7 @@ export default function Portfolios() {
             <div className="col-span-3 p-12 text-center text-muted-foreground text-sm">
               <div className="text-4xl mb-3">📁</div>
               <p className="mb-3">Aucun projet trouvé.</p>
-              <button onClick={() => setModal(true)} className="text-sm font-semibold" style={{ color: '#1E4D8B' }}>
+              <button onClick={() => setModal(true)} className="text-sm font-semibold" style={{ color: 'var(--brand)' }}>
                 Ajouter le premier projet →
               </button>
             </div>

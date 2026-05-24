@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
 import { MessageSquare, Megaphone, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function AnnouncementModal({ groups, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({ title: '', body: '', audience: 'all', group_id: '', pinned: false });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -23,13 +23,12 @@ function AnnouncementModal({ groups, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Nouvelle annonce</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nouvelle annonce</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Titre *</label>
             <input className={inputClass} value={form.title} onChange={e => set('title', e.target.value)} required />
@@ -60,20 +59,19 @@ function AnnouncementModal({ groups, onSave, onClose }) {
             <input type="checkbox" checked={form.pinned} onChange={e => set('pinned', e.target.checked)} />
             Épingler cette annonce
           </label>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>
               <Megaphone size={14} /> {saving ? '...' : 'Publier'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function MessageModal({ students, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({ to_user_email: '', to_name: '', subject: '', body: '', type: 'message' });
   const [sending, setSending] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -102,13 +100,12 @@ function MessageModal({ students, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Nouveau message</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSend} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nouveau message</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSend} className="space-y-4">
           <div>
             <label className={labelClass}>Type</label>
             <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
@@ -136,15 +133,15 @@ function MessageModal({ students, onSave, onClose }) {
             <label className={labelClass}>Message *</label>
             <textarea className={`${inputClass} h-24 resize-none`} value={form.body} onChange={e => set('body', e.target.value)} required />
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={sending} className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={sending}>
               <Send size={14} /> {sending ? '...' : 'Envoyer'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

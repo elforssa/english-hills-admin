@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, CheckCircle, XCircle, Trash2, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const STATUS_COLORS = {
   'En attente': 'bg-yellow-100 text-yellow-700',
@@ -16,7 +17,6 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function LeaveModal({ leave, teachers, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState(leave || { teacher_id: '', teacher_name: '', date_debut: '', date_fin: '', type_conge: 'Congé annuel', status: 'En attente', remplacant: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -35,13 +35,12 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Demande de congé</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Demande de congé</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Enseignant *</label>
             <select className={inputClass} value={form.teacher_id} onChange={e => handleTeacherChange(e.target.value)} required>
@@ -61,13 +60,13 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
           </div>
           <div><label className={labelClass}>Remplaçant</label><input className={inputClass} value={form.remplacant || ''} onChange={e => set('remplacant', e.target.value)} /></div>
           <div><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
-          <div className="flex gap-3">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">{saving ? '...' : 'Enregistrer'}</button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -111,16 +110,16 @@ export default function LeaveRequests() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Congés & absences</h1>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle demande
-        </button>
+        </Button>
       </div>
 
       {alerts.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 flex gap-3">
           <AlertTriangle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">⚠️ {alerts.length} enseignant(s) en congé sans remplaçant assigné</p>
+            <p className="text-sm font-semibold text-amber-800">{alerts.length} enseignant(s) en congé sans remplaçant assigné</p>
             <div className="mt-1 space-y-0.5">
               {alerts.map(l => <p key={l.id} className="text-xs text-amber-700">{l.teacher_name} · {l.date_debut} → {l.date_fin}</p>)}
             </div>
@@ -137,9 +136,9 @@ export default function LeaveRequests() {
                 <p className="text-xs font-semibold truncate">{t.full_name}</p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="flex-1 bg-white rounded-full h-1.5">
-                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (t.used / ANNUAL_DAYS) * 100)}%`, backgroundColor: t.remaining < 5 ? '#B91C2E' : '#1E4D8B' }} />
+                    <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (t.used / ANNUAL_DAYS) * 100)}%`, backgroundColor: t.remaining < 5 ? '#B91C2E' : 'var(--brand)' }} />
                   </div>
-                  <span className="text-xs font-bold flex-shrink-0" style={{ color: t.remaining < 5 ? '#B91C2E' : '#1E4D8B' }}>{t.remaining}j</span>
+                  <span className="text-xs font-bold flex-shrink-0" style={{ color: t.remaining < 5 ? '#B91C2E' : 'var(--brand)' }}>{t.remaining}j</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{t.used}j utilisés</p>
               </div>

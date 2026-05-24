@@ -123,7 +123,7 @@ export default function StudentsDirectory() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map(s => {
             const sc = STATUS_CONFIG[s.status] || STATUS_CONFIG.Prospect;
-            const lvlColor = LEVEL_COLORS[s.niveau_cefr] || '#1E4D8B';
+            const lvlColor = LEVEL_COLORS[s.niveau_cefr] || 'var(--brand)';
             const grp = groupName(s.groupe_id);
             return (
               <Link key={s.id} href={`/students/${s.id}`} className="group bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 block">
@@ -141,7 +141,7 @@ export default function StudentsDirectory() {
                 <p className="text-xs text-muted-foreground mb-3">{s.age_category || 'Catégorie non définie'}</p>
                 {grp && (
                   <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                    <BookOpen size={10} className="flex-shrink-0" style={{ color: '#1E4D8B' }} />
+                    <BookOpen size={10} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
                     {grp}
                   </p>
                 )}
@@ -183,7 +183,7 @@ export default function StudentsDirectory() {
             <tbody className="divide-y divide-border">
               {filtered.map(s => {
                 const sc = STATUS_CONFIG[s.status] || STATUS_CONFIG.Prospect;
-                const lvlColor = LEVEL_COLORS[s.niveau_cefr] || '#1E4D8B';
+                const lvlColor = LEVEL_COLORS[s.niveau_cefr] || 'var(--brand)';
                 const grp = groupName(s.groupe_id);
                 return (
                   <tr key={s.id} className="hover:bg-muted/30 transition-colors">
@@ -208,7 +208,7 @@ export default function StudentsDirectory() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/students/${s.id}`} className="text-xs font-semibold hover:underline" style={{ color: '#1E4D8B' }}>Voir →</Link>
+                      <Link href={`/students/${s.id}`} className="text-xs font-semibold hover:underline" style={{ color: 'var(--brand)' }}>Voir →</Link>
                     </td>
                   </tr>
                 );

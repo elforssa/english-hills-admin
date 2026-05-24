@@ -31,7 +31,7 @@ export default function ReportCardPrint({ student, assessment, groupName, onClos
             <img src="/eh-logo.png" alt="English Hills" className="h-12" />
             <div className="text-right">
               <p className="font-bold text-sm" style={{ color: '#1E4D8B' }}>English Hills Language Center</p>
-              <p className="text-xs text-gray-500">Bouskoura / Sidi Maarouf, Casablanca</p>
+              <p className="text-xs text-gray-500">Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
               <p className="text-xs text-gray-500">contact@english-hills.com</p>
             </div>
           </div>

@@ -217,7 +217,7 @@ export default function Sidebar() {
         onClick={() => setMobileOpen(true)}
         aria-label="Ouvrir le menu"
         className="lg:hidden fixed top-4 left-4 z-40 p-2 rounded-lg text-white shadow-lg"
-        style={{ backgroundColor: '#1E3560' }}
+        style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         <Menu size={20} />
       </button>
@@ -225,7 +225,7 @@ export default function Sidebar() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="fixed inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: '#1E3560' }}>
+          <div className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: 'var(--brand-sidebar)' }}>
             <button onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" className="absolute top-4 right-4 text-white/60 hover:text-white">
               <X size={18} />
             </button>
@@ -241,7 +241,7 @@ export default function Sidebar() {
 
       <div
         className="hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0"
-        style={{ backgroundColor: '#1E3560' }}
+        style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         <SidebarContent
           onNavigate={() => {}}

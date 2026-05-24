@@ -530,6 +530,6 @@ insert into public.app_config (key, value, label) values
   ('center_name',  'English Hills Language Center', 'Nom du centre'),
   ('center_email', 'contact@english-hills.com',     'Email du centre'),
   ('center_phone', '+212 5XX-XXXXXX',               'Téléphone du centre'),
-  ('center_address', 'Bouskoura / Sidi Maarouf, Casablanca', 'Adresse du centre'),
+  ('center_address', 'Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca', 'Adresse du centre'),
   ('center_tagline', 'Learn Today, Lead Tomorrow',  'Tagline du centre')
 on conflict (key) do nothing;

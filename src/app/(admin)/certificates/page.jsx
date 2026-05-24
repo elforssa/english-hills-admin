@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, Award, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -12,7 +13,6 @@ const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
 
 function CertificateModal({ students, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', niveau_complete: 'A1',
     terme: 'Sept–Déc', annee: '2025-2026',
@@ -53,7 +53,7 @@ function CertificateModal({ students, onSave, onClose }) {
               `Nous avons le plaisir de vous informer que le certificat de niveau ${form.niveau_complete} ` +
               `de ${form.student_name} a été émis (Terme : ${form.terme}, Année : ${form.annee}).\n\n` +
               `Vous pourrez récupérer une copie imprimée auprès du secrétariat.\n\n` +
-              `— English Hills Language Center\nBouskoura / Sidi Maarouf, Casablanca`,
+              `— English Hills Language Center\nAlmaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca`,
           });
           notified = true;
         } catch (err) {
@@ -71,13 +71,12 @@ function CertificateModal({ students, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Générer un certificat</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Générer un certificat</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Apprenant *</label>
             <select className={inputClass} value={form.student_id} onChange={e => handleStudentChange(e.target.value)} required>
@@ -111,15 +110,13 @@ function CertificateModal({ students, onSave, onClose }) {
             <label className={labelClass}>Signataire / Directeur</label>
             <input className={inputClass} value={form.directeur} onChange={e => set('directeur', e.target.value)} />
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
-              {saving ? '...' : 'Créer le certificat'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Créer le certificat'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -133,21 +130,21 @@ function CertificatePrintView({ cert }) {
           <Printer size={14} /> Imprimer
         </button>
       </div>
-      <div className="border-8 rounded-2xl p-12 text-center max-w-2xl mx-auto" style={{ borderColor: '#1E4D8B' }}>
+      <div className="border-8 rounded-2xl p-12 text-center max-w-2xl mx-auto" style={{ borderColor: 'var(--brand)' }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- next/image breaks print layout */}
         <img src="/eh-logo.png" alt="English Hills" className="h-16 mx-auto mb-4" />
         <p className="text-xs tracking-widest uppercase text-muted-foreground mb-6" style={{ color: '#B91C2E' }}>English Hills Language Center</p>
         <p className="text-sm uppercase tracking-widest text-muted-foreground mb-2">Certificat de réussite</p>
-        <h1 className="text-3xl font-bold mb-6" style={{ color: '#1E4D8B' }}>Certificate of Achievement</h1>
+        <h1 className="text-3xl font-bold mb-6" style={{ color: 'var(--brand)' }}>Certificate of Achievement</h1>
         <p className="text-muted-foreground mb-2">This is to certify that</p>
         <p className="text-2xl font-bold mb-4">{cert.student_name}</p>
         <p className="text-muted-foreground mb-2">has successfully completed</p>
-        <p className="text-xl font-bold mb-1" style={{ color: '#1E4D8B' }}>Level {cert.niveau_complete}</p>
+        <p className="text-xl font-bold mb-1" style={{ color: 'var(--brand)' }}>Level {cert.niveau_complete}</p>
         <p className="text-muted-foreground mb-8">{cert.terme} {cert.annee}</p>
         <div className="border-t border-border pt-6 mt-6">
           <p className="text-sm font-semibold">{cert.directeur}</p>
           <p className="text-xs text-muted-foreground">Direction — English Hills Language Center</p>
-          <p className="text-xs text-muted-foreground mt-1">Bouskoura / Sidi Maarouf, Casablanca</p>
+          <p className="text-xs text-muted-foreground mt-1">Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
           <p className="text-xs text-muted-foreground">contact@english-hills.com</p>
           <p className="text-xs text-muted-foreground mt-4">Émis le {cert.date_emission}</p>
         </div>
@@ -190,9 +187,9 @@ export default function Certificates() {
           <h1 className="text-2xl font-bold">Certificats de réussite</h1>
           <p className="text-muted-foreground text-sm mt-1">{certs.length} certificats émis</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Nouveau certificat
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -233,7 +230,7 @@ export default function Certificates() {
                     <td className="px-4 py-3 text-muted-foreground">{c.date_emission}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => setPrinting(c)} className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: '#1E4D8B' }}><Printer size={13} /> Imprimer</button>
+                        <button onClick={() => setPrinting(c)} className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}><Printer size={13} /> Imprimer</button>
                         <button onClick={() => handleDelete(c.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                       </div>
                     </td>

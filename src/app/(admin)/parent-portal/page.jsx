@@ -192,7 +192,7 @@ export default function ParentPortal() {
             {[
               { label: 'Taux de présence', value: `${attendanceRate}%`, color: '#059669' },
               { label: 'Absences', value: absentCount, color: '#B91C2E' },
-              { label: 'Notes enregistrées', value: assessments.length, color: '#1E4D8B' },
+              { label: 'Notes enregistrées', value: assessments.length, color: 'var(--brand)' },
               { label: 'Projets portfolio', value: portfolios.length, color: '#7c3aed' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-card border border-border rounded-lg p-3 text-center">
@@ -224,7 +224,7 @@ export default function ParentPortal() {
             <div key={a.id} className="bg-card border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="font-semibold text-sm">{a.terme}</p>
-                <span className="text-lg font-bold" style={{ color: '#1E4D8B' }}>{a.note_finale ?? '—'}/20</span>
+                <span className="text-lg font-bold" style={{ color: 'var(--brand)' }}>{a.note_finale ?? '—'}/20</span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
                 <span>Oral: {a.note_oral ?? '—'}</span>
@@ -262,7 +262,7 @@ export default function ParentPortal() {
             <div key={p.id} className="bg-card border border-border rounded-xl p-4">
               <p className="font-semibold text-sm">{p.title}</p>
               <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: '#1E4D8B' }}>Voir le fichier →</a>}
+              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir le fichier →</a>}
               {p.teacher_note && <p className="text-xs text-muted-foreground mt-2 italic">&quot;{p.teacher_note}&quot;</p>}
             </div>
           ))}

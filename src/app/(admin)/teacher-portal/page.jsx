@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 // MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
 // import MessagesTab from '@/components/portals/MessagesTab';
 
@@ -12,7 +13,6 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState(assessment || {
     student_id: '', group_id: '', terme: 'Sept–Déc', note_oral: '', note_ecrit: '', note_devoirs: '',
     poids_oral: 40, poids_ecrit: 30, poids_devoirs: 30, niveau_actuel: 'A1', commentaire: '',
@@ -48,13 +48,12 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">{form.id ? 'Modifier' : 'Nouvelle évaluation'}</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{form.id ? 'Modifier' : 'Nouvelle évaluation'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Apprenant *</label>
@@ -104,13 +103,13 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
               <textarea className={`${inputClass} h-16 resize-none`} value={form.commentaire || ''} onChange={e => set('commentaire', e.target.value)} />
             </div>
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90">{saving ? '...' : 'Enregistrer'}</button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Brain, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -24,7 +25,6 @@ const KOLB_COLORS = {
 };
 
 function AssessmentModal({ students, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState({
     student_id: '', student_name: '', date_assessment: new Date().toISOString().split('T')[0],
     kolb_style: 'Diverging', dominant_intelligence: 'Linguistique', teacher_notes: '',
@@ -62,13 +62,12 @@ function AssessmentModal({ students, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Évaluation des styles d&apos;apprentissage</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Évaluation des styles d&apos;apprentissage</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className={labelClass}>Apprenant *</label>
             <select className={inputClass} value={form.student_id} onChange={e => handleStudentChange(e.target.value)} required>
@@ -115,15 +114,13 @@ function AssessmentModal({ students, onSave, onClose }) {
             <textarea className={`${inputClass} h-20 resize-none`} value={form.teacher_notes} onChange={e => set('teacher_notes', e.target.value)} />
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
-              {saving ? '...' : 'Enregistrer'}
-            </button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -153,9 +150,9 @@ export default function LearningAssessments() {
           <h1 className="text-2xl font-bold">Styles d&apos;apprentissage</h1>
           <p className="text-muted-foreground text-sm mt-1">Kolb + Intelligences multiples</p>
         </div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle évaluation
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -165,8 +162,8 @@ export default function LearningAssessments() {
           {assessments.map(a => (
             <div key={a.id} className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-start justify-between mb-3">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#1E4D8B15' }}>
-                  <Brain size={16} style={{ color: '#1E4D8B' }} />
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand-tint)' }}>
+                  <Brain size={16} style={{ color: 'var(--brand)' }} />
                 </div>
                 <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
               </div>
@@ -183,7 +180,7 @@ export default function LearningAssessments() {
             <div className="col-span-3 p-12 text-center text-muted-foreground text-sm">
               <div className="text-4xl mb-3">🧠</div>
               <p className="mb-3">Aucune évaluation enregistrée.</p>
-              <button onClick={() => setModal(true)} className="text-sm font-semibold" style={{ color: '#1E4D8B' }}>
+              <button onClick={() => setModal(true)} className="text-sm font-semibold" style={{ color: 'var(--brand)' }}>
                 Créer la première évaluation →
               </button>
             </div>

@@ -53,7 +53,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
 
   const SectionTitle = ({ children }) => (
     <div className="flex items-center gap-3 mb-5">
-      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: '#1E4D8B' }}>{children}</span>
+      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: 'var(--brand)' }}>{children}</span>
       <div className="flex-1 h-px bg-border" />
     </div>
   );

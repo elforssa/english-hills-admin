@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
-import { Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 
 const PAGE_SIZE = 20;
@@ -21,7 +22,6 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
-  useScrollLock();
   const [form, setForm] = useState(enrollment || { student_id: '', group_id: '', status: 'Submitted', date_inscription: new Date().toISOString().split('T')[0], notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -70,13 +70,12 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
     }
   };
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">{form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</h2>
-          <button onClick={onClose} aria-label="Fermer" className="text-muted-foreground text-xl">×</button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Apprenant *</label>
             <select className={inputClass} value={form.student_id} onChange={e => set('student_id', e.target.value)} required>
@@ -88,12 +87,12 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
               ))}
             </select>
             {selectedStudent && (
-              <div className="mt-2 p-2.5 bg-blue-50 rounded-md text-xs text-blue-800 space-y-0.5">
-                {selectedStudent.telephone && <div>📞 {selectedStudent.telephone}</div>}
-                {selectedStudent.email && <div>✉️ {selectedStudent.email}</div>}
-                {selectedStudent.age_category && <div>👤 {selectedStudent.age_category}</div>}
-                {selectedStudent.niveau_cefr && <div>📚 Niveau : {selectedStudent.niveau_cefr}</div>}
-                <div className="text-blue-600 font-medium">Statut : {selectedStudent.status}</div>
+              <div className="mt-2 p-2.5 bg-blue-50 rounded-md text-xs text-blue-800 space-y-1">
+                {selectedStudent.telephone && <div className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {selectedStudent.telephone}</div>}
+                {selectedStudent.email && <div className="flex items-center gap-1.5"><Mail size={12} className="shrink-0" /> {selectedStudent.email}</div>}
+                {selectedStudent.age_category && <div className="flex items-center gap-1.5"><User size={12} className="shrink-0" /> {selectedStudent.age_category}</div>}
+                {selectedStudent.niveau_cefr && <div className="flex items-center gap-1.5"><BookOpen size={12} className="shrink-0" /> Niveau&nbsp;: {selectedStudent.niveau_cefr}</div>}
+                <div className="text-blue-600 font-medium">Statut&nbsp;: {selectedStudent.status}</div>
               </div>
             )}
           </div>
@@ -104,11 +103,11 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
               {groups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
             {selectedGroup && (
-              <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-0.5">
-                {selectedGroup.horaire && <div>🕐 {selectedGroup.horaire}</div>}
-                {selectedGroup.jours && <div>📅 {selectedGroup.jours}</div>}
-                {selectedGroup.salle && <div>🏫 Salle : {selectedGroup.salle}</div>}
-                {selectedGroup.capacite_max && <div>👥 Capacité max : {selectedGroup.capacite_max}</div>}
+              <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-1">
+                {selectedGroup.horaire && <div className="flex items-center gap-1.5"><Clock size={12} className="shrink-0" /> {selectedGroup.horaire}</div>}
+                {selectedGroup.jours && <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> {selectedGroup.jours}</div>}
+                {selectedGroup.salle && <div className="flex items-center gap-1.5"><Building2 size={12} className="shrink-0" /> Salle&nbsp;: {selectedGroup.salle}</div>}
+                {selectedGroup.capacite_max && <div className="flex items-center gap-1.5"><Users size={12} className="shrink-0" /> Capacité max&nbsp;: {selectedGroup.capacite_max}</div>}
               </div>
             )}
           </div>
@@ -126,13 +125,13 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
             <label className={labelClass}>Notes</label>
             <textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">{saving ? '...' : 'Enregistrer'}</button>
-            <button type="button" onClick={onClose} className="px-5 py-2 text-sm text-muted-foreground">Annuler</button>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -207,7 +206,7 @@ export default function Enrollments() {
         await integrations.Core.SendEmail({
           to: recipients,
           subject: '[English Hills] Inscription confirmée',
-          body: `Bonjour,\n\nL'inscription de ${student.full_name} à English Hills Language Center a été confirmée.\n\nNous vous souhaitons la bienvenue !\n\n— English Hills Language Center\nBouskoura / Sidi Maarouf, Casablanca`,
+          body: `Bonjour,\n\nL'inscription de ${student.full_name} à English Hills Language Center a été confirmée.\n\nNous vous souhaitons la bienvenue !\n\n— English Hills Language Center\nAlmaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca`,
         });
         emailSent = true;
       } catch (err) {
@@ -240,9 +239,9 @@ export default function Enrollments() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Pré-inscriptions</h1>
-        <button onClick={() => setModal({})} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 self-start sm:self-auto bg-primary">
+        <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle inscription
-        </button>
+        </Button>
       </div>
       <div className="mb-5">
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>

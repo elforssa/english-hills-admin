@@ -92,7 +92,7 @@ export default function StudentPortal() {
               <p className="text-xs text-muted-foreground">Présence</p>
             </div>
             <div className="bg-card border border-border rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold" style={{ color: '#1E4D8B' }}>{lastAssessment?.note_finale ?? '—'}</p>
+              <p className="text-2xl font-bold" style={{ color: 'var(--brand)' }}>{lastAssessment?.note_finale ?? '—'}</p>
               <p className="text-xs text-muted-foreground">Dernière note /20</p>
             </div>
             <div className="bg-card border border-border rounded-lg p-4 text-center">
@@ -110,7 +110,7 @@ export default function StudentPortal() {
                       <p className="text-sm font-medium">{a.terme}</p>
                       <p className="text-xs text-muted-foreground">Oral: {a.note_oral ?? '—'} · Écrit: {a.note_ecrit ?? '—'} · Devoirs: {a.note_devoirs ?? '—'}</p>
                     </div>
-                    <p className="font-bold" style={{ color: '#1E4D8B' }}>{a.note_finale ?? '—'}/20</p>
+                    <p className="font-bold" style={{ color: 'var(--brand)' }}>{a.note_finale ?? '—'}/20</p>
                   </div>
                 ))}
               </div>
@@ -137,7 +137,7 @@ export default function StudentPortal() {
             <div key={p.id} className="bg-card border border-border rounded-xl p-4">
               <p className="font-semibold text-sm">{p.title}</p>
               <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: '#1E4D8B' }}>Voir →</a>}
+              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir →</a>}
             </div>
           ))}
           {portfolios.length === 0 && <div className="col-span-2 p-8 text-center text-muted-foreground text-sm">Aucun projet portfolio.</div>}

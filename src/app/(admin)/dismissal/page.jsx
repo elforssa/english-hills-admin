@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
-import { Plus, CheckCircle } from 'lucide-react';
+import { Plus, CheckCircle, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -121,9 +122,9 @@ export default function Dismissal() {
           <h1 className="text-2xl font-bold">Sortie des jeunes apprenants</h1>
           <p className="text-muted-foreground text-sm mt-1">{todayLogs.length} sorties enregistrées aujourd&apos;hui</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 bg-primary">
+        <Button onClick={() => setShowForm(true)}>
           <Plus size={15} /> Enregistrer une sortie
-        </button>
+        </Button>
       </div>
 
       {showForm && (
@@ -171,7 +172,7 @@ export default function Dismissal() {
         {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> :
           logs.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground text-sm">
-              <div className="text-4xl mb-3">📋</div>
+              <ClipboardList size={36} className="mx-auto mb-3 text-muted-foreground/40" />
               <p>Aucune sortie enregistrée aujourd&apos;hui.</p>
             </div>
           ) : (
