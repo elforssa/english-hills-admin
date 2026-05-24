@@ -44,7 +44,23 @@ export default function StudentForm() {
   useEffect(() => {
     if (isEdit) {
       entities.Student.filter({ id })
-        .then(d => { if (d[0]) setForm(d[0]); })
+        .then(d => {
+          if (d[0]) {
+            const row = d[0];
+            setForm(f => ({
+              ...f,
+              ...row,
+              age_category: row.age_category ?? '',
+              niveau_cefr:  row.niveau_cefr  ?? '',
+              status:       row.status       ?? '',
+              date_naissance: row.date_naissance ?? '',
+              telephone:    row.telephone    ?? '',
+              email:        row.email        ?? '',
+              parent_email: row.parent_email ?? '',
+              notes:        row.notes        ?? '',
+            }));
+          }
+        })
         .catch((err) => {
           // eslint-disable-next-line no-console
           console.error('[StudentForm] load failed:', err);
