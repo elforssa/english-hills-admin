@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search, Download, Upload } from 'lucide-react';
+import { Plus, Search, Download, Upload, UserSearch } from 'lucide-react';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
@@ -95,7 +95,16 @@ export default function Students() {
         {loading ? (
           <SkeletonTable rows={10} cols={5} />
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">Aucun apprenant trouvé.</div>
+          <div className="p-10 text-center">
+            <UserSearch size={32} className="mx-auto text-muted-foreground/30 mb-3" />
+            <p className="text-sm font-medium text-foreground">Aucun apprenant trouvé</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Essayez d&apos;élargir vos filtres, ou ajoutez un nouvel apprenant.
+            </p>
+            <Link href="/students/new" className="inline-flex items-center gap-1 text-sm font-semibold mt-3 hover:underline" style={{ color: '#1E4D8B' }}>
+              <Plus size={14} /> Ajouter un apprenant
+            </Link>
+          </div>
         ) : (
           <>
             <div className="sm:hidden divide-y divide-border">

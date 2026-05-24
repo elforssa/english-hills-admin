@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { entities, auth } from '@/lib/entities';
 import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
-import MessagesTab from '@/components/portals/MessagesTab';
+// MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
+// import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
 const STATUS_COLORS = ATTENDANCE_STATUS_COLORS;
@@ -24,21 +26,29 @@ export default function ParentPortal() {
   const [tab, setTab] = useState('overview');
 
   useEffect(() => {
-    auth.me().then(async (u) => {
-      setUser(u);
-      const allStudents = await entities.Student.list('full_name', 200);
-      const myStudents = allStudents.filter(s => (s.parent_email && s.parent_email === u?.email) || (s.email && s.email === u?.email));
-      setStudents(myStudents);
-      if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
-      const [annParents, annAll] = await Promise.all([
-        entities.Announcement.filter({ audience: 'parents' }),
-        entities.Announcement.filter({ audience: 'all' }),
-      ]);
-      const seen = new Set();
-      const ann = [...annParents, ...annAll].filter(a => seen.has(a.id) ? false : seen.add(a.id));
-      setAnnouncements(ann);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    (async () => {
+      try {
+        const u = await auth.me();
+        setUser(u);
+        const allStudents = await entities.Student.list('full_name', 200);
+        const myStudents = allStudents.filter(s => (s.parent_email && s.parent_email === u?.email) || (s.email && s.email === u?.email));
+        setStudents(myStudents);
+        if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
+        const [annParents, annAll] = await Promise.all([
+          entities.Announcement.filter({ audience: 'parents' }),
+          entities.Announcement.filter({ audience: 'all' }),
+        ]);
+        const seen = new Set();
+        const ann = [...annParents, ...annAll].filter(a => seen.has(a.id) ? false : seen.add(a.id));
+        setAnnouncements(ann);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[parent-portal] initial load failed:', err);
+        toast.error('Impossible de charger votre espace. Veuillez réessayer.');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -49,9 +59,17 @@ export default function ParentPortal() {
       entities.Receipt.filter({ student_id: selectedStudent.id }),
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }),
-    ]).then(([att, ass, rec, port, la]) => {
-      setAttendance(att); setAssessments(ass); setReceipts(rec); setPortfolios(port); setLearningAssessments(la);
-    });
+    ])
+      .then(([att, ass, rec, port, la]) => {
+        setAttendance(att); setAssessments(ass); setReceipts(rec); setPortfolios(port); setLearningAssessments(la);
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[parent-portal] student detail load failed:', err);
+        toast.error('Impossible de charger les données de l’apprenant.');
+        // Clear stale state so the UI doesn't show last student's numbers.
+        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]);
+      });
   }, [selectedStudent]);
 
   if (loading) {
@@ -80,7 +98,6 @@ export default function ParentPortal() {
     { id: 'finance', label: 'Paiements' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'learning', label: "Style d'apprentissage" },
-    { id: 'messages', label: 'Messages' },
   ];
 
   return (
@@ -128,9 +145,30 @@ export default function ParentPortal() {
         </div>
       )}
 
-      <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-full overflow-x-auto mb-6">
+      {/* Mobile (≤sm): a native <select> is far easier to use than a horizontal
+          scroll bar full of 7 long French labels. Desktop keeps the tab bar. */}
+      <div className="sm:hidden mb-6">
+        <label htmlFor="parent-tab-mobile" className="sr-only">Section</label>
+        <select
+          id="parent-tab-mobile"
+          value={tab}
+          onChange={(e) => setTab(e.target.value)}
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          {TABS.map((t) => (
+            <option key={t.id} value={t.id}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className="hidden sm:flex gap-1 border border-border rounded-lg p-1 bg-muted w-full overflow-x-auto mb-6" role="tablist">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+          >
             {t.label}
           </button>
         ))}
@@ -267,12 +305,6 @@ export default function ParentPortal() {
         </div>
       )}
 
-      {tab === 'messages' && user && (
-        <MessagesTab
-          me={{ email: user.email, name: user.full_name }}
-          recipients={[]}
-        />
-      )}
     </div>
   );
 }

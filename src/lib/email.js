@@ -15,10 +15,26 @@ const fromDefault = process.env.RESEND_FROM_ADDRESS
 
 let client;
 
+// Mock client used when RESEND_API_KEY is unset in dev. Logs the would-be
+// send so the developer sees activity, returns a fake id so callers don't
+// crash. In production, missing key still throws.
+const mockClient = {
+  emails: {
+    async send(payload) {
+      // eslint-disable-next-line no-console
+      console.warn('[email] RESEND_API_KEY unset — mock send:', {
+        to: payload.to, subject: payload.subject,
+      });
+      return { data: { id: `mock-${Date.now()}` }, error: null };
+    },
+  },
+};
+
 function getClient() {
   if (!apiKey) {
+    if (process.env.NODE_ENV !== 'production') return mockClient;
     throw new Error(
-      'RESEND_API_KEY is not set. Add it to .env.local and restart the dev server.'
+      'RESEND_API_KEY is required in production. Set it in your environment.'
     );
   }
   if (!client) client = new Resend(apiKey);

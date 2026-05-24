@@ -7,7 +7,10 @@
 //
 // Body shape:
 //   { to: string|string[], subject: string, body: string,
-//     html?: boolean, from_name?: string, reply_to?: string }
+//     html?: boolean, reply_to?: string }
+//
+// Note: the From display name is derived from the caller's profile —
+// callers cannot spoof it. A `from_name` field in the body is ignored.
 // =============================================================================
 
 import { NextResponse } from 'next/server';

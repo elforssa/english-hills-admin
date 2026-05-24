@@ -10,9 +10,9 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServiceRoleClient } from '@/lib/supabase';
+import { getServiceRoleClient } from '@/lib/supabase-admin';
 
-const AGE_CATEGORIES = ['Enfant (5–12)', 'Ado (13–17)', 'Adulte (18+)'];
+const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const NIVEAUX       = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 const InscriptionSchema = z.object({
@@ -20,11 +20,26 @@ const InscriptionSchema = z.object({
   date_naissance: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   telephone:     z.string().trim().min(6).max(30),
   email:         z.string().trim().email().optional().or(z.literal('')),
+  parent_email:  z.string().trim().email().optional().or(z.literal('')),
   age_category:  z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:   z.enum(NIVEAUX).optional().or(z.literal('')),
   notes:         z.string().max(2000).optional().or(z.literal('')),
   documents_urls: z.array(z.string().url()).max(10).optional(),
-});
+  // CNDP (Loi 09-08) requires an explicit consent record. The client form
+  // gates submission on a checkbox, but we re-enforce here so a direct POST
+  // can't bypass it.
+  consent:       z.literal(true, {
+    errorMap: () => ({ message: 'Consentement requis pour soumettre le formulaire.' }),
+  }),
+  // Cloudflare Turnstile token; required when TURNSTILE_SECRET_KEY is set.
+  turnstileToken: z.string().min(1).max(2048).optional(),
+}).refine(
+  (data) => Boolean(data.email) || Boolean(data.parent_email),
+  {
+    message: 'Au moins un email (apprenant ou parent) est requis.',
+    path: ['email'],
+  },
+);
 
 // 5 submissions per IP per hour from the public form
 const RATE_LIMITS = [
@@ -37,6 +52,35 @@ function getIp(request) {
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     'unknown'
   );
+}
+
+// Verify a Cloudflare Turnstile token against Cloudflare's siteverify
+// endpoint. Returns true on a confirmed human, false otherwise. If the
+// secret key isn't configured we treat the gate as bypassed — local dev
+// shouldn't require Turnstile, but production MUST set TURNSTILE_SECRET_KEY.
+async function verifyTurnstile(token, ip) {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret) return true;
+  if (!token) return false;
+
+  const params = new URLSearchParams();
+  params.set('secret', secret);
+  params.set('response', token);
+  if (ip && ip !== 'unknown') params.set('remoteip', ip);
+
+  try {
+    const res = await fetch(
+      'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+      { method: 'POST', body: params },
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data.success);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[inscription] Turnstile verify failed:', err);
+    return false;
+  }
 }
 
 function checkOrigin(request) {
@@ -93,7 +137,21 @@ export async function POST(request) {
     );
   }
 
-  const { full_name, date_naissance, telephone, email, age_category, niveau_cefr, notes, documents_urls } = parsed.data;
+  const {
+    full_name, date_naissance, telephone, email, parent_email,
+    age_category, niveau_cefr, notes, documents_urls, turnstileToken,
+  } = parsed.data;
+
+  // ── Cloudflare Turnstile: confirm submission isn't from a bot. ──────────
+  // Runs AFTER schema validation so bots burning CPU on the wrong shape
+  // get rejected by Zod first (cheaper than the network round-trip).
+  const turnstileOk = await verifyTurnstile(turnstileToken, ip);
+  if (!turnstileOk) {
+    return NextResponse.json(
+      { error: 'Vérification anti-robot échouée. Veuillez réessayer.' },
+      { status: 403 },
+    );
+  }
 
   // ── Create student + enrollment ─────────────────────────────────────────
   const { data: student, error: studentErr } = await admin
@@ -103,6 +161,7 @@ export async function POST(request) {
       date_naissance: date_naissance || null,
       telephone,
       email:         email         || null,
+      parent_email:  parent_email  || null,
       age_category:  age_category  || null,
       niveau_cefr:   niveau_cefr   || null,
       notes:         notes         || null,

@@ -17,7 +17,8 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerClient, getServiceRoleClient } from '@/lib/supabase';
+import { getServerClient } from '@/lib/supabase';
+import { getServiceRoleClient } from '@/lib/supabase-admin';
 
 const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
 const PRIVILEGED_ROLES = ['admin', 'director'];
@@ -116,7 +117,7 @@ export async function POST(request) {
     // eslint-disable-next-line no-console
     console.error('[invite] inviteUserByEmail failed:', inviteError);
     return NextResponse.json(
-      { error: inviteError.message || 'Failed to send invitation' },
+      { error: "Échec de l'envoi de l'invitation." },
       { status: 500 },
     );
   }
@@ -128,9 +129,26 @@ export async function POST(request) {
     // eslint-disable-next-line no-console
     console.error('[invite] pending_roles upsert failed:', pendingError);
     return NextResponse.json(
-      { error: 'Invitation sent but role queueing failed', details: pendingError.message },
+      { error: "Invitation envoyée mais l'attribution du rôle a échoué." },
       { status: 500 },
     );
+  }
+
+  // Audit the invite — pending_roles is not a trigger-covered table, and
+  // this is a privileged action even when the invitee already exists.
+  const { error: auditErr } = await admin.from('activity_log').insert({
+    actor_id:     user.id,
+    actor_email:  user.email,
+    action:       'INSERT',
+    target_table: 'pending_roles',
+    target_id:    null,
+    changed_columns: ['email', 'role'],
+    before: null,
+    after:  { email, role, alreadyRegistered: isAlreadyRegistered },
+  });
+  if (auditErr) {
+    // eslint-disable-next-line no-console
+    console.error('[invite] audit log insert failed (non-fatal):', auditErr);
   }
 
   return NextResponse.json({

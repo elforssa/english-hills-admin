@@ -363,9 +363,14 @@ export default function Settings() {
   const [centerDraft, setCenterDraft] = useState(null);
 
   useEffect(() => {
-    auth.me().then(u => {
-      setCurrentUser(u);
-    }).catch(() => {});
+    auth.me()
+      .then((u) => {
+        setCurrentUser(u);
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[settings] auth.me() failed:', err);
+      });
   }, []);
 
   const startEditCenter = () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { entities, auth } from '@/lib/entities';
+import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -15,6 +15,38 @@ const STATUS_COLORS = {
   'Résultat saisi': 'bg-purple-100 text-purple-700',
   'Affecté': 'bg-green-100 text-green-700',
 };
+
+// Wraps the placement-test save with an outbound notification email when
+// the test transitions into "Résultat saisi" or "Affecté" — the two states
+// in which the student/parent can act on the outcome.
+async function notifyPlacementResult({ before, after, students }) {
+  const RESULT_STATES = new Set(['Résultat saisi', 'Affecté']);
+  const justEnteredResultState =
+    RESULT_STATES.has(after?.status) && !RESULT_STATES.has(before?.status);
+  if (!justEnteredResultState) return false;
+
+  const student = students.find(s => s.id === after.student_id);
+  const recipients = [];
+  if (student?.parent_email) recipients.push(student.parent_email);
+  if (student?.email && student.email !== student?.parent_email) {
+    recipients.push(student.email);
+  }
+  if (recipients.length === 0) return false;
+
+  await integrations.Core.SendEmail({
+    to: recipients,
+    subject: '[English Hills] Résultat de test de niveau',
+    body:
+      `Bonjour,\n\n` +
+      `Le test de niveau de ${after.student_name || student?.full_name || ''} est disponible.\n\n` +
+      `Niveau recommandé : ${after.niveau_recommande || '—'}\n` +
+      (after.score != null ? `Score : ${after.score}\n` : '') +
+      (after.notes ? `\nNotes de l'examinateur :\n${after.notes}\n` : '') +
+      `\nVous serez contacté(e) pour la suite (affectation à un groupe).\n\n` +
+      `— English Hills Language Center`,
+  });
+  return true;
+}
 
 function TestModal({ test, groups, students, onSave, onClose }) {
   useScrollLock();
@@ -32,13 +64,28 @@ function TestModal({ test, groups, students, onSave, onClose }) {
     setSaving(true);
     const data = { ...form, student_id: form.student_id || null, groupe_affecte_id: form.groupe_affecte_id || null, score: form.score !== '' ? parseFloat(form.score) : null };
     try {
+      let saved;
       if (form.id) {
-        await entities.PlacementTest.update(form.id, data);
-        toast.success('Test mis à jour');
+        saved = await entities.PlacementTest.update(form.id, data);
       } else {
-        await entities.PlacementTest.create(data);
-        toast.success('Test créé');
+        saved = await entities.PlacementTest.create(data);
       }
+
+      // Fire notification email if the result/affectation was just published.
+      let notified = false;
+      try {
+        notified = await notifyPlacementResult({
+          before: test || null,
+          after: saved,
+          students,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[placement-tests] notification email failed:', err);
+        // integrations.SendEmail already toasted; carry on.
+      }
+
+      toast.success((form.id ? 'Test mis à jour' : 'Test créé') + (notified ? ' — Email envoyé' : ''));
       onSave();
     } catch {
       // entities.js already toasted — keep modal open for retry.
@@ -111,7 +158,13 @@ export default function PlacementTests() {
     entities.PlacementTest.list('-date_test', 100),
     entities.Group.list('name', 100),
     entities.Student.list('full_name', 200),
-  ]).then(([t, g, s]) => { setTests(t); setGroups(g); setStudents(s); setLoading(false); });
+  ])
+    .then(([t, g, s]) => { setTests(t); setGroups(g); setStudents(s); })
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[placement-tests] load failed:', err);
+    })
+    .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 

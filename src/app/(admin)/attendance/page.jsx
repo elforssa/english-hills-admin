@@ -31,26 +31,43 @@ export default function Attendance() {
       entities.Group.list('name', 100),
       entities.Student.list('full_name', 200),
       entities.Enrollment.filter({ status: 'Validated' }),
-    ]).then(([g, s, e]) => { setGroups(g); setStudents(s); setEnrollments(e); });
+    ])
+      .then(([g, s, e]) => { setGroups(g); setStudents(s); setEnrollments(e); })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[attendance] initial load failed:', err);
+        toast.error('Impossible de charger les groupes / apprenants.');
+      });
   }, []);
 
   useEffect(() => {
     if (!selectedGroup) return;
-    entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate }).then(a => {
-      setAttendance(a);
-      const s = {};
-      a.forEach(r => { s[r.student_id] = r.status; });
-      setStatuses(s);
-    });
-    // Load full history for the selected group (past sessions)
-    entities.Attendance.filter({ group_id: selectedGroup }, '-session_date', 500).then(all => {
-      const byDate = {};
-      all.forEach(r => {
-        if (!byDate[r.session_date]) byDate[r.session_date] = [];
-        byDate[r.session_date].push(r);
+    entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate })
+      .then(a => {
+        setAttendance(a);
+        const s = {};
+        a.forEach(r => { s[r.student_id] = r.status; });
+        setStatuses(s);
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[attendance] session load failed:', err);
+        // entities.js already toasted; don't double-toast.
       });
-      setHistory(Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])));
-    });
+    // Load full history for the selected group (past sessions)
+    entities.Attendance.filter({ group_id: selectedGroup }, '-session_date', 500)
+      .then(all => {
+        const byDate = {};
+        all.forEach(r => {
+          if (!byDate[r.session_date]) byDate[r.session_date] = [];
+          byDate[r.session_date].push(r);
+        });
+        setHistory(Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])));
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[attendance] history load failed:', err);
+      });
   }, [selectedGroup, sessionDate]);
 
   const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup).map(e => e.student_id);
@@ -64,21 +81,43 @@ export default function Attendance() {
   const handleSave = async () => {
     if (!selectedGroup) return;
     setSaving(true);
-    try {
-      for (const student of groupStudents) {
-        const status = statuses[student.id] || 'Présent';
-        const existing = attendance.find(a => a.student_id === student.id);
+    // Track failures per-row so a mid-batch error doesn't silently skip the
+    // remaining students AND doesn't toast "saved" when some writes failed.
+    let failed = 0;
+    for (const student of groupStudents) {
+      const status = statuses[student.id] || 'Présent';
+      const existing = attendance.find(a => a.student_id === student.id);
+      try {
         if (existing) {
           await entities.Attendance.update(existing.id, { status });
         } else {
           await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
         }
+      } catch {
+        // entities.js already toasted the failing row; keep going so other
+        // students still get saved instead of bailing on the first failure.
+        failed += 1;
       }
+    }
+    setSaving(false);
+
+    if (failed === 0) {
       toast.success('Présences enregistrées');
+    } else if (failed < groupStudents.length) {
+      toast.error(`Enregistrement partiel : ${failed} apprenant(s) n'ont pas pu être sauvegardés.`);
+    } else {
+      toast.error('Échec de l\'enregistrement des présences.');
+    }
+
+    // Refetch so the UI reflects what actually landed in the DB.
+    try {
+      const fresh = await entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate });
+      setAttendance(fresh);
+      const s = {};
+      fresh.forEach(r => { s[r.student_id] = r.status; });
+      setStatuses(s);
     } catch {
-      // entities.js already toasted the failing row.
-    } finally {
-      setSaving(false);
+      // entities.js toasted; leave optimistic state in place.
     }
   };
 

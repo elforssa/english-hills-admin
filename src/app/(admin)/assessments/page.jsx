@@ -140,7 +140,14 @@ export default function Assessments() {
     entities.Assessment.list('-created_date', 200),
     entities.Student.list('full_name', 200),
     entities.Group.list('name', 100),
-  ]).then(([a, s, g]) => { setAssessments(a); setStudents(s); setGroups(g); setLoading(false); });
+  ])
+    .then(([a, s, g]) => { setAssessments(a); setStudents(s); setGroups(g); })
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[assessments] load failed:', err);
+      // entities.js already toasted the per-row failure.
+    })
+    .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 

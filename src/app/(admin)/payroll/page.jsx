@@ -203,8 +203,8 @@ export default function PayrollPage() {
                   <p className="text-xs text-muted-foreground">{p.mois} {p.annee} · {p.contract_type}</p>
                   <p className="text-sm font-bold mt-1" style={{ color: '#1E4D8B' }}>Net: {(p.salaire_net || 0).toLocaleString('fr-MA')} MAD</p>
                   <div className="flex gap-2 mt-2">
-                    {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">Valider</button>}
-                    {p.statut === 'Validé' && <button onClick={() => handlePay(p.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded">Marquer payé</button>}
+                    {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded">Valider</button>}
+                    {p.statut === 'Validé' && <button onClick={() => handlePay(p.id)} className="text-xs px-2.5 py-1.5 bg-green-50 text-green-700 rounded">Marquer payé</button>}
                     <button onClick={() => handleDelete(p.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                   </div>
                 </div>
@@ -232,8 +232,8 @@ export default function PayrollPage() {
                       <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.statut]}`}>{p.statut}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">Valider</button>}
-                          {p.statut === 'Validé' && <button onClick={() => handlePay(p.id)} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded hover:bg-green-100">Payé</button>}
+                          {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">Valider</button>}
+                          {p.statut === 'Validé' && <button onClick={() => handlePay(p.id)} className="text-xs px-2.5 py-1.5 bg-green-50 text-green-700 rounded hover:bg-green-100">Payé</button>}
                           <button onClick={() => handleDelete(p.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                         </div>
                       </td>

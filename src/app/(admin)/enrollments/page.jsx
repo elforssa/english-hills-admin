@@ -34,17 +34,29 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
     setSaving(true);
     try {
       const payload = { ...form, student_id: form.student_id || null, group_id: form.group_id || null };
+
+      // Compute the denormalized student status that should mirror the
+      // enrollment status. Same map used by handleValidate / handleReject.
+      const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
+      const studentStatus = statusMap[form.status];
+      const studentUpdate = (form.student_id && studentStatus)
+        ? {
+            status: studentStatus,
+            ...(form.status === 'Validated' && form.group_id ? { groupe_id: form.group_id } : {}),
+          }
+        : null;
+
+      // Sync student row FIRST. If this throws (RLS, validation, …) we
+      // abort BEFORE writing the enrollment so the two rows can't drift.
+      // The reverse order leaves enrollment.status ahead of student.status
+      // on partial failure; this order leaves student.status briefly ahead
+      // but the next retry restores consistency (writes are idempotent).
+      if (studentUpdate) {
+        await entities.Student.update(form.student_id, studentUpdate);
+      }
+
       if (form.id) {
         await entities.Enrollment.update(form.id, payload);
-        const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
-        const studentStatus = statusMap[form.status];
-        if (form.student_id && studentStatus) {
-          const updateData = { status: studentStatus };
-          if (form.status === 'Validated' && form.group_id) {
-            updateData.groupe_id = form.group_id;
-          }
-          await entities.Student.update(form.student_id, updateData);
-        }
         toast.success('Mis à jour');
       } else {
         await entities.Enrollment.create(payload);
@@ -180,14 +192,31 @@ export default function Enrollments() {
     await syncStudentStatus(id, 'Validated');
     const enrollment = enrollments.find(e => e.id === id);
     const student = enrollment ? students.find(s => s.id === enrollment.student_id) : null;
-    if (student?.email) {
-      integrations.Core.SendEmail({
-        to: student.email,
-        subject: '[English Hills] Inscription confirmée',
-        body: `Bonjour ${student.full_name},\n\nVotre inscription à English Hills Language Center a été confirmée.\n\nNous vous souhaitons la bienvenue !\n\n— English Hills Language Center\nBouskoura / Sidi Maarouf, Casablanca`,
-      });
+
+    // Notify both the student (if they have an email) AND the parent. For
+    // young learners the parent email is the primary contact — the student
+    // may not have one of their own.
+    const recipients = [];
+    if (student?.parent_email) recipients.push(student.parent_email);
+    if (student?.email && student.email !== student.parent_email) {
+      recipients.push(student.email);
     }
-    toast.success('Validée' + (student?.email ? ' — Email de confirmation envoyé' : ''));
+    let emailSent = false;
+    if (recipients.length > 0) {
+      try {
+        await integrations.Core.SendEmail({
+          to: recipients,
+          subject: '[English Hills] Inscription confirmée',
+          body: `Bonjour,\n\nL'inscription de ${student.full_name} à English Hills Language Center a été confirmée.\n\nNous vous souhaitons la bienvenue !\n\n— English Hills Language Center\nBouskoura / Sidi Maarouf, Casablanca`,
+        });
+        emailSent = true;
+      } catch (err) {
+        // integrations.SendEmail already toasted; carry on with validation.
+        // eslint-disable-next-line no-console
+        console.error('[enrollments] confirmation email failed:', err);
+      }
+    }
+    toast.success('Validée' + (emailSent ? ' — Email de confirmation envoyé' : ''));
     load();
   };
   const handleReject = async (id) => {

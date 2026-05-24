@@ -27,6 +27,7 @@ export default function ReportCardPrint({ student, assessment, groupName, onClos
 
         <div className="print-page bg-white rounded-xl shadow-2xl p-10">
           <div className="flex items-center justify-between border-b-2 pb-5 mb-6" style={{ borderColor: '#1E4D8B' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- next/image breaks print layout */}
             <img src="/eh-logo.png" alt="English Hills" className="h-12" />
             <div className="text-right">
               <p className="font-bold text-sm" style={{ color: '#1E4D8B' }}>English Hills Language Center</p>

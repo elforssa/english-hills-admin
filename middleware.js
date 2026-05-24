@@ -15,6 +15,7 @@ const PUBLIC_PATHS = new Set([
   '/login/callback',
   '/inscription',
   '/inscription-compte',
+  '/privacy',
   '/unauthorized',
 ]);
 

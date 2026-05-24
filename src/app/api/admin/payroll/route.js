@@ -9,7 +9,8 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerClient, getServiceRoleClient } from '@/lib/supabase';
+import { getServerClient } from '@/lib/supabase';
+import { getServiceRoleClient } from '@/lib/supabase-admin';
 
 // CNSS 2024 Morocco rates (authoritative server-side copy)
 const CNSS_EMPLOYEE_RATE = 0.0448;

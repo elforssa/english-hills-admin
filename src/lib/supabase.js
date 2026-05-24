@@ -8,7 +8,6 @@
 // =============================================================================
 
 import { createBrowserClient, createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -83,22 +82,7 @@ export async function getServerClient() {
   });
 }
 
-/**
- * Returns a Supabase client authenticated with the service-role key.
- * Bypasses RLS — use only inside server-side admin routes, gated behind an
- * explicit auth check on the caller's role.
- *
- * Never call from a client component or expose the resulting client to the
- * browser bundle.
- */
-export function getServiceRoleClient() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in env'
-    );
-  }
-  return createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+// `getServiceRoleClient` moved to ./supabase-admin so it can be guarded by
+// `import 'server-only'`. Importing it from this file would let a client
+// component silently pull SUPABASE_SERVICE_ROLE_KEY into the browser bundle.
+// Import directly from '@/lib/supabase-admin' in server routes / actions.

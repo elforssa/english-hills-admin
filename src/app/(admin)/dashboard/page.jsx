@@ -204,7 +204,17 @@ export default function Dashboard() {
             </Link>
           </div>
           {loading ? (
-            <div className="p-6 text-center text-muted-foreground text-sm">Chargement...</div>
+            <div className="divide-y divide-border" aria-busy="true" aria-label="Chargement des reçus">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-5 py-4 flex items-center justify-between animate-pulse">
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-40 bg-muted rounded" />
+                    <div className="h-2 w-24 bg-muted/70 rounded" />
+                  </div>
+                  <div className="h-5 w-16 bg-muted rounded-full" />
+                </div>
+              ))}
+            </div>
           ) : recentReceipts.length === 0 ? (
             <div className="p-8 text-center">
               <FileText size={32} className="mx-auto text-muted-foreground/30 mb-3" />

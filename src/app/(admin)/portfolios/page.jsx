@@ -161,7 +161,13 @@ export default function Portfolios() {
   const load = () => Promise.all([
     entities.Portfolio.list('-created_date', 200),
     entities.Student.list('full_name', 200),
-  ]).then(([p, s]) => { setPortfolios(p); setStudents(s); setLoading(false); });
+  ])
+    .then(([p, s]) => { setPortfolios(p); setStudents(s); })
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[portfolios] load failed:', err);
+    })
+    .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 

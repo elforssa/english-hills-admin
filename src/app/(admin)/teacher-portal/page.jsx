@@ -5,7 +5,8 @@ import { entities, auth } from '@/lib/entities';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScrollLock } from '@/hooks/useScrollLock';
-import MessagesTab from '@/components/portals/MessagesTab';
+// MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
+// import MessagesTab from '@/components/portals/MessagesTab';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -251,7 +252,7 @@ export default function TeacherPortal() {
   const [statuses, setStatuses] = useState({});
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('groups');
-  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }, { id: 'messages', label: 'Messages' }];
+  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }];
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -353,7 +354,7 @@ export default function TeacherPortal() {
 
       <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-fit mb-6">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.label}
           </button>
         ))}
@@ -440,12 +441,6 @@ export default function TeacherPortal() {
         <LearningTab groups={groups} students={students} />
       )}
 
-      {tab === 'messages' && user && (
-        <MessagesTab
-          me={{ email: user.email, name: user.full_name }}
-          recipients={[]}
-        />
-      )}
     </div>
   );
 }

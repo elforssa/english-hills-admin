@@ -189,7 +189,7 @@ export default function ReceiptPrint() {
               <h3 className="text-xs font-bold uppercase tracking-widest mb-4 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
                 Données d&apos;inscription
               </h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <DataField label="Nom et prénom" value={receipt.nom_prenom} />
                 <DataField label="Téléphone" value={receipt.telephone} />
                 {receipt.email && <DataField label="Email" value={receipt.email} />}
@@ -201,7 +201,7 @@ export default function ReceiptPrint() {
               <h3 className="text-xs font-bold uppercase tracking-widest mb-4 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
                 Détails du cours
               </h3>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <DataField label="Catégorie" value={receipt.categorie} />
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Niveau</p>
@@ -242,7 +242,7 @@ export default function ReceiptPrint() {
               </section>
             )}
 
-            <div className="grid grid-cols-2 gap-12 pt-8 mt-4 border-t border-gray-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 pt-8 mt-4 border-t border-gray-100">
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-10">Signature du responsable</p>
                 <div className="border-b border-gray-300 w-44" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { entities, auth } from '@/lib/entities';
+import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,7 +23,13 @@ export default function Dismissal() {
     entities.DismissalLog.list('-created_date', 50),
     entities.Student.filter({ age_category: 'Young Learners (6-12)', status: 'Enrolled' }),
     entities.AuthorizedAdult.list('full_name', 200),
-  ]).then(([l, s, a]) => { setLogs(l); setStudents(s); setAdults(a); setLoading(false); });
+  ])
+    .then(([l, s, a]) => { setLogs(l); setStudents(s); setAdults(a); })
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[dismissal] load failed:', err);
+    })
+    .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 
@@ -36,10 +42,28 @@ export default function Dismissal() {
     }
   }, [selectedStudent, adults, students]);
 
+  // Lockdown: a young learner can only be dismissed once per day. Subsequent
+  // attempts must go through a director override (not implemented here —
+  // staff is expected to escalate verbally). This prevents the foot-gun of
+  // an unauthorized adult retrying after the legitimate pickup happened.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const alreadyDismissedToday = (studentId) =>
+    logs.some(l =>
+      l.student_id === studentId
+      && l.timestamp
+      && l.timestamp.startsWith(todayKey)
+      && l.confirmed !== false
+    );
+
   const handleLog = async (e) => {
     e.preventDefault();
+    if (alreadyDismissedToday(form.student_id)) {
+      toast.error('Cet apprenant a déjà été récupéré aujourd’hui. Voir le directeur pour une dérogation.');
+      return;
+    }
     setSaving(true);
     const adult = adults.find(a => a.id === form.adult_id);
+    const student = students.find(s => s.id === form.student_id);
     try {
       await entities.DismissalLog.create({
         ...form,
@@ -49,7 +73,33 @@ export default function Dismissal() {
         timestamp: new Date().toISOString(),
         confirmed: true,
       });
-      toast.success('Sortie enregistrée');
+
+      // Notify the parent so an unauthorized later attempt would be caught
+      // immediately. Best-effort — never block dismissal confirmation on a
+      // failed email.
+      const recipients = [];
+      if (student?.parent_email) recipients.push(student.parent_email);
+      if (recipients.length > 0) {
+        try {
+          await integrations.Core.SendEmail({
+            to: recipients,
+            subject: `[English Hills] Sortie confirmée — ${student.full_name}`,
+            body:
+              `Bonjour,\n\n` +
+              `Nous vous confirmons que ${student.full_name} a été récupéré(e) ` +
+              `à ${new Date().toLocaleTimeString('fr-MA')} par ` +
+              `${adult?.full_name || form.adult_name} (${adult?.relation || '—'}).\n\n` +
+              `Responsable English Hills : ${form.staff_name}\n\n` +
+              `Si cette information vous semble incorrecte, contactez le centre immédiatement.\n\n` +
+              `— English Hills Language Center`,
+          });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[dismissal] parent notification failed:', err);
+        }
+      }
+
+      toast.success('Sortie enregistrée' + (recipients.length > 0 ? ' — Parent notifié' : ''));
       setShowForm(false);
       setSelectedStudent('');
       setForm({ student_id: '', student_name: '', adult_id: '', adult_name: '', staff_name: '' });

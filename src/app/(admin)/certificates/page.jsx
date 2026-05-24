@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { entities, auth } from '@/lib/entities';
+import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, Award, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScrollLock } from '@/hooks/useScrollLock';
@@ -34,7 +34,34 @@ function CertificateModal({ students, onSave, onClose }) {
     setSaving(true);
     try {
       await entities.Certificate.create(form);
-      toast.success('Certificat créé');
+
+      // Notify the student/parent of the issued certificate (best-effort).
+      const student = students.find(s => s.id === form.student_id);
+      const recipients = [];
+      if (student?.parent_email) recipients.push(student.parent_email);
+      if (student?.email && student.email !== student.parent_email) {
+        recipients.push(student.email);
+      }
+      let notified = false;
+      if (recipients.length > 0 && form.issued) {
+        try {
+          await integrations.Core.SendEmail({
+            to: recipients,
+            subject: `[English Hills] Certificat ${form.niveau_complete} — ${form.student_name}`,
+            body:
+              `Bonjour,\n\n` +
+              `Nous avons le plaisir de vous informer que le certificat de niveau ${form.niveau_complete} ` +
+              `de ${form.student_name} a été émis (Terme : ${form.terme}, Année : ${form.annee}).\n\n` +
+              `Vous pourrez récupérer une copie imprimée auprès du secrétariat.\n\n` +
+              `— English Hills Language Center\nBouskoura / Sidi Maarouf, Casablanca`,
+          });
+          notified = true;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[certificates] notification email failed:', err);
+        }
+      }
+      toast.success('Certificat créé' + (notified ? ' — Email envoyé' : ''));
       onSave();
     } catch {
       // entities.js already toasted — keep modal open for retry.
@@ -107,6 +134,7 @@ function CertificatePrintView({ cert }) {
         </button>
       </div>
       <div className="border-8 rounded-2xl p-12 text-center max-w-2xl mx-auto" style={{ borderColor: '#1E4D8B' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- next/image breaks print layout */}
         <img src="/eh-logo.png" alt="English Hills" className="h-16 mx-auto mb-4" />
         <p className="text-xs tracking-widest uppercase text-muted-foreground mb-6" style={{ color: '#B91C2E' }}>English Hills Language Center</p>
         <p className="text-sm uppercase tracking-widest text-muted-foreground mb-2">Certificat de réussite</p>

@@ -46,6 +46,28 @@ const ChartContainer = React.forwardRef(({ id, className, children, config, ...p
 })
 ChartContainer.displayName = "Chart"
 
+// Whitelist for CSS color values that the chart config may safely inject
+// into a <style> tag. Rejects anything that could close the style block,
+// open a comment, or inject a new declaration. Accepts: hex (#abc, #abcdef,
+// #abcd, #abcdef00), rgb/rgba/hsl/hsla/oklch/lab/color() function calls,
+// CSS variables (var(...)), and a short list of safe named tokens.
+const COLOR_RE = /^(?:#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|oklch|lab|color|var)\([^;}<>]*\)|(?:currentcolor|transparent|inherit|initial|unset|[a-z]+))$/i;
+
+function safeColor(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 100) return null;
+  if (/[<>;{}]/.test(trimmed)) return null;
+  return COLOR_RE.test(trimmed) ? trimmed : null;
+}
+
+// Sanitize the chart id so it can't escape the CSS attribute selector.
+// `React.useId()` already returns a safe value; this defends against an
+// explicit `id` prop being misused.
+function safeChartId(id) {
+  return typeof id === 'string' ? id.replace(/[^a-zA-Z0-9_-]/g, '') : '';
+}
+
 const ChartStyle = ({
   id,
   config
@@ -56,24 +78,32 @@ const ChartStyle = ({
     return null
   }
 
+  const safeId = safeChartId(id);
+  if (!safeId) return null;
+
+  const cssBlocks = Object.entries(THEMES)
+    .map(([theme, prefix]) => {
+      const decls = colorConfig
+        .map(([key, itemConfig]) => {
+          const raw = itemConfig.theme?.[theme] || itemConfig.color;
+          const color = safeColor(raw);
+          // Key is whitelisted via the same pattern as the chart id —
+          // anything fishy is silently dropped.
+          const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, '');
+          return color && safeKey ? `  --color-${safeKey}: ${color};` : null;
+        })
+        .filter(Boolean);
+      if (decls.length === 0) return '';
+      return `${prefix} [data-chart=${safeId}] {\n${decls.join('\n')}\n}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
+  if (!cssBlocks) return null;
+
   return (
     (<style
-      dangerouslySetInnerHTML={{
-        __html: Object.entries(THEMES)
-          .map(([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
-${colorConfig
-.map(([key, itemConfig]) => {
-const color =
-  itemConfig.theme?.[theme] ||
-  itemConfig.color
-return color ? `  --color-${key}: ${color};` : null
-})
-.join("\n")}
-}
-`)
-          .join("\n"),
-      }} />)
+      dangerouslySetInnerHTML={{ __html: cssBlocks }} />)
   );
 }
 

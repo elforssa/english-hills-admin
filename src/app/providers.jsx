@@ -10,7 +10,15 @@ export default function Providers({ children }) {
     <QueryClientProvider client={queryClientInstance}>
       <AuthProvider>
         {children}
-        <Toaster richColors position="top-right" />
+        <Toaster
+          richColors
+          position="top-right"
+          toastOptions={{
+            // Screen readers announce error toasts immediately, success/info
+            // politely. Sonner sets role + aria-live on each toast.
+            classNames: { toast: 'group' },
+          }}
+        />
       </AuthProvider>
     </QueryClientProvider>
   );

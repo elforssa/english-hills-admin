@@ -19,7 +19,8 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerClient, getServiceRoleClient } from '@/lib/supabase';
+import { getServerClient } from '@/lib/supabase';
+import { getServiceRoleClient } from '@/lib/supabase-admin';
 
 const ASSIGNABLE_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
 const ADMIN_ASSIGNABLE = ['student', 'parent', 'teacher'];
@@ -141,7 +142,7 @@ export async function POST(request) {
     // eslint-disable-next-line no-console
     console.error('[update-role] profiles update failed:', updateErr);
     return NextResponse.json(
-      { error: 'Échec de la mise à jour du rôle', details: updateErr.message },
+      { error: 'Échec de la mise à jour du rôle.' },
       { status: 500 },
     );
   }
@@ -150,6 +151,25 @@ export async function POST(request) {
       { error: 'Le rôle de cet utilisateur a été modifié entre-temps. Veuillez réessayer.' },
       { status: 409 },
     );
+  }
+
+  // Audit the role change. The trigger on profiles already logs the UPDATE,
+  // but loses actor_id because we mutate via the service-role client (which
+  // bypasses auth.uid()). Append an explicit row with the real caller so
+  // role-change history is attributable.
+  const { error: auditErr } = await admin.from('activity_log').insert({
+    actor_id:     user.id,
+    actor_email:  user.email,
+    action:       'UPDATE',
+    target_table: 'profiles',
+    target_id:    userId,
+    changed_columns: ['role'],
+    before: { role: target.role,  email: target.email },
+    after:  { role: nextRole,     email: target.email },
+  });
+  if (auditErr) {
+    // eslint-disable-next-line no-console
+    console.error('[update-role] audit log insert failed (non-fatal):', auditErr);
   }
 
   return NextResponse.json({

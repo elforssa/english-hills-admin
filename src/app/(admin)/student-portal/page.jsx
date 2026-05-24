@@ -78,7 +78,7 @@ export default function StudentPortal() {
 
       <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-fit mb-6">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.label}
           </button>
         ))}
