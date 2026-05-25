@@ -178,6 +178,7 @@ export default function StudentForm() {
           <div>
             <label htmlFor="age_category" className={labelClass}>Catégorie d&apos;âge</label>
             <select id="age_category" className={inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>
+              <option value="">— Non défini —</option>
               {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
@@ -191,6 +192,7 @@ export default function StudentForm() {
           <div>
             <label htmlFor="status" className={labelClass}>Statut</label>
             <select id="status" className={inputClass} value={form.status || ''} onChange={e => set('status', e.target.value)}>
+              <option value="">— Non défini —</option>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
