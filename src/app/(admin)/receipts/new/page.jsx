@@ -1,21 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
 import { toast } from 'sonner';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
+
+const AGE_TO_CATEGORIE = {
+  'Young Learners (6-12)': 'Enfants',
+  'Teens (13-17)': 'Ados',
+  'Adults (18+)': 'Adultes',
+  'Corporate': 'Business',
+};
 
 export default function ReceiptNew() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [saving, setSaving] = useState(false);
 
-  const prefill = {
-    student_id: searchParams.get('student_id') || '',
-    nom_prenom: searchParams.get('student_name') || '',
-  };
+  const studentId = searchParams.get('student_id') || '';
+  const [prefill, setPrefill] = useState({ student_id: studentId });
+  const [loadingStudent, setLoadingStudent] = useState(Boolean(studentId));
+
+  useEffect(() => {
+    if (!studentId) return;
+    entities.Student.filter({ id: studentId }).then(([student]) => {
+      if (!student) return;
+      const mapped = {
+        student_id: studentId,
+        nom_prenom: student.full_name || '',
+        telephone: student.telephone || '',
+        email: student.email || '',
+        date_naissance: student.date_naissance || '',
+      };
+      if (student.niveau_cefr) mapped.niveau = student.niveau_cefr;
+      if (AGE_TO_CATEGORIE[student.age_category]) mapped.categorie = AGE_TO_CATEGORIE[student.age_category];
+      setPrefill(mapped);
+    }).finally(() => setLoadingStudent(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (data) => {
     setSaving(true);
@@ -24,7 +47,6 @@ export default function ReceiptNew() {
       toast.success('Reçu enregistré avec succès');
       router.push(`/receipts/${receipt.id}/print`);
     } catch {
-      // entities.js already toasted — stay on the form so the user can retry.
       setSaving(false);
     }
   };
@@ -38,7 +60,11 @@ export default function ReceiptNew() {
         <h1 className="text-xl font-bold text-foreground">Nouveau reçu de paiement</h1>
         <p className="text-muted-foreground text-sm mt-1">Remplissez les informations pour générer un reçu imprimable.</p>
       </div>
-      <ReceiptForm onSubmit={handleSubmit} onCancel={() => router.push('/finance')} saving={saving} initialData={prefill} />
+      {loadingStudent ? (
+        <p className="text-sm text-muted-foreground">Chargement des données du dossier...</p>
+      ) : (
+        <ReceiptForm onSubmit={handleSubmit} onCancel={() => router.push('/finance')} saving={saving} initialData={prefill} />
+      )}
     </div>
   );
 }

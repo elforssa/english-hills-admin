@@ -33,7 +33,8 @@ export default function ReceiptPrint() {
 
   const handleDownload = () => {
     const doc = new jsPDF({ unit: 'mm', format: 'a5' });
-    const restant = (receipt.montant_total || 0) - (receipt.montant_paye || 0);
+    const pdfEffectiveTotal = (receipt.montant_total || 0) * (1 - (receipt.remise || 0) / 100);
+    const restant = pdfEffectiveTotal - (receipt.montant_paye || 0);
     const statusKey = receipt.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
     let y = 15;
 
@@ -72,7 +73,13 @@ export default function ReceiptPrint() {
 
     y += 2; doc.line(10, y, 138, y); y += 6;
     const financial = [
-      ['Montant total', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`],
+      ...(receipt.remise > 0
+        ? [
+            ['Prix de base', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`],
+            [`Remise (${receipt.remise}%)`, `-${((receipt.montant_total || 0) * (receipt.remise / 100)).toLocaleString('fr-MA')} MAD`],
+            ['Prix final', `${pdfEffectiveTotal.toLocaleString('fr-MA')} MAD`],
+          ]
+        : [['Montant total', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`]]),
       ['Montant payé', `${(receipt.montant_paye || 0).toLocaleString('fr-MA')} MAD`],
       ['Restant', `${restant.toLocaleString('fr-MA')} MAD`],
       ['Mode de paiement', receipt.mode_paiement],
@@ -103,7 +110,8 @@ export default function ReceiptPrint() {
   if (loading) return <div className="p-8 text-center text-muted-foreground">Chargement...</div>;
   if (!receipt) return <div className="p-8 text-center text-muted-foreground">Reçu introuvable.</div>;
 
-  const montantRestant = (receipt.montant_total || 0) - (receipt.montant_paye || 0);
+  const effectiveTotal = (receipt.montant_total || 0) * (1 - (receipt.remise || 0) / 100);
+  const montantRestant = effectiveTotal - (receipt.montant_paye || 0);
   const statusKey = receipt.statut_paiement || (montantRestant <= 0 ? 'Soldé' : 'En attente');
   const sc = STATUT_CONFIG[statusKey] || STATUT_CONFIG['En attente'];
 
@@ -220,7 +228,19 @@ export default function ReceiptPrint() {
               </h3>
               <div className="bg-gray-50 rounded-xl overflow-hidden">
                 <div className="divide-y divide-gray-100">
-                  <PayRow label="Montant total du cours" value={`${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`} />
+                  {receipt.remise > 0 ? (
+                    <>
+                      <PayRow label="Prix de base" value={`${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`} />
+                      <PayRow
+                        label={`Remise (${receipt.remise}%)`}
+                        value={`−${((receipt.montant_total || 0) * (receipt.remise / 100)).toLocaleString('fr-MA')} MAD`}
+                        valueStyle={{ color: '#059669' }}
+                      />
+                      <PayRow label="Prix final" value={`${effectiveTotal.toLocaleString('fr-MA')} MAD`} bold />
+                    </>
+                  ) : (
+                    <PayRow label="Montant total du cours" value={`${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`} />
+                  )}
                   <PayRow label="Montant payé ce jour" value={`${(receipt.montant_paye || 0).toLocaleString('fr-MA')} MAD`} />
                   <PayRow label="Mode de paiement" value={receipt.mode_paiement} />
                 </div>
@@ -280,11 +300,11 @@ function DataField({ label, value }) {
   );
 }
 
-function PayRow({ label, value }) {
+function PayRow({ label, value, bold, valueStyle }) {
   return (
     <div className="flex justify-between items-center px-5 py-3 text-sm">
       <span className="text-gray-500">{label}</span>
-      <span className="font-semibold text-gray-800">{value}</span>
+      <span className={bold ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} style={valueStyle}>{value}</span>
     </div>
   );
 }

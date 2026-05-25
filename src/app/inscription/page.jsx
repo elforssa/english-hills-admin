@@ -15,7 +15,7 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
 export default function PublicEnrollment() {
   const [form, setForm] = useState({
-    full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
+    full_name: '', date_naissance: '', telephone: '', email: '',
     age_category: '', niveau_cefr: '', notes: '', consent: false,
   });
   const [docUrls, setDocUrls] = useState([]);
@@ -82,11 +82,6 @@ export default function PublicEnrollment() {
     e.preventDefault();
     if (form._hp) return;
 
-    // Client-side check matches the server: at least one email is required.
-    if (!form.email && !form.parent_email) {
-      alert('Veuillez fournir au moins un email (apprenant ou parent).');
-      return;
-    }
     if (!form.consent) {
       alert('Veuillez accepter la politique de confidentialité pour soumettre votre demande.');
       return;
@@ -105,8 +100,10 @@ export default function PublicEnrollment() {
           full_name:      form.full_name,
           date_naissance: form.date_naissance || undefined,
           telephone:      form.telephone,
-          email:          form.email          || undefined,
-          parent_email:   form.parent_email   || undefined,
+          // Route the single email field to the correct column based on age category.
+          // Young Learners require a parent/guardian email; all others use the student email.
+          email:          isYoungLearner ? undefined : form.email || undefined,
+          parent_email:   isYoungLearner ? form.email || undefined : undefined,
           age_category:   form.age_category   || undefined,
           niveau_cefr:    form.niveau_cefr    || undefined,
           notes:          form.notes          || undefined,
@@ -206,7 +203,7 @@ export default function PublicEnrollment() {
               </div>
               <div>
                 <label htmlFor="email" className={labelClass}>
-                  Email {!isYoungLearner && <span className="text-red-500">*</span>}
+                  {isYoungLearner ? 'Email parent / tuteur' : 'Email'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="email"
@@ -214,25 +211,10 @@ export default function PublicEnrollment() {
                   className={inputClass}
                   value={form.email}
                   onChange={e => set('email', e.target.value)}
-                  placeholder="votre@email.com"
-                  required={!isYoungLearner && !form.parent_email}
+                  placeholder={isYoungLearner ? "Email du parent ou tuteur" : "votre@email.com"}
+                  required
                 />
               </div>
-            </div>
-
-            <div>
-              <label htmlFor="parent_email" className={labelClass}>
-                Email parent / tuteur {isYoungLearner && <span className="text-red-500">*</span>}
-              </label>
-              <input
-                id="parent_email"
-                type="email"
-                className={inputClass}
-                value={form.parent_email}
-                onChange={e => set('parent_email', e.target.value)}
-                placeholder={isYoungLearner ? "Obligatoire pour les jeunes apprenants" : "Optionnel — pour l'accès au portail parent"}
-                required={isYoungLearner && !form.email}
-              />
             </div>
 
             <div>

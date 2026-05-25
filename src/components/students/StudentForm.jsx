@@ -184,6 +184,7 @@ export default function StudentForm() {
           <div>
             <label htmlFor="niveau_cefr" className={labelClass}>Niveau CECRL</label>
             <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr || ''} onChange={e => set('niveau_cefr', e.target.value)}>
+              <option value="">— Non défini —</option>
               {NIVEAUX.map(n => <option key={n}>{n}</option>)}
             </select>
           </div>

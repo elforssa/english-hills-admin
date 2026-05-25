@@ -25,6 +25,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     jours: '',
     plage_horaire: '',
     montant_total: '',
+    remise: 0,
     montant_paye: '',
     mode_paiement: 'Espèces',
     statut_paiement: 'En attente',
@@ -33,16 +34,20 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
   });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
-  const montantRestant = (parseFloat(form.montant_total) || 0) - (parseFloat(form.montant_paye) || 0);
+
+  const base = parseFloat(form.montant_total) || 0;
+  const remisePct = parseFloat(form.remise) || 0;
+  const effectiveTotal = base * (1 - remisePct / 100);
+  const montantRestant = effectiveTotal - (parseFloat(form.montant_paye) || 0);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const restant = (parseFloat(form.montant_total) || 0) - (parseFloat(form.montant_paye) || 0);
-    const autoStatus = restant <= 0 ? 'Soldé' : form.statut_paiement;
+    const autoStatus = montantRestant <= 0 ? 'Soldé' : form.statut_paiement;
     onSubmit({
       ...form,
       student_id: form.student_id || null,
-      montant_total: parseFloat(form.montant_total) || 0,
+      montant_total: base,
+      remise: remisePct,
       montant_paye: parseFloat(form.montant_paye) || 0,
       statut_paiement: autoStatus,
     });
@@ -153,13 +158,37 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         <div className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="rf-total" className={labelClass}>Montant total du cours (MAD) <span className="text-red-400">*</span></label>
+              <label htmlFor="rf-total" className={labelClass}>
+                {remisePct > 0 ? 'Prix de base (MAD)' : 'Montant total du cours (MAD)'} <span className="text-red-400">*</span>
+              </label>
               <input id="rf-total" type="number" className={inputClass} placeholder="ex. 1500" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} required min="0" />
             </div>
             <div>
-              <label htmlFor="rf-paye" className={labelClass}>Montant payé ce jour (MAD) <span className="text-red-400">*</span></label>
-              <input id="rf-paye" type="number" className={inputClass} placeholder="ex. 750" value={form.montant_paye} onChange={(e) => set('montant_paye', e.target.value)} required min="0" />
+              <label htmlFor="rf-remise" className={labelClass}>Remise (%)</label>
+              <input
+                id="rf-remise"
+                type="number"
+                className={inputClass}
+                placeholder="0"
+                value={form.remise || ''}
+                onChange={(e) => set('remise', e.target.value)}
+                min="0"
+                max="100"
+                step="0.5"
+              />
             </div>
+          </div>
+
+          {remisePct > 0 && (
+            <div className="flex items-center justify-between rounded-xl px-4 py-3 border border-violet-200 bg-violet-50">
+              <span className="text-sm font-semibold text-violet-800">Prix après remise ({remisePct}%)</span>
+              <span className="text-base font-bold text-violet-700">{effectiveTotal.toLocaleString('fr-MA')} MAD</span>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="rf-paye" className={labelClass}>Montant payé ce jour (MAD) <span className="text-red-400">*</span></label>
+            <input id="rf-paye" type="number" className={inputClass} placeholder="ex. 750" value={form.montant_paye} onChange={(e) => set('montant_paye', e.target.value)} required min="0" />
           </div>
 
           <div className="flex items-center justify-between rounded-xl px-4 py-3 border" style={{ backgroundColor: montantRestant > 0 ? '#FFF7ED' : '#F0FDF4', borderColor: montantRestant > 0 ? '#FED7AA' : '#BBF7D0' }}>
