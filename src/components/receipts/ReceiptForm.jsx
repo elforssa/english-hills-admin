@@ -113,8 +113,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <input id="rf-email" type="email" className={inputClass} placeholder="ex. client@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </div>
           <div>
-            <label htmlFor="rf-dob" className={labelClass}>Date de naissance</label>
-            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} />
+            <label htmlFor="rf-dob" className={labelClass}>Date de naissance <span className="text-red-400">*</span></label>
+            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} required />
           </div>
         </div>
       </div>
