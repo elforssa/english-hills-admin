@@ -163,7 +163,7 @@ export default function Dashboard() {
               <div
                 className="h-3 rounded-full transition-all"
                 style={{
-                  width: `${Math.round((monthlyData.encaisse / monthlyData.total) * 100)}%`,
+                  width: `${Math.min(100, Math.round((monthlyData.encaisse / monthlyData.total) * 100))}%`,
                   background: 'linear-gradient(90deg, #059669, #10b981)',
                 }}
               />
