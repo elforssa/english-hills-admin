@@ -4,6 +4,18 @@ import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Upload, FileText, Video, Mic, Trash2, Eye, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { resolveSignedUrl } from '@/lib/storage';
+
+// Open a stored portfolio file: a "bucket/path" ref is re-signed on demand for
+// a short window; a legacy full URL opens directly.
+async function openStoredFile(stored) {
+  try {
+    const url = await resolveSignedUrl(stored);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  } catch {
+    toast.error('Impossible d’ouvrir le fichier.');
+  }
+}
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
@@ -45,8 +57,10 @@ function PortfolioModal({ students, onSave, onClose }) {
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
-      set('file_url', file_url);
+      const { file_ref } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
+      // Store the "bucket/path" ref, not a long-lived URL — it's re-signed on
+      // demand when the file is opened.
+      set('file_url', file_ref);
       set('file_name', file.name);
       toast.success('Fichier uploadé');
     } catch (err) {
@@ -227,9 +241,9 @@ export default function Portfolios() {
                   </div>
                   <div className="flex gap-1">
                     {p.file_url && (
-                      <a href={p.file_url} target="_blank" rel="noreferrer" className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary">
+                      <button type="button" onClick={() => openStoredFile(p.file_url)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary">
                         <Eye size={14} />
-                      </a>
+                      </button>
                     )}
                     <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600">
                       <Trash2 size={14} />

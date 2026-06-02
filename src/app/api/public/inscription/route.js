@@ -187,7 +187,17 @@ export async function POST(request) {
   if (enrollErr) {
     // eslint-disable-next-line no-console
     console.error('[inscription] enrollment insert failed:', enrollErr);
-    // Don't return 500 — student is created, log the partial failure.
+    // Roll back the orphan student so the submission is all-or-nothing and a
+    // retry starts clean (rather than silently reporting success).
+    const { error: rollbackErr } = await admin.from('students').delete().eq('id', student.id);
+    if (rollbackErr) {
+      // eslint-disable-next-line no-console
+      console.error('[inscription] orphan student rollback failed:', rollbackErr);
+    }
+    return NextResponse.json(
+      { error: 'Erreur lors de la création du dossier. Veuillez réessayer.' },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ success: true, studentId: student.id });
