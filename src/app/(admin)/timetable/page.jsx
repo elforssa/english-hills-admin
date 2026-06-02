@@ -18,16 +18,33 @@ export default function Timetable() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterTerme, setFilterTerme] = useState('');
+  const [role, setRole] = useState(null);
+  const [myTeacherId, setMyTeacherId] = useState(null);
 
   useEffect(() => {
     Promise.all([
       entities.Group.list('name', 100),
       entities.Teacher.list('full_name', 100),
-    ]).then(([g, t]) => { setGroups(g); setTeachers(t); setLoading(false); });
+      auth.me().catch(() => null),
+    ]).then(([g, t, u]) => {
+      setGroups(g);
+      setTeachers(t);
+      setRole(u?.role || null);
+      // Teachers see only their own groups. Identify the teacher row by email,
+      // the same rule the portal and RLS use.
+      if (u?.role === 'teacher') {
+        setMyTeacherId(t.find(x => x.email === u.email)?.id || null);
+      }
+      setLoading(false);
+    });
   }, []);
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';
-  const filtered = groups.filter(g => !filterTerme || g.terme === filterTerme);
+  // Scope the schedule to the teacher's own groups; admins/directors see all.
+  const visibleGroups = role === 'teacher'
+    ? groups.filter(g => g.teacher_id === myTeacherId)
+    : groups;
+  const filtered = visibleGroups.filter(g => !filterTerme || g.terme === filterTerme);
 
   const groupsByDay = DAYS.reduce((acc, day) => {
     acc[day] = filtered.filter(g => g.jours?.toLowerCase().includes(day.toLowerCase().slice(0, 3)));

@@ -26,7 +26,13 @@ const StudentSchema = z.object({
   niveau_cefr:    z.enum(NIVEAUX).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
-});
+}).refine(
+  (d) => Boolean(d.email?.trim()) || Boolean(d.parent_email?.trim()),
+  {
+    message: 'Email apprenant ou email parent obligatoire — saisissez-en au moins un',
+    path: ['email'],
+  },
+);
 
 export default function StudentForm() {
   const params = useParams();
@@ -149,7 +155,7 @@ export default function StudentForm() {
             <input id="telephone" className={inputClass} value={form.telephone || ''} onChange={e => set('telephone', e.target.value)} />
           </div>
           <div>
-            <label htmlFor="email" className={labelClass}>Email (apprenant)</label>
+            <label htmlFor="email" className={labelClass}>Email (apprenant) *</label>
             <input
               id="email"
               type="email"
@@ -162,7 +168,7 @@ export default function StudentForm() {
             {fieldErr('email') && <p id="email-err" className="text-xs text-red-600 mt-1">{fieldErr('email')}</p>}
           </div>
           <div>
-            <label htmlFor="parent_email" className={labelClass}>Email parent / tuteur</label>
+            <label htmlFor="parent_email" className={labelClass}>Email parent / tuteur *</label>
             <input
               id="parent_email"
               type="email"
@@ -175,6 +181,7 @@ export default function StudentForm() {
             />
             {fieldErr('parent_email') && <p id="parent_email-err" className="text-xs text-red-600 mt-1">{fieldErr('parent_email')}</p>}
           </div>
+          <p className="col-span-2 -mt-2 text-xs text-muted-foreground">* Au moins un email (apprenant ou parent) est obligatoire.</p>
           <div>
             <label htmlFor="age_category" className={labelClass}>Catégorie d&apos;âge</label>
             <select id="age_category" className={inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>

@@ -27,15 +27,17 @@ export default function StudentPortal() {
       setStudent(me || null);
       if (me) {
         const [att, ass, port] = await Promise.all([
-          entities.Attendance.filter({ student_id: me.id }),
-          entities.Assessment.filter({ student_id: me.id }),
+          entities.Attendance.filter({ student_id: me.id }, '-session_date'),
+          entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.Portfolio.filter({ student_id: me.id }),
         ]);
         setAttendance(att); setAssessments(ass);
         setPortfolios(port.filter(p => p.visible_to_student));
       }
-      const ann = await entities.Announcement.list('-created_date', 5);
-      setAnnouncements(ann.filter(a => a.audience === 'all'));
+      // RLS already scopes announcements to what this student may see
+      // (audience 'all' + their group). No client-side audience filter needed.
+      const ann = await entities.Announcement.list('-created_date', 20);
+      setAnnouncements(ann);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);

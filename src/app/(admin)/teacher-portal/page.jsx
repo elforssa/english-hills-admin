@@ -230,6 +230,119 @@ function LearningTab({ groups, students }) {
   );
 }
 
+const LEAVE_STATUS_COLORS = {
+  'En attente': 'bg-yellow-100 text-yellow-700',
+  'Approuvé': 'bg-green-100 text-green-700',
+  'Refusé': 'bg-red-100 text-red-700',
+};
+
+function LeaveTab({ teacher }) {
+  const [leaves, setLeaves] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ date_debut: '', date_fin: '', type_conge: 'Congé annuel', notes: '' });
+  const [saving, setSaving] = useState(false);
+
+  const load = () => {
+    if (!teacher) { setLoading(false); return; }
+    entities.LeaveRequest.filter({ teacher_id: teacher.id }, '-created_date')
+      .then(setLeaves)
+      .catch(() => { /* entities.js already toasted */ })
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teacher]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!teacher) return;
+    if (!form.date_debut || !form.date_fin) { toast.error('Veuillez renseigner les dates.'); return; }
+    if (form.date_fin < form.date_debut) { toast.error('La date de fin doit être après la date de début.'); return; }
+    setSaving(true);
+    try {
+      await entities.LeaveRequest.create({
+        teacher_id:   teacher.id,
+        teacher_name: teacher.full_name,
+        date_debut:   form.date_debut,
+        date_fin:     form.date_fin,
+        type_conge:   form.type_conge,
+        status:       'En attente',
+        notes:        form.notes || null,
+      });
+      toast.success('Demande de congé envoyée');
+      setForm({ date_debut: '', date_fin: '', type_conge: 'Congé annuel', notes: '' });
+      load();
+    } catch {
+      // entities.js already toasted — keep the form filled for retry.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!teacher) {
+    return (
+      <div className="p-8 text-center text-muted-foreground text-sm bg-card border border-border rounded-lg">
+        Aucune fiche enseignant n&apos;est liée à votre compte.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={submit} className="bg-card border border-border rounded-xl p-5 space-y-4 max-w-lg">
+        <h2 className="font-semibold text-sm">Nouvelle demande de congé</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Du *</label>
+            <input type="date" className={inputClass} value={form.date_debut} onChange={e => set('date_debut', e.target.value)} required />
+          </div>
+          <div>
+            <label className={labelClass}>Au *</label>
+            <input type="date" className={inputClass} value={form.date_fin} onChange={e => set('date_fin', e.target.value)} required />
+          </div>
+        </div>
+        <div>
+          <label className={labelClass}>Type de congé</label>
+          <select className={inputClass} value={form.type_conge} onChange={e => set('type_conge', e.target.value)}>
+            {['Congé annuel','Maladie','Personnel','Formation'].map(t => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Notes</label>
+          <textarea className={`${inputClass} h-16 resize-none`} value={form.notes} onChange={e => set('notes', e.target.value)} />
+        </div>
+        <button type="submit" disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50">
+          <Plus size={14} /> {saving ? 'Envoi...' : 'Envoyer la demande'}
+        </button>
+      </form>
+
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-border"><p className="font-semibold text-sm">Mes demandes</p></div>
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>
+        ) : leaves.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Aucune demande de congé.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {leaves.map(l => (
+              <div key={l.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">{l.type_conge}</p>
+                  <p className="text-xs text-muted-foreground">{l.date_debut} → {l.date_fin}{l.remplacant ? ` · Remplaçant: ${l.remplacant}` : ''}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LEAVE_STATUS_COLORS[l.status] || 'bg-gray-100 text-gray-500'}`}>{l.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const STATUS_CONFIG = {
   'Présent': 'bg-green-100 text-green-700',
   'Absent': 'bg-red-100 text-red-700',
@@ -243,6 +356,7 @@ export default function TeacherPortal() {
   const [teacher, setTeacher] = useState(null);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -251,7 +365,7 @@ export default function TeacherPortal() {
   const [statuses, setStatuses] = useState({});
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('groups');
-  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }];
+  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }, { id: 'leave', label: 'Congés' }];
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -265,8 +379,14 @@ export default function TeacherPortal() {
       setGroups(myGroups);
       const allStudents = await entities.Student.list('full_name', 200);
       setStudents(allStudents);
+      // Validated enrollments let us include students enrolled in a group even
+      // if their student.groupe_id wasn't set — matches the /attendance roster.
+      const validatedEnrollments = await entities.Enrollment.filter({ status: 'Validated' });
+      setEnrollments(validatedEnrollments);
+      // RLS scopes announcements to what this teacher may see (audience 'all',
+      // 'teachers', and their groups). No client-side audience filter needed.
       const ann = await entities.Announcement.list('-created_date', 10);
-      setAnnouncements(ann.filter(a => a.audience === 'all' || a.audience === 'teachers'));
+      setAnnouncements(ann);
       if (myGroups.length > 0) {
         const groupIds = myGroups.map(g => g.id);
         const allAssessments = await entities.Assessment.list('-created_date', 200);
@@ -286,7 +406,10 @@ export default function TeacherPortal() {
     });
   }, [selectedGroup, sessionDate]);
 
-  const groupStudents = students.filter(s => s.groupe_id === selectedGroup);
+  const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup).map(e => e.student_id);
+  const groupStudents = students
+    .filter(s => s.groupe_id === selectedGroup || enrolledStudentIds.includes(s.id))
+    .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
 
   const handleSave = async () => {
     if (!selectedGroup) return;
@@ -438,6 +561,10 @@ export default function TeacherPortal() {
 
       {tab === 'learning' && (
         <LearningTab groups={groups} students={students} />
+      )}
+
+      {tab === 'leave' && (
+        <LeaveTab teacher={teacher} />
       )}
 
     </div>

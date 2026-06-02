@@ -13,17 +13,22 @@ export default function Dashboard() {
   const [recentReceipts, setRecentReceipts] = useState([]);
   const [monthlyData, setMonthlyData] = useState({ encaisse: 0, restant: 0, total: 0, count: 0 });
   const [loading, setLoading] = useState(true);
+  // True until we know the viewer belongs here. Non-admin roles are redirected
+  // to their portal; we render a neutral loader (not the admin shell) until the
+  // navigation lands, so there's no flash of admin content.
+  const [redirecting, setRedirecting] = useState(true);
 
   const isAdmin = userRole === 'admin' || userRole === 'director';
 
   useEffect(() => {
     auth.me().then(user => {
-      if (!user) { setLoading(false); return; }
+      if (!user) { setRedirecting(false); setLoading(false); return; }
       if (user.role === 'parent') { router.replace('/parent-portal'); return; }
       if (user.role === 'student') { router.replace('/student-portal'); return; }
       if (user.role === 'teacher') { router.replace('/teacher-portal'); return; }
       setUserRole(user.role || '');
-    }).catch(() => setLoading(false));
+      setRedirecting(false);
+    }).catch(() => { setRedirecting(false); setLoading(false); });
   }, [router]);
 
   useEffect(() => {
@@ -66,6 +71,10 @@ export default function Dashboard() {
     'En attente': { bg: 'bg-blue-50 text-blue-700 ring-blue-100', dot: 'bg-blue-400' },
     'En retard': { bg: 'bg-red-50 text-red-700 ring-red-100', dot: 'bg-red-500' },
   };
+
+  if (redirecting) {
+    return <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>;
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
