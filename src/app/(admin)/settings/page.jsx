@@ -364,6 +364,8 @@ export default function Settings() {
   });
   const [editingCenter, setEditingCenter] = useState(false);
   const [centerDraft, setCenterDraft] = useState(null);
+  // app_config row id backing the center info, once loaded from the DB.
+  const [centerConfigId, setCenterConfigId] = useState(null);
 
   useEffect(() => {
     auth.me()
@@ -376,6 +378,26 @@ export default function Settings() {
       });
   }, []);
 
+  // Center info is stored in app_config (key 'center_info') so edits propagate
+  // across devices and users. localStorage is only a cache for instant paint.
+  useEffect(() => {
+    entities.AppConfig.filter({ key: 'center_info' })
+      .then((rows) => {
+        if (!rows[0]) return;
+        try {
+          const parsed = JSON.parse(rows[0].value);
+          setCenterConfigId(rows[0].id);
+          setCenterInfo({ ...CENTER_INFO_DEFAULT, ...parsed });
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(CENTER_INFO_KEY, JSON.stringify(parsed));
+          }
+        } catch {
+          // malformed stored value — keep cached/default.
+        }
+      })
+      .catch(() => { /* entities.js already toasted; keep cached/default. */ });
+  }, []);
+
   const startEditCenter = () => {
     setCenterDraft({ ...centerInfo });
     setEditingCenter(true);
@@ -386,14 +408,28 @@ export default function Settings() {
     setEditingCenter(false);
   };
 
-  const saveCenter = () => {
-    setCenterInfo(centerDraft);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(CENTER_INFO_KEY, JSON.stringify(centerDraft));
+  const saveCenter = async () => {
+    const draft = centerDraft;
+    const value = JSON.stringify(draft);
+    try {
+      if (centerConfigId) {
+        await entities.AppConfig.update(centerConfigId, { value });
+      } else {
+        const created = await entities.AppConfig.create({
+          key: 'center_info', value, label: 'Informations du centre',
+        });
+        setCenterConfigId(created.id);
+      }
+      setCenterInfo(draft);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(CENTER_INFO_KEY, JSON.stringify(draft));
+      }
+      setEditingCenter(false);
+      setCenterDraft(null);
+      toast.success('Informations du centre mises à jour');
+    } catch {
+      // entities.js already toasted — keep the editor open for retry.
     }
-    setEditingCenter(false);
-    setCenterDraft(null);
-    toast.success('Informations du centre mises à jour');
   };
 
   const isDirectorRole    = currentUser?.role === 'director';

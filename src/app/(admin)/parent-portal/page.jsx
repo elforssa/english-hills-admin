@@ -34,12 +34,11 @@ export default function ParentPortal() {
         const myStudents = allStudents.filter(s => (s.parent_email && s.parent_email === u?.email) || (s.email && s.email === u?.email));
         setStudents(myStudents);
         if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
-        const [annParents, annAll] = await Promise.all([
-          entities.Announcement.filter({ audience: 'parents' }),
-          entities.Announcement.filter({ audience: 'all' }),
-        ]);
-        const seen = new Set();
-        const ann = [...annParents, ...annAll].filter(a => seen.has(a.id) ? false : seen.add(a.id));
+        // RLS scopes announcements to what this parent may see (audience 'all',
+        // 'parents', and their child's group). Fetching the list directly is
+        // simpler than OR-ing client-side filters and picks up group-targeted
+        // announcements the old two-query approach missed.
+        const ann = await entities.Announcement.list('-created_date', 20);
         setAnnouncements(ann);
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -54,11 +53,11 @@ export default function ParentPortal() {
   useEffect(() => {
     if (!selectedStudent) return;
     Promise.all([
-      entities.Attendance.filter({ student_id: selectedStudent.id }),
-      entities.Assessment.filter({ student_id: selectedStudent.id }),
-      entities.Receipt.filter({ student_id: selectedStudent.id }),
+      entities.Attendance.filter({ student_id: selectedStudent.id }, '-session_date'),
+      entities.Assessment.filter({ student_id: selectedStudent.id }, '-created_date'),
+      entities.Receipt.filter({ student_id: selectedStudent.id }, '-date'),
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
-      entities.LearningAssessment.filter({ student_id: selectedStudent.id }),
+      entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
     ])
       .then(([att, ass, rec, port, la]) => {
         setAttendance(att); setAssessments(ass); setReceipts(rec); setPortfolios(port); setLearningAssessments(la);
