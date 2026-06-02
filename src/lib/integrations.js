@@ -24,8 +24,11 @@ export const integrations = {
     async UploadFile({ file, bucket = DEFAULT_UPLOAD_BUCKET, folder = '' } = {}) {
       if (!file) throw new Error('UploadFile: missing `file`');
       try {
-        const { url } = await uploadFile(bucket, file, folder);
-        return { file_url: url, file_name: file.name };
+        const { url, ref } = await uploadFile(bucket, file, folder);
+        // `file_ref` ("bucket/path") is preferred for storage — re-sign it on
+        // demand with resolveSignedUrl(). `file_url` stays for callers that
+        // still persist a ready URL (now 90-day, not 1-year).
+        return { file_url: url, file_ref: ref, file_name: file.name };
       } catch (err) {
         toast.error(`Upload échoué : ${err.message || 'erreur inconnue'}`);
         throw err;

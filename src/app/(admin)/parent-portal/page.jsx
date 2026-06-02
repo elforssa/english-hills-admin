@@ -5,6 +5,17 @@ import { toast } from 'sonner';
 import { entities, auth } from '@/lib/entities';
 import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
+import { resolveSignedUrl } from '@/lib/storage';
+
+// Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
+async function openStoredFile(stored) {
+  try {
+    const url = await resolveSignedUrl(stored);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  } catch {
+    toast.error('Impossible d’ouvrir le fichier.');
+  }
+}
 // MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
 // import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
@@ -261,7 +272,7 @@ export default function ParentPortal() {
             <div key={p.id} className="bg-card border border-border rounded-xl p-4">
               <p className="font-semibold text-sm">{p.title}</p>
               <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir le fichier →</a>}
+              {p.file_url && <button type="button" onClick={() => openStoredFile(p.file_url)} className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir le fichier →</button>}
               {p.teacher_note && <p className="text-xs text-muted-foreground mt-2 italic">&quot;{p.teacher_note}&quot;</p>}
             </div>
           ))}

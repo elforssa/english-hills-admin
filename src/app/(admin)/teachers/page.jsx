@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { getBrowserClient } from '@/lib/supabase';
 
 export default function Teachers() {
   const [teachers, setTeachers] = useState([]);
@@ -16,9 +17,16 @@ export default function Teachers() {
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer cet enseignant ?')) return;
-    await entities.Teacher.delete(id);
-    toast.success('Enseignant supprimé');
+    // Soft delete (deleted_at) via RPC so HR history is retained, not a hard
+    // DELETE. The RPC is role-gated (admin/director) server-side.
+    if (!confirm('Archiver cet enseignant ? Sa fiche sera masquée mais conservée.')) return;
+    const sb = getBrowserClient();
+    const { error } = await sb.rpc('soft_delete_teacher', { p_teacher_id: id });
+    if (error) {
+      toast.error(error.message || "Échec de la suppression de l'enseignant.");
+      return;
+    }
+    toast.success('Enseignant archivé');
     load();
   };
 

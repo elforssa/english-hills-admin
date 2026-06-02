@@ -16,7 +16,14 @@
 
 import { getBrowserClient } from './supabase';
 
-const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 365; // ~1 year
+// Persisted-URL lifetime (for callers that still store a ready URL, e.g. the
+// public enrollment form's documents_urls). Reduced from ~1 year so a leaked
+// URL has a far smaller exposure window. Prefer storing a `ref` (below) and
+// signing on demand with resolveSignedUrl() instead of persisting URLs.
+const SIGNED_URL_EXPIRY_SECONDS = 60 * 60 * 24 * 90; // 90 days
+// Short-lived window used when re-signing a stored `bucket/path` ref at the
+// moment a user actually opens the file.
+const ON_DEMAND_EXPIRY_SECONDS = 60 * 60; // 1 hour
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const ALLOWED_TYPES = {
@@ -80,7 +87,28 @@ export async function uploadFile(bucket, file, folder = '') {
     url:    signed.signedUrl,
     path,
     bucket,
+    // Storage reference "bucket/path" — store THIS (not the URL) and re-sign on
+    // demand via resolveSignedUrl() so no long-lived URL is persisted.
+    ref:    `${bucket}/${path}`,
   };
+}
+
+/**
+ * resolveSignedUrl(stored, expiresInSeconds?) → Promise<string|null>
+ *
+ * Turns a stored file value into a fresh, short-lived signed URL:
+ *   • A legacy full URL ("https://…") is returned as-is (backward compat).
+ *   • A "bucket/path" ref is re-signed on demand for a short window.
+ * Call this at the moment the user opens the file, never ahead of time.
+ */
+export async function resolveSignedUrl(stored, expiresInSeconds = ON_DEMAND_EXPIRY_SECONDS) {
+  if (!stored) return stored ?? null;
+  if (/^https?:\/\//i.test(stored)) return stored; // legacy persisted URL
+  const slash = stored.indexOf('/');
+  if (slash < 1 || slash === stored.length - 1) return stored; // not a ref
+  const bucket = stored.slice(0, slash);
+  const path   = stored.slice(slash + 1);
+  return createSignedUrl(bucket, path, expiresInSeconds);
 }
 
 /**

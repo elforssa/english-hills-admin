@@ -98,7 +98,11 @@ export const auth = {
    *   auth.updateMe({ phone: '+212...' })
    *   auth.updateMe({ linked_student_id: '...' })
    *
-   * Email is never overwritten — it's the join key.
+   * Email is never overwritten — it's the join key. Privileged fields
+   * (role, linked_student_id, linked_teacher_id) are stripped here so a
+   * self-service profile update can never set them; the DB trigger
+   * profiles_prevent_self_elevation (migration 008) is the backstop, but we
+   * don't rely on it alone. Use /api/admin/update-role to change roles.
    */
   async updateMe(data) {
     try {
@@ -106,7 +110,10 @@ export const auth = {
       const { data: authData, error: authErr } = await sb.auth.getUser();
       if (authErr || !authData?.user) throw new NotAuthenticatedError();
 
-      const { id, email, ...patch } = data || {};
+      // Drop server-owned / privileged fields before the update.
+      const {
+        id, email, role, linked_student_id, linked_teacher_id, ...patch
+      } = data || {};
       const { data: row, error } = await sb
         .from(PROFILE_TABLE)
         .update(patch)

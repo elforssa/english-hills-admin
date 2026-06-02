@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
 import { Printer, ArrowLeft, Download, Trash2, Edit } from 'lucide-react';
 import Link from 'next/link';
 import jsPDF from 'jspdf';
+import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
+import { getBrowserClient } from '@/lib/supabase';
 
 const STATUT_CONFIG = {
   'Soldé': { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
@@ -18,6 +21,8 @@ export default function ReceiptPrint() {
   const params = useParams();
   const id = params?.id;
   const router = useRouter();
+  const { role } = useAuth();
+  const isDirector = role === 'director';
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -102,8 +107,20 @@ export default function ReceiptPrint() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Supprimer ce reçu définitivement ?')) return;
-    await entities.Receipt.delete(id);
+    // Receipts are retention-sensitive: only the director may remove one, and
+    // it is a soft delete (deleted_at) via RPC — never a hard DELETE.
+    if (!isDirector) {
+      toast.error('Seul le directeur peut supprimer un reçu.');
+      return;
+    }
+    if (!confirm('Archiver ce reçu ? Il sera masqué mais conservé pour la comptabilité.')) return;
+    const sb = getBrowserClient();
+    const { error } = await sb.rpc('soft_delete_receipt', { p_receipt_id: id });
+    if (error) {
+      toast.error(error.message || 'Échec de la suppression du reçu.');
+      return;
+    }
+    toast.success('Reçu archivé');
     router.push('/receipts');
   };
 
@@ -150,13 +167,15 @@ export default function ReceiptPrint() {
           <Edit size={15} />
           Modifier
         </Link>
-        <button
-          onClick={handleDelete}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-        >
-          <Trash2 size={15} />
-          Supprimer
-        </button>
+        {isDirector && (
+          <button
+            onClick={handleDelete}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={15} />
+            Supprimer
+          </button>
+        )}
       </div>
 
       <div className="py-8 px-4 print:p-0">

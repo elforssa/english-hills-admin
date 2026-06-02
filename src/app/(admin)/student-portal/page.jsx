@@ -3,6 +3,17 @@
 import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { BookOpen, FileText, TrendingUp } from 'lucide-react';
+import { resolveSignedUrl } from '@/lib/storage';
+
+// Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
+async function openStoredFile(stored) {
+  try {
+    const url = await resolveSignedUrl(stored);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  } catch {
+    /* swallow — rare; the link simply won't open */
+  }
+}
 
 const STATUS_COLORS = {
   'Présent': 'bg-green-100 text-green-700', 'Absent': 'bg-red-100 text-red-700',
@@ -139,7 +150,7 @@ export default function StudentPortal() {
             <div key={p.id} className="bg-card border border-border rounded-xl p-4">
               <p className="font-semibold text-sm">{p.title}</p>
               <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-              {p.file_url && <a href={p.file_url} target="_blank" rel="noreferrer" className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir →</a>}
+              {p.file_url && <button type="button" onClick={() => openStoredFile(p.file_url)} className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir →</button>}
             </div>
           ))}
           {portfolios.length === 0 && <div className="col-span-2 p-8 text-center text-muted-foreground text-sm">Aucun projet portfolio.</div>}
