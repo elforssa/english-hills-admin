@@ -214,8 +214,8 @@ function LearningTab({ groups, students }) {
                   {Object.entries(a.intelligences).sort((x,y) => y[1]-x[1]).slice(0,3).map(([k,v]) => (
                     <div key={k} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-36 flex-shrink-0 truncate">{k}</span>
-                      <div className="flex-1 bg-muted rounded-full h-1.5">
-                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${v*10}%` }} />
+                      <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.min(100, v*10)}%` }} />
                       </div>
                       <span className="text-xs font-bold w-3">{v}</span>
                     </div>

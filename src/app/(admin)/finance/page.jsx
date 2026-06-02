@@ -99,8 +99,8 @@ export default function Finance() {
           <h2 className="font-semibold text-sm">Taux de recouvrement global</h2>
           <span className="text-2xl font-bold" style={{ color: collectionRate >= 80 ? '#059669' : collectionRate >= 60 ? '#d97706' : '#B91C2E' }}>{collectionRate}%</span>
         </div>
-        <div className="w-full bg-muted rounded-full h-2.5 mb-4">
-          <div className="h-2.5 rounded-full transition-all" style={{ width: `${collectionRate}%`, backgroundColor: collectionRate >= 80 ? '#059669' : collectionRate >= 60 ? '#d97706' : '#B91C2E' }} />
+        <div className="w-full bg-muted rounded-full h-2.5 mb-4 overflow-hidden">
+          <div className="h-2.5 rounded-full transition-all" style={{ width: `${Math.min(100, collectionRate)}%`, backgroundColor: collectionRate >= 80 ? '#059669' : collectionRate >= 60 ? '#d97706' : '#B91C2E' }} />
         </div>
         <p className="text-xs text-muted-foreground">{totalEncaisse.toLocaleString('fr-MA')} MAD encaissés sur {totalDu.toLocaleString('fr-MA')} MAD facturés</p>
         {termStats.length > 0 && (

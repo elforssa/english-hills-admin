@@ -301,8 +301,8 @@ export default function ParentPortal() {
                   {Object.entries(la.intelligences).sort((a,b) => b[1]-a[1]).slice(0, 4).map(([k, v]) => (
                     <div key={k} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-44 flex-shrink-0">{k}</span>
-                      <div className="flex-1 bg-muted rounded-full h-1.5">
-                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${v * 10}%` }} />
+                      <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${Math.min(100, v * 10)}%` }} />
                       </div>
                       <span className="text-xs font-bold w-4">{v}</span>
                     </div>
