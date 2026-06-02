@@ -72,6 +72,12 @@ export default function StudentDetail() {
         <button onClick={() => router.push('/students')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft size={15} />
         </button>
+        <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
+          {student.photo_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
+            : <span className="text-lg font-bold text-muted-foreground">{student.full_name?.[0] || '?'}</span>}
+        </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{student.full_name}</h1>
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>

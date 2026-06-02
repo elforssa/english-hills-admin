@@ -30,6 +30,7 @@ import { getBrowserClient } from './supabase';
 // Entity name → Supabase table name
 // -----------------------------------------------------------------------------
 const TABLE_FOR = {
+  ActivityLog:        'activity_log',
   Announcement:       'announcements',
   AppConfig:          'app_config',
   Assessment:         'assessments',
@@ -43,7 +44,6 @@ const TABLE_FOR = {
   LeaveRequest:       'leave_requests',
   Message:            'messages',
   Notification:       'notifications',
-  Payment:            'payments',
   Payroll:            'payroll',
   PendingRole:        'pending_roles',
   PlacementTest:      'placement_tests',
@@ -234,6 +234,7 @@ export const entities = Object.fromEntries(
 
 // Direct named exports for ergonomic per-entity imports:
 //   import { Student, Receipt } from '@/lib/entities'
+export const ActivityLog        = entities.ActivityLog;
 export const Announcement       = entities.Announcement;
 export const AppConfig          = entities.AppConfig;
 export const Assessment         = entities.Assessment;
@@ -247,7 +248,6 @@ export const LearningAssessment = entities.LearningAssessment;
 export const LeaveRequest       = entities.LeaveRequest;
 export const Message            = entities.Message;
 export const Notification       = entities.Notification;
-export const Payment            = entities.Payment;
 export const Payroll            = entities.Payroll;
 export const PendingRole        = entities.PendingRole;
 export const PlacementTest      = entities.PlacementTest;

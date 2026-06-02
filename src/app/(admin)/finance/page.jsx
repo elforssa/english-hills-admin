@@ -10,17 +10,15 @@ import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 
 export default function Finance() {
-  const [payments, setPayments] = useState([]);
   const [receipts, setReceipts] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
-      entities.Payment.list('-created_date', 200),
       entities.Receipt.list('-created_date', 50),
       entities.Student.list('full_name', 200),
-    ]).then(([p, r, s]) => { setPayments(p); setReceipts(r); setStudents(s); setLoading(false); });
+    ]).then(([r, s]) => { setReceipts(r); setStudents(s); setLoading(false); });
   }, []);
 
   const studentName = (id) => students.find(s => s.id === id)?.full_name || '—';

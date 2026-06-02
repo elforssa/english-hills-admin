@@ -52,7 +52,7 @@ export default function ReceiptPrint() {
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
     doc.text(`Reçu de paiement — ${receipt.date || ''}`, 10, y); y += 5;
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120);
-    doc.text(`Réf. #${(receipt.id || '').slice(-8).toUpperCase()}  ·  ${statusKey}`, 10, y); y += 7;
+    doc.text(`N° ${receipt.receipt_number || '#' + (receipt.id || '').slice(-8).toUpperCase()}  ·  ${statusKey}`, 10, y); y += 7;
     doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(10, y, 138, y); y += 5;
 
     const rows = [
@@ -203,7 +203,7 @@ export default function ReceiptPrint() {
                 REÇU DE PAIEMENT
               </div>
               <p className="text-xs text-gray-500">Date : <span className="font-bold text-gray-800">{receipt.date}</span></p>
-              <p className="text-xs text-gray-400 mt-1">Réf. #{receipt.id?.slice(-8).toUpperCase()}</p>
+              <p className="text-xs text-gray-500 mt-1">N° de reçu : <span className="font-bold text-gray-800">{receipt.receipt_number || `#${receipt.id?.slice(-8).toUpperCase()}`}</span></p>
               <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border" style={{ backgroundColor: sc.bg, color: sc.color, borderColor: sc.border }}>
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sc.color }} />
                 {statusKey}

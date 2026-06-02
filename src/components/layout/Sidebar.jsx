@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
   LogOut, ChevronDown, ChevronRight, Shield, Menu, X,
-  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink,
+  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -72,6 +72,7 @@ const NAV = [
     children: [
       { href: '/notifications', label: 'Notifications', roles: ADMIN },
       { href: '/communications', label: 'Messages & Annonces', roles: ADMIN },
+      { href: '/activity-log', label: "Journal d'activité", roles: ADMIN },
     ],
   },
   {

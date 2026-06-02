@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { entities, auth } from '@/lib/entities';
+import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
@@ -25,6 +25,8 @@ const StudentSchema = z.object({
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:    z.enum(NIVEAUX).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
+  groupe_id:      z.string().uuid().optional().or(z.literal('')),
+  photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
 }).refine(
   (d) => Boolean(d.email?.trim()) || Boolean(d.parent_email?.trim()),
@@ -41,11 +43,18 @@ export default function StudentForm() {
   const qc = useQueryClient();
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
-    niveau_cefr: 'A1', age_category: 'Adults (18+)', status: 'Prospect', notes: '',
+    niveau_cefr: 'A1', age_category: 'Adults (18+)', status: 'Prospect',
+    groupe_id: '', photo_url: '', notes: '',
   });
+
+  useEffect(() => {
+    entities.Group.list('name', 200).then(setGroups).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (isEdit) {
@@ -63,6 +72,8 @@ export default function StudentForm() {
               telephone:    row.telephone    ?? '',
               email:        row.email        ?? '',
               parent_email: row.parent_email ?? '',
+              groupe_id:    row.groupe_id     ?? '',
+              photo_url:    row.photo_url     ?? '',
               notes:        row.notes        ?? '',
             }));
           }
@@ -77,6 +88,21 @@ export default function StudentForm() {
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }));
     if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }));
+  };
+
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'documents', folder: 'photos' });
+      set('photo_url', file_url);
+      toast.success('Photo téléversée');
+    } catch (err) {
+      toast.error(err?.message || 'Échec du téléversement de la photo.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -101,6 +127,8 @@ export default function StudentForm() {
       telephone:      parsed.data.telephone      || null,
       email:          parsed.data.email          || null,
       parent_email:   parsed.data.parent_email   || null,
+      groupe_id:      parsed.data.groupe_id      || null,
+      photo_url:      parsed.data.photo_url      || null,
       notes:          parsed.data.notes          || null,
     };
 
@@ -132,6 +160,18 @@ export default function StudentForm() {
 
       <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-5" noValidate>
         <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+              {form.photo_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                : <span className="text-xl font-bold text-muted-foreground">{form.full_name?.[0] || '?'}</span>}
+            </div>
+            <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
+              <Upload size={14} /> {uploading ? 'Téléversement…' : 'Photo'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} disabled={uploading} />
+            </label>
+          </div>
           <div className="col-span-2">
             <label htmlFor="full_name" className={labelClass}>Nom complet *</label>
             <input
@@ -201,6 +241,13 @@ export default function StudentForm() {
             <select id="status" className={inputClass} value={form.status || ''} onChange={e => set('status', e.target.value)}>
               <option value="">— Non défini —</option>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label htmlFor="groupe_id" className={labelClass}>Groupe assigné</label>
+            <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => set('groupe_id', e.target.value)}>
+              <option value="">— Aucun groupe —</option>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
             </select>
           </div>
           <div className="col-span-2">
