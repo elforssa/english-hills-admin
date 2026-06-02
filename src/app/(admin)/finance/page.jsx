@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
-import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Printer, Download } from 'lucide-react';
+import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Printer, Download, Pencil } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
@@ -142,9 +142,14 @@ export default function Finance() {
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                       <p className="text-sm font-bold text-foreground">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
-                      <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary">
-                        <Printer size={11} /> Imprimer
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary">
+                          <Printer size={11} /> Imprimer
+                        </Link>
+                        <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+                          <Pencil size={11} /> Modifier
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 );
@@ -179,9 +184,14 @@ export default function Finance() {
                           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                            <Printer size={12} /> Imprimer
-                          </Link>
+                          <div className="flex items-center gap-4">
+                            <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                              <Printer size={12} /> Imprimer
+                            </Link>
+                            <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline">
+                              <Pencil size={12} /> Modifier
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     );
