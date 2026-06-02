@@ -1,12 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { entities } from '@/lib/entities';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { Check, ChevronsUpDown, UserX } from 'lucide-react';
 
 const categories = ['Enfants', 'Ados', 'Adultes', 'Business', 'Particulier', 'Préparation aux examens'];
 const niveaux = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'CECRL'];
 const typesCours = ['Standard', 'Intensif'];
 const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
+
+// Maps the student's age_category (used across the app) to the receipt's
+// own `categorie` vocabulary. Kept in sync with receipts/new/page.jsx.
+const AGE_TO_CATEGORIE = {
+  'Young Learners (6-12)': 'Enfants',
+  'Teens (13-17)': 'Ados',
+  'Adults (18+)': 'Adultes',
+  'Corporate': 'Business',
+};
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -34,6 +47,39 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
   });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+
+  // ── Linked student ────────────────────────────────────────────────────────
+  // A receipt SHOULD point at a real student row via `student_id`. The student
+  // detail page lists payments by `student_id` only — a receipt with no link
+  // (a walk-in, or one typed by hand before the student existed) never appears
+  // on that student's record. This picker lets staff attach the receipt.
+  const [students, setStudents] = useState([]);
+  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+
+  useEffect(() => {
+    entities.Student.list('full_name', 500).then(setStudents).catch(() => {});
+  }, []);
+
+  const selectedStudent = students.find((s) => s.id === form.student_id);
+
+  // Attach the receipt to a student AND copy their identity fields onto the
+  // receipt so the printed reçu matches the student's record. Course/payment
+  // fields are left untouched — those are specific to this transaction.
+  const selectStudent = (student) => {
+    setForm((f) => ({
+      ...f,
+      student_id: student.id,
+      nom_prenom: student.full_name || f.nom_prenom,
+      telephone: student.telephone || f.telephone,
+      email: student.email || f.email,
+      date_naissance: student.date_naissance || f.date_naissance,
+      niveau: student.niveau_cefr || f.niveau,
+      categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
+    }));
+    setStudentPickerOpen(false);
+  };
+
+  const clearStudent = () => set('student_id', '');
 
   const base = parseFloat(form.montant_total) || 0;
   const remisePct = parseFloat(form.remise) || 0;
@@ -89,6 +135,59 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      <div>
+        <SectionTitle>Apprenant lié</SectionTitle>
+        <div className="max-w-md">
+          <label className={labelClass}>Rechercher un apprenant</label>
+          <Popover open={studentPickerOpen} onOpenChange={setStudentPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={`${inputClass} flex items-center justify-between text-left ${selectedStudent ? '' : 'text-muted-foreground/70'}`}
+              >
+                <span className="truncate">
+                  {selectedStudent ? selectedStudent.full_name : 'Aucun apprenant lié — rechercher…'}
+                </span>
+                <ChevronsUpDown size={15} className="shrink-0 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
+              <Command>
+                <CommandInput placeholder="Nom de l'apprenant…" />
+                <CommandList>
+                  <CommandEmpty>Aucun apprenant trouvé.</CommandEmpty>
+                  <CommandGroup>
+                    {students.map((s) => (
+                      <CommandItem
+                        key={s.id}
+                        value={`${s.full_name} ${s.telephone || ''} ${s.email || ''}`}
+                        onSelect={() => selectStudent(s)}
+                      >
+                        <Check size={15} className={`mr-2 ${form.student_id === s.id ? 'opacity-100' : 'opacity-0'}`} />
+                        <span className="flex-1 truncate">{s.full_name}</span>
+                        {s.telephone && <span className="text-xs text-muted-foreground ml-2">{s.telephone}</span>}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {selectedStudent ? (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+              <span>Lié à <strong>{selectedStudent.full_name}</strong> — ce reçu apparaîtra sur sa fiche.</span>
+              <button type="button" onClick={clearStudent} className="flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-medium">
+                <UserX size={13} /> Détacher
+              </button>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-amber-700">
+              Non lié — ce reçu n&apos;apparaîtra sur aucune fiche apprenant. À utiliser uniquement pour un paiement ponctuel sans dossier.
+            </p>
+          )}
+        </div>
+      </div>
+
       <div>
         <SectionTitle>Reçu</SectionTitle>
         <div className="max-w-xs">
