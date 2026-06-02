@@ -6,6 +6,7 @@ import { entities, auth } from '@/lib/entities';
 import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { resolveSignedUrl } from '@/lib/storage';
+import MessagesTab from '@/components/portals/MessagesTab';
 
 // Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
 async function openStoredFile(stored) {
@@ -33,6 +34,7 @@ export default function ParentPortal() {
   const [portfolios, setPortfolios] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('overview');
 
@@ -51,6 +53,8 @@ export default function ParentPortal() {
         // announcements the old two-query approach missed.
         const ann = await entities.Announcement.list('-created_date', 20);
         setAnnouncements(ann);
+        // Teachers are the messaging recipients (parents can read the roster).
+        entities.Teacher.list('full_name', 100).then(setTeachers).catch(() => {});
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[parent-portal] initial load failed:', err);
@@ -108,6 +112,7 @@ export default function ParentPortal() {
     { id: 'finance', label: 'Paiements' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'learning', label: "Style d'apprentissage" },
+    { id: 'messages', label: 'Messages' },
   ];
 
   return (
@@ -313,6 +318,13 @@ export default function ParentPortal() {
             </div>
           ))}
         </div>
+      )}
+
+      {tab === 'messages' && (
+        <MessagesTab
+          me={{ email: user?.email, name: user?.full_name }}
+          recipients={teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name }))}
+        />
       )}
 
     </div>

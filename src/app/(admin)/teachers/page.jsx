@@ -56,9 +56,17 @@ export default function Teachers() {
           filtered.map(t => (
             <div key={t.id} className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="font-semibold text-foreground">{t.full_name}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
+                    {t.photo_url
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={t.photo_url} alt="" className="w-full h-full object-cover" />
+                      : <span className="text-sm font-bold text-muted-foreground">{t.full_name?.[0] || '?'}</span>}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground truncate">{t.full_name}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Link href={`/teachers/${t.id}/edit`} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></Link>

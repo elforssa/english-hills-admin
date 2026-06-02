@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { BookOpen, FileText, TrendingUp } from 'lucide-react';
 import { resolveSignedUrl } from '@/lib/storage';
+import MessagesTab from '@/components/portals/MessagesTab';
 
 // Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
 async function openStoredFile(stored) {
@@ -27,6 +28,7 @@ export default function StudentPortal() {
   const [assessments, setAssessments] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('progress');
 
@@ -49,6 +51,7 @@ export default function StudentPortal() {
       // (audience 'all' + their group). No client-side audience filter needed.
       const ann = await entities.Announcement.list('-created_date', 20);
       setAnnouncements(ann);
+      entities.Teacher.list('full_name', 100).then(setTeachers).catch(() => {});
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -59,7 +62,7 @@ export default function StudentPortal() {
   const rate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
   const lastAssessment = assessments[0];
 
-  const TABS = [{ id: 'progress', label: 'Ma progression' }, { id: 'attendance', label: 'Présences' }, { id: 'portfolio', label: 'Portfolio' }];
+  const TABS = [{ id: 'progress', label: 'Ma progression' }, { id: 'attendance', label: 'Présences' }, { id: 'portfolio', label: 'Portfolio' }, { id: 'messages', label: 'Messages' }];
 
   return (
     <div className="p-4 lg:p-8 max-w-3xl mx-auto">
@@ -155,6 +158,13 @@ export default function StudentPortal() {
           ))}
           {portfolios.length === 0 && <div className="col-span-2 p-8 text-center text-muted-foreground text-sm">Aucun projet portfolio.</div>}
         </div>
+      )}
+
+      {tab === 'messages' && (
+        <MessagesTab
+          me={{ email: user?.email, name: user?.full_name }}
+          recipients={teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name }))}
+        />
       )}
     </div>
   );

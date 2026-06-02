@@ -6,8 +6,13 @@ import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2 } f
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-// MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
-// import MessagesTab from '@/components/portals/MessagesTab';
+import MessagesTab from '@/components/portals/MessagesTab';
+
+// Build a unique recipient list from rows like {email, name}, dropping blanks.
+function uniqueRecipients(list) {
+  const seen = new Set();
+  return list.filter(r => r.email && !seen.has(r.email) && seen.add(r.email));
+}
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -365,7 +370,7 @@ export default function TeacherPortal() {
   const [statuses, setStatuses] = useState({});
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('groups');
-  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }, { id: 'leave', label: 'Congés' }];
+  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }, { id: 'leave', label: 'Congés' }, { id: 'messages', label: 'Messages' }];
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -565,6 +570,18 @@ export default function TeacherPortal() {
 
       {tab === 'leave' && (
         <LeaveTab teacher={teacher} />
+      )}
+
+      {tab === 'messages' && (
+        <MessagesTab
+          me={{ email: user?.email, name: user?.full_name }}
+          recipients={uniqueRecipients(
+            students.flatMap(s => [
+              { email: s.parent_email, name: `Parent de ${s.full_name}` },
+              { email: s.email, name: s.full_name },
+            ]),
+          )}
+        />
       )}
 
     </div>

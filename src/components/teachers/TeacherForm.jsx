@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { entities, auth } from '@/lib/entities';
+import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Upload } from 'lucide-react';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -19,9 +19,11 @@ export default function TeacherForm() {
   const qc = useQueryClient();
   const isEdit = Boolean(id);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({
     full_name: '', telephone: '', email: '', contract_type: 'Freelance',
-    certifications: [], niveaux_autorises: [], taux_horaire: '', salaire_mensuel: '', notes: '',
+    certifications: [], niveaux_autorises: [], taux_horaire: '', salaire_mensuel: '',
+    iban: '', photo_url: '', notes: '',
   });
 
   useEffect(() => {
@@ -30,6 +32,21 @@ export default function TeacherForm() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleArr = (k, v) => setForm(f => ({ ...f, [k]: f[k].includes(v) ? f[k].filter(x => x !== v) : [...f[k], v] }));
+
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'documents', folder: 'photos' });
+      set('photo_url', file_url);
+      toast.success('Photo téléversée');
+    } catch (err) {
+      toast.error(err?.message || "Échec du téléversement de la photo.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +74,18 @@ export default function TeacherForm() {
       <h1 className="text-2xl font-bold mb-6">{isEdit ? "Modifier l'enseignant" : 'Ajouter un enseignant'}</h1>
       <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-5">
         <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+              {form.photo_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                : <span className="text-xl font-bold text-muted-foreground">{form.full_name?.[0] || '?'}</span>}
+            </div>
+            <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
+              <Upload size={14} /> {uploading ? 'Téléversement…' : 'Photo'}
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} disabled={uploading} />
+            </label>
+          </div>
           <div className="col-span-2"><label className={labelClass}>Nom complet *</label><input className={inputClass} value={form.full_name} onChange={e => set('full_name', e.target.value)} required /></div>
           <div><label className={labelClass}>Téléphone</label><input className={inputClass} value={form.telephone || ''} onChange={e => set('telephone', e.target.value)} /></div>
           <div><label className={labelClass}>Email</label><input type="email" className={inputClass} value={form.email || ''} onChange={e => set('email', e.target.value)} /></div>
@@ -71,6 +100,7 @@ export default function TeacherForm() {
           ) : (
             <div><label className={labelClass}>Taux horaire (MAD)</label><input type="number" className={inputClass} value={form.taux_horaire || ''} onChange={e => set('taux_horaire', e.target.value)} /></div>
           )}
+          <div className="col-span-2"><label className={labelClass}>IBAN (virement salaire)</label><input className={inputClass} value={form.iban || ''} onChange={e => set('iban', e.target.value)} placeholder="MA64 ..." /></div>
           <div className="col-span-2">
             <label className={labelClass}>Niveaux autorisés</label>
             <div className="flex gap-2 flex-wrap mt-1">
