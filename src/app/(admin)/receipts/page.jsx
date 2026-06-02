@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Printer, Download, CheckSquare, Square } from 'lucide-react';
+import { Plus, Search, Printer, Download, CheckSquare, Square, Trash2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
@@ -100,11 +103,14 @@ function buildReceiptPDF(doc, r, yStart) {
 }
 
 export default function Receipts() {
+  const { role } = useAuth();
+  const isDirector = role === 'director';
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [generating, setGenerating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -147,6 +153,22 @@ export default function Receipts() {
 
     doc.save(`reçus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
     setGenerating(false);
+  };
+
+  const handleDelete = async (r) => {
+    if (!confirm(`Supprimer le reçu de ${r.nom_prenom || 'cet apprenant'} ? Cette action est réservée au directeur.`)) return;
+    setDeletingId(r.id);
+    const sb = getBrowserClient();
+    const { error } = await sb.rpc('soft_delete_receipt', { p_receipt_id: r.id });
+    setDeletingId(null);
+    if (error) { toast.error('Erreur : ' + error.message); return; }
+    setReceipts(prev => prev.filter(x => x.id !== r.id));
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.delete(r.id);
+      return next;
+    });
+    toast.success('Reçu supprimé');
   };
 
   const allChecked = filtered.length > 0 && selected.size === filtered.length;
@@ -237,9 +259,21 @@ export default function Receipts() {
                           })()}
                         </td>
                         <td className="px-4 py-3">
-                          <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline whitespace-nowrap">
-                            <Printer size={12} /> Imprimer
-                          </Link>
+                          <div className="flex items-center gap-3">
+                            <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline whitespace-nowrap">
+                              <Printer size={12} /> Imprimer
+                            </Link>
+                            {isDirector && (
+                              <button
+                                onClick={() => handleDelete(r)}
+                                disabled={deletingId === r.id}
+                                title="Supprimer le reçu"
+                                className="flex items-center gap-1 text-xs font-medium text-red-600 hover:underline disabled:opacity-50 whitespace-nowrap"
+                              >
+                                <Trash2 size={12} /> {deletingId === r.id ? 'Suppression...' : 'Supprimer'}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
