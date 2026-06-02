@@ -50,8 +50,10 @@ export default function StudentDetail() {
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
   if (!student) return <div className="p-8 text-muted-foreground">Apprenant introuvable.</div>;
 
+  // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
+  const effectiveTotal = (p) => (p.montant_total || 0) * (1 - (p.remise || 0) / 100);
   const totalPaye = payments.reduce((s, p) => s + (p.montant_paye || 0), 0);
-  const totalRestant = payments.reduce((s, p) => s + ((p.montant_total || 0) - (p.montant_paye || 0)), 0);
+  const totalRestant = payments.reduce((s, p) => s + Math.max(0, effectiveTotal(p) - (p.montant_paye || 0)), 0);
   const present = attendance.filter(a => a.status === 'Présent').length;
   const presenceRate = attendance.length ? Math.round((present / attendance.length) * 100) : null;
 
@@ -151,11 +153,15 @@ export default function StudentDetail() {
             </tr></thead>
             <tbody className="divide-y divide-border">
               {payments.map(p => {
-                const restant = (p.montant_total || 0) - (p.montant_paye || 0);
+                const total = effectiveTotal(p);
+                const restant = total - (p.montant_paye || 0);
                 return (
                 <tr key={p.id}>
                   <td className="py-2">{p.date || '—'}</td>
-                  <td className="py-2">{(p.montant_total || 0).toLocaleString('fr-MA')} MAD</td>
+                  <td className="py-2">
+                    {total.toLocaleString('fr-MA')} MAD
+                    {p.remise > 0 && <span className="block text-xs text-muted-foreground line-through">{(p.montant_total || 0).toLocaleString('fr-MA')} MAD</span>}
+                  </td>
                   <td className="py-2">{(p.montant_paye || 0).toLocaleString('fr-MA')} MAD</td>
                   <td className="py-2">{restant.toLocaleString('fr-MA')} MAD</td>
                   <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_STATUS_COLORS[p.statut_paiement] || 'bg-yellow-100 text-yellow-700'}`}>{p.statut_paiement || '—'}</span></td>

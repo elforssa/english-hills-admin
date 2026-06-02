@@ -39,9 +39,12 @@ export default function Dashboard() {
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const monthReceipts = receipts.filter(r => r.date && r.date.startsWith(currentMonth));
+      // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
+      const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
       const encaisse = monthReceipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
-      const total = monthReceipts.reduce((s, r) => s + (r.montant_total || 0), 0);
-      setMonthlyData({ encaisse, restant: total - encaisse, total, count: monthReceipts.length });
+      const total = monthReceipts.reduce((s, r) => s + effectiveTotal(r), 0);
+      const restant = monthReceipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
+      setMonthlyData({ encaisse, restant, total, count: monthReceipts.length });
 
       const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
       setStats({
@@ -224,8 +227,8 @@ export default function Dashboard() {
           ) : (
             <div className="divide-y divide-border">
               {recentReceipts.map(r => {
-                const restant = (r.montant_total || 0) - (r.montant_paye || 0);
-                const statusKey = r.statut_paiement || (restant === 0 ? 'Soldé' : 'En attente');
+                const restant = (r.montant_total || 0) * (1 - (r.remise || 0) / 100) - (r.montant_paye || 0);
+                const statusKey = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
                 const sc = PAYMENT_STATUS[statusKey] || PAYMENT_STATUS['En attente'];
                 return (
                   <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors">

@@ -13,7 +13,8 @@ import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 const PAGE_SIZE = 25;
 
 function buildReceiptPDF(doc, r, yStart) {
-  const restant = (r.montant_total || 0) - (r.montant_paye || 0);
+  const effectiveTotal = (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
+  const restant = effectiveTotal - (r.montant_paye || 0);
   const statusKey = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
   let y = yStart;
 
@@ -65,7 +66,13 @@ function buildReceiptPDF(doc, r, yStart) {
   y += 6;
 
   const financial = [
-    ['Montant total', `${(r.montant_total || 0).toLocaleString('fr-MA')} MAD`],
+    ...(r.remise > 0
+      ? [
+          ['Prix de base', `${(r.montant_total || 0).toLocaleString('fr-MA')} MAD`],
+          [`Remise (${r.remise}%)`, `-${((r.montant_total || 0) * (r.remise / 100)).toLocaleString('fr-MA')} MAD`],
+          ['Prix final', `${effectiveTotal.toLocaleString('fr-MA')} MAD`],
+        ]
+      : [['Montant total', `${(r.montant_total || 0).toLocaleString('fr-MA')} MAD`]]),
     ['Montant payé', `${(r.montant_paye || 0).toLocaleString('fr-MA')} MAD`],
     ['Restant', `${restant.toLocaleString('fr-MA')} MAD`],
     ['Mode de paiement', r.mode_paiement || '—'],
@@ -200,7 +207,8 @@ export default function Receipts() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {paged.map(r => {
-                    const restant = (r.montant_total || 0) - (r.montant_paye || 0);
+                    const effectiveTotal = (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
+                    const restant = effectiveTotal - (r.montant_paye || 0);
                     const isChecked = selected.has(r.id);
                     return (
                       <tr key={r.id} className={`hover:bg-muted/30 transition-colors ${isChecked ? 'bg-blue-50/50' : ''}`}>
@@ -213,7 +221,12 @@ export default function Receipts() {
                         <td className="px-4 py-3 text-muted-foreground">{r.date}</td>
                         <td className="px-4 py-3 text-muted-foreground">{r.categorie}</td>
                         <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{r.niveau}</span></td>
-                        <td className="px-4 py-3">{(r.montant_total || 0).toLocaleString('fr-MA')} MAD</td>
+                        <td className="px-4 py-3">
+                          {effectiveTotal.toLocaleString('fr-MA')} MAD
+                          {r.remise > 0 && (
+                            <span className="block text-xs text-muted-foreground line-through">{(r.montant_total || 0).toLocaleString('fr-MA')} MAD</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 font-semibold text-green-700">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</td>
                         <td className="px-4 py-3" style={{ color: restant > 0 ? '#B91C2E' : '#16a34a' }}>{restant.toLocaleString('fr-MA')} MAD</td>
                         <td className="px-4 py-3 text-muted-foreground">{r.mode_paiement}</td>

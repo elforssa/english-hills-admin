@@ -163,7 +163,8 @@ export default function ReportsPage() {
       const d = new Date(r.date);
       if (String(d.getFullYear()) !== year) continue;
       const m = months[d.getMonth()];
-      m.facture  += Number(r.montant_total || 0);
+      // `remise` is a percentage discount off montant_total — bill the discounted total.
+      m.facture  += Number(r.montant_total || 0) * (1 - (Number(r.remise) || 0) / 100);
       m.encaisse += Number(r.montant_paye  || 0);
     }
     return months;

@@ -24,17 +24,19 @@ export default function Finance() {
   }, []);
 
   const studentName = (id) => students.find(s => s.id === id)?.full_name || '—';
+  // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
+  const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
   const totalEncaisse = receipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
-  const totalDu = receipts.reduce((s, r) => s + (r.montant_total || 0), 0);
-  const totalRestant = receipts.reduce((s, r) => s + Math.max(0, (r.montant_total || 0) - (r.montant_paye || 0)), 0);
+  const totalDu = receipts.reduce((s, r) => s + effectiveTotal(r), 0);
+  const totalRestant = receipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
   const collectionRate = totalDu > 0 ? Math.round((totalEncaisse / totalDu) * 100) : 0;
   const enRetard = receipts.filter(r => r.statut_paiement === 'En retard').length;
-  const payes = receipts.filter(r => r.statut_paiement === 'Soldé' || ((r.montant_total || 0) - (r.montant_paye || 0)) <= 0).length;
+  const payes = receipts.filter(r => r.statut_paiement === 'Soldé' || (effectiveTotal(r) - (r.montant_paye || 0)) <= 0).length;
 
   const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
   const termStats = TERMES.map(terme => {
     const termReceipts = receipts.filter(r => r.duree_cours?.includes(terme) || false);
-    const du = termReceipts.reduce((s, r) => s + (r.montant_total || 0), 0);
+    const du = termReceipts.reduce((s, r) => s + effectiveTotal(r), 0);
     const enc = termReceipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
     return { terme, du, enc, rate: du > 0 ? Math.round((enc / du) * 100) : null };
   }).filter(t => t.du > 0);
@@ -59,8 +61,10 @@ export default function Finance() {
       Niveau: r.niveau,
       'Type cours': r.type_cours,
       'Montant total': r.montant_total,
+      'Remise (%)': r.remise || 0,
+      'Total après remise': effectiveTotal(r),
       'Montant payé': r.montant_paye,
-      Restant: (r.montant_total || 0) - (r.montant_paye || 0),
+      Restant: effectiveTotal(r) - (r.montant_paye || 0),
       Mode: r.mode_paiement,
       Statut: r.statut_paiement,
     })), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -126,7 +130,7 @@ export default function Finance() {
           <>
             <div className="divide-y divide-border sm:hidden">
               {receipts.slice(0, 20).map(r => {
-                const restant = (r.montant_total || 0) - (r.montant_paye || 0);
+                const restant = effectiveTotal(r) - (r.montant_paye || 0);
                 const key = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
                 return (
                   <div key={r.id} className="px-4 py-3 flex items-start justify-between gap-3">
@@ -162,7 +166,7 @@ export default function Finance() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {receipts.slice(0, 20).map(r => {
-                    const restant = (r.montant_total || 0) - (r.montant_paye || 0);
+                    const restant = effectiveTotal(r) - (r.montant_paye || 0);
                     const key = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
                     return (
                       <tr key={r.id} className="hover:bg-muted/30">
