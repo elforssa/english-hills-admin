@@ -9,11 +9,13 @@
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 
 export default function AdminError({ error, reset }) {
   useEffect(() => {
     // eslint-disable-next-line no-console
     console.error('[admin error boundary]', error);
+    Sentry.captureException(error); // no-op until a DSN is configured
   }, [error]);
 
   // `digest` is set by Next when the error originated in a server component;

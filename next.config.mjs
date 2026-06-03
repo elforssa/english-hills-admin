@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -29,7 +31,9 @@ const csp = [
   // Supabase project + Resend API + Cloudflare Turnstile siteverify
   // (server fetches it; the browser does not, but keeping connect-src loose
   // for the iframe is harmless).
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com",
+  // Sentry events are tunnelled through /monitoring (same-origin), so 'self'
+  // covers the browser; the ingest hosts are listed as a fallback.
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com https://*.ingest.de.sentry.io https://*.sentry.io",
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
   // Turnstile renders its challenge inside an iframe from this origin.
@@ -39,6 +43,8 @@ const csp = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Required on Next 14 so instrumentation.js (Sentry server/edge init) loads.
+  experimental: { instrumentationHook: true },
   async headers() {
     return [
       {
@@ -58,4 +64,18 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry. Build-time source-map upload only runs when an auth token
+// is present (i.e. in CI / Vercel), so local builds stay quiet. Runtime error
+// reporting is gated separately by the DSN env vars in the sentry.*.config.js
+// files, so this is a no-op until you set NEXT_PUBLIC_SENTRY_DSN.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  // Same-origin tunnel: keeps events flowing past ad-blockers and a strict CSP.
+  tunnelRoute: '/monitoring',
+  widenClientFileUpload: true,
+  // Skip source-map upload entirely when there's no auth token (local dev).
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+});

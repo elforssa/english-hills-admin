@@ -8,11 +8,13 @@
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, LogIn } from 'lucide-react';
 import Link from 'next/link';
+import * as Sentry from '@sentry/nextjs';
 
 export default function RootError({ error, reset }) {
   useEffect(() => {
     // eslint-disable-next-line no-console
     console.error('[root error boundary]', error);
+    Sentry.captureException(error); // no-op until a DSN is configured
   }, [error]);
 
   const digest = error?.digest;
