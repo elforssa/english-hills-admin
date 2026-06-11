@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
-import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2 } from 'lucide-react';
+import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import MessagesTab from '@/components/portals/MessagesTab';
+import { getOfficeRecipient } from '@/lib/centerInfo';
+import { markMyNotificationsRead } from '@/lib/notifications';
+
+const NOTIF_TYPE_LABELS = {
+  absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
+  enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
+  class_reminder: 'Rappel de cours', general: 'Général',
+};
 
 // Build a unique recipient list from rows like {email, name}, dropping blanks.
 function uniqueRecipients(list) {
@@ -25,6 +33,8 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const weightSum = (parseInt(form.poids_oral, 10) || 0) + (parseInt(form.poids_ecrit, 10) || 0) + (parseInt(form.poids_devoirs, 10) || 0);
+
   const noteFinale = () => {
     const o = parseFloat(form.note_oral) || 0;
     const e = parseFloat(form.note_ecrit) || 0;
@@ -34,6 +44,10 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
 
   const handleSubmit = async (ev) => {
     ev.preventDefault();
+    if (weightSum !== 100) {
+      toast.error(`La somme des pondérations doit être 100% (actuellement ${weightSum}%).`);
+      return;
+    }
     setSaving(true);
     const data = { ...form, student_id: form.student_id || null, group_id: form.group_id || null, note_oral: parseFloat(form.note_oral)||null, note_ecrit: parseFloat(form.note_ecrit)||null, note_devoirs: parseFloat(form.note_devoirs)||null, note_finale: parseFloat(noteFinale()) };
     try {
@@ -85,6 +99,15 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
               <select className={inputClass} value={form.niveau_actuel || ''} onChange={e => set('niveau_actuel', e.target.value)}>
                 {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
               </select>
+            </div>
+            <div className="col-span-2">
+              <label className={labelClass}>Pondérations (Oral / Écrit / Devoirs) — total {weightSum}%</label>
+              <div className="grid grid-cols-3 gap-2">
+                <input type="number" min="0" max="100" className={inputClass} value={form.poids_oral} onChange={e => set('poids_oral', parseInt(e.target.value, 10) || 0)} aria-label="Pondération oral" />
+                <input type="number" min="0" max="100" className={inputClass} value={form.poids_ecrit} onChange={e => set('poids_ecrit', parseInt(e.target.value, 10) || 0)} aria-label="Pondération écrit" />
+                <input type="number" min="0" max="100" className={inputClass} value={form.poids_devoirs} onChange={e => set('poids_devoirs', parseInt(e.target.value, 10) || 0)} aria-label="Pondération devoirs" />
+              </div>
+              {weightSum !== 100 && <p className="text-xs text-red-600 mt-1">La somme doit être 100%.</p>}
             </div>
             <div>
               <label className={labelClass}>Oral ({form.poids_oral}%)</label>
@@ -369,8 +392,10 @@ export default function TeacherPortal() {
   const [attendance, setAttendance] = useState([]);
   const [statuses, setStatuses] = useState({});
   const [saving, setSaving] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [office, setOffice] = useState(null);
   const [tab, setTab] = useState('groups');
-  const TABS = [{ id: 'groups', label: 'Mes groupes' }, { id: 'attendance', label: 'Présences' }, { id: 'notes', label: 'Notes' }, { id: 'learning', label: "Styles d'apprentissage" }, { id: 'leave', label: 'Congés' }, { id: 'messages', label: 'Messages' }];
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -380,8 +405,19 @@ export default function TeacherPortal() {
       const me = allTeachers.find(t => t.email === u?.email);
       setTeacher(me);
       const allGroups = await entities.Group.list('name', 100);
-      const myGroups = me ? allGroups.filter(g => g.teacher_id === me.id) : allGroups;
+      // A matched teacher sees their groups. A director viewing this portal
+      // (no teachers row) sees all groups. An unmatched teacher sees none —
+      // the empty-state banner below tells them to contact the office.
+      const myGroups = me
+        ? allGroups.filter(g => g.teacher_id === me.id)
+        : (u?.role === 'director' ? allGroups : []);
       setGroups(myGroups);
+      // Personal notifications + unread messages + office contact.
+      entities.Notification.filter({ recipient_email: u?.email }, '-created_date', 50)
+        .then(setNotifications).catch(() => {});
+      entities.Message.filter({ to_user_email: u?.email, read: false })
+        .then(rows => setUnreadMessages(rows.length)).catch(() => {});
+      getOfficeRecipient().then(setOffice).catch(() => {});
       const allStudents = await entities.Student.list('full_name', 200);
       setStudents(allStudents);
       // Validated enrollments let us include students enrolled in a group even
@@ -401,20 +437,35 @@ export default function TeacherPortal() {
     }).catch(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (!selectedGroup) return;
-    entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate }).then(a => {
-      setAttendance(a);
-      const s = {};
-      a.forEach(r => { s[r.student_id] = r.status; });
-      setStatuses(s);
-    });
-  }, [selectedGroup, sessionDate]);
-
   const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup).map(e => e.student_id);
   const groupStudents = students
     .filter(s => s.groupe_id === selectedGroup || enrolledStudentIds.includes(s.id))
     .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+
+  useEffect(() => {
+    if (!selectedGroup) return;
+    entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate }).then(a => {
+      setAttendance(a);
+      // Seed the form so EVERY student in the roster has a visible status.
+      // Existing records win; anyone not yet recorded defaults to 'Présent'
+      // and is shown selected — so a forgotten student is never silently
+      // saved as present without the teacher seeing it on screen first.
+      const s = {};
+      groupStudents.forEach(st => { s[st.id] = 'Présent'; });
+      a.forEach(r => { s[r.student_id] = r.status; });
+      setStatuses(s);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup, sessionDate, students, enrollments]);
+
+  // Mark notifications read when the tab is opened, then clear the badge.
+  useEffect(() => {
+    if (tab !== 'notifications') return;
+    if (!notifications.some(n => !n.read_at)) return;
+    markMyNotificationsRead().then(() => {
+      setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
+    });
+  }, [tab, notifications]);
 
   const handleSave = async () => {
     if (!selectedGroup) return;
@@ -449,6 +500,26 @@ export default function TeacherPortal() {
   }
 
   const wasDirector = user?.role === 'director' && teacher === null;
+  const unmatchedTeacher = user?.role === 'teacher' && teacher === null;
+
+  const TABS = [
+    { id: 'groups', label: 'Mes groupes' },
+    { id: 'attendance', label: 'Présences' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'learning', label: "Styles d'apprentissage" },
+    { id: 'leave', label: 'Congés' },
+    { id: 'notifications', label: 'Notifications', badge: notifications.filter(n => !n.read_at).length },
+    { id: 'messages', label: 'Messages', badge: unreadMessages },
+  ];
+
+  // Recipients: parents + students of this teacher's students, plus the office.
+  const recipients = uniqueRecipients([
+    ...students.flatMap(s => [
+      { email: s.parent_email, name: `Parent de ${s.full_name}` },
+      { email: s.email, name: s.full_name },
+    ]),
+    ...(office ? [office] : []),
+  ]);
 
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto">
@@ -467,6 +538,18 @@ export default function TeacherPortal() {
         )}
       </div>
 
+      {unmatchedTeacher && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 text-sm text-amber-800">
+          <p className="font-semibold mb-1">Aucune fiche enseignant liée à votre compte</p>
+          <p>
+            Votre adresse <strong>{user?.email}</strong> n’est rattachée à aucune fiche enseignant,
+            donc aucun groupe ni apprenant n’apparaît ici. Merci de contacter l’administration
+            {office?.email ? <> à <a className="font-semibold underline" href={`mailto:${office.email}`}>{office.email}</a></> : null}
+            {' '}pour relier votre compte.
+          </p>
+        </div>
+      )}
+
       {announcements.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
           <p className="text-xs font-semibold text-blue-700 mb-2">ANNONCES</p>
@@ -479,10 +562,13 @@ export default function TeacherPortal() {
         </div>
       )}
 
-      <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-fit mb-6">
+      <div className="flex gap-1 border border-border rounded-lg p-1 bg-muted w-full overflow-x-auto mb-6">
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.label}
+            {t.badge > 0 && (
+              <span className="inline-flex items-center justify-center text-[10px] font-bold text-white bg-primary rounded-full min-w-4 h-4 px-1">{t.badge}</span>
+            )}
           </button>
         ))}
       </div>
@@ -572,15 +658,31 @@ export default function TeacherPortal() {
         <LeaveTab teacher={teacher} />
       )}
 
+      {tab === 'notifications' && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+          {notifications.map(n => (
+            <div key={n.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <p className="text-sm font-semibold">{n.subject}</p>
+                <span className="text-xs text-muted-foreground flex-shrink-0">{(n.created_date || '').slice(0, 10)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || n.type}</p>
+              <p className="text-sm text-foreground/90 whitespace-pre-wrap">{n.message}</p>
+            </div>
+          ))}
+          {notifications.length === 0 && (
+            <div className="p-10 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <Bell size={20} className="opacity-40" />
+              Aucune notification pour le moment.
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'messages' && (
         <MessagesTab
           me={{ email: user?.email, name: user?.full_name }}
-          recipients={uniqueRecipients(
-            students.flatMap(s => [
-              { email: s.parent_email, name: `Parent de ${s.full_name}` },
-              { email: s.email, name: s.full_name },
-            ]),
-          )}
+          recipients={recipients}
         />
       )}
 

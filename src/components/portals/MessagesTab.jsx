@@ -24,6 +24,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Inbox, Send, Mail, ChevronLeft, Reply, X } from 'lucide-react';
 import { useEntityCreate, useEntityFilter, useEntityUpdate } from '@/lib/queries';
+import { integrations } from '@/lib/entities';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -95,6 +96,25 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
       reply_to_id:     replyTo?.id || null,
       read:            false,
     });
+
+    // Notify the recipient by email so a new message isn't missed between
+    // logins. Best-effort: the message is already saved, so a failed email
+    // must not block the success path.
+    try {
+      await integrations.Core.SendEmail({
+        to: to,
+        subject: `Nouveau message de ${from.name || from.email}`,
+        body:
+          `Bonjour,\n\n${from.name || from.email} vous a envoyé un message ` +
+          `via l'espace English Hills :\n\n` +
+          `Objet : ${subject.trim()}\n\n${body.trim()}\n\n` +
+          `Connectez-vous à votre espace pour répondre.`,
+        reply_to: from.email,
+      });
+    } catch {
+      /* email is a courtesy nudge; the in-app message is the source of truth */
+    }
+
     toast.success('Message envoyé');
     onSent?.();
     onClose();

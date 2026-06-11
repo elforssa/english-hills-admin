@@ -3,10 +3,14 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { entities, auth } from '@/lib/entities';
-import { BookOpen, CreditCard, GraduationCap, MessageSquare, FileText, Download } from 'lucide-react';
+import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { resolveSignedUrl } from '@/lib/storage';
+import { downloadReceiptPDF } from '@/lib/receiptPdf';
+import { getOfficeRecipient } from '@/lib/centerInfo';
+import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
+import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
 // Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
 async function openStoredFile(stored) {
@@ -17,12 +21,18 @@ async function openStoredFile(stored) {
     toast.error('Impossible d’ouvrir le fichier.');
   }
 }
-// MessagesTab hidden until v2 — see Q2 of the production-readiness audit.
-// import MessagesTab from '@/components/portals/MessagesTab';
-import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
 const STATUS_COLORS = ATTENDANCE_STATUS_COLORS;
 const PAY_COLORS = PAYMENT_STATUS_COLORS;
+
+const NOTIF_TYPE_LABELS = {
+  absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
+  enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
+  class_reminder: 'Rappel de cours', general: 'Général',
+};
+
+// Effective amount owed for a receipt after its percentage discount.
+const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
 
 export default function ParentPortal() {
   const [user, setUser] = useState(null);
@@ -34,7 +44,12 @@ export default function ParentPortal() {
   const [portfolios, setPortfolios] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
+  const [authorizedAdults, setAuthorizedAdults] = useState([]);
   const [teachers, setTeachers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [office, setOffice] = useState(null);
+  const [reEnrolling, setReEnrolling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('overview');
 
@@ -48,13 +63,18 @@ export default function ParentPortal() {
         setStudents(myStudents);
         if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
         // RLS scopes announcements to what this parent may see (audience 'all',
-        // 'parents', and their child's group). Fetching the list directly is
-        // simpler than OR-ing client-side filters and picks up group-targeted
-        // announcements the old two-query approach missed.
+        // 'parents', and their child's group).
         const ann = await entities.Announcement.list('-created_date', 20);
         setAnnouncements(ann);
-        // Teachers are the messaging recipients (parents can read the roster).
+        // Personal notifications addressed to this parent (RLS scopes by email).
+        entities.Notification.filter({ recipient_email: u?.email }, '-created_date', 50)
+          .then(setNotifications).catch(() => {});
+        // Unread direct messages — drives the tab badge.
+        entities.Message.filter({ to_user_email: u?.email, read: false })
+          .then(rows => setUnreadMessages(rows.length)).catch(() => {});
+        // Teachers are messaging recipients; the office is added separately.
         entities.Teacher.list('full_name', 100).then(setTeachers).catch(() => {});
+        getOfficeRecipient().then(setOffice).catch(() => {});
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[parent-portal] initial load failed:', err);
@@ -73,18 +93,47 @@ export default function ParentPortal() {
       entities.Receipt.filter({ student_id: selectedStudent.id }, '-date'),
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
+      entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
     ])
-      .then(([att, ass, rec, port, la]) => {
-        setAttendance(att); setAssessments(ass); setReceipts(rec); setPortfolios(port); setLearningAssessments(la);
+      .then(([att, ass, rec, port, la, adults]) => {
+        setAttendance(att); setAssessments(ass); setReceipts(rec);
+        setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[parent-portal] student detail load failed:', err);
         toast.error('Impossible de charger les données de l’apprenant.');
-        // Clear stale state so the UI doesn't show last student's numbers.
-        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]);
+        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
       });
   }, [selectedStudent]);
+
+  // Mark notifications read when the tab is opened, then clear the badge.
+  useEffect(() => {
+    if (tab !== 'notifications') return;
+    if (!notifications.some(n => !n.read_at)) return;
+    markMyNotificationsRead().then(() => {
+      setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
+    });
+  }, [tab, notifications]);
+
+  const handleReEnroll = async () => {
+    if (!selectedStudent) return;
+    if (!confirm(`Envoyer une demande de réinscription pour ${selectedStudent.full_name} ? Le centre vous recontactera pour finaliser.`)) return;
+    setReEnrolling(true);
+    try {
+      await entities.Enrollment.create({
+        student_id: selectedStudent.id,
+        status: 'Submitted',
+        date_inscription: new Date().toISOString().split('T')[0],
+        notes: `Demande de réinscription envoyée par le parent (${user?.email}).`,
+      });
+      toast.success('Demande de réinscription envoyée. Le centre vous recontactera.');
+    } catch {
+      // entities.js already toasted
+    } finally {
+      setReEnrolling(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -101,9 +150,43 @@ export default function ParentPortal() {
     );
   }
 
+  // No learner is linked to this parent's email — give clear guidance instead
+  // of a silent empty portal.
+  if (students.length === 0) {
+    return (
+      <div className="p-4 lg:p-8 max-w-2xl mx-auto">
+        <h1 className="text-2xl font-bold mb-2">Espace Parents</h1>
+        <p className="text-muted-foreground text-sm mb-6">Bienvenue, {user?.full_name}</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+          <p className="font-semibold text-amber-800 mb-2">Aucun apprenant lié à votre compte</p>
+          <p className="text-sm text-amber-800/90">
+            Nous n’avons trouvé aucun apprenant rattaché à l’adresse <strong>{user?.email}</strong>.
+            Cela arrive généralement lorsque l’email enregistré au centre est différent de celui
+            utilisé pour vous connecter.
+          </p>
+          <p className="text-sm text-amber-800/90 mt-3">
+            Merci de contacter l’administration
+            {office?.email ? <> à <a className="font-semibold underline" href={`mailto:${office.email}`}>{office.email}</a></> : null}
+            {' '}pour mettre à jour votre dossier.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const presentCount = attendance.filter(a => a.status === 'Présent').length;
   const absentCount = attendance.filter(a => a.status === 'Absent').length;
   const attendanceRate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
+  const isYoungLearner = selectedStudent?.age_category === 'Young Learners (6-12)';
+
+  // Outstanding balance across the selected child's receipts.
+  const balanceDue = receipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
+
+  // Recipients: each teacher + the front office (so parents can reach reception).
+  const recipients = [
+    ...teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name })),
+    ...(office ? [office] : []),
+  ];
 
   const TABS = [
     { id: 'overview', label: "Vue d'ensemble" },
@@ -112,7 +195,9 @@ export default function ParentPortal() {
     { id: 'finance', label: 'Paiements' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'learning', label: "Style d'apprentissage" },
-    { id: 'messages', label: 'Messages' },
+    ...(isYoungLearner ? [{ id: 'pickup', label: 'Sortie / Pickup' }] : []),
+    { id: 'notifications', label: 'Notifications', badge: notifications.filter(n => !n.read_at).length },
+    { id: 'messages', label: 'Messages', badge: unreadMessages },
   ];
 
   return (
@@ -161,7 +246,7 @@ export default function ParentPortal() {
       )}
 
       {/* Mobile (≤sm): a native <select> is far easier to use than a horizontal
-          scroll bar full of 7 long French labels. Desktop keeps the tab bar. */}
+          scroll bar full of long French labels. Desktop keeps the tab bar. */}
       <div className="sm:hidden mb-6">
         <label htmlFor="parent-tab-mobile" className="sr-only">Section</label>
         <select
@@ -171,7 +256,7 @@ export default function ParentPortal() {
           className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-white"
         >
           {TABS.map((t) => (
-            <option key={t.id} value={t.id}>{t.label}</option>
+            <option key={t.id} value={t.id}>{t.label}{t.badge ? ` (${t.badge})` : ''}</option>
           ))}
         </select>
       </div>
@@ -182,9 +267,14 @@ export default function ParentPortal() {
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${tab === t.id ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
           >
             {t.label}
+            {t.badge > 0 && (
+              <span className="inline-flex items-center justify-center text-[10px] font-bold text-white bg-primary rounded-full min-w-4 h-4 px-1">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -192,15 +282,24 @@ export default function ParentPortal() {
       {tab === 'overview' && selectedStudent && (
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-primary">
-                {selectedStudent.full_name?.[0]}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 bg-primary">
+                  {selectedStudent.full_name?.[0]}
+                </div>
+                <div>
+                  <p className="font-bold text-lg">{selectedStudent.full_name}</p>
+                  <p className="text-muted-foreground text-sm">{selectedStudent.age_category} · Niveau {selectedStudent.niveau_cefr || '—'}</p>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{selectedStudent.status}</span>
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-lg">{selectedStudent.full_name}</p>
-                <p className="text-muted-foreground text-sm">{selectedStudent.age_category} · Niveau {selectedStudent.niveau_cefr || '—'}</p>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{selectedStudent.status}</span>
-              </div>
+              <button
+                onClick={handleReEnroll}
+                disabled={reEnrolling}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 self-start"
+              >
+                <RefreshCw size={14} /> {reEnrolling ? 'Envoi…' : 'Demander une réinscription'}
+              </button>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -208,7 +307,7 @@ export default function ParentPortal() {
               { label: 'Taux de présence', value: `${attendanceRate}%`, color: '#059669' },
               { label: 'Absences', value: absentCount, color: '#B91C2E' },
               { label: 'Notes enregistrées', value: assessments.length, color: 'var(--brand)' },
-              { label: 'Projets portfolio', value: portfolios.length, color: '#7c3aed' },
+              { label: 'Solde dû', value: `${balanceDue.toLocaleString('fr-MA')} MAD`, color: balanceDue > 0 ? '#B91C2E' : '#059669' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-card border border-border rounded-lg p-3 text-center">
                 <p className="text-xl font-bold" style={{ color }}>{value}</p>
@@ -221,8 +320,11 @@ export default function ParentPortal() {
 
       {tab === 'attendance' && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="divide-y divide-border">
-            {attendance.slice(0, 30).map(a => (
+          <div className="px-4 py-2 border-b border-border text-xs text-muted-foreground">
+            {attendance.length} séance{attendance.length > 1 ? 's' : ''} enregistrée{attendance.length > 1 ? 's' : ''}
+          </div>
+          <div className="divide-y divide-border max-h-[60vh] overflow-y-auto">
+            {attendance.map(a => (
               <div key={a.id} className="flex items-center justify-between px-4 py-3">
                 <p className="text-sm">{a.session_date}</p>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-500'}`}>{a.status}</span>
@@ -254,20 +356,45 @@ export default function ParentPortal() {
       )}
 
       {tab === 'finance' && (
-        <div className="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
-          {receipts.map(r => (
-            <div key={r.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="text-sm font-medium">{r.date}</p>
-                <p className="text-xs text-muted-foreground">{r.mode_paiement}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAY_COLORS[r.statut_paiement] || 'bg-gray-100 text-gray-500'}`}>{r.statut_paiement || '—'}</span>
-              </div>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-card border border-border rounded-lg p-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Solde restant dû</p>
+              <p className={`text-xl font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                {balanceDue.toLocaleString('fr-MA')} MAD
+              </p>
             </div>
-          ))}
-          {receipts.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucun paiement enregistré.</div>}
+            <button
+              onClick={() => setTab('messages')}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted self-start"
+            >
+              <MessageSquare size={14} /> Question / paiement à l’administration
+            </button>
+          </div>
+          <div className="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+            {receipts.map(r => (
+              <div key={r.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                <div>
+                  <p className="text-sm font-medium">{r.date}{r.receipt_number ? ` · ${r.receipt_number}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">{r.mode_paiement}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-bold">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAY_COLORS[r.statut_paiement] || 'bg-gray-100 text-gray-500'}`}>{r.statut_paiement || '—'}</span>
+                  </div>
+                  <button
+                    onClick={() => downloadReceiptPDF(r)}
+                    title="Télécharger le reçu (PDF)"
+                    className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground"
+                  >
+                    <FileDown size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {receipts.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucun paiement enregistré.</div>}
+          </div>
         </div>
       )}
 
@@ -281,7 +408,7 @@ export default function ParentPortal() {
               {p.teacher_note && <p className="text-xs text-muted-foreground mt-2 italic">&quot;{p.teacher_note}&quot;</p>}
             </div>
           ))}
-          {portfolios.length === 0 && <div className="col-span-2 p-8 text-center text-muted-foreground text-sm">Aucun projet portfolio.</div>}
+          {portfolios.filter(p => p.visible_to_parent).length === 0 && <div className="col-span-2 p-8 text-center text-muted-foreground text-sm">Aucun projet portfolio.</div>}
         </div>
       )}
 
@@ -320,10 +447,63 @@ export default function ParentPortal() {
         </div>
       )}
 
+      {tab === 'pickup' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 flex items-start gap-2">
+            <ShieldCheck size={16} className="mt-0.5 flex-shrink-0" />
+            <p>
+              Personnes autorisées à récupérer <strong>{selectedStudent?.full_name}</strong> à la sortie.
+              Pour ajouter ou retirer une personne, contactez l’administration.
+            </p>
+          </div>
+          <div className="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+            {authorizedAdults.map(p => (
+              <div key={p.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">{p.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{p.relation}</p>
+                </div>
+                {p.telephone && (
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                    <Phone size={12} /> {p.telephone}
+                  </span>
+                )}
+              </div>
+            ))}
+            {authorizedAdults.length === 0 && (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                Aucune personne autorisée enregistrée. Contactez l’administration pour en ajouter.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'notifications' && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+          {notifications.map(n => (
+            <div key={n.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <p className="text-sm font-semibold">{n.subject}</p>
+                <span className="text-xs text-muted-foreground flex-shrink-0">{(n.created_date || '').slice(0, 10)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || n.type}</p>
+              <p className="text-sm text-foreground/90 whitespace-pre-wrap">{n.message}</p>
+            </div>
+          ))}
+          {notifications.length === 0 && (
+            <div className="p-10 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+              <Bell size={20} className="opacity-40" />
+              Aucune notification pour le moment.
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'messages' && (
         <MessagesTab
           me={{ email: user?.email, name: user?.full_name }}
-          recipients={teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name }))}
+          recipients={recipients}
         />
       )}
 

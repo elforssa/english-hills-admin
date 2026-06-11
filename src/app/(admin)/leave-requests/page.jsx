@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { entities, auth } from '@/lib/entities';
+import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, CheckCircle, XCircle, Trash2, Calendar, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -85,8 +85,42 @@ export default function LeaveRequests() {
   useEffect(() => { load(); }, []);
   useEffect(() => { entities.Group.list('name', 100).then(setGroups); }, []);
 
-  const handleApprove = async (id) => { await entities.LeaveRequest.update(id, { status: 'Approuvé' }); toast.success('Approuvé'); load(); };
-  const handleRefuse = async (id) => { await entities.LeaveRequest.update(id, { status: 'Refusé' }); toast.success('Refusé'); load(); };
+  // Notify the teacher of a leave decision — both by email and via an in-app
+  // notification row that surfaces in their teacher-portal Notifications tab.
+  const notifyTeacherDecision = async (leave, decision) => {
+    const teacher = teachers.find(t => t.id === leave.teacher_id);
+    const email = teacher?.email;
+    if (!email) return;
+    const subject = `Demande de congé ${decision.toLowerCase()}`;
+    const message =
+      `Votre demande de congé (${leave.type_conge}, du ${leave.date_debut} au ${leave.date_fin}) ` +
+      `a été ${decision.toLowerCase()}.`;
+    try {
+      await entities.Notification.create({
+        type: 'general',
+        recipient_email: email,
+        recipient_name: leave.teacher_name || teacher?.full_name || null,
+        subject,
+        message,
+      });
+    } catch { /* non-fatal — the status change already succeeded */ }
+    try {
+      await integrations.Core.SendEmail({ to: email, subject, body: message });
+    } catch { /* email is a courtesy nudge */ }
+  };
+
+  const handleApprove = async (leave) => {
+    await entities.LeaveRequest.update(leave.id, { status: 'Approuvé' });
+    toast.success('Approuvé');
+    await notifyTeacherDecision(leave, 'Approuvée');
+    load();
+  };
+  const handleRefuse = async (leave) => {
+    await entities.LeaveRequest.update(leave.id, { status: 'Refusé' });
+    toast.success('Refusé');
+    await notifyTeacherDecision(leave, 'Refusée');
+    load();
+  };
   const handleDelete = async (id) => { if (!confirm('Supprimer ?')) return; await entities.LeaveRequest.delete(id); load(); };
 
   const diffDays = (d1, d2) => {
@@ -161,8 +195,8 @@ export default function LeaveRequests() {
                   {l.remplacant && <p className="text-xs text-muted-foreground mt-0.5">Remplaçant: {l.remplacant}</p>}
                   <div className="flex gap-2 mt-3">
                     {l.status === 'En attente' && <>
-                      <button onClick={() => handleApprove(l.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>
-                      <button onClick={() => handleRefuse(l.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>
+                      <button onClick={() => handleApprove(l)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>
+                      <button onClick={() => handleRefuse(l)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>
                     </>}
                     <button onClick={() => setModal(l)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Plus size={15} className="rotate-45" /></button>
                     <button onClick={() => handleDelete(l.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
@@ -190,8 +224,8 @@ export default function LeaveRequests() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           {l.status === 'En attente' && <>
-                            <button onClick={() => handleApprove(l.id)} className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>
-                            <button onClick={() => handleRefuse(l.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>
+                            <button onClick={() => handleApprove(l)} className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>
+                            <button onClick={() => handleRefuse(l)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>
                           </>}
                           <button onClick={() => setModal(l)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Plus size={14} className="rotate-45" /></button>
                           <button onClick={() => handleDelete(l.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
