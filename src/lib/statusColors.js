@@ -30,3 +30,8 @@ export const STUDENT_STATUS_COLORS = {
   'Inactive':  'bg-gray-100   text-gray-500',
   'Alumni':    'bg-purple-100 text-purple-700',
 };
+
+export const SESSION_TYPE_COLORS = {
+  'Yearly':      'bg-slate-100 text-slate-600',
+  'Summer Camp': 'bg-amber-100 text-amber-700',
+};

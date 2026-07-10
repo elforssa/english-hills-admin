@@ -28,6 +28,7 @@ import { entityKeys } from '@/lib/queries';
 const LEVELS = ['A1','A2','B1','B2','C1','C2'];
 const CATEGORIES = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
 const STATUSES = ['Prospect','Enrolled','Trial','Inactive','Alumni'];
+const SESSION_TYPES = ['Yearly','Summer Camp'];
 
 // Accept multiple header spellings so a teacher's spreadsheet works without
 // renaming columns. Keys are normalised (lowercase, no spaces, no accents).
@@ -50,6 +51,8 @@ const HEADER_MAP = {
   categorie:      'age_category',
   category:       'age_category',
   agecategorie:   'age_category',
+  session:        'session_type',
+  sessiontype:    'session_type',
   statut:         'status',
   status:         'status',
   notes:          'notes',
@@ -72,6 +75,7 @@ const StudentRow = z.object({
                     .or(z.literal('')).optional(),
   niveau_cefr:    z.enum(LEVELS).or(z.literal('')).optional(),
   age_category:   z.enum(CATEGORIES).or(z.literal('')).optional(),
+  session_type:   z.enum(SESSION_TYPES).or(z.literal('')).optional(),
   status:         z.enum(STATUSES).or(z.literal('')).optional(),
   notes:          z.string().max(2000).optional(),
 });
@@ -226,6 +230,7 @@ export default function StudentImportPage() {
               <li><code>telephone</code> · <code>date_naissance</code> (YYYY-MM-DD)</li>
               <li><code>niveau_cefr</code> · {LEVELS.join(', ')}</li>
               <li><code>age_category</code> · {CATEGORIES.join(' / ')}</li>
+              <li><code>session_type</code> · {SESSION_TYPES.join(' / ')} (défaut : Yearly)</li>
               <li><code>status</code> · {STATUSES.join(' / ')}</li>
               <li><code>notes</code></li>
             </ul>

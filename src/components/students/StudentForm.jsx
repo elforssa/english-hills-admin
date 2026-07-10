@@ -15,6 +15,7 @@ const labelClass = "block text-xs font-semibold text-muted-foreground uppercase 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
+const SESSION_TYPES = ['Yearly', 'Summer Camp'];
 
 const StudentSchema = z.object({
   full_name:      z.string().trim().min(2, 'Au moins 2 caractères').max(120, 'Trop long (max 120)'),
@@ -24,6 +25,7 @@ const StudentSchema = z.object({
   parent_email:   z.string().trim().email('Email invalide').optional().or(z.literal('')),
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:    z.enum(NIVEAUX).optional().or(z.literal('')),
+  session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.string().uuid().optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
@@ -48,7 +50,7 @@ export default function StudentForm() {
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
-    niveau_cefr: 'A1', age_category: 'Adults (18+)', status: 'Prospect',
+    niveau_cefr: 'A1', age_category: 'Adults (18+)', session_type: 'Yearly', status: 'Prospect',
     groupe_id: '', photo_url: '', notes: '',
   });
 
@@ -67,6 +69,7 @@ export default function StudentForm() {
               ...row,
               age_category: row.age_category ?? '',
               niveau_cefr:  row.niveau_cefr  ?? '',
+              session_type: row.session_type ?? 'Yearly',
               status:       row.status       ?? '',
               date_naissance: row.date_naissance ?? '',
               telephone:    row.telephone    ?? '',
@@ -122,6 +125,7 @@ export default function StudentForm() {
       ...parsed.data,
       age_category:   parsed.data.age_category   || null,
       niveau_cefr:    parsed.data.niveau_cefr    || null,
+      session_type:   parsed.data.session_type   || 'Yearly',
       status:         parsed.data.status         || null,
       date_naissance: parsed.data.date_naissance || null,
       telephone:      parsed.data.telephone      || null,
@@ -227,6 +231,12 @@ export default function StudentForm() {
             <select id="age_category" className={inputClass} value={form.age_category || ''} onChange={e => set('age_category', e.target.value)}>
               <option value="">— Non défini —</option>
               {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="session_type" className={labelClass}>Session</label>
+            <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => set('session_type', e.target.value)}>
+              {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>

@@ -2,27 +2,65 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Download, Upload, UserSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
-import { useEntityList } from '@/lib/queries';
-import { STUDENT_STATUS_COLORS } from '@/lib/statusColors';
+import { useEntityList, useEntityUpdate, entityKeys } from '@/lib/queries';
+import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
 
 const PAGE_SIZE = 20;
+const LIST_ORDER = '-created_date';
+const LIST_LIMIT = 200;
+
+const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
+const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const SESSION_TYPES = ['Yearly', 'Summer Camp'];
+
+// Compact borderless dropdown for editing a single field directly in a table
+// row. `empty` (when provided) renders a "clear" option that maps to null.
+function InlineSelect({ value, options, onChange, empty, className = '' }) {
+  return (
+    <select
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value)}
+      className={`text-sm rounded-md border border-transparent hover:border-border focus:border-primary px-1.5 py-1 -ml-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary ${className}`}
+    >
+      {empty !== undefined && <option value="">{empty}</option>}
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
 
 export default function Students() {
   // Cached + deduped across pages. Sibling pages (e.g. /students/[id]) that
   // also call useEntityList('Student', ...) reuse this fetch.
   const { data: students = [], isLoading: loading } = useEntityList(
-    'Student', '-created_date', 200,
+    'Student', LIST_ORDER, LIST_LIMIT,
   );
+
+  const qc = useQueryClient();
+  const update = useEntityUpdate('Student');
+
+  // Inline single-field edit. Optimistically patches the cached list so the
+  // dropdown reflects the choice instantly (the mutation's onSuccess refetch
+  // then reconciles). Nullable fields store '' as null. entities.update toasts
+  // on failure; the refetch reverts the optimistic value if the write fails.
+  const patchStudent = (id, field, value) => {
+    const stored = value === '' ? null : value;
+    qc.setQueryData(entityKeys.list('Student', LIST_ORDER, LIST_LIMIT), (old) =>
+      Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, [field]: stored } : r)) : old,
+    );
+    update.mutate({ id, data: { [field]: stored } });
+  };
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
+  const [filterSession, setFilterSession] = useState('');
   const [page, setPage] = useState(1);
 
   const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
@@ -33,7 +71,8 @@ export default function Students() {
     const matchStatus = !filterStatus || filterStatus === 'all_shown' || s.status === filterStatus;
     const matchCat = !filterCat || s.age_category === filterCat;
     const matchLevel = !filterLevel || s.niveau_cefr === filterLevel;
-    return matchSearch && matchStatus && matchCat && matchLevel;
+    const matchSession = !filterSession || s.session_type === filterSession;
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -52,6 +91,7 @@ export default function Students() {
               Email: s.email || '',
               Téléphone: s.telephone || '',
               Catégorie: s.age_category || '',
+              Session: s.session_type || '',
               Niveau: s.niveau_cefr || '',
               Statut: s.status || '',
               'Date naissance': s.date_naissance || '',
@@ -86,17 +126,21 @@ export default function Students() {
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
           <option value="">Toutes catégories</option>
-          {['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'].map(c => <option key={c}>{c}</option>)}
+          {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
+          <option value="">Toutes sessions</option>
+          {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
-          {['A1','A2','B1','B2','C1','C2'].map(l => <option key={l}>{l}</option>)}
+          {NIVEAUX.map(l => <option key={l}>{l}</option>)}
         </select>
       </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <SkeletonTable rows={10} cols={5} />
+          <SkeletonTable rows={10} cols={6} />
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center">
             <UserSearch size={32} className="mx-auto text-muted-foreground/30 mb-3" />
@@ -115,7 +159,7 @@ export default function Students() {
                 <Link key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm truncate">{s.full_name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
@@ -128,6 +172,7 @@ export default function Students() {
                   <tr className="bg-muted border-b border-border">
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nom</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Catégorie</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Session</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Niveau</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Téléphone</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Statut</th>
@@ -138,9 +183,30 @@ export default function Students() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">{s.full_name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <InlineSelect
+                          value={s.age_category}
+                          options={AGE_CATEGORIES}
+                          empty="— Non défini —"
+                          onChange={v => patchStudent(s.id, 'age_category', v)}
+                        />
+                      </td>
                       <td className="px-4 py-3">
-                        {s.niveau_cefr ? <span className="inline-block text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{s.niveau_cefr}</span> : '—'}
+                        <InlineSelect
+                          value={s.session_type || 'Yearly'}
+                          options={SESSION_TYPES}
+                          className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
+                          onChange={v => patchStudent(s.id, 'session_type', v)}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <InlineSelect
+                          value={s.niveau_cefr}
+                          options={NIVEAUX}
+                          empty="—"
+                          className="font-semibold"
+                          onChange={v => patchStudent(s.id, 'niveau_cefr', v)}
+                        />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-4 py-3">

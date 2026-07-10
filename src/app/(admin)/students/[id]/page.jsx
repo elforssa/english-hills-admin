@@ -110,6 +110,7 @@ export default function StudentDetail() {
             ['Téléphone', student.telephone],
             ['Email', student.email],
             ['Catégorie', student.age_category],
+            ['Session', student.session_type],
           ].map(([label, val]) => (
             <div key={label}>
               <p className="text-xs text-muted-foreground">{label}</p>
