@@ -50,9 +50,44 @@ function redactDeep(node, depth = 0) {
   return node;
 }
 
+// ── Promise-rejection-with-Event noise ──────────────────────────────────────
+// Sentry's global `unhandledrejection` handler reports a synthetic
+// "Event `Event` (type=error) captured as promise rejection" whenever a promise
+// rejects with a DOM Event instead of a real Error (failed <script>/<img>/<link>
+// load, browser extension, ad-blocker, etc.). These carry no stack, so we pull
+// what we can from the original rejection reason for diagnosis.
+function describePromiseRejectionEvent(hint) {
+  const reason = hint && hint.originalException;
+  if (!reason || typeof reason !== 'object') return null;
+
+  // Duck-type a DOM Event: real Errors have none of these.
+  const isDomEvent =
+    (typeof Event !== 'undefined' && reason instanceof Event) ||
+    (typeof reason.type === 'string' && 'isTrusted' in reason);
+  if (!isDomEvent) return null;
+
+  const target = reason.target || reason.currentTarget || null;
+  return {
+    eventType: reason.type || null,
+    isTrusted: typeof reason.isTrusted === 'boolean' ? reason.isTrusted : null,
+    targetTag: (target && target.tagName && target.tagName.toLowerCase()) || null,
+    targetUrl: (target && (target.src || target.href)) || null,
+  };
+}
+
 /** Sentry `beforeSend` hook — scrub an error event before transmission. */
-export function scrubEvent(event) {
+export function scrubEvent(event, hint) {
   if (!event) return event;
+
+  // Instrument + filter the "Event captured as promise rejection" noise class.
+  const rejection = describePromiseRejectionEvent(hint);
+  if (rejection) {
+    // No target info => pure external noise (extension / cross-origin). Drop it.
+    if (!rejection.targetUrl && !rejection.targetTag) return null;
+    // Otherwise keep ONE grouped issue, enriched with the real failing resource.
+    event.fingerprint = ['promise-rejection-event'];
+    event.extra = { ...(event.extra || {}), promiseRejectionEvent: rejection };
+  }
 
   if (event.message) event.message = redactText(event.message);
 
