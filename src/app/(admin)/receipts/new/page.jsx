@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { toast } from 'sonner';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
@@ -14,9 +15,15 @@ const AGE_TO_CATEGORIE = {
   'Corporate': 'Business',
 };
 
+// A paid receipt means the linked student has committed → promote them to
+// Enrolled. Only lifts a not-yet-enrolled student; an already-Enrolled or
+// Alumni record is left untouched.
+const PROMOTABLE_STATUSES = ['Prospect', 'Trial', 'Inactive'];
+
 export default function ReceiptNew() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   const studentId = searchParams.get('student_id') || '';
@@ -45,6 +52,22 @@ export default function ReceiptNew() {
     try {
       const receipt = await entities.Receipt.create(data);
       toast.success('Reçu enregistré avec succès');
+
+      // Payment = enrollment. Promote the linked student if they aren't already
+      // Enrolled/Alumni. Non-blocking: a failure here never loses the receipt.
+      if (data.student_id) {
+        try {
+          const [student] = await entities.Student.filter({ id: data.student_id });
+          if (student && (!student.status || PROMOTABLE_STATUSES.includes(student.status))) {
+            await entities.Student.update(data.student_id, { status: 'Enrolled' });
+            qc.invalidateQueries({ queryKey: ['Student'] });
+            toast.success(`${student.full_name} marqué(e) comme inscrit(e)`);
+          }
+        } catch {
+          // Receipt is saved; enrollment status can still be set manually.
+        }
+      }
+
       router.push(`/receipts/${receipt.id}/print`);
     } catch {
       setSaving(false);
