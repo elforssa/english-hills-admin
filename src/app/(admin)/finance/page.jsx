@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
-import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Printer, Download, Pencil } from 'lucide-react';
+import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download, Wallet, Phone } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
@@ -16,7 +16,7 @@ export default function Finance() {
 
   useEffect(() => {
     Promise.all([
-      entities.Receipt.list('-created_date', 50),
+      entities.Receipt.list('-created_date', 200),
       entities.Student.list('full_name', 200),
     ]).then(([r, s]) => { setReceipts(r); setStudents(s); setLoading(false); });
   }, []);
@@ -30,6 +30,18 @@ export default function Finance() {
   const collectionRate = totalDu > 0 ? Math.round((totalEncaisse / totalDu) * 100) : 0;
   const enRetard = receipts.filter(r => r.statut_paiement === 'En retard').length;
   const payes = receipts.filter(r => r.statut_paiement === 'Soldé' || (effectiveTotal(r) - (r.montant_paye || 0)) <= 0).length;
+
+  // Receipts with an unpaid balance — the actionable "à relancer" list. Overdue
+  // (En retard) first, then largest balance owed, so reception chases the most
+  // urgent debts first. Each links to the receipt's edit page to record payment.
+  const aRelancer = receipts
+    .map(r => ({ ...r, restant: effectiveTotal(r) - (r.montant_paye || 0) }))
+    .filter(r => r.restant > 0)
+    .sort((a, b) => {
+      const lateDiff = (b.statut_paiement === 'En retard' ? 1 : 0) - (a.statut_paiement === 'En retard' ? 1 : 0);
+      return lateDiff !== 0 ? lateDiff : b.restant - a.restant;
+    });
+  const RELANCER_SHOWN = 10;
 
   const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
   const termStats = TERMES.map(terme => {
@@ -115,88 +127,63 @@ export default function Finance() {
       </div>
 
       <div className="bg-card border border-border rounded-lg mb-6">
-        <div className="px-4 lg:px-6 py-4 border-b border-border">
-          <h2 className="font-semibold">Reçus récents</h2>
+        <div className="px-4 lg:px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold flex items-center gap-2">
+              <Wallet size={16} style={{ color: '#f59e0b' }} /> À relancer
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {aRelancer.length} reçu{aRelancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
+            </p>
+          </div>
+          <Link href="/receipts" className="text-xs font-medium text-primary hover:underline whitespace-nowrap">Tous les reçus →</Link>
         </div>
         {loading ? (
           <div className="p-4 animate-pulse space-y-2">
             {Array.from({length:6}).map((_,i)=><div key={i} className="h-10 bg-muted rounded"/>)}
           </div>
-        ) : receipts.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground text-sm">Aucun reçu pour l&apos;instant.</div>
+        ) : aRelancer.length === 0 ? (
+          <div className="p-8 text-center">
+            <CheckCircle size={28} className="mx-auto text-green-500/70 mb-2" />
+            <p className="text-sm font-medium text-foreground">Aucun solde en attente</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Tous les reçus sont soldés — rien à relancer.</p>
+          </div>
         ) : (
           <>
-            <div className="divide-y divide-border sm:hidden">
-              {receipts.slice(0, 20).map(r => {
-                const restant = effectiveTotal(r) - (r.montant_paye || 0);
-                const key = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
+            <div className="divide-y divide-border">
+              {aRelancer.slice(0, RELANCER_SHOWN).map(r => {
+                const key = r.statut_paiement === 'En retard' ? 'En retard' : (r.statut_paiement || 'En attente');
                 return (
-                  <div key={r.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                  <div key={r.id} className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm text-foreground truncate">{r.nom_prenom}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{r.date} · {r.categorie} · {r.niveau}</p>
-                      <p className="text-xs text-muted-foreground">{r.mode_paiement}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{r.date} · {r.categorie}</p>
+                      {r.telephone && (
+                        <a href={`tel:${r.telephone}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
+                          <Phone size={11} /> {r.telephone}
+                        </a>
+                      )}
                     </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      <p className="text-sm font-bold text-foreground">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
-                      <div className="flex items-center gap-3">
-                        <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary">
-                          <Printer size={11} /> Imprimer
-                        </Link>
-                        <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
-                          <Pencil size={11} /> Modifier
-                        </Link>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-bold" style={{ color: '#B91C2E' }}>{r.restant.toLocaleString('fr-MA')} MAD</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
                       </div>
+                      <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white rounded-md bg-primary hover:opacity-90 whitespace-nowrap">
+                        <Wallet size={12} /> Encaisser
+                      </Link>
                     </div>
                   </div>
                 );
               })}
             </div>
-
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground">
-                    <th className="text-left px-4 py-3">Apprenant</th>
-                    <th className="text-left px-4 py-3">Date</th>
-                    <th className="text-left px-4 py-3">Catégorie</th>
-                    <th className="text-left px-4 py-3">Montant payé</th>
-                    <th className="text-left px-4 py-3">Mode</th>
-                    <th className="text-left px-4 py-3">Statut</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {receipts.slice(0, 20).map(r => {
-                    const restant = effectiveTotal(r) - (r.montant_paye || 0);
-                    const key = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
-                    return (
-                      <tr key={r.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3 font-medium">{r.nom_prenom}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{r.date}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{r.categorie} · {r.niveau}</td>
-                        <td className="px-4 py-3 font-semibold">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</td>
-                        <td className="px-4 py-3 text-muted-foreground">{r.mode_paiement}</td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-4">
-                            <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                              <Printer size={12} /> Imprimer
-                            </Link>
-                            <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline">
-                              <Pencil size={12} /> Modifier
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {aRelancer.length > RELANCER_SHOWN && (
+              <div className="px-4 lg:px-6 py-3 border-t border-border text-center">
+                <Link href="/receipts" className="text-xs font-medium text-primary hover:underline">
+                  + {aRelancer.length - RELANCER_SHOWN} autre{aRelancer.length - RELANCER_SHOWN > 1 ? 's' : ''} · voir tous les reçus →
+                </Link>
+              </div>
+            )}
           </>
         )}
       </div>

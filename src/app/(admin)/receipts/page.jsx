@@ -7,7 +7,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Printer, Download, CheckSquare, Square, Trash2 } from 'lucide-react';
+import { Plus, Search, Printer, Download, CheckSquare, Square, Trash2, Pencil } from 'lucide-react';
 import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
@@ -174,6 +174,9 @@ export default function Receipts() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
+                            <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline whitespace-nowrap">
+                              <Pencil size={12} /> Modifier
+                            </Link>
                             <Link href={`/receipts/${r.id}/print`} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline whitespace-nowrap">
                               <Printer size={12} /> Imprimer
                             </Link>
