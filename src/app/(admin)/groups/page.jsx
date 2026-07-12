@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Edit, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -72,11 +73,20 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterTerme, setFilterTerme] = useState('');
+  const [counts, setCounts] = useState({});
 
   const load = () => Promise.all([
     entities.Group.list('-created_date', 100),
     entities.Teacher.list('full_name', 100),
-  ]).then(([g, t]) => { setGroups(g); setTeachers(t); setLoading(false); });
+    entities.Student.list('full_name', 500),
+  ]).then(([g, t, s]) => {
+    setGroups(g);
+    setTeachers(t);
+    const c = {};
+    s.forEach(x => { if (x.groupe_id) c[x.groupe_id] = (c[x.groupe_id] || 0) + 1; });
+    setCounts(c);
+    setLoading(false);
+  });
 
   useEffect(() => { load(); }, []);
 
@@ -123,8 +133,8 @@ export default function Groups() {
                 <div key={g.id} className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm">{g.name}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{g.categorie} · {teacherName(g.teacher_id)}</p>
+                      <Link href={`/groups/${g.id}`} className="font-semibold text-sm text-primary hover:underline">{g.name}</Link>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · {g.categorie} · {teacherName(g.teacher_id)}</p>
                       <p className="text-xs text-muted-foreground">{g.jours} {g.horaire} {g.salle ? `· ${g.salle}` : ''}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -143,21 +153,26 @@ export default function Groups() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    {['Groupe','Niveau','Catégorie','Enseignant','Horaire','Salle','Terme',''].map(h => (
+                    {['Groupe','Apprenants','Niveau','Catégorie','Enseignant','Horaire','Salle','Terme',''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filtered.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground text-sm">
                       Aucun groupe.{' '}
                       <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
                     </td></tr>
                   )}
                   {filtered.map(g => (
                     <tr key={g.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{g.name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`/groups/${g.id}`} className="text-primary hover:underline">{g.name}</Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        <span className="inline-flex items-center gap-1"><Users size={13} /> {counts[g.id] || 0}</span>
+                      </td>
                       <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">{g.categorie}</td>
                       <td className="px-4 py-3 text-muted-foreground">{teacherName(g.teacher_id)}</td>
