@@ -17,7 +17,7 @@ const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp'];
+const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior'];
 
 // Compact borderless dropdown for editing a single field directly in a table
 // row. `empty` (when provided) renders a "clear" option that maps to null.

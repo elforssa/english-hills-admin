@@ -15,7 +15,7 @@ const labelClass = "block text-xs font-semibold text-muted-foreground uppercase 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp'];
+const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior'];
 
 const StudentSchema = z.object({
   full_name:      z.string().trim().min(2, 'Au moins 2 caractères').max(120, 'Trop long (max 120)'),
