@@ -62,17 +62,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     statut_paiement: 'En attente',
     observation: '',
     ...initialData,
-    // A pre-existing receipt with no linked student is treated as a walk-in so
-    // it stays editable without forcing a student link.
-    walk_in: Boolean(initialData?.id && !initialData?.student_id),
   });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   // ── Linked student ────────────────────────────────────────────────────────
-  // A receipt SHOULD point at a real student row via `student_id`, so the payer
+  // A receipt MUST point at a real student row via `student_id`, so the payer
   // always appears in the students list. Staff either link an existing student
-  // or create one inline; only an explicit walk-in receipt may stay unlinked.
+  // or create one inline before the receipt can be saved.
   const [students, setStudents] = useState([]);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -89,7 +86,6 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     setForm((f) => ({
       ...f,
       student_id: student.id,
-      walk_in: false,
       nom_prenom: student.full_name || f.nom_prenom,
       telephone: student.telephone || f.telephone,
       email: student.email || f.email,
@@ -135,7 +131,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         status: 'Enrolled',
       });
       setStudents((prev) => [created, ...prev]);
-      setForm((f) => ({ ...f, student_id: created.id, walk_in: false }));
+      setForm((f) => ({ ...f, student_id: created.id }));
       toast.success(`Apprenant créé et lié : ${created.full_name}`);
     } catch {
       // entities.js already toasted.
@@ -151,13 +147,13 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.student_id && !form.walk_in) {
-      toast.error('Liez un apprenant existant, créez-en un, ou cochez « Walk-in ».');
+    if (!form.student_id) {
+      toast.error('Liez un apprenant existant ou créez-en un avant d’enregistrer le reçu.');
       return;
     }
     const autoStatus = montantRestant <= 0 ? 'Soldé' : form.statut_paiement;
-    // parent_email and walk_in are not receipt columns — strip before saving.
-    const { parent_email, walk_in, ...receiptFields } = form;
+    // parent_email is not a receipt column — strip before saving.
+    const { parent_email, ...receiptFields } = form;
     onSubmit({
       ...receiptFields,
       student_id: form.student_id || null,
@@ -253,16 +249,11 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
                 <UserX size={13} /> Détacher
               </button>
             </div>
-          ) : !form.walk_in && (
+          ) : (
             <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
-              Aucun apprenant lié. Recherchez ci-dessus pour lier un apprenant existant, ou remplissez les infos plus bas et cliquez <strong>« Créer et lier l’apprenant »</strong>.
+              Aucun apprenant lié. Recherchez ci-dessus pour lier un apprenant existant, ou remplissez les infos plus bas et cliquez <strong>« Créer et lier l’apprenant »</strong>. Un apprenant est obligatoire.
             </div>
           )}
-
-          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-            <input type="checkbox" checked={form.walk_in} onChange={(e) => set('walk_in', e.target.checked)} />
-            Reçu ponctuel sans apprenant (walk-in)
-          </label>
         </div>
       </div>
 
@@ -306,7 +297,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">Email (apprenant ou parent) requis uniquement pour créer un nouvel apprenant.</p>
-        {!selectedStudent && !form.walk_in && (
+        {!selectedStudent && (
           <button
             type="button"
             onClick={createAndLink}
