@@ -28,7 +28,7 @@ import { entityKeys } from '@/lib/queries';
 const LEVELS = ['A1','A2','B1','B2','C1','C2'];
 const CATEGORIES = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
 const STATUSES = ['Prospect','Enrolled','Trial','Inactive','Alumni'];
-const SESSION_TYPES = ['Yearly','Summer Camp','Communication Junior','Communication Adult'];
+const SESSION_TYPES = ['Yearly','Summer Camp','Communication Junior','Communication Adult','One-to-One'];
 
 // Accept multiple header spellings so a teacher's spreadsheet works without
 // renaming columns. Keys are normalised (lowercase, no spaces, no accents).
