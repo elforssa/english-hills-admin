@@ -35,4 +35,5 @@ export const SESSION_TYPE_COLORS = {
   'Yearly':               'bg-slate-100  text-slate-600',
   'Summer Camp':          'bg-amber-100  text-amber-700',
   'Communication Junior': 'bg-indigo-100 text-indigo-700',
+  'Communication Adult':  'bg-teal-100   text-teal-700',
 };
