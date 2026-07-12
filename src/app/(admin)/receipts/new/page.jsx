@@ -39,7 +39,9 @@ export default function ReceiptNew() {
         nom_prenom: student.full_name || '',
         telephone: student.telephone || '',
         email: student.email || '',
+        parent_email: student.parent_email || '',
         date_naissance: student.date_naissance || '',
+        session_type: student.session_type || '',
       };
       if (student.niveau_cefr) mapped.niveau = student.niveau_cefr;
       if (AGE_TO_CATEGORIE[student.age_category]) mapped.categorie = AGE_TO_CATEGORIE[student.age_category];

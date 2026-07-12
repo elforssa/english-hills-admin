@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { entities } from '@/lib/entities';
+import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Check, ChevronsUpDown, UserX } from 'lucide-react';
+import { Check, ChevronsUpDown, UserX, UserPlus } from 'lucide-react';
 
 const categories = ['Enfants', 'Ados', 'Adultes', 'Business', 'Particulier', 'Préparation aux examens'];
 const niveaux = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'CECRL'];
+const NIVEAUX_STUDENT = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const typesCours = ['Standard', 'Intensif'];
 const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
+const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communication Adult', 'One-to-One'];
 
 // Maps the student's age_category (used across the app) to the receipt's
 // own `categorie` vocabulary. Kept in sync with receipts/new/page.jsx.
@@ -21,7 +24,20 @@ const AGE_TO_CATEGORIE = {
   'Corporate': 'Business',
 };
 
+// Reverse map: receipt `categorie` -> student age_category, used when a student
+// is created inline from a receipt.
+const CATEGORIE_TO_AGE = {
+  'Enfants': 'Young Learners (6-12)',
+  'Ados': 'Teens (13-17)',
+  'Adultes': 'Adults (18+)',
+  'Business': 'Corporate',
+  'Particulier': 'Adults (18+)',
+  'Préparation aux examens': 'Adults (18+)',
+};
+
 const today = new Date().toISOString().split('T')[0];
+const normName = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+const normPhone = s => (s || '').replace(/\D/g, '');
 
 export default function ReceiptForm({ onSubmit, onCancel, saving, initialData }) {
   const [form, setForm] = useState({
@@ -30,8 +46,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     nom_prenom: '',
     telephone: '',
     email: '',
+    parent_email: '',
     date_naissance: '',
     categorie: 'Adultes',
+    session_type: '',
     niveau: 'A1',
     duree_cours: '',
     type_cours: 'Standard',
@@ -44,17 +62,20 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     statut_paiement: 'En attente',
     observation: '',
     ...initialData,
+    // A pre-existing receipt with no linked student is treated as a walk-in so
+    // it stays editable without forcing a student link.
+    walk_in: Boolean(initialData?.id && !initialData?.student_id),
   });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   // ── Linked student ────────────────────────────────────────────────────────
-  // A receipt SHOULD point at a real student row via `student_id`. The student
-  // detail page lists payments by `student_id` only — a receipt with no link
-  // (a walk-in, or one typed by hand before the student existed) never appears
-  // on that student's record. This picker lets staff attach the receipt.
+  // A receipt SHOULD point at a real student row via `student_id`, so the payer
+  // always appears in the students list. Staff either link an existing student
+  // or create one inline; only an explicit walk-in receipt may stay unlinked.
   const [students, setStudents] = useState([]);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     entities.Student.list('full_name', 500).then(setStudents).catch(() => {});
@@ -63,23 +84,65 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
   const selectedStudent = students.find((s) => s.id === form.student_id);
 
   // Attach the receipt to a student AND copy their identity fields onto the
-  // receipt so the printed reçu matches the student's record. Course/payment
-  // fields are left untouched — those are specific to this transaction.
+  // receipt so the printed reçu matches the student's record.
   const selectStudent = (student) => {
     setForm((f) => ({
       ...f,
       student_id: student.id,
+      walk_in: false,
       nom_prenom: student.full_name || f.nom_prenom,
       telephone: student.telephone || f.telephone,
       email: student.email || f.email,
+      parent_email: student.parent_email || f.parent_email,
       date_naissance: student.date_naissance || f.date_naissance,
       niveau: student.niveau_cefr || f.niveau,
       categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
+      session_type: student.session_type || f.session_type,
     }));
     setStudentPickerOpen(false);
   };
 
   const clearStudent = () => set('student_id', '');
+
+  // Create a student from the receipt's fields and link it, with a duplicate
+  // guard so slightly-different spellings don't spawn a second record.
+  const createAndLink = async () => {
+    const nm = (form.nom_prenom || '').trim();
+    if (nm.length < 2) { toast.error('Renseignez d’abord le nom et prénom.'); return; }
+    if (!form.email?.trim() && !form.parent_email?.trim()) {
+      toast.error('Email apprenant ou email parent obligatoire pour créer l’apprenant.'); return;
+    }
+    if (!form.session_type) { toast.error('Choisissez la session (programme).'); return; }
+    const dup = students.find((s) =>
+      normName(s.full_name) === normName(nm) ||
+      (normPhone(form.telephone) && normPhone(s.telephone) === normPhone(form.telephone)),
+    );
+    if (dup) {
+      toast.error(`Apprenant similaire : « ${dup.full_name} ». Utilisez la recherche pour le lier.`);
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await entities.Student.create({
+        full_name: nm,
+        telephone: form.telephone || null,
+        email: form.email?.trim() || null,
+        parent_email: form.parent_email?.trim() || null,
+        date_naissance: form.date_naissance || null,
+        age_category: CATEGORIE_TO_AGE[form.categorie] || null,
+        niveau_cefr: NIVEAUX_STUDENT.includes(form.niveau) ? form.niveau : null,
+        session_type: form.session_type,
+        status: 'Enrolled',
+      });
+      setStudents((prev) => [created, ...prev]);
+      setForm((f) => ({ ...f, student_id: created.id, walk_in: false }));
+      toast.success(`Apprenant créé et lié : ${created.full_name}`);
+    } catch {
+      // entities.js already toasted.
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const base = parseFloat(form.montant_total) || 0;
   const remisePct = parseFloat(form.remise) || 0;
@@ -88,10 +151,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!form.student_id && !form.walk_in) {
+      toast.error('Liez un apprenant existant, créez-en un, ou cochez « Walk-in ».');
+      return;
+    }
     const autoStatus = montantRestant <= 0 ? 'Soldé' : form.statut_paiement;
+    // parent_email and walk_in are not receipt columns — strip before saving.
+    const { parent_email, walk_in, ...receiptFields } = form;
     onSubmit({
-      ...form,
+      ...receiptFields,
       student_id: form.student_id || null,
+      session_type: form.session_type || null,
       montant_total: base,
       remise: remisePct,
       montant_paye: parseFloat(form.montant_paye) || 0,
@@ -137,54 +207,70 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     <form onSubmit={handleSubmit} className="space-y-8">
       <div>
         <SectionTitle>Apprenant lié</SectionTitle>
-        <div className="max-w-md">
-          <label className={labelClass}>Rechercher un apprenant</label>
-          <Popover open={studentPickerOpen} onOpenChange={setStudentPickerOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className={`${inputClass} flex items-center justify-between text-left ${selectedStudent ? '' : 'text-muted-foreground/70'}`}
-              >
-                <span className="truncate">
-                  {selectedStudent ? selectedStudent.full_name : 'Aucun apprenant lié — rechercher…'}
-                </span>
-                <ChevronsUpDown size={15} className="shrink-0 opacity-50" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
-              <Command>
-                <CommandInput placeholder="Nom de l'apprenant…" />
-                <CommandList>
-                  <CommandEmpty>Aucun apprenant trouvé.</CommandEmpty>
-                  <CommandGroup>
-                    {students.map((s) => (
-                      <CommandItem
-                        key={s.id}
-                        value={`${s.full_name} ${s.telephone || ''} ${s.email || ''}`}
-                        onSelect={() => selectStudent(s)}
-                      >
-                        <Check size={15} className={`mr-2 ${form.student_id === s.id ? 'opacity-100' : 'opacity-0'}`} />
-                        <span className="flex-1 truncate">{s.full_name}</span>
-                        {s.telephone && <span className="text-xs text-muted-foreground ml-2">{s.telephone}</span>}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+        <div className="max-w-md space-y-3">
+          <div>
+            <label className={labelClass}>Rechercher un apprenant existant</label>
+            <Popover open={studentPickerOpen} onOpenChange={setStudentPickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={`${inputClass} flex items-center justify-between text-left ${selectedStudent ? '' : 'text-muted-foreground/70'}`}
+                >
+                  <span className="truncate">
+                    {selectedStudent ? selectedStudent.full_name : 'Aucun apprenant lié — rechercher…'}
+                  </span>
+                  <ChevronsUpDown size={15} className="shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
+                <Command>
+                  <CommandInput placeholder="Nom de l'apprenant…" />
+                  <CommandList>
+                    <CommandEmpty>Aucun apprenant trouvé — utilisez « Créer un nouvel apprenant » ci-dessous.</CommandEmpty>
+                    <CommandGroup>
+                      {students.map((s) => (
+                        <CommandItem
+                          key={s.id}
+                          value={`${s.full_name} ${s.telephone || ''} ${s.email || ''}`}
+                          onSelect={() => selectStudent(s)}
+                        >
+                          <Check size={15} className={`mr-2 ${form.student_id === s.id ? 'opacity-100' : 'opacity-0'}`} />
+                          <span className="flex-1 truncate">{s.full_name}</span>
+                          {s.telephone && <span className="text-xs text-muted-foreground ml-2">{s.telephone}</span>}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
           {selectedStudent ? (
-            <div className="mt-2 flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+            <div className="flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
               <span>Lié à <strong>{selectedStudent.full_name}</strong> — ce reçu apparaîtra sur sa fiche.</span>
               <button type="button" onClick={clearStudent} className="flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-medium">
                 <UserX size={13} /> Détacher
               </button>
             </div>
-          ) : (
-            <p className="mt-2 text-xs text-amber-700">
-              Non lié — ce reçu n&apos;apparaîtra sur aucune fiche apprenant. À utiliser uniquement pour un paiement ponctuel sans dossier.
-            </p>
+          ) : !form.walk_in && (
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800 space-y-2">
+              <p>Nouvel apprenant ? Remplissez les infos ci-dessous (nom, email ou email parent, session), puis :</p>
+              <button
+                type="button"
+                onClick={createAndLink}
+                disabled={creating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-primary hover:opacity-90 disabled:opacity-50"
+              >
+                <UserPlus size={13} /> {creating ? 'Création…' : 'Créer un nouvel apprenant'}
+              </button>
+            </div>
           )}
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={form.walk_in} onChange={(e) => set('walk_in', e.target.checked)} />
+            Reçu ponctuel sans apprenant (walk-in)
+          </label>
         </div>
       </div>
 
@@ -208,14 +294,26 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <input id="rf-tel" type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} required />
           </div>
           <div>
-            <label htmlFor="rf-email" className={labelClass}>Email</label>
+            <label htmlFor="rf-email" className={labelClass}>Email (apprenant)</label>
             <input id="rf-email" type="email" className={inputClass} placeholder="ex. client@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="rf-pemail" className={labelClass}>Email parent / tuteur</label>
+            <input id="rf-pemail" type="email" className={inputClass} placeholder="Pour un jeune apprenant" value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} />
           </div>
           <div>
             <label htmlFor="rf-dob" className={labelClass}>Date de naissance <span className="text-red-400">*</span></label>
             <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} required />
           </div>
+          <div>
+            <label htmlFor="rf-session" className={labelClass}>Session / Programme</label>
+            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => set('session_type', e.target.value)}>
+              <option value="">— Choisir —</option>
+              {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground mt-2">Email (apprenant ou parent) requis uniquement pour créer un nouvel apprenant.</p>
       </div>
 
       <div>
