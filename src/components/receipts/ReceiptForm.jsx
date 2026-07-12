@@ -254,16 +254,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
               </button>
             </div>
           ) : !form.walk_in && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800 space-y-2">
-              <p>Nouvel apprenant ? Remplissez les infos ci-dessous (nom, email ou email parent, session), puis :</p>
-              <button
-                type="button"
-                onClick={createAndLink}
-                disabled={creating}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-primary hover:opacity-90 disabled:opacity-50"
-              >
-                <UserPlus size={13} /> {creating ? 'Création…' : 'Créer un nouvel apprenant'}
-              </button>
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+              Aucun apprenant lié. Recherchez ci-dessus pour lier un apprenant existant, ou remplissez les infos plus bas et cliquez <strong>« Créer et lier l’apprenant »</strong>.
             </div>
           )}
 
@@ -314,6 +306,16 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">Email (apprenant ou parent) requis uniquement pour créer un nouvel apprenant.</p>
+        {!selectedStudent && !form.walk_in && (
+          <button
+            type="button"
+            onClick={createAndLink}
+            disabled={creating}
+            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary hover:opacity-90 disabled:opacity-50"
+          >
+            <UserPlus size={14} /> {creating ? 'Création…' : 'Créer et lier l’apprenant'}
+          </button>
+        )}
       </div>
 
       <div>
