@@ -2,54 +2,40 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { entities, auth } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
 import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download, Wallet, Phone } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
+const RELANCER_SHOWN = 10;
+const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
 
 export default function Finance() {
-  const [receipts, setReceipts] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [relancer, setRelancer] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
+    const sb = getBrowserClient();
     Promise.all([
-      entities.Receipt.list('-created_date', 200),
-      entities.Student.list('full_name', 200),
-    ]).then(([r, s]) => { setReceipts(r); setStudents(s); setLoading(false); });
+      sb.rpc('get_finance_summary'),
+      sb.rpc('get_unpaid_receipts', { lim: 50 }),
+    ]).then(([sum, unpaid]) => {
+      setSummary(sum.data || {});
+      setRelancer((unpaid.data || []).map(r => ({ ...r, restant: effectiveTotal(r) - (r.montant_paye || 0) })));
+      setLoading(false);
+    });
   }, []);
 
-  const studentName = (id) => students.find(s => s.id === id)?.full_name || '—';
-  // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
-  const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
-  const totalEncaisse = receipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
-  const totalDu = receipts.reduce((s, r) => s + effectiveTotal(r), 0);
-  const totalRestant = receipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
+  const totalEncaisse = Math.round(Number(summary?.total_encaisse || 0));
+  const totalDu = Math.round(Number(summary?.total_du || 0));
+  const totalRestant = Math.round(Number(summary?.total_restant || 0));
+  const enRetard = Number(summary?.count_en_retard || 0);
+  const payes = Number(summary?.count_solde || 0);
   const collectionRate = totalDu > 0 ? Math.round((totalEncaisse / totalDu) * 100) : 0;
-  const enRetard = receipts.filter(r => r.statut_paiement === 'En retard').length;
-  const payes = receipts.filter(r => r.statut_paiement === 'Soldé' || (effectiveTotal(r) - (r.montant_paye || 0)) <= 0).length;
-
-  // Receipts with an unpaid balance — the actionable "à relancer" list. Overdue
-  // (En retard) first, then largest balance owed, so reception chases the most
-  // urgent debts first. Each links to the receipt's edit page to record payment.
-  const aRelancer = receipts
-    .map(r => ({ ...r, restant: effectiveTotal(r) - (r.montant_paye || 0) }))
-    .filter(r => r.restant > 0)
-    .sort((a, b) => {
-      const lateDiff = (b.statut_paiement === 'En retard' ? 1 : 0) - (a.statut_paiement === 'En retard' ? 1 : 0);
-      return lateDiff !== 0 ? lateDiff : b.restant - a.restant;
-    });
-  const RELANCER_SHOWN = 10;
-
-  const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
-  const termStats = TERMES.map(terme => {
-    const termReceipts = receipts.filter(r => r.duree_cours?.includes(terme) || false);
-    const du = termReceipts.reduce((s, r) => s + effectiveTotal(r), 0);
-    const enc = termReceipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
-    return { terme, du, enc, rate: du > 0 ? Math.round((enc / du) * 100) : null };
-  }).filter(t => t.du > 0);
+  const byProgram = (summary?.by_program || []).filter(p => Number(p.encaisse) > 0 || Number(p.restant) > 0);
 
   const StatCard = ({ label, value, icon: Icon, color }) => (
     <div className="bg-card border border-border rounded-lg p-5">
@@ -63,21 +49,30 @@ export default function Finance() {
     </div>
   );
 
-  const exportFinanceCsv = () => {
-    exportToCsv(receipts.map(r => ({
-      Apprenant: r.nom_prenom,
-      Date: r.date,
-      Catégorie: r.categorie,
-      Niveau: r.niveau,
-      'Type cours': r.type_cours,
-      'Montant total': r.montant_total,
-      'Remise (%)': r.remise || 0,
-      'Total après remise': effectiveTotal(r),
-      'Montant payé': r.montant_paye,
-      Restant: effectiveTotal(r) - (r.montant_paye || 0),
-      Mode: r.mode_paiement,
-      Statut: r.statut_paiement,
-    })), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
+  // Export every receipt (not just a page) by fetching in one large range.
+  const exportFinanceCsv = async () => {
+    setExporting(true);
+    try {
+      const sb = getBrowserClient();
+      const { data } = await sb.from('receipts').select('*').order('date', { ascending: false }).range(0, 9999);
+      exportToCsv((data || []).map(r => ({
+        Apprenant: r.nom_prenom,
+        Date: r.date,
+        Catégorie: r.categorie,
+        Session: r.session_type || '',
+        Niveau: r.niveau,
+        'Type cours': r.type_cours,
+        'Montant total': r.montant_total,
+        'Remise (%)': r.remise || 0,
+        'Total après remise': effectiveTotal(r),
+        'Montant payé': r.montant_paye,
+        Restant: Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)),
+        Mode: r.mode_paiement,
+        Statut: r.statut_paiement,
+      })), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -91,8 +86,8 @@ export default function Finance() {
           <Link href="/receipts" className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
             <FileText size={15} /> Tous les reçus
           </Link>
-          <button onClick={exportFinanceCsv} className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
-            <Download size={15} /> Export CSV
+          <button onClick={exportFinanceCsv} disabled={exporting} className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50">
+            <Download size={15} /> {exporting ? 'Export…' : 'Export CSV'}
           </button>
         </div>
       </div>
@@ -113,13 +108,13 @@ export default function Finance() {
           <div className="h-2.5 rounded-full transition-all" style={{ width: `${Math.min(100, collectionRate)}%`, backgroundColor: collectionRate >= 80 ? '#059669' : collectionRate >= 60 ? '#d97706' : '#B91C2E' }} />
         </div>
         <p className="text-xs text-muted-foreground">{totalEncaisse.toLocaleString('fr-MA')} MAD encaissés sur {totalDu.toLocaleString('fr-MA')} MAD facturés</p>
-        {termStats.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            {termStats.map(t => (
-              <div key={t.terme} className="bg-muted rounded-lg p-3 text-center">
-                <p className="text-xs text-muted-foreground mb-1">{t.terme}</p>
-                <p className="font-bold text-sm" style={{ color: 'var(--brand)' }}>{t.rate}%</p>
-                <p className="text-xs text-muted-foreground">{t.enc.toLocaleString('fr-MA')} MAD</p>
+        {byProgram.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4">
+            {byProgram.map(p => (
+              <div key={p.program} className="bg-muted rounded-lg p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1 truncate" title={p.program}>{p.program}</p>
+                <p className="font-bold text-sm" style={{ color: 'var(--brand)' }}>{Math.round(Number(p.encaisse)).toLocaleString('fr-MA')} MAD</p>
+                {Number(p.restant) > 0 && <p className="text-xs" style={{ color: '#B91C2E' }}>{Math.round(Number(p.restant)).toLocaleString('fr-MA')} dû</p>}
               </div>
             ))}
           </div>
@@ -133,7 +128,7 @@ export default function Finance() {
               <Wallet size={16} style={{ color: '#f59e0b' }} /> À relancer
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {aRelancer.length} reçu{aRelancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
+              {relancer.length}{relancer.length >= 50 ? '+' : ''} reçu{relancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
             </p>
           </div>
           <Link href="/receipts" className="text-xs font-medium text-primary hover:underline whitespace-nowrap">Tous les reçus →</Link>
@@ -142,7 +137,7 @@ export default function Finance() {
           <div className="p-4 animate-pulse space-y-2">
             {Array.from({length:6}).map((_,i)=><div key={i} className="h-10 bg-muted rounded"/>)}
           </div>
-        ) : aRelancer.length === 0 ? (
+        ) : relancer.length === 0 ? (
           <div className="p-8 text-center">
             <CheckCircle size={28} className="mx-auto text-green-500/70 mb-2" />
             <p className="text-sm font-medium text-foreground">Aucun solde en attente</p>
@@ -151,7 +146,7 @@ export default function Finance() {
         ) : (
           <>
             <div className="divide-y divide-border">
-              {aRelancer.slice(0, RELANCER_SHOWN).map(r => {
+              {relancer.slice(0, RELANCER_SHOWN).map(r => {
                 const key = r.statut_paiement === 'En retard' ? 'En retard' : (r.statut_paiement || 'En attente');
                 return (
                   <div key={r.id} className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
@@ -177,10 +172,10 @@ export default function Finance() {
                 );
               })}
             </div>
-            {aRelancer.length > RELANCER_SHOWN && (
+            {relancer.length > RELANCER_SHOWN && (
               <div className="px-4 lg:px-6 py-3 border-t border-border text-center">
                 <Link href="/receipts" className="text-xs font-medium text-primary hover:underline">
-                  + {aRelancer.length - RELANCER_SHOWN} autre{aRelancer.length - RELANCER_SHOWN > 1 ? 's' : ''} · voir tous les reçus →
+                  + {relancer.length - RELANCER_SHOWN} autre{relancer.length - RELANCER_SHOWN > 1 ? 's' : ''} · voir tous les reçus →
                 </Link>
               </div>
             )}

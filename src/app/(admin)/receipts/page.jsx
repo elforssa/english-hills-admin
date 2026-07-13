@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { entities, auth } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -19,54 +18,70 @@ const PAGE_SIZE = 25;
 export default function Receipts() {
   const { role } = useAuth();
   const isDirector = role === 'director';
-  const [receipts, setReceipts] = useState([]);
+  const [receipts, setReceipts] = useState([]); // current page only
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [generating, setGenerating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [page, setPage] = useState(1);
 
+  // Debounce the search box, and reset to page 1 on a new query.
   useEffect(() => {
-    entities.Receipt.list('-created_date', 200).then(d => { setReceipts(d); setLoading(false); });
-  }, []);
+    const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
-  const filtered = receipts.filter(r =>
-    !search || r.nom_prenom?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Server-side page + search: fetch only the 25 rows for this page, plus the
+  // exact total count. Scales to any number of receipts (no client-side limit).
+  const load = useCallback(async () => {
+    setLoading(true);
+    const sb = getBrowserClient();
+    let q = sb.from('receipts').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+    if (search) q = q.ilike('nom_prenom', `%${search}%`);
+    const { data, count } = await q.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    setReceipts(data || []);
+    setTotal(count || 0);
+    setLoading(false);
+  }, [page, search]);
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { load(); }, [load]);
 
   const toggleOne = (id) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
+  const pageIds = receipts.map(r => r.id);
+  const allChecked = receipts.length > 0 && pageIds.every(id => selected.has(id));
+  const someChecked = pageIds.some(id => selected.has(id)) && !allChecked;
   const toggleAll = () => {
-    if (selected.size === filtered.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(filtered.map(r => r.id)));
-    }
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allChecked) pageIds.forEach(id => next.delete(id));
+      else pageIds.forEach(id => next.add(id));
+      return next;
+    });
   };
 
-  const downloadSelected = () => {
-    const toExport = filtered.filter(r => selected.has(r.id));
-    if (!toExport.length) return;
+  // Fetch the selected receipts (may span pages) and render them to one PDF.
+  const downloadSelected = async () => {
+    if (!selected.size) return;
     setGenerating(true);
-
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    toExport.forEach((r, i) => {
-      if (i > 0) doc.addPage();
-      buildReceiptPDF(doc, r, 20);
-    });
-
-    doc.save(`reçus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
-    setGenerating(false);
+    try {
+      const sb = getBrowserClient();
+      const { data } = await sb.from('receipts').select('*').in('id', [...selected]);
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      (data || []).forEach((r, i) => { if (i > 0) doc.addPage(); buildReceiptPDF(doc, r, 20); });
+      doc.save(`reçus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleDelete = async (r) => {
@@ -76,24 +91,17 @@ export default function Receipts() {
     const { error } = await sb.rpc('soft_delete_receipt', { p_receipt_id: r.id });
     setDeletingId(null);
     if (error) { toast.error('Erreur : ' + error.message); return; }
-    setReceipts(prev => prev.filter(x => x.id !== r.id));
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.delete(r.id);
-      return next;
-    });
+    setSelected(prev => { const next = new Set(prev); next.delete(r.id); return next; });
     toast.success('Reçu supprimé');
+    load();
   };
-
-  const allChecked = filtered.length > 0 && selected.size === filtered.length;
-  const someChecked = selected.size > 0 && selected.size < filtered.length;
 
   return (
     <div className="p-4 lg:p-8">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Reçus de paiement</h1>
-          <p className="text-muted-foreground text-sm mt-1">{receipts.length} reçus</p>
+          <p className="text-muted-foreground text-sm mt-1">{total} reçu{total > 1 ? 's' : ''}{search ? ' (filtré)' : ''}</p>
         </div>
         <Button asChild>
           <Link href="/receipts/new">
@@ -105,7 +113,7 @@ export default function Receipts() {
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         <div className="relative flex-1 min-w-0 max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Rechercher par nom..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+          <input className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Rechercher par nom..." value={searchInput} onChange={e => setSearchInput(e.target.value)} />
         </div>
         {selected.size > 0 && (
           <button
@@ -121,10 +129,11 @@ export default function Receipts() {
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? <SkeletonTable rows={10} cols={9} /> :
-          filtered.length === 0 ? (
+          receipts.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
-              Aucun reçu.{' '}
-              <a href="/receipts/new" className="text-primary font-medium hover:underline">Créer le premier →</a>
+              {search ? 'Aucun reçu ne correspond à cette recherche.' : (
+                <>Aucun reçu.{' '}<a href="/receipts/new" className="text-primary font-medium hover:underline">Créer le premier →</a></>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -142,7 +151,7 @@ export default function Receipts() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {paged.map(r => {
+                  {receipts.map(r => {
                     const effectiveTotal = (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
                     const restant = effectiveTotal - (r.montant_paye || 0);
                     const isChecked = selected.has(r.id);
@@ -200,7 +209,7 @@ export default function Receipts() {
             </div>
           )
         }
-        <Pagination page={page} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={setPage} />
       </div>
     </div>
   );
