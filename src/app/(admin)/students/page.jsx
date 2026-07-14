@@ -61,6 +61,7 @@ export default function Students() {
   const [filterCat, setFilterCat] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [filterSession, setFilterSession] = useState('');
+  const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [page, setPage] = useState(1);
 
   const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
@@ -72,7 +73,9 @@ export default function Students() {
     const matchCat = !filterCat || s.age_category === filterCat;
     const matchLevel = !filterLevel || s.niveau_cefr === filterLevel;
     const matchSession = !filterSession || s.session_type === filterSession;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession;
+    // "À compléter" = no way to link a parent portal (no email at all).
+    const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -135,6 +138,10 @@ export default function Students() {
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
           {NIVEAUX.map(l => <option key={l}>{l}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
+          <option value="">Complétude : tous</option>
+          <option value="incomplete">À compléter (sans email)</option>
         </select>
       </div>
 

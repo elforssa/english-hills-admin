@@ -105,10 +105,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
   const createAndLink = async () => {
     const nm = (form.nom_prenom || '').trim();
     if (nm.length < 2) { toast.error('Renseignez d’abord le nom et prénom.'); return; }
-    if (!form.email?.trim() && !form.parent_email?.trim()) {
-      toast.error('Email apprenant ou email parent obligatoire pour créer l’apprenant.'); return;
-    }
-    if (!form.session_type) { toast.error('Choisissez la session (programme).'); return; }
+    // Everything else (email, session, phone…) is optional and can be completed
+    // later — see the "À compléter" filter on the students list.
     const dup = students.find((s) =>
       normName(s.full_name) === normName(nm) ||
       (normPhone(form.telephone) && normPhone(s.telephone) === normPhone(form.telephone)),
@@ -140,7 +138,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     }
   };
 
-  const base = parseFloat(form.montant_total) || 0;
+  // Total defaults to the amount paid when left blank (quick receipt).
+  const base = parseFloat(form.montant_total) || parseFloat(form.montant_paye) || 0;
   const remisePct = parseFloat(form.remise) || 0;
   const effectiveTotal = base * (1 - remisePct / 100);
   const montantRestant = effectiveTotal - (parseFloat(form.montant_paye) || 0);
@@ -273,8 +272,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <input id="rf-nom" type="text" className={inputClass} placeholder="ex. Karim Benali" value={form.nom_prenom} onChange={(e) => set('nom_prenom', e.target.value)} required />
           </div>
           <div>
-            <label htmlFor="rf-tel" className={labelClass}>Téléphone <span className="text-red-400">*</span></label>
-            <input id="rf-tel" type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} required />
+            <label htmlFor="rf-tel" className={labelClass}>Téléphone</label>
+            <input id="rf-tel" type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} />
           </div>
           <div>
             <label htmlFor="rf-email" className={labelClass}>Email (apprenant)</label>
@@ -285,8 +284,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <input id="rf-pemail" type="email" className={inputClass} placeholder="Pour un jeune apprenant" value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} />
           </div>
           <div>
-            <label htmlFor="rf-dob" className={labelClass}>Date de naissance <span className="text-red-400">*</span></label>
-            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} required />
+            <label htmlFor="rf-dob" className={labelClass}>Date de naissance</label>
+            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} />
           </div>
           <div>
             <label htmlFor="rf-session" className={labelClass}>Session / Programme</label>
@@ -296,7 +295,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             </select>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Email (apprenant ou parent) requis uniquement pour créer un nouvel apprenant.</p>
+        <p className="text-xs text-muted-foreground mt-2">Seuls le <strong>nom</strong> et le <strong>paiement</strong> sont requis. Le reste (email, téléphone, session…) peut être complété plus tard — l’email parent activera l’accès portail dès qu’il sera renseigné.</p>
         {!selectedStudent && (
           <button
             type="button"
@@ -349,9 +348,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="rf-total" className={labelClass}>
-                {remisePct > 0 ? 'Prix de base (MAD)' : 'Montant total du cours (MAD)'} <span className="text-red-400">*</span>
+                {remisePct > 0 ? 'Prix de base (MAD)' : 'Montant total du cours (MAD)'}
               </label>
-              <input id="rf-total" type="number" className={inputClass} placeholder="ex. 1500" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} required min="0" />
+              <input id="rf-total" type="number" className={inputClass} placeholder="= montant payé si vide" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} min="0" />
             </div>
             <div>
               <label htmlFor="rf-remise" className={labelClass}>Remise (%)</label>
