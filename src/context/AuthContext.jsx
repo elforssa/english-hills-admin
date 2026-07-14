@@ -81,10 +81,13 @@ export function AuthProvider({ children }) {
   const [role,      setRole]      = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadSession = useCallback(async () => {
+  const loadSession = useCallback(async ({ silent = false } = {}) => {
     const sb = getBrowserClient();
 
-    setIsLoading(true);
+    // `silent` refreshes the profile without toggling isLoading. Toggling it
+    // makes ProtectedRoute unmount the current page — which wipes any
+    // in-progress form when Supabase fires an auth event on tab focus.
+    if (!silent) setIsLoading(true);
 
     const { data: { user: authUser }, error } = await sb.auth.getUser();
     if (error || !authUser) {
@@ -119,14 +122,18 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     loadSession();
 
-    // Re-load on auth-state changes (sign-in/out, token refresh).
+    // Re-load on auth-state changes. Crucially, these run SILENTLY (no
+    // isLoading toggle) so a tab-focus auth event never unmounts the page and
+    // wipes an in-progress form. TOKEN_REFRESHED (fired on focus) is ignored
+    // entirely — supabase-js has already refreshed the session and the role
+    // hasn't changed; only a real sign-in / user update needs a profile reload.
     const sb = getBrowserClient();
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        loadSession();
-      } else if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT') {
         setUser(null);
         setRole(null);
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        loadSession({ silent: true });
       }
     });
 
