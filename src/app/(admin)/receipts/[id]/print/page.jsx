@@ -282,6 +282,17 @@ export default function ReceiptPrint() {
               </section>
             )}
 
+            <section className="pt-6 mt-4 border-t border-gray-100">
+              <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#1E4D8B' }}>Autorisation d&apos;image</h3>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                J&apos;autorise English Hills Language Center à utiliser les photos et vidéos de l&apos;apprenant à des fins de communication (réseaux sociaux, supports du centre). Autorisation facultative et révocable à tout moment.
+              </p>
+              <div className="flex gap-8 mt-2 text-sm text-gray-700">
+                <span>{receipt.photo_consent === 'Accepte' ? '☑' : '☐'} J&apos;accepte</span>
+                <span>{receipt.photo_consent === 'Refuse' ? '☑' : '☐'} Je refuse</span>
+              </div>
+            </section>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 pt-8 mt-4 border-t border-gray-100">
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide mb-10">Signature du responsable</p>

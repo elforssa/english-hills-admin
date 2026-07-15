@@ -101,7 +101,27 @@ export function buildReceiptPDF(doc, r, yStart) {
 
   y += 4;
   doc.line(14, y, 196, y);
+  y += 6;
+
+  // Image consent (CNDP) — statement + recorded choice as a paper trail.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 77, 139);
+  doc.text("Autorisation d'image :", 14, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(90, 90, 90);
+  const consentText = doc.splitTextToSize(
+    "J'autorise English Hills à utiliser les photos/vidéos de l'apprenant (réseaux sociaux, supports du centre). Facultative et révocable à tout moment.",
+    182,
+  );
+  doc.text(consentText, 14, y + 4);
+  y += 4 + consentText.length * 3.6 + 2;
+  const acc = r.photo_consent === 'Accepte' ? '[X]' : '[  ]';
+  const ref = r.photo_consent === 'Refuse' ? '[X]' : '[  ]';
+  doc.setTextColor(30, 30, 30);
+  doc.text(`${acc} J'accepte        ${ref} Je refuse`, 14, y);
   y += 8;
+
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   doc.setTextColor(130, 130, 130);

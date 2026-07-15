@@ -60,13 +60,19 @@ export default function ReceiptNew() {
       if (data.student_id) {
         try {
           const [student] = await entities.Student.filter({ id: data.student_id });
-          if (student && (!student.status || PROMOTABLE_STATUSES.includes(student.status))) {
-            await entities.Student.update(data.student_id, { status: 'Enrolled' });
-            qc.invalidateQueries({ queryKey: ['Student'] });
-            toast.success(`${student.full_name} marqué(e) comme inscrit(e)`);
+          if (student) {
+            const upd = {};
+            if (!student.status || PROMOTABLE_STATUSES.includes(student.status)) upd.status = 'Enrolled';
+            // Keep the student's standing image-consent in sync with the desk choice.
+            if (data.photo_consent && data.photo_consent !== student.photo_consent) upd.photo_consent = data.photo_consent;
+            if (Object.keys(upd).length) {
+              await entities.Student.update(data.student_id, upd);
+              qc.invalidateQueries({ queryKey: ['Student'] });
+              if (upd.status) toast.success(`${student.full_name} marqué(e) comme inscrit(e)`);
+            }
           }
         } catch {
-          // Receipt is saved; enrollment status can still be set manually.
+          // Receipt is saved; status/consent can still be set manually.
         }
       }
 

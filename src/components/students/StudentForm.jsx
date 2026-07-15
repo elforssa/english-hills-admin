@@ -16,6 +16,7 @@ const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)'
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
 const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One'];
+const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 
 const StudentSchema = z.object({
   full_name:      z.string().trim().min(2, 'Au moins 2 caractères').max(120, 'Trop long (max 120)'),
@@ -26,6 +27,7 @@ const StudentSchema = z.object({
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:    z.enum(NIVEAUX).optional().or(z.literal('')),
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
+  photo_consent:  z.enum(PHOTO_CONSENTS).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.string().uuid().optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
@@ -45,7 +47,7 @@ export default function StudentForm() {
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
     niveau_cefr: 'A1', age_category: 'Adults (18+)', session_type: 'Yearly', status: 'Prospect',
-    groupe_id: '', photo_url: '', notes: '',
+    photo_consent: 'Non demandé', groupe_id: '', photo_url: '', notes: '',
   });
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function StudentForm() {
               age_category: row.age_category ?? '',
               niveau_cefr:  row.niveau_cefr  ?? '',
               session_type: row.session_type ?? 'Yearly',
+              photo_consent: row.photo_consent ?? 'Non demandé',
               status:       row.status       ?? '',
               date_naissance: row.date_naissance ?? '',
               telephone:    row.telephone    ?? '',
@@ -120,6 +123,7 @@ export default function StudentForm() {
       age_category:   parsed.data.age_category   || null,
       niveau_cefr:    parsed.data.niveau_cefr    || null,
       session_type:   parsed.data.session_type   || 'Yearly',
+      photo_consent:  parsed.data.photo_consent  || 'Non demandé',
       status:         parsed.data.status         || null,
       date_naissance: parsed.data.date_naissance || null,
       telephone:      parsed.data.telephone      || null,
@@ -246,6 +250,13 @@ export default function StudentForm() {
               <option value="">— Non défini —</option>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+          <div className="col-span-2">
+            <label htmlFor="photo_consent" className={labelClass}>Autorisation d&apos;image (photos / vidéos, réseaux sociaux)</label>
+            <select id="photo_consent" className={inputClass} value={form.photo_consent || 'Non demandé'} onChange={e => set('photo_consent', e.target.value)}>
+              {PHOTO_CONSENTS.map(c => <option key={c}>{c}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">« Accepte » autorise la publication des photos/vidéos de l&apos;enfant. Retirable à tout moment.</p>
           </div>
           <div className="col-span-2">
             <label htmlFor="groupe_id" className={labelClass}>Groupe assigné</label>
