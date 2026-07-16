@@ -19,6 +19,14 @@ const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)'
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One'];
 const PHOTO_CONSENTS = ['Accepte', 'Refuse', 'Non demandé'];
+const SOURCES = [
+  'Réseaux sociaux (Facebook / Instagram)',
+  'Publicité payante (Ads)',
+  'Recherche Google',
+  'Famille / Ami(e)',
+  'Passage devant le centre (walk-in)',
+  'Ancien élève / Réinscription',
+];
 
 // Small camera badge showing a student's image-consent at a glance.
 function ConsentIcon({ v }) {
@@ -71,6 +79,7 @@ export default function Students() {
   const [filterSession, setFilterSession] = useState('');
   const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [filterConsent, setFilterConsent] = useState('');
+  const [filterSource, setFilterSource] = useState('');
   const [page, setPage] = useState(1);
 
   const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
@@ -85,7 +94,8 @@ export default function Students() {
     // "À compléter" = no way to link a parent portal (no email at all).
     const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
     const matchConsent = !filterConsent || (s.photo_consent || 'Non demandé') === filterConsent;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent;
+    const matchSource = !filterSource || s.referral_source === filterSource;
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -107,6 +117,7 @@ export default function Students() {
               Session: s.session_type || '',
               Niveau: s.niveau_cefr || '',
               Statut: s.status || '',
+              Source: s.referral_source || '',
               'Date naissance': s.date_naissance || '',
             })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`)}
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted"
@@ -156,6 +167,10 @@ export default function Students() {
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterConsent} onChange={e => { setFilterConsent(e.target.value); setPage(1); }}>
           <option value="">Autorisation photo : toutes</option>
           {PHOTO_CONSENTS.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
+          <option value="">Source : toutes</option>
+          {SOURCES.map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
 

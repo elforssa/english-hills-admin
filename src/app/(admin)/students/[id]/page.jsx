@@ -112,6 +112,7 @@ export default function StudentDetail() {
             ['Catégorie', student.age_category],
             ['Session', student.session_type],
             ['Autorisation photo', student.photo_consent || 'Non demandé'],
+            ['Comment connu le centre', student.referral_source || '—'],
           ].map(([label, val]) => (
             <div key={label}>
               <p className="text-xs text-muted-foreground">{label}</p>

@@ -15,6 +15,14 @@ const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
 const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communication Adult', 'One-to-One'];
 const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
+const SOURCES = [
+  'Réseaux sociaux (Facebook / Instagram)',
+  'Publicité payante (Ads)',
+  'Recherche Google',
+  'Famille / Ami(e)',
+  'Passage devant le centre (walk-in)',
+  'Ancien élève / Réinscription',
+];
 
 // Maps the student's age_category (used across the app) to the receipt's
 // own `categorie` vocabulary. Kept in sync with receipts/new/page.jsx.
@@ -52,6 +60,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     categorie: 'Adultes',
     session_type: '',
     photo_consent: 'Non demandé',
+    referral_source: '',
     niveau: 'A1',
     duree_cours: '',
     type_cours: 'Standard',
@@ -97,6 +106,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
       session_type: student.session_type || f.session_type,
       photo_consent: student.photo_consent || f.photo_consent,
+      referral_source: student.referral_source || f.referral_source,
     }));
     setStudentPickerOpen(false);
   };
@@ -130,6 +140,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         niveau_cefr: NIVEAUX_STUDENT.includes(form.niveau) ? form.niveau : null,
         session_type: form.session_type,
         photo_consent: form.photo_consent || 'Non demandé',
+        referral_source: form.referral_source || null,
         status: 'Enrolled',
       });
       setStudents((prev) => [created, ...prev]);
@@ -302,6 +313,13 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <label htmlFor="rf-consent" className={labelClass}>Autorisation d&apos;image (réseaux sociaux)</label>
             <select id="rf-consent" className={inputClass} value={form.photo_consent || 'Non demandé'} onChange={(e) => set('photo_consent', e.target.value)}>
               {PHOTO_CONSENTS.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="rf-source" className={labelClass}>Comment avez-vous connu le centre ? (non imprimé)</label>
+            <select id="rf-source" className={inputClass} value={form.referral_source || ''} onChange={(e) => set('referral_source', e.target.value)}>
+              <option value="">— Non renseigné —</option>
+              {SOURCES.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
         </div>

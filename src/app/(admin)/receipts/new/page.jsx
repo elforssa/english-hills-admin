@@ -65,6 +65,8 @@ export default function ReceiptNew() {
             if (!student.status || PROMOTABLE_STATUSES.includes(student.status)) upd.status = 'Enrolled';
             // Keep the student's standing image-consent in sync with the desk choice.
             if (data.photo_consent && data.photo_consent !== student.photo_consent) upd.photo_consent = data.photo_consent;
+            // Record how they heard about the center (once) if not already set.
+            if (data.referral_source && data.referral_source !== student.referral_source) upd.referral_source = data.referral_source;
             if (Object.keys(upd).length) {
               await entities.Student.update(data.student_id, upd);
               qc.invalidateQueries({ queryKey: ['Student'] });
