@@ -14,6 +14,7 @@ const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 10
 export default function Finance() {
   const [summary, setSummary] = useState(null);
   const [relancer, setRelancer] = useState([]);
+  const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -22,9 +23,11 @@ export default function Finance() {
     Promise.all([
       sb.rpc('get_finance_summary'),
       sb.rpc('get_unpaid_receipts', { lim: 50 }),
-    ]).then(([sum, unpaid]) => {
+      sb.rpc('get_referral_breakdown'),
+    ]).then(([sum, unpaid, refs]) => {
       setSummary(sum.data || {});
       setRelancer((unpaid.data || []).map(r => ({ ...r, restant: effectiveTotal(r) - (r.montant_paye || 0) })));
+      setSources(refs.data || []);
       setLoading(false);
     });
   }, []);
@@ -36,6 +39,7 @@ export default function Finance() {
   const payes = Number(summary?.count_solde || 0);
   const collectionRate = totalDu > 0 ? Math.round((totalEncaisse / totalDu) * 100) : 0;
   const byProgram = (summary?.by_program || []).filter(p => Number(p.encaisse) > 0 || Number(p.restant) > 0);
+  const totalSources = sources.reduce((a, x) => a + Number(x.count || 0), 0);
 
   const StatCard = ({ label, value, icon: Icon, color }) => (
     <div className="bg-card border border-border rounded-lg p-5">
@@ -120,6 +124,26 @@ export default function Finance() {
           </div>
         )}
       </div>
+
+      {sources.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-5 mb-6">
+          <h2 className="font-semibold text-sm mb-4">Sources d&apos;acquisition <span className="text-muted-foreground font-normal">· {totalSources} apprenants</span></h2>
+          <div className="space-y-2.5">
+            {sources.map(s => {
+              const pct = totalSources > 0 ? Math.round(Number(s.count) / totalSources * 100) : 0;
+              return (
+                <div key={s.source} className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground w-40 sm:w-64 truncate" title={s.source}>{s.source}</span>
+                  <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: 'var(--brand)' }} />
+                  </div>
+                  <span className="text-xs font-semibold w-20 text-right">{s.count} · {pct}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="bg-card border border-border rounded-lg mb-6">
         <div className="px-4 lg:px-6 py-4 border-b border-border flex items-center justify-between gap-3">
