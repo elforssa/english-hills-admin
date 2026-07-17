@@ -137,7 +137,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         date_naissance: form.date_naissance || null,
         age_category: CATEGORIE_TO_AGE[form.categorie] || null,
         niveau_cefr: NIVEAUX_STUDENT.includes(form.niveau) ? form.niveau : null,
-        session_type: form.session_type,
+        session_type: form.session_type || 'Yearly',
         photo_consent: form.photo_consent || 'Non demandé',
         referral_source: form.referral_source || null,
         status: 'Enrolled',
