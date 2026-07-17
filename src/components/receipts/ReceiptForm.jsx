@@ -17,7 +17,6 @@ const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communicatio
 const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
-  'Publicité payante (Ads)',
   'Recherche Google',
   'Famille / Ami(e)',
   'Passage devant le centre (walk-in)',
