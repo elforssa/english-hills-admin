@@ -171,6 +171,11 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       ...receiptFields,
       student_id: form.student_id || null,
       session_type: form.session_type || null,
+      referral_source: form.referral_source || null,
+      // Empty strings break date/typed columns — coerce to null (or today for the required date).
+      date: form.date || today,
+      date_naissance: form.date_naissance || null,
+      email: form.email?.trim() || null,
       montant_total: base,
       remise: remisePct,
       montant_paye: parseFloat(form.montant_paye) || 0,
