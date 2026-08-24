@@ -17,7 +17,7 @@ const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One'];
+const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau'];
 const PHOTO_CONSENTS = ['Accepte', 'Refuse', 'Non demandé'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',

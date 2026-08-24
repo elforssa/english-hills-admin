@@ -13,7 +13,7 @@ const NIVEAUX_STUDENT = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const typesCours = ['Standard', 'Intensif'];
 const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
-const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communication Adult', 'One-to-One'];
+const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau'];
 const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
