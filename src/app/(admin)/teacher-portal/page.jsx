@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getMyTeacher } from '@/lib/teacher-directory';
 import { entities, auth } from '@/lib/entities';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell } from 'lucide-react';
 import { toast } from 'sonner';
@@ -401,8 +402,7 @@ export default function TeacherPortal() {
   useEffect(() => {
     auth.me().then(async (u) => {
       setUser(u);
-      const allTeachers = await entities.Teacher.list('full_name', 100);
-      const me = allTeachers.find(t => t.email === u?.email);
+      const me = await getMyTeacher();
       setTeacher(me);
       const allGroups = await entities.Group.list('name', 100);
       // A matched teacher sees their groups. A director viewing this portal

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Edit, Trash2, Users } from 'lucide-react';
@@ -77,7 +78,7 @@ export default function Groups() {
 
   const load = () => Promise.all([
     entities.Group.list('-created_date', 100),
-    entities.Teacher.list('full_name', 100),
+    getTeacherDirectory(),
     entities.Student.list('full_name', 500),
   ]).then(([g, t, s]) => {
     setGroups(g);

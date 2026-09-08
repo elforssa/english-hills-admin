@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, auth, integrations } from '@/lib/entities';
 import { Bell, Upload, Download } from 'lucide-react';
@@ -84,7 +85,7 @@ export default function StudentPortal() {
         .then(setNotifications).catch(() => {});
       entities.Message.filter({ to_user_email: u?.email, read: false })
         .then(rows => setUnreadMessages(rows.length)).catch(() => {});
-      entities.Teacher.list('full_name', 100).then(setTeachers).catch(() => {});
+      getTeacherDirectory().then(setTeachers).catch(() => {});
       getOfficeRecipient().then(setOffice).catch(() => {});
       setLoading(false);
     }).catch(() => setLoading(false));

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities } from '@/lib/entities';
@@ -32,7 +33,7 @@ export default function GroupDetail() {
       const [g] = await entities.Group.filter({ id });
       setGroup(g || null);
       if (g?.teacher_id) {
-        const [t] = await entities.Teacher.filter({ id: g.teacher_id });
+        const [t] = await getTeacherDirectory({ id: g.teacher_id });
         setTeacher(t || null);
       }
       const [roster, everyone] = await Promise.all([

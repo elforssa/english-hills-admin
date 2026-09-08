@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, auth } from '@/lib/entities';
 import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function ParentPortal() {
         entities.Message.filter({ to_user_email: u?.email, read: false })
           .then(rows => setUnreadMessages(rows.length)).catch(() => {});
         // Teachers are messaging recipients; the office is added separately.
-        entities.Teacher.list('full_name', 100).then(setTeachers).catch(() => {});
+        getTeacherDirectory().then(setTeachers).catch(() => {});
         getOfficeRecipient().then(setOffice).catch(() => {});
       } catch (err) {
         // eslint-disable-next-line no-console
