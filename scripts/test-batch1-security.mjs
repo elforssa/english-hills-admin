@@ -27,6 +27,7 @@ assert.equal(sql("select count(*) from supabase_migrations.schema_migrations whe
 // Receipt fixtures must never trigger an external email webhook.
 assert.equal(sql("select count(*) from vault.secrets where name in ('receipt_webhook_url','receipt_webhook_token')"), '0', 'Refusing configured receipt webhooks');
 
+const batch2 = sql("select count(*) from supabase_migrations.schema_migrations where version='042'") === '1';
 const run = `batch1-${randomUUID()}`;
 const password = randomBytes(24).toString('base64url');
 const roles = ['pending', 'parent', 'student', 'teacher', 'admin', 'director'];
@@ -83,7 +84,7 @@ try {
     const actor = { id: user.id, email, role };
     users.push(actor);
     assert.equal((await rows('profiles', user.id))[0].role, 'pending', 'Auth trigger creates pending profile');
-    success(await request(service, `/rest/v1/profiles?id=eq.${user.id}`, 'PATCH', { role }));
+    sql(`update public.profiles set role='${role}' where id='${user.id}';`);
     const session = success(await request(null, '/auth/v1/token?grant_type=password', 'POST', { email, password }));
     actor.token = session.access_token;
     actor.refreshToken = session.refresh_token;
@@ -117,7 +118,7 @@ try {
     pendingEmails.push(email);
     const queue = () => request(service, `/rest/v1/pending_roles?email=eq.${email}&select=*`).then(success);
     await unchanged(actor, '/rest/v1/pending_roles', 'POST', { email, role: 'director' }, queue, 'Queue insert');
-    success(await request(service, '/rest/v1/pending_roles', 'POST', { email, role: 'student' }));
+    sql(`insert into public.pending_roles(email,role) values('${email}','student');`);
     await unchanged(actor, `/rest/v1/pending_roles?email=eq.${email}`, 'PATCH', { role: 'director' }, queue, 'Queue update');
     await unchanged(actor, `/rest/v1/pending_roles?email=eq.${email}`, 'DELETE', undefined, queue, 'Queue delete');
     const before = await queue();
@@ -139,17 +140,21 @@ try {
   console.log('PASS profile and pending-role REST matrix');
 
   // Service-role operations used by the existing authorized API handlers.
-  success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'admin' }));
+  if (batch2) {
+    denied(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'admin' }));
+    success(await request(director, '/rest/v1/rpc/change_user_role', 'POST', { p_user_id: pending.id, p_role: 'admin' }));
+  } else success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'admin' }));
   assert.equal((await rows('profiles', pending.id))[0].role, 'admin');
-  success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'pending' }));
+  sql(`update public.profiles set role='pending' where id='${pending.id}';`);
   for (const role of roles.filter(r => r !== 'pending')) {
     pendingEmails.push(pending.email);
-    success(await request(service, '/rest/v1/pending_roles', 'POST', { email: pending.email, role }));
+    if (batch2) success(await request(director, '/rest/v1/rpc/prepare_role_invitation', 'POST', { p_email: pending.email, p_role: role }));
+    else success(await request(service, '/rest/v1/pending_roles', 'POST', { email: pending.email, role }));
     assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), role);
     assert.equal((await rows('profiles', pending.id))[0].role, role);
     assert.deepEqual(success(await request(service, `/rest/v1/pending_roles?email=eq.${pending.email}`)), []);
     assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), null);
-    success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'pending' }));
+    sql(`update public.profiles set role='pending' where id='${pending.id}';`);
     checks++;
   }
   denied(await request(anonymous, '/rest/v1/rpc/apply_pending_role', 'POST', {}));
@@ -186,12 +191,12 @@ try {
     for (const [actor, role] of [[admin, 'teacher'], [director, 'admin']]) {
       success(await appRequest(actor, '/api/admin/update-role', { userId: pending.id, role }));
       assert.equal((await rows('profiles', pending.id))[0].role, role);
-      success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'pending' }));
+      sql(`update public.profiles set role='pending' where id='${pending.id}';`);
       // Existing-account invitation queues a role without delivering email.
       pendingEmails.push(pending.email);
       success(await appRequest(actor, '/api/admin/invite', { email: pending.email, role }));
       assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), role);
-      success(await request(service, `/rest/v1/profiles?id=eq.${pending.id}`, 'PATCH', { role: 'pending' }));
+      sql(`update public.profiles set role='pending' where id='${pending.id}';`);
       checks += 2;
     }
     const beforeDirector = await rows('profiles', director.id);
@@ -251,7 +256,10 @@ try {
 
   // PostgreSQL-only corner cases, rolled back in full. Existing director rows
   // are hidden only inside this transaction; none of these changes persist.
+  // On 042 the owner temporarily disables the guard solely to construct the
+  // otherwise-unreachable zero-director test. ROLLBACK restores the trigger.
   sql(`begin;
+    ${batch2 ? 'alter table public.profiles disable trigger role_security_guard;' : ''}
     update public.profiles set role='pending' where role='director';
     set local role authenticated;
     select set_config('request.jwt.claim.sub', '${pending.id}', true);
@@ -290,11 +298,19 @@ try {
   console.log(`PASS ${checks} checks; NULL identity/role and zero-director cases included`);
 } finally {
   // IDs/emails below were generated by this run, never taken from existing data.
-  for (const email of new Set(pendingEmails)) success(await request(service, `/rest/v1/pending_roles?email=eq.${email}`, 'DELETE'));
+  for (const email of new Set(pendingEmails)) sql(`delete from public.pending_roles where email='${email}';`);
   for (const table of ['receipts', 'students', 'teachers']) {
     for (const id of records[table]) success(await request(service, `/rest/v1/${table}?id=eq.${id}`, 'DELETE'));
   }
-  for (const user of users) success(await request(service, `/auth/v1/admin/users/${user.id}`, 'DELETE'));
+  // Owner-only synthetic teardown, never an application bypass. Restore the
+  // guard and counter in the same transaction, including when no director
+  // existed before the test. IDs were generated exclusively by this run.
+  if (users.length) sql(`begin;
+    lock table public.profiles in access exclusive mode;
+    ${batch2 ? 'alter table public.profiles disable trigger role_security_guard;' : ''}
+    delete from auth.users where id in (${users.map(u => "'"+u.id+"'::uuid").join(',')});
+    ${batch2 ? "alter table public.profiles enable trigger role_security_guard; update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');" : ''}
+    commit;`);
   const ids = [...users.map(u => u.id), ...Object.values(records).flat()];
   if (ids.length) {
     sql(`delete from public.activity_log where target_id in (${ids.map(id => `'${id}'::uuid`).join(',')})

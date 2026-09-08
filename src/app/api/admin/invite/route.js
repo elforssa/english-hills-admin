@@ -1,20 +1,3 @@
-// =============================================================================
-// POST /api/admin/invite
-//
-// Sends a Supabase Auth invitation email and queues a pending_roles row so
-// the invitee's role is applied on first sign-in. The invite link lands on
-// /inscription-compte, where the user sets their password and full name.
-//
-// Auth model:
-//   • Caller must have profile.role in {admin, director}.
-//   • Director may grant any of {director, admin, teacher, parent, student}.
-//   • Admin may grant {teacher, parent, student} only — granting admin or
-//     director from an admin session returns 403.
-//
-// Body shape:
-//   { email: string, role: 'student'|'parent'|'teacher'|'admin'|'director' }
-// =============================================================================
-
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
@@ -87,75 +70,25 @@ export async function POST(request) {
   }
   const { email, role } = parsed.data;
 
-  // ── Gate 3: only directors may grant privileged roles ──────────────────
-  if (PRIVILEGED_ROLES.includes(role) && profile.role !== 'director') {
-    return NextResponse.json(
-      { error: 'Seul le directeur peut attribuer ce rôle.' },
-      { status: 403 },
-    );
+  // Authorize and persist via the caller's JWT, before any Auth email is
+  // sent. Existing active accounts cannot change role through re-invitation.
+  const { data, error } = await supabase.rpc('prepare_role_invitation', { p_email: email, p_role: role });
+  if (error) {
+    const status = error.code === '42501' ? 403 : ['23514', '40001', '40P01'].includes(error.code) ? 409 : 500;
+    return NextResponse.json({ error: status === 403 ? 'Forbidden' : status === 409
+      ? "Ce compte existe déjà ou a changé. Utilisez la gestion des rôles puis réessayez."
+      : "Échec de la préparation de l'invitation." }, { status });
   }
+  if (!data.needsDelivery) return NextResponse.json(data);
 
-  // ── Perform invite via service-role client ─────────────────────────────
+  // Service key is used only for Auth delivery, never profile/queue writes.
+  // Delivery and the DB transaction cannot be atomic: on failure the bounded,
+  // expiring queue stays retryable. A normal signup still requires verified email.
   const admin = getServiceRoleClient();
-
   const redirectTo = new URL('/inscription-compte', request.url).toString();
-  const { data: inviteData, error: inviteError } =
-    await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-
-  // "User already registered" is fine — we still upsert the pending role so
-  // the next sign-in (or apply_pending_role RPC) bumps them to the new role.
-  // Supabase has used several wordings here ("already registered", "already
-  // been registered", "email already exists") plus an `email_exists` code
-  // and a 422 status — match any of them.
-  const isAlreadyRegistered = !!inviteError && (
-    inviteError.code === 'email_exists' ||
-    inviteError.status === 422 ||
-    /already.*(registered|exists)/i.test(inviteError.message || '') ||
-    /email.*already.*exists/i.test(inviteError.message || '')
-  );
-  if (inviteError && !isAlreadyRegistered) {
-    // eslint-disable-next-line no-console
-    console.error('[invite] inviteUserByEmail failed:', inviteError);
-    return NextResponse.json(
-      { error: "Échec de l'envoi de l'invitation." },
-      { status: 500 },
-    );
+  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+  if (inviteError) {
+    return NextResponse.json({ error: "Envoi non confirmé. Réessayez l'invitation; aucun rôle existant n'a été modifié." }, { status: 502 });
   }
-
-  const { error: pendingError } = await admin
-    .from('pending_roles')
-    .upsert({ email, role }, { onConflict: 'email' });
-  if (pendingError) {
-    // eslint-disable-next-line no-console
-    console.error('[invite] pending_roles upsert failed:', pendingError);
-    return NextResponse.json(
-      { error: "Invitation envoyée mais l'attribution du rôle a échoué." },
-      { status: 500 },
-    );
-  }
-
-  // Audit the invite — pending_roles is not a trigger-covered table, and
-  // this is a privileged action even when the invitee already exists.
-  const { error: auditErr } = await admin.from('activity_log').insert({
-    actor_id:     user.id,
-    actor_email:  user.email,
-    action:       'INSERT',
-    target_table: 'pending_roles',
-    target_id:    null,
-    changed_columns: ['email', 'role'],
-    before: null,
-    after:  { email, role, alreadyRegistered: isAlreadyRegistered },
-  });
-  if (auditErr) {
-    // eslint-disable-next-line no-console
-    console.error('[invite] audit log insert failed (non-fatal):', auditErr);
-  }
-
-  return NextResponse.json({
-    success: true,
-    email,
-    role,
-    userId: inviteData?.user?.id ?? null,
-    alreadyRegistered: isAlreadyRegistered,
-  });
+  return NextResponse.json(data);
 }

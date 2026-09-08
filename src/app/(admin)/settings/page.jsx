@@ -179,13 +179,12 @@ function InviteUserForm({ currentUser }) {
     const trimmedEmail = email.trim();
 
     try {
-      // The /api/admin/invite route handles caller-role enforcement, the
-      // pending_roles upsert, and sends the Supabase invite email
-      // (server-side, via the service-role key).
+      // The API delegates role authorization to the authenticated database
+      // operation; the service key is used only for Auth invitation delivery.
       const result = await users.inviteUser(trimmedEmail, role);
       setInvited(prev => [...prev, { email: trimmedEmail, role }]);
       if (result?.alreadyRegistered) {
-        toast.success(`${trimmedEmail} est déjà inscrit — son rôle a été mis à jour vers "${ROLES.find(r => r.value === role)?.label}".`);
+        toast.success(`${trimmedEmail} : invitation traitée. Un rôle en attente sera appliqué à la prochaine connexion ; un rôle actif n'est pas modifié par une invitation.`);
       } else {
         toast.success(`Invitation envoyée à ${trimmedEmail} avec le rôle "${ROLES.find(r => r.value === role)?.label}".`);
       }
