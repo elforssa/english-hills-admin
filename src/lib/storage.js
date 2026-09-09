@@ -1,12 +1,13 @@
 // =============================================================================
-// Storage helper — uploadFile(bucket, file)
+// Batch 4A: uploadAsset() reserves/finalizes; asset: refs use server signing.
+// uploadFile()/createSignedUrl() below are LEGACY COMPATIBILITY ONLY until 046.
 //
 // Uploads to a private Supabase Storage bucket and returns a long-lived
 // signed URL. Safe to call from client components.
 //
 // Buckets `documents` and `portfolios` are both private (set in migration 004),
 // so the bucket itself has no public access — clients must use signed URLs
-// or signed-cookie auth. We return a 1-year signed URL for backward
+// or authenticated reads. The legacy uploader returns a 90-day signed URL for backward
 // compatibility with the existing pattern of storing `file_url` directly in
 // the database. For tighter security, store `{ bucket, path }` and call
 // createSignedUrl on demand instead.
@@ -54,7 +55,7 @@ async function validateFile(file) {
  * @param {File}   file    Browser File object.
  * @param {string} [folder] Optional path prefix inside the bucket.
  *
- * Returns the signed URL (good for ~1 year), the storage path, and the
+ * Legacy only: returns a 90-day signed URL, the storage path, and the
  * bucket id. The path/bucket are useful if you ever need to regenerate
  * a fresh URL.
  */
@@ -103,12 +104,50 @@ export async function uploadFile(bucket, file, folder = '') {
  */
 export async function resolveSignedUrl(stored, expiresInSeconds = ON_DEMAND_EXPIRY_SECONDS) {
   if (!stored) return stored ?? null;
+  if (stored.startsWith('asset:')) {
+    const response = await fetch('/api/storage/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId: stored.slice(6) }), cache: 'no-store' });
+    if (!response.ok) throw new Error('Accès au fichier refusé');
+    return (await response.json()).url;
+  }
+  // BATCH 4A LEGACY COMPATIBILITY ONLY. Remove after reviewed backfill/046.
+  if (stored.startsWith('blob:')) return stored;
   if (/^https?:\/\//i.test(stored)) return stored; // legacy persisted URL
   const slash = stored.indexOf('/');
   if (slash < 1 || slash === stored.length - 1) return stored; // not a ref
   const bucket = stored.slice(0, slash);
   const path   = stored.slice(slash + 1);
   return createSignedUrl(bucket, path, expiresInSeconds);
+}
+
+export async function uploadAsset(file, { purpose, studentId = null, teacherId = null, enrollmentId = null }) {
+  await validateFile(file);
+  if (purpose.endsWith('_photo') && !file.type.startsWith('image/')) throw new Error('Une image est requise');
+  const client = getBrowserClient();
+  const { data: asset, error } = await client.rpc('reserve_storage_asset', {
+    p_purpose: purpose, p_student_id: studentId, p_teacher_id: teacherId, p_enrollment_id: enrollmentId,
+  });
+  if (error) throw new Error('Réservation refusée');
+  const { error: uploadError } = await client.storage.from(asset.bucket).upload(asset.path, file, { upsert: false, contentType: file.type, cacheControl: '0' });
+  if (uploadError) throw new Error('Téléversement échoué');
+  const response = await fetch('/api/storage/finalize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId: asset.id }) });
+  if (!response.ok) throw new Error('Validation du fichier échouée');
+  return { ref: `asset:${asset.id}`, url: `asset:${asset.id}` };
+}
+
+// Preserve the click gesture across asynchronous signing. No opener is left
+// on the new window; denied/malformed references never navigate it.
+export async function openStoredFile(stored) {
+  const popup = window.open('about:blank', '_blank');
+  if (popup) popup.opener = null;
+  try {
+    const url = await resolveSignedUrl(stored);
+    if (!/^https?:\/\//i.test(url || '')) throw new Error('Invalid file URL');
+    if (popup) popup.location.replace(url);
+    else window.location.assign(url); // Browser disallows popups: same-tab download.
+  } catch (error) {
+    if (popup) popup.close();
+    throw error;
+  }
 }
 
 /**

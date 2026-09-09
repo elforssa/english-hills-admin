@@ -10,7 +10,7 @@
 'use client';
 
 import { toast } from 'sonner';
-import { uploadFile } from './storage';
+import { uploadFile, uploadAsset } from './storage';
 
 const DEFAULT_UPLOAD_BUCKET = 'documents';
 
@@ -21,13 +21,13 @@ export const integrations = {
      *
      * Defaults bucket to 'documents'. Returns `{ file_url, file_name }`.
      */
-    async UploadFile({ file, bucket = DEFAULT_UPLOAD_BUCKET, folder = '' } = {}) {
+    async UploadFile({ file, bucket = DEFAULT_UPLOAD_BUCKET, folder = '', purpose, studentId, teacherId, enrollmentId } = {}) {
       if (!file) throw new Error('UploadFile: missing `file`');
       try {
-        const { url, ref } = await uploadFile(bucket, file, folder);
-        // `file_ref` ("bucket/path") is preferred for storage — re-sign it on
-        // demand with resolveSignedUrl(). `file_url` stays for callers that
-        // still persist a ready URL (now 90-day, not 1-year).
+        // Legacy entry point retained only for old clients during Batch 4A.
+        const { url, ref } = purpose ? await uploadAsset(file, { purpose, studentId, teacherId, enrollmentId }) : await uploadFile(bucket, file, folder);
+        // With purpose, both values are asset:<uuid>, never a persisted token.
+        // Legacy callers retain their previous URL/bucket-path result.
         return { file_url: url, file_ref: ref, file_name: file.name };
       } catch (err) {
         toast.error(`Upload échoué : ${err.message || 'erreur inconnue'}`);

@@ -24,7 +24,8 @@ const InscriptionSchema = z.object({
   age_category:  z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:   z.enum(NIVEAUX).optional().or(z.literal('')),
   notes:         z.string().max(2000).optional().or(z.literal('')),
-  documents_urls: z.array(z.string().url()).max(10).optional(),
+  // Batch 4A: public uploads are unsupported; never accept unverified URLs.
+  documents_urls: z.array(z.string()).max(0).optional(),
   // CNDP (Loi 09-08) requires an explicit consent record. The client form
   // gates submission on a checkbox, but we re-enforce here so a direct POST
   // can't bypass it.
