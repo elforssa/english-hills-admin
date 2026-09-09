@@ -4,14 +4,12 @@ import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Upload, FileText, Video, Mic, Trash2, Eye, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { resolveSignedUrl } from '@/lib/storage';
+import { openStoredFile as openFile } from '@/lib/storage';
 
-// Open a stored portfolio file: a "bucket/path" ref is re-signed on demand for
-// a short window; a legacy full URL opens directly.
+// Registry refs use authorized signing; legacy URL/path compatibility ends after backfill.
 async function openStoredFile(stored) {
   try {
-    const url = await resolveSignedUrl(stored);
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    await openFile(stored);
   } catch {
     toast.error('Impossible d’ouvrir le fichier.');
   }
@@ -47,6 +45,7 @@ function PortfolioModal({ students, onSave, onClose }) {
 
   const handleStudentChange = (id) => {
     const s = students.find(s => s.id === id);
+    set('file_url', ''); set('file_name', ''); // A reservation cannot change learner.
     set('student_id', id);
     set('student_name', s?.full_name || '');
     if (s?.niveau_cefr) set('niveau', s.niveau_cefr);
@@ -55,11 +54,11 @@ function PortfolioModal({ students, onSave, onClose }) {
   const handleFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (!form.student_id) { toast.error('Choisissez un apprenant avant le fichier.'); return; }
     setUploading(true);
     try {
-      const { file_ref } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
-      // Store the "bucket/path" ref, not a long-lived URL — it's re-signed on
-      // demand when the file is opened.
+      const { file_ref } = await integrations.Core.UploadFile({ file, purpose: 'portfolio', studentId: form.student_id || null });
+      // Store asset:<uuid>; record insertion activates the validated binding.
       set('file_url', file_ref);
       set('file_name', file.name);
       toast.success('Fichier uploadé');

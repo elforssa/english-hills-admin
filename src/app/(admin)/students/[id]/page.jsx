@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
+import StorageImage from '@/components/StorageImage';
 import { ArrowLeft, Edit, FileText, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
@@ -75,7 +76,7 @@ export default function StudentDetail() {
         <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
           {student.photo_url
             // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
+            ? <StorageImage src={student.photo_url} alt="" className="w-full h-full object-cover" />
             : <span className="text-lg font-bold text-muted-foreground">{student.full_name?.[0] || '?'}</span>}
         </div>
         <div className="flex-1">

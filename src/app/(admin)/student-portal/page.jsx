@@ -5,19 +5,18 @@ import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, auth, integrations } from '@/lib/entities';
 import { Bell, Upload, Download } from 'lucide-react';
-import { resolveSignedUrl } from '@/lib/storage';
+import { openStoredFile as openFile } from '@/lib/storage';
 import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 
-// Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
+// asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
   try {
-    const url = await resolveSignedUrl(stored);
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    await openFile(stored);
   } catch {
-    /* swallow — rare; the link simply won't open */
+    toast.error('Impossible d’ouvrir le fichier.');
   }
 }
 
@@ -106,7 +105,7 @@ export default function StudentPortal() {
     if (!pfTitle.trim()) { toast.error('Donnez un titre à votre projet avant de téléverser.'); e.target.value = ''; return; }
     setPfUploading(true);
     try {
-      const { file_url, file_name } = await integrations.Core.UploadFile({ file, bucket: 'portfolios' });
+      const { file_url, file_name } = await integrations.Core.UploadFile({ file, purpose: 'portfolio', studentId: student.id });
       await entities.Portfolio.create({
         student_id: student.id,
         student_name: student.full_name,
