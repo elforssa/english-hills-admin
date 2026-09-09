@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import Image from 'next/image';
-import { integrations } from '@/lib/entities';
-import { CheckCircle, Upload, ArrowLeft, Check } from 'lucide-react';
+import { CheckCircle, ArrowLeft } from 'lucide-react';
 
 const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
@@ -18,8 +17,6 @@ export default function PublicEnrollment() {
     full_name: '', date_naissance: '', telephone: '', email: '',
     age_category: '', niveau_cefr: '', notes: '', consent: false,
   });
-  const [docUrls, setDocUrls] = useState([]);
-  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
@@ -57,25 +54,6 @@ export default function PublicEnrollment() {
     return () => { cancelled = true; };
   }, []);
 
-  const handleFile = async (e) => {
-    const files = Array.from(e.target.files);
-    setUploading(true);
-    try {
-      const urls = [];
-      for (const file of files) {
-        const { file_url } = await integrations.Core.UploadFile({ file });
-        urls.push(file_url);
-      }
-      setDocUrls(prev => [...prev, ...urls]);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[inscription] upload failed:', err);
-      // integrations.UploadFile already toasted.
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const isYoungLearner = form.age_category === 'Young Learners (6-12)';
 
   const handleSubmit = async (e) => {
@@ -107,7 +85,6 @@ export default function PublicEnrollment() {
           age_category:   form.age_category   || undefined,
           niveau_cefr:    form.niveau_cefr    || undefined,
           notes:          form.notes          || undefined,
-          documents_urls: docUrls.length > 0 ? docUrls : undefined,
           consent:        form.consent,
           turnstileToken: turnstileToken || undefined,
         }),
@@ -225,19 +202,7 @@ export default function PublicEnrollment() {
               </select>
             </div>
 
-            <div>
-              <label className={labelClass}>Documents (optionnel)</label>
-              <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center">
-                <input type="file" multiple onChange={handleFile} className="hidden" id="doc-upload" accept=".pdf,.jpg,.jpeg,.png" />
-                <label htmlFor="doc-upload" className="cursor-pointer flex flex-col items-center gap-2">
-                  <Upload size={20} className="text-gray-400" />
-                  <span className="text-sm text-gray-500">Cliquer pour uploader des documents</span>
-                  <span className="text-xs text-gray-400">PDF, JPG, PNG acceptés</span>
-                </label>
-                {uploading && <p className="text-xs text-blue-600 mt-2">Upload en cours...</p>}
-                {docUrls.length > 0 && <p className="text-xs text-green-600 mt-2 flex items-center justify-center gap-1"><Check size={12} /> {docUrls.length} document(s) joint(s)</p>}
-              </div>
-            </div>
+            <p className="text-xs text-gray-500">Pièces jointes indisponibles en ligne. Vous pouvez vous inscrire sans document et contacter le centre.</p>
 
             <div>
               <label htmlFor="notes" className={labelClass}>Message / Précisions (optionnel)</label>
@@ -270,7 +235,7 @@ export default function PublicEnrollment() {
 
             <button
               type="submit"
-              disabled={submitting || uploading || !form.consent || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
+              disabled={submitting || !form.consent || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
               className="w-full py-3 text-sm font-bold text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all bg-primary"
             >
               {submitting ? 'Envoi en cours...' : 'Soumettre ma demande'}

@@ -7,6 +7,7 @@ import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { getBrowserClient } from '@/lib/supabase';
+import StorageImage from '@/components/StorageImage';
 
 export default function Teachers() {
   const [teachers, setTeachers] = useState([]);
@@ -60,7 +61,7 @@ export default function Teachers() {
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
                     {t.photo_url
                       // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={t.photo_url} alt="" className="w-full h-full object-cover" />
+                      ? <StorageImage src={t.photo_url} alt="" className="w-full h-full object-cover" />
                       : <span className="text-sm font-bold text-muted-foreground">{t.full_name?.[0] || '?'}</span>}
                   </div>
                   <div className="min-w-0">
