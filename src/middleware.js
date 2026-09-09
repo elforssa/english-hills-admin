@@ -44,6 +44,14 @@ export async function middleware(request) {
 
   let response = NextResponse.next({ request });
 
+  // A redirect is a new response: carry over every cookie written by Auth
+  // refresh, including chunked session cookies and cookie deletions.
+  const redirect = (url) => {
+    const redirected = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirected.cookies.set(cookie));
+    return redirected;
+  };
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -56,7 +64,9 @@ export async function middleware(request) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
+          const previousCookies = response.cookies.getAll();
           response = NextResponse.next({ request });
+          previousCookies.forEach((cookie) => response.cookies.set(cookie));
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           );
@@ -86,7 +96,7 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = `?returnTo=${encodeURIComponent(pathname)}`;
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
 
   // Signed in — look up the role. profiles.id == auth.users.id (migration 002).
@@ -104,7 +114,7 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = '/unauthorized';
     url.search = '';
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
 
   // Full-access roles.
@@ -117,7 +127,7 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = '/teacher-portal';
     url.search = '';
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
 
   if (role === 'parent') {
@@ -125,7 +135,7 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = '/parent-portal';
     url.search = '';
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
 
   if (role === 'student') {
@@ -133,14 +143,14 @@ export async function middleware(request) {
     const url = request.nextUrl.clone();
     url.pathname = '/student-portal';
     url.search = '';
-    return NextResponse.redirect(url);
+    return redirect(url);
   }
 
   // Unknown role.
   const url = request.nextUrl.clone();
   url.pathname = '/unauthorized';
   url.search = '';
-  return NextResponse.redirect(url);
+  return redirect(url);
 }
 
 export const config = {
