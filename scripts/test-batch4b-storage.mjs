@@ -77,7 +77,7 @@ try {
   check(() => assert.equal(first.report.candidates.length, 0));
   const ownerOnly = structuredClone(first.snapshot);
   ownerOnly.objects.forEach(o => { o.owner_id = user.id; });
-  check(() => assert.equal(classify(ownerOnly).candidates.length, 0));
+  check(() => assert.equal(classify(ownerOnly, [], LOCAL_URL).candidates.length, 0));
   check(() => assert.equal(first.report.totals.referenceStates.conflicting, 2));
   check(() => assert.equal(first.report.totals.referenceStates.missing_object, 1));
   check(() => assert.equal(first.report.totals.referenceStates.unknown_external, 1));
@@ -110,11 +110,29 @@ try {
   check(() => assert.deepEqual(inventory(ctx).snapshot, first.snapshot));
   const stale = evidence.map(e => ({ ...e, objectVersion: 'stale' }));
   check(() => assert.equal(inventory(ctx, stale).report.candidates.length, 0));
-  check(() => assert.equal(classify(first.snapshot, [...evidence, evidence[0]]).candidates.length, 4));
+  const candidateKey = r => `${r.table}:${r.recordId}:${r.objectId}`;
+  const candidateKeys = report => report.candidates.map(candidateKey).sort();
+  const singleClaimCandidate = second.report.candidates.find(candidate =>
+    second.report.references.filter(r => r.objectId === candidate.objectId).length === 1);
+  assert.ok(singleClaimCandidate, 'Fixture must include a verified object with exactly one database claim');
+  const duplicateEvidence = evidence.find(e => e.referenceFingerprint === singleClaimCandidate.fingerprint);
+  assert.ok(duplicateEvidence, 'Selected candidate must have independent review evidence');
+  const duplicateReport = classify(first.snapshot, [...evidence, duplicateEvidence], LOCAL_URL);
+  check(() => assert.deepEqual(
+    candidateKeys(duplicateReport),
+    candidateKeys(second.report).filter(key => key !== candidateKey(singleClaimCandidate)),
+  ));
+  const reversed = classify({ ...first.snapshot,
+    objects: [...first.snapshot.objects].reverse(),
+    references: [...first.snapshot.references].reverse(),
+    assets: [...first.snapshot.assets].reverse(),
+    bindings: [...first.snapshot.bindings].reverse(),
+  }, [...evidence].reverse(), LOCAL_URL);
+  check(() => assert.deepEqual(candidateKeys(reversed), candidateKeys(second.report)));
   const duplicateProofs = evidence.map(e => ({ ...e }));
   const duplicateRef = first.report.references.find(r => r.table === 'enrollments' && r.index === 1);
   duplicateProofs.find(e => e.referenceFingerprint === duplicateRef.fingerprint).objectVersion = 'contradiction';
-  check(() => assert.equal(classify(first.snapshot, duplicateProofs).candidates.some(r => r.table === 'enrollments'), false));
+  check(() => assert.equal(classify(first.snapshot, duplicateProofs, LOCAL_URL).candidates.some(r => r.table === 'enrollments'), false));
   const forged = evidence.map(e => ({ ...e, reviewedBy: randomUUID() }));
   check(() => assert.equal(inventory(ctx, forged).report.candidates.length, 0));
   const wrongHash = inventory(ctx, evidence.map(e => ({ ...e, sha256: '0'.repeat(64) })));
@@ -147,11 +165,11 @@ try {
   const existing = structuredClone(after.snapshot);
   const bound = existing.bindings.find(b => b.student_photo_id === sid);
   existing.references.find(r => r.recordId === sid).value = 'asset:' + bound.asset_id;
-  check(() => assert.equal(classify(existing).references.find(r => r.recordId === sid).state, 'verified'));
+  check(() => assert.equal(classify(existing, [], LOCAL_URL).references.find(r => r.recordId === sid).state, 'verified'));
   existing.assets.find(a => a.id === bound.asset_id).student_id = randomUUID();
-  check(() => assert.equal(classify(existing).references.find(r => r.recordId === sid).state, 'conflicting'));
+  check(() => assert.equal(classify(existing, [], LOCAL_URL).references.find(r => r.recordId === sid).state, 'conflicting'));
   existing.references.find(r => r.recordId === sid).value = 'asset:' + randomUUID();
-  check(() => assert.equal(classify(existing).references.find(r => r.recordId === sid).state, 'missing_object'));
+  check(() => assert.equal(classify(existing, [], LOCAL_URL).references.find(r => r.recordId === sid).state, 'missing_object'));
   for (const o of objects) {
     const r = await fetch(LOCAL_URL + '/storage/v1/object/authenticated/' + o.bucket + '/' + o.path.split('/').map(encodeURIComponent).join('/'), { headers: { apikey: key, Authorization: 'Bearer ' + key }, redirect: 'error' });
     check(() => assert.equal(r.status, 200));
