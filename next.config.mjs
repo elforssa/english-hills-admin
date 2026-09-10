@@ -2,7 +2,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === 'production';
-
+const localSupabaseConnect = isProd ? '' : ' http://127.0.0.1:54321 ws://127.0.0.1:54321';
 // Content-Security-Policy — locks down what scripts, styles, images, and
 // network destinations the browser will accept. Tighten further once we move
 // inline styles into Tailwind-only classes and inline scripts out of Next's
@@ -33,7 +33,7 @@ const csp = [
   // for the iframe is harmless).
   // Sentry events are tunnelled through /monitoring (same-origin), so 'self'
   // covers the browser; the ingest hosts are listed as a fallback.
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com https://*.ingest.de.sentry.io https://*.sentry.io",
+`connect-src 'self' ${isProd ? '' : 'http://127.0.0.1:54321 ws://127.0.0.1:54321'} https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com https://*.ingest.de.sentry.io https://*.sentry.io`,
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
   // Turnstile renders its challenge inside an iframe from this origin.

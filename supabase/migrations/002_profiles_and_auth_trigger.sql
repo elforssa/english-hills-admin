@@ -15,7 +15,6 @@
 -- -----------------------------------------------------------------------------
 -- Drop the temporary users table (empty, no inbound FKs in migration 001)
 -- -----------------------------------------------------------------------------
-drop trigger if exists set_users_updated_at on public.users;
 drop table  if exists public.users;
 
 -- -----------------------------------------------------------------------------

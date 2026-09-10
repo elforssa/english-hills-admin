@@ -506,7 +506,7 @@ begin
     'teachers','groups','students','authorized_adults','receipts','payments',
     'enrollments','attendance','assessments','learning_assessments',
     'placement_tests','portfolios','certificates','dismissal_logs','payroll',
-    'leave_requests','announcements','notifications','messages','users',
+    'leave_requests','announcements','notifications','messages',
     'app_config','pending_roles'
   ]
   loop

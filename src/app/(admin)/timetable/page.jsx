@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
 import { entities, auth } from '@/lib/entities';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -24,19 +25,19 @@ export default function Timetable() {
   useEffect(() => {
     Promise.all([
       entities.Group.list('name', 100),
-      entities.Teacher.list('full_name', 100),
+      getTeacherDirectory(),
       auth.me().catch(() => null),
-    ]).then(([g, t, u]) => {
+      getMyTeacher(),
+    ]).then(([g, t, u, me]) => {
       setGroups(g);
       setTeachers(t);
       setRole(u?.role || null);
-      // Teachers see only their own groups. Identify the teacher row by email,
-      // the same rule the portal and RLS use.
+      // Resolve the teacher with the same database helper used by RLS.
       if (u?.role === 'teacher') {
-        setMyTeacherId(t.find(x => x.email === u.email)?.id || null);
+        setMyTeacherId(me?.id || null);
       }
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, []);
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';

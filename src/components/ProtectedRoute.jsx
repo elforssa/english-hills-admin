@@ -38,61 +38,53 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   const router    = useRouter();
   const pathname  = usePathname();
 
-  useEffect(() => {
-    if (isLoading) return;
+  // Decide before rendering: an effect-only redirect lets disallowed children
+  // mount and start queries during the navigation window.
+  const redirectTo = (() => {
+    if (isLoading) return null;
 
     // Not signed in
     if (!user) {
       const returnTo = encodeURIComponent(pathname || '/');
-      router.replace(`/login?returnTo=${returnTo}`);
-      return;
+      return `/login?returnTo=${returnTo}`;
     }
 
     // Explicit per-route allowlist takes precedence
     if (Array.isArray(allowedRoles)) {
-      if (!allowedRoles.includes(role)) {
-        router.replace('/unauthorized');
-      }
-      return;
+      return allowedRoles.includes(role) ? null : '/unauthorized';
     }
 
     // Pending / unknown
     if (!role || role === 'pending') {
-      router.replace('/unauthorized');
-      return;
+      return '/unauthorized';
     }
 
     // Full-access roles
-    if (role === 'admin' || role === 'director') return;
+    if (role === 'admin' || role === 'director') return null;
 
     // Teacher
     if (role === 'teacher') {
-      if (!matchesAny(pathname, TEACHER_ROUTES)) {
-        router.replace('/teacher-portal');
-      }
-      return;
+      return matchesAny(pathname, TEACHER_ROUTES) ? null : '/teacher-portal';
     }
 
     // Parent — portal + settings only
     if (role === 'parent') {
-      if (pathname !== '/parent-portal' && pathname !== '/settings') {
-        router.replace('/parent-portal');
-      }
-      return;
+      return pathname === '/parent-portal' || pathname === '/settings' ? null : '/parent-portal';
     }
 
     // Student — portal + settings only
     if (role === 'student') {
-      if (pathname !== '/student-portal' && pathname !== '/settings') {
-        router.replace('/student-portal');
-      }
-      return;
+      return pathname === '/student-portal' || pathname === '/settings' ? null : '/student-portal';
     }
 
     // Unknown role
-    router.replace('/unauthorized');
-  }, [user, role, isLoading, pathname, router, allowedRoles]);
+    return '/unauthorized';
+  })();
 
-  if (isLoading || !user) return null;
+  useEffect(() => {
+    if (redirectTo) router.replace(redirectTo);
+  }, [redirectTo, router]);
+
+  if (isLoading || !user || redirectTo) return null;
   return children;
 }
