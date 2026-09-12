@@ -6,18 +6,17 @@ import { toast } from 'sonner';
 import { entities, auth } from '@/lib/entities';
 import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
-import { resolveSignedUrl } from '@/lib/storage';
+import { openStoredFile as openFile } from '@/lib/storage';
 import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
-// Re-sign a stored "bucket/path" ref on demand (legacy full URLs open as-is).
+// asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
   try {
-    const url = await resolveSignedUrl(stored);
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    await openFile(stored);
   } catch {
     toast.error('Impossible d’ouvrir le fichier.');
   }

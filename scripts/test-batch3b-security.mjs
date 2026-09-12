@@ -6,7 +6,9 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
-assert.equal(execFileSync('git',['branch','--show-current'],{cwd:root,encoding:'utf8'}).trim(),'codex-migration');
+assert.ok(['codex-migration', 'codex/storage-hardening-final'].includes(
+  execFileSync('git',['branch','--show-current'],{cwd:root,encoding:'utf8'}).trim(),
+));
 const env = {};
 for(const line of readFileSync(new URL('.env.local',root),'utf8').split('\n')) {
   const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
@@ -117,7 +119,11 @@ try {
   }
   console.log('PASS ownership, multi-child reads, constrained submissions, mutations, upserts and atomic bulk rejection');
   for(const staff of [admin,director]) {
-    const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:['synthetic-staff-document']},staff);
+    // Batch 4C permits only registry-backed asset references in persisted
+    // enrollment documents. This staff workflow test concerns review/decision
+    // authority, so it deliberately uses no attachment rather than a legacy
+    // arbitrary path.
+    const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:[]},staff);
     for(const status of ['Validated','Rejected']) {
       assert.equal(ok(await request(staff,'enrollments','PATCH',{status,group_id:group.id},'?id=eq.'+e.id))[0].status,status); checks++;
     }

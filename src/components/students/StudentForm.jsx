@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
+import StorageImage from '@/components/StorageImage';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
@@ -99,13 +100,16 @@ export default function StudentForm() {
     if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }));
   };
 
+  const [photoPreview, setPhotoPreview] = useState(null);
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
   const handlePhoto = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await integrations.Core.UploadFile({ file, bucket: 'documents', folder: 'photos' });
+      const { file_url } = await integrations.Core.UploadFile({ file, purpose: 'student_photo', studentId: id || null });
       set('photo_url', file_url);
+      setPhotoPreview(URL.createObjectURL(file));
       toast.success('Photo téléversée');
     } catch (err) {
       toast.error(err?.message || 'Échec du téléversement de la photo.');
@@ -176,7 +180,7 @@ export default function StudentForm() {
             <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border border-border">
               {form.photo_url
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                ? <StorageImage src={photoPreview || form.photo_url} alt="" className="w-full h-full object-cover" />
                 : <span className="text-xl font-bold text-muted-foreground">{form.full_name?.[0] || '?'}</span>}
             </div>
             <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
@@ -289,7 +293,7 @@ export default function StudentForm() {
           </div>
         </div>
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={saving} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
+          <button type="submit" disabled={saving || uploading} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
           <button type="button" onClick={() => router.push('/students')} className="px-5 py-2.5 text-sm text-muted-foreground hover:text-foreground">Annuler</button>
