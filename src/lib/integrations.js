@@ -10,24 +10,19 @@
 'use client';
 
 import { toast } from 'sonner';
-import { uploadFile, uploadAsset } from './storage';
-
-const DEFAULT_UPLOAD_BUCKET = 'documents';
+import { uploadAsset } from './storage';
 
 export const integrations = {
   Core: {
     /**
-     * UploadFile({ file, bucket?, folder? }) → Promise<{ file_url, file_name }>
-     *
-     * Defaults bucket to 'documents'. Returns `{ file_url, file_name }`.
+     * UploadFile({ file, purpose, studentId?, teacherId?, enrollmentId? })
+     * → Promise<{ file_url, file_ref, file_name }>.
      */
-    async UploadFile({ file, bucket = DEFAULT_UPLOAD_BUCKET, folder = '', purpose, studentId, teacherId, enrollmentId } = {}) {
+    async UploadFile({ file, purpose, studentId, teacherId, enrollmentId } = {}) {
       if (!file) throw new Error('UploadFile: missing `file`');
+      if (typeof purpose !== 'string' || !purpose) throw new Error('UploadFile: registry purpose required');
       try {
-        // Legacy entry point retained only for old clients during Batch 4A.
-        const { url, ref } = purpose ? await uploadAsset(file, { purpose, studentId, teacherId, enrollmentId }) : await uploadFile(bucket, file, folder);
-        // With purpose, both values are asset:<uuid>, never a persisted token.
-        // Legacy callers retain their previous URL/bucket-path result.
+        const { url, ref } = await uploadAsset(file, { purpose, studentId, teacherId, enrollmentId });
         return { file_url: url, file_ref: ref, file_name: file.name };
       } catch (err) {
         toast.error(`Upload échoué : ${err.message || 'erreur inconnue'}`);
