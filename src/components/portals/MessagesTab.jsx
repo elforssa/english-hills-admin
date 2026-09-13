@@ -23,8 +23,9 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Inbox, Send, Mail, ChevronLeft, Reply, X } from 'lucide-react';
-import { useEntityCreate, useEntityFilter, useEntityUpdate } from '@/lib/queries';
+import { useEntityCreate, useEntityFilter } from '@/lib/queries';
 import { integrations } from '@/lib/entities';
+import { markMessageRead } from '@/lib/messages';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -216,8 +217,6 @@ export default function MessagesTab({ me, recipients = [] }) {
   const inbox = useEntityFilter('Message', { to_user_email: me?.email }, '-created_date', 200);
   const sent  = useEntityFilter('Message', { from_user_email: me?.email }, '-created_date', 200);
 
-  const updateMessage = useEntityUpdate('Message');
-
   const items = view === 'inbox' ? (inbox.data || []) : (sent.data || []);
   const loading = view === 'inbox' ? inbox.isLoading : sent.isLoading;
 
@@ -231,7 +230,8 @@ export default function MessagesTab({ me, recipients = [] }) {
     // Auto-mark as read on first open of an inbox message.
     if (view === 'inbox' && !msg.read) {
       try {
-        await updateMessage.mutateAsync({ id: msg.id, data: { read: true } });
+        await markMessageRead(msg.id);
+        await inbox.refetch();
       } catch { /* swallow — the user already saw the message */ }
     }
   }
