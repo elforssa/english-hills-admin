@@ -38,4 +38,5 @@ export const SESSION_TYPE_COLORS = {
   'Communication Adult':  'bg-teal-100   text-teal-700',
   'One-to-One':           'bg-rose-100   text-rose-700',
   'Mise à niveau':        'bg-cyan-100   text-cyan-700',
+  'Other':                 'bg-gray-100   text-gray-600',
 };
