@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Users, CreditCard, Briefcase, Calendar } from 'lucide-react';
 import { useEntityList } from '@/lib/queries';
+import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
 
 // Brand palette — matches the rest of the platform.
 const COLORS = {
@@ -113,6 +114,10 @@ export default function ReportsPage() {
   const { data: payroll    = [], isLoading: payLoading } = useEntityList('Payroll', '-created_date', 2000);
   const { data: students   = [] } = useEntityList('Student', 'full_name', 500);
   const { data: teachers   = [] } = useEntityList('Teacher', 'full_name', 200);
+  const { data: groups = [], isLoading: groupsLoading } = useEntityList('Group', 'name', 500);
+  const { data: enrollments = [], isLoading: enrollmentsLoading } = useEntityList('Enrollment', '-created_date', 5000);
+  const { data: premiumSessions = [], isLoading: premiumLoading } = useEntityList('PremiumSession', '-scheduled_date', 2000);
+  const { data: premiumHomework = [], isLoading: homeworkLoading } = useEntityList('PremiumHomework', '-submitted_at', 2000);
 
   // ── attendance roll-up: build {date, Présent, Absent, Retard, Justifié} ──
   const attendanceSeries = useMemo(() => {
@@ -234,6 +239,7 @@ export default function ReportsPage() {
   }, [receipts, payroll, currentYear]);
 
   const loading = attLoading || recLoading || payLoading;
+  const academicLoading = groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading;
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto">
@@ -285,6 +291,17 @@ export default function ReportsPage() {
       </div>
 
       <div className="space-y-6">
+        <AcademicOperationsReport
+          students={students}
+          teachers={teachers}
+          groups={groups}
+          enrollments={enrollments}
+          receipts={receipts}
+          premiumSessions={premiumSessions}
+          premiumHomework={premiumHomework}
+          loading={academicLoading}
+        />
+
         {/* ── Attendance ─────────────────────────────────────────────── */}
         <Panel
           title="Présences"
