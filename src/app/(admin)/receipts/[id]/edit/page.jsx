@@ -6,6 +6,7 @@ import { entities } from '@/lib/entities';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { completeReceiptAcademicLink } from '@/lib/receiptAcademicLink';
 
 export default function ReceiptEdit() {
   const params = useParams();
@@ -27,7 +28,16 @@ export default function ReceiptEdit() {
     setSaving(true);
     try {
       await entities.Receipt.update(id, formData);
-      toast.success('Reçu mis à jour');
+      if (formData.group_id) {
+        try {
+          await completeReceiptAcademicLink(id, formData);
+          toast.success('Reçu, groupe et inscription mis à jour');
+        } catch {
+          toast.warning('Le reçu est lié au groupe, mais l’inscription doit être vérifiée.');
+        }
+      } else {
+        toast.success('Reçu mis à jour');
+      }
       router.push(`/receipts/${id}/print`);
     } catch (err) {
       toast.error('Erreur lors de la mise à jour : ' + (err.message || 'Veuillez réessayer.'));

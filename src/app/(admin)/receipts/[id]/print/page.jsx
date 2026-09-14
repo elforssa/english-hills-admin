@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { entities } from '@/lib/entities';
-import { Printer, ArrowLeft, Download, Trash2, Edit } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Trash2, Edit, UsersRound } from 'lucide-react';
 import Link from 'next/link';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
@@ -24,14 +24,19 @@ export default function ReceiptPrint() {
   const { role } = useAuth();
   const isDirector = role === 'director';
   const [receipt, setReceipt] = useState(null);
+  const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    entities.Receipt.filter({ id }).then((data) => {
-      setReceipt(data[0] || null);
-      setLoading(false);
-    });
+    entities.Receipt.filter({ id }).then(async (data) => {
+      const row = data[0] || null;
+      setReceipt(row);
+      if (row?.group_id) {
+        const [linkedGroup] = await entities.Group.filter({ id: row.group_id });
+        setGroup(linkedGroup || null);
+      }
+    }).finally(() => setLoading(false));
   }, [id]);
 
   const handlePrint = () => window.print();
@@ -61,7 +66,10 @@ export default function ReceiptPrint() {
       ...(receipt.email ? [['Email', receipt.email]] : []),
       ...(receipt.date_naissance ? [['Date de naissance', receipt.date_naissance]] : []),
       ['Catégorie', receipt.categorie],
+      ['Formule', receipt.plan_type || 'Standard'],
+      ...(receipt.session_type ? [['Session', receipt.session_type]] : []),
       ['Niveau', receipt.niveau],
+      ...(group ? [['Groupe', group.name]] : []),
       ['Type de cours', receipt.type_cours],
       ...(receipt.jours ? [['Jours', receipt.jours]] : []),
       ...(receipt.plage_horaire ? [['Horaire', receipt.plage_horaire]] : []),
@@ -139,6 +147,14 @@ export default function ReceiptPrint() {
           <ArrowLeft size={15} /> Retour
         </button>
         <div className="flex-1" />
+        {group && (
+          <Link
+            href={`/groups/${group.id}`}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-xl border border-blue-200 bg-blue-50 text-primary hover:bg-blue-100 transition-colors"
+          >
+            <UsersRound size={15} /> {group.name}
+          </Link>
+        )}
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium text-muted-foreground mr-2">{receipt.nom_prenom}</div>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full border" style={{ backgroundColor: sc.bg, color: sc.color, borderColor: sc.border }}>
@@ -230,7 +246,9 @@ export default function ReceiptPrint() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <DataField label="Catégorie" value={receipt.categorie} />
+                <DataField label="Formule" value={receipt.plan_type || 'Standard'} />
                 {receipt.session_type && <DataField label="Session" value={receipt.session_type} />}
+                {group && <DataField label="Groupe" value={group.name} />}
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Niveau</p>
                   <span className="inline-block text-xs font-bold text-white px-3 py-1 rounded-lg bg-primary">{receipt.niveau}</span>

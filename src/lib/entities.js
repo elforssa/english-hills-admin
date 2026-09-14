@@ -48,6 +48,8 @@ const TABLE_FOR = {
   PendingRole:        'pending_roles',
   PlacementTest:      'placement_tests',
   Portfolio:          'portfolios',
+  PremiumSession:     'premium_sessions',
+  PremiumHomework:    'premium_homework_submissions',
   Receipt:            'receipts',
   Student:            'students',
   Teacher:            'teachers',

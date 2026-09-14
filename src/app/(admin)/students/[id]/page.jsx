@@ -6,9 +6,14 @@ import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import StorageImage from '@/components/StorageImage';
-import { ArrowLeft, Edit, FileText, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, FileText, Plus, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { toast } from 'sonner';
-import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
+import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
+
+const PREMIUM_STATUS_LABELS = {
+  Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
+  Cancelled: 'Annulée', Missed: 'Absence',
+};
 
 export default function StudentDetail() {
   const params = useParams();
@@ -19,6 +24,7 @@ export default function StudentDetail() {
   const [attendance, setAttendance] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [adults, setAdults] = useState([]);
+  const [premiumSessions, setPremiumSessions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,12 +35,14 @@ export default function StudentDetail() {
       entities.Attendance.filter({ student_id: id }),
       entities.Assessment.filter({ student_id: id }),
       entities.AuthorizedAdult.filter({ student_id: id }),
-    ]).then(([s, p, a, as_, adults]) => {
+      entities.PremiumSession.filter({ student_id: id }, '-scheduled_date', 100),
+    ]).then(([s, p, a, as_, adults, premium]) => {
       setStudent(s[0]);
       setPayments(p);
       setAttendance(a);
       setAssessments(as_);
       setAdults(adults);
+      setPremiumSessions(premium);
       setLoading(false);
     });
   }, [id]);
@@ -81,7 +89,10 @@ export default function StudentDetail() {
         </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{student.full_name}</h1>
-          <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>
+            {student.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800"><Crown size={12} /> Premium</span>}
+          </div>
         </div>
         <Link href={`/students/${id}/edit`} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
           <Edit size={14} /> Modifier
@@ -128,6 +139,33 @@ export default function StudentDetail() {
           )}
         </div>
       </Section>
+
+      {student.plan_type === 'Premium' && (
+        <Section title="Programme Premium">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
+            <div>
+              <p className="font-semibold text-amber-950 flex items-center gap-2"><Crown size={16} /> Une heure supplémentaire chaque week-end</p>
+              <p className="text-xs text-amber-800 mt-1">
+                {student.premium_start_date ? `Du ${student.premium_start_date}` : 'Début non limité'}{student.premium_end_date ? ` au ${student.premium_end_date}` : ' · sans date de fin'}
+              </p>
+            </div>
+            <Link href="/premium-sessions" className="shrink-0 px-3 py-2 rounded-md bg-amber-400 text-amber-950 text-xs font-bold hover:bg-amber-300">Gérer les séances</Link>
+          </div>
+          {premiumSessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune heure Premium planifiée.</p>
+          ) : (
+            <div className="space-y-2">
+              {premiumSessions.slice(0, 6).map((session) => (
+                <div key={session.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-sm">
+                  <span className="flex items-center gap-2 font-medium"><CalendarDays size={14} className="text-muted-foreground" /> {session.scheduled_date}</span>
+                  <span className="flex items-center gap-1 text-muted-foreground"><Clock3 size={13} /> {String(session.start_time).slice(0, 5)} · 60 min</span>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{PREMIUM_STATUS_LABELS[session.status]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title="Adultes autorisés au retrait">
         {adults.length === 0 ? (

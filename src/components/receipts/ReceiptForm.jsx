@@ -5,15 +5,13 @@ import { entities } from '@/lib/entities';
 import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Check, ChevronsUpDown, UserX, UserPlus } from 'lucide-react';
+import { Check, ChevronsUpDown, UserX, UserPlus, UsersRound, Clock3, Link2, Crown } from 'lucide-react';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 
 const categories = ['Enfants', 'Ados', 'Adultes', 'Business', 'Particulier', 'Préparation aux examens'];
-const niveaux = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', 'CECRL'];
-const NIVEAUX_STUDENT = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const typesCours = ['Standard', 'Intensif'];
 const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
-const SESSIONS = ['Summer Camp', 'Yearly', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau'];
 const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
@@ -46,10 +44,42 @@ const CATEGORIE_TO_AGE = {
 const today = new Date().toISOString().split('T')[0];
 const normName = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 const normPhone = s => (s || '').replace(/\D/g, '');
+const ACTIVE_ENROLLMENT_STATUSES = ['Validated', 'Trial'];
+
+function suggestAcademicLink(student, groups, enrollments, sessionType, level) {
+  if (!student) return { group_id: '', enrollment_id: '' };
+
+  const matchingGroup = (groupId) => {
+    const group = groups.find((item) => item.id === groupId);
+    return group && groupMatchesSelection(group, sessionType, level) ? group : null;
+  };
+
+  if (student.groupe_id && matchingGroup(student.groupe_id)) {
+    const enrollment = enrollments.find((item) =>
+      item.student_id === student.id
+      && item.group_id === student.groupe_id
+      && ACTIVE_ENROLLMENT_STATUSES.includes(item.status),
+    );
+    return { group_id: student.groupe_id, enrollment_id: enrollment?.id || '' };
+  }
+
+  const candidates = enrollments.filter((item) =>
+    item.student_id === student.id
+    && ACTIVE_ENROLLMENT_STATUSES.includes(item.status)
+    && matchingGroup(item.group_id),
+  );
+  const groupIds = [...new Set(candidates.map((item) => item.group_id))];
+  if (groupIds.length !== 1) return { group_id: '', enrollment_id: '' };
+
+  const enrollment = candidates.find((item) => item.group_id === groupIds[0]);
+  return { group_id: groupIds[0], enrollment_id: enrollment?.id || '' };
+}
 
 export default function ReceiptForm({ onSubmit, onCancel, saving, initialData }) {
   const [form, setForm] = useState({
     student_id: '',
+    group_id: '',
+    enrollment_id: '',
     date: today,
     nom_prenom: '',
     telephone: '',
@@ -57,10 +87,11 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     parent_email: '',
     date_naissance: '',
     categorie: 'Adultes',
+    plan_type: 'Standard',
     session_type: '',
     photo_consent: 'Non demandé',
     referral_source: '',
-    niveau: 'A1',
+    niveau: '',
     duree_cours: '',
     type_cours: 'Standard',
     jours: '',
@@ -81,18 +112,43 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
   // always appears in the students list. Staff either link an existing student
   // or create one inline before the receipt can be saved.
   const [students, setStudents] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    entities.Student.list('full_name', 500).then(setStudents).catch(() => {});
-  }, []);
+    Promise.all([
+      entities.Student.list('full_name', 500),
+      entities.Group.list('name', 500),
+      entities.Enrollment.list('-created_date', 1000),
+    ]).then(([studentRows, groupRows, enrollmentRows]) => {
+      setStudents(studentRows);
+      setGroups(groupRows);
+      setEnrollments(enrollmentRows);
+
+      if (initialData?.student_id && !initialData?.group_id && !initialData?.enrollment_id) {
+        const student = studentRows.find((item) => item.id === initialData.student_id);
+        const suggestion = suggestAcademicLink(
+          student,
+          groupRows,
+          enrollmentRows,
+          initialData.session_type || student?.session_type || '',
+          initialData.niveau || student?.niveau_cefr || '',
+        );
+        if (suggestion.group_id) setForm((current) => ({ ...current, ...suggestion }));
+      }
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedStudent = students.find((s) => s.id === form.student_id);
 
   // Attach the receipt to a student AND copy their identity fields onto the
   // receipt so the printed reçu matches the student's record.
   const selectStudent = (student) => {
+    const sessionType = student.session_type || form.session_type;
+    const level = student.niveau_cefr || form.niveau;
+    const suggestion = suggestAcademicLink(student, groups, enrollments, sessionType, level);
     setForm((f) => ({
       ...f,
       student_id: student.id,
@@ -101,16 +157,18 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       email: student.email || f.email,
       parent_email: student.parent_email || f.parent_email,
       date_naissance: student.date_naissance || f.date_naissance,
-      niveau: student.niveau_cefr || f.niveau,
+      niveau: level,
       categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
-      session_type: student.session_type || f.session_type,
+      plan_type: student.plan_type || 'Standard',
+      session_type: sessionType,
       photo_consent: student.photo_consent || f.photo_consent,
       referral_source: student.referral_source || f.referral_source,
+      ...suggestion,
     }));
     setStudentPickerOpen(false);
   };
 
-  const clearStudent = () => set('student_id', '');
+  const clearStudent = () => setForm((f) => ({ ...f, student_id: '', group_id: '', enrollment_id: '' }));
 
   // Create a student from the receipt's fields and link it, with a duplicate
   // guard so slightly-different spellings don't spawn a second record.
@@ -136,14 +194,16 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         parent_email: form.parent_email?.trim() || null,
         date_naissance: form.date_naissance || null,
         age_category: CATEGORIE_TO_AGE[form.categorie] || null,
-        niveau_cefr: NIVEAUX_STUDENT.includes(form.niveau) ? form.niveau : null,
+        niveau_cefr: ALL_LEVELS.includes(form.niveau) ? form.niveau : null,
         session_type: form.session_type || 'Yearly',
         photo_consent: form.photo_consent || 'Non demandé',
         referral_source: form.referral_source || null,
         status: 'Enrolled',
+        plan_type: form.plan_type || 'Standard',
+        premium_start_date: form.plan_type === 'Premium' ? today : null,
       });
       setStudents((prev) => [created, ...prev]);
-      setForm((f) => ({ ...f, student_id: created.id }));
+      setForm((f) => ({ ...f, student_id: created.id, group_id: '', enrollment_id: '' }));
       toast.success(`Apprenant créé et lié : ${created.full_name}`);
     } catch {
       // entities.js already toasted.
@@ -170,6 +230,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     onSubmit({
       ...receiptFields,
       student_id: form.student_id || null,
+      group_id: form.group_id || null,
+      enrollment_id: form.enrollment_id || null,
       session_type: form.session_type || null,
       referral_source: form.referral_source || null,
       // Empty strings break date/typed columns — coerce to null (or today for the required date).
@@ -215,6 +277,27 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     'Acompte versé': 'bg-amber-50 text-amber-700 border-amber-200',
     'En attente': 'bg-blue-50 text-blue-700 border-blue-200',
     'En retard': 'bg-red-50 text-red-700 border-red-200',
+  };
+
+  const matchingGroups = groups.filter((group) => groupMatchesSelection(group, form.session_type, form.niveau));
+  const selectedGroup = groups.find((group) => group.id === form.group_id);
+  const selectedEnrollment = enrollments.find((item) => item.id === form.enrollment_id);
+
+  const changeGroup = (groupId) => {
+    if (!groupId) {
+      setForm((current) => ({ ...current, group_id: '', enrollment_id: '' }));
+      return;
+    }
+    const enrollment = enrollments.find((item) =>
+      item.student_id === form.student_id
+      && item.group_id === groupId
+      && ACTIVE_ENROLLMENT_STATUSES.includes(item.status),
+    );
+    setForm((current) => ({
+      ...current,
+      group_id: groupId,
+      enrollment_id: enrollment?.id || '',
+    }));
   };
 
   return (
@@ -308,9 +391,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           </div>
           <div>
             <label htmlFor="rf-session" className={labelClass}>Session / Programme</label>
-            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => set('session_type', e.target.value)}>
+            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => setForm(f => ({ ...f, session_type: e.target.value, niveau: '', group_id: '', enrollment_id: '' }))}>
               <option value="">— Choisir —</option>
-              {SESSIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {SESSION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
@@ -347,10 +430,25 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <label className={labelClass}>Catégorie <span className="text-red-400">*</span></label>
             <ToggleGroup options={categories} value={form.categorie} onChange={(v) => set('categorie', v)} />
           </div>
+          <div className={`rounded-xl border px-4 py-3 ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50' : 'border-border bg-muted/20'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Crown size={16} className={form.plan_type === 'Premium' ? 'text-amber-600' : 'text-muted-foreground'} />
+                <div><p className="text-sm font-semibold">Formule</p><p className="text-xs text-muted-foreground">Premium inclut une heure supplémentaire le week-end.</p></div>
+              </div>
+              <select className={`${inputClass} sm:w-40`} aria-label="Formule" value={form.plan_type || 'Standard'} onChange={(event) => set('plan_type', event.target.value)}>
+                <option value="Standard">Standard</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Niveau (CECRL) <span className="text-red-400">*</span></label>
-              <ToggleGroup options={niveaux} value={form.niveau} onChange={(v) => set('niveau', v)} />
+              <label htmlFor="rf-niveau" className={labelClass}>Niveau (NIV) <span className="text-red-400">*</span></label>
+              <select id="rf-niveau" className={inputClass} value={form.niveau || ''} onChange={(e) => setForm((f) => ({ ...f, niveau: e.target.value, group_id: '', enrollment_id: '' }))} required>
+                <option value="">— Choisir —</option>
+                {getLevelsForSession(form.session_type || 'Yearly', form.niveau).map(level => <option key={level}>{level}</option>)}
+              </select>
             </div>
             <div>
               <label htmlFor="rf-duree" className={labelClass}>Durée du cours (H/mois)</label>
@@ -371,6 +469,57 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
               <input id="rf-horaire" type="text" className={inputClass} placeholder="ex. 18h – 19h30" value={form.plage_horaire} onChange={(e) => set('plage_horaire', e.target.value)} />
             </div>
           </div>
+        </div>
+      </div>
+
+      <div>
+        <SectionTitle>Affectation académique</SectionTitle>
+        <div className="rounded-2xl border border-border bg-slate-50/70 p-4 sm:p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-xl bg-primary/10 p-2 text-primary"><UsersRound size={18} /></div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Groupe du reçu</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Facultatif — enregistrez immédiatement et affectez le groupe plus tard si nécessaire.</p>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="rf-group" className={labelClass}>Groupe</label>
+            <select
+              id="rf-group"
+              className={inputClass}
+              value={form.group_id || ''}
+              onChange={(event) => changeGroup(event.target.value)}
+              disabled={!form.student_id || !form.session_type || !form.niveau}
+            >
+              <option value="">— Aucun groupe pour le moment —</option>
+              {matchingGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}{group.jours ? ` · ${group.jours}` : ''}{group.horaire ? ` · ${group.horaire}` : ''}
+                </option>
+              ))}
+            </select>
+            {!form.student_id && <p className="mt-1.5 text-xs text-muted-foreground">Liez d’abord un apprenant.</p>}
+            {form.student_id && (!form.session_type || !form.niveau) && <p className="mt-1.5 text-xs text-muted-foreground">Choisissez la session et le niveau pour afficher les groupes correspondants.</p>}
+            {form.student_id && form.session_type && form.niveau && matchingGroups.length === 0 && <p className="mt-1.5 text-xs text-amber-700">Aucun groupe disponible pour cette session et ce niveau. Le reçu peut être enregistré sans groupe.</p>}
+          </div>
+
+          {selectedGroup ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
+              <div className="flex items-center gap-2 text-sm font-semibold"><Link2 size={15} /> {selectedGroup.name}</div>
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-emerald-800">
+                <span>{selectedGroup.session_type || 'Yearly'} · {selectedGroup.niveau}</span>
+                {(selectedGroup.jours || selectedGroup.horaire) && <span className="inline-flex items-center gap-1"><Clock3 size={12} /> {[selectedGroup.jours, selectedGroup.horaire].filter(Boolean).join(' · ')}</span>}
+              </div>
+              <p className="mt-2 text-xs text-emerald-700">
+                {selectedEnrollment ? 'Inscription existante liée automatiquement.' : 'Le reçu sera lié au groupe; une inscription validée sera créée lors du premier enregistrement.'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              À affecter plus tard — le reçu restera visible et pourra être lié depuis « Modifier ».
+            </div>
+          )}
         </div>
       </div>
 

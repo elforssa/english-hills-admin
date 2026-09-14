@@ -33,9 +33,25 @@ export const STUDENT_STATUS_COLORS = {
 
 export const SESSION_TYPE_COLORS = {
   'Yearly':               'bg-slate-100  text-slate-600',
+  'Adults':               'bg-violet-100 text-violet-700',
   'Summer Camp':          'bg-amber-100  text-amber-700',
   'Communication Junior': 'bg-indigo-100 text-indigo-700',
   'Communication Adult':  'bg-teal-100   text-teal-700',
   'One-to-One':           'bg-rose-100   text-rose-700',
   'Mise à niveau':        'bg-cyan-100   text-cyan-700',
+  'Other':                 'bg-gray-100   text-gray-600',
+};
+
+export const PREMIUM_SESSION_STATUS_COLORS = {
+  'Scheduled': 'bg-blue-100 text-blue-700',
+  'Confirmed': 'bg-cyan-100 text-cyan-700',
+  'Completed': 'bg-emerald-100 text-emerald-700',
+  'Cancelled': 'bg-gray-100 text-gray-500',
+  'Missed': 'bg-red-100 text-red-700',
+};
+
+export const PREMIUM_HOMEWORK_STATUS_COLORS = {
+  'Submitted': 'bg-amber-100 text-amber-800',
+  'Reviewed': 'bg-blue-100 text-blue-700',
+  'Prepared': 'bg-emerald-100 text-emerald-700',
 };

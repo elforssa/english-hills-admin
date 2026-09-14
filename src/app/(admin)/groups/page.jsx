@@ -8,14 +8,24 @@ import { Plus, Edit, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 function GroupModal({ group, teachers, onSave, onClose }) {
-  const [form, setForm] = useState(group || { name: '', niveau: 'A1', categorie: 'Adultes', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: '2025-2026' });
+  const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: '2025-2026' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const changeSession = (sessionType) => {
+    const [firstLevel] = getLevelsForSession(sessionType);
+    setForm(f => ({
+      ...f,
+      session_type: sessionType,
+      niveau: firstLevel,
+      ...(sessionType === 'Adults' ? { categorie: 'Adultes' } : {}),
+    }));
+  };
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const payload = { ...form, teacher_id: form.teacher_id || null };
@@ -32,9 +42,14 @@ function GroupModal({ group, teachers, onSave, onClose }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2"><label className={labelClass}>Nom du groupe *</label><input className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} required /></div>
+            <div><label className={labelClass}>Session *</label>
+              <select className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required>
+                {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+              </select>
+            </div>
             <div><label className={labelClass}>Niveau</label>
               <select className={inputClass} value={form.niveau} onChange={e => set('niveau', e.target.value)}>
-                {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
+                {getLevelsForSession(form.session_type || 'Yearly', form.niveau).map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div><label className={labelClass}>Catégorie</label>
@@ -42,8 +57,8 @@ function GroupModal({ group, teachers, onSave, onClose }) {
                 {['Enfants','Ados','Adultes','Business','Particulier','Préparation aux examens'].map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
-            <div><label className={labelClass}>Enseignant</label>
-              <select className={inputClass} value={form.teacher_id || ''} onChange={e => set('teacher_id', e.target.value)}>
+            <div><label className={labelClass}>Enseignant *</label>
+              <select className={inputClass} value={form.teacher_id || ''} onChange={e => set('teacher_id', e.target.value)} required>
                 <option value="">— Choisir —</option>
                 {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
@@ -74,6 +89,8 @@ export default function Groups() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [filterTerme, setFilterTerme] = useState('');
+  const [filterSession, setFilterSession] = useState('');
+  const [filterLevel, setFilterLevel] = useState('');
   const [counts, setCounts] = useState({});
 
   const load = () => Promise.all([
@@ -99,7 +116,11 @@ export default function Groups() {
   };
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '—';
-  const filtered = groups.filter(g => !filterTerme || g.terme === filterTerme);
+  const filtered = groups.filter(g => (
+    (!filterTerme || g.terme === filterTerme)
+    && (!filterSession || (g.session_type || 'Yearly') === filterSession)
+    && (!filterLevel || g.niveau === filterLevel)
+  ));
 
   return (
     <div className="p-4 lg:p-8">
@@ -113,7 +134,15 @@ export default function Groups() {
         </Button>
       </div>
 
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap gap-3">
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
+          <option value="">Toutes les sessions</option>
+          {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
+          <option value="">Tous les niveaux</option>
+          {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(level => <option key={level}>{level}</option>)}
+        </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterTerme} onChange={e => setFilterTerme(e.target.value)}>
           <option value="">Tous les termes</option>
           {['Sept–Déc','Jan–Mar','Avr–Juin','Été'].map(t => <option key={t}>{t}</option>)}
@@ -135,7 +164,7 @@ export default function Groups() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <Link href={`/groups/${g.id}`} className="font-semibold text-sm text-primary hover:underline">{g.name}</Link>
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · {g.categorie} · {teacherName(g.teacher_id)}</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · {g.session_type || 'Yearly'} · {g.categorie} · {teacherName(g.teacher_id)}</p>
                       <p className="text-xs text-muted-foreground">{g.jours} {g.horaire} {g.salle ? `· ${g.salle}` : ''}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -154,14 +183,14 @@ export default function Groups() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    {['Groupe','Apprenants','Niveau','Catégorie','Enseignant','Horaire','Salle','Terme',''].map(h => (
+                    {['Groupe','Apprenants','Session','Niveau','Catégorie','Enseignant','Horaire','Salle','Terme',''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filtered.length === 0 && (
-                    <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                    <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground text-sm">
                       Aucun groupe.{' '}
                       <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
                     </td></tr>
@@ -174,6 +203,7 @@ export default function Groups() {
                       <td className="px-4 py-3 text-muted-foreground">
                         <span className="inline-flex items-center gap-1"><Users size={13} /> {counts[g.id] || 0}</span>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground">{g.session_type || 'Yearly'}</td>
                       <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">{g.categorie}</td>
                       <td className="px-4 py-3 text-muted-foreground">{teacherName(g.teacher_id)}</td>

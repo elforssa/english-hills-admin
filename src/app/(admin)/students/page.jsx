@@ -3,21 +3,20 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, Upload, UserSearch, Camera, CameraOff } from 'lucide-react';
+import { Plus, Search, Download, Upload, UserSearch, Camera, CameraOff, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityList, useEntityUpdate, entityKeys } from '@/lib/queries';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const PAGE_SIZE = 20;
 const LIST_ORDER = '-created_date';
 const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau'];
 const PHOTO_CONSENTS = ['Accepte', 'Refuse', 'Non demandé'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
@@ -71,6 +70,13 @@ export default function Students() {
     update.mutate({ id, data: { [field]: stored } });
   };
 
+  const patchStudentFields = (id, data) => {
+    qc.setQueryData(entityKeys.list('Student', LIST_ORDER, LIST_LIMIT), (old) =>
+      Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, ...data } : r)) : old,
+    );
+    update.mutate({ id, data });
+  };
+
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCat, setFilterCat] = useState('');
@@ -79,6 +85,7 @@ export default function Students() {
   const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [filterConsent, setFilterConsent] = useState('');
   const [filterSource, setFilterSource] = useState('');
+  const [filterPlan, setFilterPlan] = useState('');
   const [page, setPage] = useState(1);
 
   const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
@@ -94,7 +101,8 @@ export default function Students() {
     const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
     const matchConsent = !filterConsent || (s.photo_consent || 'Non demandé') === filterConsent;
     const matchSource = !filterSource || s.referral_source === filterSource;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource;
+    const matchPlan = !filterPlan || (s.plan_type || 'Standard') === filterPlan;
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource && matchPlan;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -116,6 +124,7 @@ export default function Students() {
               Session: s.session_type || '',
               Niveau: s.niveau_cefr || '',
               Statut: s.status || '',
+              Formule: s.plan_type || 'Standard',
               Source: s.referral_source || '',
               'Date naissance': s.date_naissance || '',
             })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`)}
@@ -157,7 +166,7 @@ export default function Students() {
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
-          {NIVEAUX.map(l => <option key={l}>{l}</option>)}
+          {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(l => <option key={l}>{l}</option>)}
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
           <option value="">Complétude : tous</option>
@@ -170,6 +179,11 @@ export default function Students() {
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
           <option value="">Source : toutes</option>
           {SOURCES.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
+          <option value="">Toutes les formules</option>
+          <option value="Premium">Premium</option>
+          <option value="Standard">Standard</option>
         </select>
       </div>
 
@@ -193,7 +207,7 @@ export default function Students() {
               {paged.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm truncate">{s.full_name}</p>
+                    <p className="font-semibold text-sm truncate flex items-center gap-1.5">{s.full_name}{s.plan_type === 'Premium' && <Crown size={13} className="text-amber-600 shrink-0" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
@@ -218,7 +232,7 @@ export default function Students() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5">{s.full_name}<ConsentIcon v={s.photo_consent} /></span>
+                        <span className="inline-flex items-center gap-1.5">{s.full_name}<ConsentIcon v={s.photo_consent} />{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect
@@ -233,16 +247,16 @@ export default function Students() {
                           value={s.session_type || 'Yearly'}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
-                          onChange={v => patchStudent(s.id, 'session_type', v)}
+                          onChange={v => patchStudentFields(s.id, { session_type: v, niveau_cefr: null, groupe_id: null })}
                         />
                       </td>
                       <td className="px-4 py-3">
                         <InlineSelect
                           value={s.niveau_cefr}
-                          options={NIVEAUX}
+                          options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
-                          onChange={v => patchStudent(s.id, 'niveau_cefr', v)}
+                          onChange={v => patchStudentFields(s.id, { niveau_cefr: v || null, groupe_id: null })}
                         />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>

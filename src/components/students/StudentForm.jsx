@@ -6,17 +6,21 @@ import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Upload, Crown, CalendarDays } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
+import {
+  ALL_LEVELS,
+  SESSION_TYPES,
+  getLevelsForSession,
+  groupMatchesSelection,
+} from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau'];
 const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
@@ -33,15 +37,21 @@ const StudentSchema = z.object({
   email:          z.string().trim().email('Email invalide').optional().or(z.literal('')),
   parent_email:   z.string().trim().email('Email invalide').optional().or(z.literal('')),
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
-  niveau_cefr:    z.enum(NIVEAUX).optional().or(z.literal('')),
+  niveau_cefr:    z.enum(ALL_LEVELS).optional().or(z.literal('')),
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
   photo_consent:  z.enum(PHOTO_CONSENTS).optional().or(z.literal('')),
   referral_source: z.enum(SOURCES).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.string().uuid().optional().or(z.literal('')),
+  plan_type:      z.enum(['Standard', 'Premium']),
+  premium_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format AAAA-MM-JJ').optional().or(z.literal('')),
+  premium_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format AAAA-MM-JJ').optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
-});
+}).refine(
+  (data) => !data.premium_start_date || !data.premium_end_date || data.premium_end_date >= data.premium_start_date,
+  { message: 'La date de fin doit suivre la date de début', path: ['premium_end_date'] },
+);
 
 export default function StudentForm() {
   const params = useParams();
@@ -55,8 +65,9 @@ export default function StudentForm() {
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
-    niveau_cefr: 'A1', age_category: 'Adults (18+)', session_type: 'Yearly', status: 'Prospect',
-    photo_consent: 'Non demandé', referral_source: '', groupe_id: '', photo_url: '', notes: '',
+    niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Prospect',
+    photo_consent: 'Non demandé', referral_source: '', groupe_id: '', plan_type: 'Standard',
+    premium_start_date: '', premium_end_date: '', photo_url: '', notes: '',
   });
 
   useEffect(() => {
@@ -83,6 +94,9 @@ export default function StudentForm() {
               email:        row.email        ?? '',
               parent_email: row.parent_email ?? '',
               groupe_id:    row.groupe_id     ?? '',
+              plan_type:    row.plan_type     ?? 'Standard',
+              premium_start_date: row.premium_start_date ?? '',
+              premium_end_date: row.premium_end_date ?? '',
               photo_url:    row.photo_url     ?? '',
               notes:        row.notes        ?? '',
             }));
@@ -99,6 +113,37 @@ export default function StudentForm() {
     setForm(f => ({ ...f, [k]: v }));
     if (errors[k]) setErrors(e => ({ ...e, [k]: undefined }));
   };
+
+  const changeSession = (sessionType) => {
+    setForm(f => ({ ...f, session_type: sessionType, niveau_cefr: '', groupe_id: '' }));
+    setErrors(e => ({ ...e, session_type: undefined, niveau_cefr: undefined, groupe_id: undefined }));
+  };
+
+  const changeLevel = (level) => {
+    setForm(f => ({
+      ...f,
+      niveau_cefr: level,
+      groupe_id: groups.some(g => g.id === f.groupe_id && groupMatchesSelection(g, f.session_type, level))
+        ? f.groupe_id
+        : '',
+    }));
+    setErrors(e => ({ ...e, niveau_cefr: undefined, groupe_id: undefined }));
+  };
+
+  const changeGroup = (groupId) => {
+    const group = groups.find(g => g.id === groupId);
+    setForm(f => group ? {
+      ...f,
+      groupe_id: groupId,
+      session_type: group.session_type || 'Yearly',
+      niveau_cefr: group.niveau || f.niveau_cefr,
+    } : { ...f, groupe_id: '' });
+  };
+
+  const availableGroups = groups.filter(group => (
+    groupMatchesSelection(group, form.session_type, form.niveau_cefr)
+    || group.id === form.groupe_id
+  ));
 
   const [photoPreview, setPhotoPreview] = useState(null);
   useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
@@ -144,6 +189,9 @@ export default function StudentForm() {
       email:          parsed.data.email          || null,
       parent_email:   parsed.data.parent_email   || null,
       groupe_id:      parsed.data.groupe_id      || null,
+      plan_type:      parsed.data.plan_type      || 'Standard',
+      premium_start_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_start_date || null) : null,
+      premium_end_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_end_date || null) : null,
       photo_url:      parsed.data.photo_url      || null,
       notes:          parsed.data.notes          || null,
     };
@@ -247,15 +295,15 @@ export default function StudentForm() {
           </div>
           <div>
             <label htmlFor="session_type" className={labelClass}>Session</label>
-            <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => set('session_type', e.target.value)}>
+            <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)}>
               {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label htmlFor="niveau_cefr" className={labelClass}>Niveau CECRL</label>
-            <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr || ''} onChange={e => set('niveau_cefr', e.target.value)}>
+            <label htmlFor="niveau_cefr" className={labelClass}>Niveau (NIV)</label>
+            <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr || ''} onChange={e => changeLevel(e.target.value)}>
               <option value="">— Non défini —</option>
-              {NIVEAUX.map(n => <option key={n}>{n}</option>)}
+              {getLevelsForSession(form.session_type, form.niveau_cefr).map(n => <option key={n}>{n}</option>)}
             </select>
           </div>
           <div>
@@ -281,10 +329,47 @@ export default function StudentForm() {
           </div>
           <div className="col-span-2">
             <label htmlFor="groupe_id" className={labelClass}>Groupe assigné</label>
-            <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => set('groupe_id', e.target.value)}>
+            <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => changeGroup(e.target.value)}>
               <option value="">— Aucun groupe —</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
+              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
             </select>
+            <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau.</p>
+          </div>
+          <div className={`col-span-2 rounded-xl border p-4 transition-colors ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50/70' : 'border-border bg-muted/20'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={`rounded-lg p-2 ${form.plan_type === 'Premium' ? 'bg-amber-400 text-amber-950' : 'bg-muted text-muted-foreground'}`}>
+                  <Crown size={17} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Formule Premium</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Donne droit à une séance individuelle d’une heure chaque week-end.</p>
+                </div>
+              </div>
+              <select
+                id="plan_type"
+                aria-label="Formule de l'apprenant"
+                className={`${inputClass} sm:w-36`}
+                value={form.plan_type}
+                onChange={e => set('plan_type', e.target.value)}
+              >
+                <option value="Standard">Standard</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
+            {form.plan_type === 'Premium' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-amber-200">
+                <div>
+                  <label htmlFor="premium_start_date" className={labelClass}><CalendarDays size={12} className="inline mr-1" />Début</label>
+                  <input id="premium_start_date" type="date" className={inputClass} value={form.premium_start_date || ''} onChange={e => set('premium_start_date', e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="premium_end_date" className={labelClass}>Fin (facultative)</label>
+                  <input id="premium_end_date" type="date" className={fieldErr('premium_end_date') ? inputErrClass : inputClass} value={form.premium_end_date || ''} onChange={e => set('premium_end_date', e.target.value)} min={form.premium_start_date || undefined} />
+                  {fieldErr('premium_end_date') && <p className="text-xs text-red-600 mt-1">{fieldErr('premium_end_date')}</p>}
+                </div>
+              </div>
+            )}
           </div>
           <div className="col-span-2">
             <label htmlFor="notes" className={labelClass}>Notes</label>

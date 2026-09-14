@@ -16,10 +16,10 @@ async function openStoredFile(stored) {
 }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { getLevelsForSession } from '@/lib/academicPrograms';
 
 const PROJECT_TYPES = ['Oral Presentation', 'Written Essay', 'Audio Recording', 'Video Project', 'PDF Document', 'Other'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
-const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -36,12 +36,14 @@ const TYPE_ICONS = {
 function PortfolioModal({ students, onSave, onClose }) {
   const [form, setForm] = useState({
     student_id: '', student_name: '', terme: 'Sept–Déc', annee: '2025-2026',
-    niveau: 'A1', project_type: 'Oral Presentation', title: '', description: '',
+    niveau: 'Pre-Child', project_type: 'Oral Presentation', title: '', description: '',
     file_url: '', teacher_note: '', visible_to_parent: true, visible_to_student: true,
   });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const selectedStudent = students.find(student => student.id === form.student_id);
+  const availableLevels = getLevelsForSession(selectedStudent?.session_type || 'Yearly', form.niveau);
 
   const handleStudentChange = (id) => {
     const s = students.find(s => s.id === id);
@@ -111,7 +113,7 @@ function PortfolioModal({ students, onSave, onClose }) {
             <div>
               <label className={labelClass}>Niveau</label>
               <select className={inputClass} value={form.niveau} onChange={e => set('niveau', e.target.value)}>
-                {NIVEAUX.map(n => <option key={n}>{n}</option>)}
+                {availableLevels.map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div>

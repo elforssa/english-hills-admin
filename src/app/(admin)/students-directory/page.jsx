@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Search, Phone, Mail, Users, ArrowRight, BookOpen } from 'lucide-react';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const STATUS_CONFIG = {
   Enrolled: { bg: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', dot: 'bg-emerald-500' },
@@ -26,6 +27,7 @@ export default function StudentsDirectory() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCat, setFilterCat] = useState('');
+  const [filterSession, setFilterSession] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [view, setView] = useState('grid');
 
@@ -43,14 +45,10 @@ export default function StudentsDirectory() {
     const matchSearch = !search || s.full_name?.toLowerCase().includes(q) || s.email?.toLowerCase().includes(q) || s.telephone?.includes(search);
     const matchStatus = !filterStatus || s.status === filterStatus;
     const matchCat = !filterCat || s.age_category === filterCat;
+    const matchSession = !filterSession || (s.session_type || 'Yearly') === filterSession;
     const matchLevel = !filterLevel || s.niveau_cefr === filterLevel;
-    return matchSearch && matchStatus && matchCat && matchLevel;
+    return matchSearch && matchStatus && matchCat && matchSession && matchLevel;
   });
-
-  const byLevel = ['A1','A2','B1','B2','C1','C2'].reduce((acc, lvl) => {
-    acc[lvl] = students.filter(s => s.niveau_cefr === lvl).length;
-    return acc;
-  }, {});
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -69,18 +67,14 @@ export default function StudentsDirectory() {
       </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
-        {['A1','A2','B1','B2','C1','C2'].map(lvl => (
-          <button
-            key={lvl}
-            onClick={() => setFilterLevel(filterLevel === lvl ? '' : lvl)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${filterLevel === lvl ? 'text-white border-transparent shadow-sm' : 'bg-white border-border text-muted-foreground hover:border-gray-300'}`}
-            style={filterLevel === lvl ? { backgroundColor: LEVEL_COLORS[lvl] } : {}}
-          >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: filterLevel === lvl ? 'white' : LEVEL_COLORS[lvl] }} />
-            {lvl}
-            <span className={`ml-1 ${filterLevel === lvl ? 'text-white/80' : 'text-muted-foreground/60'}`}>{byLevel[lvl]}</span>
-          </button>
-        ))}
+        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
+          <option value="">Toutes les sessions</option>
+          {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+        </select>
+        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
+          <option value="">Tous les niveaux</option>
+          {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(level => <option key={level}>{level}</option>)}
+        </select>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6">

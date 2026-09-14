@@ -11,6 +11,7 @@ import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
+import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
@@ -29,6 +30,7 @@ const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
+  premium_homework: 'Devoir Premium',
 };
 
 // Effective amount owed for a receipt after its percentage discount.
@@ -45,6 +47,8 @@ export default function ParentPortal() {
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
   const [authorizedAdults, setAuthorizedAdults] = useState([]);
+  const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumHomework, setPremiumHomework] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -94,16 +98,23 @@ export default function ParentPortal() {
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
+      entities.PremiumSession.filter({ student_id: selectedStudent.id }, '-scheduled_date', 100),
+      entities.PremiumHomework.filter({ student_id: selectedStudent.id }, '-created_date', 100),
     ])
-      .then(([att, ass, rec, port, la, adults]) => {
-        setAttendance(att); setAssessments(ass); setReceipts(rec);
+      .then(async ([att, ass, rec, port, la, adults, premium, homework]) => {
+        const groupIds = [...new Set(rec.map((receipt) => receipt.group_id).filter(Boolean))];
+        const groupRows = groupIds.length ? await entities.Group.filter({ id: groupIds }) : [];
+        const groupNames = Object.fromEntries(groupRows.map((group) => [group.id, group.name]));
+        setAttendance(att); setAssessments(ass);
+        setReceipts(rec.map((receipt) => ({ ...receipt, group_name: groupNames[receipt.group_id] })));
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
+        setPremiumSessions(premium); setPremiumHomework(homework);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[parent-portal] student detail load failed:', err);
         toast.error('Impossible de charger les données de l’apprenant.');
-        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
+        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumHomework([]);
       });
   }, [selectedStudent]);
 
@@ -302,6 +313,15 @@ export default function ParentPortal() {
               </button>
             </div>
           </div>
+          <PremiumHomeworkSubmitter
+            student={selectedStudent}
+            sessions={premiumSessions}
+            submissions={premiumHomework}
+            onChanged={(saved) => setPremiumHomework((current) => {
+              const exists = current.some((item) => item.id === saved.id);
+              return exists ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current];
+            })}
+          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Taux de présence', value: `${attendanceRate}%`, color: '#059669' },

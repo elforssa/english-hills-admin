@@ -6,6 +6,7 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -53,11 +54,22 @@ function TestModal({ test, groups, students, onSave, onClose }) {
   const [form, setForm] = useState(test || { student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const selectedStudent = students.find(student => student.id === form.student_id);
+  const availableLevels = selectedStudent
+    ? getLevelsForSession(selectedStudent.session_type || 'Yearly', form.niveau_recommande)
+    : ALL_LEVELS;
+  const availableGroups = groups.filter(group => (
+    !selectedStudent
+    || groupMatchesSelection(group, selectedStudent.session_type || 'Yearly', form.niveau_recommande)
+    || group.id === form.groupe_affecte_id
+  ));
 
   const handleStudentChange = (id) => {
     const s = students.find(s => s.id === id);
     set('student_id', id);
     set('student_name', s?.full_name || '');
+    if (s?.niveau_cefr) set('niveau_recommande', s.niveau_cefr);
+    set('groupe_affecte_id', '');
   };
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -123,13 +135,16 @@ function TestModal({ test, groups, students, onSave, onClose }) {
             <div><label className={labelClass}>Score</label><input type="number" className={inputClass} value={form.score || ''} onChange={e => set('score', e.target.value)} min="0" max="100" /></div>
             <div><label className={labelClass}>Niveau recommandé</label>
               <select className={inputClass} value={form.niveau_recommande} onChange={e => set('niveau_recommande', e.target.value)}>
-                {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
+                {availableLevels.map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div className="col-span-2"><label className={labelClass}>Groupe affecté</label>
-              <select className={inputClass} value={form.groupe_affecte_id || ''} onChange={e => set('groupe_affecte_id', e.target.value)}>
+              <select className={inputClass} value={form.groupe_affecte_id || ''} onChange={e => {
+                const group = groups.find(item => item.id === e.target.value);
+                setForm(f => ({ ...f, groupe_affecte_id: e.target.value, niveau_recommande: group?.niveau || f.niveau_recommande }));
+              }}>
                 <option value="">— Choisir —</option>
-                {groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
+                {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
               </select>
             </div>
             <div className="col-span-2"><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
