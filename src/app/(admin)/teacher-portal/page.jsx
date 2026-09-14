@@ -11,11 +11,13 @@ import MessagesTab from '@/components/portals/MessagesTab';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import { getLevelsForSession } from '@/lib/academicPrograms';
+import PremiumHomeworkInbox from '@/components/premium/PremiumHomeworkInbox';
 
 const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
+  premium_homework: 'Devoir Premium',
 };
 
 // Build a unique recipient list from rows like {email, name}, dropping blanks.
@@ -396,6 +398,7 @@ export default function TeacherPortal() {
   const [students, setStudents] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
   const [assessments, setAssessments] = useState([]);
+  const [premiumHomework, setPremiumHomework] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -429,6 +432,8 @@ export default function TeacherPortal() {
       getOfficeRecipient().then(setOffice).catch(() => {});
       const allStudents = await entities.Student.list('full_name', 200);
       setStudents(allStudents);
+      const homeworkRows = await entities.PremiumHomework.list('-submitted_at', 500);
+      setPremiumHomework(homeworkRows);
       // Validated enrollments let us include students enrolled in a group even
       // if their student.groupe_id wasn't set — matches the /attendance roster.
       const validatedEnrollments = await entities.Enrollment.filter({ status: 'Validated' });
@@ -513,6 +518,7 @@ export default function TeacherPortal() {
 
   const TABS = [
     { id: 'groups', label: 'Mes groupes' },
+    { id: 'premium-homework', label: 'Préparation Premium', badge: premiumHomework.filter(item => item.status !== 'Prepared').length },
     { id: 'attendance', label: 'Présences' },
     { id: 'notes', label: 'Notes' },
     { id: 'learning', label: "Styles d'apprentissage" },
@@ -655,6 +661,10 @@ export default function TeacherPortal() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'premium-homework' && (
+        <PremiumHomeworkInbox submissions={premiumHomework} setSubmissions={setPremiumHomework} students={students} />
       )}
 
       {tab === 'notes' && (

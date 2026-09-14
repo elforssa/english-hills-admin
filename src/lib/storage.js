@@ -40,13 +40,19 @@ export async function resolveSignedUrl(stored) {
   throw new Error('Référence de fichier non autorisée');
 }
 
-export async function uploadAsset(file, { purpose, studentId = null, teacherId = null, enrollmentId = null }) {
+export async function uploadAsset(file, { purpose, studentId = null, teacherId = null, enrollmentId = null, premiumSessionId = null }) {
   await validateFile(file);
   if (purpose.endsWith('_photo') && !file.type.startsWith('image/')) throw new Error('Une image est requise');
   const client = getBrowserClient();
-  const { data: asset, error } = await client.rpc('reserve_storage_asset', {
-    p_purpose: purpose, p_student_id: studentId, p_teacher_id: teacherId, p_enrollment_id: enrollmentId,
-  });
+  const reservation = purpose === 'premium_homework'
+    ? client.rpc('reserve_premium_homework_asset', {
+        p_student_id: studentId,
+        p_premium_session_id: premiumSessionId,
+      })
+    : client.rpc('reserve_storage_asset', {
+        p_purpose: purpose, p_student_id: studentId, p_teacher_id: teacherId, p_enrollment_id: enrollmentId,
+      });
+  const { data: asset, error } = await reservation;
   if (error) throw new Error('Réservation refusée');
   const { error: uploadError } = await client.storage.from(asset.bucket).upload(asset.path, file, { upsert: false, contentType: file.type, cacheControl: '0' });
   if (uploadError) throw new Error('Téléversement échoué');

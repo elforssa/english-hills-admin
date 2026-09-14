@@ -10,6 +10,7 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
+import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -29,6 +30,7 @@ const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
+  premium_homework: 'Devoir Premium',
 };
 
 const PROJECT_TYPES = ['Oral Presentation', 'Written Essay', 'Audio Recording', 'Video Project', 'PDF Document', 'Other'];
@@ -45,6 +47,8 @@ export default function StudentPortal() {
   const [assessments, setAssessments] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [learning, setLearning] = useState([]);
+  const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumHomework, setPremiumHomework] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -69,12 +73,15 @@ export default function StudentPortal() {
       const me = allStudents.find(s => s.email === u?.email);
       setStudent(me || null);
       if (me) {
-        const [att, ass, la] = await Promise.all([
+        const [att, ass, la, premium, homework] = await Promise.all([
           entities.Attendance.filter({ student_id: me.id }, '-session_date'),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
+          entities.PremiumSession.filter({ student_id: me.id }, '-scheduled_date', 100),
+          entities.PremiumHomework.filter({ student_id: me.id }, '-created_date', 100),
         ]);
         setAttendance(att); setAssessments(ass); setLearning(la);
+        setPremiumSessions(premium); setPremiumHomework(homework);
         loadPortfolios(me.id);
       }
       // RLS scopes announcements to what this student may see.
@@ -224,6 +231,15 @@ export default function StudentPortal() {
 
       {tab === 'progress' && (
         <div className="space-y-4">
+          <PremiumHomeworkSubmitter
+            student={student}
+            sessions={premiumSessions}
+            submissions={premiumHomework}
+            onChanged={(saved) => setPremiumHomework((current) => {
+              const exists = current.some((item) => item.id === saved.id);
+              return exists ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current];
+            })}
+          />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-card border border-border rounded-lg p-4 text-center">
               <p className="text-2xl font-bold" style={{ color: '#059669' }}>{rate}%</p>

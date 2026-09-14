@@ -14,11 +14,13 @@ const TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
+  premium_homework: 'Devoir Premium',
 };
 const TYPE_COLORS = {
   absence: 'bg-red-50 text-red-700', payment_reminder: 'bg-amber-50 text-amber-700',
   report_card: 'bg-blue-50 text-blue-700', enrollment_confirmed: 'bg-green-50 text-green-700',
   schedule_change: 'bg-orange-50 text-orange-700', class_reminder: 'bg-purple-50 text-purple-700',
+  premium_homework: 'bg-amber-50 text-amber-800',
   general: 'bg-gray-50 text-gray-700',
 };
 
