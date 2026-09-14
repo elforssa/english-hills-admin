@@ -55,6 +55,7 @@ export function buildReceiptPDF(doc, r, yStart) {
     ['Catégorie', r.categorie || '—'],
     ...(r.session_type ? [['Session', r.session_type]] : []),
     ['Niveau', r.niveau || '—'],
+    ...(r.group_name ? [['Groupe', r.group_name]] : []),
     ['Type de cours', r.type_cours || '—'],
     ['Jours', r.jours || '—'],
     ['Plage horaire', r.plage_horaire || '—'],

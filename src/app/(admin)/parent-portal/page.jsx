@@ -95,8 +95,12 @@ export default function ParentPortal() {
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
     ])
-      .then(([att, ass, rec, port, la, adults]) => {
-        setAttendance(att); setAssessments(ass); setReceipts(rec);
+      .then(async ([att, ass, rec, port, la, adults]) => {
+        const groupIds = [...new Set(rec.map((receipt) => receipt.group_id).filter(Boolean))];
+        const groupRows = groupIds.length ? await entities.Group.filter({ id: groupIds }) : [];
+        const groupNames = Object.fromEntries(groupRows.map((group) => [group.id, group.name]));
+        setAttendance(att); setAssessments(ass);
+        setReceipts(rec.map((receipt) => ({ ...receipt, group_name: groupNames[receipt.group_id] })));
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
       })
       .catch((err) => {

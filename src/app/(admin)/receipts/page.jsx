@@ -6,7 +6,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Printer, Download, CheckSquare, Square, Trash2, Pencil } from 'lucide-react';
+import { Plus, Search, Printer, Download, CheckSquare, Square, Trash2, Pencil, UsersRound, Link2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
@@ -19,6 +19,7 @@ export default function Receipts() {
   const { role } = useAuth();
   const isDirector = role === 'director';
   const [receipts, setReceipts] = useState([]); // current page only
+  const [groupsById, setGroupsById] = useState({});
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
@@ -42,7 +43,15 @@ export default function Receipts() {
     let q = sb.from('receipts').select('*', { count: 'exact' }).order('created_at', { ascending: false });
     if (search) q = q.ilike('nom_prenom', `%${search}%`);
     const { data, count } = await q.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-    setReceipts(data || []);
+    const rows = data || [];
+    setReceipts(rows);
+    const groupIds = [...new Set(rows.map((receipt) => receipt.group_id).filter(Boolean))];
+    if (groupIds.length) {
+      const { data: groupRows } = await sb.from('groups').select('id,name,niveau').in('id', groupIds);
+      setGroupsById(Object.fromEntries((groupRows || []).map((group) => [group.id, group])));
+    } else {
+      setGroupsById({});
+    }
     setTotal(count || 0);
     setLoading(false);
   }, [page, search]);
@@ -76,8 +85,17 @@ export default function Receipts() {
     try {
       const sb = getBrowserClient();
       const { data } = await sb.from('receipts').select('*').in('id', [...selected]);
+      const groupIds = [...new Set((data || []).map((receipt) => receipt.group_id).filter(Boolean))];
+      let pdfGroups = {};
+      if (groupIds.length) {
+        const { data: groupRows } = await sb.from('groups').select('id,name').in('id', groupIds);
+        pdfGroups = Object.fromEntries((groupRows || []).map((group) => [group.id, group]));
+      }
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-      (data || []).forEach((r, i) => { if (i > 0) doc.addPage(); buildReceiptPDF(doc, r, 20); });
+      (data || []).forEach((r, i) => {
+        if (i > 0) doc.addPage();
+        buildReceiptPDF(doc, { ...r, group_name: pdfGroups[r.group_id]?.name }, 20);
+      });
       doc.save(`reçus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
     } finally {
       setGenerating(false);
@@ -128,7 +146,7 @@ export default function Receipts() {
       </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? <SkeletonTable rows={10} cols={9} /> :
+        {loading ? <SkeletonTable rows={10} cols={11} /> :
           receipts.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
               {search ? 'Aucun reçu ne correspond à cette recherche.' : (
@@ -145,7 +163,7 @@ export default function Receipts() {
                         {allChecked ? <CheckSquare size={16} style={{ color: 'var(--brand)' }} /> : someChecked ? <CheckSquare size={16} className="opacity-50" /> : <Square size={16} />}
                       </button>
                     </th>
-                    {['Apprenant','Date','Catégorie','Niveau','Total','Payé','Restant','Mode','Statut',''].map(h => (
+                    {['Apprenant','Date','Catégorie','Niveau','Groupe','Total','Payé','Restant','Mode','Statut',''].map(h => (
                       <th key={h} className="text-left px-4 py-3">{h}</th>
                     ))}
                   </tr>
@@ -166,6 +184,17 @@ export default function Receipts() {
                         <td className="px-4 py-3 text-muted-foreground">{r.date}</td>
                         <td className="px-4 py-3 text-muted-foreground">{r.categorie}</td>
                         <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{r.niveau}</span></td>
+                        <td className="px-4 py-3">
+                          {r.group_id && groupsById[r.group_id] ? (
+                            <Link href={`/groups/${r.group_id}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline whitespace-nowrap">
+                              <UsersRound size={13} /> {groupsById[r.group_id].name}
+                            </Link>
+                          ) : (
+                            <Link href={`/receipts/${r.id}/edit`} className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:underline whitespace-nowrap">
+                              <Link2 size={13} /> À affecter
+                            </Link>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           {effectiveTotal.toLocaleString('fr-MA')} MAD
                           {r.remise > 0 && (

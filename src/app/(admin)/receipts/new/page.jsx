@@ -7,6 +7,7 @@ import { entities } from '@/lib/entities';
 import { toast } from 'sonner';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
+import { completeReceiptAcademicLink } from '@/lib/receiptAcademicLink';
 
 const AGE_TO_CATEGORIE = {
   'Young Learners (6-12)': 'Enfants',
@@ -55,6 +56,16 @@ export default function ReceiptNew() {
       const receipt = await entities.Receipt.create(data);
       toast.success('Reçu enregistré avec succès');
 
+      if (data.group_id) {
+        try {
+          await completeReceiptAcademicLink(receipt.id, data);
+          qc.invalidateQueries({ queryKey: ['Enrollment'] });
+          toast.success('Groupe et inscription liés');
+        } catch {
+          toast.warning('Le reçu est enregistré et lié au groupe, mais l’inscription doit être vérifiée.');
+        }
+      }
+
       // Payment = enrollment. Promote the linked student if they aren't already
       // Enrolled/Alumni. Non-blocking: a failure here never loses the receipt.
       if (data.student_id) {
@@ -67,6 +78,9 @@ export default function ReceiptNew() {
             if (data.photo_consent && data.photo_consent !== student.photo_consent) upd.photo_consent = data.photo_consent;
             // Record how they heard about the center (once) if not already set.
             if (data.referral_source && data.referral_source !== student.referral_source) upd.referral_source = data.referral_source;
+            if (data.group_id && data.group_id !== student.groupe_id) upd.groupe_id = data.group_id;
+            if (data.session_type && data.session_type !== student.session_type) upd.session_type = data.session_type;
+            if (data.niveau && data.niveau !== student.niveau_cefr) upd.niveau_cefr = data.niveau;
             if (Object.keys(upd).length) {
               await entities.Student.update(data.student_id, upd);
               qc.invalidateQueries({ queryKey: ['Student'] });
