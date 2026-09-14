@@ -7,11 +7,16 @@ import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
+import { ADULT_LEVELS, LEGACY_LEVELS, YEARLY_LEVELS } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
-const NIVEAUX = ['A1','A2','B1','B2','C1','C2'];
 const CERTS = ['CELTA','DELTA','TKT','Licence','Master','Autre'];
+const LEVEL_SECTIONS = [
+  ['Yearly', YEARLY_LEVELS],
+  ['Adults', ADULT_LEVELS],
+  ['Autres programmes', LEGACY_LEVELS],
+];
 
 export default function TeacherForm() {
   const params = useParams();
@@ -107,12 +112,19 @@ export default function TeacherForm() {
           <div className="col-span-2"><label className={labelClass}>IBAN (virement salaire)</label><input className={inputClass} value={form.iban || ''} onChange={e => set('iban', e.target.value)} placeholder="MA64 ..." /></div>
           <div className="col-span-2">
             <label className={labelClass}>Niveaux autorisés</label>
-            <div className="flex gap-2 flex-wrap mt-1">
-              {NIVEAUX.map(n => (
-                <button key={n} type="button" onClick={() => toggleArr('niveaux_autorises', n)}
-                  className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${form.niveaux_autorises.includes(n) ? 'bg-primary text-white border-transparent' : 'bg-white text-foreground border-border'}`}>
-                  {n}
-                </button>
+            <div className="space-y-3 mt-2">
+              {LEVEL_SECTIONS.map(([session, levels]) => (
+                <div key={session}>
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{session}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {levels.map(n => (
+                      <button key={n} type="button" onClick={() => toggleArr('niveaux_autorises', n)}
+                        className={`px-3 py-1 rounded text-xs font-bold border transition-colors ${form.niveaux_autorises.includes(n) ? 'bg-primary text-white border-transparent' : 'bg-white text-foreground border-border'}`}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

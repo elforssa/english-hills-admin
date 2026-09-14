@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
+import { getLevelsForSession } from '@/lib/academicPrograms';
 
 const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
@@ -33,6 +34,11 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const selectedAssessmentGroup = groups.find(group => group.id === form.group_id);
+  const assessmentLevels = getLevelsForSession(
+    selectedAssessmentGroup?.session_type || 'Yearly',
+    form.niveau_actuel,
+  );
 
   const weightSum = (parseInt(form.poids_oral, 10) || 0) + (parseInt(form.poids_ecrit, 10) || 0) + (parseInt(form.poids_devoirs, 10) || 0);
 
@@ -84,7 +90,10 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
             </div>
             <div>
               <label className={labelClass}>Groupe</label>
-              <select className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)}>
+              <select className={inputClass} value={form.group_id || ''} onChange={e => {
+                const group = groups.find(item => item.id === e.target.value);
+                setForm(f => ({ ...f, group_id: e.target.value, niveau_actuel: group?.niveau || f.niveau_actuel }));
+              }}>
                 <option value="">— Choisir —</option>
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
@@ -98,7 +107,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
             <div>
               <label className={labelClass}>Niveau actuel</label>
               <select className={inputClass} value={form.niveau_actuel || ''} onChange={e => set('niveau_actuel', e.target.value)}>
-                {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
+                {assessmentLevels.map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div className="col-span-2">
@@ -576,7 +585,8 @@ export default function TeacherPortal() {
       {tab === 'groups' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map(g => {
-            const count = students.filter(s => s.groupe_id === g.id).length;
+            const enrolledIds = enrollments.filter(e => e.group_id === g.id).map(e => e.student_id);
+            const count = students.filter(s => s.groupe_id === g.id || enrolledIds.includes(s.id)).length;
             return (
               <div key={g.id} className="bg-card border border-border rounded-xl p-5">
                 <div className="flex items-start justify-between mb-3">
@@ -584,7 +594,8 @@ export default function TeacherPortal() {
                   <span className="text-xs text-muted-foreground">{g.terme}</span>
                 </div>
                 <p className="font-semibold">{g.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">{g.jours} {g.horaire}</p>
+                <p className="text-xs text-muted-foreground mt-1">{g.session_type || 'Yearly'} · {g.niveau}</p>
+                <p className="text-xs text-muted-foreground">{g.jours} {g.horaire}</p>
                 <p className="text-xs text-muted-foreground">{g.salle || '—'}</p>
                 <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
                   <Users size={12} /> {count} apprenants

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import Image from 'next/image';
 import { CheckCircle, ArrowLeft } from 'lucide-react';
+import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
@@ -15,7 +16,7 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 export default function PublicEnrollment() {
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '',
-    age_category: '', niveau_cefr: '', notes: '', consent: false,
+    age_category: '', session_type: 'Yearly', niveau_cefr: '', notes: '', consent: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -83,6 +84,7 @@ export default function PublicEnrollment() {
           email:          isYoungLearner ? undefined : form.email || undefined,
           parent_email:   isYoungLearner ? form.email || undefined : undefined,
           age_category:   form.age_category   || undefined,
+          session_type:   form.session_type   || undefined,
           niveau_cefr:    form.niveau_cefr    || undefined,
           notes:          form.notes          || undefined,
           consent:        form.consent,
@@ -194,12 +196,20 @@ export default function PublicEnrollment() {
               </div>
             </div>
 
-            <div>
-              <label htmlFor="niveau_cefr" className={labelClass}>Niveau estimé (si connu)</label>
-              <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr} onChange={e => set('niveau_cefr', e.target.value)}>
-                <option value="">— Je ne sais pas / à évaluer —</option>
-                {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="session_type" className={labelClass}>Session *</label>
+                <select id="session_type" className={inputClass} value={form.session_type} onChange={e => setForm(f => ({ ...f, session_type: e.target.value, niveau_cefr: '' }))} required>
+                  {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="niveau_cefr" className={labelClass}>Niveau estimé (si connu)</label>
+                <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr} onChange={e => set('niveau_cefr', e.target.value)}>
+                  <option value="">— Je ne sais pas / à évaluer —</option>
+                  {getLevelsForSession(form.session_type).map(n => <option key={n}>{n}</option>)}
+                </select>
+              </div>
             </div>
 
             <p className="text-xs text-gray-500">Pièces jointes indisponibles en ligne. Vous pouvez vous inscrire sans document et contacter le centre.</p>

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
+import { groupMatchesSelection } from '@/lib/academicPrograms';
 
 const PAGE_SIZE = 20;
 
@@ -28,6 +29,11 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
 
   const selectedStudent = students.find(s => s.id === form.student_id);
   const selectedGroup = groups.find(g => g.id === form.group_id);
+  const availableGroups = groups.filter(group => (
+    !selectedStudent
+    || groupMatchesSelection(group, selectedStudent.session_type || 'Yearly', selectedStudent.niveau_cefr)
+    || group.id === form.group_id
+  ));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,7 +84,7 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className={labelClass}>Apprenant *</label>
-            <select className={inputClass} value={form.student_id} onChange={e => set('student_id', e.target.value)} required>
+            <select className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required>
               <option value="">— Choisir un apprenant —</option>
               {students.map(s => (
                 <option key={s.id} value={s.id}>
@@ -91,6 +97,7 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
                 {selectedStudent.telephone && <div className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {selectedStudent.telephone}</div>}
                 {selectedStudent.email && <div className="flex items-center gap-1.5"><Mail size={12} className="shrink-0" /> {selectedStudent.email}</div>}
                 {selectedStudent.age_category && <div className="flex items-center gap-1.5"><User size={12} className="shrink-0" /> {selectedStudent.age_category}</div>}
+                <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> Session&nbsp;: {selectedStudent.session_type || 'Yearly'}</div>
                 {selectedStudent.niveau_cefr && <div className="flex items-center gap-1.5"><BookOpen size={12} className="shrink-0" /> Niveau&nbsp;: {selectedStudent.niveau_cefr}</div>}
                 <div className="text-blue-600 font-medium">Statut&nbsp;: {selectedStudent.status}</div>
               </div>
@@ -100,8 +107,9 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
             <label className={labelClass}>Groupe</label>
             <select className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)}>
               <option value="">— Choisir un groupe —</option>
-              {groups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
+              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
+            {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de l&apos;apprenant.</p>}
             {selectedGroup && (
               <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-1">
                 {selectedGroup.horaire && <div className="flex items-center gap-1.5"><Clock size={12} className="shrink-0" /> {selectedGroup.horaire}</div>}

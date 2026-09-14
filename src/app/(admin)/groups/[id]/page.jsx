@@ -46,13 +46,22 @@ export default function GroupDetail() {
     })().catch(() => setLoading(false));
   }, [id]);
 
-  const available = allStudents.filter(s => s.groupe_id !== id);
+  const available = allStudents.filter(s => (
+    s.groupe_id !== id
+    && (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
+    && (!s.niveau_cefr || s.niveau_cefr === group.niveau)
+  ));
 
   const addToGroup = async (s) => {
     setBusyId(s.id);
     try {
-      await entities.Student.update(s.id, { groupe_id: id });
-      const updated = { ...s, groupe_id: id };
+      const groupAssignment = {
+        groupe_id: id,
+        session_type: group.session_type || 'Yearly',
+        niveau_cefr: group.niveau,
+      };
+      await entities.Student.update(s.id, groupAssignment);
+      const updated = { ...s, ...groupAssignment };
       setStudents(prev => [...prev, updated].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')));
       setAllStudents(prev => prev.map(x => (x.id === s.id ? updated : x)));
       toast.success(`${s.full_name} ajouté(e) au groupe`);
@@ -82,6 +91,7 @@ export default function GroupDetail() {
   if (!group) return <div className="p-8 text-center text-muted-foreground text-sm">Groupe introuvable.</div>;
 
   const meta = [
+    ['Session', group.session_type || 'Yearly'],
     ['Niveau', group.niveau],
     ['Catégorie', group.categorie],
     ['Enseignant', teacher?.full_name || '—'],
@@ -210,7 +220,7 @@ export default function GroupDetail() {
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
                       <span className="flex-1 truncate">{s.full_name}</span>
                       <span className="text-xs text-muted-foreground ml-2">
-                        {s.groupe_id ? 'change de groupe' : (s.session_type || s.age_category || '')}
+                        {s.groupe_id ? 'change de groupe' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
                       </span>
                     </CommandItem>
                   ))}

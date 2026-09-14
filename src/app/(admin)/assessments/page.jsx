@@ -9,6 +9,7 @@ import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -20,6 +21,8 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const selectedGroup = groups.find(group => group.id === form.group_id);
+  const availableLevels = getLevelsForSession(selectedGroup?.session_type || 'Yearly', form.niveau_actuel);
 
   const noteFinale = () => {
     const o = parseFloat(form.note_oral) || 0;
@@ -74,7 +77,10 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
             </div>
             <div>
               <label className={labelClass}>Groupe</label>
-              <select className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)}>
+              <select className={inputClass} value={form.group_id || ''} onChange={e => {
+                const group = groups.find(item => item.id === e.target.value);
+                setForm(f => ({ ...f, group_id: e.target.value, niveau_actuel: group?.niveau || f.niveau_actuel }));
+              }}>
                 <option value="">— Choisir —</option>
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
@@ -88,7 +94,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
             <div>
               <label className={labelClass}>Niveau actuel</label>
               <select className={inputClass} value={form.niveau_actuel || ''} onChange={e => set('niveau_actuel', e.target.value)}>
-                {['A1','A2','B1','B2','C1','C2'].map(n => <option key={n}>{n}</option>)}
+                {availableLevels.map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div>

@@ -10,14 +10,13 @@ import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityList, useEntityUpdate, entityKeys } from '@/lib/queries';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const PAGE_SIZE = 20;
 const LIST_ORDER = '-created_date';
 const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const SESSION_TYPES = ['Yearly', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau', 'Other'];
 const PHOTO_CONSENTS = ['Accepte', 'Refuse', 'Non demandé'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
@@ -69,6 +68,13 @@ export default function Students() {
       Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, [field]: stored } : r)) : old,
     );
     update.mutate({ id, data: { [field]: stored } });
+  };
+
+  const patchStudentFields = (id, data) => {
+    qc.setQueryData(entityKeys.list('Student', LIST_ORDER, LIST_LIMIT), (old) =>
+      Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, ...data } : r)) : old,
+    );
+    update.mutate({ id, data });
   };
 
   const [search, setSearch] = useState('');
@@ -157,7 +163,7 @@ export default function Students() {
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
-          {NIVEAUX.map(l => <option key={l}>{l}</option>)}
+          {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(l => <option key={l}>{l}</option>)}
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
           <option value="">Complétude : tous</option>
@@ -233,16 +239,16 @@ export default function Students() {
                           value={s.session_type || 'Yearly'}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
-                          onChange={v => patchStudent(s.id, 'session_type', v)}
+                          onChange={v => patchStudentFields(s.id, { session_type: v, niveau_cefr: null, groupe_id: null })}
                         />
                       </td>
                       <td className="px-4 py-3">
                         <InlineSelect
                           value={s.niveau_cefr}
-                          options={NIVEAUX}
+                          options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
-                          onChange={v => patchStudent(s.id, 'niveau_cefr', v)}
+                          onChange={v => patchStudentFields(s.id, { niveau_cefr: v || null, groupe_id: null })}
                         />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>

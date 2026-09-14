@@ -6,21 +6,23 @@ import { Plus, Award, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
-const NIVEAUX = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const TERMES = ['Sept–Déc', 'Jan–Mar', 'Avr–Juin', 'Été'];
 
 function CertificateModal({ students, onSave, onClose }) {
   const [form, setForm] = useState({
-    student_id: '', student_name: '', niveau_complete: 'A1',
+    student_id: '', student_name: '', niveau_complete: 'Pre-Child',
     terme: 'Sept–Déc', annee: '2025-2026',
     date_emission: new Date().toISOString().split('T')[0],
     directeur: 'Direction English Hills', notes: '', issued: true,
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const selectedStudent = students.find(student => student.id === form.student_id);
+  const availableLevels = getLevelsForSession(selectedStudent?.session_type || 'Yearly', form.niveau_complete);
 
   const handleStudentChange = (id) => {
     const s = students.find(s => s.id === id);
@@ -88,7 +90,7 @@ function CertificateModal({ students, onSave, onClose }) {
             <div>
               <label className={labelClass}>Niveau complété</label>
               <select className={inputClass} value={form.niveau_complete} onChange={e => set('niveau_complete', e.target.value)}>
-                {NIVEAUX.map(n => <option key={n}>{n}</option>)}
+                {availableLevels.map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
             <div>

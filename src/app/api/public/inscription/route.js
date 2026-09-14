@@ -11,9 +11,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const NIVEAUX       = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 const InscriptionSchema = z.object({
   full_name:     z.string().trim().min(2).max(120),
@@ -22,7 +22,8 @@ const InscriptionSchema = z.object({
   email:         z.string().trim().email().optional().or(z.literal('')),
   parent_email:  z.string().trim().email().optional().or(z.literal('')),
   age_category:  z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
-  niveau_cefr:   z.enum(NIVEAUX).optional().or(z.literal('')),
+  session_type:  z.enum(SESSION_TYPES).optional().or(z.literal('')),
+  niveau_cefr:   z.enum(ALL_LEVELS).optional().or(z.literal('')),
   notes:         z.string().max(2000).optional().or(z.literal('')),
   // Batch 4A: public uploads are unsupported; never accept unverified URLs.
   documents_urls: z.array(z.string()).max(0).optional(),
@@ -39,6 +40,12 @@ const InscriptionSchema = z.object({
   {
     message: 'Au moins un email (apprenant ou parent) est requis.',
     path: ['email'],
+  },
+).refine(
+  (data) => !data.niveau_cefr || getLevelsForSession(data.session_type || 'Yearly').includes(data.niveau_cefr),
+  {
+    message: 'Le niveau ne correspond pas à la session sélectionnée.',
+    path: ['niveau_cefr'],
   },
 );
 
@@ -140,7 +147,7 @@ export async function POST(request) {
 
   const {
     full_name, date_naissance, telephone, email, parent_email,
-    age_category, niveau_cefr, notes, documents_urls, turnstileToken,
+    age_category, session_type, niveau_cefr, notes, documents_urls, turnstileToken,
   } = parsed.data;
 
   // ── Cloudflare Turnstile: confirm submission isn't from a bot. ──────────
@@ -164,6 +171,7 @@ export async function POST(request) {
       email:         email         || null,
       parent_email:  parent_email  || null,
       age_category:  age_category  || null,
+      session_type:  session_type  || 'Yearly',
       niveau_cefr:   niveau_cefr   || null,
       notes:         notes         || null,
       status:        'Prospect',
