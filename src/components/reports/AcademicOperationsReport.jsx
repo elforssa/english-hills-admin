@@ -108,7 +108,7 @@ export default function AcademicOperationsReport({
       })
       .map((receipt) => ({
         id: receipt.id,
-        label: `${receipt.student_name || studentById[receipt.student_id]?.full_name || 'Reçu'} · ${receipt.date || 'date inconnue'}`,
+        label: `${receipt.nom_prenom || studentById[receipt.student_id]?.full_name || 'Reçu'} · ${receipt.date || 'date inconnue'}`,
       }));
 
     const activePremium = sessionStudents.filter((student) => student.plan_type === 'Premium'

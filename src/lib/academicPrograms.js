@@ -55,4 +55,3 @@ export function groupMatchesSelection(group, sessionType, level) {
   return (!sessionType || groupSession === sessionType)
     && (!level || group.niveau === level);
 }
-

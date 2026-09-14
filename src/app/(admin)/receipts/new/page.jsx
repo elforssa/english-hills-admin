@@ -82,7 +82,10 @@ export default function ReceiptNew() {
             if (data.group_id && data.group_id !== student.groupe_id) upd.groupe_id = data.group_id;
             if (data.session_type && data.session_type !== student.session_type) upd.session_type = data.session_type;
             if (data.niveau && data.niveau !== student.niveau_cefr) upd.niveau_cefr = data.niveau;
-            if (data.plan_type && data.plan_type !== student.plan_type) upd.plan_type = data.plan_type;
+            // A Premium receipt activates the entitlement. A later Standard
+            // receipt is only a payment snapshot and must not silently remove
+            // an existing Premium plan; deactivation belongs in the profile.
+            if (data.plan_type === 'Premium' && student.plan_type !== 'Premium') upd.plan_type = 'Premium';
             if (data.plan_type === 'Premium' && !student.premium_start_date) upd.premium_start_date = data.date;
             if (Object.keys(upd).length) {
               await entities.Student.update(data.student_id, upd);
