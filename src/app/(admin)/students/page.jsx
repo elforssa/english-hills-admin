@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, Upload, UserSearch, Camera, CameraOff } from 'lucide-react';
+import { Plus, Search, Download, Upload, UserSearch, Camera, CameraOff, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
@@ -85,6 +85,7 @@ export default function Students() {
   const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [filterConsent, setFilterConsent] = useState('');
   const [filterSource, setFilterSource] = useState('');
+  const [filterPlan, setFilterPlan] = useState('');
   const [page, setPage] = useState(1);
 
   const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
@@ -100,7 +101,8 @@ export default function Students() {
     const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
     const matchConsent = !filterConsent || (s.photo_consent || 'Non demandé') === filterConsent;
     const matchSource = !filterSource || s.referral_source === filterSource;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource;
+    const matchPlan = !filterPlan || (s.plan_type || 'Standard') === filterPlan;
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource && matchPlan;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -122,6 +124,7 @@ export default function Students() {
               Session: s.session_type || '',
               Niveau: s.niveau_cefr || '',
               Statut: s.status || '',
+              Formule: s.plan_type || 'Standard',
               Source: s.referral_source || '',
               'Date naissance': s.date_naissance || '',
             })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`)}
@@ -177,6 +180,11 @@ export default function Students() {
           <option value="">Source : toutes</option>
           {SOURCES.map(s => <option key={s}>{s}</option>)}
         </select>
+        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
+          <option value="">Toutes les formules</option>
+          <option value="Premium">Premium</option>
+          <option value="Standard">Standard</option>
+        </select>
       </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -199,7 +207,7 @@ export default function Students() {
               {paged.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm truncate">{s.full_name}</p>
+                    <p className="font-semibold text-sm truncate flex items-center gap-1.5">{s.full_name}{s.plan_type === 'Premium' && <Crown size={13} className="text-amber-600 shrink-0" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
@@ -224,7 +232,7 @@ export default function Students() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5">{s.full_name}<ConsentIcon v={s.photo_consent} /></span>
+                        <span className="inline-flex items-center gap-1.5">{s.full_name}<ConsentIcon v={s.photo_consent} />{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect

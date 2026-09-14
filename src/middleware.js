@@ -25,6 +25,7 @@ const PUBLIC_PATHS = new Set([
 const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
   '/learning-assessments', '/groups', '/timetable', '/dashboard',
+  '/premium-sessions',
   '/', '/settings',
 ];
 

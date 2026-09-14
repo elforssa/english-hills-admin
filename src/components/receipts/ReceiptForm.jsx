@@ -5,7 +5,7 @@ import { entities } from '@/lib/entities';
 import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Check, ChevronsUpDown, UserX, UserPlus, UsersRound, Clock3, Link2 } from 'lucide-react';
+import { Check, ChevronsUpDown, UserX, UserPlus, UsersRound, Clock3, Link2, Crown } from 'lucide-react';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 
 const categories = ['Enfants', 'Ados', 'Adultes', 'Business', 'Particulier', 'Préparation aux examens'];
@@ -87,6 +87,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     parent_email: '',
     date_naissance: '',
     categorie: 'Adultes',
+    plan_type: 'Standard',
     session_type: '',
     photo_consent: 'Non demandé',
     referral_source: '',
@@ -158,6 +159,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       date_naissance: student.date_naissance || f.date_naissance,
       niveau: level,
       categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
+      plan_type: student.plan_type || 'Standard',
       session_type: sessionType,
       photo_consent: student.photo_consent || f.photo_consent,
       referral_source: student.referral_source || f.referral_source,
@@ -197,6 +199,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
         photo_consent: form.photo_consent || 'Non demandé',
         referral_source: form.referral_source || null,
         status: 'Enrolled',
+        plan_type: form.plan_type || 'Standard',
+        premium_start_date: form.plan_type === 'Premium' ? today : null,
       });
       setStudents((prev) => [created, ...prev]);
       setForm((f) => ({ ...f, student_id: created.id, group_id: '', enrollment_id: '' }));
@@ -425,6 +429,18 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           <div>
             <label className={labelClass}>Catégorie <span className="text-red-400">*</span></label>
             <ToggleGroup options={categories} value={form.categorie} onChange={(v) => set('categorie', v)} />
+          </div>
+          <div className={`rounded-xl border px-4 py-3 ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50' : 'border-border bg-muted/20'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Crown size={16} className={form.plan_type === 'Premium' ? 'text-amber-600' : 'text-muted-foreground'} />
+                <div><p className="text-sm font-semibold">Formule</p><p className="text-xs text-muted-foreground">Premium inclut une heure supplémentaire le week-end.</p></div>
+              </div>
+              <select className={`${inputClass} sm:w-40`} aria-label="Formule" value={form.plan_type || 'Standard'} onChange={(event) => set('plan_type', event.target.value)}>
+                <option value="Standard">Standard</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

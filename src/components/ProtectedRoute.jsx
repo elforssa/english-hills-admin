@@ -26,7 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
-  '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings',
+  '/learning-assessments', '/groups', '/timetable', '/premium-sessions', '/dashboard', '/', '/settings',
 ];
 
 function matchesAny(path, allowedList) {

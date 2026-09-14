@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Upload, Crown, CalendarDays } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
 import {
   ALL_LEVELS,
@@ -43,9 +43,15 @@ const StudentSchema = z.object({
   referral_source: z.enum(SOURCES).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.string().uuid().optional().or(z.literal('')),
+  plan_type:      z.enum(['Standard', 'Premium']),
+  premium_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format AAAA-MM-JJ').optional().or(z.literal('')),
+  premium_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format AAAA-MM-JJ').optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
-});
+}).refine(
+  (data) => !data.premium_start_date || !data.premium_end_date || data.premium_end_date >= data.premium_start_date,
+  { message: 'La date de fin doit suivre la date de début', path: ['premium_end_date'] },
+);
 
 export default function StudentForm() {
   const params = useParams();
@@ -60,7 +66,8 @@ export default function StudentForm() {
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
     niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Prospect',
-    photo_consent: 'Non demandé', referral_source: '', groupe_id: '', photo_url: '', notes: '',
+    photo_consent: 'Non demandé', referral_source: '', groupe_id: '', plan_type: 'Standard',
+    premium_start_date: '', premium_end_date: '', photo_url: '', notes: '',
   });
 
   useEffect(() => {
@@ -87,6 +94,9 @@ export default function StudentForm() {
               email:        row.email        ?? '',
               parent_email: row.parent_email ?? '',
               groupe_id:    row.groupe_id     ?? '',
+              plan_type:    row.plan_type     ?? 'Standard',
+              premium_start_date: row.premium_start_date ?? '',
+              premium_end_date: row.premium_end_date ?? '',
               photo_url:    row.photo_url     ?? '',
               notes:        row.notes        ?? '',
             }));
@@ -179,6 +189,9 @@ export default function StudentForm() {
       email:          parsed.data.email          || null,
       parent_email:   parsed.data.parent_email   || null,
       groupe_id:      parsed.data.groupe_id      || null,
+      plan_type:      parsed.data.plan_type      || 'Standard',
+      premium_start_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_start_date || null) : null,
+      premium_end_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_end_date || null) : null,
       photo_url:      parsed.data.photo_url      || null,
       notes:          parsed.data.notes          || null,
     };
@@ -321,6 +334,42 @@ export default function StudentForm() {
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
             </select>
             <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau.</p>
+          </div>
+          <div className={`col-span-2 rounded-xl border p-4 transition-colors ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50/70' : 'border-border bg-muted/20'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={`rounded-lg p-2 ${form.plan_type === 'Premium' ? 'bg-amber-400 text-amber-950' : 'bg-muted text-muted-foreground'}`}>
+                  <Crown size={17} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Formule Premium</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Donne droit à une séance individuelle d’une heure chaque week-end.</p>
+                </div>
+              </div>
+              <select
+                id="plan_type"
+                aria-label="Formule de l'apprenant"
+                className={`${inputClass} sm:w-36`}
+                value={form.plan_type}
+                onChange={e => set('plan_type', e.target.value)}
+              >
+                <option value="Standard">Standard</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
+            {form.plan_type === 'Premium' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-amber-200">
+                <div>
+                  <label htmlFor="premium_start_date" className={labelClass}><CalendarDays size={12} className="inline mr-1" />Début</label>
+                  <input id="premium_start_date" type="date" className={inputClass} value={form.premium_start_date || ''} onChange={e => set('premium_start_date', e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="premium_end_date" className={labelClass}>Fin (facultative)</label>
+                  <input id="premium_end_date" type="date" className={fieldErr('premium_end_date') ? inputErrClass : inputClass} value={form.premium_end_date || ''} onChange={e => set('premium_end_date', e.target.value)} min={form.premium_start_date || undefined} />
+                  {fieldErr('premium_end_date') && <p className="text-xs text-red-600 mt-1">{fieldErr('premium_end_date')}</p>}
+                </div>
+              </div>
+            )}
           </div>
           <div className="col-span-2">
             <label htmlFor="notes" className={labelClass}>Notes</label>

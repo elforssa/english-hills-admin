@@ -66,6 +66,7 @@ export default function ReceiptPrint() {
       ...(receipt.email ? [['Email', receipt.email]] : []),
       ...(receipt.date_naissance ? [['Date de naissance', receipt.date_naissance]] : []),
       ['Catégorie', receipt.categorie],
+      ['Formule', receipt.plan_type || 'Standard'],
       ...(receipt.session_type ? [['Session', receipt.session_type]] : []),
       ['Niveau', receipt.niveau],
       ...(group ? [['Groupe', group.name]] : []),
@@ -245,6 +246,7 @@ export default function ReceiptPrint() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <DataField label="Catégorie" value={receipt.categorie} />
+                <DataField label="Formule" value={receipt.plan_type || 'Standard'} />
                 {receipt.session_type && <DataField label="Session" value={receipt.session_type} />}
                 {group && <DataField label="Groupe" value={group.name} />}
                 <div>

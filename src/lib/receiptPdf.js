@@ -53,6 +53,7 @@ export function buildReceiptPDF(doc, r, yStart) {
     ['Téléphone', r.telephone || '—'],
     ['Email', r.email || '—'],
     ['Catégorie', r.categorie || '—'],
+    ['Formule', r.plan_type || 'Standard'],
     ...(r.session_type ? [['Session', r.session_type]] : []),
     ['Niveau', r.niveau || '—'],
     ...(r.group_name ? [['Groupe', r.group_name]] : []),

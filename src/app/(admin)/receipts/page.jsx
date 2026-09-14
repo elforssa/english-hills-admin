@@ -180,7 +180,10 @@ export default function Receipts() {
                             {isChecked ? <CheckSquare size={16} style={{ color: 'var(--brand)' }} /> : <Square size={16} />}
                           </button>
                         </td>
-                        <td className="px-4 py-3 font-medium">{r.nom_prenom}</td>
+                        <td className="px-4 py-3 font-medium">
+                          {r.nom_prenom}
+                          {r.plan_type === 'Premium' && <span className="block text-[10px] font-bold text-amber-700">PREMIUM</span>}
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">{r.date}</td>
                         <td className="px-4 py-3 text-muted-foreground">{r.categorie}</td>
                         <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{r.niveau}</span></td>

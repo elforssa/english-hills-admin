@@ -32,6 +32,7 @@ const NAV = [
       { href: '/groups', label: 'Groupes & niveaux', roles: [...ADMIN, 'teacher'] },
       { href: '/attendance', label: 'Présences', roles: [...ADMIN, 'teacher'] },
       { href: '/timetable', label: 'Emploi du temps', roles: [...ADMIN, 'teacher'] },
+      { href: '/premium-sessions', label: 'Heures Premium', roles: [...ADMIN, 'teacher'] },
       { href: '/placement-tests', label: 'Tests de niveau', roles: ADMIN },
       { href: '/assessments', label: 'Notes & bulletins', roles: [...ADMIN, 'teacher'] },
     ],

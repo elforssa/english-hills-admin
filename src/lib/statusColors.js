@@ -41,3 +41,11 @@ export const SESSION_TYPE_COLORS = {
   'Mise à niveau':        'bg-cyan-100   text-cyan-700',
   'Other':                 'bg-gray-100   text-gray-600',
 };
+
+export const PREMIUM_SESSION_STATUS_COLORS = {
+  'Scheduled': 'bg-blue-100 text-blue-700',
+  'Confirmed': 'bg-cyan-100 text-cyan-700',
+  'Completed': 'bg-emerald-100 text-emerald-700',
+  'Cancelled': 'bg-gray-100 text-gray-500',
+  'Missed': 'bg-red-100 text-red-700',
+};
