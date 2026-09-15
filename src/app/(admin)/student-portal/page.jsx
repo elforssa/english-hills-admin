@@ -48,6 +48,7 @@ export default function StudentPortal() {
   const [portfolios, setPortfolios] = useState([]);
   const [learning, setLearning] = useState([]);
   const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumMemberships, setPremiumMemberships] = useState([]);
   const [premiumHomework, setPremiumHomework] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -73,15 +74,16 @@ export default function StudentPortal() {
       const me = allStudents.find(s => s.email === u?.email);
       setStudent(me || null);
       if (me) {
-        const [att, ass, la, premium, homework] = await Promise.all([
+        const [att, ass, la, premium, memberships, homework] = await Promise.all([
           entities.Attendance.filter({ student_id: me.id }, '-session_date'),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
-          entities.PremiumSession.filter({ student_id: me.id }, '-scheduled_date', 100),
+          entities.PremiumSession.list('-scheduled_date', 200),
+          entities.PremiumMembership.filter({ student_id: me.id }, '-created_at', 20),
           entities.PremiumHomework.filter({ student_id: me.id }, '-created_date', 100),
         ]);
         setAttendance(att); setAssessments(ass); setLearning(la);
-        setPremiumSessions(premium); setPremiumHomework(homework);
+        setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
         loadPortfolios(me.id);
       }
       // RLS scopes announcements to what this student may see.
@@ -234,6 +236,7 @@ export default function StudentPortal() {
           <PremiumHomeworkSubmitter
             student={student}
             sessions={premiumSessions}
+            memberships={premiumMemberships}
             submissions={premiumHomework}
             onChanged={(saved) => setPremiumHomework((current) => {
               const exists = current.some((item) => item.id === saved.id);

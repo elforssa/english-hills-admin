@@ -72,7 +72,8 @@ function ActionList({ title, description, items, href, empty, accent = 'amber' }
 }
 
 export default function AcademicOperationsReport({
-  students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework, loading,
+  students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework,
+  premiumGroups, premiumMemberships, premiumAttendance, loading,
 }) {
   const [sessionFilter, setSessionFilter] = useState('');
   const today = dateString(new Date());
@@ -112,18 +113,24 @@ export default function AcademicOperationsReport({
       }));
 
     const activePremium = sessionStudents.filter((student) => student.plan_type === 'Premium'
+      && (student.session_type || 'Yearly') === 'Yearly'
       && (!student.premium_start_date || student.premium_start_date <= today)
       && (!student.premium_end_date || student.premium_end_date >= today));
     const activePremiumIds = new Set(activePremium.map((student) => student.id));
+    const activeMemberships = premiumMemberships.filter((membership) => membership.active && activePremiumIds.has(membership.student_id));
+    const assignedPremiumIds = new Set(activeMemberships.map((membership) => membership.student_id));
+    const activePremiumGroups = premiumGroups.filter((group) => group.active && (!sessionFilter || sessionFilter === 'Yearly'));
+    const activePremiumGroupIds = new Set(activePremiumGroups.map((group) => group.id));
     const weekSessions = premiumSessions.filter((session) => session.week_start === currentWeek
-      && session.status !== 'Cancelled' && activePremiumIds.has(session.student_id));
-    const weekSessionByStudent = new Map(weekSessions.map((session) => [session.student_id, session]));
-    const homeworkBySession = new Map(premiumHomework.map((submission) => [submission.premium_session_id, submission]));
-    const unscheduledPremium = activePremium
-      .filter((student) => !weekSessionByStudent.has(student.id))
+      && session.status !== 'Cancelled' && session.premium_group_id && activePremiumGroupIds.has(session.premium_group_id));
+    const weekSessionIds = new Set(weekSessions.map((session) => session.id));
+    const weekHomework = premiumHomework.filter((submission) => weekSessionIds.has(submission.premium_session_id));
+    const unassignedPremium = activePremium
+      .filter((student) => !assignedPremiumIds.has(student.id))
       .map((student) => ({ id: student.id, label: `${student.full_name} · ${student.niveau_cefr || student.session_type || 'Premium'}` }));
-    const preparedCount = weekSessions.filter((session) => homeworkBySession.get(session.id)?.status === 'Prepared').length;
-    const submittedCount = weekSessions.filter((session) => homeworkBySession.has(session.id)).length;
+    const preparedCount = weekHomework.filter((submission) => submission.status === 'Prepared').length;
+    const submittedCount = weekHomework.length;
+    const attendanceCount = premiumAttendance.filter((item) => weekSessionIds.has(item.premium_session_id)).length;
 
     const sessionRows = SESSION_TYPES.map((sessionType) => {
       const rowGroups = groups.filter((group) => (group.session_type || 'Yearly') === sessionType);
@@ -137,16 +144,17 @@ export default function AcademicOperationsReport({
     const teacherRows = teachers.map((teacher) => {
       const teacherGroups = sessionGroups.filter((group) => group.teacher_id === teacher.id);
       const regularStudents = new Set(teacherGroups.flatMap((group) => [...(membersByGroup.get(group.id) || [])]));
-      const premiumCount = weekSessions.filter((session) => session.teacher_id === teacher.id).length;
+      const premiumCount = activePremiumGroups.filter((group) => group.teacher_id === teacher.id).length;
       return { id: teacher.id, name: teacher.full_name, groups: teacherGroups.length, students: regularStudents.size, premium: premiumCount };
     }).filter((row) => row.groups || row.premium).sort((a, b) => (b.students + b.premium) - (a.students + a.premium));
 
     return {
       sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, unlinkedReceipts,
-      activePremium, weekSessions, unscheduledPremium, preparedCount, submittedCount,
+      activePremium, activeMemberships, activePremiumGroups, weekSessions, unassignedPremium,
+      preparedCount, submittedCount, attendanceCount,
       sessionRows, teacherRows,
     };
-  }, [students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework, sessionFilter, today, currentWeek]);
+  }, [students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework, premiumGroups, premiumMemberships, premiumAttendance, sessionFilter, today, currentWeek]);
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950 text-white overflow-hidden">
@@ -173,7 +181,7 @@ export default function AcademicOperationsReport({
           <Metric icon={UsersRound} label="Groupes sans enseignant" value={loading ? '—' : data.unassignedGroups.length} note={`${data.sessionGroups.length} groupe(s) dans la vue`} tone={data.unassignedGroups.length ? 'rose' : 'emerald'} />
           <Metric icon={GraduationCap} label="Apprenants sans groupe" value={loading ? '—' : data.studentsWithoutGroup.length} note={`${data.sessionStudents.length} apprenant(s) actif(s)`} tone={data.studentsWithoutGroup.length ? 'amber' : 'emerald'} />
           <Metric icon={Link2} label="Reçus à relier" value={loading ? '—' : data.unlinkedReceipts.length} note="Affectation manuelle en attente" tone={data.unlinkedReceipts.length ? 'amber' : 'emerald'} />
-          <Metric icon={Crown} label="Premium à planifier" value={loading ? '—' : data.unscheduledPremium.length} note={`${data.weekSessions.length}/${data.activePremium.length} planifié(s) cette semaine`} tone={data.unscheduledPremium.length ? 'rose' : 'slate'} />
+          <Metric icon={Crown} label="Premium à affecter" value={loading ? '—' : data.unassignedPremium.length} note={`${data.activeMemberships.length}/${data.activePremium.length} affecté(s) à ${data.activePremiumGroups.length} atelier(s)`} tone={data.unassignedPremium.length ? 'rose' : 'slate'} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -208,24 +216,25 @@ export default function AcademicOperationsReport({
               <div className="flex items-center gap-2"><BookOpenCheck size={16} className="text-amber-700" /><div><h3 className="text-sm font-bold">Préparation Premium</h3><p className="text-[11px] text-amber-800/70">Semaine du {currentWeek}</p></div></div>
               <Link href="/premium-sessions" className="text-xs font-bold text-amber-900 hover:underline">Planning</Link>
             </div>
-            <div className="grid grid-cols-3 gap-px bg-amber-200">
-              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.weekSessions.length}</p><p className="text-[10px] text-amber-800">Planifiées</p></div>
+            <div className="grid grid-cols-4 gap-px bg-amber-200">
+              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.weekSessions.length}</p><p className="text-[10px] text-amber-800">Ateliers</p></div>
               <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.submittedCount}</p><p className="text-[10px] text-amber-800">Reçues</p></div>
               <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.preparedCount}</p><p className="text-[10px] text-amber-800">Prêtes</p></div>
+              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.attendanceCount}</p><p className="text-[10px] text-amber-800">Présences saisies</p></div>
             </div>
             <div className="p-4">
-              {data.unscheduledPremium.length ? (
-                <div className="flex items-start gap-2 text-xs text-rose-800"><AlertTriangle size={15} className="mt-0.5 shrink-0" /><p><strong>{data.unscheduledPremium.length} apprenant(s)</strong> Premium n’ont pas encore leur heure du week-end.</p></div>
-              ) : <p className="text-xs text-emerald-700">Tous les apprenants Premium actifs sont planifiés cette semaine.</p>}
+              {data.unassignedPremium.length ? (
+                <div className="flex items-start gap-2 text-xs text-rose-800"><AlertTriangle size={15} className="mt-0.5 shrink-0" /><p><strong>{data.unassignedPremium.length} apprenant(s)</strong> Premium ne sont pas encore affectés à un atelier.</p></div>
+              ) : <p className="text-xs text-emerald-700">Tous les apprenants Premium Yearly actifs sont affectés à un atelier.</p>}
             </div>
           </section>
         </div>
 
         <section className="rounded-xl border border-border bg-white overflow-hidden">
-          <div className="border-b border-border px-4 py-3.5"><h3 className="text-sm font-bold">Charge des enseignants</h3><p className="text-[11px] text-muted-foreground">Groupes de la session sélectionnée et heures Premium de la semaine.</p></div>
+          <div className="border-b border-border px-4 py-3.5"><h3 className="text-sm font-bold">Charge des enseignants</h3><p className="text-[11px] text-muted-foreground">Groupes réguliers et ateliers Premium actifs.</p></div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-xs">
-              <thead className="bg-muted/50 text-muted-foreground"><tr><th className="px-4 py-2 text-left">Enseignant</th><th className="px-3 py-2 text-right">Groupes</th><th className="px-3 py-2 text-right">Apprenants</th><th className="px-4 py-2 text-right">Heures Premium</th></tr></thead>
+              <thead className="bg-muted/50 text-muted-foreground"><tr><th className="px-4 py-2 text-left">Enseignant</th><th className="px-3 py-2 text-right">Groupes</th><th className="px-3 py-2 text-right">Apprenants</th><th className="px-4 py-2 text-right">Ateliers Premium</th></tr></thead>
               <tbody className="divide-y divide-border">
                 {data.teacherRows.map((row) => <tr key={row.id}><td className="px-4 py-3 font-semibold">{row.name}</td><td className="px-3 py-3 text-right">{row.groups}</td><td className="px-3 py-3 text-right">{row.students}</td><td className="px-4 py-3 text-right">{row.premium}</td></tr>)}
                 {!data.teacherRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">Aucune affectation enseignant dans cette vue.</td></tr>}

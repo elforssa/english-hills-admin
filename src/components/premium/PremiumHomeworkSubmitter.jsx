@@ -13,10 +13,15 @@ const STATUS = {
   Prepared: 'Enseignant prêt',
 };
 
-export default function PremiumHomeworkSubmitter({ student, sessions, submissions, onChanged }) {
+export default function PremiumHomeworkSubmitter({ student, sessions, memberships = [], submissions, onChanged }) {
   const today = new Date().toISOString().slice(0, 10);
+  const sharedGroupIds = new Set(memberships
+    .filter((membership) => membership.student_id === student?.id && membership.active)
+    .map((membership) => membership.premium_group_id));
   const eligibleSessions = sessions
-    .filter((session) => session.student_id === student?.id && session.status !== 'Cancelled' && session.scheduled_date >= today)
+    .filter((session) => (
+      session.student_id === student?.id || sharedGroupIds.has(session.premium_group_id)
+    ) && session.status !== 'Cancelled' && session.scheduled_date >= today)
     .sort((a, b) => `${a.scheduled_date} ${a.start_time}`.localeCompare(`${b.scheduled_date} ${b.start_time}`));
   const submissionsBySession = useMemo(() => Object.fromEntries(submissions.map((item) => [item.premium_session_id, item])), [submissions]);
   const [selectedSessionId, setSelectedSessionId] = useState(eligibleSessions[0]?.id || '');
@@ -87,12 +92,12 @@ export default function PremiumHomeworkSubmitter({ student, sessions, submission
         <div className="rounded-xl bg-amber-400 p-2 text-amber-950"><BookOpen size={18} /></div>
         <div>
           <h2 className="font-bold">Préparer mon heure Premium</h2>
-          <p className="text-xs text-amber-800 mt-0.5">Envoyez l’exercice, le devoir ou le sujet souhaité avant le week-end pour que l’enseignant puisse préparer la séance.</p>
+          <p className="text-xs text-amber-800 mt-0.5">Envoyez votre exercice, devoir ou sujet avant l’atelier partagé afin que l’enseignant puisse préparer votre besoin.</p>
         </div>
       </div>
 
       {eligibleSessions.length === 0 ? (
-        <div className="p-6 text-center text-sm text-muted-foreground">Aucune séance Premium à venir. L’administration doit d’abord planifier votre heure du week-end.</div>
+        <div className="p-6 text-center text-sm text-muted-foreground">Aucun atelier Premium à venir. L’administration doit d’abord vous affecter et générer le planning.</div>
       ) : (
         <form onSubmit={submit} className="p-5 space-y-4">
           <div>
@@ -129,7 +134,7 @@ export default function PremiumHomeworkSubmitter({ student, sessions, submission
             <input type="file" className="hidden" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0] || null)} />
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Recommandation : envoyez votre demande au moins 24 heures avant le cours.</p>
+            <p className="text-xs text-muted-foreground">Vous pouvez mettre à jour votre demande tant que l’atelier n’a pas commencé.</p>
             <button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
               <CheckCircle2 size={15} /> {saving ? 'Envoi…' : existing ? 'Mettre à jour' : 'Envoyer au professeur'}
             </button>

@@ -48,6 +48,7 @@ export default function ParentPortal() {
   const [learningAssessments, setLearningAssessments] = useState([]);
   const [authorizedAdults, setAuthorizedAdults] = useState([]);
   const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumMemberships, setPremiumMemberships] = useState([]);
   const [premiumHomework, setPremiumHomework] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -98,23 +99,24 @@ export default function ParentPortal() {
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
-      entities.PremiumSession.filter({ student_id: selectedStudent.id }, '-scheduled_date', 100),
+      entities.PremiumSession.list('-scheduled_date', 200),
+      entities.PremiumMembership.filter({ student_id: selectedStudent.id }, '-created_at', 20),
       entities.PremiumHomework.filter({ student_id: selectedStudent.id }, '-created_date', 100),
     ])
-      .then(async ([att, ass, rec, port, la, adults, premium, homework]) => {
+      .then(async ([att, ass, rec, port, la, adults, premium, memberships, homework]) => {
         const groupIds = [...new Set(rec.map((receipt) => receipt.group_id).filter(Boolean))];
         const groupRows = groupIds.length ? await entities.Group.filter({ id: groupIds }) : [];
         const groupNames = Object.fromEntries(groupRows.map((group) => [group.id, group.name]));
         setAttendance(att); setAssessments(ass);
         setReceipts(rec.map((receipt) => ({ ...receipt, group_name: groupNames[receipt.group_id] })));
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
-        setPremiumSessions(premium); setPremiumHomework(homework);
+        setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[parent-portal] student detail load failed:', err);
         toast.error('Impossible de charger les données de l’apprenant.');
-        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumHomework([]);
+        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
       });
   }, [selectedStudent]);
 
@@ -316,6 +318,7 @@ export default function ParentPortal() {
           <PremiumHomeworkSubmitter
             student={selectedStudent}
             sessions={premiumSessions}
+            memberships={premiumMemberships}
             submissions={premiumHomework}
             onChanged={(saved) => setPremiumHomework((current) => {
               const exists = current.some((item) => item.id === saved.id);
