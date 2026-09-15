@@ -38,7 +38,8 @@ create table public.charges (
   constraint charges_discount_check check (discount_amount <= gross_amount),
   constraint charges_actor_check check (legacy or created_by is not null),
   constraint charges_yearly_formula_check check (
-    (session_type = 'Yearly' and plan_type in ('Standard','Premium'))
+    legacy
+    or (session_type = 'Yearly' and plan_type in ('Standard','Premium'))
     or (session_type <> 'Yearly' and plan_type is null)
   ),
   constraint charges_other_description_check check (
@@ -76,8 +77,12 @@ alter table public.receipts
   add column if not exists voided_by uuid references auth.users(id) on delete restrict,
   add column if not exists void_reason text,
   add column if not exists email_delivery_status text not null default 'pending'
-    check (email_delivery_status in ('pending','queued','sent','failed','skipped')),
+    check (email_delivery_status in ('unknown','pending','queued','sent','failed','skipped')),
   add column if not exists email_request_id bigint,
+  add column if not exists email_attempt_count integer not null default 0
+    check (email_attempt_count >= 0),
+  add column if not exists email_last_attempted_at timestamptz,
+  add column if not exists email_last_error text,
   add column if not exists idempotency_key uuid;
 
 -- Obsolete receipt fields stay available for legacy display, but are optional
@@ -90,6 +95,12 @@ alter table public.receipts alter column plan_type drop not null;
 alter table public.receipts drop constraint if exists receipts_plan_type_check;
 alter table public.receipts add constraint receipts_plan_type_check
   check (plan_type is null or plan_type in ('Standard','Premium'));
+alter table public.receipts drop constraint if exists receipts_session_type_check;
+alter table public.receipts add constraint receipts_session_type_check
+  check (session_type is null or session_type in (
+    'Yearly','Adults','Summer Camp','Communication Junior','Communication Adult',
+    'One-to-One','Mise à niveau','Other','Legacy'
+  ));
 alter table public.receipts add constraint receipts_payment_positive_check
   check (charge_id is null or legacy or montant_paye > 0) not valid;
 alter table public.receipts add constraint receipts_balance_snapshot_check
@@ -103,6 +114,10 @@ create unique index if not exists receipts_idempotency_key_key
 create index if not exists receipts_charge_idx on public.receipts(charge_id, date, created_at)
   where deleted_at is null;
 
+-- These rows predate delivery/audit tracking. Do not infer either from the
+-- presence of an address or from unrelated authentication accounts.
+update public.receipts set email_delivery_status = 'unknown';
+
 -- Each historical receipt becomes one explicit legacy agreement. This keeps
 -- the old due/paid semantics and prevents double counting without inventing
 -- allocations or payment dates between records that merely look similar.
@@ -111,24 +126,31 @@ insert into public.charges (
   gross_amount, discount_amount, due_date, created_by, legacy, legacy_receipt_id,
   voided_at, voided_by, void_reason, created_at, updated_at
 )
-select r.student_id, r.enrollment_id, 'Legacy',
+select r.student_id, r.enrollment_id,
+       case when r.session_type in (
+         'Yearly','Adults','Summer Camp','Communication Junior','Communication Adult',
+         'One-to-One','Mise à niveau','Other'
+       ) then r.session_type else 'Legacy' end,
        concat('Reçu historique ', coalesce(r.receipt_number, r.id::text)),
-       null, r.niveau,
+       r.plan_type, r.niveau,
        r.montant_total,
        round(r.montant_total * coalesce(r.remise, 0) / 100, 2),
        null,
-       (select id from auth.users order by created_at limit 1),
+       null,
        true, r.id, r.deleted_at, null,
        case when r.deleted_at is not null then 'Suppression historique' else null end,
        r.created_at, r.updated_at
 from public.receipts r
 where r.student_id is not null
+  and exists (
+    select 1 from public.students s
+    where s.id = r.student_id and s.deleted_at is null
+  )
   and not exists (select 1 from public.charges c where c.legacy_receipt_id = r.id);
 
 update public.receipts r
 set charge_id = c.id,
     service_description = coalesce(r.service_description, c.service_description),
-    actor_id = coalesce(r.actor_id, c.created_by),
     gross_amount_snapshot = coalesce(r.gross_amount_snapshot, c.gross_amount),
     discount_amount_snapshot = coalesce(r.discount_amount_snapshot, c.discount_amount),
     net_amount_snapshot = coalesce(r.net_amount_snapshot, c.gross_amount - c.discount_amount),
@@ -136,7 +158,7 @@ set charge_id = c.id,
     balance_after_snapshot = coalesce(r.balance_after_snapshot,
       greatest(0, c.gross_amount - c.discount_amount - r.montant_paye)),
     legacy = true,
-    email_delivery_status = case when r.email is null then 'skipped' else 'sent' end
+    email_delivery_status = 'unknown'
 from public.charges c
 where c.legacy_receipt_id = r.id and r.charge_id is null;
 
@@ -150,6 +172,16 @@ create policy "charges staff read" on public.charges for select to authenticated
   using (public.get_my_role() in ('admin','director'));
 create policy "charges family read" on public.charges for select to authenticated
   using (student_id in (select public.get_visible_student_ids()));
+
+-- Migration 047 intentionally removed the former broad student receipt policy.
+-- Restore only the financial self-read needed by the student portal. The
+-- restrictive soft-delete policy from migration 019 still applies.
+drop policy if exists "receipts student financial read" on public.receipts;
+create policy "receipts student financial read" on public.receipts for select to authenticated
+  using (
+    public.get_my_role() = 'student'
+    and student_id in (select public.get_visible_student_ids())
+  );
 
 create or replace view public.charge_balances
 with (security_invoker = true)
@@ -199,8 +231,11 @@ revoke all on public.financial_requests from public, anon, authenticated;
 create table public.financial_events (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  event_type text not null check (event_type in ('charge_created','payment_recorded','payment_voided')),
-  charge_id uuid not null references public.charges(id) on delete restrict,
+  event_type text not null check (event_type in (
+    'charge_created','charge_voided','payment_recorded','payment_voided','email_retry_queued'
+  )),
+  -- Nullable only for a correction event on an unreconciled historical receipt.
+  charge_id uuid references public.charges(id) on delete restrict,
   receipt_id uuid references public.receipts(id) on delete restrict,
   actor_id uuid not null references auth.users(id) on delete restrict,
   metadata jsonb not null default '{}'::jsonb
@@ -241,7 +276,7 @@ declare
   v_actor_name text;
   v_new_charge boolean := false;
 begin
-  if v_actor is null or public.get_my_role() not in ('admin','director') then
+  if v_actor is null or (public.get_my_role() in ('admin','director')) is not true then
     raise exception 'Forbidden' using errcode = '42501';
   end if;
   if v_key is null then raise exception 'An idempotency key is required.'; end if;
@@ -361,6 +396,7 @@ begin
   if auth.uid() is null or public.get_my_role() is distinct from 'director' then
     raise exception 'Forbidden' using errcode = '42501';
   end if;
+  if p_idempotency_key is null then raise exception 'An idempotency key is required.'; end if;
   if char_length(btrim(coalesce(p_reason,''))) < 3 then raise exception 'A correction reason is required.'; end if;
   perform pg_advisory_xact_lock(hashtext(p_idempotency_key::text));
   select * into v_receipt from public.receipts where id = p_receipt_id for update;
@@ -377,21 +413,78 @@ begin
 end;
 $$;
 
+create or replace function public.void_financial_charge(
+  p_charge_id uuid, p_reason text, p_idempotency_key uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_charge public.charges%rowtype;
+  v_active_payments integer;
+begin
+  if auth.uid() is null or public.get_my_role() is distinct from 'director' then
+    raise exception 'Forbidden' using errcode = '42501';
+  end if;
+  if p_idempotency_key is null then raise exception 'An idempotency key is required.'; end if;
+  if char_length(btrim(coalesce(p_reason,''))) < 3 then raise exception 'A correction reason is required.'; end if;
+
+  perform pg_advisory_xact_lock(hashtext(p_idempotency_key::text));
+  select * into v_charge from public.charges where id = p_charge_id for update;
+  if not found then raise exception 'Charge not found.'; end if;
+  if v_charge.voided_at is not null then
+    return jsonb_build_object('charge_id',v_charge.id,'already_voided',true);
+  end if;
+
+  select count(*) into v_active_payments
+  from public.receipts
+  where charge_id = p_charge_id and voided_at is null and deleted_at is null;
+  if v_active_payments > 0 then
+    raise exception 'Void the charge''s active payments before cancelling the charge.';
+  end if;
+
+  update public.charges
+  set voided_at=now(), voided_by=auth.uid(), void_reason=btrim(p_reason), updated_at=now()
+  where id=p_charge_id;
+  insert into public.financial_events(event_type,charge_id,actor_id,metadata)
+  values ('charge_voided',p_charge_id,auth.uid(),jsonb_build_object(
+    'reason',btrim(p_reason),'idempotency_key',p_idempotency_key
+  ));
+  return jsonb_build_object('charge_id',p_charge_id,'already_voided',false);
+end;
+$$;
+
 -- Financial rows are written only through audited transactional RPCs.
 revoke insert, update, delete, truncate on public.receipts, public.charges
   from public, anon, authenticated;
 grant select on public.receipts, public.charges to authenticated;
 grant select, insert, update, delete on public.receipts, public.charges, public.financial_requests to service_role;
-revoke execute on function public.create_charge_payment(jsonb), public.void_financial_receipt(uuid,text,uuid)
+revoke execute on function public.create_charge_payment(jsonb), public.void_financial_receipt(uuid,text,uuid),
+  public.void_financial_charge(uuid,text,uuid)
   from public, anon;
-grant execute on function public.create_charge_payment(jsonb), public.void_financial_receipt(uuid,text,uuid)
+grant execute on function public.create_charge_payment(jsonb), public.void_financial_receipt(uuid,text,uuid),
+  public.void_financial_charge(uuid,text,uuid)
   to authenticated;
+
+-- The pre-ledger deletion RPC would bypass correction reasons and the append-only
+-- event trail. Remove the entry point completely; historical rows are now voided.
+drop function if exists public.soft_delete_receipt(uuid);
+
+create or replace function public.require_finance_staff()
+returns void language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin
+  if auth.uid() is null or (public.get_my_role() in ('admin','director')) is not true then
+    raise exception 'Forbidden' using errcode='42501';
+  end if;
+end $$;
+revoke all on function public.require_finance_staff() from public,anon,authenticated,service_role;
 
 create or replace function public.get_finance_charge_summary()
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
 declare result jsonb;
 begin
-  if auth.uid() is null or public.get_my_role() not in ('admin','director') then raise exception 'Forbidden' using errcode='42501'; end if;
+  perform public.require_finance_staff();
   select jsonb_build_object(
     'total_encaisse', coalesce((select sum(montant_paye) from receipts where voided_at is null and deleted_at is null),0),
     'total_du', coalesce((select sum(net_amount) from charge_balances where voided_at is null),0),
@@ -408,37 +501,50 @@ end $$;
 create or replace function public.get_unpaid_charges(lim int default 50)
 returns table(id uuid, student_id uuid, nom_prenom text, telephone text, session_type text,
   service_description text, due_date date, restant numeric, settlement_status text)
-language sql stable security definer set search_path=public,pg_temp as $$
+language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin
+  perform public.require_finance_staff();
+  return query
   select c.id,c.student_id,s.full_name,s.telephone,c.session_type,c.service_description,c.due_date,c.balance,c.settlement_status
   from public.charge_balances c join public.students s on s.id=c.student_id
-  where public.get_my_role() in ('admin','director') and c.voided_at is null and c.balance>0
-  order by (c.settlement_status='En retard') desc,c.due_date nulls last,c.balance desc limit lim
+  where c.voided_at is null and c.balance>0
+  order by (c.settlement_status='En retard') desc,c.due_date nulls last,c.balance desc limit lim;
+end
 $$;
 
 create or replace function public.get_monthly_finance_summary(p_month_start date)
-returns jsonb language sql stable security definer set search_path=public,pg_temp as $$
-  select case when public.get_my_role() in ('admin','director') then jsonb_build_object(
+returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+declare result jsonb;
+begin
+  perform public.require_finance_staff();
+  select jsonb_build_object(
     'encaisse',coalesce((select sum(montant_paye) from receipts where voided_at is null and deleted_at is null and date>=p_month_start and date<(p_month_start+interval '1 month')::date),0),
     'total',coalesce((select sum(net_amount) from charge_balances where voided_at is null and created_at>=p_month_start and created_at<(p_month_start+interval '1 month')),0),
     'restant',coalesce((select sum(balance) from charge_balances where voided_at is null and created_at>=p_month_start and created_at<(p_month_start+interval '1 month')),0),
     'count',coalesce((select count(*) from receipts where voided_at is null and deleted_at is null and date>=p_month_start and date<(p_month_start+interval '1 month')::date),0)
-  ) else null end
+  ) into result;
+  return result;
+end
 $$;
 
 create or replace function public.get_finance_year_months(p_year int)
 returns table(month_idx int, encaisse numeric, facture numeric)
-language sql stable security definer set search_path=public,pg_temp as $$
-  with months as (select generate_series(0,11) month_idx),
+language plpgsql stable security definer set search_path=public,pg_temp as $$
+begin
+  perform public.require_finance_staff();
+  return query
+  with months as (select generate_series(0,11)::int month_idx),
   paid as (select extract(month from date)::int-1 month_idx,sum(montant_paye) encaisse from receipts where voided_at is null and deleted_at is null and extract(year from date)=p_year group by 1),
   billed as (select extract(month from created_at)::int-1 month_idx,sum(gross_amount-discount_amount) facture from charges where voided_at is null and extract(year from created_at)=p_year group by 1)
   select m.month_idx,coalesce(p.encaisse,0),coalesce(b.facture,0) from months m left join paid p using(month_idx) left join billed b using(month_idx)
-  where public.get_my_role() in ('admin','director') order by m.month_idx
+  order by m.month_idx;
+end
 $$;
 revoke execute on function public.get_finance_charge_summary(), public.get_unpaid_charges(int), public.get_monthly_finance_summary(date), public.get_finance_year_months(int) from public,anon;
 grant execute on function public.get_finance_charge_summary(), public.get_unpaid_charges(int), public.get_monthly_finance_summary(date), public.get_finance_year_months(int) to authenticated;
 
--- The pg_net worker starts queued HTTP requests only after commit. Track the
--- queued request and never send a zero-payment charge (no receipt exists).
+-- The pg_net worker starts queued HTTP requests only after commit. Missing
+-- configuration is a visible failed state, not a permanently queued receipt.
 create or replace function public.handle_new_receipt()
 returns trigger language plpgsql security definer set search_path=public,extensions as $$
 declare edge_url text; auth_token text; request_id bigint;
@@ -446,17 +552,98 @@ begin
   if new.email is null then return new; end if;
   select decrypted_secret into auth_token from vault.decrypted_secrets where name='receipt_webhook_token';
   select decrypted_secret into edge_url from vault.decrypted_secrets where name='receipt_webhook_url';
-  if auth_token is null or edge_url is null then return new; end if;
+  if nullif(auth_token,'') is null or nullif(edge_url,'') is null then
+    update public.receipts
+    set email_delivery_status='failed',
+        email_last_error='Receipt email webhook is not configured.'
+    where id=new.id;
+    return new;
+  end if;
   select net.http_post(url=>edge_url,
     headers=>jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||auth_token),
     body=>jsonb_build_object('type','INSERT','table','receipts','schema','public','record',row_to_json(new)))
     into request_id;
-  update public.receipts set email_delivery_status='queued', email_request_id=request_id where id=new.id;
+  update public.receipts
+  set email_delivery_status='queued', email_request_id=request_id,
+      email_attempt_count=email_attempt_count+1, email_last_attempted_at=now(),
+      email_last_error=null
+  where id=new.id;
   return new;
 exception when others then
-  update public.receipts set email_delivery_status='failed' where id=new.id;
+  update public.receipts
+  set email_delivery_status='failed', email_last_error=left(sqlerrm,500)
+  where id=new.id;
   return new;
 end $$;
+
+create or replace function public.retry_receipt_email(p_receipt_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,extensions,pg_temp as $$
+declare
+  v_receipt public.receipts%rowtype;
+  edge_url text;
+  auth_token text;
+  request_id bigint;
+begin
+  perform public.require_finance_staff();
+  select * into v_receipt from public.receipts where id=p_receipt_id for update;
+  if not found then raise exception 'Receipt not found.'; end if;
+  if v_receipt.voided_at is not null or v_receipt.deleted_at is not null then
+    update public.receipts set email_delivery_status='skipped',
+      email_last_error='Receipt was voided before delivery.' where id=p_receipt_id;
+    return jsonb_build_object('receipt_id',p_receipt_id,'queued',false,'skipped',true);
+  end if;
+  if v_receipt.email is null then
+    update public.receipts set email_delivery_status='skipped',
+      email_last_error='No email address on receipt.' where id=p_receipt_id;
+    return jsonb_build_object('receipt_id',p_receipt_id,'queued',false,'skipped',true);
+  end if;
+  if v_receipt.email_delivery_status = 'sent' then
+    raise exception 'Receipt email is already marked sent.';
+  end if;
+  if v_receipt.email_delivery_status = 'unknown' then
+    raise exception 'Historical delivery is unknown and cannot be replayed automatically.';
+  end if;
+  if v_receipt.email_delivery_status = 'queued'
+     and v_receipt.email_last_attempted_at > now() - interval '15 minutes' then
+    raise exception 'Receipt email is already queued.';
+  end if;
+
+  select decrypted_secret into auth_token from vault.decrypted_secrets where name='receipt_webhook_token';
+  select decrypted_secret into edge_url from vault.decrypted_secrets where name='receipt_webhook_url';
+  if nullif(auth_token,'') is null or nullif(edge_url,'') is null then
+    update public.receipts set email_delivery_status='failed',
+      email_attempt_count=email_attempt_count+1, email_last_attempted_at=now(),
+      email_last_error='Receipt email webhook is not configured.' where id=p_receipt_id;
+    return jsonb_build_object('receipt_id',p_receipt_id,'queued',false,'configuration_error',true);
+  end if;
+
+  begin
+    select net.http_post(url=>edge_url,
+      headers=>jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||auth_token),
+      body=>jsonb_build_object('type','RETRY','table','receipts','schema','public','record',row_to_json(v_receipt)))
+      into request_id;
+  exception when others then
+    update public.receipts set email_delivery_status='failed',
+      email_attempt_count=email_attempt_count+1, email_last_attempted_at=now(),
+      email_last_error=left(sqlerrm,500)
+    where id=p_receipt_id;
+    return jsonb_build_object('receipt_id',p_receipt_id,'queued',false,'queue_error',true);
+  end;
+  update public.receipts
+  set email_delivery_status='queued', email_request_id=request_id,
+      email_attempt_count=email_attempt_count+1, email_last_attempted_at=now(),
+      email_last_error=null
+  where id=p_receipt_id;
+  if v_receipt.charge_id is not null then
+    insert into public.financial_events(event_type,charge_id,receipt_id,actor_id,metadata)
+    values ('email_retry_queued',v_receipt.charge_id,p_receipt_id,auth.uid(),
+      jsonb_build_object('request_id',request_id));
+  end if;
+  return jsonb_build_object('receipt_id',p_receipt_id,'queued',true,'request_id',request_id);
+end $$;
+
+revoke execute on function public.retry_receipt_email(uuid) from public,anon;
+grant execute on function public.retry_receipt_email(uuid) to authenticated;
 
 drop trigger if exists validate_receipt_academic_links_trigger on public.receipts;
 notify pgrst, 'reload schema';

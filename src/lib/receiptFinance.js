@@ -15,7 +15,9 @@ export function receiptAmounts(receipt) {
       ?? (gross * Number(receipt.remise || 0) / 100),
   );
   const net = Number(receipt.net_amount_snapshot ?? (gross - discount));
-  const payment = receipt.voided_at ? 0 : Number(receipt.montant_paye || 0);
+  // A void changes live totals, not the immutable amount printed on the
+  // historical receipt. charge_balances excludes voided rows separately.
+  const payment = Number(receipt.montant_paye || 0);
   const paidBefore = Number(receipt.paid_before_snapshot || 0);
   const balance = Number(
     receipt.balance_after_snapshot

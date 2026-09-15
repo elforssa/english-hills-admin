@@ -1,15 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getBrowserClient } from '@/lib/supabase';
 import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { PAYMENT_METHODS, localBusinessDate, money } from '@/lib/receiptFinance';
+import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { toast } from 'sonner';
 import { ChevronRight, CircleDollarSign, Search, UserPlus, X } from 'lucide-react';
 
 const emptyStudent = { student_id: '', student_name: '', phone: '', student_email: '', parent_email: '' };
 
 export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = {} }) {
+  // One mounted form represents one logical financial request. Keep the key
+  // stable when the browser retries after an uncertain/lost RPC response.
+  const idempotencyKey = useRef(null);
+  if (!idempotencyKey.current) idempotencyKey.current = createStableIdempotencyKey();
   const [form, setForm] = useState({
     ...emptyStudent,
     charge_id: '', session_type: '', service_description: '', plan_type: 'Standard', level: '',
@@ -132,7 +137,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!form.charge_id && (!Number.isFinite(gross) || gross < 0 || discount < 0 || discount > gross)) return toast.error('Vérifiez le prix convenu et la remise.');
     if (!Number.isFinite(todayPayment) || todayPayment < 0) return toast.error('Le paiement ne peut pas être négatif.');
     if (todayPayment > net - paidBefore) return toast.error(`Le paiement dépasse le solde de ${money(net - paidBefore)} MAD.`);
-    onSubmit({ ...form, idempotency_key: crypto.randomUUID() });
+    onSubmit({ ...form, idempotency_key: idempotencyKey.current() });
   };
 
   const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
@@ -160,7 +165,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     <Step number="2" title="Session ou service" subtitle="Choisissez un solde existant ou créez un nouvel engagement">
       {charges.length > 0 && <Field label="Solde existant"><select className={input} value={form.charge_id} onChange={(e) => selectCharge(e.target.value)}><option value="">Nouveau service / nouvelle période</option>{charges.map((charge) => <option key={charge.id} value={charge.id}>{charge.session_type} · {charge.service_description} · reste {money(charge.balance)} MAD</option>)}</select>{selectedCharge && <p className="mt-2 text-xs text-muted-foreground">Prix net {money(selectedCharge.net_amount)} MAD · déjà payé {money(selectedCharge.paid_amount)} MAD · solde {money(selectedCharge.balance)} MAD{selectedCharge.due_date ? ` · échéance ${selectedCharge.due_date}` : ''}</p>}</Field>}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Field label="Session"><select disabled={lockedCharge} required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, session_type: e.target.value, plan_type: 'Standard', level: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
+        <Field label="Session"><select disabled={lockedCharge} required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, session_type: e.target.value, plan_type: 'Standard', level: '' }))}><option value="">Choisir…</option>{lockedCharge && !SESSION_TYPES.includes(form.session_type) && <option>{form.session_type}</option>}{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
         <Field label="Service / période couverte"><input disabled={lockedCharge} required className={input} value={form.service_description} onChange={(e) => set('service_description', e.target.value)} placeholder={form.session_type === 'Other' ? 'Description courte obligatoire' : 'Ex. année 2026–2027, module 1…'} /></Field>
         {form.session_type === 'Yearly' && <Field label="Formule"><div className="flex gap-2">{['Standard','Premium'].map((plan) => <button disabled={lockedCharge} type="button" key={plan} onClick={() => set('plan_type', plan)} className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold ${form.plan_type === plan ? 'border-primary bg-primary text-white' : 'bg-white'}`}>{plan}</button>)}</div><p className="mt-1 text-[11px] text-muted-foreground">Premium inclut un atelier collectif partagé d’une heure le week-end. L’activation reste une action académique séparée.</p></Field>}
         <Field label="Niveau (facultatif)"><select disabled={lockedCharge} className={input} value={form.level} onChange={(e) => set('level', e.target.value)}><option value="">À déterminer</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></Field>

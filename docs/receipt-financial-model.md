@@ -12,28 +12,34 @@
 - `financial_requests` provides request idempotency. Charge row locking and an
   advisory idempotency lock serialize concurrent payments.
 - `financial_events` is the append-only audit trail for charge creation,
-  payment recording, and director-only payment voids.
+  payment recording, director-only payment/charge voids, and email retries.
 - `charge_balances` is the canonical live balance calculation. Issued receipt
   snapshots never change when later installments are recorded.
 
 Client roles cannot insert, update, or delete financial rows directly. Staff
 use `create_charge_payment(jsonb)` and directors use
-`void_financial_receipt(uuid,text,uuid)`.
+`void_financial_receipt(uuid,text,uuid)` or
+`void_financial_charge(uuid,text,uuid)`. A charge with active payments can be
+cancelled only after those payments have been voided individually.
 
 ## Legacy representation
 
-Migration 055 creates one `legacy = true` charge per historical receipt with a
-valid student. It deliberately does not group similar receipts into guessed
-installments. Receipts whose student is missing or deleted remain available in
-`legacy_receipt_reconciliation`; their cash remains in receipt-based collected
-totals, but no charge is fabricated.
+Migration 055 creates one `legacy = true` charge per historical receipt with an
+active student, preserving the receipt's known program classification. It
+deliberately does not group similar receipts into guessed installments or infer
+an actor/delivery result. Receipts whose student is missing or deleted remain
+available in `legacy_receipt_reconciliation`; their cash remains in
+receipt-based collected totals, but no charge is fabricated.
 
 ## Email delivery
 
 The receipt insert queues the existing pg_net webhook. pg_net begins delivery
-after transaction commit. Delivery is tracked as pending, queued, sent, failed,
-or skipped, and the Edge Function uses the receipt ID as its Resend idempotency
-key. Local tests do not configure webhook secrets and send no email.
+after transaction commit. Delivery is tracked as unknown (historical), pending,
+queued, sent, failed, or skipped. Missing configuration is recorded as failed,
+and staff can retry failed deliveries with `retry_receipt_email(uuid)`. The Edge
+Function reloads the current receipt and skips a voided/deleted payment before
+using the receipt ID as its stable Resend idempotency key. Local tests do not
+configure webhook secrets and send no email.
 
 ## Photo-consent retirement
 

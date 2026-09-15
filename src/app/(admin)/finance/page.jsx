@@ -7,11 +7,13 @@ import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { useAuth } from '@/context/AuthContext';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 const RELANCER_SHOWN = 10;
 
 export default function Finance() {
+  const { role } = useAuth();
   const [summary, setSummary] = useState(null);
   const [relancer, setRelancer] = useState([]);
   const [sources, setSources] = useState([]);
@@ -201,6 +203,7 @@ export default function Finance() {
                       <Link href={`/receipts/new?student_id=${r.student_id}&charge_id=${r.id}`} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white rounded-md bg-primary hover:opacity-90 whitespace-nowrap">
                         <Wallet size={12} /> Encaisser
                       </Link>
+                      {role === 'director' && <Link href={`/finance/charges/${r.id}/edit`} className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:underline whitespace-nowrap">Corriger</Link>}
                     </div>
                   </div>
                 );

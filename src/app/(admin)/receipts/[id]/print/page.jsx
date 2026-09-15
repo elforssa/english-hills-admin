@@ -7,16 +7,41 @@ import { getBrowserClient } from '@/lib/supabase';
 import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { useAuth } from '@/context/AuthContext';
-import { ArrowLeft, Download, Edit, Printer } from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowLeft, Download, Edit, Mail, Printer } from 'lucide-react';
 
 export default function ReceiptPrint() {
   const { id } = useParams(); const router = useRouter(); const { role } = useAuth();
   const [receipt, setReceipt] = useState(null);
+  const [retryingEmail, setRetryingEmail] = useState(false);
   useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id]);
+  const retryEmail = async () => {
+    setRetryingEmail(true);
+    try {
+      const sb = getBrowserClient();
+      const { data, error } = await sb.rpc('retry_receipt_email', { p_receipt_id: id });
+      if (error) toast.error(error.message);
+      else if (data.queued) toast.success('Nouvelle tentative d’envoi mise en file.');
+      else toast.error(data.configuration_error ? 'Le service email n’est pas configuré.' : 'Ce reçu ne peut pas être envoyé.');
+      const refreshed = await sb.from('receipts').select('*').eq('id', id).single();
+      if (refreshed.data) setReceipt(refreshed.data);
+    } catch {
+      toast.error('Impossible de relancer l’envoi pour le moment.');
+    } finally {
+      setRetryingEmail(false);
+    }
+  };
   if (!receipt) return <div className="p-8 text-sm text-muted-foreground">Chargement du reçu…</div>;
   const amounts = receiptAmounts(receipt); const status = receiptStatus(receipt);
+  const lastEmailAttempt = receipt.email_last_attempted_at
+    ? new Date(receipt.email_last_attempted_at).getTime()
+    : 0;
+  const emailRetryable = receipt.email_delivery_status === 'failed'
+    || (receipt.email_delivery_status === 'queued'
+      && lastEmailAttempt > 0
+      && Date.now() - lastEmailAttempt >= 15 * 60 * 1000);
   return <div className="min-h-screen bg-slate-100 p-4 print:bg-white print:p-0 lg:p-8">
-    <div className="mx-auto mb-5 flex max-w-3xl flex-wrap items-center justify-between gap-3 print:hidden"><button onClick={() => router.push('/receipts')} className="inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={15} /> Tous les reçus</button><div className="flex gap-2">{role === 'director' && <Link href={`/receipts/${id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger</Link>}<button onClick={() => downloadReceiptPDF(receipt)} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Download size={15} /> PDF</button><button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white"><Printer size={15} /> Imprimer</button></div></div>
+    <div className="mx-auto mb-5 flex max-w-3xl flex-wrap items-center justify-between gap-3 print:hidden"><button onClick={() => router.push('/receipts')} className="inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={15} /> Tous les reçus</button><div className="flex flex-wrap gap-2">{role === 'director' && !receipt.voided_at && <Link href={`/receipts/${id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger le paiement</Link>}{role === 'director' && receipt.charge_id && <Link href={`/finance/charges/${receipt.charge_id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger l’engagement</Link>}{['admin','director'].includes(role) && emailRetryable && !receipt.voided_at && <button onClick={retryEmail} disabled={retryingEmail} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold disabled:opacity-60"><Mail size={15} /> {retryingEmail ? 'Nouvel envoi…' : 'Réessayer l’email'}</button>}<button onClick={() => downloadReceiptPDF(receipt)} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Download size={15} /> PDF</button><button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white"><Printer size={15} /> Imprimer</button></div></div>
     <article className="relative mx-auto max-w-3xl overflow-hidden bg-white shadow-xl print:shadow-none">
       {receipt.voided_at && <div className="absolute right-[-48px] top-8 rotate-45 bg-rose-700 px-16 py-2 text-xs font-black uppercase tracking-[0.2em] text-white">Annulé</div>}
       <header className="border-b-4 border-primary px-8 py-7"><p className="text-2xl font-black tracking-tight text-primary">English Hills</p><p className="text-xs text-slate-500">Language Center · Centre Almaz, Casablanca</p><div className="mt-6 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Reçu de paiement</p><h1 className="mt-1 text-xl font-black">{receipt.receipt_number}</h1></div><div className="text-right"><p className="text-sm font-bold">{receipt.date}</p><p className="text-xs text-slate-500">Émis {receipt.created_at ? new Date(receipt.created_at).toLocaleString('fr-MA') : ''}</p></div></div></header>
