@@ -6,12 +6,14 @@ import { getBrowserClient } from '@/lib/supabase';
 import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download, Wallet, Phone } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { useAuth } from '@/context/AuthContext';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 const RELANCER_SHOWN = 10;
-const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
 
 export default function Finance() {
+  const { role } = useAuth();
   const [summary, setSummary] = useState(null);
   const [relancer, setRelancer] = useState([]);
   const [sources, setSources] = useState([]);
@@ -21,12 +23,12 @@ export default function Finance() {
   useEffect(() => {
     const sb = getBrowserClient();
     Promise.all([
-      sb.rpc('get_finance_summary'),
-      sb.rpc('get_unpaid_receipts', { lim: 50 }),
+      sb.rpc('get_finance_charge_summary'),
+      sb.rpc('get_unpaid_charges', { lim: 50 }),
       sb.rpc('get_referral_breakdown'),
     ]).then(([sum, unpaid, refs]) => {
       setSummary(sum.data || {});
-      setRelancer((unpaid.data || []).map(r => ({ ...r, restant: effectiveTotal(r) - (r.montant_paye || 0) })));
+      setRelancer(unpaid.data || []);
       setSources(refs.data || []);
       setLoading(false);
     });
@@ -53,27 +55,35 @@ export default function Finance() {
     </div>
   );
 
-  // Export every receipt (not just a page) by fetching in one large range.
+  // Fetch in pages so the export is not capped by the API row limit.
   const exportFinanceCsv = async () => {
     setExporting(true);
     try {
       const sb = getBrowserClient();
-      const { data } = await sb.from('receipts').select('*').order('date', { ascending: false }).range(0, 9999);
-      exportToCsv((data || []).map(r => ({
+      const data = [];
+      for (let start = 0; ; start += 1000) {
+        const { data: page } = await sb.from('receipts').select('*').order('date', { ascending: false }).range(start, start + 999);
+        data.push(...(page || [])); if (!page || page.length < 1000) break;
+      }
+      exportToCsv(data.map(r => {
+        const amounts = receiptAmounts(r);
+        return ({
         Apprenant: r.nom_prenom,
         Date: r.date,
-        Catégorie: r.categorie,
         Session: r.session_type || '',
-        Niveau: r.niveau,
-        'Type cours': r.type_cours,
-        'Montant total': r.montant_total,
-        'Remise (%)': r.remise || 0,
-        'Total après remise': effectiveTotal(r),
-        'Montant payé': r.montant_paye,
-        Restant: Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)),
+        'Service / période': r.service_description || '',
+        Formule: r.session_type === 'Yearly' ? (r.plan_type || '') : '',
+        Niveau: r.niveau || 'À déterminer',
+        'Prix brut': amounts.gross,
+        Remise: amounts.discount,
+        'Prix net': amounts.net,
+        'Payé avant': amounts.paidBefore,
+        'Montant reçu': amounts.payment,
+        'Solde après': amounts.balance,
         Mode: r.mode_paiement,
-        Statut: r.statut_paiement,
-      })), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
+        Statut: receiptStatus(r),
+        Référence: r.transaction_reference || '',
+      });}), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
     } finally {
       setExporting(false);
     }
@@ -102,6 +112,8 @@ export default function Finance() {
         <StatCard label="Paiements en retard" value={enRetard} icon={AlertTriangle} color="#B91C2E" />
         <StatCard label="Reçus soldés" value={payes} icon={CheckCircle} color="#16a34a" />
       </div>
+
+      {Number(summary?.legacy_unreconciled || 0) > 0 && <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><b>{summary.legacy_unreconciled} reçu(s) historique(s) à rapprocher</b><p className="mt-1 text-xs">Leur apprenant est absent ou archivé. Ils restent comptés dans les encaissements, mais aucun engagement n’a été fabriqué. Vue de contrôle : <code>legacy_receipt_reconciliation</code>.</p></div>}
 
       <div className="bg-card border border-border rounded-lg p-5 mb-6">
         <div className="flex items-center justify-between mb-3">
@@ -152,7 +164,7 @@ export default function Finance() {
               <Wallet size={16} style={{ color: '#f59e0b' }} /> À relancer
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {relancer.length}{relancer.length >= 50 ? '+' : ''} reçu{relancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
+              {relancer.length}{relancer.length >= 50 ? '+' : ''} engagement{relancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
             </p>
           </div>
           <Link href="/receipts" className="text-xs font-medium text-primary hover:underline whitespace-nowrap">Tous les reçus →</Link>
@@ -165,18 +177,18 @@ export default function Finance() {
           <div className="p-8 text-center">
             <CheckCircle size={28} className="mx-auto text-green-500/70 mb-2" />
             <p className="text-sm font-medium text-foreground">Aucun solde en attente</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Tous les reçus sont soldés — rien à relancer.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Tous les engagements sont soldés — rien à relancer.</p>
           </div>
         ) : (
           <>
             <div className="divide-y divide-border">
               {relancer.slice(0, RELANCER_SHOWN).map(r => {
-                const key = r.statut_paiement === 'En retard' ? 'En retard' : (r.statut_paiement || 'En attente');
+                const key = r.settlement_status || 'En attente';
                 return (
                   <div key={r.id} className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm text-foreground truncate">{r.nom_prenom}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{r.date} · {r.categorie}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{r.session_type} · {r.service_description}{r.due_date ? ` · échéance ${r.due_date}` : ''}</p>
                       {r.telephone && (
                         <a href={`tel:${r.telephone}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
                           <Phone size={11} /> {r.telephone}
@@ -185,12 +197,13 @@ export default function Finance() {
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="text-right">
-                        <p className="text-sm font-bold" style={{ color: '#B91C2E' }}>{r.restant.toLocaleString('fr-MA')} MAD</p>
+                        <p className="text-sm font-bold" style={{ color: '#B91C2E' }}>{money(r.restant)} MAD</p>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUT_CONFIG[key] || STATUT_CONFIG['En attente']}`}>{key}</span>
                       </div>
-                      <Link href={`/receipts/${r.id}/edit`} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white rounded-md bg-primary hover:opacity-90 whitespace-nowrap">
+                      <Link href={`/receipts/new?student_id=${r.student_id}&charge_id=${r.id}`} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white rounded-md bg-primary hover:opacity-90 whitespace-nowrap">
                         <Wallet size={12} /> Encaisser
                       </Link>
+                      {role === 'director' && <Link href={`/finance/charges/${r.id}/edit`} className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:underline whitespace-nowrap">Corriger</Link>}
                     </div>
                   </div>
                 );

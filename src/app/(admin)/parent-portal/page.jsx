@@ -13,6 +13,8 @@ import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
+import { getBrowserClient } from '@/lib/supabase';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -33,9 +35,6 @@ const NOTIF_TYPE_LABELS = {
   premium_homework: 'Devoir Premium',
 };
 
-// Effective amount owed for a receipt after its percentage discount.
-const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
-
 export default function ParentPortal() {
   const [user, setUser] = useState(null);
   const [students, setStudents] = useState([]);
@@ -43,6 +42,7 @@ export default function ParentPortal() {
   const [attendance, setAttendance] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [receipts, setReceipts] = useState([]);
+  const [charges, setCharges] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
@@ -102,13 +102,11 @@ export default function ParentPortal() {
       entities.PremiumSession.list('-scheduled_date', 200),
       entities.PremiumMembership.filter({ student_id: selectedStudent.id }, '-created_at', 20),
       entities.PremiumHomework.filter({ student_id: selectedStudent.id }, '-created_date', 100),
+      getBrowserClient().from('charge_balances').select('*').eq('student_id', selectedStudent.id),
     ])
-      .then(async ([att, ass, rec, port, la, adults, premium, memberships, homework]) => {
-        const groupIds = [...new Set(rec.map((receipt) => receipt.group_id).filter(Boolean))];
-        const groupRows = groupIds.length ? await entities.Group.filter({ id: groupIds }) : [];
-        const groupNames = Object.fromEntries(groupRows.map((group) => [group.id, group.name]));
+      .then(async ([att, ass, rec, port, la, adults, premium, memberships, homework, chargeResult]) => {
         setAttendance(att); setAssessments(ass);
-        setReceipts(rec.map((receipt) => ({ ...receipt, group_name: groupNames[receipt.group_id] })));
+        setReceipts(rec); setCharges(chargeResult.data || []);
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
         setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
       })
@@ -192,8 +190,7 @@ export default function ParentPortal() {
   const attendanceRate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
   const isYoungLearner = selectedStudent?.age_category === 'Young Learners (6-12)';
 
-  // Outstanding balance across the selected child's receipts.
-  const balanceDue = receipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
+  const balanceDue = charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0);
 
   // Recipients: each teacher + the front office (so parents can reach reception).
   const recipients = [
@@ -226,7 +223,7 @@ export default function ParentPortal() {
               const rows = [
                 ...attendance.map(a => ({ Type: 'Présence', Date: a.session_date, Détail: a.status, Note: '' })),
                 ...assessments.map(a => ({ Type: 'Note', Date: a.terme, Détail: `Finale: ${a.note_finale ?? '—'}/20`, Note: a.commentaire || '' })),
-                ...receipts.map(r => ({ Type: 'Paiement', Date: r.date, Détail: r.statut_paiement, Note: `${(r.montant_paye || 0).toLocaleString('fr-MA')} MAD` })),
+                ...receipts.map(r => ({ Type: 'Paiement', Date: r.date, Détail: receiptStatus(r), Note: `${money(receiptAmounts(r).payment)} MAD` })),
               ];
               exportToCsv(rows, `bilan-${selectedStudent.full_name}-${new Date().toISOString().slice(0,10)}.csv`);
             }}
@@ -399,12 +396,12 @@ export default function ParentPortal() {
               <div key={r.id} className="flex items-center justify-between px-4 py-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">{r.date}{r.receipt_number ? ` · ${r.receipt_number}` : ''}</p>
-                  <p className="text-xs text-muted-foreground">{r.mode_paiement}</p>
+                  <p className="text-xs text-muted-foreground">{r.session_type || 'Historique'} · {r.service_description || 'Reçu historique'} · {r.mode_paiement}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <p className="text-sm font-bold">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAY_COLORS[r.statut_paiement] || 'bg-gray-100 text-gray-500'}`}>{r.statut_paiement || '—'}</span>
+                    <p className="text-sm font-bold">{money(receiptAmounts(r).payment)} MAD</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.voided_at ? 'bg-rose-100 text-rose-700' : PAY_COLORS[receiptStatus(r)] || 'bg-gray-100 text-gray-500'}`}>{receiptStatus(r)}</span>
                   </div>
                   <button
                     onClick={() => downloadReceiptPDF(r)}

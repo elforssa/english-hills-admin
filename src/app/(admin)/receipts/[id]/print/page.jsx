@@ -2,358 +2,63 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { entities } from '@/lib/entities';
-import { Printer, ArrowLeft, Download, Trash2, Edit, UsersRound } from 'lucide-react';
 import Link from 'next/link';
-import jsPDF from 'jspdf';
-import { toast } from 'sonner';
-import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
-
-const STATUT_CONFIG = {
-  'Soldé': { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
-  'Acompte versé': { bg: '#FFFBEB', color: '#92400e', border: '#FDE68A' },
-  'En attente': { bg: '#EFF6FF', color: '#1e40af', border: '#BFDBFE' },
-  'En retard': { bg: '#FFF1F2', color: '#9f1239', border: '#FECDD3' },
-};
+import { downloadReceiptPDF } from '@/lib/receiptPdf';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
+import { ArrowLeft, Download, Edit, Mail, Printer } from 'lucide-react';
 
 export default function ReceiptPrint() {
-  const params = useParams();
-  const id = params?.id;
-  const router = useRouter();
-  const { role } = useAuth();
-  const isDirector = role === 'director';
+  const { id } = useParams(); const router = useRouter(); const { role } = useAuth();
   const [receipt, setReceipt] = useState(null);
-  const [group, setGroup] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!id) return;
-    entities.Receipt.filter({ id }).then(async (data) => {
-      const row = data[0] || null;
-      setReceipt(row);
-      if (row?.group_id) {
-        const [linkedGroup] = await entities.Group.filter({ id: row.group_id });
-        setGroup(linkedGroup || null);
-      }
-    }).finally(() => setLoading(false));
-  }, [id]);
-
-  const handlePrint = () => window.print();
-
-  const handleDownload = () => {
-    const doc = new jsPDF({ unit: 'mm', format: 'a5' });
-    const pdfEffectiveTotal = (receipt.montant_total || 0) * (1 - (receipt.remise || 0) / 100);
-    const restant = pdfEffectiveTotal - (receipt.montant_paye || 0);
-    const statusKey = receipt.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
-    let y = 15;
-
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 77, 139);
-    doc.text('English Hills Language Center', 74, y, { align: 'center' }); y += 7;
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
-    doc.text('Centre Almaz, Casablanca · contact@english-hills.com', 74, y, { align: 'center' }); y += 8;
-    doc.setDrawColor(30, 77, 139); doc.setLineWidth(0.5); doc.line(10, y, 138, y); y += 6;
-
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text(`Reçu de paiement — ${receipt.date || ''}`, 10, y); y += 5;
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120, 120, 120);
-    doc.text(`N° ${receipt.receipt_number || '#' + (receipt.id || '').slice(-8).toUpperCase()}  ·  ${statusKey}`, 10, y); y += 7;
-    doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3); doc.line(10, y, 138, y); y += 5;
-
-    const rows = [
-      ['Nom et prénom', receipt.nom_prenom],
-      ['Téléphone', receipt.telephone],
-      ...(receipt.email ? [['Email', receipt.email]] : []),
-      ...(receipt.date_naissance ? [['Date de naissance', receipt.date_naissance]] : []),
-      ['Catégorie', receipt.categorie],
-      ['Formule', receipt.plan_type || 'Standard'],
-      ...(receipt.session_type ? [['Session', receipt.session_type]] : []),
-      ['Niveau', receipt.niveau],
-      ...(group ? [['Groupe', group.name]] : []),
-      ['Type de cours', receipt.type_cours],
-      ...(receipt.jours ? [['Jours', receipt.jours]] : []),
-      ...(receipt.plage_horaire ? [['Horaire', receipt.plage_horaire]] : []),
-    ];
-
-    doc.setFontSize(9);
-    rows.forEach(([label, val]) => {
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
-      doc.text(label + ' :', 10, y);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      doc.text(String(val || '—'), 58, y);
-      y += 6;
-    });
-
-    y += 2; doc.line(10, y, 138, y); y += 6;
-    const financial = [
-      ...(receipt.remise > 0
-        ? [
-            ['Prix de base', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`],
-            [`Remise (${receipt.remise}%)`, `-${((receipt.montant_total || 0) * (receipt.remise / 100)).toLocaleString('fr-MA')} MAD`],
-            ['Prix final', `${pdfEffectiveTotal.toLocaleString('fr-MA')} MAD`],
-          ]
-        : [['Montant total', `${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`]]),
-      ['Montant payé', `${(receipt.montant_paye || 0).toLocaleString('fr-MA')} MAD`],
-      ['Restant', `${restant.toLocaleString('fr-MA')} MAD`],
-      ['Mode de paiement', receipt.mode_paiement],
-      ['Statut', statusKey],
-    ];
-    financial.forEach(([label, val]) => {
-      doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 80, 80);
-      doc.text(label + ' :', 10, y);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      doc.text(String(val || '—'), 58, y);
-      y += 6;
-    });
-
-    y += 4; doc.line(10, y, 138, y); y += 8;
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
-    doc.text('Signature du responsable : ________________________', 10, y);
-
-    const safeName = (receipt.nom_prenom || 'recu').replace(/\s+/g, '-').toLowerCase();
-    doc.save(`reçu-${safeName}-${receipt.date || 'english-hills'}.pdf`);
-  };
-
-  const handleDelete = async () => {
-    // Receipts are retention-sensitive: only the director may remove one, and
-    // it is a soft delete (deleted_at) via RPC — never a hard DELETE.
-    if (!isDirector) {
-      toast.error('Seul le directeur peut supprimer un reçu.');
-      return;
+  const [retryingEmail, setRetryingEmail] = useState(false);
+  useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id]);
+  const retryEmail = async () => {
+    setRetryingEmail(true);
+    try {
+      const sb = getBrowserClient();
+      const { data, error } = await sb.rpc('retry_receipt_email', { p_receipt_id: id });
+      if (error) toast.error(error.message);
+      else if (data.queued) toast.success('Nouvelle tentative d’envoi mise en file.');
+      else toast.error(data.configuration_error ? 'Le service email n’est pas configuré.' : 'Ce reçu ne peut pas être envoyé.');
+      const refreshed = await sb.from('receipts').select('*').eq('id', id).single();
+      if (refreshed.data) setReceipt(refreshed.data);
+    } catch {
+      toast.error('Impossible de relancer l’envoi pour le moment.');
+    } finally {
+      setRetryingEmail(false);
     }
-    if (!confirm('Archiver ce reçu ? Il sera masqué mais conservé pour la comptabilité.')) return;
-    const sb = getBrowserClient();
-    const { error } = await sb.rpc('soft_delete_receipt', { p_receipt_id: id });
-    if (error) {
-      toast.error(error.message || 'Échec de la suppression du reçu.');
-      return;
-    }
-    toast.success('Reçu archivé');
-    router.push('/receipts');
   };
-
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Chargement...</div>;
-  if (!receipt) return <div className="p-8 text-center text-muted-foreground">Reçu introuvable.</div>;
-
-  const effectiveTotal = (receipt.montant_total || 0) * (1 - (receipt.remise || 0) / 100);
-  const montantRestant = effectiveTotal - (receipt.montant_paye || 0);
-  const statusKey = receipt.statut_paiement || (montantRestant <= 0 ? 'Soldé' : 'En attente');
-  const sc = STATUT_CONFIG[statusKey] || STATUT_CONFIG['En attente'];
-
-  return (
-    <div className="min-h-screen bg-gray-100 print:bg-white">
-      <div className="print:hidden sticky top-0 z-10 flex flex-wrap items-center gap-3 px-6 py-3 bg-white border-b border-border shadow-sm">
-        <button onClick={() => router.push('/receipts')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft size={15} /> Retour
-        </button>
-        <div className="flex-1" />
-        {group && (
-          <Link
-            href={`/groups/${group.id}`}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-xl border border-blue-200 bg-blue-50 text-primary hover:bg-blue-100 transition-colors"
-          >
-            <UsersRound size={15} /> {group.name}
-          </Link>
-        )}
-        <div className="flex items-center gap-2">
-          <div className="text-sm font-medium text-muted-foreground mr-2">{receipt.nom_prenom}</div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full border" style={{ backgroundColor: sc.bg, color: sc.color, borderColor: sc.border }}>
-            {statusKey}
-          </span>
-        </div>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-xl transition-all hover:opacity-90 shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #1E4D8B 0%, #1a3f75 100%)' }}
-        >
-          <Printer size={15} />
-          Imprimer
-        </button>
-        <button
-          onClick={handleDownload}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
-        >
-          <Download size={15} />
-          Télécharger PDF
-        </button>
-        <Link
-          href={`/receipts/${id}/edit`}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-border hover:bg-muted transition-colors"
-        >
-          <Edit size={15} />
-          Modifier
-        </Link>
-        {isDirector && (
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 size={15} />
-            Supprimer
-          </button>
-        )}
+  if (!receipt) return <div className="p-8 text-sm text-muted-foreground">Chargement du reçu…</div>;
+  const amounts = receiptAmounts(receipt); const status = receiptStatus(receipt);
+  const lastEmailAttempt = receipt.email_last_attempted_at
+    ? new Date(receipt.email_last_attempted_at).getTime()
+    : 0;
+  const emailRetryable = receipt.email_delivery_status === 'failed'
+    || (receipt.email_delivery_status === 'queued'
+      && lastEmailAttempt > 0
+      && Date.now() - lastEmailAttempt >= 15 * 60 * 1000);
+  return <div className="min-h-screen bg-slate-100 p-4 print:bg-white print:p-0 lg:p-8">
+    <div className="mx-auto mb-5 flex max-w-3xl flex-wrap items-center justify-between gap-3 print:hidden"><button onClick={() => router.push('/receipts')} className="inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={15} /> Tous les reçus</button><div className="flex flex-wrap gap-2">{role === 'director' && !receipt.voided_at && <Link href={`/receipts/${id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger le paiement</Link>}{role === 'director' && receipt.charge_id && <Link href={`/finance/charges/${receipt.charge_id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger l’engagement</Link>}{['admin','director'].includes(role) && emailRetryable && !receipt.voided_at && <button onClick={retryEmail} disabled={retryingEmail} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold disabled:opacity-60"><Mail size={15} /> {retryingEmail ? 'Nouvel envoi…' : 'Réessayer l’email'}</button>}<button onClick={() => downloadReceiptPDF(receipt)} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Download size={15} /> PDF</button><button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-bold text-white"><Printer size={15} /> Imprimer</button></div></div>
+    <article className="relative mx-auto max-w-3xl overflow-hidden bg-white shadow-xl print:shadow-none">
+      {receipt.voided_at && <div className="absolute right-[-48px] top-8 rotate-45 bg-rose-700 px-16 py-2 text-xs font-black uppercase tracking-[0.2em] text-white">Annulé</div>}
+      <header className="border-b-4 border-primary px-8 py-7"><p className="text-2xl font-black tracking-tight text-primary">English Hills</p><p className="text-xs text-slate-500">Language Center · Centre Almaz, Casablanca</p><div className="mt-6 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Reçu de paiement</p><h1 className="mt-1 text-xl font-black">{receipt.receipt_number}</h1></div><div className="text-right"><p className="text-sm font-bold">{receipt.date}</p><p className="text-xs text-slate-500">Émis {receipt.created_at ? new Date(receipt.created_at).toLocaleString('fr-MA') : ''}</p></div></div></header>
+      <div className="space-y-7 px-8 py-7">
+        <section><Title>Apprenant</Title><div className="grid grid-cols-2 gap-4 sm:grid-cols-3"><Data label="Nom" value={receipt.nom_prenom} /><Data label="Téléphone" value={receipt.telephone} /><Data label="Destinataire email" value={receipt.email} /></div></section>
+        <section><Title>Service facturé</Title><div className="grid grid-cols-2 gap-4 sm:grid-cols-4"><Data label="Session" value={receipt.session_type || 'Historique'} /><Data label="Service / période" value={receipt.service_description || 'Reçu historique'} />{receipt.session_type === 'Yearly' && <Data label="Formule" value={receipt.plan_type} />}<Data label="Niveau" value={receipt.niveau || 'À déterminer'} /></div>{receipt.plan_type === 'Premium' && <p className="mt-3 text-xs text-amber-800">Formule achetée : atelier collectif partagé d’une heure le week-end. Ce reçu ne modifie pas l’affectation académique.</p>}</section>
+        <section><Title>Paiement</Title><div className="overflow-hidden rounded-xl border"><Row label="Prix brut convenu" value={`${money(amounts.gross)} MAD`} />{amounts.discount > 0 && <Row label="Remise" value={`−${money(amounts.discount)} MAD`} />}<Row label="Prix net" value={`${money(amounts.net)} MAD`} strong /><Row label="Payé avant ce reçu" value={`${money(amounts.paidBefore)} MAD`} /><Row label="Reçu ce jour" value={`${money(amounts.payment)} MAD`} strong /><Row label="Solde après ce reçu" value={`${money(amounts.balance)} MAD`} strong tone={amounts.balance > 0 ? 'due' : 'paid'} /></div><div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-xs text-slate-600"><span><b>Mode :</b> {receipt.mode_paiement}</span>{receipt.transaction_reference && <span><b>Référence :</b> {receipt.transaction_reference}</span>}<span><b>Statut :</b> {status}</span></div></section>
+        {(receipt.payment_note || receipt.observation) && <section><Title>Note</Title><p className="text-sm text-slate-600">{receipt.payment_note || receipt.observation}</p></section>}
+        {receipt.voided_at && <section className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><b>Paiement annulé</b><p>{receipt.void_reason}</p><p className="mt-1 text-xs">L’original est conservé pour l’audit et ne compte plus dans le solde.</p></section>}
+        <div className="grid grid-cols-2 gap-12 pt-8 text-xs uppercase tracking-wide text-slate-400"><div><p>Signature du responsable</p><div className="mt-10 border-b" /></div><div className="text-right"><p>Cachet du centre</p><div className="mt-10 border-b" /></div></div>
       </div>
-
-      <div className="py-8 px-4 print:p-0">
-        <div
-          className="bg-white mx-auto shadow-xl print:shadow-none"
-          style={{ maxWidth: '560px', fontFamily: 'Inter, sans-serif' }}
-        >
-          <div className="h-2" style={{ background: 'linear-gradient(90deg, #1E4D8B 0%, #B91C2E 100%)' }} />
-
-          <div className="flex items-start justify-between px-10 pt-8 pb-6">
-            <div>
-              <img
-                src="/eh-logo.png"
-                alt="English Hills"
-                style={{ height: '44px', width: 'auto' }}
-              />
-              <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                Centre Almaz, Casablanca<br />
-                Maroc<br />
-                contact@english-hills.com
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="inline-block text-white text-xs font-bold px-4 py-1.5 rounded-lg mb-3 bg-primary">
-                REÇU DE PAIEMENT
-              </div>
-              <p className="text-xs text-gray-500">Date : <span className="font-bold text-gray-800">{receipt.date}</span></p>
-              <p className="text-xs text-gray-500 mt-1">N° de reçu : <span className="font-bold text-gray-800">{receipt.receipt_number || `#${receipt.id?.slice(-8).toUpperCase()}`}</span></p>
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border" style={{ backgroundColor: sc.bg, color: sc.color, borderColor: sc.border }}>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: sc.color }} />
-                {statusKey}
-              </div>
-            </div>
-          </div>
-
-          <div className="px-10 pb-8 space-y-7">
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest mb-4 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
-                Données d&apos;inscription
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <DataField label="Nom et prénom" value={receipt.nom_prenom} />
-                <DataField label="Téléphone" value={receipt.telephone} />
-                {receipt.email && <DataField label="Email" value={receipt.email} />}
-                {receipt.date_naissance && <DataField label="Date de naissance" value={receipt.date_naissance} />}
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest mb-4 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
-                Détails du cours
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                <DataField label="Catégorie" value={receipt.categorie} />
-                <DataField label="Formule" value={receipt.plan_type || 'Standard'} />
-                {receipt.session_type && <DataField label="Session" value={receipt.session_type} />}
-                {group && <DataField label="Groupe" value={group.name} />}
-                <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Niveau</p>
-                  <span className="inline-block text-xs font-bold text-white px-3 py-1 rounded-lg bg-primary">{receipt.niveau}</span>
-                </div>
-                <DataField label="Type de cours" value={receipt.type_cours} />
-                {receipt.duree_cours && <DataField label="Durée" value={receipt.duree_cours} />}
-                {receipt.jours && <DataField label="Jours" value={receipt.jours} />}
-                {receipt.plage_horaire && <DataField label="Horaire" value={receipt.plage_horaire} />}
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-widest mb-4 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
-                Détails du paiement
-              </h3>
-              <div className="bg-gray-50 rounded-xl overflow-hidden">
-                <div className="divide-y divide-gray-100">
-                  {receipt.remise > 0 ? (
-                    <>
-                      <PayRow label="Prix de base" value={`${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`} />
-                      <PayRow
-                        label={`Remise (${receipt.remise}%)`}
-                        value={`−${((receipt.montant_total || 0) * (receipt.remise / 100)).toLocaleString('fr-MA')} MAD`}
-                        valueStyle={{ color: '#059669' }}
-                      />
-                      <PayRow label="Prix final" value={`${effectiveTotal.toLocaleString('fr-MA')} MAD`} bold />
-                    </>
-                  ) : (
-                    <PayRow label="Montant total du cours" value={`${(receipt.montant_total || 0).toLocaleString('fr-MA')} MAD`} />
-                  )}
-                  <PayRow label="Montant payé ce jour" value={`${(receipt.montant_paye || 0).toLocaleString('fr-MA')} MAD`} />
-                  <PayRow label="Mode de paiement" value={receipt.mode_paiement} />
-                </div>
-                <div className="flex justify-between items-center px-5 py-4" style={{ backgroundColor: montantRestant > 0 ? '#FFF1F2' : '#F0FDF4' }}>
-                  <span className="text-sm font-bold" style={{ color: montantRestant > 0 ? '#B91C2E' : '#166534' }}>Montant restant</span>
-                  <span className="text-lg font-bold" style={{ color: montantRestant > 0 ? '#B91C2E' : '#166534' }}>
-                    {montantRestant.toLocaleString('fr-MA')} MAD
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {receipt.observation && (
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-widest mb-3 pb-2 border-b-2" style={{ color: '#1E4D8B', borderColor: '#E8EEF7' }}>
-                  Observation
-                </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{receipt.observation}</p>
-              </section>
-            )}
-
-            <section className="pt-6 mt-4 border-t border-gray-100">
-              <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#1E4D8B' }}>Autorisation d&apos;image</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                J&apos;autorise English Hills Language Center à utiliser les photos et vidéos de l&apos;apprenant à des fins de communication (réseaux sociaux, supports du centre). Autorisation facultative et révocable à tout moment.
-              </p>
-              <div className="flex gap-8 mt-2 text-sm text-gray-700">
-                <span>{receipt.photo_consent === 'Accepte' ? '☑' : '☐'} J&apos;accepte</span>
-                <span>{receipt.photo_consent === 'Refuse' ? '☑' : '☐'} Je refuse</span>
-              </div>
-            </section>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 pt-8 mt-4 border-t border-gray-100">
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-10">Signature du responsable</p>
-                <div className="border-b border-gray-300 w-44" />
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-10">Cachet du centre</p>
-                <div className="border-b border-gray-300 w-44 ml-auto" />
-              </div>
-            </div>
-          </div>
-
-          <div className="px-10 py-4 text-center bg-primary">
-            <p className="text-xs font-medium text-white/80">English Hills Language Center · Centre Almaz, Casablanca</p>
-            <p className="text-xs text-white/50 mt-0.5 italic">Learn Today, Lead Tomorrow · english-hills.com</p>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @media print {
-          body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          @page { margin: 0; size: A5; }
-        }
-      `}</style>
-    </div>
-  );
+      <footer className="bg-primary px-8 py-3 text-center text-xs text-white/80">English Hills Language Center · Learn Today, Lead Tomorrow</footer>
+    </article>
+    <style>{`@media print { body { margin:0; print-color-adjust:exact; -webkit-print-color-adjust:exact } @page { size:A5; margin:0 } }`}</style>
+  </div>;
 }
 
-function DataField({ label, value }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="font-semibold text-gray-800">{value || '—'}</p>
-    </div>
-  );
-}
-
-function PayRow({ label, value, bold, valueStyle }) {
-  return (
-    <div className="flex justify-between items-center px-5 py-3 text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className={bold ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} style={valueStyle}>{value}</span>
-    </div>
-  );
-}
+function Title({ children }) { return <h2 className="mb-3 border-b pb-2 text-[11px] font-black uppercase tracking-[0.18em] text-primary">{children}</h2>; }
+function Data({ label, value }) { return <div><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 text-sm font-bold text-slate-800">{value || '—'}</p></div>; }
+function Row({ label, value, strong, tone }) { return <div className={`flex justify-between border-b px-4 py-3 text-sm last:border-0 ${tone === 'due' ? 'bg-rose-50 text-rose-800' : tone === 'paid' ? 'bg-emerald-50 text-emerald-800' : ''}`}><span>{label}</span><span className={strong ? 'font-black' : 'font-semibold'}>{value}</span></div>; }

@@ -2,69 +2,43 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { entities } from '@/lib/entities';
-import ReceiptForm from '@/components/receipts/ReceiptForm';
-import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { getBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { receiptAmounts, money } from '@/lib/receiptFinance';
 import { toast } from 'sonner';
-import { completeReceiptAcademicLink } from '@/lib/receiptAcademicLink';
+import { ArrowLeft, Ban, ShieldCheck } from 'lucide-react';
 
-export default function ReceiptEdit() {
-  const params = useParams();
-  const id = params?.id;
+export default function ReceiptCorrection() {
+  const { id } = useParams();
   const router = useRouter();
+  const { role } = useAuth();
   const [receipt, setReceipt] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id]);
 
-  useEffect(() => {
-    if (!id) return;
-    entities.Receipt.filter({ id }).then((data) => {
-      setReceipt(data[0] || null);
-      setLoading(false);
-    });
-  }, [id]);
-
-  const handleSubmit = async (formData) => {
+  const voidReceipt = async () => {
+    if (reason.trim().length < 3) return toast.error('Indiquez le motif de correction.');
+    if (!confirm('Annuler ce paiement ? Le reçu original restera visible et le solde sera recalculé.')) return;
     setSaving(true);
-    try {
-      await entities.Receipt.update(id, formData);
-      if (formData.group_id) {
-        try {
-          await completeReceiptAcademicLink(id, formData);
-          toast.success('Reçu, groupe et inscription mis à jour');
-        } catch {
-          toast.warning('Le reçu est lié au groupe, mais l’inscription doit être vérifiée.');
-        }
-      } else {
-        toast.success('Reçu mis à jour');
-      }
-      router.push(`/receipts/${id}/print`);
-    } catch (err) {
-      toast.error('Erreur lors de la mise à jour : ' + (err.message || 'Veuillez réessayer.'));
-      setSaving(false);
-    }
+    const { data, error } = await getBrowserClient().rpc('void_financial_receipt', {
+      p_receipt_id: id, p_reason: reason.trim(), p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) { toast.error(error.message); setSaving(false); return; }
+    toast.success(data.already_voided ? 'Ce reçu était déjà annulé.' : 'Paiement annulé. La trace originale est conservée.');
+    router.push(`/receipts/${id}/print`);
   };
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Chargement...</div>;
-  if (!receipt) return <div className="p-8 text-center text-muted-foreground">Reçu introuvable.</div>;
-
-  return (
-    <div className="p-4 lg:p-8 max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={() => router.push(`/receipts/${id}/print`)}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft size={15} /> Retour
-        </button>
-        <h1 className="text-2xl font-bold">Modifier le reçu</h1>
-      </div>
-      <ReceiptForm
-        initialData={receipt}
-        onSubmit={handleSubmit}
-        onCancel={() => router.push(`/receipts/${id}/print`)}
-        saving={saving}
-      />
+  if (!receipt) return <div className="p-8 text-sm text-muted-foreground">Chargement…</div>;
+  const amounts = receiptAmounts(receipt);
+  return <div className="mx-auto max-w-2xl p-4 lg:p-8">
+    <Link href={`/receipts/${id}/print`} className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={15} /> Retour au reçu</Link>
+    <div className="rounded-2xl border bg-card p-6 shadow-sm">
+      <div className="flex items-start gap-3"><span className="rounded-xl bg-amber-50 p-2 text-amber-700"><ShieldCheck size={22} /></span><div><h1 className="text-xl font-black">Correction contrôlée</h1><p className="mt-1 text-sm text-muted-foreground">Un reçu émis est immuable. Une correction annule le paiement avec une trace d’audit, puis permet de saisir un paiement de remplacement.</p></div></div>
+      <dl className="mt-6 grid grid-cols-2 gap-4 rounded-xl bg-muted/50 p-4 text-sm"><div><dt className="text-muted-foreground">Reçu</dt><dd className="font-bold">{receipt.receipt_number}</dd></div><div><dt className="text-muted-foreground">Apprenant</dt><dd className="font-bold">{receipt.nom_prenom}</dd></div><div><dt className="text-muted-foreground">Paiement</dt><dd className="font-bold">{money(amounts.payment)} MAD</dd></div><div><dt className="text-muted-foreground">Service</dt><dd className="font-bold">{receipt.service_description || 'Historique'}</dd></div></dl>
+      {receipt.voided_at ? <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><b>Déjà annulé</b><p>{receipt.void_reason}</p></div> : role !== 'director' ? <p className="mt-5 rounded-xl bg-muted p-4 text-sm">Seul un directeur peut annuler ou corriger un paiement émis.</p> : <div className="mt-5"><label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Motif obligatoire</label><textarea className="min-h-24 w-full rounded-xl border p-3 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex. montant saisi par erreur…" /><button onClick={voidReceipt} disabled={saving} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white"><Ban size={16} /> {saving ? 'Annulation…' : 'Annuler ce paiement'}</button></div>}
+      {receipt.voided_at && receipt.charge_id && <Link href={`/receipts/new?student_id=${receipt.student_id}&charge_id=${receipt.charge_id}`} className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Saisir le paiement corrigé</Link>}
     </div>
-  );
+  </div>;
 }

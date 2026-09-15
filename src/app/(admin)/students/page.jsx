@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, Upload, UserSearch, Camera, CameraOff, Crown } from 'lucide-react';
+import { Plus, Search, Download, Upload, UserSearch, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
@@ -17,7 +17,6 @@ const LIST_ORDER = '-created_date';
 const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const PHOTO_CONSENTS = ['Accepte', 'Refuse', 'Non demandé'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
   'Recherche Google',
@@ -25,13 +24,6 @@ const SOURCES = [
   'Passage devant le centre (walk-in)',
   'Ancien élève / Réinscription',
 ];
-
-// Small camera badge showing a student's image-consent at a glance.
-function ConsentIcon({ v }) {
-  if (v === 'Accepte') return <Camera size={13} className="text-green-600" title="Photos autorisées" />;
-  if (v === 'Refuse') return <CameraOff size={13} className="text-red-600" title="Photos refusées" />;
-  return <Camera size={13} className="text-muted-foreground/40" title="Autorisation non demandée" />;
-}
 
 // Compact borderless dropdown for editing a single field directly in a table
 // row. `empty` (when provided) renders a "clear" option that maps to null.
@@ -83,7 +75,6 @@ export default function Students() {
   const [filterLevel, setFilterLevel] = useState('');
   const [filterSession, setFilterSession] = useState('');
   const [filterIncomplete, setFilterIncomplete] = useState(false);
-  const [filterConsent, setFilterConsent] = useState('');
   const [filterSource, setFilterSource] = useState('');
   const [filterPlan, setFilterPlan] = useState('');
   const [page, setPage] = useState(1);
@@ -99,10 +90,9 @@ export default function Students() {
     const matchSession = !filterSession || s.session_type === filterSession;
     // "À compléter" = no way to link a parent portal (no email at all).
     const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
-    const matchConsent = !filterConsent || (s.photo_consent || 'Non demandé') === filterConsent;
     const matchSource = !filterSource || s.referral_source === filterSource;
     const matchPlan = !filterPlan || (s.plan_type || 'Standard') === filterPlan;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchConsent && matchSource && matchPlan;
+    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchSource && matchPlan;
   });
 
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -172,10 +162,6 @@ export default function Students() {
           <option value="">Complétude : tous</option>
           <option value="incomplete">À compléter (sans email)</option>
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterConsent} onChange={e => { setFilterConsent(e.target.value); setPage(1); }}>
-          <option value="">Autorisation photo : toutes</option>
-          {PHOTO_CONSENTS.map(c => <option key={c}>{c}</option>)}
-        </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
           <option value="">Source : toutes</option>
           {SOURCES.map(s => <option key={s}>{s}</option>)}
@@ -232,7 +218,7 @@ export default function Students() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5">{s.full_name}<ConsentIcon v={s.photo_consent} />{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
+                        <span className="inline-flex items-center gap-1.5">{s.full_name}{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect

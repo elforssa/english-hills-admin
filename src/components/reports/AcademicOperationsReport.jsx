@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle, ArrowUpRight, BookOpenCheck, CalendarCheck2, Crown,
-  GraduationCap, Link2, UsersRound,
+  GraduationCap, UsersRound,
 } from 'lucide-react';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
 
@@ -72,7 +72,7 @@ function ActionList({ title, description, items, href, empty, accent = 'amber' }
 }
 
 export default function AcademicOperationsReport({
-  students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework,
+  students, teachers, groups, enrollments, premiumSessions, premiumHomework,
   premiumGroups, premiumMemberships, premiumAttendance, loading,
 }) {
   const [sessionFilter, setSessionFilter] = useState('');
@@ -80,7 +80,6 @@ export default function AcademicOperationsReport({
   const currentWeek = mondayOf();
 
   const data = useMemo(() => {
-    const studentById = Object.fromEntries(students.map((student) => [student.id, student]));
     const membersByGroup = new Map(groups.map((group) => [group.id, new Set()]));
 
     students.forEach((student) => {
@@ -101,16 +100,10 @@ export default function AcademicOperationsReport({
     const studentsWithoutGroup = sessionStudents
       .filter((student) => !student.groupe_id && !enrollments.some((enrollment) => enrollment.student_id === student.id && enrollment.group_id && ['Validated', 'Trial'].includes(enrollment.status)))
       .map((student) => ({ id: student.id, label: `${student.full_name} · ${student.session_type || 'Yearly'} · ${student.niveau_cefr || 'niveau non défini'}` }));
-    const unlinkedReceipts = receipts
-      .filter((receipt) => receipt.student_id && !receipt.group_id)
-      .filter((receipt) => {
-        const receiptSession = receipt.session_type || studentById[receipt.student_id]?.session_type || 'Yearly';
-        return !sessionFilter || receiptSession === sessionFilter;
-      })
-      .map((receipt) => ({
-        id: receipt.id,
-        label: `${receipt.nom_prenom || studentById[receipt.student_id]?.full_name || 'Reçu'} · ${receipt.date || 'date inconnue'}`,
-      }));
+    const enrollmentsToReview = enrollments
+      .filter((enrollment) => ['Submitted', 'Under Review'].includes(enrollment.status))
+      .filter((enrollment) => !sessionFilter || (students.find((student) => student.id === enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
+      .map((enrollment) => ({ id: enrollment.id, label: `${students.find((student) => student.id === enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
 
     const activePremium = sessionStudents.filter((student) => student.plan_type === 'Premium'
       && (student.session_type || 'Yearly') === 'Yearly'
@@ -149,12 +142,12 @@ export default function AcademicOperationsReport({
     }).filter((row) => row.groups || row.premium).sort((a, b) => (b.students + b.premium) - (a.students + a.premium));
 
     return {
-      sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, unlinkedReceipts,
+      sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, enrollmentsToReview,
       activePremium, activeMemberships, activePremiumGroups, weekSessions, unassignedPremium,
       preparedCount, submittedCount, attendanceCount,
       sessionRows, teacherRows,
     };
-  }, [students, teachers, groups, enrollments, receipts, premiumSessions, premiumHomework, premiumGroups, premiumMemberships, premiumAttendance, sessionFilter, today, currentWeek]);
+  }, [students, teachers, groups, enrollments, premiumSessions, premiumHomework, premiumGroups, premiumMemberships, premiumAttendance, sessionFilter, today, currentWeek]);
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950 text-white overflow-hidden">
@@ -180,14 +173,14 @@ export default function AcademicOperationsReport({
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           <Metric icon={UsersRound} label="Groupes sans enseignant" value={loading ? '—' : data.unassignedGroups.length} note={`${data.sessionGroups.length} groupe(s) dans la vue`} tone={data.unassignedGroups.length ? 'rose' : 'emerald'} />
           <Metric icon={GraduationCap} label="Apprenants sans groupe" value={loading ? '—' : data.studentsWithoutGroup.length} note={`${data.sessionStudents.length} apprenant(s) actif(s)`} tone={data.studentsWithoutGroup.length ? 'amber' : 'emerald'} />
-          <Metric icon={Link2} label="Reçus à relier" value={loading ? '—' : data.unlinkedReceipts.length} note="Affectation manuelle en attente" tone={data.unlinkedReceipts.length ? 'amber' : 'emerald'} />
+          <Metric icon={AlertTriangle} label="Inscriptions à examiner" value={loading ? '—' : data.enrollmentsToReview.length} note="Demandes soumises ou en revue" tone={data.enrollmentsToReview.length ? 'amber' : 'emerald'} />
           <Metric icon={Crown} label="Premium à affecter" value={loading ? '—' : data.unassignedPremium.length} note={`${data.activeMemberships.length}/${data.activePremium.length} affecté(s) à ${data.activePremiumGroups.length} atelier(s)`} tone={data.unassignedPremium.length ? 'rose' : 'slate'} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <ActionList title="Groupes sans enseignant" description="À affecter avant l’ouverture des cours." items={data.unassignedGroups} href="/groups" empty="Tous les groupes visibles ont un enseignant." accent="rose" />
           <ActionList title="Apprenants sans groupe" description="Actifs mais sans groupe direct ou inscription validée." items={data.studentsWithoutGroup} href="/students" empty="Tous les apprenants actifs sont affectés." />
-          <ActionList title="Reçus sans groupe" description="Reçus rapides conservés pour liaison ultérieure." items={data.unlinkedReceipts} href="/receipts" empty="Aucun reçu ne reste à relier dans cette vue." />
+          <ActionList title="Inscriptions à examiner" description="Demandes académiques en attente d’une décision." items={data.enrollmentsToReview} href="/enrollments" empty="Aucune inscription ne demande de revue." />
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
