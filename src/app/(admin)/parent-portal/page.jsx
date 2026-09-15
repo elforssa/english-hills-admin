@@ -15,6 +15,7 @@ import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmit
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { receiptServiceSummary } from '@/lib/receiptPresentation';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -396,7 +397,7 @@ export default function ParentPortal() {
               <div key={r.id} className="flex items-center justify-between px-4 py-3 gap-3">
                 <div>
                   <p className="text-sm font-medium">{r.date}{r.receipt_number ? ` · ${r.receipt_number}` : ''}</p>
-                  <p className="text-xs text-muted-foreground">{r.session_type || 'Historique'} · {r.service_description || 'Reçu historique'} · {r.mode_paiement}</p>
+                  <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.mode_paiement}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">

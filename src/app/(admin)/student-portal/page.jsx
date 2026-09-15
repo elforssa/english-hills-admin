@@ -14,6 +14,7 @@ import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmit
 import { getBrowserClient } from '@/lib/supabase';
 import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { receiptServiceSummary } from '@/lib/receiptPresentation';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -305,7 +306,7 @@ export default function StudentPortal() {
       {tab === 'finance' && (
         <div className="space-y-4">
           <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{money(charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0))} MAD</p></div>
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-bold">{receipt.receipt_number} · {receipt.date}</p><p className="text-xs text-muted-foreground">{receipt.session_type || 'Historique'} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu"><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-bold">{receipt.receipt_number} · {receipt.date}</p><p className="text-xs text-muted-foreground">{receiptServiceSummary(receipt)} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu"><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
         </div>
       )}
 

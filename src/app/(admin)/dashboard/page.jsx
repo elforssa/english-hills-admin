@@ -7,6 +7,7 @@ import { entities, auth } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { receiptServiceSummary } from '@/lib/receiptPresentation';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -244,7 +245,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{r.nom_prenom}</p>
-                      <p className="text-xs text-muted-foreground">{r.session_type || 'Historique'} · {r.service_description || 'Reçu historique'} · {r.date}</p>
+                      <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.date}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-sm font-bold text-foreground">{money(receiptAmounts(r).payment)} MAD</p>
