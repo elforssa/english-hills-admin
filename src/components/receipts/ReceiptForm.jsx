@@ -5,6 +5,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { PAYMENT_METHODS, localBusinessDate, money } from '@/lib/receiptFinance';
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
+import { createInitialChargeCoordinator, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
 import { toast } from 'sonner';
 import { ChevronRight, CircleDollarSign, Search, UserPlus, X } from 'lucide-react';
 
@@ -15,12 +16,20 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   // stable when the browser retries after an uncertain/lost RPC response.
   const idempotencyKey = useRef(null);
   if (!idempotencyKey.current) idempotencyKey.current = createStableIdempotencyKey();
+  const initialCharge = useRef(null);
+  if (!initialCharge.current) {
+    initialCharge.current = createInitialChargeCoordinator(initialData.student_id, initialData.charge_id);
+  }
+  const studentLookupVersion = useRef(0);
   const [form, setForm] = useState({
     ...emptyStudent,
-    charge_id: '', session_type: '', service_description: '', plan_type: 'Standard', level: '',
+    session_type: '', service_description: '', plan_type: 'Standard', level: '',
     gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
     payment_date: localBusinessDate(), payment_method: 'Espèces', transaction_reference: '', note: '',
     update_contacts: false, ...initialData,
+    // Resolve a deep-linked student first, then load that student's balances.
+    student_id: '',
+    charge_id: '',
   });
   const [search, setSearch] = useState(initialData.student_name || '');
   const [students, setStudents] = useState([]);
@@ -32,9 +41,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
   useEffect(() => {
     if (!initialData.student_id) return;
+    const requestVersion = ++studentLookupVersion.current;
     getBrowserClient().from('students')
       .select('id,full_name,telephone,email,parent_email,niveau_cefr,session_type,plan_type,status')
-      .eq('id', initialData.student_id).single().then(({ data }) => data && selectStudent(data));
+      .eq('id', initialData.student_id).single().then(({ data }) => {
+        if (requestVersion !== studentLookupVersion.current) return;
+        if (data) selectStudent(data, { fromInitialLink: true });
+        else {
+          initialCharge.current.clearStudent();
+          toast.error('L’apprenant demandé est introuvable ou inaccessible.');
+        }
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData.student_id]);
 
@@ -56,22 +73,30 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   }, [search, form.student_id]);
 
   useEffect(() => {
-    if (!form.student_id) { setCharges([]); return; }
+    if (!form.student_id) { setCharges([]); return undefined; }
+    const request = initialCharge.current.startChargeLoad(form.student_id);
+    setCharges([]);
     getBrowserClient().from('charge_balances').select('*').eq('student_id', form.student_id)
       .is('voided_at', null).gt('balance', 0).order('created_at', { ascending: false })
-      .then(({ data }) => setCharges(data || []));
+      .then(({ data, error }) => {
+        const rows = error ? [] : (data || []);
+        const resolution = initialCharge.current.resolveChargeLoad(request, rows);
+        if (resolution.status === 'stale') return;
+        setCharges(rows);
+        if (resolution.status === 'apply') applyCharge(resolution.charge);
+        if (resolution.status === 'missing') {
+          toast.error('Le solde demandé est introuvable, réglé ou inaccessible. Vous pouvez choisir un autre engagement ou créer un nouveau service.');
+        }
+      });
+    return undefined;
+    // applyCharge only writes the resolved snapshot; request coordination is
+    // deliberately keyed solely by the selected student.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.student_id]);
 
-  useEffect(() => {
-    if (!initialData.charge_id || !charges.length || form.charge_id === initialData.charge_id) return;
-    const charge = charges.find((item) => item.id === initialData.charge_id);
-    if (charge) setForm((current) => ({ ...current, charge_id: charge.id, session_type: charge.session_type,
-      service_description: charge.service_description, plan_type: charge.plan_type || 'Standard',
-      level: charge.level || '', gross_amount: charge.gross_amount, discount_amount: charge.discount_amount,
-      due_date: charge.due_date || '', payment_amount: '' }));
-  }, [charges, form.charge_id, initialData.charge_id]);
-
-  const selectStudent = (student) => {
+  const selectStudent = (student, { fromInitialLink = false } = {}) => {
+    if (!fromInitialLink) studentLookupVersion.current += 1;
+    initialCharge.current.selectStudent(student.id, { fromInitialLink });
     setShowCreate(false); setStudents([]); setSearch(student.full_name || ''); setDuplicateWarning('');
     setForm((current) => ({
       ...current, ...emptyStudent,
@@ -80,14 +105,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       session_type: student.session_type || '', level: student.niveau_cefr || '',
       plan_type: student.session_type === 'Yearly' ? (student.plan_type || 'Standard') : 'Standard',
       charge_id: '', service_description: '', gross_amount: '', discount_amount: '', due_date: '',
+      payment_amount: '', transaction_reference: '', note: '',
       update_contacts: false,
     }));
   };
 
   const clearStudent = () => {
+    studentLookupVersion.current += 1;
+    initialCharge.current.clearStudent();
     setSearch(''); setShowCreate(false); setStudents([]); setCharges([]); setDuplicateWarning('');
-    setForm((current) => ({ ...current, ...emptyStudent, charge_id: '', service_description: '',
-      gross_amount: '', discount_amount: '', due_date: '', update_contacts: false }));
+    setForm((current) => ({ ...current, ...emptyStudent, ...emptyChargeTerms(),
+      transaction_reference: '', note: '', update_contacts: false }));
   };
 
   const beginCreate = async () => {
@@ -111,9 +139,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   };
 
   const selectCharge = (id) => {
+    initialCharge.current.userSelectedCharge();
     const charge = charges.find((item) => item.id === id);
-    if (!charge) { set('charge_id', ''); return; }
-    setForm((current) => ({ ...current, charge_id: id, session_type: charge.session_type,
+    if (!charge) {
+      setForm((current) => ({ ...current, ...emptyChargeTerms() }));
+      return;
+    }
+    applyCharge(charge);
+  };
+
+  const applyCharge = (charge) => {
+    setForm((current) => ({ ...current, charge_id: charge.id, session_type: charge.session_type,
       service_description: charge.service_description, plan_type: charge.plan_type || 'Standard',
       level: charge.level || '', gross_amount: charge.gross_amount, discount_amount: charge.discount_amount,
       due_date: charge.due_date || '', payment_amount: '' }));

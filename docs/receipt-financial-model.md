@@ -9,8 +9,11 @@
   non-zero payment creates one immutable row with identity, service, amount,
   prior-paid, and balance snapshots. A zero-payment request creates only the
   charge.
-- `financial_requests` provides request idempotency. Charge row locking and an
-  advisory idempotency lock serialize concurrent payments.
+- `financial_requests` binds each idempotency key to its actor and a SHA-256
+  fingerprint of normalized transaction inputs. Exact retries replay; changing
+  a student, charge, amount, contact update, or other meaningful input is an
+  explicit conflict. Charge row locking and an advisory idempotency lock
+  serialize concurrent payments.
 - `financial_events` is the append-only audit trail for charge creation,
   payment recording, director-only payment/charge voids, and email retries.
 - `charge_balances` is the canonical live balance calculation. Issued receipt
@@ -38,8 +41,18 @@ after transaction commit. Delivery is tracked as unknown (historical), pending,
 queued, sent, failed, or skipped. Missing configuration is recorded as failed,
 and staff can retry failed deliveries with `retry_receipt_email(uuid)`. The Edge
 Function reloads the current receipt and skips a voided/deleted payment before
-using the receipt ID as its stable Resend idempotency key. Local tests do not
-configure webhook secrets and send no email.
+using the receipt ID as its stable Resend idempotency key. Historical `unknown`
+status is never rewritten by webhook, lookup-error, or retry paths. Local tests
+do not configure webhook secrets and send no email.
+
+## Migration development status
+
+Migration 055 is unreleased on this feature branch and is absent from
+`origin/main`, so the fixes were applied directly to 055 rather than adding a
+forward migration. `scripts/test-receipt-migration-rehearsal.sh` requires the
+explicit `--confirm-disposable-local` flag, resets local Supabase through 054,
+loads synthetic historical fixtures, applies 055, verifies the migrated data
+and a later installment, and restores the complete local schema on exit.
 
 ## Photo-consent retirement
 

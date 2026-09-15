@@ -222,6 +222,7 @@ create table public.financial_requests (
   idempotency_key uuid primary key,
   created_at timestamptz not null default now(),
   actor_id uuid not null references auth.users(id) on delete restrict,
+  request_fingerprint text not null check (request_fingerprint ~ '^[0-9a-f]{64}$'),
   charge_id uuid references public.charges(id) on delete restrict,
   receipt_id uuid references public.receipts(id) on delete restrict
 );
@@ -266,9 +267,21 @@ declare
   v_service text := nullif(btrim(p_payload->>'service_description'),'');
   v_plan text := nullif(btrim(p_payload->>'plan_type'),'');
   v_level text := nullif(btrim(p_payload->>'level'),'');
+  v_student_name text := nullif(btrim(p_payload->>'student_name'),'');
+  v_phone text := nullif(btrim(p_payload->>'phone'),'');
+  v_student_email text := nullif(lower(btrim(p_payload->>'student_email')),'');
+  v_parent_email text := nullif(lower(btrim(p_payload->>'parent_email')),'');
+  v_update_contacts boolean := coalesce((p_payload->>'update_contacts')::boolean, false);
   v_gross numeric(12,2) := round(coalesce(nullif(p_payload->>'gross_amount','')::numeric, 0), 2);
   v_discount numeric(12,2) := round(coalesce(nullif(p_payload->>'discount_amount','')::numeric, 0), 2);
   v_payment numeric(12,2) := round(coalesce(nullif(p_payload->>'payment_amount','')::numeric, 0), 2);
+  v_due_date date := nullif(p_payload->>'due_date','')::date;
+  v_payment_date date := coalesce(nullif(p_payload->>'payment_date','')::date,current_date);
+  v_payment_method text := nullif(btrim(p_payload->>'payment_method'),'');
+  v_transaction_reference text := nullif(btrim(p_payload->>'transaction_reference'),'');
+  v_note text := nullif(btrim(p_payload->>'note'),'');
+  v_normalized_request jsonb;
+  v_request_fingerprint text;
   v_paid numeric(12,2);
   v_net numeric(12,2);
   v_balance numeric(12,2);
@@ -280,30 +293,66 @@ begin
     raise exception 'Forbidden' using errcode = '42501';
   end if;
   if v_key is null then raise exception 'An idempotency key is required.'; end if;
+
+  -- Normalize only inputs that can affect this transaction. JSONB numeric/date
+  -- values make 1, 1.0, blank optionals, and trimmed text compare consistently.
+  -- Existing-charge requests intentionally ignore locked charge terms; existing
+  -- contacts are compared only when the explicit update flag is enabled.
+  if v_charge_id is null and v_session <> 'Yearly' and v_plan <> 'Premium' then
+    v_plan := null;
+  end if;
+  v_normalized_request := jsonb_strip_nulls(jsonb_build_object(
+    'student_id',v_student_id,
+    'student_name',case when v_student_id is null then v_student_name end,
+    'phone',case when v_student_id is null or v_update_contacts then v_phone end,
+    'student_email',case when v_student_id is null or v_update_contacts then v_student_email end,
+    'parent_email',case when v_student_id is null or v_update_contacts then v_parent_email end,
+    'update_contacts',case when v_student_id is not null then v_update_contacts else false end,
+    'charge_id',v_charge_id,
+    'session_type',case when v_charge_id is null then v_session end,
+    'service_description',case when v_charge_id is null then v_service end,
+    'plan_type',case when v_charge_id is null then v_plan end,
+    'level',case when v_charge_id is null then v_level end,
+    'gross_amount',case when v_charge_id is null then v_gross end,
+    'discount_amount',case when v_charge_id is null then v_discount end,
+    'due_date',case when v_charge_id is null then v_due_date end,
+    'payment_amount',v_payment,
+    'payment_date',v_payment_date,
+    'payment_method',v_payment_method,
+    'transaction_reference',v_transaction_reference,
+    'note',v_note
+  ));
+  v_request_fingerprint := encode(extensions.digest(v_normalized_request::text, 'sha256'), 'hex');
+
   perform pg_advisory_xact_lock(hashtext(v_key::text));
   select * into v_existing from public.financial_requests where idempotency_key = v_key;
   if found then
+    if v_existing.actor_id is distinct from v_actor then
+      raise exception 'Idempotency key conflict: this key belongs to another actor.';
+    end if;
+    if v_existing.request_fingerprint is distinct from v_request_fingerprint then
+      raise exception 'Idempotency key conflict: request contents changed.';
+    end if;
     return jsonb_build_object('charge_id',v_existing.charge_id,'receipt_id',v_existing.receipt_id,'replayed',true);
   end if;
   if v_payment < 0 then raise exception 'Payment amount cannot be negative.'; end if;
 
   if v_student_id is null then
-    if char_length(btrim(coalesce(p_payload->>'student_name',''))) < 2 then
+    if char_length(coalesce(v_student_name,'')) < 2 then
       raise exception 'Student name is required.';
     end if;
     insert into public.students(full_name, telephone, email, parent_email, status)
-    values (btrim(p_payload->>'student_name'), nullif(btrim(p_payload->>'phone'),''),
-      nullif(btrim(p_payload->>'student_email'),''), nullif(btrim(p_payload->>'parent_email'),''), 'Prospect')
+    values (v_student_name, v_phone, v_student_email, v_parent_email, 'Prospect')
     returning * into v_student;
     v_student_id := v_student.id;
   else
     select * into v_student from public.students where id = v_student_id and deleted_at is null;
     if not found then raise exception 'Student not found.'; end if;
-    if coalesce((p_payload->>'update_contacts')::boolean, false) then
+    if v_update_contacts then
       update public.students set
-        telephone = nullif(btrim(p_payload->>'phone'),''),
-        email = nullif(btrim(p_payload->>'student_email'),''),
-        parent_email = nullif(btrim(p_payload->>'parent_email'),'')
+        telephone = v_phone,
+        email = v_student_email,
+        parent_email = v_parent_email
       where id = v_student_id returning * into v_student;
     end if;
   end if;
@@ -325,7 +374,7 @@ begin
     insert into public.charges(student_id, session_type, service_description, plan_type,
       level, gross_amount, discount_amount, due_date, created_by)
     values (v_student_id, v_session, v_service, v_plan, v_level, v_gross, v_discount,
-      nullif(p_payload->>'due_date','')::date, v_actor)
+      v_due_date, v_actor)
     returning * into v_charge;
     v_new_charge := true;
   else
@@ -342,8 +391,8 @@ begin
     raise exception 'Payment exceeds the remaining balance of % MAD.', v_balance;
   end if;
 
-  insert into public.financial_requests(idempotency_key, actor_id, charge_id)
-  values (v_key, v_actor, v_charge.id);
+  insert into public.financial_requests(idempotency_key, actor_id, request_fingerprint, charge_id)
+  values (v_key, v_actor, v_request_fingerprint, v_charge.id);
 
   if v_new_charge then
     insert into public.financial_events(event_type,charge_id,actor_id,metadata)
@@ -365,15 +414,15 @@ begin
     discount_amount_snapshot, net_amount_snapshot, paid_before_snapshot,
     balance_after_snapshot, idempotency_key, email_delivery_status
   ) values (
-    v_student.id, v_charge.id, coalesce(nullif(p_payload->>'payment_date','')::date,current_date),
+    v_student.id, v_charge.id, v_payment_date,
     v_student.full_name, v_student.telephone,
     coalesce(v_student.parent_email, v_student.email), v_student.date_naissance,
     v_charge.session_type, v_charge.plan_type, v_charge.level, v_charge.service_description,
     v_charge.gross_amount,
     case when v_charge.gross_amount = 0 then 0 else round(v_charge.discount_amount * 100 / v_charge.gross_amount, 2) end,
-    v_payment, p_payload->>'payment_method', v_status,
-    nullif(btrim(p_payload->>'transaction_reference'),''), nullif(btrim(p_payload->>'note'),''),
-    nullif(btrim(p_payload->>'note'),''), v_actor, v_actor_name,
+    v_payment, v_payment_method, v_status,
+    v_transaction_reference, v_note,
+    v_note, v_actor, v_actor_name,
     v_charge.gross_amount, v_charge.discount_amount, v_net, v_paid, v_balance, v_key,
     case when coalesce(v_student.parent_email, v_student.email) is null then 'skipped' else 'pending' end
   ) returning * into v_receipt;
@@ -587,6 +636,12 @@ begin
   perform public.require_finance_staff();
   select * into v_receipt from public.receipts where id=p_receipt_id for update;
   if not found then raise exception 'Receipt not found.'; end if;
+  if v_receipt.email_delivery_status = 'unknown' then
+    raise exception 'Historical delivery is unknown and cannot be replayed automatically.';
+  end if;
+  if v_receipt.email_delivery_status = 'sent' then
+    raise exception 'Receipt email is already marked sent.';
+  end if;
   if v_receipt.voided_at is not null or v_receipt.deleted_at is not null then
     update public.receipts set email_delivery_status='skipped',
       email_last_error='Receipt was voided before delivery.' where id=p_receipt_id;
@@ -596,12 +651,6 @@ begin
     update public.receipts set email_delivery_status='skipped',
       email_last_error='No email address on receipt.' where id=p_receipt_id;
     return jsonb_build_object('receipt_id',p_receipt_id,'queued',false,'skipped',true);
-  end if;
-  if v_receipt.email_delivery_status = 'sent' then
-    raise exception 'Receipt email is already marked sent.';
-  end if;
-  if v_receipt.email_delivery_status = 'unknown' then
-    raise exception 'Historical delivery is unknown and cannot be replayed automatically.';
   end if;
   if v_receipt.email_delivery_status = 'queued'
      and v_receipt.email_last_attempted_at > now() - interval '15 minutes' then

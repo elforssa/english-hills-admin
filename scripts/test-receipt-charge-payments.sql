@@ -7,13 +7,17 @@ values
  ('10000000-0000-0000-0000-000000000001','finance-director@example.test','authenticated','authenticated',now(),now()),
  ('10000000-0000-0000-0000-000000000002','parent@example.test','authenticated','authenticated',now(),now()),
  ('10000000-0000-0000-0000-000000000003','student@example.test','authenticated','authenticated',now(),now()),
- ('10000000-0000-0000-0000-000000000004','missing-profile@example.test','authenticated','authenticated',now(),now());
+ ('10000000-0000-0000-0000-000000000004','missing-profile@example.test','authenticated','authenticated',now(),now()),
+ ('10000000-0000-0000-0000-000000000005','second-admin@example.test','authenticated','authenticated',now(),now());
 update public.profiles set role='director',full_name='Synthetic Director' where id='10000000-0000-0000-0000-000000000001';
 update public.profiles set role='student' where id='10000000-0000-0000-0000-000000000003';
+update public.profiles set role='admin' where id='10000000-0000-0000-0000-000000000005';
 delete from public.profiles where id='10000000-0000-0000-0000-000000000004';
 
 insert into public.students(id,full_name,telephone,email,parent_email,status,session_type,plan_type,premium_start_date)
 values ('20000000-0000-0000-0000-000000000001','Synthetic Premium','0600000000','student@example.test','parent@example.test','Enrolled','Yearly','Premium',current_date-30);
+insert into public.students(id,full_name,telephone,status)
+values ('20000000-0000-0000-0000-000000000003','Second Synthetic','0611111111','Prospect');
 update public.profiles set role='parent',linked_student_id='20000000-0000-0000-0000-000000000001' where id='10000000-0000-0000-0000-000000000002';
 
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
@@ -28,8 +32,85 @@ insert into test_results values ('first', public.create_charge_payment(jsonb_bui
   'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001')));
 insert into test_results values ('retry', public.create_charge_payment(jsonb_build_object(
   'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique',
-  'plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500.00','payment_date',current_date,
-  'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001')));
+  'plan_type','Premium','gross_amount','3000.00','discount_amount','','payment_amount','1500','payment_date',current_date,
+  'payment_method','Espèces','phone','ignored while contacts are not updated',
+  'idempotency_key','30000000-0000-0000-0000-000000000001')));
+
+-- A successful response can be lost: equivalent retries replay, while any
+-- meaningful content or actor change is an explicit conflict before writes.
+do $$
+declare
+  before_charges bigint := (select count(*) from public.charges);
+  before_receipts bigint := (select count(*) from public.receipts);
+  before_students bigint := (select count(*) from public.students);
+  original_phone text := (select telephone from public.students where id='20000000-0000-0000-0000-000000000001');
+  conflict_payload jsonb;
+begin
+  foreach conflict_payload in array array[
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1400','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000003','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','charge_id','70000000-0000-0000-0000-000000000001','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','update_contacts',true,'phone','0699999999','idempotency_key','30000000-0000-0000-0000-000000000001')
+  ] loop
+    begin
+      perform public.create_charge_payment(conflict_payload);
+      raise exception 'Changed request unexpectedly replayed';
+    exception when others then
+      if sqlerrm not like 'Idempotency key conflict:%' then raise; end if;
+    end;
+  end loop;
+  if (select count(*) from public.charges) <> before_charges
+     or (select count(*) from public.receipts) <> before_receipts
+     or (select count(*) from public.students) <> before_students
+     or (select telephone from public.students where id='20000000-0000-0000-0000-000000000001') is distinct from original_phone then
+    raise exception 'An idempotency conflict changed financial, student, or contact data';
+  end if;
+end $$;
+
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000005',true);
+set local role authenticated;
+do $$ declare before_charges bigint := (select count(*) from public.charges); before_receipts bigint := (select count(*) from public.receipts); begin
+  begin
+    perform public.create_charge_payment(jsonb_build_object(
+      'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly',
+      'service_description','Année synthétique','plan_type','Premium','gross_amount','3000',
+      'discount_amount','0','payment_amount','1500','payment_date',current_date,
+      'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'));
+    raise exception 'Another actor reused an idempotency key';
+  exception when others then
+    if sqlerrm not like 'Idempotency key conflict:%another actor%' then raise; end if;
+  end;
+  if (select count(*) from public.charges) <> before_charges
+     or (select count(*) from public.receipts) <> before_receipts then
+    raise exception 'Cross-actor key conflict created financial rows';
+  end if;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
+set local role authenticated;
+
+-- Inline creation is also bound to its normalized identity/contact payload.
+insert into test_results values ('inline', public.create_charge_payment(jsonb_build_object(
+  'student_name','  Inline Synthetic  ','phone',' 0622222222 ','student_email','INLINE@EXAMPLE.TEST',
+  'session_type','Other','service_description','Inline service','gross_amount','25.00',
+  'payment_amount','0.00','payment_method','Espèces',
+  'idempotency_key','30000000-0000-0000-0000-000000000013')));
+do $$ declare student_count bigint := (select count(*) from public.students where full_name like 'Inline Synthetic%'); begin
+  begin
+    perform public.create_charge_payment(jsonb_build_object(
+      'student_name','Different Inline','phone','0622222222','student_email','inline@example.test',
+      'session_type','Other','service_description','Inline service','gross_amount','25',
+      'payment_amount','0','payment_method','Espèces',
+      'idempotency_key','30000000-0000-0000-0000-000000000013'));
+    raise exception 'Changed inline request unexpectedly replayed';
+  exception when others then
+    if sqlerrm not like 'Idempotency key conflict:%' then raise; end if;
+  end;
+  if (select count(*) from public.students where full_name like '%Inline%') <> student_count then
+    raise exception 'Inline idempotency conflict created another student';
+  end if;
+end $$;
 insert into test_results values ('second', public.create_charge_payment(jsonb_build_object(
   'student_id','20000000-0000-0000-0000-000000000001','charge_id',(select result->>'charge_id' from test_results where name='first'),
   'payment_amount','1500','payment_date',current_date,'payment_method','Virement',
@@ -119,6 +200,15 @@ do $$ begin
   if (select actor_id is not null or email_delivery_status <> 'unknown' from public.receipts where id='60000000-0000-0000-0000-000000000001') then raise exception 'Historical actor or delivery state was invented'; end if;
   if exists(select 1 from public.charges where student_id='20000000-0000-0000-0000-000000000002') then raise exception 'Archived student received a fabricated charge'; end if;
   if not exists(select 1 from public.legacy_receipt_reconciliation where id='60000000-0000-0000-0000-000000000003') then raise exception 'Archived student receipt missing from reconciliation'; end if;
+  begin
+    perform public.retry_receipt_email('60000000-0000-0000-0000-000000000001');
+    raise exception 'Unknown historical delivery was made retryable';
+  exception when others then
+    if sqlerrm not like 'Historical delivery is unknown%' then raise; end if;
+  end;
+  if (select email_delivery_status from public.receipts where id='60000000-0000-0000-0000-000000000001') <> 'unknown' then
+    raise exception 'Historical retry attempt changed unknown delivery status';
+  end if;
 end $$;
 insert into test_results values ('unreconciled_void', public.void_financial_receipt(
   '60000000-0000-0000-0000-000000000003','Cancel unreconciled legacy receipt',

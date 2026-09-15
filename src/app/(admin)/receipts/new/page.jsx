@@ -18,7 +18,10 @@ export default function ReceiptNew() {
     setSaving(true);
     const { data, error } = await getBrowserClient().rpc('create_charge_payment', { p_payload: payload });
     if (error) {
-      toast.error(error.message || 'Impossible d’enregistrer le paiement.');
+      const idempotencyConflict = error.message?.includes('Idempotency key conflict');
+      toast.error(idempotencyConflict
+        ? 'Cette tentative ne correspond plus à la demande déjà enregistrée. Rechargez la page avant toute nouvelle saisie afin d’éviter un double paiement.'
+        : (error.message || 'Impossible d’enregistrer le paiement.'));
       setSaving(false);
       return;
     }
