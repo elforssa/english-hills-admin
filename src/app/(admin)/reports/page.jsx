@@ -118,6 +118,9 @@ export default function ReportsPage() {
   const { data: enrollments = [], isLoading: enrollmentsLoading } = useEntityList('Enrollment', '-created_date', 5000);
   const { data: premiumSessions = [], isLoading: premiumLoading } = useEntityList('PremiumSession', '-scheduled_date', 2000);
   const { data: premiumHomework = [], isLoading: homeworkLoading } = useEntityList('PremiumHomework', '-submitted_at', 2000);
+  const { data: premiumGroups = [], isLoading: premiumGroupsLoading } = useEntityList('PremiumGroup', 'name', 500);
+  const { data: premiumMemberships = [], isLoading: premiumMembershipsLoading } = useEntityList('PremiumMembership', '-created_at', 3000);
+  const { data: premiumAttendance = [], isLoading: premiumAttendanceLoading } = useEntityList('PremiumAttendance', '-created_at', 5000);
 
   // ── attendance roll-up: build {date, Présent, Absent, Retard, Justifié} ──
   const attendanceSeries = useMemo(() => {
@@ -239,7 +242,8 @@ export default function ReportsPage() {
   }, [receipts, payroll, currentYear]);
 
   const loading = attLoading || recLoading || payLoading;
-  const academicLoading = groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading;
+  const academicLoading = groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading
+    || premiumGroupsLoading || premiumMembershipsLoading || premiumAttendanceLoading;
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto">
@@ -299,6 +303,9 @@ export default function ReportsPage() {
           receipts={receipts}
           premiumSessions={premiumSessions}
           premiumHomework={premiumHomework}
+          premiumGroups={premiumGroups}
+          premiumMemberships={premiumMemberships}
+          premiumAttendance={premiumAttendance}
           loading={academicLoading}
         />
 

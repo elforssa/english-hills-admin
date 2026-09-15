@@ -16,12 +16,14 @@ const STATUS = {
 
 export default function PremiumHomeworkInbox({ submissions, setSubmissions, students }) {
   const [sessions, setSessions] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [notes, setNotes] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [filter, setFilter] = useState('pending');
 
   useEffect(() => {
     entities.PremiumSession.list('-scheduled_date', 500).then(setSessions).catch(() => {});
+    entities.PremiumGroup.list('name', 100).then(setGroups).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -30,6 +32,7 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
 
   const studentsById = useMemo(() => Object.fromEntries(students.map((student) => [student.id, student])), [students]);
   const sessionsById = useMemo(() => Object.fromEntries(sessions.map((session) => [session.id, session])), [sessions]);
+  const groupsById = useMemo(() => Object.fromEntries(groups.map((group) => [group.id, group])), [groups]);
   const visible = submissions.filter((item) => filter === 'all' || (filter === 'pending' ? item.status !== 'Prepared' : item.status === filter));
 
   const saveReview = async (submission, status) => {
@@ -95,6 +98,7 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
                     <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} /> {session.scheduled_date}</span>
                       <span className="inline-flex items-center gap-1.5"><Clock3 size={13} /> {String(session.start_time).slice(0, 5)} · 60 min</span>
+                      {session.premium_group_id && <span className="font-semibold text-amber-800">{groupsById[session.premium_group_id]?.name || 'Atelier partagé'}</span>}
                     </div>
                   )}
                   {submission.student_note && <p className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-950 whitespace-pre-wrap">{submission.student_note}</p>}

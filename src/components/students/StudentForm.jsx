@@ -115,7 +115,15 @@ export default function StudentForm() {
   };
 
   const changeSession = (sessionType) => {
-    setForm(f => ({ ...f, session_type: sessionType, niveau_cefr: '', groupe_id: '' }));
+    setForm(f => ({
+      ...f,
+      session_type: sessionType,
+      niveau_cefr: '',
+      groupe_id: '',
+      plan_type: sessionType === 'Yearly' ? f.plan_type : 'Standard',
+      premium_start_date: sessionType === 'Yearly' ? f.premium_start_date : '',
+      premium_end_date: sessionType === 'Yearly' ? f.premium_end_date : '',
+    }));
     setErrors(e => ({ ...e, session_type: undefined, niveau_cefr: undefined, groupe_id: undefined }));
   };
 
@@ -137,6 +145,9 @@ export default function StudentForm() {
       groupe_id: groupId,
       session_type: group.session_type || 'Yearly',
       niveau_cefr: group.niveau || f.niveau_cefr,
+      plan_type: (group.session_type || 'Yearly') === 'Yearly' ? f.plan_type : 'Standard',
+      premium_start_date: (group.session_type || 'Yearly') === 'Yearly' ? f.premium_start_date : '',
+      premium_end_date: (group.session_type || 'Yearly') === 'Yearly' ? f.premium_end_date : '',
     } : { ...f, groupe_id: '' });
   };
 
@@ -189,9 +200,9 @@ export default function StudentForm() {
       email:          parsed.data.email          || null,
       parent_email:   parsed.data.parent_email   || null,
       groupe_id:      parsed.data.groupe_id      || null,
-      plan_type:      parsed.data.plan_type      || 'Standard',
-      premium_start_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_start_date || null) : null,
-      premium_end_date: parsed.data.plan_type === 'Premium' ? (parsed.data.premium_end_date || null) : null,
+      plan_type:      parsed.data.session_type === 'Yearly' ? (parsed.data.plan_type || 'Standard') : 'Standard',
+      premium_start_date: parsed.data.session_type === 'Yearly' && parsed.data.plan_type === 'Premium' ? (parsed.data.premium_start_date || null) : null,
+      premium_end_date: parsed.data.session_type === 'Yearly' && parsed.data.plan_type === 'Premium' ? (parsed.data.premium_end_date || null) : null,
       photo_url:      parsed.data.photo_url      || null,
       notes:          parsed.data.notes          || null,
     };
@@ -343,7 +354,7 @@ export default function StudentForm() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold">Formule Premium</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Donne droit à une séance individuelle d’une heure chaque week-end.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Pour le programme Yearly : ajoute un atelier partagé d’une heure chaque week-end.</p>
                 </div>
               </div>
               <select
@@ -352,11 +363,13 @@ export default function StudentForm() {
                 className={`${inputClass} sm:w-36`}
                 value={form.plan_type}
                 onChange={e => set('plan_type', e.target.value)}
+                disabled={form.session_type !== 'Yearly'}
               >
                 <option value="Standard">Standard</option>
                 <option value="Premium">Premium</option>
               </select>
             </div>
+            {form.session_type !== 'Yearly' && <p className="mt-3 text-xs text-muted-foreground">La formule Premium est réservée au programme Yearly.</p>}
             {form.plan_type === 'Premium' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-amber-200">
                 <div>

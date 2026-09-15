@@ -159,7 +159,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
       date_naissance: student.date_naissance || f.date_naissance,
       niveau: level,
       categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
-      plan_type: student.plan_type || 'Standard',
+      plan_type: sessionType === 'Yearly' ? (student.plan_type || 'Standard') : 'Standard',
       session_type: sessionType,
       photo_consent: student.photo_consent || f.photo_consent,
       referral_source: student.referral_source || f.referral_source,
@@ -229,6 +229,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
     const { parent_email, ...receiptFields } = form;
     onSubmit({
       ...receiptFields,
+      plan_type: receiptFields.session_type === 'Yearly' ? receiptFields.plan_type : 'Standard',
       student_id: form.student_id || null,
       group_id: form.group_id || null,
       enrollment_id: form.enrollment_id || null,
@@ -391,7 +392,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
           </div>
           <div>
             <label htmlFor="rf-session" className={labelClass}>Session / Programme</label>
-            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => setForm(f => ({ ...f, session_type: e.target.value, niveau: '', group_id: '', enrollment_id: '' }))}>
+            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => setForm(f => ({ ...f, session_type: e.target.value, niveau: '', group_id: '', enrollment_id: '', plan_type: e.target.value === 'Yearly' ? f.plan_type : 'Standard' }))}>
               <option value="">— Choisir —</option>
               {SESSION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -434,13 +435,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData })
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Crown size={16} className={form.plan_type === 'Premium' ? 'text-amber-600' : 'text-muted-foreground'} />
-                <div><p className="text-sm font-semibold">Formule</p><p className="text-xs text-muted-foreground">Premium inclut une heure supplémentaire le week-end.</p></div>
+                <div><p className="text-sm font-semibold">Formule</p><p className="text-xs text-muted-foreground">En Yearly, Premium inclut un atelier partagé supplémentaire le week-end.</p></div>
               </div>
-              <select className={`${inputClass} sm:w-40`} aria-label="Formule" value={form.plan_type || 'Standard'} onChange={(event) => set('plan_type', event.target.value)}>
+              <select className={`${inputClass} sm:w-40`} aria-label="Formule" value={form.plan_type || 'Standard'} onChange={(event) => set('plan_type', event.target.value)} disabled={form.session_type !== 'Yearly'}>
                 <option value="Standard">Standard</option>
                 <option value="Premium">Premium</option>
               </select>
             </div>
+            {form.session_type !== 'Yearly' && <p className="mt-2 text-xs text-muted-foreground">Premium est disponible uniquement avec le programme Yearly.</p>}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
