@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
+import { getBrowserClient } from '@/lib/supabase';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -37,26 +39,23 @@ export default function Dashboard() {
       entities.Student.list('full_name', 200),
       entities.Teacher.list('full_name', 100),
       entities.Group.list('name', 100),
-      entities.Receipt.list('-created_date', 200),
+      entities.Receipt.list('-created_date', 5),
       entities.Enrollment.list('-created_date', 200),
       entities.PlacementTest.filter({ status: 'Planifié' }),
-    ]).then(([students, teachers, groups, receipts, pendingEnroll, plannedTests]) => {
+      getBrowserClient().rpc('get_finance_charge_summary'),
+      getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: new Date().toISOString().slice(0, 7) + '-01' }),
+    ]).then(([students, teachers, groups, receipts, pendingEnroll, plannedTests, financeResult, monthlyResult]) => {
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const monthReceipts = receipts.filter(r => r.date && r.date.startsWith(currentMonth));
-      // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
-      const effectiveTotal = (r) => (r.montant_total || 0) * (1 - (r.remise || 0) / 100);
-      const encaisse = monthReceipts.reduce((s, r) => s + (r.montant_paye || 0), 0);
-      const total = monthReceipts.reduce((s, r) => s + effectiveTotal(r), 0);
-      const restant = monthReceipts.reduce((s, r) => s + Math.max(0, effectiveTotal(r) - (r.montant_paye || 0)), 0);
-      setMonthlyData({ encaisse, restant, total, count: monthReceipts.length });
+      void currentMonth;
+      setMonthlyData(monthlyResult.data || { encaisse: 0, restant: 0, total: 0, count: 0 });
 
       const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
       setStats({
         students: students.filter(s => ACTIVE_STATUSES.includes(s.status)).length,
         teachers: teachers.length,
         groups: groups.length,
-        totalEncaisse: receipts.reduce((s, r) => s + (r.montant_paye || 0), 0),
+        totalEncaisse: Number(financeResult.data?.total_encaisse || 0),
         enrollmentsPending: pendingEnroll.filter(e => ['Submitted', 'Under Review', 'Rejected'].includes(e.status)).length,
         testsPlanifies: plannedTests.length,
       });
@@ -236,8 +235,7 @@ export default function Dashboard() {
           ) : (
             <div className="divide-y divide-border">
               {recentReceipts.map(r => {
-                const restant = (r.montant_total || 0) * (1 - (r.remise || 0) / 100) - (r.montant_paye || 0);
-                const statusKey = r.statut_paiement || (restant <= 0 ? 'Soldé' : 'En attente');
+                const statusKey = receiptStatus(r);
                 const sc = PAYMENT_STATUS[statusKey] || PAYMENT_STATUS['En attente'];
                 return (
                   <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors">
@@ -246,10 +244,10 @@ export default function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{r.nom_prenom}</p>
-                      <p className="text-xs text-muted-foreground">{r.categorie} · {r.niveau} · {r.date}</p>
+                      <p className="text-xs text-muted-foreground">{r.session_type || 'Historique'} · {r.service_description || 'Reçu historique'} · {r.date}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-foreground">{(r.montant_paye || 0).toLocaleString('fr-MA')} MAD</p>
+                      <p className="text-sm font-bold text-foreground">{money(receiptAmounts(r).payment)} MAD</p>
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ring-1 ${sc.bg}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                         {statusKey}

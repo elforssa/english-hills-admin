@@ -13,7 +13,7 @@
 // React Query hooks added in Fix 9 so other pages benefit from the cache.
 // =============================================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Legend,
   ResponsiveContainer, CartesianGrid, AreaChart, Area, PieChart, Pie, Cell,
@@ -21,6 +21,7 @@ import {
 import { TrendingUp, Users, CreditCard, Briefcase, Calendar } from 'lucide-react';
 import { useEntityList } from '@/lib/queries';
 import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
+import { getBrowserClient } from '@/lib/supabase';
 
 // Brand palette — matches the rest of the platform.
 const COLORS = {
@@ -105,6 +106,8 @@ export default function ReportsPage() {
   const [days, setDays]   = useState(30);
   const currentYear       = String(new Date().getFullYear());
   const [year, setYear]   = useState(currentYear);
+  const [financeRows, setFinanceRows] = useState([]);
+  const [financeLoading, setFinanceLoading] = useState(true);
 
   // Limits below mirror what the existing dashboard pulls. Real production
   // numbers should swap to server-side aggregation (Postgres views) once
@@ -121,6 +124,12 @@ export default function ReportsPage() {
   const { data: premiumGroups = [], isLoading: premiumGroupsLoading } = useEntityList('PremiumGroup', 'name', 500);
   const { data: premiumMemberships = [], isLoading: premiumMembershipsLoading } = useEntityList('PremiumMembership', '-created_at', 3000);
   const { data: premiumAttendance = [], isLoading: premiumAttendanceLoading } = useEntityList('PremiumAttendance', '-created_at', 5000);
+
+  useEffect(() => {
+    setFinanceLoading(true);
+    getBrowserClient().rpc('get_finance_year_months', { p_year: Number(year) })
+      .then(({ data }) => { setFinanceRows(data || []); setFinanceLoading(false); });
+  }, [year]);
 
   // ── attendance roll-up: build {date, Présent, Absent, Retard, Justifié} ──
   const attendanceSeries = useMemo(() => {
@@ -166,17 +175,9 @@ export default function ReportsPage() {
       facture:  0,
     }));
 
-    for (const r of receipts) {
-      if (!r.date) continue;
-      const d = new Date(r.date);
-      if (String(d.getFullYear()) !== year) continue;
-      const m = months[d.getMonth()];
-      // `remise` is a percentage discount off montant_total — bill the discounted total.
-      m.facture  += Number(r.montant_total || 0) * (1 - (Number(r.remise) || 0) / 100);
-      m.encaisse += Number(r.montant_paye  || 0);
-    }
+    for (const row of financeRows) Object.assign(months[Number(row.month_idx)], { facture: Number(row.facture || 0), encaisse: Number(row.encaisse || 0) });
     return months;
-  }, [receipts, year]);
+  }, [financeRows, year]);
 
   const financeTotals = useMemo(() => {
     const facture  = financeMonthly.reduce((s, m) => s + m.facture,  0);
@@ -241,7 +242,7 @@ export default function ReportsPage() {
     return Array.from(ys).filter(y => /^\d{4}$/.test(y)).sort().reverse();
   }, [receipts, payroll, currentYear]);
 
-  const loading = attLoading || recLoading || payLoading;
+  const loading = attLoading || recLoading || payLoading || financeLoading;
   const academicLoading = groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading
     || premiumGroupsLoading || premiumMembershipsLoading || premiumAttendanceLoading;
 
@@ -300,7 +301,6 @@ export default function ReportsPage() {
           teachers={teachers}
           groups={groups}
           enrollments={enrollments}
-          receipts={receipts}
           premiumSessions={premiumSessions}
           premiumHomework={premiumHomework}
           premiumGroups={premiumGroups}

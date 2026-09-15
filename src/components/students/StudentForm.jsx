@@ -21,7 +21,6 @@ const labelClass = "block text-xs font-semibold text-muted-foreground uppercase 
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
-const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
   'Recherche Google',
@@ -39,7 +38,6 @@ const StudentSchema = z.object({
   age_category:   z.enum(AGE_CATEGORIES).optional().or(z.literal('')),
   niveau_cefr:    z.enum(ALL_LEVELS).optional().or(z.literal('')),
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
-  photo_consent:  z.enum(PHOTO_CONSENTS).optional().or(z.literal('')),
   referral_source: z.enum(SOURCES).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.string().uuid().optional().or(z.literal('')),
@@ -66,7 +64,7 @@ export default function StudentForm() {
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
     niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Prospect',
-    photo_consent: 'Non demandé', referral_source: '', groupe_id: '', plan_type: 'Standard',
+    referral_source: '', groupe_id: '', plan_type: 'Standard',
     premium_start_date: '', premium_end_date: '', photo_url: '', notes: '',
   });
 
@@ -86,7 +84,6 @@ export default function StudentForm() {
               age_category: row.age_category ?? '',
               niveau_cefr:  row.niveau_cefr  ?? '',
               session_type: row.session_type ?? 'Yearly',
-              photo_consent: row.photo_consent ?? 'Non demandé',
               referral_source: row.referral_source ?? '',
               status:       row.status       ?? '',
               date_naissance: row.date_naissance ?? '',
@@ -192,7 +189,6 @@ export default function StudentForm() {
       age_category:   parsed.data.age_category   || null,
       niveau_cefr:    parsed.data.niveau_cefr    || null,
       session_type:   parsed.data.session_type   || 'Yearly',
-      photo_consent:  parsed.data.photo_consent  || 'Non demandé',
       referral_source: parsed.data.referral_source || null,
       status:         parsed.data.status         || null,
       date_naissance: parsed.data.date_naissance || null,
@@ -323,13 +319,6 @@ export default function StudentForm() {
               <option value="">— Non défini —</option>
               {STATUSES.map(s => <option key={s}>{s}</option>)}
             </select>
-          </div>
-          <div className="col-span-2">
-            <label htmlFor="photo_consent" className={labelClass}>Autorisation d&apos;image (photos / vidéos, réseaux sociaux)</label>
-            <select id="photo_consent" className={inputClass} value={form.photo_consent || 'Non demandé'} onChange={e => set('photo_consent', e.target.value)}>
-              {PHOTO_CONSENTS.map(c => <option key={c}>{c}</option>)}
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">« Accepte » autorise la publication des photos/vidéos de l&apos;enfant. Retirable à tout moment.</p>
           </div>
           <div className="col-span-2">
             <label htmlFor="referral_source" className={labelClass}>Comment avez-vous connu le centre ?</label>

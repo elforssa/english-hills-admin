@@ -4,13 +4,16 @@ import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, auth, integrations } from '@/lib/entities';
-import { Bell, Upload, Download } from 'lucide-react';
+import { Bell, Upload, Download, FileDown } from 'lucide-react';
 import { openStoredFile as openFile } from '@/lib/storage';
 import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
+import { getBrowserClient } from '@/lib/supabase';
+import { downloadReceiptPDF } from '@/lib/receiptPdf';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -45,6 +48,8 @@ export default function StudentPortal() {
   const [student, setStudent] = useState(null);
   const [attendance, setAttendance] = useState([]);
   const [assessments, setAssessments] = useState([]);
+  const [receipts, setReceipts] = useState([]);
+  const [charges, setCharges] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [learning, setLearning] = useState([]);
   const [premiumSessions, setPremiumSessions] = useState([]);
@@ -74,16 +79,19 @@ export default function StudentPortal() {
       const me = allStudents.find(s => s.email === u?.email);
       setStudent(me || null);
       if (me) {
-        const [att, ass, la, premium, memberships, homework] = await Promise.all([
+        const [att, ass, la, premium, memberships, homework, receiptRows, chargeResult] = await Promise.all([
           entities.Attendance.filter({ student_id: me.id }, '-session_date'),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
           entities.PremiumSession.list('-scheduled_date', 200),
           entities.PremiumMembership.filter({ student_id: me.id }, '-created_at', 20),
           entities.PremiumHomework.filter({ student_id: me.id }, '-created_date', 100),
+          entities.Receipt.filter({ student_id: me.id }, '-date'),
+          getBrowserClient().from('charge_balances').select('*').eq('student_id', me.id),
         ]);
         setAttendance(att); setAssessments(ass); setLearning(la);
         setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
+        setReceipts(receiptRows); setCharges(chargeResult.data || []);
         loadPortfolios(me.id);
       }
       // RLS scopes announcements to what this student may see.
@@ -172,6 +180,7 @@ export default function StudentPortal() {
   const TABS = [
     { id: 'progress', label: 'Ma progression' },
     { id: 'attendance', label: 'Présences' },
+    { id: 'finance', label: 'Paiements' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'learning', label: "Mon style d'apprentissage" },
     { id: 'notifications', label: 'Notifications', badge: notifications.filter(n => !n.read_at).length },
@@ -290,6 +299,13 @@ export default function StudentPortal() {
             ))}
             {attendance.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucune donnée de présence.</div>}
           </div>
+        </div>
+      )}
+
+      {tab === 'finance' && (
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{money(charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0))} MAD</p></div>
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-bold">{receipt.receipt_number} · {receipt.date}</p><p className="text-xs text-muted-foreground">{receipt.session_type || 'Historique'} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu"><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
         </div>
       )}
 

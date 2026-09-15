@@ -1,625 +1,185 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { entities } from '@/lib/entities';
+import { useEffect, useMemo, useState } from 'react';
+import { getBrowserClient } from '@/lib/supabase';
+import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { PAYMENT_METHODS, localBusinessDate, money } from '@/lib/receiptFinance';
 import { toast } from 'sonner';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Check, ChevronsUpDown, UserX, UserPlus, UsersRound, Clock3, Link2, Crown } from 'lucide-react';
-import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
+import { ChevronRight, CircleDollarSign, Search, UserPlus, X } from 'lucide-react';
 
-const categories = ['Enfants', 'Ados', 'Adultes', 'Business', 'Particulier', 'Préparation aux examens'];
-const typesCours = ['Standard', 'Intensif'];
-const modesPaiement = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
-const statutsPaiement = ['Soldé', 'Acompte versé', 'En attente', 'En retard'];
-const PHOTO_CONSENTS = ['Non demandé', 'Accepte', 'Refuse'];
-const SOURCES = [
-  'Réseaux sociaux (Facebook / Instagram)',
-  'Recherche Google',
-  'Famille / Ami(e)',
-  'Passage devant le centre (walk-in)',
-  'Ancien élève / Réinscription',
-];
+const emptyStudent = { student_id: '', student_name: '', phone: '', student_email: '', parent_email: '' };
 
-// Maps the student's age_category (used across the app) to the receipt's
-// own `categorie` vocabulary. Kept in sync with receipts/new/page.jsx.
-const AGE_TO_CATEGORIE = {
-  'Young Learners (6-12)': 'Enfants',
-  'Teens (13-17)': 'Ados',
-  'Adults (18+)': 'Adultes',
-  'Corporate': 'Business',
-};
-
-// Reverse map: receipt `categorie` -> student age_category, used when a student
-// is created inline from a receipt.
-const CATEGORIE_TO_AGE = {
-  'Enfants': 'Young Learners (6-12)',
-  'Ados': 'Teens (13-17)',
-  'Adultes': 'Adults (18+)',
-  'Business': 'Corporate',
-  'Particulier': 'Adults (18+)',
-  'Préparation aux examens': 'Adults (18+)',
-};
-
-const today = new Date().toISOString().split('T')[0];
-const normName = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
-const normPhone = s => (s || '').replace(/\D/g, '');
-const ACTIVE_ENROLLMENT_STATUSES = ['Validated', 'Trial'];
-
-function suggestAcademicLink(student, groups, enrollments, sessionType, level) {
-  if (!student) return { group_id: '', enrollment_id: '' };
-
-  const matchingGroup = (groupId) => {
-    const group = groups.find((item) => item.id === groupId);
-    return group && groupMatchesSelection(group, sessionType, level) ? group : null;
-  };
-
-  if (student.groupe_id && matchingGroup(student.groupe_id)) {
-    const enrollment = enrollments.find((item) =>
-      item.student_id === student.id
-      && item.group_id === student.groupe_id
-      && ACTIVE_ENROLLMENT_STATUSES.includes(item.status),
-    );
-    return { group_id: student.groupe_id, enrollment_id: enrollment?.id || '' };
-  }
-
-  const candidates = enrollments.filter((item) =>
-    item.student_id === student.id
-    && ACTIVE_ENROLLMENT_STATUSES.includes(item.status)
-    && matchingGroup(item.group_id),
-  );
-  const groupIds = [...new Set(candidates.map((item) => item.group_id))];
-  if (groupIds.length !== 1) return { group_id: '', enrollment_id: '' };
-
-  const enrollment = candidates.find((item) => item.group_id === groupIds[0]);
-  return { group_id: groupIds[0], enrollment_id: enrollment?.id || '' };
-}
-
-export default function ReceiptForm({ onSubmit, onCancel, saving, initialData }) {
+export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = {} }) {
   const [form, setForm] = useState({
-    student_id: '',
-    group_id: '',
-    enrollment_id: '',
-    date: today,
-    nom_prenom: '',
-    telephone: '',
-    email: '',
-    parent_email: '',
-    date_naissance: '',
-    categorie: 'Adultes',
-    plan_type: 'Standard',
-    session_type: '',
-    photo_consent: 'Non demandé',
-    referral_source: '',
-    niveau: '',
-    duree_cours: '',
-    type_cours: 'Standard',
-    jours: '',
-    plage_horaire: '',
-    montant_total: '',
-    remise: 0,
-    montant_paye: '',
-    mode_paiement: 'Espèces',
-    statut_paiement: 'En attente',
-    observation: '',
-    ...initialData,
+    ...emptyStudent,
+    charge_id: '', session_type: '', service_description: '', plan_type: 'Standard', level: '',
+    gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
+    payment_date: localBusinessDate(), payment_method: 'Espèces', transaction_reference: '', note: '',
+    update_contacts: false, ...initialData,
   });
-
-  const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
-
-  // ── Linked student ────────────────────────────────────────────────────────
-  // A receipt MUST point at a real student row via `student_id`, so the payer
-  // always appears in the students list. Staff either link an existing student
-  // or create one inline before the receipt can be saved.
+  const [search, setSearch] = useState(initialData.student_name || '');
   const [students, setStudents] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [enrollments, setEnrollments] = useState([]);
-  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [charges, setCharges] = useState([]);
+  const [duplicateWarning, setDuplicateWarning] = useState('');
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
-    Promise.all([
-      entities.Student.list('full_name', 500),
-      entities.Group.list('name', 500),
-      entities.Enrollment.list('-created_date', 1000),
-    ]).then(([studentRows, groupRows, enrollmentRows]) => {
-      setStudents(studentRows);
-      setGroups(groupRows);
-      setEnrollments(enrollmentRows);
+    if (!initialData.student_id) return;
+    getBrowserClient().from('students')
+      .select('id,full_name,telephone,email,parent_email,niveau_cefr,session_type,plan_type,status')
+      .eq('id', initialData.student_id).single().then(({ data }) => data && selectStudent(data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData.student_id]);
 
-      if (initialData?.student_id && !initialData?.group_id && !initialData?.enrollment_id) {
-        const student = studentRows.find((item) => item.id === initialData.student_id);
-        const suggestion = suggestAcademicLink(
-          student,
-          groupRows,
-          enrollmentRows,
-          initialData.session_type || student?.session_type || '',
-          initialData.niveau || student?.niveau_cefr || '',
-        );
-        if (suggestion.group_id) setForm((current) => ({ ...current, ...suggestion }));
-      }
-    }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const term = search.trim();
+    if (term.length < 2 || form.student_id) { setStudents([]); return undefined; }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      const safe = term.replace(/[,%()]/g, ' ');
+      const { data, error } = await getBrowserClient().from('students')
+        .select('id,full_name,telephone,email,parent_email,niveau_cefr,session_type,plan_type,status')
+        .is('deleted_at', null)
+        .or(`full_name.ilike.%${safe}%,telephone.ilike.%${safe}%,email.ilike.%${safe}%,parent_email.ilike.%${safe}%`)
+        .order('full_name').range(0, 19);
+      if (!error) setStudents(data || []);
+      setSearching(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, form.student_id]);
 
-  const selectedStudent = students.find((s) => s.id === form.student_id);
+  useEffect(() => {
+    if (!form.student_id) { setCharges([]); return; }
+    getBrowserClient().from('charge_balances').select('*').eq('student_id', form.student_id)
+      .is('voided_at', null).gt('balance', 0).order('created_at', { ascending: false })
+      .then(({ data }) => setCharges(data || []));
+  }, [form.student_id]);
 
-  // Attach the receipt to a student AND copy their identity fields onto the
-  // receipt so the printed reçu matches the student's record.
+  useEffect(() => {
+    if (!initialData.charge_id || !charges.length || form.charge_id === initialData.charge_id) return;
+    const charge = charges.find((item) => item.id === initialData.charge_id);
+    if (charge) setForm((current) => ({ ...current, charge_id: charge.id, session_type: charge.session_type,
+      service_description: charge.service_description, plan_type: charge.plan_type || 'Standard',
+      level: charge.level || '', gross_amount: charge.gross_amount, discount_amount: charge.discount_amount,
+      due_date: charge.due_date || '', payment_amount: '' }));
+  }, [charges, form.charge_id, initialData.charge_id]);
+
   const selectStudent = (student) => {
-    const sessionType = student.session_type || form.session_type;
-    const level = student.niveau_cefr || form.niveau;
-    const suggestion = suggestAcademicLink(student, groups, enrollments, sessionType, level);
-    setForm((f) => ({
-      ...f,
-      student_id: student.id,
-      nom_prenom: student.full_name || f.nom_prenom,
-      telephone: student.telephone || f.telephone,
-      email: student.email || f.email,
-      parent_email: student.parent_email || f.parent_email,
-      date_naissance: student.date_naissance || f.date_naissance,
-      niveau: level,
-      categorie: AGE_TO_CATEGORIE[student.age_category] || f.categorie,
-      plan_type: sessionType === 'Yearly' ? (student.plan_type || 'Standard') : 'Standard',
-      session_type: sessionType,
-      photo_consent: student.photo_consent || f.photo_consent,
-      referral_source: student.referral_source || f.referral_source,
-      ...suggestion,
-    }));
-    setStudentPickerOpen(false);
-  };
-
-  const clearStudent = () => setForm((f) => ({ ...f, student_id: '', group_id: '', enrollment_id: '' }));
-
-  // Create a student from the receipt's fields and link it, with a duplicate
-  // guard so slightly-different spellings don't spawn a second record.
-  const createAndLink = async () => {
-    const nm = (form.nom_prenom || '').trim();
-    if (nm.length < 2) { toast.error('Renseignez d’abord le nom et prénom.'); return; }
-    // Everything else (email, session, phone…) is optional and can be completed
-    // later — see the "À compléter" filter on the students list.
-    const dup = students.find((s) =>
-      normName(s.full_name) === normName(nm) ||
-      (normPhone(form.telephone) && normPhone(s.telephone) === normPhone(form.telephone)),
-    );
-    if (dup) {
-      toast.error(`Apprenant similaire : « ${dup.full_name} ». Utilisez la recherche pour le lier.`);
-      return;
-    }
-    setCreating(true);
-    try {
-      const created = await entities.Student.create({
-        full_name: nm,
-        telephone: form.telephone || null,
-        email: form.email?.trim() || null,
-        parent_email: form.parent_email?.trim() || null,
-        date_naissance: form.date_naissance || null,
-        age_category: CATEGORIE_TO_AGE[form.categorie] || null,
-        niveau_cefr: ALL_LEVELS.includes(form.niveau) ? form.niveau : null,
-        session_type: form.session_type || 'Yearly',
-        photo_consent: form.photo_consent || 'Non demandé',
-        referral_source: form.referral_source || null,
-        status: 'Enrolled',
-        plan_type: form.plan_type || 'Standard',
-        premium_start_date: form.plan_type === 'Premium' ? today : null,
-      });
-      setStudents((prev) => [created, ...prev]);
-      setForm((f) => ({ ...f, student_id: created.id, group_id: '', enrollment_id: '' }));
-      toast.success(`Apprenant créé et lié : ${created.full_name}`);
-    } catch {
-      // entities.js already toasted.
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  // Total defaults to the amount paid when left blank (quick receipt).
-  const base = parseFloat(form.montant_total) || parseFloat(form.montant_paye) || 0;
-  const remisePct = parseFloat(form.remise) || 0;
-  const effectiveTotal = base * (1 - remisePct / 100);
-  const montantRestant = effectiveTotal - (parseFloat(form.montant_paye) || 0);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.student_id) {
-      toast.error('Liez un apprenant existant ou créez-en un avant d’enregistrer le reçu.');
-      return;
-    }
-    const autoStatus = montantRestant <= 0 ? 'Soldé' : form.statut_paiement;
-    // parent_email is not a receipt column — strip before saving.
-    const { parent_email, ...receiptFields } = form;
-    onSubmit({
-      ...receiptFields,
-      plan_type: receiptFields.session_type === 'Yearly' ? receiptFields.plan_type : 'Standard',
-      student_id: form.student_id || null,
-      group_id: form.group_id || null,
-      enrollment_id: form.enrollment_id || null,
-      session_type: form.session_type || null,
-      referral_source: form.referral_source || null,
-      // Empty strings break date/typed columns — coerce to null (or today for the required date).
-      date: form.date || today,
-      date_naissance: form.date_naissance || null,
-      email: form.email?.trim() || null,
-      montant_total: base,
-      remise: remisePct,
-      montant_paye: parseFloat(form.montant_paye) || 0,
-      statut_paiement: autoStatus,
-    });
-  };
-
-  const inputClass = "w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-muted-foreground/50";
-  const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5";
-
-  const SectionTitle = ({ children }) => (
-    <div className="flex items-center gap-3 mb-5">
-      <span className="text-xs font-bold tracking-widest uppercase" style={{ color: 'var(--brand)' }}>{children}</span>
-      <div className="flex-1 h-px bg-border" />
-    </div>
-  );
-
-  const ToggleGroup = ({ options, value, onChange }) => (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onChange(opt)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-            value === opt ? 'bg-primary text-white border-transparent shadow-sm' : 'bg-white text-foreground border-border hover:border-primary/40 hover:bg-primary/5'
-          }`}
-        >
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
-
-  const STATUT_CONFIG = {
-    'Soldé': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Acompte versé': 'bg-amber-50 text-amber-700 border-amber-200',
-    'En attente': 'bg-blue-50 text-blue-700 border-blue-200',
-    'En retard': 'bg-red-50 text-red-700 border-red-200',
-  };
-
-  const matchingGroups = groups.filter((group) => groupMatchesSelection(group, form.session_type, form.niveau));
-  const selectedGroup = groups.find((group) => group.id === form.group_id);
-  const selectedEnrollment = enrollments.find((item) => item.id === form.enrollment_id);
-
-  const changeGroup = (groupId) => {
-    if (!groupId) {
-      setForm((current) => ({ ...current, group_id: '', enrollment_id: '' }));
-      return;
-    }
-    const enrollment = enrollments.find((item) =>
-      item.student_id === form.student_id
-      && item.group_id === groupId
-      && ACTIVE_ENROLLMENT_STATUSES.includes(item.status),
-    );
+    setShowCreate(false); setStudents([]); setSearch(student.full_name || ''); setDuplicateWarning('');
     setForm((current) => ({
-      ...current,
-      group_id: groupId,
-      enrollment_id: enrollment?.id || '',
+      ...current, ...emptyStudent,
+      student_id: student.id, student_name: student.full_name || '', phone: student.telephone || '',
+      student_email: student.email || '', parent_email: student.parent_email || '',
+      session_type: student.session_type || '', level: student.niveau_cefr || '',
+      plan_type: student.session_type === 'Yearly' ? (student.plan_type || 'Standard') : 'Standard',
+      charge_id: '', service_description: '', gross_amount: '', discount_amount: '', due_date: '',
+      update_contacts: false,
     }));
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <div>
-        <SectionTitle>Apprenant lié</SectionTitle>
-        <div className="max-w-md space-y-3">
-          <div>
-            <label className={labelClass}>Rechercher un apprenant existant</label>
-            <Popover open={studentPickerOpen} onOpenChange={setStudentPickerOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={`${inputClass} flex items-center justify-between text-left ${selectedStudent ? '' : 'text-muted-foreground/70'}`}
-                >
-                  <span className="truncate">
-                    {selectedStudent ? selectedStudent.full_name : 'Aucun apprenant lié — rechercher…'}
-                  </span>
-                  <ChevronsUpDown size={15} className="shrink-0 opacity-50" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="p-0 w-[var(--radix-popover-trigger-width)]" align="start">
-                <Command>
-                  <CommandInput placeholder="Nom de l'apprenant…" />
-                  <CommandList>
-                    <CommandEmpty>Aucun apprenant trouvé — utilisez « Créer un nouvel apprenant » ci-dessous.</CommandEmpty>
-                    <CommandGroup>
-                      {students.map((s) => (
-                        <CommandItem
-                          key={s.id}
-                          value={`${s.full_name} ${s.telephone || ''} ${s.email || ''}`}
-                          onSelect={() => selectStudent(s)}
-                        >
-                          <Check size={15} className={`mr-2 ${form.student_id === s.id ? 'opacity-100' : 'opacity-0'}`} />
-                          <span className="flex-1 truncate">{s.full_name}</span>
-                          {s.telephone && <span className="text-xs text-muted-foreground ml-2">{s.telephone}</span>}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
+  const clearStudent = () => {
+    setSearch(''); setShowCreate(false); setStudents([]); setCharges([]); setDuplicateWarning('');
+    setForm((current) => ({ ...current, ...emptyStudent, charge_id: '', service_description: '',
+      gross_amount: '', discount_amount: '', due_date: '', update_contacts: false }));
+  };
 
-          {selectedStudent ? (
-            <div className="flex items-center justify-between rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
-              <span>Lié à <strong>{selectedStudent.full_name}</strong> — ce reçu apparaîtra sur sa fiche.</span>
-              <button type="button" onClick={clearStudent} className="flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-medium">
-                <UserX size={13} /> Détacher
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
-              Aucun apprenant lié. Recherchez ci-dessus pour lier un apprenant existant, ou remplissez les infos plus bas et cliquez <strong>« Créer et lier l’apprenant »</strong>. Un apprenant est obligatoire.
-            </div>
-          )}
-        </div>
+  const beginCreate = async () => {
+    const name = search.trim();
+    if (name.length < 2) return toast.error('Saisissez au moins deux caractères pour le nom.');
+    const { data } = await getBrowserClient().from('students')
+      .select('id,full_name,telephone,email,parent_email,niveau_cefr,session_type,plan_type,status')
+      .ilike('full_name', name).is('deleted_at', null).limit(5);
+    if (data?.length) { setStudents(data); return toast.error('Un dossier porte déjà ce nom. Sélectionnez-le ou vérifiez l’identité.'); }
+    setForm((current) => ({ ...current, ...emptyStudent, student_name: name }));
+    setShowCreate(true); setStudents([]);
+  };
+
+  const checkSharedPhone = async (phone) => {
+    set('phone', phone); setDuplicateWarning('');
+    const normalized = phone.replace(/\D/g, '');
+    if (normalized.length < 8) return;
+    const { data } = await getBrowserClient().from('students').select('id,full_name,telephone')
+      .ilike('telephone', `%${normalized.slice(-8)}%`).limit(5);
+    if (data?.length) setDuplicateWarning(`Téléphone déjà utilisé par ${data.map((row) => row.full_name).join(', ')}. Les fratries restent autorisées.`);
+  };
+
+  const selectCharge = (id) => {
+    const charge = charges.find((item) => item.id === id);
+    if (!charge) { set('charge_id', ''); return; }
+    setForm((current) => ({ ...current, charge_id: id, session_type: charge.session_type,
+      service_description: charge.service_description, plan_type: charge.plan_type || 'Standard',
+      level: charge.level || '', gross_amount: charge.gross_amount, discount_amount: charge.discount_amount,
+      due_date: charge.due_date || '', payment_amount: '' }));
+  };
+
+  const selectedCharge = charges.find((item) => item.id === form.charge_id);
+  const gross = Number(form.gross_amount || 0);
+  const discount = Number(form.discount_amount || 0);
+  const net = selectedCharge ? Number(selectedCharge.net_amount) : Math.max(0, gross - discount);
+  const paidBefore = selectedCharge ? Number(selectedCharge.paid_amount) : 0;
+  const todayPayment = Number(form.payment_amount || 0);
+  const balanceAfter = Math.max(0, net - paidBefore - todayPayment);
+  const levels = useMemo(() => getLevelsForSession(form.session_type, form.level), [form.session_type, form.level]);
+  const lockedCharge = Boolean(selectedCharge);
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!form.student_id && !showCreate) return toast.error('Sélectionnez ou créez un apprenant.');
+    if (!form.charge_id && (!form.session_type || !form.service_description.trim())) return toast.error('La session et le service/période sont obligatoires.');
+    if (form.session_type === 'Other' && form.service_description.trim().length < 3) return toast.error('Décrivez brièvement le service « Other ».');
+    if (!form.charge_id && (!Number.isFinite(gross) || gross < 0 || discount < 0 || discount > gross)) return toast.error('Vérifiez le prix convenu et la remise.');
+    if (!Number.isFinite(todayPayment) || todayPayment < 0) return toast.error('Le paiement ne peut pas être négatif.');
+    if (todayPayment > net - paidBefore) return toast.error(`Le paiement dépasse le solde de ${money(net - paidBefore)} MAD.`);
+    onSubmit({ ...form, idempotency_key: crypto.randomUUID() });
+  };
+
+  const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
+
+  return <form onSubmit={submit} className="space-y-5">
+    <Step number="1" title="Apprenant" subtitle="Un dossier existant ou une création minimale">
+      {!form.student_id && !showCreate ? <div className="relative">
+        <Search className="absolute left-3.5 top-3 text-muted-foreground" size={17} />
+        <input className={`${input} pl-10`} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Nom, téléphone ou email…" autoComplete="off" />
+        {(searching || students.length > 0) && <div className="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-xl border bg-white p-1 shadow-xl">
+          {searching ? <p className="p-3 text-sm text-muted-foreground">Recherche…</p> : students.map((student) =>
+            <button type="button" key={student.id} onClick={() => selectStudent(student)} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-muted">
+              <span><b className="block text-sm">{student.full_name}</b><span className="text-xs text-muted-foreground">{student.telephone || student.email || 'Aucun contact'} · {student.status || 'Prospect'}</span></span><ChevronRight size={15} />
+            </button>)}
+        </div>}
+        <button type="button" onClick={beginCreate} className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-primary"><UserPlus size={15} /> Créer « {search || 'nouvel apprenant'} »</button>
+      </div> : <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{showCreate ? 'Nouveau prospect' : 'Dossier sélectionné'}</p><p className="mt-1 text-lg font-bold">{form.student_name}</p><p className="text-sm text-muted-foreground">{form.phone || form.student_email || form.parent_email || 'Contacts non renseignés'}</p></div><button type="button" onClick={clearStudent} className="rounded-full p-2 hover:bg-white" aria-label="Changer d’apprenant"><X size={17} /></button></div>
+        {(showCreate || form.update_contacts) && <div className="mt-4 grid gap-3 sm:grid-cols-3"><Field label="Téléphone (facultatif)"><input className={input} value={form.phone} onChange={(e) => checkSharedPhone(e.target.value)} /></Field><Field label="Email apprenant"><input type="email" className={input} value={form.student_email} onChange={(e) => set('student_email', e.target.value)} /></Field><Field label="Email parent"><input type="email" className={input} value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} /></Field></div>}
+        {duplicateWarning && <p className="mt-2 text-xs font-medium text-amber-700">{duplicateWarning}</p>}
+        {!showCreate && <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={form.update_contacts} onChange={(e) => set('update_contacts', e.target.checked)} /> Mettre à jour explicitement les contacts du dossier</label>}
+      </div>}
+    </Step>
+
+    <Step number="2" title="Session ou service" subtitle="Choisissez un solde existant ou créez un nouvel engagement">
+      {charges.length > 0 && <Field label="Solde existant"><select className={input} value={form.charge_id} onChange={(e) => selectCharge(e.target.value)}><option value="">Nouveau service / nouvelle période</option>{charges.map((charge) => <option key={charge.id} value={charge.id}>{charge.session_type} · {charge.service_description} · reste {money(charge.balance)} MAD</option>)}</select>{selectedCharge && <p className="mt-2 text-xs text-muted-foreground">Prix net {money(selectedCharge.net_amount)} MAD · déjà payé {money(selectedCharge.paid_amount)} MAD · solde {money(selectedCharge.balance)} MAD{selectedCharge.due_date ? ` · échéance ${selectedCharge.due_date}` : ''}</p>}</Field>}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field label="Session"><select disabled={lockedCharge} required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, session_type: e.target.value, plan_type: 'Standard', level: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
+        <Field label="Service / période couverte"><input disabled={lockedCharge} required className={input} value={form.service_description} onChange={(e) => set('service_description', e.target.value)} placeholder={form.session_type === 'Other' ? 'Description courte obligatoire' : 'Ex. année 2026–2027, module 1…'} /></Field>
+        {form.session_type === 'Yearly' && <Field label="Formule"><div className="flex gap-2">{['Standard','Premium'].map((plan) => <button disabled={lockedCharge} type="button" key={plan} onClick={() => set('plan_type', plan)} className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold ${form.plan_type === plan ? 'border-primary bg-primary text-white' : 'bg-white'}`}>{plan}</button>)}</div><p className="mt-1 text-[11px] text-muted-foreground">Premium inclut un atelier collectif partagé d’une heure le week-end. L’activation reste une action académique séparée.</p></Field>}
+        <Field label="Niveau (facultatif)"><select disabled={lockedCharge} className={input} value={form.level} onChange={(e) => set('level', e.target.value)}><option value="">À déterminer</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></Field>
       </div>
+    </Step>
 
-      <div>
-        <SectionTitle>Reçu</SectionTitle>
-        <div className="max-w-xs">
-          <label htmlFor="rf-date" className={labelClass}>Date <span className="text-red-400">*</span></label>
-          <input id="rf-date" type="date" className={inputClass} value={form.date} onChange={(e) => set('date', e.target.value)} required />
-        </div>
+    <Step number="3" title="Paiement" subtitle="Les montants déterminent automatiquement le statut">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {!lockedCharge && <><Field label="Prix brut convenu"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} /></Field><Field label="Échéance (facultative)"><input type="date" className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field></>}
+        <Field label="Reçu aujourd’hui"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement"><input required type="date" className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /></Field><Field label="Mode"><select className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select></Field><Field label="Référence (facultative)"><input className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note (facultative)"><input className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
       </div>
+      <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4"><Amount label="Prix net" value={net} /><Amount label="Déjà payé" value={paidBefore} /><Amount label="Aujourd’hui" value={todayPayment} accent /><Amount label="Solde après" value={balanceAfter} warning={balanceAfter > 0} /></div>
+      {todayPayment === 0 && <p className="mt-3 text-xs font-medium text-amber-700">L’engagement sera enregistré comme dû. Aucun reçu ne sera émis puisqu’aucun argent n’est encaissé.</p>}
+    </Step>
 
-      <div>
-        <SectionTitle>Données d&apos;inscription</SectionTitle>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="rf-nom" className={labelClass}>Nom et prénom <span className="text-red-400">*</span></label>
-            <input id="rf-nom" type="text" className={inputClass} placeholder="ex. Karim Benali" value={form.nom_prenom} onChange={(e) => set('nom_prenom', e.target.value)} required />
-          </div>
-          <div>
-            <label htmlFor="rf-tel" className={labelClass}>Téléphone</label>
-            <input id="rf-tel" type="tel" className={inputClass} placeholder="ex. 0661 234 567" value={form.telephone} onChange={(e) => set('telephone', e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="rf-email" className={labelClass}>Email (apprenant)</label>
-            <input id="rf-email" type="email" className={inputClass} placeholder="ex. client@email.com" value={form.email} onChange={(e) => set('email', e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="rf-pemail" className={labelClass}>Email parent / tuteur</label>
-            <input id="rf-pemail" type="email" className={inputClass} placeholder="Pour un jeune apprenant" value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="rf-dob" className={labelClass}>Date de naissance</label>
-            <input id="rf-dob" type="date" className={inputClass} value={form.date_naissance} onChange={(e) => set('date_naissance', e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="rf-session" className={labelClass}>Session / Programme</label>
-            <select id="rf-session" className={inputClass} value={form.session_type || ''} onChange={(e) => setForm(f => ({ ...f, session_type: e.target.value, niveau: '', group_id: '', enrollment_id: '', plan_type: e.target.value === 'Yearly' ? f.plan_type : 'Standard' }))}>
-              <option value="">— Choisir —</option>
-              {SESSION_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="rf-consent" className={labelClass}>Autorisation d&apos;image (réseaux sociaux)</label>
-            <select id="rf-consent" className={inputClass} value={form.photo_consent || 'Non demandé'} onChange={(e) => set('photo_consent', e.target.value)}>
-              {PHOTO_CONSENTS.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="rf-source" className={labelClass}>Comment avez-vous connu le centre ? (non imprimé)</label>
-            <select id="rf-source" className={inputClass} value={form.referral_source || ''} onChange={(e) => set('referral_source', e.target.value)}>
-              <option value="">— Non renseigné —</option>
-              {SOURCES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">Seuls le <strong>nom</strong> et le <strong>paiement</strong> sont requis. Le reste (email, téléphone, session…) peut être complété plus tard — l’email parent activera l’accès portail dès qu’il sera renseigné.</p>
-        {!selectedStudent && (
-          <button
-            type="button"
-            onClick={createAndLink}
-            disabled={creating}
-            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary hover:opacity-90 disabled:opacity-50"
-          >
-            <UserPlus size={14} /> {creating ? 'Création…' : 'Créer et lier l’apprenant'}
-          </button>
-        )}
-      </div>
-
-      <div>
-        <SectionTitle>Détails du cours</SectionTitle>
-        <div className="space-y-5">
-          <div>
-            <label className={labelClass}>Catégorie <span className="text-red-400">*</span></label>
-            <ToggleGroup options={categories} value={form.categorie} onChange={(v) => set('categorie', v)} />
-          </div>
-          <div className={`rounded-xl border px-4 py-3 ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50' : 'border-border bg-muted/20'}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Crown size={16} className={form.plan_type === 'Premium' ? 'text-amber-600' : 'text-muted-foreground'} />
-                <div><p className="text-sm font-semibold">Formule</p><p className="text-xs text-muted-foreground">En Yearly, Premium inclut un atelier partagé supplémentaire le week-end.</p></div>
-              </div>
-              <select className={`${inputClass} sm:w-40`} aria-label="Formule" value={form.plan_type || 'Standard'} onChange={(event) => set('plan_type', event.target.value)} disabled={form.session_type !== 'Yearly'}>
-                <option value="Standard">Standard</option>
-                <option value="Premium">Premium</option>
-              </select>
-            </div>
-            {form.session_type !== 'Yearly' && <p className="mt-2 text-xs text-muted-foreground">Premium est disponible uniquement avec le programme Yearly.</p>}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="rf-niveau" className={labelClass}>Niveau (NIV) <span className="text-red-400">*</span></label>
-              <select id="rf-niveau" className={inputClass} value={form.niveau || ''} onChange={(e) => setForm((f) => ({ ...f, niveau: e.target.value, group_id: '', enrollment_id: '' }))} required>
-                <option value="">— Choisir —</option>
-                {getLevelsForSession(form.session_type || 'Yearly', form.niveau).map(level => <option key={level}>{level}</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="rf-duree" className={labelClass}>Durée du cours (H/mois)</label>
-              <input id="rf-duree" type="text" className={inputClass} placeholder="ex. 20h/mois" value={form.duree_cours} onChange={(e) => set('duree_cours', e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className={labelClass}>Type de cours <span className="text-red-400">*</span></label>
-              <ToggleGroup options={typesCours} value={form.type_cours} onChange={(v) => set('type_cours', v)} />
-            </div>
-            <div>
-              <label htmlFor="rf-jours" className={labelClass}>Jours</label>
-              <input id="rf-jours" type="text" className={inputClass} placeholder="ex. Lun, Mer, Ven" value={form.jours} onChange={(e) => set('jours', e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="rf-horaire" className={labelClass}>Plage horaire</label>
-              <input id="rf-horaire" type="text" className={inputClass} placeholder="ex. 18h – 19h30" value={form.plage_horaire} onChange={(e) => set('plage_horaire', e.target.value)} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <SectionTitle>Affectation académique</SectionTitle>
-        <div className="rounded-2xl border border-border bg-slate-50/70 p-4 sm:p-5 space-y-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-xl bg-primary/10 p-2 text-primary"><UsersRound size={18} /></div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Groupe du reçu</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Facultatif — enregistrez immédiatement et affectez le groupe plus tard si nécessaire.</p>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="rf-group" className={labelClass}>Groupe</label>
-            <select
-              id="rf-group"
-              className={inputClass}
-              value={form.group_id || ''}
-              onChange={(event) => changeGroup(event.target.value)}
-              disabled={!form.student_id || !form.session_type || !form.niveau}
-            >
-              <option value="">— Aucun groupe pour le moment —</option>
-              {matchingGroups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}{group.jours ? ` · ${group.jours}` : ''}{group.horaire ? ` · ${group.horaire}` : ''}
-                </option>
-              ))}
-            </select>
-            {!form.student_id && <p className="mt-1.5 text-xs text-muted-foreground">Liez d’abord un apprenant.</p>}
-            {form.student_id && (!form.session_type || !form.niveau) && <p className="mt-1.5 text-xs text-muted-foreground">Choisissez la session et le niveau pour afficher les groupes correspondants.</p>}
-            {form.student_id && form.session_type && form.niveau && matchingGroups.length === 0 && <p className="mt-1.5 text-xs text-amber-700">Aucun groupe disponible pour cette session et ce niveau. Le reçu peut être enregistré sans groupe.</p>}
-          </div>
-
-          {selectedGroup ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
-              <div className="flex items-center gap-2 text-sm font-semibold"><Link2 size={15} /> {selectedGroup.name}</div>
-              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-emerald-800">
-                <span>{selectedGroup.session_type || 'Yearly'} · {selectedGroup.niveau}</span>
-                {(selectedGroup.jours || selectedGroup.horaire) && <span className="inline-flex items-center gap-1"><Clock3 size={12} /> {[selectedGroup.jours, selectedGroup.horaire].filter(Boolean).join(' · ')}</span>}
-              </div>
-              <p className="mt-2 text-xs text-emerald-700">
-                {selectedEnrollment ? 'Inscription existante liée automatiquement.' : 'Le reçu sera lié au groupe; une inscription validée sera créée lors du premier enregistrement.'}
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-              À affecter plus tard — le reçu restera visible et pourra être lié depuis « Modifier ».
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <SectionTitle>Détails du paiement</SectionTitle>
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="rf-total" className={labelClass}>
-                {remisePct > 0 ? 'Prix de base (MAD)' : 'Montant total du cours (MAD)'}
-              </label>
-              <input id="rf-total" type="number" className={inputClass} placeholder="= montant payé si vide" value={form.montant_total} onChange={(e) => set('montant_total', e.target.value)} min="0" />
-            </div>
-            <div>
-              <label htmlFor="rf-remise" className={labelClass}>Remise (%)</label>
-              <input
-                id="rf-remise"
-                type="number"
-                className={inputClass}
-                placeholder="0"
-                value={form.remise || ''}
-                onChange={(e) => set('remise', e.target.value)}
-                min="0"
-                max="100"
-                step="0.5"
-              />
-            </div>
-          </div>
-
-          {remisePct > 0 && (
-            <div className="flex items-center justify-between rounded-xl px-4 py-3 border border-violet-200 bg-violet-50">
-              <span className="text-sm font-semibold text-violet-800">Prix après remise ({remisePct}%)</span>
-              <span className="text-base font-bold text-violet-700">{effectiveTotal.toLocaleString('fr-MA')} MAD</span>
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="rf-paye" className={labelClass}>Montant payé ce jour (MAD) <span className="text-red-400">*</span></label>
-            <input id="rf-paye" type="number" className={inputClass} placeholder="ex. 750" value={form.montant_paye} onChange={(e) => set('montant_paye', e.target.value)} required min="0" />
-          </div>
-
-          <div className="flex items-center justify-between rounded-xl px-4 py-3 border" style={{ backgroundColor: montantRestant > 0 ? '#FFF7ED' : '#F0FDF4', borderColor: montantRestant > 0 ? '#FED7AA' : '#BBF7D0' }}>
-            <span className="text-sm font-semibold" style={{ color: montantRestant > 0 ? '#92400e' : '#166534' }}>Montant restant</span>
-            <span className="text-base font-bold" style={{ color: montantRestant > 0 ? '#B91C2E' : '#16a34a' }}>
-              {montantRestant.toLocaleString('fr-MA')} MAD
-            </span>
-          </div>
-
-          <div>
-            <label className={labelClass}>Mode de paiement <span className="text-red-400">*</span></label>
-            <ToggleGroup options={modesPaiement} value={form.mode_paiement} onChange={(v) => set('mode_paiement', v)} />
-          </div>
-
-          <div>
-            <label className={labelClass}>Statut du paiement</label>
-            <div className="flex flex-wrap gap-2">
-              {statutsPaiement.map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => set('statut_paiement', s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${form.statut_paiement === s ? STATUT_CONFIG[s] + ' shadow-sm' : 'bg-white text-muted-foreground border-border hover:bg-muted'}`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <SectionTitle>Observation</SectionTitle>
-        <textarea
-          className={`${inputClass} h-24 resize-none`}
-          placeholder="Remarques, commentaires..."
-          value={form.observation}
-          onChange={(e) => set('observation', e.target.value)}
-        />
-      </div>
-
-      <div className="flex items-center gap-3 pt-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-6 py-2.5 text-sm font-semibold text-white rounded-xl shadow-sm hover:shadow-md hover:opacity-95 transition-all disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #1E4D8B 0%, #1a3f75 100%)' }}
-        >
-          {saving ? 'Enregistrement...' : 'Enregistrer le reçu'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-6 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-xl hover:bg-muted"
-        >
-          Annuler
-        </button>
-      </div>
-    </form>
-  );
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et imprimer' : 'Enregistrer le solde'}</button></div>
+  </form>;
 }
+
+function Step({ number, title, subtitle, children }) { return <section className="overflow-visible rounded-2xl border bg-card shadow-sm"><header className="flex gap-3 border-b bg-muted/40 px-5 py-4"><span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-sm font-black text-white">{number}</span><div><h2 className="font-bold">{title}</h2><p className="text-xs text-muted-foreground">{subtitle}</p></div></header><div className="p-5">{children}</div></section>; }
+function Field({ label, children }) { return <label><span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</span>{children}</label>; }
+function Amount({ label, value, accent, warning }) { return <div className={`bg-white p-4 ${accent ? 'text-emerald-700' : warning ? 'text-rose-700' : ''}`}><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p><p className="mt-1 text-lg font-black">{money(value)} <span className="text-xs">MAD</span></p></div>; }

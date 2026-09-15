@@ -9,6 +9,7 @@ import StorageImage from '@/components/StorageImage';
 import { ArrowLeft, Edit, FileText, Plus, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
@@ -21,6 +22,7 @@ export default function StudentDetail() {
   const router = useRouter();
   const [student, setStudent] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [charges, setCharges] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [adults, setAdults] = useState([]);
@@ -40,7 +42,8 @@ export default function StudentDetail() {
       entities.PremiumSession.list('-scheduled_date', 300),
       entities.PremiumMembership.filter({ student_id: id }, '-created_at', 20),
       entities.PremiumGroup.list('name', 100),
-    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows]) => {
+      getBrowserClient().from('charge_balances').select('*').eq('student_id', id),
+    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult]) => {
       setStudent(s[0]);
       setPayments(p);
       setAttendance(a);
@@ -50,6 +53,7 @@ export default function StudentDetail() {
       setPremiumSessions(premium.filter((item) => item.student_id === id || sharedGroupIds.has(item.premium_group_id)));
       setPremiumMemberships(memberships);
       setPremiumGroups(premiumGroupRows);
+      setCharges(chargeResult.data || []);
       setLoading(false);
     });
   }, [id]);
@@ -66,10 +70,8 @@ export default function StudentDetail() {
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
   if (!student) return <div className="p-8 text-muted-foreground">Apprenant introuvable.</div>;
 
-  // `remise` is a percentage discount off montant_total, so the amount owed is the discounted total.
-  const effectiveTotal = (p) => (p.montant_total || 0) * (1 - (p.remise || 0) / 100);
-  const totalPaye = payments.reduce((s, p) => s + (p.montant_paye || 0), 0);
-  const totalRestant = payments.reduce((s, p) => s + Math.max(0, effectiveTotal(p) - (p.montant_paye || 0)), 0);
+  const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
+  const totalRestant = charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0);
   const present = attendance.filter(a => a.status === 'Présent').length;
   const presenceRate = attendance.length ? Math.round((present / attendance.length) * 100) : null;
 
@@ -113,7 +115,7 @@ export default function StudentDetail() {
         {[
           { label: 'Niveau', value: student.niveau_cefr || '—' },
           { label: 'Taux de présence', value: presenceRate !== null ? `${presenceRate}%` : '—' },
-          { label: 'Solde restant', value: totalRestant ? `${totalRestant.toLocaleString('fr-MA')} MAD` : '0 MAD' },
+          { label: 'Solde restant', value: `${money(totalRestant)} MAD` },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -130,7 +132,6 @@ export default function StudentDetail() {
             ['Email', student.email],
             ['Catégorie', student.age_category],
             ['Session', student.session_type],
-            ['Autorisation photo', student.photo_consent || 'Non demandé'],
             ['Comment connu le centre', student.referral_source || '—'],
           ].map(([label, val]) => (
             <div key={label}>
@@ -209,18 +210,17 @@ export default function StudentDetail() {
             </tr></thead>
             <tbody className="divide-y divide-border">
               {payments.map(p => {
-                const total = effectiveTotal(p);
-                const restant = total - (p.montant_paye || 0);
+                const amounts = receiptAmounts(p);
+                const status = receiptStatus(p);
                 return (
                 <tr key={p.id}>
                   <td className="py-2">{p.date || '—'}</td>
                   <td className="py-2">
-                    {total.toLocaleString('fr-MA')} MAD
-                    {p.remise > 0 && <span className="block text-xs text-muted-foreground line-through">{(p.montant_total || 0).toLocaleString('fr-MA')} MAD</span>}
+                    {money(amounts.net)} MAD
                   </td>
-                  <td className="py-2">{(p.montant_paye || 0).toLocaleString('fr-MA')} MAD</td>
-                  <td className="py-2">{restant.toLocaleString('fr-MA')} MAD</td>
-                  <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAYMENT_STATUS_COLORS[p.statut_paiement] || 'bg-yellow-100 text-yellow-700'}`}>{p.statut_paiement || '—'}</span></td>
+                  <td className="py-2">{money(amounts.payment)} MAD</td>
+                  <td className="py-2">{money(amounts.balance)} MAD</td>
+                  <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.voided_at ? 'bg-rose-100 text-rose-700' : PAYMENT_STATUS_COLORS[status] || 'bg-yellow-100 text-yellow-700'}`}>{status}</span></td>
                   <td className="py-2"><Link href={`/receipts/${p.id}/print`} className="text-xs text-muted-foreground hover:text-primary"><FileText size={13} /></Link></td>
                 </tr>
               );})}

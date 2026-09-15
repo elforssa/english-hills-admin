@@ -1,123 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { entities } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
-import { completeReceiptAcademicLink } from '@/lib/receiptAcademicLink';
-
-const AGE_TO_CATEGORIE = {
-  'Young Learners (6-12)': 'Enfants',
-  'Teens (13-17)': 'Ados',
-  'Adults (18+)': 'Adultes',
-  'Corporate': 'Business',
-};
-
-// A paid receipt means the linked student has committed → promote them to
-// Enrolled. Only lifts a not-yet-enrolled student; an already-Enrolled or
-// Alumni record is left untouched.
-const PROMOTABLE_STATUSES = ['Prospect', 'Trial', 'Inactive'];
 
 export default function ReceiptNew() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
-  const studentId = searchParams.get('student_id') || '';
-  const [prefill, setPrefill] = useState({ student_id: studentId });
-  const [loadingStudent, setLoadingStudent] = useState(Boolean(studentId));
-
-  useEffect(() => {
-    if (!studentId) return;
-    entities.Student.filter({ id: studentId }).then(([student]) => {
-      if (!student) return;
-      const mapped = {
-        student_id: studentId,
-        nom_prenom: student.full_name || '',
-        telephone: student.telephone || '',
-        email: student.email || '',
-        parent_email: student.parent_email || '',
-        date_naissance: student.date_naissance || '',
-        session_type: student.session_type || '',
-        plan_type: student.plan_type || 'Standard',
-      };
-      if (student.niveau_cefr) mapped.niveau = student.niveau_cefr;
-      if (AGE_TO_CATEGORIE[student.age_category]) mapped.categorie = AGE_TO_CATEGORIE[student.age_category];
-      setPrefill(mapped);
-    }).finally(() => setLoadingStudent(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSubmit = async (data) => {
+  const handleSubmit = async (payload) => {
     setSaving(true);
-    try {
-      const receipt = await entities.Receipt.create(data);
-      toast.success('Reçu enregistré avec succès');
-
-      if (data.group_id) {
-        try {
-          await completeReceiptAcademicLink(receipt.id, data);
-          qc.invalidateQueries({ queryKey: ['Enrollment'] });
-          toast.success('Groupe et inscription liés');
-        } catch {
-          toast.warning('Le reçu est enregistré et lié au groupe, mais l’inscription doit être vérifiée.');
-        }
-      }
-
-      // Payment = enrollment. Promote the linked student if they aren't already
-      // Enrolled/Alumni. Non-blocking: a failure here never loses the receipt.
-      if (data.student_id) {
-        try {
-          const [student] = await entities.Student.filter({ id: data.student_id });
-          if (student) {
-            const upd = {};
-            if (!student.status || PROMOTABLE_STATUSES.includes(student.status)) upd.status = 'Enrolled';
-            // Keep the student's standing image-consent in sync with the desk choice.
-            if (data.photo_consent && data.photo_consent !== student.photo_consent) upd.photo_consent = data.photo_consent;
-            // Record how they heard about the center (once) if not already set.
-            if (data.referral_source && data.referral_source !== student.referral_source) upd.referral_source = data.referral_source;
-            if (data.group_id && data.group_id !== student.groupe_id) upd.groupe_id = data.group_id;
-            if (data.session_type && data.session_type !== student.session_type) upd.session_type = data.session_type;
-            if (data.niveau && data.niveau !== student.niveau_cefr) upd.niveau_cefr = data.niveau;
-            // A Premium receipt activates the entitlement. A later Standard
-            // receipt is only a payment snapshot and must not silently remove
-            // an existing Premium plan; deactivation belongs in the profile.
-            if (data.plan_type === 'Premium' && student.plan_type !== 'Premium') upd.plan_type = 'Premium';
-            if (data.plan_type === 'Premium' && !student.premium_start_date) upd.premium_start_date = data.date;
-            if (Object.keys(upd).length) {
-              await entities.Student.update(data.student_id, upd);
-              qc.invalidateQueries({ queryKey: ['Student'] });
-              if (upd.status) toast.success(`${student.full_name} marqué(e) comme inscrit(e)`);
-            }
-          }
-        } catch {
-          // Receipt is saved; status/consent can still be set manually.
-        }
-      }
-
-      router.push(`/receipts/${receipt.id}/print`);
-    } catch {
+    const { data, error } = await getBrowserClient().rpc('create_charge_payment', { p_payload: payload });
+    if (error) {
+      toast.error(error.message || 'Impossible d’enregistrer le paiement.');
       setSaving(false);
+      return;
     }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['Receipt'] }),
+      queryClient.invalidateQueries({ queryKey: ['Student'] }),
+      queryClient.invalidateQueries({ queryKey: ['Charge'] }),
+    ]);
+    if (!data.receipt_id) {
+      toast.success('Solde à payer enregistré. Aucun reçu émis.');
+      router.push('/finance');
+      return;
+    }
+    toast.success(data.replayed ? 'Paiement déjà enregistré — reçu existant affiché.' : 'Paiement enregistré et reçu émis.');
+    router.push(`/receipts/${data.receipt_id}/print`);
   };
 
-  return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto">
-      <button onClick={() => router.push('/finance')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
-        <ArrowLeft size={15} /> Retour
-      </button>
-      <div className="mb-8">
-        <h1 className="text-xl font-bold text-foreground">Nouveau reçu de paiement</h1>
-        <p className="text-muted-foreground text-sm mt-1">Remplissez les informations pour générer un reçu imprimable.</p>
-      </div>
-      {loadingStudent ? (
-        <p className="text-sm text-muted-foreground">Chargement des données du dossier...</p>
-      ) : (
-        <ReceiptForm onSubmit={handleSubmit} onCancel={() => router.push('/finance')} saving={saving} initialData={prefill} />
-      )}
-    </div>
-  );
+  return <div className="mx-auto max-w-4xl p-4 lg:p-8">
+    <button onClick={() => router.push('/finance')} className="mb-6 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft size={15} /> Retour aux finances</button>
+    <div className="mb-7"><p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Réception</p><h1 className="mt-1 text-2xl font-black tracking-tight">Encaisser un paiement</h1><p className="mt-1 text-sm text-muted-foreground">Apprenant → service ou solde → paiement → reçu imprimable.</p></div>
+    <ReceiptForm onSubmit={handleSubmit} onCancel={() => router.push('/finance')} saving={saving} initialData={{ student_id: searchParams.get('student_id') || '', charge_id: searchParams.get('charge_id') || '' }} />
+  </div>;
 }
