@@ -74,3 +74,17 @@ from `supabase/manual/drop_photo_consent.sql`.
    allocations.
 5. Only in a later, separately approved maintenance window, consider the manual
    photo-consent column cleanup.
+
+### Archived-student reconciliation (migration 056)
+
+Migration 055 skipped legacy receipts whose existing student was archived. Migration
+056 creates a separate legacy charge for each of these explicitly linked receipts;
+it does not combine installments or reactivate students. Deleted or voided receipts
+produce inactive historical charges. Original payment fields and delivery/audit
+history are preserved, and updating the links does not send receipt emails.
+
+Run `python3 scripts/test-archived-receipt-reconciliation.py` against local Supabase
+for synthetic rollback-only tests of reconciliation, totals, cancellation, unchanged
+student/receipt history, and repeat execution. Migration 055 remains unchanged after
+release. Backup configuration and a real recipient-approved email delivery test are
+separate operational checks; successful reconciliation does not establish either.
