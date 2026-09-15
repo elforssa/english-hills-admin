@@ -25,6 +25,8 @@ export default function StudentDetail() {
   const [assessments, setAssessments] = useState([]);
   const [adults, setAdults] = useState([]);
   const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumMemberships, setPremiumMemberships] = useState([]);
+  const [premiumGroups, setPremiumGroups] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,14 +37,19 @@ export default function StudentDetail() {
       entities.Attendance.filter({ student_id: id }),
       entities.Assessment.filter({ student_id: id }),
       entities.AuthorizedAdult.filter({ student_id: id }),
-      entities.PremiumSession.filter({ student_id: id }, '-scheduled_date', 100),
-    ]).then(([s, p, a, as_, adults, premium]) => {
+      entities.PremiumSession.list('-scheduled_date', 300),
+      entities.PremiumMembership.filter({ student_id: id }, '-created_at', 20),
+      entities.PremiumGroup.list('name', 100),
+    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows]) => {
       setStudent(s[0]);
       setPayments(p);
       setAttendance(a);
       setAssessments(as_);
       setAdults(adults);
-      setPremiumSessions(premium);
+      const sharedGroupIds = new Set(memberships.filter((item) => item.active).map((item) => item.premium_group_id));
+      setPremiumSessions(premium.filter((item) => item.student_id === id || sharedGroupIds.has(item.premium_group_id)));
+      setPremiumMemberships(memberships);
+      setPremiumGroups(premiumGroupRows);
       setLoading(false);
     });
   }, [id]);
@@ -144,9 +151,10 @@ export default function StudentDetail() {
         <Section title="Programme Premium">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
             <div>
-              <p className="font-semibold text-amber-950 flex items-center gap-2"><Crown size={16} /> Une heure supplémentaire chaque week-end</p>
+              <p className="font-semibold text-amber-950 flex items-center gap-2"><Crown size={16} /> Un atelier partagé supplémentaire chaque week-end</p>
               <p className="text-xs text-amber-800 mt-1">
                 {student.premium_start_date ? `Du ${student.premium_start_date}` : 'Début non limité'}{student.premium_end_date ? ` au ${student.premium_end_date}` : ' · sans date de fin'}
+                {premiumMemberships.find((item) => item.active) && ` · ${premiumGroups.find((group) => group.id === premiumMemberships.find((item) => item.active)?.premium_group_id)?.name || 'Atelier affecté'}`}
               </p>
             </div>
             <Link href="/premium-sessions" className="shrink-0 px-3 py-2 rounded-md bg-amber-400 text-amber-950 text-xs font-bold hover:bg-amber-300">Gérer les séances</Link>
