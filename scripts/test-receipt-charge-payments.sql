@@ -124,6 +124,7 @@ insert into test_results values ('second', public.create_charge_payment(jsonb_bu
 do $$ declare c record; begin
   select * into c from public.charge_balances where id = (select (result->>'charge_id')::uuid from test_results where name='first');
   if c.paid_amount <> 3000 or c.balance <> 0 or c.settlement_status <> 'Soldé' then raise exception 'Installment totals failed: %',row_to_json(c); end if;
+  if (select school_year from public.charge_balances where id=c.id) is distinct from '2026/2027' then raise exception 'Balance view lost school year'; end if;
   if c.school_year <> '2026/2027' or c.service_description <> 'Yearly · Premium · 2026/2027' then raise exception 'Structured school year/service failed'; end if;
   if (select count(*) from public.receipts where charge_id=c.id) <> 2 then raise exception 'Expected exactly two receipts'; end if;
   if exists(select 1 from public.receipts where charge_id=c.id and school_year_snapshot <> '2026/2027') then raise exception 'Receipt school-year snapshot failed'; end if;
@@ -157,6 +158,30 @@ do $$ declare c record; begin
   select * into c from public.charge_balances where id=(select (result->>'charge_id')::uuid from test_results where name='decimal');
   if c.net_amount<>100 or c.paid_amount<>40 or c.balance<>60 or c.settlement_status<>'En retard' then raise exception 'Decimal/overdue test failed'; end if;
   if (select result->>'receipt_id' from test_results where name='zero') is not null then raise exception 'Zero payment issued a receipt'; end if;
+end $$;
+
+-- A missing Yearly formula must fail closed (SQL NULL is not a valid plan).
+do $$ begin
+  begin
+    perform public.create_charge_payment(jsonb_build_object(
+      'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly',
+      'school_year','2026/2027','gross_amount','10','payment_amount','1',
+      'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+    raise exception 'Missing Yearly formula accepted';
+  exception when others then
+    if sqlerrm <> 'A Yearly charge requires Standard or Premium.' then raise; end if;
+  end;
+end $$;
+
+-- Unrequested email inputs are ignored both in the fingerprint and snapshot.
+do $$ declare k uuid := gen_random_uuid(); first_result jsonb; retry_result jsonb; payload jsonb; begin
+  payload := jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001',
+    'session_type','Adults','school_year','2026/2027','gross_amount','10','payment_amount','1',
+    'payment_method','Espèces','request_email',false,'email_recipient','ignored-one@example.test','idempotency_key',k);
+  first_result := public.create_charge_payment(payload);
+  retry_result := public.create_charge_payment(payload || jsonb_build_object('email_recipient','ignored-two@example.test'));
+  if first_result->>'receipt_id' is distinct from retry_result->>'receipt_id' then raise exception 'Ignored email changed replay'; end if;
+  if (select email from public.receipts where id=(first_result->>'receipt_id')::uuid) is distinct from 'parent@example.test' then raise exception 'Unrequested recipient affected snapshot'; end if;
 end $$;
 
 -- Invalid/excess/Premium misuse fail atomically.

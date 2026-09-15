@@ -32,47 +32,46 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   const height = doc.internal.pageSize.getHeight();
   const margin = 10;
   const contentWidth = width - (margin * 2);
-  const bottomLimit = height - 18;
   const firstPage = doc.getNumberOfPages();
   let y = 8;
 
-  const addPage = () => {
-    doc.addPage(RECEIPT_PAPER_FORMAT, 'portrait');
-    y = 13;
-    doc.setFillColor(...BLUE); doc.rect(0, 0, width * 0.72, 2.5, 'F');
-    doc.setFillColor(...RED); doc.rect(width * 0.72, 0, width * 0.28, 2.5, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...BLUE);
-    doc.text(`Reçu ${receipt.receipt_number || ''} - suite`, margin, 8);
+  // Client receipts never paginate. Fit the variable detail rows into one A5.
+  const details = [receipt.nom_prenom, receipt.telephone, receipt.email,
+    receipt.session_type, receiptSchoolYear(receipt),
+    receipt.session_type === 'Yearly' ? receipt.plan_type : '', receipt.niveau,
+    receipt.service_description, receipt.mode_paiement, receipt.transaction_reference].filter(Boolean);
+  let detailFontSize = 8.5;
+  const detailHeight = () => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(detailFontSize);
+    return details.reduce((total, value) => total + Math.max(4.8, doc.splitTextToSize(String(value), contentWidth - 39).length * detailFontSize * 0.49), 0);
   };
-  const ensureSpace = (needed) => { if (y + needed > bottomLimit) addPage(); };
+  while (detailHeight() > 65 && detailFontSize > 4) detailFontSize -= 0.25;
   const sectionTitle = (title) => {
-    ensureSpace(10); y += 2;
+    y += 1;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...BLUE);
     doc.text(title.toUpperCase(), margin, y);
     doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.25); doc.line(margin, y + 2.3, width - margin, y + 2.3);
-    y += 7;
+    y += 6;
   };
   const detailRow = (label, value) => {
     if (value === null || value === undefined || String(value).trim() === '') return;
-    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(detailFontSize);
     const lines = doc.splitTextToSize(String(value), contentWidth - 39);
-    ensureSpace(Math.max(6, lines.length * 4.2));
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...MUTED); doc.text(`${label}`, margin, y);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK); doc.text(lines, margin + 39, y);
-    y += Math.max(6, lines.length * 4.2);
+    y += Math.max(4.8, lines.length * detailFontSize * 0.49);
   };
   const amountRow = (label, value, { emphasis = false, balance = false } = {}) => {
-    ensureSpace(9);
     if (emphasis || balance) {
       doc.setFillColor(...(balance && amounts.balance > 0 ? [255, 241, 242] : emphasis ? [239, 246, 255] : [236, 253, 245]));
-      doc.roundedRect(margin, y - 4.5, contentWidth, 7.5, 1.2, 1.2, 'F');
+      doc.roundedRect(margin, y - 4.5, contentWidth, 6, 1.2, 1.2, 'F');
     }
     doc.setFontSize(emphasis || balance ? 9.2 : 8.5);
     doc.setFont('helvetica', emphasis || balance ? 'bold' : 'normal');
     doc.setTextColor(...(balance && amounts.balance > 0 ? RED : emphasis ? BLUE : INK));
     doc.text(label, margin + 2, y);
     doc.setFont('helvetica', 'bold'); doc.text(value, width - margin - 2, y, { align: 'right' });
-    y += 8;
+    y += 6.5;
   };
 
   doc.setFillColor(...BLUE); doc.rect(0, 0, width * 0.72, 3, 'F');
@@ -90,16 +89,12 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   doc.setDrawColor(...BLUE); doc.setLineWidth(0.7); doc.line(margin, y, width - margin, y); y += 7;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...INK);
-  doc.text(receipt.voided_at ? 'REÇU DE PAIEMENT - ANNULÉ' : 'REÇU DE PAIEMENT', margin, y);
-  doc.setFontSize(9); doc.setTextColor(...BLUE); doc.text(receipt.receipt_number || '', width - margin, y, { align: 'right' }); y += 6;
+  doc.text('REÇU DE PAIEMENT', margin, y);
+  y += 5;
+  doc.setFontSize(9); doc.setTextColor(...BLUE); doc.text(receipt.receipt_number || '', margin, y); y += 5;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
   doc.text(`Date du paiement : ${receipt.date || ''}`, margin, y);
   doc.text(`Statut : ${receiptStatus(receipt)}`, width - margin, y, { align: 'right' }); y += 4;
-  if (receipt.voided_at) {
-    doc.setFillColor(...RED); doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-    doc.roundedRect(margin, y, contentWidth, 8, 1.2, 1.2, 'F'); doc.text('ANNULÉ', width / 2, y + 5.4, { align: 'center' }); y += 12;
-  }
-
   sectionTitle('Apprenant');
   detailRow('Nom', receipt.nom_prenom);
   detailRow('Téléphone', receipt.telephone);
@@ -122,19 +117,12 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   detailRow('Mode de paiement', receipt.mode_paiement);
   detailRow('Référence', receipt.transaction_reference);
 
-  const note = receipt.payment_note || receipt.observation;
-  if (note) { sectionTitle('Note'); detailRow('', note); }
-  if (receipt.voided_at) {
-    sectionTitle('Annulation');
-    detailRow('Motif', receipt.void_reason || 'Paiement annulé');
-  }
-
-  ensureSpace(30); y += 5;
+  y += 4;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
   doc.text('SIGNATURE DU RESPONSABLE', margin, y);
   doc.text('CACHET DU CENTRE', width - margin, y, { align: 'right' });
   doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.25);
-  doc.line(margin, y + 20, margin + 48, y + 20); doc.line(width - margin - 48, y + 20, width - margin, y + 20);
+  doc.line(margin, y + 15, margin + 48, y + 15); doc.line(width - margin - 48, y + 15, width - margin, y + 15);
 
   const lastPage = doc.getNumberOfPages();
   for (let page = firstPage; page <= lastPage; page += 1) {
@@ -153,4 +141,23 @@ export async function downloadReceiptPDF(receipt) {
   const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT, orientation: 'portrait' });
   buildReceiptPDF(doc, receipt, { logoData });
   doc.save(`recu-english-hills-${receipt.receipt_number || receipt.date}.pdf`);
+}
+
+// Open the exact A5 download in the browser's native PDF viewer. PDF viewers
+// isolate their frames, so calling frame.contentWindow.print() is not portable.
+export async function printReceiptPDF(receipt) {
+  const preview = window.open('about:blank', '_blank');
+  if (!preview) throw new Error('Autorisez l’ouverture du PDF ou utilisez le bouton PDF A5.');
+  preview.opener = null;
+  try {
+    const logoData = await loadReceiptLogo();
+    const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT, orientation: 'portrait' });
+    buildReceiptPDF(doc, receipt, { logoData });
+    const url = URL.createObjectURL(doc.output('blob'));
+    preview.location.replace(url);
+    window.addEventListener('pagehide', () => URL.revokeObjectURL(url), { once: true });
+  } catch (error) {
+    preview.close();
+    throw error;
+  }
 }

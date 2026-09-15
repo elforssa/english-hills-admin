@@ -88,3 +88,28 @@ for synthetic rollback-only tests of reconciliation, totals, cancellation, uncha
 student/receipt history, and repeat execution. Migration 055 remains unchanged after
 release. Backup configuration and a real recipient-approved email delivery test are
 separate operational checks; successful reconciliation does not establish either.
+
+### School-year workflow (057, unreleased)
+
+New agreements store the selected school year (UI catalogue: 2026/2027). Receipts
+snapshot that year; existing agreements without a known year remain undated.
+The security-invoker balance view appends school_year without reordering existing
+columns. Yearly requires an explicit Standard/Premium formula; other sessions
+cannot use Premium. Email delivery is opt-in; an unrequested recipient is ignored
+in both request normalization and receipt creation.
+
+Client receipts use one A5 portrait page. Internal notes and cancellation reasons
+remain stored and visible to staff outside the printable document; they are absent
+from PDFs and email. Voided documents retain their cancellation status. The print
+action opens the same PDF in the native viewer; choose A5 and actual size (100%).
+It does not call into an embedded viewer, which browsers isolate across origins.
+
+Independent local review: synthetic 056-to-057 upgrade assertions ran inside a
+rollback-only transaction without resetting local data; migration 057 was then
+applied locally. Financial/RLS, concurrent payment/retry, Premium workshop/RLS,
+client/email, and every-session A5 checks passed. Desktop/mobile browser review
+covered existing-student search, an Adults installment, school-year retention on
+an existing balance, and clearing state on new-learner mode. A temporary local
+synthetic receipt (EH-2026-00039) remains for review. No production data or real
+email was used. Native PDF tab inspection is restricted by browser automation;
+the generated PDF itself was rendered and visually inspected separately.

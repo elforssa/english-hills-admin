@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import jsPDFPackage from 'jspdf';
@@ -36,6 +37,7 @@ const receipt = {
   statut_paiement: 'Acompte versé',
 };
 buildReceiptPDF(doc, receipt, { logoData });
+assert.equal(doc.getNumberOfPages(), 1, 'Even long internal notes and cancellation reasons must never add a client page');
 
 const outputPath = resolve(outputDir, 'receipt-a5-synthetic-qa.pdf');
 doc.save(outputPath);

@@ -16,6 +16,37 @@ alter table public.receipts
   check (school_year_snapshot is null or school_year_snapshot ~ '^[0-9]{4}/[0-9]{4}$') not valid;
 alter table public.receipts validate constraint receipts_school_year_snapshot_format_check;
 
+-- Keep existing view column positions stable; append the new year for consumers.
+create or replace view public.charge_balances
+with (security_invoker = true)
+as
+select c.id, c.created_at, c.updated_at, c.student_id, c.enrollment_id,
+       c.session_type, c.service_description, c.plan_type, c.level,
+       c.gross_amount, c.discount_amount, c.due_date, c.created_by, c.legacy,
+       c.legacy_receipt_id, c.voided_at, c.voided_by, c.void_reason,
+       (c.gross_amount - c.discount_amount)::numeric(12,2) as net_amount,
+       coalesce(sum(r.montant_paye) filter (
+         where r.voided_at is null and r.deleted_at is null
+       ), 0)::numeric(12,2) as paid_amount,
+       greatest(0, c.gross_amount - c.discount_amount - coalesce(sum(r.montant_paye) filter (
+         where r.voided_at is null and r.deleted_at is null
+       ), 0))::numeric(12,2) as balance,
+       case
+         when c.voided_at is not null then 'Annulée'
+         when c.gross_amount - c.discount_amount - coalesce(sum(r.montant_paye) filter (
+           where r.voided_at is null and r.deleted_at is null
+         ), 0) <= 0 then 'Soldé'
+         when c.due_date < current_date then 'En retard'
+         when coalesce(sum(r.montant_paye) filter (
+           where r.voided_at is null and r.deleted_at is null
+         ), 0) > 0 then 'Acompte versé'
+         else 'En attente'
+       end as settlement_status,
+       c.school_year
+from public.charges c
+left join public.receipts r on r.charge_id = c.id
+group by c.id;
+
 create or replace function public.create_charge_payment(p_payload jsonb)
 returns jsonb
 language plpgsql
@@ -70,6 +101,7 @@ begin
     v_request_email := false;
     v_email_recipient := null;
   end if;
+  if not v_request_email then v_email_recipient := null; end if;
   if v_request_email and (
     v_email_recipient is null
     or v_email_recipient !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
@@ -138,7 +170,7 @@ begin
       raise exception 'Session and school year are required for a new charge.';
     end if;
     if v_school_year !~ '^[0-9]{4}/[0-9]{4}$' then raise exception 'Invalid school year.'; end if;
-    if v_session = 'Yearly' and v_plan not in ('Standard','Premium') then
+    if v_session = 'Yearly' and (v_plan in ('Standard','Premium')) is not true then
       raise exception 'A Yearly charge requires Standard or Premium.';
     elsif v_session <> 'Yearly' and v_plan = 'Premium' then
       raise exception 'Premium is available only for Yearly charges.';
