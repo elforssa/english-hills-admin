@@ -41,7 +41,7 @@ export default function ReceiptNew() {
 
   return <div className="mx-auto max-w-4xl p-4 lg:p-8">
     <button onClick={() => router.push('/finance')} className="mb-6 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft size={15} /> Retour aux finances</button>
-    <div className="mb-7"><p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Réception</p><h1 className="mt-1 text-2xl font-black tracking-tight">Encaisser un paiement</h1><p className="mt-1 text-sm text-muted-foreground">Apprenant → service ou solde → paiement → reçu imprimable.</p></div>
+    <div className="mb-7"><p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Réception</p><h1 className="mt-1 text-2xl font-black tracking-tight">Encaisser un paiement</h1><p className="mt-1 text-sm text-muted-foreground">Apprenant → solde existant ou nouvelle session → paiement → reçu.</p></div>
     <ReceiptForm onSubmit={handleSubmit} onCancel={() => router.push('/finance')} saving={saving} initialData={{ student_id: searchParams.get('student_id') || '', charge_id: searchParams.get('charge_id') || '' }} />
   </div>;
 }

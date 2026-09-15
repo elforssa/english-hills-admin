@@ -1,3 +1,14 @@
+import { DEFAULT_SCHOOL_YEAR } from './receiptPresentation.js';
+
+export function createLatestRequestGate() {
+  let version = 0;
+  return {
+    begin() { version += 1; return version; },
+    invalidate() { version += 1; },
+    isCurrent(requestVersion) { return requestVersion === version; },
+  };
+}
+
 export function createInitialChargeCoordinator(initialStudentId = '', initialChargeId = '') {
   let pending = Boolean(initialStudentId && initialChargeId);
   let activeStudentId = '';
@@ -38,7 +49,8 @@ export function createInitialChargeCoordinator(initialStudentId = '', initialCha
 
 export function emptyChargeTerms() {
   return {
-    charge_id: '', session_type: '', service_description: '', plan_type: 'Standard',
+    charge_id: '', session_type: '', school_year: DEFAULT_SCHOOL_YEAR, service_detail: '',
+    service_description: '', plan_type: 'Standard',
     level: '', gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
   };
 }

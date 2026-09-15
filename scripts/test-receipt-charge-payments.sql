@@ -2,6 +2,10 @@
 \set ON_ERROR_STOP on
 begin;
 
+-- Email delivery is verified with JavaScript mocks. Keep this SQL suite fully
+-- local and prevent any configured webhook from making an outbound request.
+alter table public.receipts disable trigger on_receipt_created;
+
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 values
  ('10000000-0000-0000-0000-000000000001','finance-director@example.test','authenticated','authenticated',now(),now()),
@@ -27,13 +31,13 @@ set local role authenticated;
 -- 3,000 MAD charge, two installments. The retry replays the first receipt.
 create temp table test_results(name text primary key, result jsonb);
 insert into test_results values ('first', public.create_charge_payment(jsonb_build_object(
-  'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique',
+  'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2026/2027',
   'plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500.00','payment_date',current_date,
-  'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001')));
+  'payment_method','Espèces','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001')));
 insert into test_results values ('retry', public.create_charge_payment(jsonb_build_object(
-  'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique',
+  'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2026/2027',
   'plan_type','Premium','gross_amount','3000.00','discount_amount','','payment_amount','1500','payment_date',current_date,
-  'payment_method','Espèces','phone','ignored while contacts are not updated',
+  'payment_method','Espèces','phone','ignored while contacts are not updated','request_email',true,'email_recipient','PARENT@example.test',
   'idempotency_key','30000000-0000-0000-0000-000000000001')));
 
 -- A successful response can be lost: equivalent retries replay, while any
@@ -47,10 +51,11 @@ declare
   conflict_payload jsonb;
 begin
   foreach conflict_payload in array array[
-    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1400','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
-    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000003','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2026/2027','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1400','payment_date',current_date,'payment_method','Espèces','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000003','session_type','Yearly','school_year','2026/2027','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001'),
     jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','charge_id','70000000-0000-0000-0000-000000000001','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'),
-    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','service_description','Année synthétique','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','update_contacts',true,'phone','0699999999','idempotency_key','30000000-0000-0000-0000-000000000001')
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2026/2027','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','update_contacts',true,'phone','0699999999','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2027/2028','plan_type','Premium','gross_amount','3000','discount_amount','0','payment_amount','1500','payment_date',current_date,'payment_method','Espèces','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001')
   ] loop
     begin
       perform public.create_charge_payment(conflict_payload);
@@ -73,10 +78,10 @@ set local role authenticated;
 do $$ declare before_charges bigint := (select count(*) from public.charges); before_receipts bigint := (select count(*) from public.receipts); begin
   begin
     perform public.create_charge_payment(jsonb_build_object(
-      'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly',
-      'service_description','Année synthétique','plan_type','Premium','gross_amount','3000',
+      'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly','school_year','2026/2027',
+      'plan_type','Premium','gross_amount','3000',
       'discount_amount','0','payment_amount','1500','payment_date',current_date,
-      'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000001'));
+      'payment_method','Espèces','request_email',true,'email_recipient','parent@example.test','idempotency_key','30000000-0000-0000-0000-000000000001'));
     raise exception 'Another actor reused an idempotency key';
   exception when others then
     if sqlerrm not like 'Idempotency key conflict:%another actor%' then raise; end if;
@@ -93,14 +98,14 @@ set local role authenticated;
 -- Inline creation is also bound to its normalized identity/contact payload.
 insert into test_results values ('inline', public.create_charge_payment(jsonb_build_object(
   'student_name','  Inline Synthetic  ','phone',' 0622222222 ','student_email','INLINE@EXAMPLE.TEST',
-  'session_type','Other','service_description','Inline service','gross_amount','25.00',
+  'session_type','Other','school_year','2026/2027','service_detail','Inline service','gross_amount','25.00',
   'payment_amount','0.00','payment_method','Espèces',
   'idempotency_key','30000000-0000-0000-0000-000000000013')));
 do $$ declare student_count bigint := (select count(*) from public.students where full_name like 'Inline Synthetic%'); begin
   begin
     perform public.create_charge_payment(jsonb_build_object(
       'student_name','Different Inline','phone','0622222222','student_email','inline@example.test',
-      'session_type','Other','service_description','Inline service','gross_amount','25',
+      'session_type','Other','school_year','2026/2027','service_detail','Inline service','gross_amount','25',
       'payment_amount','0','payment_method','Espèces',
       'idempotency_key','30000000-0000-0000-0000-000000000013'));
     raise exception 'Changed inline request unexpectedly replayed';
@@ -119,7 +124,9 @@ insert into test_results values ('second', public.create_charge_payment(jsonb_bu
 do $$ declare c record; begin
   select * into c from public.charge_balances where id = (select (result->>'charge_id')::uuid from test_results where name='first');
   if c.paid_amount <> 3000 or c.balance <> 0 or c.settlement_status <> 'Soldé' then raise exception 'Installment totals failed: %',row_to_json(c); end if;
+  if c.school_year <> '2026/2027' or c.service_description <> 'Yearly · Premium · 2026/2027' then raise exception 'Structured school year/service failed'; end if;
   if (select count(*) from public.receipts where charge_id=c.id) <> 2 then raise exception 'Expected exactly two receipts'; end if;
+  if exists(select 1 from public.receipts where charge_id=c.id and school_year_snapshot <> '2026/2027') then raise exception 'Receipt school-year snapshot failed'; end if;
   if (select count(*) from public.financial_events where charge_id=c.id and event_type='charge_created') <> 1 then raise exception 'Charge audit event missing/duplicated'; end if;
   if (select count(*) from public.financial_events where charge_id=c.id and event_type='payment_recorded') <> 2 then raise exception 'Payment audit events missing'; end if;
   if coalesce((select (result->>'replayed')::boolean from test_results where name='retry'),false) is not true then raise exception 'Idempotent retry did not replay'; end if;
@@ -129,8 +136,8 @@ end $$;
 do $$ declare session_name text; result jsonb; begin
   foreach session_name in array array['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other'] loop
     result := public.create_charge_payment(jsonb_build_object(
-      'student_id','20000000-0000-0000-0000-000000000001','session_type',session_name,
-      'service_description',case when session_name='Other' then 'Autre service synthétique' else 'Service synthétique' end,
+      'student_id','20000000-0000-0000-0000-000000000001','session_type',session_name,'school_year','2026/2027',
+      'service_detail',case when session_name='Other' then 'Autre service synthétique' else null end,
       'plan_type','Standard','gross_amount','1.25','discount_amount','0.25','payment_amount','0',
       'payment_method','Espèces','idempotency_key',gen_random_uuid()));
     if result->>'charge_id' is null or result->>'receipt_id' is not null then raise exception 'Catalog session failed: %',session_name; end if;
@@ -139,11 +146,11 @@ end $$;
 
 -- Decimal discount and zero-payment owed charge (no zero-value receipt).
 insert into test_results values ('decimal', public.create_charge_payment(jsonb_build_object(
-  'student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','service_description','Module décimal',
+  'student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027',
   'plan_type','Standard','gross_amount','100.01','discount_amount','0.01','payment_amount','40.00','payment_date',current_date,
   'due_date',current_date-1,'payment_method','Carte bancaire','idempotency_key','30000000-0000-0000-0000-000000000003')));
 insert into test_results values ('zero', public.create_charge_payment(jsonb_build_object(
-  'student_id','20000000-0000-0000-0000-000000000001','session_type','Summer Camp','service_description','Camp synthétique',
+  'student_id','20000000-0000-0000-0000-000000000001','session_type','Summer Camp','school_year','2026/2027',
   'gross_amount','500','payment_amount','0','payment_date',current_date,'payment_method','Espèces',
   'idempotency_key','30000000-0000-0000-0000-000000000004')));
 do $$ declare c record; begin
@@ -155,8 +162,10 @@ end $$;
 -- Invalid/excess/Premium misuse fail atomically.
 do $$ begin
   begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','charge_id',(select result->>'charge_id' from test_results where name='decimal'),'payment_amount','60.01','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000005')); raise exception 'overpayment accepted'; exception when others then if sqlerrm='overpayment accepted' then raise; end if; end;
-  begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','service_description','Bad premium','plan_type','Premium','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000006')); raise exception 'non-Yearly Premium accepted'; exception when others then if sqlerrm='non-Yearly Premium accepted' then raise; end if; end;
-  begin perform public.create_charge_payment(jsonb_build_object('student_name','Should Roll Back','session_type','Other','service_description','x','gross_amount','10','payment_amount','-1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000007')); raise exception 'negative accepted'; exception when others then if sqlerrm='negative accepted' then raise; end if; end;
+  begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027','plan_type','Premium','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000006')); raise exception 'non-Yearly Premium accepted'; exception when others then if sqlerrm='non-Yearly Premium accepted' then raise; end if; end;
+  begin perform public.create_charge_payment(jsonb_build_object('student_name','Should Roll Back','session_type','Other','school_year','2026/2027','service_detail','x','gross_amount','10','payment_amount','-1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000007')); raise exception 'negative accepted'; exception when others then if sqlerrm='negative accepted' then raise; end if; end;
+  begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Other','school_year','2026/2027','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key',gen_random_uuid())); raise exception 'Other without description accepted'; exception when others then if sqlerrm='Other without description accepted' then raise; end if; end;
+  begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027','gross_amount','10','payment_amount','1','payment_method','Espèces','request_email',true,'idempotency_key',gen_random_uuid())); raise exception 'Email request without recipient accepted'; exception when others then if sqlerrm='Email request without recipient accepted' then raise; end if; end;
   if exists(select 1 from public.students where full_name='Should Roll Back') then raise exception 'Failed transaction left a student'; end if;
 end $$;
 
@@ -196,7 +205,9 @@ insert into test_results values ('legacy_balance', public.create_charge_payment(
   'idempotency_key','30000000-0000-0000-0000-000000000009')));
 do $$ begin
   if (select session_type from public.charges where id='60000000-0000-0000-0000-000000000002') <> 'Adults' then raise exception 'Legacy program classification was lost'; end if;
+  if (select school_year from public.charges where id='60000000-0000-0000-0000-000000000002') is not null then raise exception 'Historical charge was assigned a school year'; end if;
   if (select session_type from public.receipts where id=(select (result->>'receipt_id')::uuid from test_results where name='legacy_balance')) <> 'Adults' then raise exception 'Legacy balance payment copied an invalid program'; end if;
+  if (select school_year_snapshot from public.receipts where id=(select (result->>'receipt_id')::uuid from test_results where name='legacy_balance')) is not null then raise exception 'Historical charge payment invented a school year'; end if;
   if (select actor_id is not null or email_delivery_status <> 'unknown' from public.receipts where id='60000000-0000-0000-0000-000000000001') then raise exception 'Historical actor or delivery state was invented'; end if;
   if exists(select 1 from public.charges where student_id='20000000-0000-0000-0000-000000000002') then raise exception 'Archived student received a fabricated charge'; end if;
   if not exists(select 1 from public.legacy_receipt_reconciliation where id='60000000-0000-0000-0000-000000000003') then raise exception 'Archived student receipt missing from reconciliation'; end if;
@@ -236,12 +247,11 @@ do $$ begin
   begin perform public.void_financial_charge((select (result->>'charge_id')::uuid from test_results where name='first'),'Must void payments first','30000000-0000-0000-0000-000000000011'); raise exception 'Charge with active payment was voided'; exception when others then if sqlerrm='Charge with active payment was voided' then raise; end if; end;
 end $$;
 
--- Missing webhook credentials produce a retryable failed state. The retry RPC
--- exists and reports configuration failure without pretending the email queued.
-do $$ declare retry jsonb; begin
-  if (select email_delivery_status from public.receipts where id=(select (result->>'receipt_id')::uuid from test_results where name='first')) <> 'failed' then raise exception 'Missing email credentials did not mark delivery failed'; end if;
-  retry := public.retry_receipt_email((select (result->>'receipt_id')::uuid from test_results where name='first'));
-  if coalesce((retry->>'configuration_error')::boolean,false) is not true or coalesce((retry->>'queued')::boolean,true) is not false then raise exception 'Email retry falsely reported queued: %',retry; end if;
+-- Email is explicit: requested delivery is pending for the mocked worker,
+-- while an ordinary payment with a saved contact is skipped.
+do $$ begin
+  if (select email_delivery_status from public.receipts where id=(select (result->>'receipt_id')::uuid from test_results where name='first')) <> 'pending' then raise exception 'Explicit email request was not marked pending'; end if;
+  if (select email_delivery_status from public.receipts where id=(select (result->>'receipt_id')::uuid from test_results where name='second')) <> 'skipped' then raise exception 'Unrequested email was not skipped'; end if;
 end $$;
 
 -- The legacy deletion entry point is gone; only void RPCs remain.

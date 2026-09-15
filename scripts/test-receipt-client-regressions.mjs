@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
-import { createInitialChargeCoordinator, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
+import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, SCHOOL_YEAR_OPTIONS } from '../src/lib/receiptPresentation.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
 
@@ -10,6 +11,22 @@ const stableKey = createStableIdempotencyKey(() => `request-${++generated}`);
 assert.equal(stableKey(), 'request-1');
 assert.equal(stableKey(), 'request-1');
 assert.equal(generated, 1, 'an uncertain browser retry must reuse its request key');
+
+assert.deepEqual(SCHOOL_YEAR_OPTIONS, ['2026/2027']);
+assert.equal(buildServiceDescription({ sessionType: 'Yearly', planType: 'Premium', schoolYear: '2026/2027' }), 'Yearly · Premium · 2026/2027');
+assert.equal(buildServiceDescription({ sessionType: 'Adults', planType: 'Premium', schoolYear: '2026/2027' }), 'Adults · 2026/2027');
+assert.equal(buildServiceDescription({ sessionType: 'Other', schoolYear: '2026/2027', serviceDetail: 'Examen Cambridge' }), 'Autre · Examen Cambridge · 2026/2027');
+assert.equal(receiptSchoolYear({ school_year_snapshot: '2026/2027' }), '2026/2027');
+assert.equal(receiptSchoolYear({ service_description: 'Legacy 2024 text only' }), '', 'historical text must not be parsed for a year');
+assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Yearly · Standard · 2026/2027');
+
+const searchGate = createLatestRequestGate();
+const staleSearch = searchGate.begin();
+const currentSearch = searchGate.begin();
+assert.equal(searchGate.isCurrent(staleSearch), false, 'older student-search responses must be ignored');
+assert.equal(searchGate.isCurrent(currentSearch), true);
+searchGate.invalidate();
+assert.equal(searchGate.isCurrent(currentSearch), false, 'switching learner modes invalidates pending searches');
 
 assert.deepEqual(receiptEmailDecision({ email: 'family@example.test', voided_at: '2026-09-15T00:00:00Z' }),
   { action: 'skip', reason: 'Receipt was voided before delivery', persistStatus: 'skipped' });
@@ -60,7 +77,8 @@ coordinator.userSelectedCharge();
 const refreshed = coordinator.startChargeLoad('student-a');
 assert.deepEqual(coordinator.resolveChargeLoad(refreshed, [intended, alternate]), { status: 'ready' });
 assert.deepEqual(emptyChargeTerms(), {
-  charge_id: '', session_type: '', service_description: '', plan_type: 'Standard',
+  charge_id: '', session_type: '', school_year: '2026/2027', service_detail: '',
+  service_description: '', plan_type: 'Standard',
   level: '', gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
 });
 
@@ -85,6 +103,10 @@ assert.match(receiptForm, /startChargeLoad\(form\.student_id\)/);
 assert.match(receiptForm, /resolveChargeLoad\(request, rows\)/);
 assert.match(receiptForm, /initialCharge\.current\.userSelectedCharge\(\)/);
 assert.match(receiptForm, /\.\.\.emptyChargeTerms\(\)/);
+assert.match(receiptForm, /Rechercher un apprenant/);
+assert.match(receiptForm, /Nouvel apprenant/);
+assert.match(receiptForm, /SCHOOL_YEAR_OPTIONS/);
+assert.match(receiptForm, /request_email/);
 assert.doesNotMatch(receiptForm, /\[charges, form\.charge_id, initialData\.charge_id\]/);
 
 const finance = await readFile(new URL('../src/lib/receiptFinance.js', import.meta.url), 'utf8');
@@ -100,6 +122,15 @@ assert.ok(workflowCall >= 0 && currentLookup > workflowCall && providerSend > cu
   'email delivery must route provider calls through the current-row workflow');
 assert.doesNotMatch(emailFunction, /catch \(error\) \{ await track/);
 assert.match(emailFunction, /idempotencyKey: `receipt\/\$\{receipt\.id\}`/);
+assert.match(emailFunction, /school_year_snapshot/);
+assert.doesNotMatch(emailFunction, /À déterminer/);
+
+const receiptPdf = await readFile(new URL('../src/lib/receiptPdf.js', import.meta.url), 'utf8');
+assert.match(receiptPdf, /fetch\('\/eh-logo\.png'\)/);
+assert.match(receiptPdf, /format: RECEIPT_PAPER_FORMAT/);
+assert.match(receiptPdf, /Montant payé aujourd’hui/);
+assert.match(receiptPdf, /Solde restant/);
+assert.doesNotMatch(receiptPdf, /À déterminer/);
 
 const migration = await readFile(new URL('../supabase/migrations/055_receipt_charge_payments.sql', import.meta.url), 'utf8');
 assert.doesNotMatch(migration, /select id from auth\.users order by created_at limit 1/i);
@@ -109,6 +140,13 @@ assert.match(migration, /update public\.receipts set email_delivery_status = 'un
 assert.match(migration, /request_fingerprint text not null/);
 assert.match(migration, /v_existing\.actor_id is distinct from v_actor/);
 assert.match(migration, /v_existing\.request_fingerprint is distinct from v_request_fingerprint/);
+
+const schoolYearMigration = await readFile(new URL('../supabase/migrations/057_receipt_school_year_workflow.sql', import.meta.url), 'utf8');
+assert.match(schoolYearMigration, /add column if not exists school_year text/);
+assert.match(schoolYearMigration, /add column if not exists school_year_snapshot text/);
+assert.match(schoolYearMigration, /'school_year',case when v_charge_id is null then v_school_year end/);
+assert.match(schoolYearMigration, /case when v_request_email then 'pending' else 'skipped' end/);
+assert.match(schoolYearMigration, /new\.email_delivery_status <> 'pending'/);
 
 const receiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
 assert.match(receiptPage, /Idempotency key conflict/);
