@@ -48,6 +48,9 @@ const TABLE_FOR = {
   PendingRole:        'pending_roles',
   PlacementTest:      'placement_tests',
   Portfolio:          'portfolios',
+  PremiumAttendance:  'premium_attendance',
+  PremiumGroup:       'premium_groups',
+  PremiumMembership:  'premium_group_memberships',
   PremiumSession:     'premium_sessions',
   PremiumHomework:    'premium_homework_submissions',
   Receipt:            'receipts',
@@ -254,6 +257,11 @@ export const Payroll            = entities.Payroll;
 export const PendingRole        = entities.PendingRole;
 export const PlacementTest      = entities.PlacementTest;
 export const Portfolio          = entities.Portfolio;
+export const PremiumAttendance  = entities.PremiumAttendance;
+export const PremiumGroup       = entities.PremiumGroup;
+export const PremiumMembership  = entities.PremiumMembership;
+export const PremiumSession     = entities.PremiumSession;
+export const PremiumHomework    = entities.PremiumHomework;
 export const Receipt            = entities.Receipt;
 export const Student            = entities.Student;
 export const Teacher            = entities.Teacher;
