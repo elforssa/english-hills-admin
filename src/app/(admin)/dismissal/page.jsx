@@ -1,16 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { entities, auth, integrations } from '@/lib/entities';
+import { entities, integrations } from '@/lib/entities';
 import { Plus, CheckCircle, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { getBrowserClient } from '@/lib/supabase';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
+const schoolDate = (value) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+const schoolTime = (value) => new Intl.DateTimeFormat('fr-MA', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 
 export default function Dismissal() {
   const [logs, setLogs] = useState([]);
+  const [todayCount, setTodayCount] = useState(null);
   const [students, setStudents] = useState([]);
   const [adults, setAdults] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState('');
@@ -21,38 +25,52 @@ export default function Dismissal() {
   const [showForm, setShowForm] = useState(false);
 
   const load = () => Promise.all([
-    entities.DismissalLog.list('-created_date', 50),
+    entities.DismissalLog.listAll('-created_date'),
     entities.Student.filter({ age_category: 'Young Learners (6-12)', status: 'Enrolled' }),
-    entities.AuthorizedAdult.list('full_name', 200),
+    getBrowserClient().rpc('count_today_dismissals'),
   ])
-    .then(([l, s, a]) => { setLogs(l); setStudents(s); setAdults(a); })
+    .then(async ([l, s, countResult]) => {
+      if (countResult.error) throw countResult.error;
+      const adultIds = [...new Set(l.map(row => row.adult_id).filter(Boolean))];
+      const a = adultIds.length ? await entities.AuthorizedAdult.filter({ id: adultIds }, 'full_name') : [];
+      setAdults(a);
+      setLogs(l); setStudents(s); setTodayCount(Number(countResult.data));
+    })
     .catch((err) => {
       // eslint-disable-next-line no-console
-      console.error('[dismissal] load failed:', err);
+      console.error('[dismissal] load failed:', err?.message, err?.code);
+      setTodayCount(null);
+      toast.error('Journal des sorties indisponible. Rechargez la page pour réessayer.');
     })
     .finally(() => setLoading(false));
 
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (selectedStudent) {
-      const sa = adults.filter(a => a.student_id === selectedStudent);
-      setStudentAdults(sa);
+      setStudentAdults([]);
       const student = students.find(s => s.id === selectedStudent);
-      setForm(f => ({ ...f, student_id: selectedStudent, student_name: student?.full_name || '' }));
+      setForm(f => ({ ...f, student_id: selectedStudent, student_name: student?.full_name || '', adult_id: '', adult_name: '' }));
+      entities.AuthorizedAdult.filter({ student_id: selectedStudent }, 'full_name')
+        .then(rows => { if (!cancelled) setStudentAdults(rows); })
+        .catch(() => { if (!cancelled) toast.error('Adultes autorisés indisponibles. Réessayez.'); });
+    } else {
+      setStudentAdults([]);
+      setForm(f => ({ ...f, student_id: '', student_name: '', adult_id: '', adult_name: '' }));
     }
-  }, [selectedStudent, adults, students]);
+    return () => { cancelled = true; };
+  }, [selectedStudent, students]);
 
   // Lockdown: a young learner can only be dismissed once per day. Subsequent
-  // attempts must go through a director override (not implemented here —
-  // staff is expected to escalate verbally). This prevents the foot-gun of
-  // an unauthorized adult retrying after the legitimate pickup happened.
-  const todayKey = new Date().toISOString().slice(0, 10);
+  // This is only a UI shortcut; the database trigger enforces uniqueness even
+  // when a pickup falls outside the 50 entries shown here.
+  const todayKey = schoolDate(Date.now());
   const alreadyDismissedToday = (studentId) =>
     logs.some(l =>
       l.student_id === studentId
       && l.timestamp
-      && l.timestamp.startsWith(todayKey)
+      && schoolDate(l.timestamp) === todayKey
       && l.confirmed !== false
     );
 
@@ -63,10 +81,10 @@ export default function Dismissal() {
       return;
     }
     setSaving(true);
-    const adult = adults.find(a => a.id === form.adult_id);
+    const adult = studentAdults.find(a => a.id === form.adult_id);
     const student = students.find(s => s.id === form.student_id);
     try {
-      await entities.DismissalLog.create({
+      const saved = await entities.DismissalLog.create({
         ...form,
         student_id: form.student_id || null,
         adult_id: form.adult_id || null,
@@ -80,6 +98,7 @@ export default function Dismissal() {
       // failed email.
       const recipients = [];
       if (student?.parent_email) recipients.push(student.parent_email);
+      let parentNotified = false;
       if (recipients.length > 0) {
         try {
           await integrations.Core.SendEmail({
@@ -88,19 +107,20 @@ export default function Dismissal() {
             body:
               `Bonjour,\n\n` +
               `Nous vous confirmons que ${student.full_name} a été récupéré(e) ` +
-              `à ${new Date().toLocaleTimeString('fr-MA')} par ` +
+              `à ${schoolTime(saved.timestamp)} par ` +
               `${adult?.full_name || form.adult_name} (${adult?.relation || '—'}).\n\n` +
-              `Responsable English Hills : ${form.staff_name}\n\n` +
+              `Responsable English Hills : ${saved.staff_name}\n\n` +
               `Si cette information vous semble incorrecte, contactez le centre immédiatement.\n\n` +
               `— English Hills Language Center`,
           });
+          parentNotified = true;
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[dismissal] parent notification failed:', err);
         }
       }
 
-      toast.success('Sortie enregistrée' + (recipients.length > 0 ? ' — Parent notifié' : ''));
+      toast.success('Sortie enregistrée' + (parentNotified ? ' — Notification envoyée' : ' — Notification non confirmée'));
       setShowForm(false);
       setSelectedStudent('');
       setForm({ student_id: '', student_name: '', adult_id: '', adult_name: '', staff_name: '' });
@@ -112,15 +132,12 @@ export default function Dismissal() {
     }
   };
 
-  const today = new Date().toLocaleDateString('fr-MA');
-  const todayLogs = logs.filter(l => new Date(l.timestamp).toLocaleDateString('fr-MA') === today);
-
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Sortie des jeunes apprenants</h1>
-          <p className="text-muted-foreground text-sm mt-1">{todayLogs.length} sorties enregistrées aujourd&apos;hui</p>
+          <p className="text-muted-foreground text-sm mt-1">{todayCount ?? '—'} sorties enregistrées aujourd&apos;hui</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
           <Plus size={15} /> Enregistrer une sortie
@@ -132,19 +149,19 @@ export default function Dismissal() {
           <h2 className="font-semibold mb-4">Nouvelle sortie</h2>
           <form onSubmit={handleLog} className="space-y-4">
             <div>
-              <label className={labelClass}>Apprenant *</label>
-              <select className={inputClass} value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} required>
+              <label htmlFor="dismissal-student" className={labelClass}>Apprenant *</label>
+              <select id="dismissal-student" className={inputClass} value={selectedStudent} onChange={e => setSelectedStudent(e.target.value)} required>
                 <option value="">— Choisir —</option>
                 {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
             </div>
             {selectedStudent && (
               <div>
-                <label className={labelClass}>Adulte autorisé *</label>
+                <label htmlFor="dismissal-adult" className={labelClass}>Adulte autorisé *</label>
                 {studentAdults.length === 0 ? (
                   <p className="text-sm text-red-500">Aucun adulte autorisé pour cet apprenant.</p>
                 ) : (
-                  <select className={inputClass} value={form.adult_id} onChange={e => setForm(f => ({ ...f, adult_id: e.target.value }))} required>
+                  <select id="dismissal-adult" className={inputClass} value={form.adult_id} onChange={e => setForm(f => ({ ...f, adult_id: e.target.value }))} required>
                     <option value="">— Choisir —</option>
                     {studentAdults.map(a => <option key={a.id} value={a.id}>{a.full_name} ({a.relation})</option>)}
                   </select>
@@ -152,8 +169,7 @@ export default function Dismissal() {
               </div>
             )}
             <div>
-              <label className={labelClass}>Responsable (staff) *</label>
-              <input className={inputClass} value={form.staff_name} onChange={e => setForm(f => ({ ...f, staff_name: e.target.value }))} required />
+              <p className={labelClass}>Responsable : identité du compte connecté</p>
             </div>
             <div className="flex gap-3">
               <button type="submit" disabled={saving || studentAdults.length === 0} className="px-5 py-2 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
@@ -167,7 +183,7 @@ export default function Dismissal() {
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/30">
-          <h3 className="font-semibold text-sm">Journal des sorties</h3>
+          <h3 className="font-semibold text-sm">Journal des sorties (50 dernières entrées)</h3>
         </div>
         {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> :
           logs.length === 0 ? (
@@ -184,7 +200,7 @@ export default function Dismissal() {
                     <div key={l.id} className="p-4">
                       <div className="flex items-start justify-between mb-1">
                         <p className="font-semibold text-sm">{l.student_name}</p>
-                        <span className="text-xs text-muted-foreground">{l.timestamp ? new Date(l.timestamp).toLocaleTimeString('fr-MA') : '—'}</span>
+                        <span className="text-xs text-muted-foreground">{l.timestamp ? schoolTime(l.timestamp) : '—'}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{l.adult_name} · {adult?.relation || '—'}</p>
                       <p className="text-xs text-muted-foreground">Staff : {l.staff_name}</p>
@@ -208,7 +224,7 @@ export default function Dismissal() {
                           <td className="px-4 py-3">{l.adult_name}</td>
                           <td className="px-4 py-3 text-muted-foreground">{adult?.relation || '—'}</td>
                           <td className="px-4 py-3 text-muted-foreground">{l.staff_name}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{l.timestamp ? new Date(l.timestamp).toLocaleTimeString('fr-MA') : '—'}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{l.timestamp ? schoolTime(l.timestamp) : '—'}</td>
                         </tr>
                       );
                     })}

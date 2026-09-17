@@ -19,7 +19,7 @@ import {
   ResponsiveContainer, CartesianGrid, AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 import { TrendingUp, Users, CreditCard, Briefcase, Calendar } from 'lucide-react';
-import { useEntityList } from '@/lib/queries';
+import { useEntityAll } from '@/lib/queries';
 import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
 import { getBrowserClient } from '@/lib/supabase';
 
@@ -70,7 +70,7 @@ function MAD(n) {
 // ── small wrapper used for every chart panel — keeps the page scannable.
 function Panel({ title, subtitle, icon: Icon, right, children }) {
   return (
-    <section className="bg-card border border-border rounded-2xl p-5">
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <header className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-3">
           {Icon && (
@@ -94,7 +94,7 @@ function Panel({ title, subtitle, icon: Icon, right, children }) {
 
 function StatCard({ label, value, hint, color = COLORS.primary }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-4">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className="text-xl font-bold mt-1" style={{ color }}>{value}</p>
       {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
@@ -108,28 +108,37 @@ export default function ReportsPage() {
   const [year, setYear]   = useState(currentYear);
   const [financeRows, setFinanceRows] = useState([]);
   const [financeLoading, setFinanceLoading] = useState(true);
+  const [financeError, setFinanceError] = useState(false);
+  const [financeAttempt, setFinanceAttempt] = useState(0);
 
-  // Limits below mirror what the existing dashboard pulls. Real production
-  // numbers should swap to server-side aggregation (Postgres views) once
-  // a center crosses ~10k attendance rows.
-  const { data: attendance = [], isLoading: attLoading } = useEntityList('Attendance', '-session_date', 5000);
-  const { data: receipts   = [], isLoading: recLoading } = useEntityList('Receipt', '-date', 5000);
-  const { data: payroll    = [], isLoading: payLoading } = useEntityList('Payroll', '-created_date', 2000);
-  const { data: students   = [] } = useEntityList('Student', 'full_name', 500);
-  const { data: teachers   = [] } = useEntityList('Teacher', 'full_name', 200);
-  const { data: groups = [], isLoading: groupsLoading } = useEntityList('Group', 'name', 500);
-  const { data: enrollments = [], isLoading: enrollmentsLoading } = useEntityList('Enrollment', '-created_date', 5000);
-  const { data: premiumSessions = [], isLoading: premiumLoading } = useEntityList('PremiumSession', '-scheduled_date', 2000);
-  const { data: premiumHomework = [], isLoading: homeworkLoading } = useEntityList('PremiumHomework', '-submitted_at', 2000);
-  const { data: premiumGroups = [], isLoading: premiumGroupsLoading } = useEntityList('PremiumGroup', 'name', 500);
-  const { data: premiumMemberships = [], isLoading: premiumMembershipsLoading } = useEntityList('PremiumMembership', '-created_at', 3000);
-  const { data: premiumAttendance = [], isLoading: premiumAttendanceLoading } = useEntityList('PremiumAttendance', '-created_at', 5000);
+  // Complete pages are fetched with stable ordering; move large aggregate
+  // reports into SQL when the dataset size warrants it.
+  const { data: attendance = [], isLoading: attLoading, isError: attError } = useEntityAll('Attendance', '-session_date');
+  const { data: receipts   = [], isLoading: recLoading, isError: recError } = useEntityAll('Receipt', '-date');
+  const { data: payroll    = [], isLoading: payLoading, isError: payError } = useEntityAll('Payroll', '-created_date');
+  const { data: students   = [], isLoading: studentsLoading, isError: studentsError } = useEntityAll('Student', 'full_name');
+  const { data: teachers   = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
+  const { data: groups = [], isLoading: groupsLoading, isError: groupsError } = useEntityAll('Group', 'name');
+  const { data: enrollments = [], isLoading: enrollmentsLoading, isError: enrollmentsError } = useEntityAll('Enrollment', '-created_date');
+  const { data: premiumSessions = [], isLoading: premiumLoading, isError: premiumError } = useEntityAll('PremiumSession', '-scheduled_date');
+  const { data: premiumHomework = [], isLoading: homeworkLoading, isError: homeworkError } = useEntityAll('PremiumHomework', '-submitted_at');
+  const { data: premiumGroups = [], isLoading: premiumGroupsLoading, isError: premiumGroupsError } = useEntityAll('PremiumGroup', 'name');
+  const { data: premiumMemberships = [], isLoading: premiumMembershipsLoading, isError: premiumMembershipsError } = useEntityAll('PremiumMembership', '-created_at');
+  const { data: premiumAttendance = [], isLoading: premiumAttendanceLoading, isError: premiumAttendanceError } = useEntityAll('PremiumAttendance', '-created_at');
 
   useEffect(() => {
+    let active = true;
     setFinanceLoading(true);
+    setFinanceError(false);
     getBrowserClient().rpc('get_finance_year_months', { p_year: Number(year) })
-      .then(({ data }) => { setFinanceRows(data || []); setFinanceLoading(false); });
-  }, [year]);
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !Array.isArray(data)) setFinanceError(true);
+        else setFinanceRows(data);
+        setFinanceLoading(false);
+      }).catch(() => { if (active) { setFinanceError(true); setFinanceLoading(false); } });
+    return () => { active = false; };
+  }, [year, financeAttempt]);
 
   // ── attendance roll-up: build {date, Présent, Absent, Retard, Justifié} ──
   const attendanceSeries = useMemo(() => {
@@ -243,21 +252,35 @@ export default function ReportsPage() {
   }, [receipts, payroll, currentYear]);
 
   const loading = attLoading || recLoading || payLoading || financeLoading;
-  const academicLoading = groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading
+  const academicLoading = studentsLoading || teachersLoading || groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading
     || premiumGroupsLoading || premiumMembershipsLoading || premiumAttendanceLoading;
+  const dataError = attError || recError || payError || studentsError || teachersError || groupsError
+    || enrollmentsError || premiumError || homeworkError || premiumGroupsError
+    || premiumMembershipsError || premiumAttendanceError;
+
+  if (dataError || financeError) return (
+    <div className="p-4 lg:p-8 max-w-7xl mx-auto" role="alert">
+      <h1 className="text-2xl font-bold">Rapports indisponibles</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Une source de données n’a pas pu être chargée. Aucun total partiel n’est affiché.</p>
+      <button className="mt-4 rounded-md border border-border px-4 py-2 text-sm font-semibold text-primary" onClick={() => {
+        if (dataError) window.location.reload(); else setFinanceAttempt((value) => value + 1);
+      }}>Réessayer</button>
+    </div>
+  );
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-      <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <header className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Rapports</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary">Pilotage du centre</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">Rapports</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Synthèse présences, finance et paie. Les données sont rafraîchies en temps réel.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Calendar size={14} className="text-muted-foreground" />
-          <select
+          <select aria-label="Année des rapports"
             value={year}
             onChange={e => setYear(e.target.value)}
             className="border border-border rounded-md px-3 py-1.5 text-sm bg-white"

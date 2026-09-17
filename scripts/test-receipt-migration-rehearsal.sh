@@ -9,8 +9,9 @@ fi
 project_root=$(cd "$(dirname "$0")/.." && pwd)
 db_url='postgresql://postgres:postgres@127.0.0.1:54322/postgres'
 
-if [[ "$(git -C "$project_root" branch --show-current)" != 'codex/receipt-charge-payments' ]]; then
-  echo 'Refusing migration rehearsal outside codex/receipt-charge-payments.' >&2
+branch=$(git -C "$project_root" branch --show-current)
+if [[ "$branch" != 'codex-migration' && "$branch" != codex/* ]]; then
+  echo 'Refusing migration rehearsal outside a Codex feature branch.' >&2
   exit 2
 fi
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
 import { entities, auth } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const COLORS = [
@@ -21,23 +22,35 @@ export default function Timetable() {
   const [filterTerme, setFilterTerme] = useState('');
   const [role, setRole] = useState(null);
   const [myTeacherId, setMyTeacherId] = useState(null);
+  const [premiumSessions, setPremiumSessions] = useState([]);
+  const [premiumGroups, setPremiumGroups] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const until = new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
     Promise.all([
-      entities.Group.list('name', 100),
+      entities.Group.listAll('name'),
       getTeacherDirectory(),
       auth.me().catch(() => null),
       getMyTeacher(),
-    ]).then(([g, t, u, me]) => {
+      getBrowserClient().from('premium_sessions').select('id,premium_group_id,teacher_id,scheduled_date,start_time,status')
+        .gte('scheduled_date', today).lte('scheduled_date', until)
+        .neq('status', 'Cancelled').order('scheduled_date', { ascending: true }),
+      entities.PremiumGroup.listAll('name'),
+    ]).then(([g, t, u, me, premiumResult, premiumGroupRows]) => {
+      if (premiumResult.error) throw premiumResult.error;
       setGroups(g);
       setTeachers(t);
+      setPremiumSessions(premiumResult.data || []);
+      setPremiumGroups(premiumGroupRows);
       setRole(u?.role || null);
       // Resolve the teacher with the same database helper used by RLS.
       if (u?.role === 'teacher') {
         setMyTeacherId(me?.id || null);
       }
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { setLoadError('Impossible de charger l’emploi du temps. Réessayez en actualisant la page.'); setLoading(false); });
   }, []);
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';
@@ -53,6 +66,8 @@ export default function Timetable() {
   }, {});
 
   const hasAny = Object.values(groupsByDay).some(arr => arr.length > 0);
+  const visiblePremium = premiumSessions.filter(s => role !== 'teacher' || s.teacher_id === myTeacherId);
+  const premiumGroupName = (id) => premiumGroups.find(g => g.id === id)?.name || 'Séance Premium';
 
   return (
     <div className="p-8">
@@ -64,6 +79,7 @@ export default function Timetable() {
         </select>
       </div>
 
+      {loadError && <div role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{loadError}</div>}
       {loading ? (
         <div className="p-8 text-center text-muted-foreground">Chargement...</div>
       ) : !hasAny ? (
@@ -114,6 +130,24 @@ export default function Timetable() {
             ))}
           </div>
         </>
+      )}
+      {!loading && !loadError && visiblePremium.length > 0 && (
+        <section className="mt-8" aria-labelledby="premium-timetable-heading">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="premium-timetable-heading" className="text-lg font-semibold text-[var(--brand-deep)]">Séances Premium à venir</h2>
+            <span className="text-xs text-muted-foreground">30 prochains jours</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {visiblePremium.map(session => (
+              <article key={session.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Premium · {session.status}</p>
+                <h3 className="mt-1 font-semibold">{premiumGroupName(session.premium_group_id)}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{session.scheduled_date} · {String(session.start_time).slice(0,5)}</p>
+                <p className="text-sm text-muted-foreground">{teacherName(session.teacher_id)}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

@@ -34,7 +34,7 @@ export default function ActivityLog() {
   const [action, setAction] = useState('');
 
   useEffect(() => {
-    entities.ActivityLog.list('-created_date', 500)
+    entities.ActivityLog.listAll('-created_date')
       .then(setRows)
       .catch(() => { /* entities.js already toasted */ })
       .finally(() => setLoading(false));

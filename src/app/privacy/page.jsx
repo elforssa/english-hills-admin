@@ -23,7 +23,7 @@ export default function PrivacyPolicy() {
         <div className="text-center mb-8">
           <Image src="/eh-logo.png" alt="English Hills" width={140} height={56} priority className="h-14 w-auto mx-auto mb-4" />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--brand)' }}>Politique de confidentialité</h1>
-          <p className="text-gray-500 text-sm mt-1">Conformément à la loi 09-08 (CNDP, Maroc)</p>
+          <p className="text-gray-500 text-sm mt-1">Informations sur le traitement des données</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-8 prose prose-sm max-w-none text-gray-700">
@@ -39,7 +39,8 @@ export default function PrivacyPolicy() {
             <li>Identité : nom complet, date de naissance, catégorie d&apos;âge</li>
             <li>Coordonnées : téléphone, email apprenant, email parent/tuteur</li>
             <li>Informations pédagogiques : niveau CEFR estimé, message de contact</li>
-            <li>Documents joints (optionnels) : justificatifs PDF / JPG / PNG</li>
+            <li>Preuve de consentement à la pré-inscription : date, origine du formulaire et version de cette notice</li>
+            <li>Les pièces jointes ne sont pas acceptées dans le formulaire public de pré-inscription.</li>
           </ul>
 
           <h2 className="text-lg font-semibold text-gray-900">3. Finalités du traitement</h2>
@@ -52,22 +53,22 @@ export default function PrivacyPolicy() {
 
           <h2 className="text-lg font-semibold text-gray-900">4. Base légale</h2>
           <p>
-            Le traitement est fondé sur votre consentement explicite (article 4 de la loi 09-08)
-            ainsi que sur l&apos;exécution du contrat de formation et le respect d&apos;obligations légales.
+            Le formulaire de pré-inscription demande votre accord avant l&apos;envoi. Les autres traitements
+            administratifs, pédagogiques et financiers nécessitent une analyse des bases applicables par le centre.
           </p>
 
           <h2 className="text-lg font-semibold text-gray-900">5. Destinataires</h2>
           <p>
-            Vos données sont accessibles uniquement au personnel autorisé d&apos;English Hills
-            Language Center (direction, administration, enseignants concernés). Aucune donnée
-            n&apos;est cédée à des tiers commerciaux.
+            L&apos;accès dans l&apos;application dépend du rôle et du lien avec l&apos;apprenant.
+            Les services techniques utilisés pour l&apos;hébergement, la base de données, l&apos;envoi d&apos;emails
+            et la surveillance des erreurs peuvent traiter les données nécessaires à leur fonction.
           </p>
 
           <h2 className="text-lg font-semibold text-gray-900">6. Durée de conservation</h2>
           <p>
-            Les données sont conservées pendant la durée de la relation pédagogique et, après
-            sa fin, pendant les durées légales applicables (notamment comptables et fiscales).
-            Les journaux d&apos;audit sont pseudonymisés conformément aux exigences CNDP.
+            Les durées de conservation et les modalités de suppression doivent être confirmées
+            par le centre selon les obligations applicables. Contactez le centre pour connaître
+            la durée applicable à votre dossier.
           </p>
 
           <h2 className="text-lg font-semibold text-gray-900">7. Sécurité</h2>

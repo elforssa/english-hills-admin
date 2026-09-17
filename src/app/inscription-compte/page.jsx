@@ -166,24 +166,48 @@ function InscriptionCompteInner() {
 
     // Mirror full_name onto the profiles row so the rest of the app picks
     // it up without a round-trip via user_metadata.
-    const { data: { user } } = await sb.auth.getUser();
-    if (user) {
-      await sb.from('profiles').update({ full_name: fullName }).eq('id', user.id);
+    const { data: { user }, error: userError } = await sb.auth.getUser();
+    if (userError || !user) {
+      setErrorMsg("Impossible de vérifier ce compte. Veuillez rouvrir votre lien d'invitation.");
+      setPhase('form');
+      return;
+    }
+    const { error: profileError } = await sb.from('profiles').update({ full_name: fullName }).eq('id', user.id);
+    if (profileError) {
+      setErrorMsg("Le profil n'a pas pu être mis à jour. Veuillez réessayer.");
+      setPhase('form');
+      return;
     }
 
     // Apply the role queued by the inviter. The RPC returns the applied
     // role (or null if none was queued — shouldn't happen for an invitee).
     let appliedRole = null;
-    const { data: rpcRole } = await sb.rpc('apply_pending_role');
+    const { data: rpcRole, error: roleError } = await sb.rpc('apply_pending_role');
+    if (roleError) {
+      setErrorMsg("Le rôle du compte n'a pas pu être activé. Veuillez réessayer.");
+      setPhase('form');
+      return;
+    }
     appliedRole = rpcRole || null;
 
-    if (!appliedRole && user) {
-      const { data: profile } = await sb
+    if (!appliedRole) {
+      const { data: profile, error: readError } = await sb
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .maybeSingle();
+      if (readError) {
+        setErrorMsg("Le rôle du compte n'a pas pu être vérifié. Veuillez réessayer.");
+        setPhase('form');
+        return;
+      }
       appliedRole = profile?.role || null;
+    }
+
+    if (!PORTAL_FOR_ROLE[appliedRole]) {
+      setErrorMsg("Aucun rôle actif n'est associé à cette invitation. Veuillez contacter l'administration.");
+      setPhase('form');
+      return;
     }
 
     setPhase('done');

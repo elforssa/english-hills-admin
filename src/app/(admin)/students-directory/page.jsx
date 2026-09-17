@@ -24,6 +24,8 @@ export default function StudentsDirectory() {
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterCat, setFilterCat] = useState('');
@@ -32,11 +34,21 @@ export default function StudentsDirectory() {
   const [view, setView] = useState('grid');
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError(false);
     Promise.all([
-      entities.Student.list('full_name', 500),
-      entities.Group.list('name', 100),
-    ]).then(([s, g]) => { setStudents(s); setGroups(g); setLoading(false); });
-  }, []);
+      entities.Student.listAll('full_name'),
+      entities.Group.listAll('name'),
+    ]).then(([s, g]) => {
+      if (active) { setStudents(s); setGroups(g); }
+    }).catch(() => {
+      if (active) setLoadError(true);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [reload]);
 
   const groupName = (gid) => groups.find(g => g.id === gid)?.name;
 
@@ -59,19 +71,18 @@ export default function StudentsDirectory() {
         </div>
         <Link
           href="/students/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl hover:opacity-90 transition-all shadow-sm"
-          style={{ background: 'linear-gradient(135deg, #1E4D8B 0%, #1a3f75 100%)' }}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           + Ajouter un apprenant
         </Link>
       </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">
-        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
+        <select aria-label="Filtrer l'annuaire par session" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
           <option value="">Toutes les sessions</option>
           {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
         </select>
-        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
+        <select aria-label="Filtrer l'annuaire par niveau" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white" value={filterLevel} onChange={e => setFilterLevel(e.target.value)}>
           <option value="">Tous les niveaux</option>
           {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(level => <option key={level}>{level}</option>)}
         </select>
@@ -81,23 +92,24 @@ export default function StudentsDirectory() {
         <div className="relative flex-1 min-w-48">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+            aria-label="Rechercher dans l'annuaire"
             className="w-full pl-9 pr-3 py-2.5 text-sm border border-border rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             placeholder="Nom, email, téléphone..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+        <select aria-label="Filtrer l'annuaire par statut" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">Tous les statuts</option>
           {['Enrolled','Trial','Prospect','Inactive','Alumni'].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+        <select aria-label="Filtrer l'annuaire par catégorie" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">Toutes catégories</option>
           {CATS.map(c => <option key={c}>{c}</option>)}
         </select>
         <div className="flex border border-border rounded-xl overflow-hidden bg-white">
           {['grid','list'].map(v => (
-            <button key={v} onClick={() => setView(v)}
+            <button key={v} onClick={() => setView(v)} aria-pressed={view === v}
               className={`px-3 py-2 text-xs font-medium transition-colors ${view === v ? 'text-white bg-primary' : 'text-muted-foreground hover:bg-muted'}`}
             >
               {v === 'grid' ? '⊞ Grille' : '≡ Liste'}
@@ -108,6 +120,10 @@ export default function StudentsDirectory() {
 
       {loading ? (
         <div className="text-center py-16 text-muted-foreground text-sm">Chargement...</div>
+      ) : loadError ? (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800">
+          Impossible de charger l’annuaire. <button type="button" onClick={() => setReload(value => value + 1)} className="ml-2 font-semibold underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Réessayer</button>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <Users size={40} className="mx-auto text-muted-foreground/20 mb-3" />
@@ -165,7 +181,7 @@ export default function StudentsDirectory() {
           })}
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="bg-card border border-border rounded-2xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">

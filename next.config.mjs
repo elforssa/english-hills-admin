@@ -2,7 +2,11 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === 'production';
-const localSupabaseConnect = isProd ? '' : ' http://127.0.0.1:54321 ws://127.0.0.1:54321';
+const localSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const isLocalSupabase = /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/|$)/.test(localSupabaseUrl);
+const localSupabaseConnect = !isProd || isLocalSupabase
+  ? ' http://127.0.0.1:54321 ws://127.0.0.1:54321 http://localhost:54321 ws://localhost:54321'
+  : '';
 // Content-Security-Policy — locks down what scripts, styles, images, and
 // network destinations the browser will accept. Tighten further once we move
 // inline styles into Tailwind-only classes and inline scripts out of Next's
@@ -33,18 +37,16 @@ const csp = [
   // for the iframe is harmless).
   // Sentry events are tunnelled through /monitoring (same-origin), so 'self'
   // covers the browser; the ingest hosts are listed as a fallback.
-`connect-src 'self' ${isProd ? '' : 'http://127.0.0.1:54321 ws://127.0.0.1:54321'} https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com https://*.ingest.de.sentry.io https://*.sentry.io`,
+  `connect-src 'self'${localSupabaseConnect} https://*.supabase.co wss://*.supabase.co https://api.resend.com https://challenges.cloudflare.com https://*.ingest.de.sentry.io https://*.sentry.io`,
   "media-src 'self' blob:",
   "worker-src 'self' blob:",
   // Turnstile renders its challenge inside an iframe from this origin.
   "frame-src 'self' https://challenges.cloudflare.com",
-  isProd ? 'upgrade-insecure-requests' : '',
+  isProd && !isLocalSupabase ? 'upgrade-insecure-requests' : '',
 ].filter(Boolean).join('; ');
 
 const nextConfig = {
   reactStrictMode: true,
-  // Required on Next 14 so instrumentation.js (Sentry server/edge init) loads.
-  experimental: { instrumentationHook: true },
   async headers() {
     return [
       {

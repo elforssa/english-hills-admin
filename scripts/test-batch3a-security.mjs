@@ -6,9 +6,10 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 
 const root = new URL('../', import.meta.url);
-assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim(), 'codex-migration');
+assertLocalFeatureBranch(root);
 const env = {};
 for (const line of readFileSync(new URL('.env.local', root), 'utf8').split('\n')) {
   const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
@@ -35,7 +36,7 @@ async function request(actor,path,method='GET',body,extraHeaders={}) {
   const res=await fetch(base+path,{method,redirect:'error',signal:AbortSignal.timeout(20000),
     headers:{apikey:actor?.service?env.SUPABASE_SERVICE_ROLE_KEY:env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       'Content-Type':'application/json',Prefer:'return=representation',
-      ...(actor?.token?{Authorization:'Bearer '+actor.token}:{}),...extraHeaders},
+      ...(actor?.service?{Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY}:actor?.token?{Authorization:'Bearer '+actor.token}:{}),...extraHeaders},
     ...(body===undefined?{}:{body:JSON.stringify(body)})});
   return {ok:res.ok,status:res.status,data:await res.json().catch(()=>null)};
 }
@@ -92,6 +93,18 @@ try {
   const g2=await create('groups',{name:run+' Group Two',niveau:'A1',teacher_id:t2.id,jours:'Mardi',horaire:'10:00–11:00'});
   const s1=await create('students',{full_name:run+' Learner',email:student.email,parent_email:parent.email,groupe_id:g1.id,status:'Enrolled',niveau_cefr:'A1'});
   const s2=await create('students',{full_name:run+' Other Learner',email:run+'-other@example.invalid',parent_email:run+'-other-parent@example.invalid',groupe_id:g2.id,status:'Enrolled'});
+  sql(`update public.profiles set full_name='Synthetic Admin' where id='${admin.id}'`);
+  const pickupAdult=await create('authorized_adults',{student_id:s1.id,full_name:run+' Adult',telephone:'0000000000',relation:'Parent'});
+  const pickups=await Promise.all(Array.from({length:4},()=>request(admin,'/rest/v1/dismissal_logs','POST',{
+    student_id:s1.id,adult_id:pickupAdult.id,adult_name:'FORGED',staff_name:'FORGED',confirmed:false,
+  })));
+  assert.equal(pickups.filter(r=>r.ok).length,1,JSON.stringify(pickups));
+  assert.ok(pickups.filter(r=>!r.ok).every(r=>r.status===409));
+  assert.equal(sql(`select count(*) from public.dismissal_logs where student_id='${s1.id}'`),'1');
+  const pickup=pickups.find(r=>r.ok).data[0];
+  assert.equal(pickup.staff_name,'Synthetic Admin');
+  assert.equal(pickup.adult_name,pickupAdult.full_name);
+  (records.dismissal_logs??=[]).push(pickup.id); checks+=4;
   await create('payroll',{teacher_id:t1.id,teacher_name:t1.full_name,mois:'Janvier',annee:'2026',taux_horaire:hr.taux_horaire,salaire_brut:hr.salaire_mensuel,salaire_net:9999,notes:hr.notes});
   for(const actor of [null,...users]) {
     const privileged=['admin','director'].includes(actor?.role);
@@ -156,10 +169,32 @@ try {
   assert.equal(ok(await request(teacher,`/rest/v1/attendance?id=eq.${attendance.id}`))[0].student_id,s1.id);
   const forbidden=await request(teacher,'/rest/v1/attendance','POST',{student_id:s2.id,group_id:g2.id,session_date:'2026-09-08',status:'Présent'});
   assert.equal(forbidden.status,403); checks+=3;
+  const concurrent=await Promise.all(Array.from({length:6},(_,i)=>rpc(teacher,'save_attendance',{
+    p_student:s1.id,p_group:g1.id,p_date:'2026-09-09',p_status:i%2?'Absent':'Présent',
+  })));
+  const savedIds=concurrent.map(ok);
+  assert.equal(new Set(savedIds).size,1);
+  assert.equal(sql(`select count(*) from public.attendance where student_id='${s1.id}' and group_id='${g1.id}' and session_date='2026-09-09'`),'1');
+  (records.attendance??=[]).push(savedIds[0]); checks+=2;
   for(const sender of [parent,student]) {
     const [recipient]=ok(await rpc(sender,'get_teacher_directory',{p_teacher_id:t1.id}));
     const msg=await create('messages',{from_user_email:sender.email,to_user_email:recipient.email,subject:run,body:'Synthetic directory-recipient test'},sender);
     assert.equal(ok(await request(teacher,`/rest/v1/messages?id=eq.${msg.id}`))[0].body,'Synthetic directory-recipient test'); checks++;
+  }
+  // The normal teacher profile has no linked_teacher_id; authorization must
+  // use the same email-derived teacher identity as attendance and roster RLS.
+  assert.equal(sql(`select linked_teacher_id is null from public.profiles where id='${teacher.id}'`),'t');
+  for(const recipient of [parent.email,student.email]) {
+    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient})),true);
+    const msg=await create('messages',{from_user_email:teacher.email,to_user_email:recipient,subject:run,body:'Teacher recipient relationship test'},teacher);
+    assert.equal(msg.to_user_email,recipient); checks+=2;
+  }
+  for(const recipient of [s2.email,s2.parent_email]) {
+    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient})),false);
+    const denied=await request(teacher,'/rest/v1/messages','POST',{
+      from_user_email:teacher.email,to_user_email:recipient,subject:run,body:'FORBIDDEN',
+    });
+    assert.equal(denied.status,403); checks+=2;
   }
   assert.equal(sql("select has_function_privilege('anon','public.get_teacher_directory(uuid)','execute') or has_function_privilege('service_role','public.get_teacher_directory(uuid)','execute')"),'f');
   assert.equal(sql("select proconfig @> array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.get_teacher_directory(uuid)'::regprocedure"),'t');
@@ -187,6 +222,33 @@ try {
     assert.ok(source.includes('@/lib/teacher-directory')); assert.ok(!source.includes('entities.Teacher.')); checks++;
   }
   if(process.argv.includes('--app')) {
+    const invitee=await makeUser('pending','invitee');
+    const expiredInvitee=await makeUser('pending','expired-invitee');
+    const forbiddenInvite=await app(parent,'/api/admin/invite',{email:invitee.email,role:'parent'});
+    assert.equal(forbiddenInvite.status,403); checks++;
+    const prepared=await app(admin,'/api/admin/invite',{email:invitee.email,role:'parent'});
+    assert.equal(prepared.status,200,JSON.stringify(prepared));
+    assert.equal(prepared.data.needsDelivery,false);
+    assert.equal(sql(`select role from public.pending_roles where email='${invitee.email}'`),'parent'); checks++;
+    assert.equal(ok(await rpc(invitee,'apply_pending_role')),'parent');
+    assert.equal(sql(`select role from public.profiles where id='${invitee.id}'`),'parent');
+    assert.equal(sql(`select count(*) from public.pending_roles where email='${invitee.email}'`),'0'); checks++;
+    assert.equal(ok(await rpc(invitee,'apply_pending_role')),null); checks++;
+    ok(await rpc(admin,'prepare_role_invitation',{p_email:expiredInvitee.email,p_role:'teacher'}));
+    sql(`update public.pending_roles set expires_at=now()-interval '1 second' where email='${expiredInvitee.email}'`);
+    assert.equal(ok(await rpc(expiredInvitee,'apply_pending_role')),null);
+    assert.equal(sql(`select role from public.profiles where id='${expiredInvitee.id}'`),'pending'); checks++;
+    const serviceAuth=createClient(base,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+    const { data: magic, error: magicError }=await serviceAuth.auth.admin.generateLink({type:'magiclink',email:invitee.email});
+    assert.equal(magicError,null);
+    assert.ok(magic.properties.hashed_token);
+    const magicClient=createClient(base,env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+    const { data: magicSession, error: verifyError }=await magicClient.auth.verifyOtp({token_hash:magic.properties.hashed_token,type:'magiclink'});
+    assert.equal(verifyError,null);
+    assert.equal(magicSession.user.id,invitee.id); checks++;
+    const { error: reusedLinkError }=await magicClient.auth.verifyOtp({token_hash:magic.properties.hashed_token,type:'magiclink'});
+    assert.ok(reusedLinkError); checks++;
+    console.log('PASS local invite authorization, one-shot activation, expired queue and magic-link verification');
     for(const actor of users.filter(u=>roles.includes(u.role))) {
       const r=await app(actor,'/api/admin/payroll',{teacher_id:t1.id,mois:actor.role==='director'?'Mars':'Février',annee:'2026',heures:20});
       if(['admin','director'].includes(actor.role)) {
@@ -208,14 +270,17 @@ try {
   // Atomic teardown touches only generated UUIDs. The owner-only temporary
   // guard disable restores the original director count; no bypass is deployed.
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
-  for(const table of ['messages','attendance','payroll','students','groups','teachers']) if(records[table]?.length)
+  if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs disable trigger enforce_dismissal_integrity;';
+  for(const table of ['messages','attendance','dismissal_logs','authorized_adults','payroll','students','groups','teachers']) if(records[table]?.length)
     cleanup+=`delete from public.${table} where id in (${records[table].map(id=>"'"+id+"'::uuid").join(',')});`;
+  if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs enable trigger enforce_dismissal_integrity;';
   if(userIds.length) {
     const list=userIds.map(id=>"'"+id+"'::uuid").join(',');
     cleanup+=`alter table public.profiles disable trigger role_security_guard; delete from auth.users where id in (${list});
       alter table public.profiles enable trigger role_security_guard;
       update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');
       delete from public.rate_limits where user_id in (${list});`;
+    cleanup+=`delete from public.pending_roles where invited_by in (${list}) or target_user_id in (${list});`;
   }
   if([...ids,...userIds].length) {
     const list=[...ids,...userIds].map(id=>"'"+id+"'::uuid").join(',');

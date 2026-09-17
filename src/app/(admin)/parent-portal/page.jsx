@@ -64,8 +64,11 @@ export default function ParentPortal() {
       try {
         const u = await auth.me();
         setUser(u);
-        const allStudents = await entities.Student.list('full_name', 200);
-        const myStudents = allStudents.filter(s => (s.parent_email && s.parent_email === u?.email) || (s.email && s.email === u?.email));
+        const [parentRows, studentRows] = await Promise.all([
+          entities.Student.filter({ parent_email: u?.email }, 'full_name'),
+          entities.Student.filter({ email: u?.email }, 'full_name'),
+        ]);
+        const myStudents = [...new Map([...parentRows, ...studentRows].map(s => [s.id, s])).values()].sort((a, b) => a.full_name.localeCompare(b.full_name));
         setStudents(myStudents);
         if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
         // RLS scopes announcements to what this parent may see (audience 'all',
@@ -73,7 +76,7 @@ export default function ParentPortal() {
         const ann = await entities.Announcement.list('-created_date', 20);
         setAnnouncements(ann);
         // Personal notifications addressed to this parent (RLS scopes by email).
-        entities.Notification.filter({ recipient_email: u?.email }, '-created_date', 50)
+        entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
           .then(setNotifications).catch(() => {});
         // Unread direct messages — drives the tab badge.
         entities.Message.filter({ to_user_email: u?.email, read: false })
@@ -93,6 +96,10 @@ export default function ParentPortal() {
 
   useEffect(() => {
     if (!selectedStudent) return;
+    let cancelled = false;
+    setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]);
+    setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
+    setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
     Promise.all([
       entities.Attendance.filter({ student_id: selectedStudent.id }, '-session_date'),
       entities.Assessment.filter({ student_id: selectedStudent.id }, '-created_date'),
@@ -100,32 +107,37 @@ export default function ParentPortal() {
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
-      entities.PremiumSession.list('-scheduled_date', 200),
-      entities.PremiumMembership.filter({ student_id: selectedStudent.id }, '-created_at', 20),
-      entities.PremiumHomework.filter({ student_id: selectedStudent.id }, '-created_date', 100),
+      entities.PremiumSession.listAll('-scheduled_date'),
+      entities.PremiumMembership.filterAll({ student_id: selectedStudent.id }, '-created_at'),
+      entities.PremiumHomework.filterAll({ student_id: selectedStudent.id }, '-created_date'),
       getBrowserClient().from('charge_balances').select('*').eq('student_id', selectedStudent.id),
     ])
       .then(async ([att, ass, rec, port, la, adults, premium, memberships, homework, chargeResult]) => {
+        if (cancelled) return;
+        if (chargeResult.error) throw chargeResult.error;
         setAttendance(att); setAssessments(ass);
         setReceipts(rec); setCharges(chargeResult.data || []);
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
         setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
       })
       .catch((err) => {
+        if (cancelled) return;
         // eslint-disable-next-line no-console
         console.error('[parent-portal] student detail load failed:', err);
         toast.error('Impossible de charger les données de l’apprenant.');
-        setAttendance([]); setAssessments([]); setReceipts([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
+        setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
       });
+    return () => { cancelled = true; };
   }, [selectedStudent]);
 
   // Mark notifications read when the tab is opened, then clear the badge.
   useEffect(() => {
     if (tab !== 'notifications') return;
     if (!notifications.some(n => !n.read_at)) return;
-    markMyNotificationsRead().then(() => {
+    markMyNotificationsRead().then((updated) => {
+      if (!updated) return;
       setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
-    });
+    }).catch(() => toast.error('Lecture des notifications non enregistrée. Réessayez.'));
   }, [tab, notifications]);
 
   const handleReEnroll = async () => {

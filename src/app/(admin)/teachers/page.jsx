@@ -14,7 +14,7 @@ export default function Teachers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  const load = () => entities.Teacher.list('-created_date', 100).then(d => { setTeachers(d); setLoading(false); });
+  const load = () => entities.Teacher.listAll('-created_date').then(d => { setTeachers(d); setLoading(false); });
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (id) => {

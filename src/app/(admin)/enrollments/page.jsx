@@ -8,16 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import { groupMatchesSelection } from '@/lib/academicPrograms';
+import { ENROLLMENT_STATUS_COLORS } from '@/lib/statusColors';
 
 const PAGE_SIZE = 20;
-
-const STATUS_COLORS = {
-  'Submitted': 'bg-blue-100 text-blue-700',
-  'Under Review': 'bg-yellow-100 text-yellow-700',
-  'Validated': 'bg-green-100 text-green-700',
-  'Rejected': 'bg-red-100 text-red-700',
-  'Trial': 'bg-purple-100 text-purple-700',
-};
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -41,26 +34,6 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
     try {
       const payload = { ...form, student_id: form.student_id || null, group_id: form.group_id || null };
 
-      // Compute the denormalized student status that should mirror the
-      // enrollment status. Same map used by handleValidate / handleReject.
-      const statusMap = { 'Validated': 'Enrolled', 'Rejected': 'Inactive', 'Trial': 'Trial', 'Submitted': 'Prospect', 'Under Review': 'Prospect' };
-      const studentStatus = statusMap[form.status];
-      const studentUpdate = (form.student_id && studentStatus)
-        ? {
-            status: studentStatus,
-            ...(form.status === 'Validated' && form.group_id ? { groupe_id: form.group_id } : {}),
-          }
-        : null;
-
-      // Sync student row FIRST. If this throws (RLS, validation, …) we
-      // abort BEFORE writing the enrollment so the two rows can't drift.
-      // The reverse order leaves enrollment.status ahead of student.status
-      // on partial failure; this order leaves student.status briefly ahead
-      // but the next retry restores consistency (writes are idempotent).
-      if (studentUpdate) {
-        await entities.Student.update(form.student_id, studentUpdate);
-      }
-
       if (form.id) {
         await entities.Enrollment.update(form.id, payload);
         toast.success('Mis à jour');
@@ -83,8 +56,8 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className={labelClass}>Apprenant *</label>
-            <select className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required>
+            <label htmlFor="enrollment-student" className={labelClass}>Apprenant *</label>
+            <select id="enrollment-student" className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required disabled={Boolean(form.id)}>
               <option value="">— Choisir un apprenant —</option>
               {students.map(s => (
                 <option key={s.id} value={s.id}>
@@ -104,8 +77,8 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
             )}
           </div>
           <div>
-            <label className={labelClass}>Groupe</label>
-            <select className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)}>
+            <label htmlFor="enrollment-group" className={labelClass}>Groupe</label>
+            <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)} required={['Validated','Trial'].includes(form.status)}>
               <option value="">— Choisir un groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
@@ -120,18 +93,18 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
             )}
           </div>
           <div>
-            <label className={labelClass}>Statut</label>
-            <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
+            <label htmlFor="enrollment-status" className={labelClass}>Statut</label>
+            <select id="enrollment-status" className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
               {['Submitted','Under Review','Validated','Rejected','Trial'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelClass}>Date</label>
-            <input type="date" className={inputClass} value={form.date_inscription || ''} onChange={e => set('date_inscription', e.target.value)} />
+            <label htmlFor="enrollment-date" className={labelClass}>Date</label>
+            <input id="enrollment-date" type="date" className={inputClass} value={form.date_inscription || ''} onChange={e => set('date_inscription', e.target.value)} />
           </div>
           <div>
-            <label className={labelClass}>Notes</label>
-            <textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />
+            <label htmlFor="enrollment-notes" className={labelClass}>Notes</label>
+            <textarea id="enrollment-notes" className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
@@ -148,21 +121,23 @@ export default function Enrollments() {
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [modal, setModal] = useState(null);
   const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
 
   const load = async () => {
     setLoading(true);
-    const [e, s, g] = await Promise.all([
-      entities.Enrollment.list('-created_date', 200),
-      entities.Student.list('full_name', 200),
-      entities.Group.list('name', 100),
-    ]);
-    setEnrollments(e);
-    setStudents(s);
-    setGroups(g);
-    setLoading(false);
+    setLoadError(false);
+    try {
+      const [e, s, g] = await Promise.all([
+        entities.Enrollment.listAll('-created_date'),
+        entities.Student.listAll('full_name'),
+        entities.Group.listAll('name'),
+      ]);
+      setEnrollments(e); setStudents(s); setGroups(g);
+    } catch { setLoadError(true); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
@@ -174,30 +149,11 @@ export default function Enrollments() {
     return g ? `${g.name} (${g.niveau})` : '—';
   };
 
-  const ENROLLMENT_TO_STUDENT_STATUS = {
-    'Validated': 'Enrolled',
-    'Rejected': 'Inactive',
-    'Trial': 'Trial',
-    'Submitted': 'Prospect',
-    'Under Review': 'Prospect',
-  };
-
-  const syncStudentStatus = async (enrollmentId, enrollmentStatus) => {
-    const enrollment = enrollments.find(e => e.id === enrollmentId);
-    const studentStatus = ENROLLMENT_TO_STUDENT_STATUS[enrollmentStatus];
-    if (enrollment?.student_id && studentStatus) {
-      const updateData = { status: studentStatus };
-      if (enrollmentStatus === 'Validated' && enrollment.group_id) {
-        updateData.groupe_id = enrollment.group_id;
-      }
-      await entities.Student.update(enrollment.student_id, updateData);
-    }
-  };
-
   const handleValidate = async (id) => {
-    await entities.Enrollment.update(id, { status: 'Validated' });
-    await syncStudentStatus(id, 'Validated');
     const enrollment = enrollments.find(e => e.id === id);
+    if (!enrollment?.group_id) { toast.error('Choisissez un groupe avant de valider cette inscription.'); return; }
+    try { await entities.Enrollment.update(id, { status: 'Validated' }); }
+    catch { return; }
     const student = enrollment ? students.find(s => s.id === enrollment.student_id) : null;
 
     // Notify both the student (if they have an email) AND the parent. For
@@ -227,12 +183,12 @@ export default function Enrollments() {
     load();
   };
   const handleReject = async (id) => {
-    await entities.Enrollment.update(id, { status: 'Rejected' });
-    await syncStudentStatus(id, 'Rejected');
+    try { await entities.Enrollment.update(id, { status: 'Rejected' }); }
+    catch { return; }
     toast.success('Refusée');
     load();
   };
-  const handleDelete = async (id) => { if (!confirm('Supprimer ?')) return; await entities.Enrollment.delete(id); load(); };
+  const handleDelete = async (id) => { if (!confirm('Supprimer ?')) return; try { await entities.Enrollment.delete(id); await load(); } catch { /* entities already reported the error */ } };
 
   const PENDING_STATUSES = ['Submitted', 'Under Review', 'Rejected', 'Trial'];
   const filtered = enrollments.filter(e => {
@@ -244,13 +200,13 @@ export default function Enrollments() {
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="p-4 lg:p-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Pré-inscriptions</h1>
+    <div className="mx-auto max-w-7xl p-4 lg:p-8">
+      <header className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-xs font-bold uppercase tracking-widest text-primary">Parcours apprenant</p><h1 className="mt-1 text-2xl font-bold tracking-tight">Pré-inscriptions</h1></div>
         <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle inscription
         </Button>
-      </div>
+      </header>
       <div className="mb-5">
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">En attente (défaut)</option>
@@ -259,7 +215,7 @@ export default function Enrollments() {
         </select>
       </div>
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
+        {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : loadError ? <div role="alert" className="p-8 text-center text-sm">Impossible de charger les inscriptions. <button onClick={load} className="text-primary underline">Réessayer</button></div> : (
           <>
             <div className="sm:hidden divide-y divide-border">
               {paged.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">Aucune inscription trouvée.</p>}
@@ -274,13 +230,13 @@ export default function Enrollments() {
                         {st?.age_category && <p className="text-xs text-muted-foreground">{st.age_category}</p>}
                         <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)} · {e.date_inscription}</p>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[e.status] || ''}`}>{e.status}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{e.status}</span>
                     </div>
                     <div className="flex gap-2 mt-3">
-                      {e.status !== 'Validated' && <button onClick={() => handleValidate(e.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>}
-                      {e.status !== 'Rejected' && <button onClick={() => handleReject(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>}
-                      <button onClick={() => setModal(e)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                      <button onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                      {e.status !== 'Validated' && <button aria-label={`Valider l'inscription de ${studentName(e.student_id)}`} onClick={() => handleValidate(e.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>}
+                      {e.status !== 'Rejected' && <button aria-label={`Refuser l'inscription de ${studentName(e.student_id)}`} onClick={() => handleReject(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>}
+                      <button aria-label={`Modifier l'inscription de ${studentName(e.student_id)}`} onClick={() => setModal(e)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
+                      <button aria-label={`Supprimer l'inscription de ${studentName(e.student_id)}`} onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
                     </div>
                   </div>
                 );
@@ -308,7 +264,7 @@ export default function Enrollments() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{groupName(e.group_id)}</td>
                         <td className="px-4 py-3 text-muted-foreground">{e.date_inscription}</td>
-                        <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[e.status] || ''}`}>{e.status}</span></td>
+                        <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{e.status}</span></td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
                             {e.status !== 'Validated' && <button onClick={() => handleValidate(e.id)} title="Valider" className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>}

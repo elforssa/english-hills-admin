@@ -30,20 +30,26 @@ export default function StudentDetail() {
   const [premiumMemberships, setPremiumMemberships] = useState([]);
   const [premiumGroups, setPremiumGroups] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!id) return;
+    let active = true;
+    setLoading(true); setLoadError(false);
     Promise.all([
       entities.Student.filter({ id }),
       entities.Receipt.filter({ student_id: id }),
       entities.Attendance.filter({ student_id: id }),
       entities.Assessment.filter({ student_id: id }),
       entities.AuthorizedAdult.filter({ student_id: id }),
-      entities.PremiumSession.list('-scheduled_date', 300),
-      entities.PremiumMembership.filter({ student_id: id }, '-created_at', 20),
-      entities.PremiumGroup.list('name', 100),
+      entities.PremiumSession.listAll('-scheduled_date'),
+      entities.PremiumMembership.filterAll({ student_id: id }, '-created_at'),
+      entities.PremiumGroup.listAll('name'),
       getBrowserClient().from('charge_balances').select('*').eq('student_id', id),
     ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult]) => {
+      if (!active) return;
+      if (chargeResult.error) throw chargeResult.error;
       setStudent(s[0]);
       setPayments(p);
       setAttendance(a);
@@ -54,9 +60,10 @@ export default function StudentDetail() {
       setPremiumMemberships(memberships);
       setPremiumGroups(premiumGroupRows);
       setCharges(chargeResult.data || []);
-      setLoading(false);
-    });
-  }, [id]);
+    }).catch(() => { if (active) setLoadError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [id, reload]);
 
   const handleDelete = async () => {
     if (!confirm('Archiver cet apprenant ? Son historique sera conservé.')) return;
@@ -68,6 +75,7 @@ export default function StudentDetail() {
   };
 
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
+  if (loadError) return <div className="p-8" role="alert">Impossible de charger la fiche complète. <button className="text-primary underline" onClick={() => setReload((value) => value + 1)}>Réessayer</button></div>;
   if (!student) return <div className="p-8 text-muted-foreground">Apprenant introuvable.</div>;
 
   const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
@@ -85,9 +93,9 @@ export default function StudentDetail() {
   );
 
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => router.push('/students')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+    <div className="mx-auto max-w-5xl p-4 lg:p-8">
+      <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <button aria-label="Retour à la liste des apprenants" onClick={() => router.push('/students')} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
           <ArrowLeft size={15} />
         </button>
         <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
@@ -97,7 +105,8 @@ export default function StudentDetail() {
             : <span className="text-lg font-bold text-muted-foreground">{student.full_name?.[0] || '?'}</span>}
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{student.full_name}</h1>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary">Fiche apprenant</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">{student.full_name}</h1>
           <div className="flex items-center gap-2 mt-1">
             <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>
             {student.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800"><Crown size={12} /> Premium</span>}
@@ -150,15 +159,15 @@ export default function StudentDetail() {
 
       {student.plan_type === 'Premium' && (
         <Section title="Programme Premium">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
+          <div className="mb-4 flex flex-col justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center">
             <div>
-              <p className="font-semibold text-amber-950 flex items-center gap-2"><Crown size={16} /> Un atelier partagé supplémentaire chaque week-end</p>
-              <p className="text-xs text-amber-800 mt-1">
+              <p className="flex items-center gap-2 font-semibold text-primary"><Crown size={16} /> Un atelier partagé supplémentaire chaque week-end</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {student.premium_start_date ? `Du ${student.premium_start_date}` : 'Début non limité'}{student.premium_end_date ? ` au ${student.premium_end_date}` : ' · sans date de fin'}
                 {premiumMemberships.find((item) => item.active) && ` · ${premiumGroups.find((group) => group.id === premiumMemberships.find((item) => item.active)?.premium_group_id)?.name || 'Atelier affecté'}`}
               </p>
             </div>
-            <Link href="/premium-sessions" className="shrink-0 px-3 py-2 rounded-md bg-amber-400 text-amber-950 text-xs font-bold hover:bg-amber-300">Gérer les séances</Link>
+            <Link href="/premium-sessions" className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90">Gérer les séances</Link>
           </div>
           {premiumSessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucune heure Premium planifiée.</p>

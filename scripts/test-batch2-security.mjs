@@ -6,9 +6,10 @@ import { readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createServerClient } from '@supabase/ssr';
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 
 const root = new URL('../', import.meta.url);
-assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim(), 'codex-migration');
+assertLocalFeatureBranch(root);
 const env = {};
 for (const line of readFileSync(new URL('.env.local', root), 'utf8').split('\n')) {
   const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);

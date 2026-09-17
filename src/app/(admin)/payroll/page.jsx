@@ -6,12 +6,13 @@ import { Plus, Calculator, CheckCircle, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { PAYROLL_STATUS_COLORS } from '@/lib/statusColors';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-const STATUS_COLORS = { 'Brouillon': 'bg-gray-100 text-gray-600', 'Validé': 'bg-blue-100 text-blue-700', 'Payé': 'bg-green-100 text-green-700' };
+const STATUS_COLORS = PAYROLL_STATUS_COLORS;
 
 // CNSS 2024 Morocco rates
 const CNSS_EMPLOYEE_RATE = 0.0448; // 4.48% employee share
@@ -138,8 +139,8 @@ export default function PayrollPage() {
   const [modal, setModal] = useState(false);
 
   const load = () => Promise.all([
-    entities.Payroll.list('-created_date', 200),
-    entities.Teacher.list('full_name', 100),
+    entities.Payroll.listAll('-created_date'),
+    entities.Teacher.listAll('full_name'),
   ]).then(([p, t]) => { setPayrolls(p); setTeachers(t); setLoading(false); });
 
   useEffect(() => { load(); }, []);

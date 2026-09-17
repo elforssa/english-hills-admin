@@ -36,11 +36,7 @@ export async function POST(request) {
 
   // ── Gate 3: per-user rate limit ────────────────────────────────────────
   for (const limit of RATE_LIMITS) {
-    const { data: allowed, error: rlError } = await supabase.rpc('check_rate_limit', {
-      p_scope: limit.scope,
-      p_max_requests: limit.max,
-      p_window_seconds: limit.windowSeconds,
-    });
+    const { data: allowed, error: rlError } = await supabase.rpc('consume_rate_limit', { p_scope: limit.scope });
     if (rlError) {
       // eslint-disable-next-line no-console
       console.error('[invite] rate-limit RPC failed:', rlError);

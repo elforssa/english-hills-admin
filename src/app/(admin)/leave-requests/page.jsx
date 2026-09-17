@@ -78,12 +78,12 @@ export default function LeaveRequests() {
   const [groups, setGroups] = useState([]);
 
   const load = () => Promise.all([
-    entities.LeaveRequest.list('-created_date', 100),
-    entities.Teacher.list('full_name', 100),
+    entities.LeaveRequest.listAll('-created_date'),
+    entities.Teacher.listAll('full_name'),
   ]).then(([l, t]) => { setLeaves(l); setTeachers(t); setLoading(false); });
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { entities.Group.list('name', 100).then(setGroups); }, []);
+  useEffect(() => { entities.Group.listAll('name').then(setGroups); }, []);
 
   // Notify the teacher of a leave decision — both by email and via an in-app
   // notification row that surfaces in their teacher-portal Notifications tab.

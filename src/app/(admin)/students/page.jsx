@@ -2,19 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Download, Upload, UserSearch, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
-import { useEntityList, useEntityUpdate, entityKeys } from '@/lib/queries';
+import { useEntityUpdate } from '@/lib/queries';
+import { getBrowserClient } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const PAGE_SIZE = 20;
-const LIST_ORDER = '-created_date';
-const LIST_LIMIT = 200;
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
 const SOURCES = [
@@ -27,10 +27,11 @@ const SOURCES = [
 
 // Compact borderless dropdown for editing a single field directly in a table
 // row. `empty` (when provided) renders a "clear" option that maps to null.
-function InlineSelect({ value, options, onChange, empty, className = '' }) {
+function InlineSelect({ value, options, onChange, empty, label, className = '' }) {
   return (
     <select
       value={value ?? ''}
+      aria-label={label}
       onChange={e => onChange(e.target.value)}
       className={`text-sm rounded-md border border-transparent hover:border-border focus:border-primary px-1.5 py-1 -ml-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary ${className}`}
     >
@@ -41,33 +42,15 @@ function InlineSelect({ value, options, onChange, empty, className = '' }) {
 }
 
 export default function Students() {
-  // Cached + deduped across pages. Sibling pages (e.g. /students/[id]) that
-  // also call useEntityList('Student', ...) reuse this fetch.
-  const { data: students = [], isLoading: loading } = useEntityList(
-    'Student', LIST_ORDER, LIST_LIMIT,
-  );
-
-  const qc = useQueryClient();
   const update = useEntityUpdate('Student');
 
-  // Inline single-field edit. Optimistically patches the cached list so the
-  // dropdown reflects the choice instantly (the mutation's onSuccess refetch
-  // then reconciles). Nullable fields store '' as null. entities.update toasts
-  // on failure; the refetch reverts the optimistic value if the write fails.
-  const patchStudent = (id, field, value) => {
-    const stored = value === '' ? null : value;
-    qc.setQueryData(entityKeys.list('Student', LIST_ORDER, LIST_LIMIT), (old) =>
-      Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, [field]: stored } : r)) : old,
-    );
-    update.mutate({ id, data: { [field]: stored } });
+  // Keep the current server value visible until persistence succeeds.
+  const patchStudentFields = async (id, data) => {
+    try {
+      await update.mutateAsync({ id, data });
+    } catch { /* entities.update already reports the failure */ }
   };
-
-  const patchStudentFields = (id, data) => {
-    qc.setQueryData(entityKeys.list('Student', LIST_ORDER, LIST_LIMIT), (old) =>
-      Array.isArray(old) ? old.map(r => (r.id === id ? { ...r, ...data } : r)) : old,
-    );
-    update.mutate({ id, data });
-  };
+  const patchStudent = (id, field, value) => patchStudentFields(id, { [field]: value === '' ? null : value });
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -79,46 +62,59 @@ export default function Students() {
   const [filterPlan, setFilterPlan] = useState('');
   const [page, setPage] = useState(1);
 
-  const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
-  const activeStudents = filterStatus ? students : students.filter(s => ACTIVE_STATUSES.includes(s.status));
-
-  const filtered = activeStudents.filter(s => {
-    const matchSearch = !search || s.full_name?.toLowerCase().includes(search.toLowerCase()) || s.email?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = !filterStatus || filterStatus === 'all_shown' || s.status === filterStatus;
-    const matchCat = !filterCat || s.age_category === filterCat;
-    const matchLevel = !filterLevel || s.niveau_cefr === filterLevel;
-    const matchSession = !filterSession || s.session_type === filterSession;
-    // "À compléter" = no way to link a parent portal (no email at all).
-    const matchComplete = !filterIncomplete || (!s.email && !s.parent_email);
-    const matchSource = !filterSource || s.referral_source === filterSource;
-    const matchPlan = !filterPlan || (s.plan_type || 'Standard') === filterPlan;
-    return matchSearch && matchStatus && matchCat && matchLevel && matchSession && matchComplete && matchSource && matchPlan;
+  const filters = {
+    p_search: search, p_status: filterStatus, p_age_category: filterCat,
+    p_session: filterSession, p_level: filterLevel, p_incomplete: filterIncomplete,
+    p_source: filterSource, p_plan: filterPlan,
+  };
+  const { data: result, isLoading: loading, isError, refetch } = useQuery({
+    queryKey: ['Student', 'page', filters, page],
+    queryFn: async () => {
+      const { data, error } = await getBrowserClient().rpc('search_students_page', {
+        ...filters, p_page: page, p_page_size: PAGE_SIZE,
+      });
+      if (error) throw error;
+      return data;
+    },
   });
+  const paged = result?.rows || [];
+  const matchedCount = Number(result?.count || 0);
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const exportStudents = async () => {
+    try {
+      const { data, error } = await getBrowserClient().rpc('search_students_page', {
+        ...filters, p_page: 1, p_page_size: 0,
+      });
+      if (error) throw error;
+      const rows = data?.rows || [];
+      if (rows.length !== Number(data?.count)) throw new Error('Incomplete student export');
+      exportToCsv(rows.map(s => ({
+        Nom: s.full_name,
+        Email: s.email || '',
+        Téléphone: s.telephone || '',
+        Catégorie: s.age_category || '',
+        Session: s.session_type || '',
+        Niveau: s.niveau_cefr || '',
+        Statut: s.status || '',
+        Formule: s.plan_type || 'Standard',
+        Source: s.referral_source || '',
+        'Date naissance': s.date_naissance || '',
+      })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch { toast.error('Export impossible. Aucun fichier CSV créé.'); }
+  };
 
   return (
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Apprenants</h1>
-          <p className="text-muted-foreground text-sm mt-1">{activeStudents.length} apprenants {filterStatus ? '' : 'actifs'} · {students.length} au total</p>
+          <p className="text-muted-foreground text-sm mt-1">{loading || isError ? '—' : matchedCount} apprenants correspondants · {loading || isError ? '—' : result.total} au total</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           <button
-            onClick={() => exportToCsv(filtered.map(s => ({
-              Nom: s.full_name,
-              Email: s.email || '',
-              Téléphone: s.telephone || '',
-              Catégorie: s.age_category || '',
-              Session: s.session_type || '',
-              Niveau: s.niveau_cefr || '',
-              Statut: s.status || '',
-              Formule: s.plan_type || 'Standard',
-              Source: s.referral_source || '',
-              'Date naissance': s.date_naissance || '',
-            })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`)}
-            className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted"
+            onClick={exportStudents}
+            disabled={loading || isError}
+            className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
           >
             <Download size={15} /> CSV
           </button>
@@ -139,34 +135,34 @@ export default function Students() {
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="relative flex-1 min-w-0 w-full sm:w-auto">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Rechercher..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+          <input className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Rechercher..." aria-label="Rechercher un apprenant" maxLength={120} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par statut" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">Actifs (Enrolled/Trial/Alumni)</option>
           <option value="all_shown">Tous les statuts</option>
           {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par catégorie" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
           <option value="">Toutes catégories</option>
           {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par session" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
           <option value="">Toutes sessions</option>
           {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par niveau" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
           {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(l => <option key={l}>{l}</option>)}
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
+        <select aria-label="Filtrer par complétude" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
           <option value="">Complétude : tous</option>
           <option value="incomplete">À compléter (sans email)</option>
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par source" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
           <option value="">Source : toutes</option>
           {SOURCES.map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none flex-1 sm:flex-none" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
+        <select aria-label="Filtrer par formule" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
           <option value="">Toutes les formules</option>
           <option value="Premium">Premium</option>
           <option value="Standard">Standard</option>
@@ -176,7 +172,9 @@ export default function Students() {
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
           <SkeletonTable rows={10} cols={6} />
-        ) : filtered.length === 0 ? (
+        ) : isError ? (
+          <div className="p-10 text-center" role="alert"><p className="text-sm font-medium">Impossible de charger les apprenants.</p><button className="mt-3 rounded-md bg-primary px-4 py-2 text-sm text-white" onClick={() => refetch()}>Réessayer</button></div>
+        ) : matchedCount === 0 ? (
           <div className="p-10 text-center">
             <UserSearch size={32} className="mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-sm font-medium text-foreground">Aucun apprenant trouvé</p>
@@ -193,7 +191,7 @@ export default function Students() {
               {paged.map(s => (
                 <Link key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm truncate flex items-center gap-1.5">{s.full_name}{s.plan_type === 'Premium' && <Crown size={13} className="text-amber-600 shrink-0" />}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]">{s.full_name}{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
@@ -223,6 +221,7 @@ export default function Students() {
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect
                           value={s.age_category}
+                          label={`Catégorie de ${s.full_name}`}
                           options={AGE_CATEGORIES}
                           empty="— Non défini —"
                           onChange={v => patchStudent(s.id, 'age_category', v)}
@@ -231,6 +230,7 @@ export default function Students() {
                       <td className="px-4 py-3">
                         <InlineSelect
                           value={s.session_type || 'Yearly'}
+                          label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
                           onChange={v => patchStudentFields(s.id, { session_type: v, niveau_cefr: null, groupe_id: null })}
@@ -239,6 +239,7 @@ export default function Students() {
                       <td className="px-4 py-3">
                         <InlineSelect
                           value={s.niveau_cefr}
+                          label={`Niveau de ${s.full_name}`}
                           options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
@@ -259,7 +260,7 @@ export default function Students() {
             </div>
           </>
         )}
-        <Pagination page={page} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        <Pagination page={page} total={matchedCount} pageSize={PAGE_SIZE} onChange={setPage} />
       </div>
     </div>
   );

@@ -9,19 +9,13 @@ import {
   BookOpenCheck, CalendarDays, CheckCircle2, Crown, Plus,
   Sparkles, UserMinus, UserPlus, UserRound,
 } from 'lucide-react';
-import { PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
+import { PREMIUM_ATTENDANCE_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
 
 const STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
   Cancelled: 'Annulée', Missed: 'Non tenue',
 };
 const ATTENDANCE_LABELS = { Present: 'Présent', Absent: 'Absent', Late: 'Retard', Excused: 'Justifié' };
-const ATTENDANCE_STYLES = {
-  Present: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  Absent: 'bg-rose-100 text-rose-800 border-rose-200',
-  Late: 'bg-amber-100 text-amber-800 border-amber-200',
-  Excused: 'bg-sky-100 text-sky-800 border-sky-200',
-};
 
 const dateString = (date) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -59,6 +53,7 @@ export default function PremiumSessionsPage() {
   const canManage = role === 'admin' || role === 'director';
   const [tab, setTab] = useState('groups');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [groups, setGroups] = useState([]);
   const [memberships, setMemberships] = useState([]);
@@ -75,14 +70,15 @@ export default function PremiumSessionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const [groupRows, membershipRows, sessionRows, homeworkRows, attendanceRows, studentRows, teacherRows] = await Promise.all([
-        entities.PremiumGroup.list('name', 500),
-        entities.PremiumMembership.list('-created_at', 2000),
-        entities.PremiumSession.list('-scheduled_date', 2000),
-        entities.PremiumHomework.list('-submitted_at', 3000),
-        entities.PremiumAttendance.list('-created_at', 5000),
-        entities.Student.list('full_name', 2000),
+        entities.PremiumGroup.listAll('name'),
+        entities.PremiumMembership.listAll('-created_at'),
+        entities.PremiumSession.listAll('-scheduled_date'),
+        entities.PremiumHomework.listAll('-submitted_at'),
+        entities.PremiumAttendance.listAll('-created_at'),
+        entities.Student.listAll('full_name'),
         getTeacherDirectory(),
       ]);
       setGroups(groupRows);
@@ -93,6 +89,7 @@ export default function PremiumSessionsPage() {
       setStudents(studentRows);
       setTeachers(teacherRows);
     } catch (error) {
+      setLoadError(true);
       toast.error(error?.message || 'Impossible de charger les ateliers Premium.');
     } finally {
       setLoading(false);
@@ -253,35 +250,37 @@ export default function PremiumSessionsPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 lg:p-8">
-      <header className="relative overflow-hidden rounded-3xl bg-slate-950 text-white p-6 lg:p-8">
-        <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-amber-400/20 blur-3xl" />
+      <header className="relative overflow-hidden rounded-2xl bg-[var(--brand-sidebar)] text-white p-6 lg:p-8">
+        <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-amber-300"><Crown size={15} /> Programme Premium</p>
+            <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-blue-100"><Crown size={15} /> Programme Premium</p>
             <h1 className="mt-3 text-2xl lg:text-3xl font-black tracking-tight">Ateliers partagés du week-end</h1>
             <p className="mt-2 text-sm text-slate-300">Une heure supplémentaire en petit groupe. Les niveaux peuvent être mélangés et le nombre d’apprenants reste flexible.</p>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-white/10 px-4 py-3"><p className="text-xl font-black">{eligibleStudents.length}</p><p className="text-[10px] text-slate-400">ÉLIGIBLES</p></div>
             <div className="rounded-xl bg-white/10 px-4 py-3"><p className="text-xl font-black">{activeMemberships.length}</p><p className="text-[10px] text-slate-400">AFFECTÉS</p></div>
-            <div className="rounded-xl bg-amber-400 px-4 py-3 text-slate-950"><p className="text-xl font-black">{unassignedStudents.length}</p><p className="text-[10px]">À AFFECTER</p></div>
+            <div className="rounded-xl border border-white/20 bg-white px-4 py-3 text-primary"><p className="text-xl font-black">{unassignedStudents.length}</p><p className="text-[10px]">À AFFECTER</p></div>
           </div>
         </div>
       </header>
 
       <nav className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Vues Premium">
         {tabs.map(([value, label, count]) => (
-          <button key={value} onClick={() => setTab(value)} className={`shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition ${tab === value ? 'border-slate-950 bg-slate-950 text-white' : 'border-border bg-white text-muted-foreground hover:bg-muted'}`}>{label} <span className="ml-1 opacity-70">{count}</span></button>
+          <button key={value} onClick={() => setTab(value)} aria-current={tab === value ? 'page' : undefined} className={`shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${tab === value ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-white text-muted-foreground hover:bg-muted'}`}>{label} <span className="ml-1 opacity-70">{count}</span></button>
         ))}
       </nav>
 
       {loading ? <div className="mt-5 rounded-2xl border border-border p-14 text-center text-sm text-muted-foreground">Chargement des ateliers…</div> : null}
 
-      {!loading && tab === 'groups' && (
+      {!loading && loadError && <div role="alert" className="mt-5 rounded-2xl border border-border bg-card p-8 text-center text-sm">Impossible de charger les ateliers. <button onClick={load} className="font-semibold text-primary underline">Réessayer</button></div>}
+
+      {!loading && !loadError && tab === 'groups' && (
         <div className="mt-5 space-y-5">
           {canManage && (
-            <form onSubmit={createGroup} className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5">
-              <div className="mb-4 flex items-center gap-2"><Sparkles size={17} className="text-amber-700" /><h2 className="font-bold">Créer un atelier partagé</h2></div>
+            <form onSubmit={createGroup} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="mb-4 flex items-center gap-2"><Sparkles size={17} className="text-primary" /><h2 className="font-bold">Créer un atelier partagé</h2></div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
                 <label className="xl:col-span-2 text-xs font-bold text-muted-foreground">NOM<input className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" placeholder="Ex. Premium samedi 10h" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
                 <label className="text-xs font-bold text-muted-foreground">ENSEIGNANT<select className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" value={form.teacher_id} onChange={(event) => setForm((current) => ({ ...current, teacher_id: event.target.value }))}><option value="">— Choisir —</option>{teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.full_name}</option>)}</select></label>
@@ -289,7 +288,7 @@ export default function PremiumSessionsPage() {
                 <label className="text-xs font-bold text-muted-foreground">HEURE<input type="time" className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm" value={form.start_time} onChange={(event) => setForm((current) => ({ ...current, start_time: event.target.value }))} /></label>
                 <label className="text-xs font-bold text-muted-foreground">ANNÉE<input className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" value={form.academic_year} onChange={(event) => setForm((current) => ({ ...current, academic_year: event.target.value }))} /></label>
               </div>
-              <div className="mt-3 flex flex-col md:flex-row gap-3 md:items-end"><label className="flex-1 text-xs font-bold text-muted-foreground">NOTES (FACULTATIF)<input className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" maxLength={2000} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Plus size={15} /> Créer</button></div>
+              <div className="mt-3 flex flex-col md:flex-row gap-3 md:items-end"><label className="flex-1 text-xs font-bold text-muted-foreground">NOTES (FACULTATIF)<input className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" maxLength={2000} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-50"><Plus size={15} /> Créer</button></div>
             </form>
           )}
 
@@ -299,7 +298,7 @@ export default function PremiumSessionsPage() {
               return (
                 <article key={group.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                   <div className="flex items-start justify-between gap-4 bg-slate-50 px-5 py-4 border-b border-border">
-                    <div><p className="text-[10px] font-black uppercase tracking-widest text-amber-700">{Number(group.weekday) === 6 ? 'Samedi' : 'Dimanche'} · {String(group.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group.name}</h2><p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><UserRound size={12} /> {teachersById[group.teacher_id]?.full_name || 'Enseignant'}</p></div>
+                    <div><p className="text-[10px] font-black uppercase tracking-widest text-primary">{Number(group.weekday) === 6 ? 'Samedi' : 'Dimanche'} · {String(group.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group.name}</h2><p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><UserRound size={12} /> {teachersById[group.teacher_id]?.full_name || 'Enseignant'}</p></div>
                     <div className={`rounded-xl border px-3 py-2 text-center ${roster.length > group.target_size ? 'border-amber-300 bg-amber-50' : 'border-border bg-white'}`}><p className="text-xl font-black">{roster.length}</p><p className="text-[9px] text-muted-foreground">REPÈRE {group.target_size}</p></div>
                   </div>
                   <div className="p-5">
@@ -322,7 +321,7 @@ export default function PremiumSessionsPage() {
         </div>
       )}
 
-      {!loading && tab === 'sessions' && (
+      {!loading && !loadError && tab === 'sessions' && (
         <div className="mt-5 space-y-4">
           {visibleSharedSessions.map((session) => {
             const group = groupsById[session.premium_group_id];
@@ -331,15 +330,15 @@ export default function PremiumSessionsPage() {
             return (
               <article key={session.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-border bg-slate-50 px-5 py-4">
-                  <div><p className="text-xs font-black uppercase tracking-wide text-amber-700">{displayDate(session.scheduled_date)} · {String(session.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group?.name || 'Atelier Premium'}</h2><p className="mt-1 text-xs text-muted-foreground">{teachersById[session.teacher_id]?.full_name || 'Enseignant'} · {roster.length} apprenant(s) · {sessionHomework.length} demande(s) reçue(s)</p></div>
-                  <div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{STATUS_LABELS[session.status]}</span>{session.status === 'Scheduled' && <button onClick={() => updateSessionStatus(session, 'Confirmed')} className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-bold">Confirmer</button>}{session.status !== 'Completed' && session.status !== 'Cancelled' && <button onClick={() => updateSessionStatus(session, 'Completed')} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white"><CheckCircle2 size={13} /> Terminer</button>}{canManage && session.status !== 'Cancelled' && session.status !== 'Completed' && <button onClick={() => updateSessionStatus(session, 'Cancelled')} className="px-2 py-1 text-xs font-bold text-rose-700">Annuler</button>}</div>
+                  <div><p className="text-xs font-black uppercase tracking-wide text-primary">{displayDate(session.scheduled_date)} · {String(session.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group?.name || 'Atelier Premium'}</h2><p className="mt-1 text-xs text-muted-foreground">{teachersById[session.teacher_id]?.full_name || 'Enseignant'} · {roster.length} apprenant(s) · {sessionHomework.length} demande(s) reçue(s)</p></div>
+                  <div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{STATUS_LABELS[session.status]}</span>{session.status === 'Scheduled' && <button onClick={() => updateSessionStatus(session, 'Confirmed')} className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-bold">Confirmer</button>}{session.status !== 'Completed' && session.status !== 'Cancelled' && <button onClick={() => updateSessionStatus(session, 'Completed')} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"><CheckCircle2 size={13} /> Terminer</button>}{canManage && session.status !== 'Cancelled' && session.status !== 'Completed' && <button onClick={() => updateSessionStatus(session, 'Cancelled')} className="px-2 py-1 text-xs font-bold text-rose-700">Annuler</button>}</div>
                 </div>
                 <div className="divide-y divide-border">
                   {roster.map((membership) => {
                     const student = studentsById[membership.student_id];
                     const submission = sessionHomework.find((item) => item.student_id === membership.student_id);
                     const marked = attendance.find((item) => item.premium_session_id === session.id && item.student_id === membership.student_id);
-                    return <div key={membership.id} className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 lg:items-center px-5 py-3"><div><p className="text-sm font-bold">{student?.full_name || 'Apprenant'}</p><p className="text-[11px] text-muted-foreground">NIV {student?.niveau_cefr || '—'} · {submission ? `Devoir ${submission.status === 'Prepared' ? 'prêt' : 'reçu'}` : 'Aucun devoir envoyé'}</p></div><div className="flex flex-wrap gap-1">{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <button key={value} onClick={() => setStudentAttendance(session, membership.student_id, value)} className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${marked?.status === value ? ATTENDANCE_STYLES[value] : 'border-border bg-white text-muted-foreground'}`}>{label}</button>)}</div>{submission && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><BookOpenCheck size={13} /> {submission.title}</span>}</div>;
+                    return <div key={membership.id} className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 lg:items-center px-5 py-3"><div><p className="text-sm font-bold">{student?.full_name || 'Apprenant'}</p><p className="text-[11px] text-muted-foreground">NIV {student?.niveau_cefr || '—'} · {submission ? `Devoir ${submission.status === 'Prepared' ? 'prêt' : 'reçu'}` : 'Aucun devoir envoyé'}</p></div><div className="flex flex-wrap gap-1">{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <button key={value} aria-label={`${student?.full_name || 'Apprenant'} : ${label}`} aria-pressed={marked?.status === value} onClick={() => setStudentAttendance(session, membership.student_id, value)} className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${marked?.status === value ? PREMIUM_ATTENDANCE_STATUS_COLORS[value] : 'border-border bg-white text-muted-foreground'}`}>{label}</button>)}</div>{submission && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><BookOpenCheck size={13} /> {submission.title}</span>}</div>;
                   })}
                   {!roster.length && <p className="px-5 py-6 text-center text-xs text-muted-foreground">Aucun apprenant sur la liste à cette date.</p>}
                 </div>
@@ -357,7 +356,7 @@ export default function PremiumSessionsPage() {
         </div>
       )}
 
-      {!loading && tab === 'legacy' && (
+      {!loading && !loadError && tab === 'legacy' && (
         <div className="mt-5 rounded-2xl border border-border bg-card overflow-hidden">
           <div className="border-b border-border px-5 py-4"><h2 className="font-bold">Anciennes séances individuelles</h2><p className="mt-1 text-xs text-muted-foreground">Conservées en lecture pour ne perdre aucun historique.</p></div>
           <div className="divide-y divide-border">{legacySessions.map((session) => <div key={session.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-5 py-3"><div><p className="text-sm font-bold">{studentsById[session.student_id]?.full_name || 'Apprenant'}</p><p className="text-xs text-muted-foreground">{displayDate(session.scheduled_date)} · {String(session.start_time).slice(0, 5)} · {teachersById[session.teacher_id]?.full_name || '—'}</p></div><span className={`self-start rounded-full px-2.5 py-1 text-xs font-bold ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{STATUS_LABELS[session.status]}</span></div>)}{!legacySessions.length && <p className="px-5 py-8 text-center text-xs text-muted-foreground">Aucun historique individuel.</p>}</div>

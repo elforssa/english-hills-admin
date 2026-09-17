@@ -23,7 +23,7 @@ function mondayOf(date = new Date()) {
 
 function Metric({ icon: Icon, label, value, note, tone = 'slate' }) {
   const tones = {
-    slate: 'bg-slate-900 text-white border-slate-800',
+    slate: 'bg-primary/5 text-foreground border-primary/15',
     amber: 'bg-amber-50 text-amber-950 border-amber-200',
     rose: 'bg-rose-50 text-rose-950 border-rose-200',
     emerald: 'bg-emerald-50 text-emerald-950 border-emerald-200',
@@ -80,7 +80,9 @@ export default function AcademicOperationsReport({
   const currentWeek = mondayOf();
 
   const data = useMemo(() => {
+    const studentsById = new Map(students.map((student) => [student.id, student]));
     const membersByGroup = new Map(groups.map((group) => [group.id, new Set()]));
+    const enrolledWithGroup = new Set();
 
     students.forEach((student) => {
       if (student.groupe_id && membersByGroup.has(student.groupe_id)) membersByGroup.get(student.groupe_id).add(student.id);
@@ -88,6 +90,9 @@ export default function AcademicOperationsReport({
     enrollments.forEach((enrollment) => {
       if (['Validated', 'Trial'].includes(enrollment.status) && enrollment.group_id && membersByGroup.has(enrollment.group_id)) {
         membersByGroup.get(enrollment.group_id).add(enrollment.student_id);
+      }
+      if (['Validated', 'Trial'].includes(enrollment.status) && enrollment.group_id) {
+        enrolledWithGroup.add(enrollment.student_id);
       }
     });
 
@@ -98,12 +103,12 @@ export default function AcademicOperationsReport({
       .filter((group) => !group.teacher_id)
       .map((group) => ({ id: group.id, label: `${group.name} · ${group.session_type || 'Yearly'} · ${group.niveau}` }));
     const studentsWithoutGroup = sessionStudents
-      .filter((student) => !student.groupe_id && !enrollments.some((enrollment) => enrollment.student_id === student.id && enrollment.group_id && ['Validated', 'Trial'].includes(enrollment.status)))
+      .filter((student) => !student.groupe_id && !enrolledWithGroup.has(student.id))
       .map((student) => ({ id: student.id, label: `${student.full_name} · ${student.session_type || 'Yearly'} · ${student.niveau_cefr || 'niveau non défini'}` }));
     const enrollmentsToReview = enrollments
       .filter((enrollment) => ['Submitted', 'Under Review'].includes(enrollment.status))
-      .filter((enrollment) => !sessionFilter || (students.find((student) => student.id === enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
-      .map((enrollment) => ({ id: enrollment.id, label: `${students.find((student) => student.id === enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
+      .filter((enrollment) => !sessionFilter || (studentsById.get(enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
+      .map((enrollment) => ({ id: enrollment.id, label: `${studentsById.get(enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
 
     const activePremium = sessionStudents.filter((student) => student.plan_type === 'Premium'
       && (student.session_type || 'Yearly') === 'Yearly'
@@ -150,26 +155,26 @@ export default function AcademicOperationsReport({
   }, [students, teachers, groups, enrollments, premiumSessions, premiumHomework, premiumGroups, premiumMemberships, premiumAttendance, sessionFilter, today, currentWeek]);
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-950 text-white overflow-hidden">
-      <div className="relative px-5 py-5 lg:px-6">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-amber-400/15 blur-3xl" />
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="relative bg-[var(--brand-sidebar)] px-5 py-5 text-white lg:px-6">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
         <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">Pilotage académique</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-100">Pilotage académique</p>
             <h2 className="mt-2 text-xl font-black tracking-tight">Groupes, affectations et promesses Premium</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-400">Les écarts qui demandent une action humaine, regroupés dans une seule vue.</p>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-blue-100/80">Les écarts qui demandent une action humaine, regroupés dans une seule vue.</p>
           </div>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
             Session
-            <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} className="mt-1 block min-w-52 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-sm font-medium text-white">
-              <option className="text-slate-950" value="">Toutes les sessions</option>
-              {SESSION_TYPES.map((session) => <option className="text-slate-950" key={session} value={session}>{session}</option>)}
+            <select value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)} className="mt-1 block min-w-52 rounded-lg border border-border bg-white px-3 py-2 text-sm font-medium text-foreground focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary">
+              <option value="">Toutes les sessions</option>
+              {SESSION_TYPES.map((session) => <option key={session} value={session}>{session}</option>)}
             </select>
           </label>
         </div>
       </div>
 
-      <div className="bg-slate-100 p-4 lg:p-6 text-slate-950 space-y-5">
+      <div className="space-y-5 bg-background p-4 text-foreground lg:p-6">
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           <Metric icon={UsersRound} label="Groupes sans enseignant" value={loading ? '—' : data.unassignedGroups.length} note={`${data.sessionGroups.length} groupe(s) dans la vue`} tone={data.unassignedGroups.length ? 'rose' : 'emerald'} />
           <Metric icon={GraduationCap} label="Apprenants sans groupe" value={loading ? '—' : data.studentsWithoutGroup.length} note={`${data.sessionStudents.length} apprenant(s) actif(s)`} tone={data.studentsWithoutGroup.length ? 'amber' : 'emerald'} />
@@ -204,16 +209,16 @@ export default function AcademicOperationsReport({
             </div>
           </section>
 
-          <section className="xl:col-span-2 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-amber-200 px-4 py-3.5">
-              <div className="flex items-center gap-2"><BookOpenCheck size={16} className="text-amber-700" /><div><h3 className="text-sm font-bold">Préparation Premium</h3><p className="text-[11px] text-amber-800/70">Semaine du {currentWeek}</p></div></div>
-              <Link href="/premium-sessions" className="text-xs font-bold text-amber-900 hover:underline">Planning</Link>
+          <section className="xl:col-span-2 overflow-hidden rounded-xl border border-primary/20 bg-primary/[0.04]">
+            <div className="flex items-center justify-between border-b border-primary/15 px-4 py-3.5">
+              <div className="flex items-center gap-2"><BookOpenCheck size={16} className="text-primary" /><div><h3 className="text-sm font-bold">Préparation Premium</h3><p className="text-[11px] text-muted-foreground">Semaine du {currentWeek}</p></div></div>
+              <Link href="/premium-sessions" className="text-xs font-bold text-primary hover:underline">Planning</Link>
             </div>
-            <div className="grid grid-cols-4 gap-px bg-amber-200">
-              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.weekSessions.length}</p><p className="text-[10px] text-amber-800">Ateliers</p></div>
-              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.submittedCount}</p><p className="text-[10px] text-amber-800">Reçues</p></div>
-              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.preparedCount}</p><p className="text-[10px] text-amber-800">Prêtes</p></div>
-              <div className="bg-amber-50 p-4 text-center"><p className="text-xl font-black">{data.attendanceCount}</p><p className="text-[10px] text-amber-800">Présences saisies</p></div>
+            <div className="grid grid-cols-2 gap-px bg-primary/15 sm:grid-cols-4">
+              <div className="bg-white p-4 text-center"><p className="text-xl font-black">{data.weekSessions.length}</p><p className="text-[10px] text-muted-foreground">Ateliers</p></div>
+              <div className="bg-white p-4 text-center"><p className="text-xl font-black">{data.submittedCount}</p><p className="text-[10px] text-muted-foreground">Reçues</p></div>
+              <div className="bg-white p-4 text-center"><p className="text-xl font-black">{data.preparedCount}</p><p className="text-[10px] text-muted-foreground">Prêtes</p></div>
+              <div className="bg-white p-4 text-center"><p className="text-xl font-black">{data.attendanceCount}</p><p className="text-[10px] text-muted-foreground">Présences saisies</p></div>
             </div>
             <div className="p-4">
               {data.unassignedPremium.length ? (

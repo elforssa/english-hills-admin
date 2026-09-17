@@ -156,10 +156,10 @@ export default function Communications() {
   const [messageModal, setMessageModal] = useState(false);
 
   const load = () => Promise.all([
-    entities.Message.list('-created_date', 100),
-    entities.Announcement.list('-created_date', 50),
-    entities.Student.list('full_name', 200),
-    entities.Group.list('name', 100),
+    entities.Message.listAll('-created_date'),
+    entities.Announcement.listAll('-created_date'),
+    entities.Student.listAll('full_name'),
+    entities.Group.listAll('name'),
   ]).then(([m, a, s, g]) => { setMessages(m); setAnnouncements(a); setStudents(s); setGroups(g); setLoading(false); });
 
   useEffect(() => { load(); }, []);

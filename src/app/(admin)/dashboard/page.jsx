@@ -37,11 +37,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!userRole) return;
     Promise.all([
-      entities.Student.list('full_name', 200),
-      entities.Teacher.list('full_name', 100),
-      entities.Group.list('name', 100),
+      entities.Student.listAll('full_name'),
+      entities.Teacher.listAll('full_name'),
+      entities.Group.listAll('name'),
       entities.Receipt.list('-created_date', 5),
-      entities.Enrollment.list('-created_date', 200),
+      entities.Enrollment.listAll('-created_date'),
       entities.PlacementTest.filter({ status: 'Planifié' }),
       getBrowserClient().rpc('get_finance_charge_summary'),
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: new Date().toISOString().slice(0, 7) + '-01' }),

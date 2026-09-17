@@ -4,11 +4,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 
 const root = new URL('../', import.meta.url);
-assert.ok(['codex-migration', 'codex/storage-hardening-final'].includes(
-  execFileSync('git',['branch','--show-current'],{cwd:root,encoding:'utf8'}).trim(),
-));
+assertLocalFeatureBranch(root);
 const env = {};
 for(const line of readFileSync(new URL('.env.local',root),'utf8').split('\n')) {
   const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);

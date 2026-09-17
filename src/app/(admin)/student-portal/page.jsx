@@ -76,20 +76,21 @@ export default function StudentPortal() {
   useEffect(() => {
     auth.me().then(async (u) => {
       setUser(u);
-      const allStudents = await entities.Student.list('full_name', 200);
-      const me = allStudents.find(s => s.email === u?.email);
+      const matches = await entities.Student.filter({ email: u?.email }, 'full_name', 2);
+      const me = matches[0];
       setStudent(me || null);
       if (me) {
         const [att, ass, la, premium, memberships, homework, receiptRows, chargeResult] = await Promise.all([
           entities.Attendance.filter({ student_id: me.id }, '-session_date'),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
-          entities.PremiumSession.list('-scheduled_date', 200),
-          entities.PremiumMembership.filter({ student_id: me.id }, '-created_at', 20),
-          entities.PremiumHomework.filter({ student_id: me.id }, '-created_date', 100),
+          entities.PremiumSession.listAll('-scheduled_date'),
+          entities.PremiumMembership.filterAll({ student_id: me.id }, '-created_at'),
+          entities.PremiumHomework.filterAll({ student_id: me.id }, '-created_date'),
           entities.Receipt.filter({ student_id: me.id }, '-date'),
           getBrowserClient().from('charge_balances').select('*').eq('student_id', me.id),
         ]);
+        if (chargeResult.error) throw chargeResult.error;
         setAttendance(att); setAssessments(ass); setLearning(la);
         setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
         setReceipts(receiptRows); setCharges(chargeResult.data || []);
@@ -98,7 +99,7 @@ export default function StudentPortal() {
       // RLS scopes announcements to what this student may see.
       const ann = await entities.Announcement.list('-created_date', 20);
       setAnnouncements(ann);
-      entities.Notification.filter({ recipient_email: u?.email }, '-created_date', 50)
+      entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
         .then(setNotifications).catch(() => {});
       entities.Message.filter({ to_user_email: u?.email, read: false })
         .then(rows => setUnreadMessages(rows.length)).catch(() => {});
@@ -112,9 +113,10 @@ export default function StudentPortal() {
   useEffect(() => {
     if (tab !== 'notifications') return;
     if (!notifications.some(n => !n.read_at)) return;
-    markMyNotificationsRead().then(() => {
+    markMyNotificationsRead().then((updated) => {
+      if (!updated) return;
       setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
-    });
+    }).catch(() => toast.error('Lecture des notifications non enregistrée. Réessayez.'));
   }, [tab, notifications]);
 
   const handleUpload = async (e) => {
@@ -328,7 +330,7 @@ export default function StudentPortal() {
             </div>
             <label className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-md cursor-pointer ${pfUploading ? 'bg-muted text-muted-foreground' : 'bg-primary text-white hover:opacity-90'}`}>
               <Upload size={14} /> {pfUploading ? 'Téléversement…' : 'Téléverser un fichier'}
-              <input type="file" className="hidden" onChange={handleUpload} disabled={pfUploading} accept="application/pdf,image/*,audio/*,video/*" />
+              <input type="file" className="hidden" onChange={handleUpload} disabled={pfUploading} accept="application/pdf,image/jpeg,image/png" />
             </label>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

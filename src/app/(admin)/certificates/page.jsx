@@ -163,8 +163,8 @@ export default function Certificates() {
   const [printing, setPrinting] = useState(null);
 
   const load = () => Promise.all([
-    entities.Certificate.list('-created_date', 200),
-    entities.Student.list('full_name', 200),
+    entities.Certificate.listAll('-created_date'),
+    entities.Student.listAll('full_name'),
   ]).then(([c, s]) => { setCerts(c); setStudents(s); setLoading(false); });
 
   useEffect(() => { load(); }, []);

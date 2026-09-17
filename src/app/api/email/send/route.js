@@ -20,7 +20,7 @@ import { sendEmail } from '@/lib/email';
 
 // Cap on recipients per request — defends against a compromised account
 // fanning a single call out to the whole address book.
-const MAX_RECIPIENTS = 50;
+const MAX_RECIPIENTS = 20;
 
 // Per-user rate limit on this endpoint. Both windows must pass: this caps
 // burst (10/min) and sustained abuse (100/hour) without blocking normal use.
@@ -40,6 +40,7 @@ const SendEmailSchema = z.object({
   body:      z.string().min(1).max(200_000),
   html:      z.boolean().optional(),
   reply_to:  emailField.optional(),
+  message_id: z.string().uuid().optional(),
 });
 
 export async function POST(request) {
@@ -51,20 +52,19 @@ export async function POST(request) {
   }
 
   // Look up caller's display name server-side so callers can't spoof it.
-  const { data: callerProfile } = await supabase
+  const { data: callerProfile, error: profileError } = await supabase
     .from('profiles')
-    .select('full_name')
+    .select('full_name, role, email')
     .eq('id', user.id)
     .maybeSingle();
+  if (profileError || !callerProfile || !['director', 'admin', 'teacher', 'parent', 'student'].includes(callerProfile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   const callerName = callerProfile?.full_name || null;
 
   // Gate: per-user rate limit (atomic, DB-backed).
   for (const limit of RATE_LIMITS) {
-    const { data: allowed, error: rlError } = await supabase.rpc('check_rate_limit', {
-      p_scope: limit.scope,
-      p_max_requests: limit.max,
-      p_window_seconds: limit.windowSeconds,
-    });
+    const { data: allowed, error: rlError } = await supabase.rpc('consume_rate_limit', { p_scope: limit.scope });
     if (rlError) {
       // eslint-disable-next-line no-console
       console.error('[POST /api/email/send] rate-limit RPC failed:', rlError);
@@ -96,19 +96,46 @@ export async function POST(request) {
     );
   }
 
-  const { to, subject, body, html, reply_to } = parsed.data;
+  const { to, subject, body, html, message_id } = parsed.data;
+  const recipients = [...new Set((Array.isArray(to) ? to : [to]).map(value => value.toLowerCase()))];
+  const staff = ['director', 'admin'].includes(callerProfile.role);
+  if (!staff && (recipients.length !== 1 || !message_id || html)) {
+    return NextResponse.json({ error: 'A saved message is required' }, { status: 403 });
+  }
+
+  for (const recipient of recipients) {
+    const { data: permitted, error: permissionError } = await supabase.rpc('can_message_recipient', { p_email: recipient });
+    if (permissionError) return NextResponse.json({ error: 'Recipient authorization unavailable' }, { status: 503 });
+    if (!permitted) return NextResponse.json({ error: 'Recipient forbidden' }, { status: 403 });
+  }
+
+  let effectiveSubject = subject;
+  let effectiveBody = body;
+  if (!staff) {
+    const { data: message, error: messageError } = await supabase.from('messages')
+      .select('id, from_user_email, to_user_email, subject, body, created_at')
+      .eq('id', message_id).maybeSingle();
+    if (messageError || !message
+      || message.from_user_email?.toLowerCase() !== callerProfile.email?.toLowerCase()
+      || message.to_user_email?.toLowerCase() !== recipients[0]
+      || Date.now() - new Date(message.created_at).getTime() > 5 * 60 * 1000) {
+      return NextResponse.json({ error: 'Message not eligible for email notification' }, { status: 403 });
+    }
+    effectiveSubject = `Nouveau message English Hills : ${message.subject}`;
+    effectiveBody = `Bonjour,\n\nVous avez reçu un message via votre espace English Hills :\n\n${message.body}\n\nConnectez-vous à votre espace pour répondre.`;
+  }
 
   try {
     const options = {};
     if (html)      options.html = true;
-    if (reply_to)  options.replyTo = reply_to;
+    if (callerProfile.email) options.replyTo = callerProfile.email;
     if (callerName && process.env.RESEND_FROM_ADDRESS) {
       // Use the server-side display name so callers can't spoof it.
       const verified = process.env.RESEND_FROM_ADDRESS;
       const addrMatch = verified.match(/<([^>]+)>/) || [null, verified];
       options.from = `${callerName} <${addrMatch[1]}>`;
     }
-    const result = await sendEmail(to, subject, body, options);
+    const result = await sendEmail(recipients, effectiveSubject, effectiveBody, options);
     return NextResponse.json({ success: true, id: result?.id });
   } catch (err) {
     // eslint-disable-next-line no-console

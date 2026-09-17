@@ -69,7 +69,7 @@ export default function StudentForm() {
   });
 
   useEffect(() => {
-    entities.Group.list('name', 200).then(setGroups).catch(() => {});
+    entities.Group.listAll('name').then(setGroups).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -240,7 +240,7 @@ export default function StudentForm() {
             </div>
             <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
               <Upload size={14} /> {uploading ? 'Téléversement…' : 'Photo'}
-              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} disabled={uploading} />
+              <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handlePhoto} disabled={uploading} />
             </label>
           </div>
           <div className="col-span-2">
@@ -335,10 +335,10 @@ export default function StudentForm() {
             </select>
             <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau.</p>
           </div>
-          <div className={`col-span-2 rounded-xl border p-4 transition-colors ${form.plan_type === 'Premium' ? 'border-amber-300 bg-amber-50/70' : 'border-border bg-muted/20'}`}>
+          <div className={`col-span-2 rounded-xl border p-4 transition-colors ${form.plan_type === 'Premium' ? 'border-primary/25 bg-primary/5' : 'border-border bg-muted/20'}`}>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className={`rounded-lg p-2 ${form.plan_type === 'Premium' ? 'bg-amber-400 text-amber-950' : 'bg-muted text-muted-foreground'}`}>
+                <div className={`rounded-lg p-2 ${form.plan_type === 'Premium' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                   <Crown size={17} />
                 </div>
                 <div>
@@ -360,7 +360,7 @@ export default function StudentForm() {
             </div>
             {form.session_type !== 'Yearly' && <p className="mt-3 text-xs text-muted-foreground">La formule Premium est réservée au programme Yearly.</p>}
             {form.plan_type === 'Premium' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-amber-200">
+              <div className="mt-4 grid grid-cols-1 gap-3 border-t border-primary/15 pt-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="premium_start_date" className={labelClass}><CalendarDays size={12} className="inline mr-1" />Début</label>
                   <input id="premium_start_date" type="date" className={inputClass} value={form.premium_start_date || ''} onChange={e => set('premium_start_date', e.target.value)} />

@@ -1,0 +1,72 @@
+name: Verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: local-ci-placeholder
+      SUPABASE_SERVICE_ROLE_KEY: local-ci-placeholder
+      DISABLE_EXTERNAL_EMAIL: 'true'
+      NEXT_PUBLIC_SENTRY_DSN: ''
+      SENTRY_DSN: ''
+      SENTRY_AUTH_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit --audit-level=moderate
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:middleware
+  local-database:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_EXTERNAL_EMAIL: 'true'
+      NEXT_PUBLIC_SENTRY_DSN: ''
+      SENTRY_DSN: ''
+      SENTRY_AUTH_TOKEN: ''
+      TURNSTILE_SECRET_KEY: ''
+      SUPABASE_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: supabase/setup-cli@v2
+        with:
+          version: 2.116.0
+      - run: npm ci
+      - run: supabase start
+      - name: Configure local-only app credentials
+        run: |
+          supabase status -o env > /tmp/hills-supabase-status.env
+          awk -F= '$1 == "API_URL" { print "NEXT_PUBLIC_SUPABASE_URL=" $2 } $1 == "ANON_KEY" { print "NEXT_PUBLIC_SUPABASE_ANON_KEY=" $2 } $1 == "SERVICE_ROLE_KEY" { print "SUPABASE_SERVICE_ROLE_KEY=" $2 }' /tmp/hills-supabase-status.env > .env.local
+          rm /tmp/hills-supabase-status.env
+          test "$(wc -l < .env.local)" -eq 3
+          grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
+      - name: Rollback-only migration regression
+        run: docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
+      - name: Synthetic database and API role suites
+        run: |
+          npm run dev -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3101/login > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3101/login > /dev/null
+          node scripts/test-batch3a-security.mjs --app
+          node scripts/test-batch4a-security.mjs
+          node scripts/test-large-data-local.mjs
