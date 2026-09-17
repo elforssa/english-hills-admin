@@ -30,7 +30,7 @@ let checks=0;
 async function request(actor,table,method='GET',body,query='',prefer='return=representation') {
   const res=await fetch(base+'/rest/v1/'+table+query,{method,redirect:'error',signal:AbortSignal.timeout(20000),
     headers:{apikey:actor?.service?env.SUPABASE_SERVICE_ROLE_KEY:env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      'Content-Type':'application/json',Prefer:prefer,...(actor?.token?{Authorization:'Bearer '+actor.token}:{})},
+      'Content-Type':'application/json',Prefer:prefer,...(actor?.service?{Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY}:actor?.token?{Authorization:'Bearer '+actor.token}:{})},
     ...(body===undefined?{}:{body:JSON.stringify(body)})});
   return {status:res.status,ok:res.ok,data:await res.json().catch(()=>null)};
 }
@@ -51,7 +51,7 @@ async function denyMutation(actor,table,id,method,body) {
 }
 async function makeUser(role,label=role) {
   const email=run+'-'+label+'@example.invalid';
-  const res=await fetch(base+'/auth/v1/admin/users',{method:'POST',headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'},
+  const res=await fetch(base+'/auth/v1/admin/users',{method:'POST',headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({email,password,email_confirm:true})});
   assert.ok(res.ok); const u=await res.json(); const actor={id:u.id,email,role}; users.push(actor);
   sql(`update public.profiles set role='${role}' where id='${u.id}';`);

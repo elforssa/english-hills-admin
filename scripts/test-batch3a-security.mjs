@@ -36,7 +36,7 @@ async function request(actor,path,method='GET',body,extraHeaders={}) {
   const res=await fetch(base+path,{method,redirect:'error',signal:AbortSignal.timeout(20000),
     headers:{apikey:actor?.service?env.SUPABASE_SERVICE_ROLE_KEY:env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       'Content-Type':'application/json',Prefer:'return=representation',
-      ...(actor?.token?{Authorization:'Bearer '+actor.token}:{}),...extraHeaders},
+      ...(actor?.service?{Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY}:actor?.token?{Authorization:'Bearer '+actor.token}:{}),...extraHeaders},
     ...(body===undefined?{}:{body:JSON.stringify(body)})});
   return {ok:res.ok,status:res.status,data:await res.json().catch(()=>null)};
 }
