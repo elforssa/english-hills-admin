@@ -53,7 +53,7 @@ Copy `.env.example` to `.env.local` and fill in the values. `.env.local` is giti
 - Apply pending migrations to local Supabase first: `supabase migration up --local`
 
 ## Getting Started
-1. Clone the repo
+1. Use Node.js 22 or newer and Supabase CLI 2.116.0, then clone the repo
 2. `npm install`
 3. Copy `.env.example` → `.env.local` and fill in the values
 4. Start local Supabase: `supabase start`
