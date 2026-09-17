@@ -7,16 +7,19 @@ function safeEqual(a: string, b: string) { if (a.length !== b.length) return fal
 
 async function track(id: string | undefined, status: 'sent' | 'failed' | 'skipped', error?: string) {
   const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!id || !url || !key) return;
+  if (!id || !url || !key) throw new Error('Receipt delivery status persistence is not configured');
   // Never let a delayed/erroring worker rewrite historical-unknown or already
   // sent rows into a retryable status. The RPC applies the same invariant.
   const mutableStatuses = '&email_delivery_status=in.(pending,queued,failed)';
   const activeFilter = status === 'skipped' ? '' : '&voided_at=is.null&deleted_at=is.null';
-  await fetch(`${url}/rest/v1/receipts?id=eq.${encodeURIComponent(id)}${mutableStatuses}${activeFilter}`, {
+  const response = await fetch(`${url}/rest/v1/receipts?id=eq.${encodeURIComponent(id)}${mutableStatuses}${activeFilter}&select=id`, {
     method: 'PATCH',
-    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ email_delivery_status: status, email_last_error: error || null }),
   });
+  if (!response.ok) throw new Error(`Receipt status persistence failed (${response.status})`);
+  const rows = await response.json();
+  if (!Array.isArray(rows) || rows.length !== 1) throw new Error('Receipt status persistence was not confirmed');
 }
 
 async function loadCurrentReceipt(id: string) {
@@ -58,7 +61,8 @@ Deno.serve(async (request) => {
       },
     });
     if (outcome.status === 'skipped') return Response.json({ skipped: true, reason: outcome.reason });
-    if (outcome.status === 'failed') return Response.json({ error: outcome.error }, { status: 500 });
+    if (outcome.status === 'failed') return Response.json({ error: outcome.error, delivery_status: 'failed' }, { status: 500 });
+    if (outcome.status === 'unknown') return Response.json({ error: outcome.error, delivery_status: 'unknown' }, { status: 503 });
     return Response.json({ success: true, sent_to: outcome.receipt.email, id: outcome.providerResult?.id });
   } catch (error) {
     // Lookup/parse failures do not establish the current delivery state, so

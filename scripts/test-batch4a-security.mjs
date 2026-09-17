@@ -5,10 +5,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 
 const root = new URL('../', import.meta.url);
 assert.ok(!process.argv.includes('--ui') || process.stdin.isTTY, '--ui requires an interactive terminal so fixture cleanup can run');
-assert.equal(execFileSync('git',['branch','--show-current'],{cwd:root,encoding:'utf8'}).trim(),'codex-migration');
+assertLocalFeatureBranch(root);
 const env = {};
 for(const line of readFileSync(new URL('.env.local',root),'utf8').split('\n')) {
   const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
@@ -81,10 +82,12 @@ async function reserve(actor,purpose,sid=null,tid=null,eid=null) {
   const a=ok(await rpc(actor,'reserve_storage_asset',{p_purpose:purpose,p_student_id:sid,p_teacher_id:tid,p_enrollment_id:eid}));
   assets.push(a); checks++; return a;
 }
-async function upload(actor,a,bytes=png) {
+async function upload(actor,a,bytes=png,expectAllowed=true) {
   const r=await fetch(base+'/storage/v1/object/'+a.bucket+'/'+a.path,{method:'POST',
     headers:{apikey:env.NEXT_PUBLIC_SUPABASE_ANON_KEY,Authorization:'Bearer '+actor.token,'Content-Type':'image/png','x-upsert':'false'},body:bytes});
-  assert.ok(r.ok,await r.text()); checks++;
+  if (expectAllowed) assert.ok(r.ok,await r.text());
+  else assert.ok([400,403].includes(r.status),await r.text());
+  checks++;
 }
 async function ready(actor,a) { await upload(actor,a); ok(await app(actor,'finalize',{assetId:a.id})); checks++; }
 try {
@@ -185,7 +188,7 @@ try {
   sql("update public.storage_assets set expires_at=now()-interval '1 second' where id='"+expired.id+"'");
   await denied(()=>rpc(admin,'get_storage_upload',{p_asset_id:expired.id}));
   await denied(()=>app(admin,'finalize',{assetId:expired.id}));
-  const wrong=await reserve(admin,'student_photo',child.id); await upload(director,wrong);
+  const wrong=await reserve(admin,'student_photo',child.id); await upload(director,wrong,png,false);
   await denied(()=>app(admin,'finalize',{assetId:wrong.id}));
   const invalid=await reserve(admin,'student_photo',child.id); await upload(admin,invalid,Buffer.from('not a png'));
   await denied(()=>app(admin,'finalize',{assetId:invalid.id}));
@@ -195,7 +198,7 @@ try {
   const legacyId=randomUUID();
   sql("insert into public.storage_assets(id,bucket_id,object_path,purpose,uploader_id,state,provenance) values ('"+legacyId+"','documents','assets/"+legacyId+"','legacy_unclassified','"+admin.id+"','staff_only','synthetic_unknown');");
   await denied(()=>app(admin,'sign',{assetId:legacyId}));
-  const registration={full_name:run+' Registration',telephone:'0600000000',email:run+'-registration@example.invalid',consent:true};
+  const registration={full_name:run+' Registration',telephone:'0600000000',email:run+'-registration@example.invalid',consent:true,idempotency_key:randomUUID()};
   async function register(body) { return fetch('http://127.0.0.1:3101/api/public/inscription',{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101','x-real-ip':run},body:JSON.stringify(body)}); }
   const studentCount=count('students');
   assert.equal((await register({...registration,documents_urls:['https://example.invalid/forged']})).status,400);

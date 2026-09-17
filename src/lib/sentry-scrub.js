@@ -15,14 +15,25 @@
 
 // Field-name fragments that carry personal or financial data. Contains-match,
 // case-insensitive — over-redacting an extra field is fine; leaking isn't.
-const PII_KEY = /(email|full_name|nom|prenom|name|telephone|phone|iban|naissance|montant|salaire|taux_horaire|cnss|amo|ir_retenu|adresse|address)/i;
+const PII_KEY = /(email|full_name|nom|prenom|name|telephone|phone|iban|naissance|montant|salaire|taux_horaire|cnss|amo|ir_retenu|adresse|address|authorization|cookie|token|secret|api[_-]?key|password|session|credential|query_string|fragment)/i;
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 const LONGNUM_RE = /\b\d{6,}\b/g; // phones, IBAN digits, ids
+const JWT_RE = /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
+const BEARER_RE = /\bBearer\s+[^\s,;]+/gi;
+
+function safeUrl(value) {
+  return typeof value === 'string' ? value.split(/[?#]/, 1)[0] : value;
+}
 
 function redactText(value) {
   if (typeof value !== 'string') return value;
-  return value.replace(EMAIL_RE, '[email]').replace(LONGNUM_RE, '[number]');
+  return value
+    .replace(/https?:\/\/[^\s]+/gi, match => safeUrl(match))
+    .replace(JWT_RE, '[token]')
+    .replace(BEARER_RE, '[token]')
+    .replace(EMAIL_RE, '[email]')
+    .replace(LONGNUM_RE, '[number]');
 }
 
 // Recursively redact an object/array in place. Depth-capped to avoid cycles.
@@ -40,6 +51,8 @@ function redactDeep(node, depth = 0) {
       const val = node[key];
       if (PII_KEY.test(key)) {
         node[key] = '[redacted]';
+      } else if (/(^url$|_url$|href|src$)/i.test(key)) {
+        node[key] = redactText(safeUrl(val));
       } else if (val && typeof val === 'object') {
         redactDeep(val, depth + 1);
       } else {
@@ -101,11 +114,8 @@ export function scrubEvent(event, hint) {
     delete event.request.data;
     delete event.request.cookies;
     delete event.request.query_string;
-    if (event.request.headers) {
-      delete event.request.headers.cookie;
-      delete event.request.headers.authorization;
-    }
-    if (event.request.url) event.request.url = redactText(event.request.url);
+    if (event.request.headers) redactDeep(event.request.headers);
+    if (event.request.url) event.request.url = redactText(safeUrl(event.request.url));
   }
 
   // Never attach end-user identity.
@@ -123,7 +133,7 @@ export function scrubBreadcrumb(crumb) {
   if (crumb.message) crumb.message = redactText(crumb.message);
   if (crumb.data) {
     // Network breadcrumbs keep the path but lose the query string + body.
-    if (typeof crumb.data.url === 'string') crumb.data.url = redactText(crumb.data.url.split('?')[0]);
+    if (typeof crumb.data.url === 'string') crumb.data.url = redactText(safeUrl(crumb.data.url));
     delete crumb.data.body;
     redactDeep(crumb.data);
   }

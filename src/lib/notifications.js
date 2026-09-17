@@ -13,15 +13,11 @@ import { getBrowserClient } from './supabase';
 /**
  * markMyNotificationsRead() → Promise<number>
  * Marks all of the current user's unread notifications as read.
- * Returns the number updated (0 on failure — best-effort).
+ * Returns the number updated. Errors reject so callers keep unread state.
  */
 export async function markMyNotificationsRead() {
-  try {
-    const sb = getBrowserClient();
-    const { data, error } = await sb.rpc('mark_my_notifications_read');
-    if (error) throw error;
-    return data ?? 0;
-  } catch {
-    return 0;
-  }
+  const sb = getBrowserClient();
+  const { data, error } = await sb.rpc('mark_my_notifications_read');
+  if (error) throw error;
+  return data ?? 0;
 }

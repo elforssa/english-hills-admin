@@ -140,9 +140,9 @@ export default function Assessments() {
   const [filterTerme, setFilterTerme] = useState('');
 
   const load = () => Promise.all([
-    entities.Assessment.list('-created_date', 200),
-    entities.Student.list('full_name', 200),
-    entities.Group.list('name', 100),
+    entities.Assessment.listAll('-created_date'),
+    entities.Student.listAll('full_name'),
+    entities.Group.listAll('name'),
   ])
     .then(([a, s, g]) => { setAssessments(a); setStudents(s); setGroups(g); })
     .catch((err) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getMyTeacher } from '@/lib/teacher-directory';
 import { entities, auth } from '@/lib/entities';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell } from 'lucide-react';
@@ -12,6 +12,10 @@ import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import PremiumHomeworkInbox from '@/components/premium/PremiumHomeworkInbox';
+import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
+import { getBrowserClient } from '@/lib/supabase';
+
+const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
 const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
@@ -162,7 +166,7 @@ function NotesTab({ groups, students, assessments: initialAssessments, setAssess
   const reload = async () => {
     if (!groups.length) return;
     const groupIds = groups.map(g => g.id);
-    const all = await entities.Assessment.list('-created_date', 200);
+    const all = await entities.Assessment.listAll('-created_date');
     const filtered = all.filter(a => groupIds.includes(a.group_id));
     setLocalAssessments(filtered);
     setAssessments(filtered);
@@ -224,7 +228,7 @@ const KOLB_COLORS = {
 function LearningTab({ groups, students }) {
   const [assessments, setLearning] = useState([]);
   const [filterGroup, setFilterGroup] = useState('');
-  useEffect(() => { entities.LearningAssessment.list('-created_date', 200).then(setLearning); }, []);
+  useEffect(() => { entities.LearningAssessment.listAll('-created_date').then(setLearning); }, []);
 
   const groupStudentIds = filterGroup ? students.filter(s => s.groupe_id === filterGroup).map(s => s.id) : null;
   const filtered = assessments.filter(a => !groupStudentIds || groupStudentIds.includes(a.student_id));
@@ -401,10 +405,21 @@ export default function TeacherPortal() {
   const [premiumHomework, setPremiumHomework] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [attendance, setAttendance] = useState([]);
-  const [statuses, setStatuses] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [sessionDate, setSessionDate] = useState(todayInCasablanca);
+  const sessionManager = useRef(null);
+  if (!sessionManager.current) {
+    sessionManager.current = createAttendanceSessionManager({
+      loadSession: (group, date) => entities.Attendance.filter({ group_id: group, session_date: date }),
+      loadHistory: async () => [],
+      saveRow: async (studentId, group, date, status) => {
+        const { error } = await getBrowserClient().rpc('save_attendance', {
+          p_student: studentId, p_group: group, p_date: date, p_status: status,
+        });
+        if (error) throw error;
+      },
+    });
+  }
+  const [sessionState, setSessionState] = useState(sessionManager.current.getState);
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [office, setOffice] = useState(null);
@@ -416,7 +431,7 @@ export default function TeacherPortal() {
       setUser(u);
       const me = await getMyTeacher();
       setTeacher(me);
-      const allGroups = await entities.Group.list('name', 100);
+      const allGroups = await entities.Group.listAll('name');
       // A matched teacher sees their groups. A director viewing this portal
       // (no teachers row) sees all groups. An unmatched teacher sees none —
       // the empty-state banner below tells them to contact the office.
@@ -425,26 +440,26 @@ export default function TeacherPortal() {
         : (u?.role === 'director' ? allGroups : []);
       setGroups(myGroups);
       // Personal notifications + unread messages + office contact.
-      entities.Notification.filter({ recipient_email: u?.email }, '-created_date', 50)
+      entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
         .then(setNotifications).catch(() => {});
       entities.Message.filter({ to_user_email: u?.email, read: false })
         .then(rows => setUnreadMessages(rows.length)).catch(() => {});
       getOfficeRecipient().then(setOffice).catch(() => {});
-      const allStudents = await entities.Student.list('full_name', 200);
+      const allStudents = await entities.Student.listAll('full_name');
       setStudents(allStudents);
-      const homeworkRows = await entities.PremiumHomework.list('-submitted_at', 500);
+      const homeworkRows = await entities.PremiumHomework.listAll('-submitted_at');
       setPremiumHomework(homeworkRows);
       // Validated enrollments let us include students enrolled in a group even
       // if their student.groupe_id wasn't set — matches the /attendance roster.
-      const validatedEnrollments = await entities.Enrollment.filter({ status: 'Validated' });
-      setEnrollments(validatedEnrollments);
+      const activeEnrollments = await entities.Enrollment.listAll('-created_date');
+      setEnrollments(activeEnrollments.filter(e => ['Validated','Trial'].includes(e.status)));
       // RLS scopes announcements to what this teacher may see (audience 'all',
       // 'teachers', and their groups). No client-side audience filter needed.
       const ann = await entities.Announcement.list('-created_date', 10);
       setAnnouncements(ann);
       if (myGroups.length > 0) {
         const groupIds = myGroups.map(g => g.id);
-        const allAssessments = await entities.Assessment.list('-created_date', 200);
+        const allAssessments = await entities.Assessment.listAll('-created_date');
         setAssessments(allAssessments.filter(a => groupIds.includes(a.group_id)));
       }
       setLoading(false);
@@ -456,47 +471,30 @@ export default function TeacherPortal() {
     .filter(s => s.groupe_id === selectedGroup || enrolledStudentIds.includes(s.id))
     .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
 
-  useEffect(() => {
-    if (!selectedGroup) return;
-    entities.Attendance.filter({ group_id: selectedGroup, session_date: sessionDate }).then(a => {
-      setAttendance(a);
-      // Seed the form so EVERY student in the roster has a visible status.
-      // Existing records win; anyone not yet recorded defaults to 'Présent'
-      // and is shown selected — so a forgotten student is never silently
-      // saved as present without the teacher seeing it on screen first.
-      const s = {};
-      groupStudents.forEach(st => { s[st.id] = 'Présent'; });
-      a.forEach(r => { s[r.student_id] = r.status; });
-      setStatuses(s);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroup, sessionDate, students, enrollments]);
+  useEffect(() => sessionManager.current.subscribe(setSessionState), []);
+  useEffect(() => { sessionManager.current.select(selectedGroup, sessionDate); }, [selectedGroup, sessionDate]);
+  const selectedKey = selectedGroup ? `${selectedGroup}|${sessionDate}` : '';
+  const sessionReady = sessionState.key === selectedKey && sessionState.phase === 'ready';
+  const sessionError = sessionState.key === selectedKey && sessionState.phase === 'error';
+  const statuses = sessionReady ? sessionState.statuses : {};
+  const saving = sessionState.key === selectedKey && sessionState.saving;
 
   // Mark notifications read when the tab is opened, then clear the badge.
   useEffect(() => {
     if (tab !== 'notifications') return;
     if (!notifications.some(n => !n.read_at)) return;
-    markMyNotificationsRead().then(() => {
+    markMyNotificationsRead().then((updated) => {
+      if (!updated) return;
       setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
-    });
+    }).catch(() => toast.error('Lecture des notifications non enregistrée. Réessayez.'));
   }, [tab, notifications]);
 
   const handleSave = async () => {
-    if (!selectedGroup) return;
-    setSaving(true);
-    try {
-      for (const student of groupStudents) {
-        const status = statuses[student.id] || 'Présent';
-        const existing = attendance.find(a => a.student_id === student.id);
-        if (existing) await entities.Attendance.update(existing.id, { status });
-        else await entities.Attendance.create({ student_id: student.id, group_id: selectedGroup, session_date: sessionDate, status });
-      }
-      toast.success('Présences enregistrées');
-    } catch {
-      // entities.js already toasted the failing row.
-    } finally {
-      setSaving(false);
-    }
+    const result = await sessionManager.current.save(selectedGroup, sessionDate, groupStudents);
+    if (result.skipped) return;
+    const label = `${result.date}`;
+    if (result.failed === 0 && !result.refreshFailed) toast.success(`Présences enregistrées : ${label}`);
+    else toast.error(`Présences non confirmées (${label}). Rechargez la séance avant une nouvelle saisie.`);
   };
 
   if (loading) {
@@ -617,19 +615,22 @@ export default function TeacherPortal() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Groupe</label>
-              <select className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
+              <label htmlFor="teacher-attendance-group" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Groupe</label>
+              <select id="teacher-attendance-group" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
                 <option value="">— Choisir un groupe —</option>
                 {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Date</label>
-              <input type="date" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={sessionDate} onChange={e => setSessionDate(e.target.value)} max={new Date().toISOString().split('T')[0]} />
+              <label htmlFor="teacher-attendance-date" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Date</label>
+              <input id="teacher-attendance-date" type="date" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={sessionDate} onChange={e => setSessionDate(e.target.value)} max={todayInCasablanca()} />
             </div>
           </div>
           {selectedGroup && (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
+              {!sessionReady && !sessionError && <p className="p-4 text-sm text-muted-foreground" role="status">Chargement de la séance…</p>}
+              {sessionError && <div className="p-4 text-sm" role="alert">Impossible de charger la séance. <button className="text-primary underline" onClick={() => sessionManager.current.select(selectedGroup, sessionDate)}>Réessayer</button></div>}
+              {sessionReady && <>
               <div className="divide-y divide-border">
                 {groupStudents.map(student => {
                   const status = statuses[student.id] || 'Présent';
@@ -640,7 +641,7 @@ export default function TeacherPortal() {
                         {Object.keys(STATUS_CONFIG).map(s => {
                           const Icon = ICONS[s];
                           return (
-                            <button key={s} onClick={() => setStatuses(prev => ({ ...prev, [student.id]: s }))}
+                            <button key={s} onClick={() => sessionManager.current.setStatus(selectedGroup, sessionDate, student.id, s)} disabled={saving} aria-pressed={status === s}
                               className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${status === s ? STATUS_CONFIG[s] + ' border-transparent' : 'bg-white text-muted-foreground border-border hover:bg-muted'}`}>
                               <Icon size={11} />{s}
                             </button>
@@ -653,11 +654,12 @@ export default function TeacherPortal() {
               </div>
               {groupStudents.length > 0 && (
                 <div className="px-4 py-3 border-t border-border">
-                  <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50">
+                  <button onClick={handleSave} disabled={!sessionReady || saving} className="px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50">
                     {saving ? 'Enregistrement...' : 'Enregistrer'}
                   </button>
                 </div>
               )}
+              </>}
             </div>
           )}
         </div>

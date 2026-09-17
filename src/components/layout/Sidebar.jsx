@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -171,7 +171,7 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
           alt="English Hills"
           className="h-11 w-auto"
         />
-        <p className="text-white/30 text-[10px] font-medium tracking-widest uppercase mt-2">
+        <p className="text-white/70 text-[10px] font-medium tracking-widest uppercase mt-2">
           {userRole === 'director' ? 'Directeur' :
            userRole === 'admin' ? 'Administrateur' :
            userRole === 'teacher' ? 'Enseignant' :
@@ -189,14 +189,14 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
           href="https://english-hills.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-sidebar-foreground/40 hover:text-white/70 hover:bg-sidebar-accent/50 w-full transition-all duration-150"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent/50 w-full transition-all duration-150"
         >
           <ExternalLink size={13} />
           Retour au site
         </a>
         <button
           onClick={onLogout}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-sidebar-foreground/50 hover:text-white hover:bg-sidebar-accent w-full transition-all duration-150"
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent w-full transition-all duration-150"
         >
           <LogOut size={14} />
           Déconnexion
@@ -208,7 +208,35 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const dialogRef = useRef(null);
+  const closeRef = useRef(null);
   const { user, role, logout } = useAuth();
+
+  const closeMobile = useCallback(() => {
+    setMobileOpen(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    closeRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobile();
+      } else if (event.key === 'Tab') {
+        const focusable = [...dialogRef.current.querySelectorAll('a[href], button:not([disabled])')];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [mobileOpen, closeMobile]);
 
   const userRole  = role || '';
   const userEmail = user?.email || '';
@@ -216,8 +244,13 @@ export default function Sidebar() {
   return (
     <>
       <button
+        ref={triggerRef}
         onClick={() => setMobileOpen(true)}
         aria-label="Ouvrir le menu"
+        aria-expanded={mobileOpen}
+        aria-controls="mobile-sidebar"
+        aria-hidden={mobileOpen}
+        tabIndex={mobileOpen ? -1 : 0}
         className="lg:hidden fixed top-4 left-4 z-40 p-2 rounded-lg text-white shadow-lg"
         style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
@@ -226,13 +259,13 @@ export default function Sidebar() {
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: 'var(--brand-sidebar)' }}>
-            <button onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" className="absolute top-4 right-4 text-white/60 hover:text-white">
+          <div className="fixed inset-0 bg-black/50" aria-hidden="true" onClick={closeMobile} />
+          <div id="mobile-sidebar" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Menu de navigation" className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: 'var(--brand-sidebar)' }}>
+            <button ref={closeRef} onClick={closeMobile} aria-label="Fermer le menu" className="absolute top-4 right-4 text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <X size={18} />
             </button>
             <SidebarContent
-              onNavigate={() => setMobileOpen(false)}
+              onNavigate={closeMobile}
               userRole={userRole}
               userEmail={userEmail}
               onLogout={logout}

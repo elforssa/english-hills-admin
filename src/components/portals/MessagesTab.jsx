@@ -86,7 +86,7 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
       return;
     }
     const recipient = recipients?.find(r => r.email === to);
-    await create.mutateAsync({
+    const savedMessage = await create.mutateAsync({
       from_user_email: from.email,
       from_name:       from.name,
       to_user_email:   to,
@@ -103,6 +103,7 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
     // must not block the success path.
     try {
       await integrations.Core.SendEmail({
+        message_id: savedMessage.id,
         to: to,
         subject: `Nouveau message de ${from.name || from.email}`,
         body:

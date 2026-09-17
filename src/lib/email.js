@@ -22,15 +22,14 @@ const mockClient = {
   emails: {
     async send(payload) {
       // eslint-disable-next-line no-console
-      console.warn('[email] RESEND_API_KEY unset — mock send:', {
-        to: payload.to, subject: payload.subject,
-      });
+      console.warn('[email] delivery mocked; no external message sent');
       return { data: { id: `mock-${Date.now()}` }, error: null };
     },
   },
 };
 
 function getClient() {
+  if (process.env.DISABLE_EXTERNAL_EMAIL === 'true') return mockClient;
   if (!apiKey) {
     if (process.env.NODE_ENV !== 'production') return mockClient;
     throw new Error(

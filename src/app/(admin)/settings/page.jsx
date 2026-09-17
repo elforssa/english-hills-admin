@@ -56,7 +56,7 @@ function UserManagement({ currentUser }) {
 
   const load = async () => {
     setLoading(true);
-    const list = await entities.User.list('full_name', 200);
+    const list = await entities.User.listAll('full_name');
     setUsersList(list);
     setLoading(false);
   };

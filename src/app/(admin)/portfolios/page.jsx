@@ -171,8 +171,8 @@ export default function Portfolios() {
   const [filterSearch, setFilterSearch] = useState('');
 
   const load = () => Promise.all([
-    entities.Portfolio.list('-created_date', 200),
-    entities.Student.list('full_name', 200),
+    entities.Portfolio.listAll('-created_date'),
+    entities.Student.listAll('full_name'),
   ])
     .then(([p, s]) => { setPortfolios(p); setStudents(s); })
     .catch((err) => {

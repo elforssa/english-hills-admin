@@ -37,11 +37,11 @@ export const integrations = {
      * Note: the sender's display name is derived server-side from the
      * caller's profile — callers cannot spoof it via `from_name`.
      */
-    async SendEmail({ to, subject, body, html, reply_to } = {}) {
+    async SendEmail({ to, subject, body, html, reply_to, message_id } = {}) {
       const res = await fetch('/api/email/send', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ to, subject, body, html, reply_to }),
+        body:    JSON.stringify({ to, subject, body, html, reply_to, message_id }),
       });
 
       if (!res.ok) {

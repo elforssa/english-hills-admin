@@ -60,7 +60,7 @@ export async function getServerClient() {
     );
   }
   const { cookies } = await import('next/headers');
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
 
   return createServerClient(url, anonKey, {
     cookies: {

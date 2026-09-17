@@ -94,9 +94,9 @@ export default function Groups() {
   const [counts, setCounts] = useState({});
 
   const load = () => Promise.all([
-    entities.Group.list('-created_date', 100),
+    entities.Group.listAll('-created_date'),
     getTeacherDirectory(),
-    entities.Student.list('full_name', 500),
+    entities.Student.listAll('full_name'),
   ]).then(([g, t, s]) => {
     setGroups(g);
     setTeachers(t);

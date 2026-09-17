@@ -167,9 +167,9 @@ export default function PlacementTests() {
   const [modal, setModal] = useState(null);
 
   const load = () => Promise.all([
-    entities.PlacementTest.list('-date_test', 100),
-    entities.Group.list('name', 100),
-    entities.Student.list('full_name', 200),
+    entities.PlacementTest.listAll('-date_test'),
+    entities.Group.listAll('name'),
+    entities.Student.listAll('full_name'),
   ])
     .then(([t, g, s]) => { setTests(t); setGroups(g); setStudents(s); })
     .catch((err) => {

@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
@@ -35,6 +36,7 @@ const InscriptionSchema = z.object({
   }),
   // Cloudflare Turnstile token; required when TURNSTILE_SECRET_KEY is set.
   turnstileToken: z.string().min(1).max(2048).optional(),
+  idempotency_key: z.string().uuid(),
 }).refine(
   (data) => Boolean(data.email) || Boolean(data.parent_email),
   {
@@ -95,11 +97,13 @@ function checkOrigin(request) {
   const origin  = request.headers.get('origin');
   const referer = request.headers.get('referer');
   const host    = request.headers.get('host');
-  if (!host) return true; // local / server-to-server — allow
-  const expected = [`http://${host}`, `https://${host}`];
-  if (origin  && expected.some(e => origin.startsWith(e)))  return true;
-  if (referer && expected.some(e => referer.startsWith(e))) return true;
-  return false;
+  if (!host || (!origin && !referer)) return false;
+  try {
+    const source = new URL(origin || referer);
+    return ['http:', 'https:'].includes(source.protocol)
+      && source.host === host
+      && (!origin || source.origin === origin);
+  } catch { return false; }
 }
 
 export async function POST(request) {
@@ -147,7 +151,7 @@ export async function POST(request) {
 
   const {
     full_name, date_naissance, telephone, email, parent_email,
-    age_category, session_type, niveau_cefr, notes, documents_urls, turnstileToken,
+    age_category, session_type, niveau_cefr, notes, turnstileToken, idempotency_key,
   } = parsed.data;
 
   // ── Cloudflare Turnstile: confirm submission isn't from a bot. ──────────
@@ -161,53 +165,20 @@ export async function POST(request) {
     );
   }
 
-  // ── Create student + enrollment ─────────────────────────────────────────
-  const { data: student, error: studentErr } = await admin
-    .from('students')
-    .insert({
-      full_name,
-      date_naissance: date_naissance || null,
-      telephone,
-      email:         email         || null,
-      parent_email:  parent_email  || null,
-      age_category:  age_category  || null,
-      session_type:  session_type  || 'Yearly',
-      niveau_cefr:   niveau_cefr   || null,
-      notes:         notes         || null,
-      status:        'Prospect',
-    })
-    .select('id')
-    .single();
-
-  if (studentErr) {
-    // eslint-disable-next-line no-console
-    console.error('[inscription] student insert failed:', studentErr);
-    return NextResponse.json({ error: 'Erreur lors de la création du dossier.' }, { status: 500 });
-  }
-
-  const { error: enrollErr } = await admin.from('enrollments').insert({
-    student_id:      student.id,
-    status:          'Submitted',
-    date_inscription: new Date().toISOString().split('T')[0],
-    documents_urls:  documents_urls || [],
-    notes:           notes || null,
+  const payload = {
+    full_name, date_naissance: date_naissance || '', telephone,
+    email: email || '', parent_email: parent_email || '',
+    age_category: age_category || '', session_type: session_type || 'Yearly',
+    niveau_cefr: niveau_cefr || '', notes: notes || '', consent: true,
+  };
+  const hash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  const { data: studentId, error: registrationError } = await admin.rpc('create_public_registration', {
+    p_payload: payload, p_request_id: idempotency_key, p_hash: hash,
   });
-
-  if (enrollErr) {
+  if (registrationError) {
     // eslint-disable-next-line no-console
-    console.error('[inscription] enrollment insert failed:', enrollErr);
-    // Roll back the orphan student so the submission is all-or-nothing and a
-    // retry starts clean (rather than silently reporting success).
-    const { error: rollbackErr } = await admin.from('students').delete().eq('id', student.id);
-    if (rollbackErr) {
-      // eslint-disable-next-line no-console
-      console.error('[inscription] orphan student rollback failed:', rollbackErr);
-    }
-    return NextResponse.json(
-      { error: 'Erreur lors de la création du dossier. Veuillez réessayer.' },
-      { status: 500 },
-    );
+    console.error('[inscription] transactional registration failed:', registrationError.code);
+    return NextResponse.json({ error: 'Erreur lors de la création du dossier. Veuillez réessayer.' }, { status: registrationError.code === '23505' ? 409 : 500 });
   }
-
-  return NextResponse.json({ success: true, studentId: student.id });
+  return NextResponse.json({ success: true, studentId });
 }

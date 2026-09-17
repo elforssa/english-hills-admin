@@ -50,8 +50,21 @@ export const PREMIUM_SESSION_STATUS_COLORS = {
   'Missed': 'bg-red-100 text-red-700',
 };
 
+export const PREMIUM_ATTENDANCE_STATUS_COLORS = {
+  Present: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  Absent: 'bg-rose-100 text-rose-800 border-rose-200',
+  Late: 'bg-amber-100 text-amber-800 border-amber-200',
+  Excused: 'bg-sky-100 text-sky-800 border-sky-200',
+};
+
 export const PREMIUM_HOMEWORK_STATUS_COLORS = {
   'Submitted': 'bg-amber-100 text-amber-800',
   'Reviewed': 'bg-blue-100 text-blue-700',
   'Prepared': 'bg-emerald-100 text-emerald-700',
+};
+
+export const PAYROLL_STATUS_COLORS = {
+  'Brouillon': 'bg-slate-100 text-slate-700',
+  'Validé': 'bg-blue-100 text-blue-700',
+  'Payé': 'bg-emerald-100 text-emerald-700',
 };

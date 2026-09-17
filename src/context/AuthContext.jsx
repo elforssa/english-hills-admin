@@ -20,9 +20,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { getBrowserClient } from '@/lib/supabase';
+import { queryClientInstance } from '@/lib/query-client';
 
 const AuthContext = createContext(null);
 
@@ -40,23 +42,18 @@ async function loadOrCreateProfile(sb, authUser) {
   }
   if (existing) return existing;
 
-  // Safety-net insert (the auth.users trigger normally creates this row).
-  const { data: created, error: insertErr } = await sb
-    .from('profiles')
-    .insert({
-      id:        authUser.id,
-      email:     authUser.email,
-      full_name: authUser.user_metadata?.full_name || '',
-      role:      'pending',
-    })
-    .select()
-    .single();
-  if (insertErr) {
+  // Authenticated clients cannot insert profiles under the current grants.
+  // The narrow RPC derives the identity from auth.uid() and auth.users.
+  const { error: recoveryErr } = await sb.rpc('recover_missing_profile');
+  if (recoveryErr) {
     // eslint-disable-next-line no-console
-    console.error('profiles fallback-create failed:', insertErr);
+    console.error('profiles recovery failed:', recoveryErr);
     return null;
   }
-  return created;
+  const { data: recovered, error: rereadErr } = await sb.from('profiles')
+    .select('*').eq('id', authUser.id).maybeSingle();
+  if (rereadErr) return null;
+  return recovered;
 }
 
 /**
@@ -80,8 +77,11 @@ export function AuthProvider({ children }) {
   const [user,      setUser]      = useState(null);
   const [role,      setRole]      = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const identityRef = useRef(null);
+  const requestRef = useRef(0);
 
   const loadSession = useCallback(async ({ silent = false } = {}) => {
+    const requestId = ++requestRef.current;
     const sb = getBrowserClient();
 
     // `silent` refreshes the profile without toggling isLoading. Toggling it
@@ -90,7 +90,10 @@ export function AuthProvider({ children }) {
     if (!silent) setIsLoading(true);
 
     const { data: { user: authUser }, error } = await sb.auth.getUser();
+    if (requestId !== requestRef.current) return;
     if (error || !authUser) {
+      queryClientInstance.clear();
+      identityRef.current = null;
       setUser(null);
       setRole(null);
       setIsLoading(false);
@@ -101,8 +104,14 @@ export function AuthProvider({ children }) {
     if (profile) {
       profile = await applyPendingRoleIfAny(sb, profile);
     }
+    if (requestId !== requestRef.current) return;
 
     const resolvedRole = profile?.role || 'pending';
+    const identity = `${authUser.id}:${resolvedRole}`;
+    if (identityRef.current !== identity) {
+      queryClientInstance.clear();
+      identityRef.current = identity;
+    }
 
     setUser({
       id:                profile?.id || authUser.id,
@@ -130,6 +139,9 @@ export function AuthProvider({ children }) {
     const sb = getBrowserClient();
     const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
+        ++requestRef.current;
+        queryClientInstance.clear();
+        identityRef.current = null;
         setUser(null);
         setRole(null);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {

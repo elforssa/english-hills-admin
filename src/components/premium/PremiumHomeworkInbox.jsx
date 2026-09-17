@@ -22,8 +22,8 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
   const [filter, setFilter] = useState('pending');
 
   useEffect(() => {
-    entities.PremiumSession.list('-scheduled_date', 500).then(setSessions).catch(() => {});
-    entities.PremiumGroup.list('name', 100).then(setGroups).catch(() => {});
+    entities.PremiumSession.listAll('-scheduled_date').then(setSessions).catch(() => {});
+    entities.PremiumGroup.listAll('name').then(setGroups).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -59,9 +59,9 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl bg-slate-950 text-white px-5 py-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl bg-[var(--brand-sidebar)] text-white px-5 py-4">
         <div>
-          <p className="text-xs font-bold text-amber-300 uppercase tracking-[0.18em]">Préparation Premium</p>
+          <p className="text-xs font-bold text-blue-100 uppercase tracking-[0.18em]">Préparation Premium</p>
           <p className="font-semibold mt-1">Les exercices envoyés avant les séances</p>
         </div>
         <Link href="/premium-sessions" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-200 hover:text-white">Voir mon planning <ExternalLink size={13} /></Link>
@@ -69,7 +69,7 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
 
       <div className="flex flex-wrap gap-2">
         {[['pending', 'À traiter'], ['Submitted', 'Nouveaux'], ['Reviewed', 'Consultés'], ['Prepared', 'Prêts'], ['all', 'Tous']].map(([value, label]) => (
-          <button key={value} onClick={() => setFilter(value)} className={`px-3 py-1.5 rounded-full border text-xs font-semibold ${filter === value ? 'bg-primary text-white border-primary' : 'bg-white border-border text-muted-foreground hover:bg-muted'}`}>{label}</button>
+          <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)} className={`px-3 py-1.5 rounded-full border text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === value ? 'bg-primary text-white border-primary' : 'bg-white border-border text-muted-foreground hover:bg-muted'}`}>{label}</button>
         ))}
       </div>
 
@@ -98,7 +98,7 @@ export default function PremiumHomeworkInbox({ submissions, setSubmissions, stud
                     <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} /> {session.scheduled_date}</span>
                       <span className="inline-flex items-center gap-1.5"><Clock3 size={13} /> {String(session.start_time).slice(0, 5)} · 60 min</span>
-                      {session.premium_group_id && <span className="font-semibold text-amber-800">{groupsById[session.premium_group_id]?.name || 'Atelier partagé'}</span>}
+                      {session.premium_group_id && <span className="font-semibold text-primary">{groupsById[session.premium_group_id]?.name || 'Atelier partagé'}</span>}
                     </div>
                   )}
                   {submission.student_note && <p className="mt-4 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-950 whitespace-pre-wrap">{submission.student_note}</p>}

@@ -37,8 +37,8 @@ export default function GroupDetail() {
         setTeacher(t || null);
       }
       const [roster, everyone] = await Promise.all([
-        entities.Student.filter({ groupe_id: id }, 'full_name', 500),
-        entities.Student.list('full_name', 1000),
+        entities.Student.filterAll({ groupe_id: id }, 'full_name'),
+        entities.Student.listAll('full_name'),
       ]);
       setStudents(roster);
       setAllStudents(everyone);

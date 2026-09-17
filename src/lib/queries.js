@@ -45,6 +45,7 @@ import { entities } from './entities';
 export const entityKeys = {
   all:    (name) => [name],
   list:   (name, orderBy, limit) => [name, 'list', orderBy ?? null, limit ?? null],
+  allRows: (name, orderBy) => [name, 'allRows', orderBy ?? null],
   filter: (name, criteria, orderBy, limit) => [
     name, 'filter', criteria ?? null, orderBy ?? null, limit ?? null,
   ],
@@ -64,6 +65,15 @@ export function useEntityList(name, orderBy, limit, options = {}) {
     queryKey: entityKeys.list(name, orderBy, limit),
     queryFn:  () => getEntity(name).list(orderBy, limit),
     staleTime: 30_000, // 30s — keeps tab-switching snappy without aging too much.
+    ...options,
+  });
+}
+
+export function useEntityAll(name, orderBy, options = {}) {
+  return useQuery({
+    queryKey: entityKeys.allRows(name, orderBy),
+    queryFn: () => getEntity(name).listAll(orderBy),
+    staleTime: 30_000,
     ...options,
   });
 }

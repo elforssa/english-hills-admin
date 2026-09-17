@@ -25,6 +25,7 @@
 
 import { toast } from 'sonner';
 import { getBrowserClient } from './supabase';
+import { paginateAll } from './paginateAll.mjs';
 
 // -----------------------------------------------------------------------------
 // Entity name → Supabase table name
@@ -126,6 +127,7 @@ function makeEntity(entityName) {
      * @param {number} [limit] Optional row cap.
      */
     async list(orderBy, limit) {
+      if (typeof limit !== 'number') return this.listAll(orderBy);
       try {
         const sb = getBrowserClient();
         const { column, ascending } = parseOrderBy(orderBy);
@@ -140,12 +142,29 @@ function makeEntity(entityName) {
       }
     },
 
+    async listAll(orderBy) {
+      try {
+        const { column, ascending } = parseOrderBy(orderBy);
+        const rows = await paginateAll((from, to) => {
+          let query = getBrowserClient().from(table).select('*', { count: 'exact' })
+            .order(column, { ascending });
+          if (column !== 'id') query = query.order('id', { ascending: true });
+          return query.range(from, to);
+        });
+        return mapRows(rows);
+      } catch (error) {
+        reportError('listAll', entityName, error);
+        throw error;
+      }
+    },
+
     /**
      * entities.X.filter(criteria, orderBy?, limit?) → Promise<Row[]>
      *
      * @param {Object} criteria Equality predicates, e.g. { student_id: "..." }.
      */
     async filter(criteria, orderBy, limit) {
+      if (typeof limit !== 'number') return this.filterAll(criteria, orderBy);
       try {
         const sb = getBrowserClient();
         let query = sb.from(table).select('*');
@@ -168,6 +187,27 @@ function makeEntity(entityName) {
         return mapRows(data || []);
       } catch (error) {
         reportError('filter', entityName, error);
+        throw error;
+      }
+    },
+
+    async filterAll(criteria, orderBy) {
+      try {
+        const { column, ascending } = parseOrderBy(orderBy);
+        const rows = await paginateAll((from, to) => {
+          let query = getBrowserClient().from(table).select('*', { count: 'exact' });
+          for (const [key, value] of Object.entries(criteria || {})) {
+            if (value === null || value === undefined) query = query.is(key, null);
+            else if (Array.isArray(value)) query = query.in(key, value);
+            else query = query.eq(key, value);
+          }
+          query = query.order(column, { ascending });
+          if (column !== 'id') query = query.order('id', { ascending: true });
+          return query.range(from, to);
+        });
+        return mapRows(rows);
+      } catch (error) {
+        reportError('filterAll', entityName, error);
         throw error;
       }
     },

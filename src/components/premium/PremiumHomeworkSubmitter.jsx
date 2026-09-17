@@ -87,12 +87,12 @@ export default function PremiumHomeworkSubmitter({ student, sessions, membership
   if (student?.plan_type !== 'Premium') return null;
 
   return (
-    <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white overflow-hidden">
-      <div className="px-5 py-4 border-b border-amber-200 flex items-start gap-3">
-        <div className="rounded-xl bg-amber-400 p-2 text-amber-950"><BookOpen size={18} /></div>
+    <section className="rounded-2xl border border-border bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-start gap-3">
+        <div className="rounded-xl bg-primary/10 p-2 text-primary"><BookOpen size={18} /></div>
         <div>
           <h2 className="font-bold">Préparer mon heure Premium</h2>
-          <p className="text-xs text-amber-800 mt-0.5">Envoyez votre exercice, devoir ou sujet avant l’atelier partagé afin que l’enseignant puisse préparer votre besoin.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Envoyez votre exercice, devoir ou sujet avant l’atelier partagé afin que l’enseignant puisse préparer votre besoin.</p>
         </div>
       </div>
 
@@ -101,8 +101,8 @@ export default function PremiumHomeworkSubmitter({ student, sessions, membership
       ) : (
         <form onSubmit={submit} className="p-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Séance concernée</label>
-            <select className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" value={selectedSession?.id || ''} onChange={(event) => { setSelectedSessionId(event.target.value); setFile(null); }}>
+            <label htmlFor="premium-homework-session" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Séance concernée</label>
+            <select id="premium-homework-session" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm" value={selectedSession?.id || ''} onChange={(event) => { setSelectedSessionId(event.target.value); setFile(null); }}>
               {eligibleSessions.map((session) => <option key={session.id} value={session.id}>{session.scheduled_date} · {String(session.start_time).slice(0, 5)}</option>)}
             </select>
           </div>
@@ -128,14 +128,14 @@ export default function PremiumHomeworkSubmitter({ student, sessions, membership
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Ce que vous souhaitez travailler</label>
             <textarea className="w-full min-h-24 resize-y rounded-lg border border-border bg-white px-3 py-2.5 text-sm" maxLength={4000} placeholder="Expliquez le point difficile, les questions ou l’objectif de la séance…" value={draft.student_note} onChange={(event) => setDraft('student_note', event.target.value)} />
           </div>
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-amber-300 bg-white px-4 py-3 cursor-pointer hover:bg-amber-50/50">
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-primary/30 bg-white px-4 py-3 cursor-pointer hover:bg-primary/5 focus-within:ring-2 focus-within:ring-primary">
             <span className="inline-flex items-center gap-2 text-sm font-medium"><Upload size={15} /> {file ? file.name : existing?.file_name || 'Ajouter un PDF ou une image (facultatif)'}</span>
             <span className="text-[10px] text-muted-foreground">MAX 10 MO</span>
-            <input type="file" className="hidden" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+            <input type="file" className="sr-only" accept="application/pdf,image/jpeg,image/png" onChange={(event) => setFile(event.target.files?.[0] || null)} />
           </label>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <p className="text-xs text-muted-foreground">Vous pouvez mettre à jour votre demande tant que l’atelier n’a pas commencé.</p>
-            <button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
+            <button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold disabled:opacity-50">
               <CheckCircle2 size={15} /> {saving ? 'Envoi…' : existing ? 'Mettre à jour' : 'Envoyer au professeur'}
             </button>
           </div>

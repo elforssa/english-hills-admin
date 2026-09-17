@@ -8,6 +8,7 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'sonner';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 const RELANCER_SHOWN = 10;
@@ -18,6 +19,7 @@ export default function Finance() {
   const [relancer, setRelancer] = useState([]);
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -27,10 +29,15 @@ export default function Finance() {
       sb.rpc('get_unpaid_charges', { lim: 50 }),
       sb.rpc('get_referral_breakdown'),
     ]).then(([sum, unpaid, refs]) => {
+      if (sum.error || unpaid.error || refs.error) throw sum.error || unpaid.error || refs.error;
       setSummary(sum.data || {});
       setRelancer(unpaid.data || []);
       setSources(refs.data || []);
       setLoading(false);
+    }).catch(() => {
+      setLoading(false);
+      setLoadError(true);
+      toast.error('Données financières indisponibles. Rechargez la page pour réessayer.');
     });
   }, []);
 
@@ -55,6 +62,8 @@ export default function Finance() {
     </div>
   );
 
+  if (loadError) return <div className="p-4 lg:p-8" role="alert"><h1 className="text-2xl font-bold mb-4">Finance</h1><p>Impossible de charger les données financières.</p><button className="mt-4 rounded-md bg-primary px-4 py-2 text-white" onClick={() => window.location.reload()}>Réessayer</button></div>;
+
   // Fetch in pages so the export is not capped by the API row limit.
   const exportFinanceCsv = async () => {
     setExporting(true);
@@ -62,7 +71,8 @@ export default function Finance() {
       const sb = getBrowserClient();
       const data = [];
       for (let start = 0; ; start += 1000) {
-        const { data: page } = await sb.from('receipts').select('*').order('date', { ascending: false }).range(start, start + 999);
+        const { data: page, error } = await sb.from('receipts').select('*').order('date', { ascending: false }).order('id', { ascending: true }).range(start, start + 999);
+        if (error) throw error;
         data.push(...(page || [])); if (!page || page.length < 1000) break;
       }
       exportToCsv(data.map(r => {
@@ -85,6 +95,8 @@ export default function Finance() {
         Statut: receiptStatus(r),
         Référence: r.transaction_reference || '',
       });}), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch {
+      toast.error('Export incomplet. Aucun fichier CSV créé. Réessayez.');
     } finally {
       setExporting(false);
     }

@@ -8,18 +8,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev      # Start dev server at http://localhost:3000
 npm run build    # Production build
 npm run lint     # ESLint via next lint
+npm test         # Pure regression tests
 ```
 
 Apply database migrations:
 ```bash
-supabase db push --linked
+supabase migration up --local
 ```
 
-There is no test suite — verify changes manually in the browser.
+Run `scripts/test-audit-remediation.sql` against local Supabase for rollback-only database checks. Verify browser workflows manually too. Never push linked migrations without a separate production deployment approval.
 
 ## Architecture
 
-**English Hills Admin Platform** — full school management system for a language center in Casablanca. Built with Next.js 14 App Router, Supabase (PostgreSQL + Auth + Storage), and Tailwind CSS + shadcn/ui.
+**English Hills Admin Platform** — full school management system for a language center in Casablanca. Built with Next.js 15 App Router, Supabase (PostgreSQL + Auth + Storage), and Tailwind CSS + shadcn/ui.
 
 ### Route structure
 
@@ -65,11 +66,11 @@ create.mutate({ full_name: 'Amal' }); // auto-invalidates cache
 - Icons: `lucide-react` only
 - Status badge colors are centralized in `src/lib/statusColors.js` — do not add inline color maps in page files
 - Toast notifications via `sonner` — import `{ toast }` from `'sonner'`
-- `StudentForm` lives at `src/components/layout/StudentForm.jsx` — shared across create and edit flows
+- `StudentForm` lives at `src/components/students/StudentForm.jsx` — shared across create and edit flows
 
 ### Database
 
-22 tables in Supabase PostgreSQL. RLS enabled on every table — see `supabase/migrations/006_rls_policies.sql`. Migrations are numbered sequentially in `supabase/migrations/`. When adding a migration, apply it with `supabase db push --linked`.
+The local schema has 34 public tables after migration 063. Inspect current policies and migrations rather than relying on the original table count. Migrations are numbered sequentially in `supabase/migrations/`; apply them to local Supabase with `supabase migration up --local` first.
 
 `public.profiles` is the join between `auth.users` and app data: `profiles.id == auth.users.id`. Role, linked student/teacher IDs, and phone are stored on `profiles`.
 

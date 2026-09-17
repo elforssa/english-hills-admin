@@ -1,10 +1,7 @@
 // Standalone local regression: node scripts/test-middleware-security.mjs
-// Runs a real production Next server against an in-memory fake Auth/PostgREST
-// server. No database, production credentials, emails or storage are used.
-// First build with NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:55431 and
-// NEXT_PUBLIC_SUPABASE_ANON_KEY=middleware-local-test (not a real credential).
-// Child-effect tests require Playwright (or PLAYWRIGHT_MODULE_PATH pointing to
-// its installed package). The browser blocks every non-loopback request.
+// Builds a real production Next server against an in-memory fake Auth/PostgREST
+// server, then checks HTTP role gates and ProtectedRoute in Chromium. No database,
+// production credentials, emails or storage are used.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -12,6 +9,9 @@ import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
+import { chromium } from '@playwright/test';
 import { NextRequest, NextResponse } from 'next/server.js';
 import { createServerClient } from '@supabase/ssr';
 
@@ -22,7 +22,7 @@ const app = 'http://127.0.0.1:3241';
 const key = 'middleware-local-test';
 let checks = 0;
 const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director'];
-const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings'];
+const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/premium-sessions', '/dashboard', '/', '/settings'];
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
@@ -35,8 +35,34 @@ function pages(dir) {
     ? pages(new URL(e.name + '/', dir)) : e.name === 'page.jsx' ? [new URL(e.name, dir).pathname] : []);
 }
 const routes = pages(new URL('src/app/(admin)/', root)).map(p => p.split('/src/app/(admin)')[1].replace('/page.jsx', '').replace('[id]', '00000000-0000-4000-8000-000000000001'));
-assert.equal(routes.length, 36);
+assert.ok(routes.length >= 36, 'Expected protected admin routes to be present');
 assert.equal(existsSync(new URL('middleware.js', root)), false);
+const mockEnv = {
+  PATH: process.env.PATH,
+  NODE_ENV: 'production',
+  NEXT_TELEMETRY_DISABLED: '1',
+  NEXT_PUBLIC_SUPABASE_URL: base,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
+  SUPABASE_SERVICE_ROLE_KEY: key,
+  DISABLE_EXTERNAL_EMAIL: 'true',
+  NEXT_PUBLIC_SENTRY_DSN: '',
+  SENTRY_DSN: '',
+  SENTRY_AUTH_TOKEN: '',
+  RESEND_API_KEY: '',
+  TURNSTILE_SECRET_KEY: '',
+};
+async function buildAgainstMockAuth() {
+  const child = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'build'], {
+    cwd: root, env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', chunk => { output += chunk; });
+  child.stderr.on('data', chunk => { output += chunk; });
+  const [code] = await once(child, 'exit');
+  assert.equal(code, 0, 'Mock Auth build failed:\n' + output.slice(-4000));
+  console.log('PASS isolated production build against ' + base);
+}
+await buildAgainstMockAuth();
 const manifest = JSON.parse(readFileSync(new URL('.next/server/middleware-manifest.json', root)));
 assert.ok(manifest.middleware['/'], 'Production build must contain middleware');
 assert.ok(manifest.sortedMiddleware.includes('/'));
@@ -44,7 +70,7 @@ for (const path of routes) {
   assert.ok(manifest.middleware['/'].matchers.some(m => new RegExp(m.regexp).test(path)), 'Matcher missing ' + path);
   checks++;
 }
-console.log('PASS active production middleware manifest; all 36 route patterns matched');
+console.log('PASS active production middleware manifest; all ' + routes.length + ' route patterns matched');
 
 // Execute the unmodified middleware body with only its Auth dependency replaced.
 const middlewareSource = readFileSync(new URL('src/middleware.js', root), 'utf8')
@@ -126,8 +152,7 @@ try {
   stub.listen(55431, '127.0.0.1'); await once(stub, 'listening');
   // Explicit allowlist: never inherit cloud URLs, service keys, Sentry or email tokens.
   server = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '--hostname', '127.0.0.1', '--port', '3241'], {
-    cwd: root, env: { PATH: process.env.PATH, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1',
-      NEXT_PUBLIC_SUPABASE_URL: base, NEXT_PUBLIC_SUPABASE_ANON_KEY: key }, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: root, env: mockEnv, stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = ''; server.stdout.on('data', d => { output += d; }); server.stderr.on('data', d => { output += d; });
   for (let i = 0; ; i++) {
@@ -154,7 +179,7 @@ try {
       const r = await fetch(app + path, { headers: { Cookie }, redirect: 'manual' });
       const target = expected(role, path);
       assert.equal(r.status, target ? 307 : 200, role + ' ' + path);
-      if (target) { assert.equal(new URL(r.headers.get('location')).pathname, target); assert.ok(!(await r.text()).includes('self.__next_f')); }
+      if (target) { assert.equal(new URL(r.headers.get('location')).pathname, target, role + ' ' + path); assert.ok(!(await r.text()).includes('self.__next_f')); }
       else await r.arrayBuffer();
       checks++;
     }
@@ -190,47 +215,43 @@ try {
   assert.deepEqual(unexpected, []);
   console.log('PASS HTTP expired-session renewal, refreshed redirect cookies and code-exchange callback');
 
-  const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || 'playwright');
+  const browserBundle = await build({
+    entryPoints: [fileURLToPath(new URL('fixtures/protected-route-browser.jsx', import.meta.url))],
+    bundle: true, write: false, format: 'iife', platform: 'browser',
+    define: { 'process.env.NODE_ENV': '"test"' },
+    plugins: [{
+      name: 'guard-fixture-hooks',
+      setup(bundle) {
+        bundle.onResolve({ filter: /^(next\/navigation|@\/context\/AuthContext)$/ }, args => ({ path: args.path, namespace: 'guard-hooks' }));
+        bundle.onLoad({ filter: /.*/, namespace: 'guard-hooks' }, args => ({
+          contents: args.path === 'next/navigation'
+            ? 'export const usePathname = () => window.__guardFixture.pathname; export const useRouter = () => window.__guardFixture.router;'
+            : 'export const useAuth = () => window.__guardFixture.actor;',
+          loader: 'js',
+        }));
+      },
+    }],
+  });
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext();
     await context.route('**/*', r => r.abort());
     const page = await context.newPage();
     await page.setContent('<div id="root"></div>');
-    await page.addScriptTag({ path: require.resolve('react').replace(/index\.js$/, 'umd/react.development.js') });
-    await page.addScriptTag({ path: require.resolve('react-dom').replace(/index\.js$/, 'umd/react-dom.development.js') });
-    const source = readFileSync(new URL('src/components/ProtectedRoute.jsx', root), 'utf8')
-      .replace(/^import .*;\n/gm, '').replace('export default function ProtectedRoute', 'function ProtectedRoute');
-    const results = await page.evaluate(async ({ source, roles, routes }) => {
-      const redirects = []; let actor, pathname, mounts = 0, effects = 0, queries = 0;
-      const router = { replace: path => redirects.push(path) };
-      const Guard = new Function('useEffect', 'usePathname', 'useRouter', 'useAuth', source + '\nreturn ProtectedRoute;')(
-        React.useEffect, () => pathname, () => router, () => actor);
-      function Child() { mounts++; React.useEffect(() => { effects++; queries++; }, []); return React.createElement('span', null, 'Protected child'); }
-      const results = [];
-      for (const role of roles) for (const path of routes) {
-        actor = { user: role === 'anonymous' ? null : { id: 'fixture' }, role: role === 'missing' ? null : role, isLoading: false }; pathname = path;
-        mounts = effects = queries = 0; redirects.length = 0;
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        ReactDOM.flushSync(() => root.render(React.createElement(Guard, null, React.createElement(Child))));
-        await new Promise(r => setTimeout(r, 0));
-        results.push({ role, path, mounts, effects, queries, redirects: [...redirects] });
-        ReactDOM.flushSync(() => root.unmount());
-      }
-      // Explicit allowlists must also prevent mounting even for an admin.
-      actor = { user: { id: 'fixture' }, role: 'admin', isLoading: false }; pathname = '/settings';
-      mounts = effects = queries = 0; redirects.length = 0;
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      ReactDOM.flushSync(() => root.render(React.createElement(Guard, { allowedRoles: ['director'] }, React.createElement(Child))));
-      await new Promise(r => setTimeout(r, 0));
-      results.push({ explicit: true, mounts, effects, queries, redirects: [...redirects] }); root.unmount();
-      return results;
-    }, { source, roles, routes });
+    await page.addScriptTag({ content: browserBundle.outputFiles[0].text });
+    const results = await page.evaluate(({ roles, routes }) => window.runProtectedRouteCases(roles, routes), { roles, routes });
     for (const row of results) {
-      const target = row.explicit ? '/unauthorized' : expected(row.role, row.path);
+      const target = row.loading ? null : row.explicit ? '/unauthorized' : expected(row.role, row.path);
+      if (row.loading) {
+        assert.equal(row.mounts, 0); assert.equal(row.effects, 0); assert.equal(row.queries, 0);
+        assert.deepEqual(row.redirects, []); checks++; continue;
+      }
       assert.equal(row.mounts, target ? 0 : 1, JSON.stringify(row));
       assert.equal(row.effects, target ? 0 : 1); assert.equal(row.queries, target ? 0 : 1);
-      if (target) assert.equal(row.redirects.length, 1); else assert.deepEqual(row.redirects, []);
+      if (target) {
+        assert.equal(row.redirects.length, 1);
+        assert.equal(row.redirects[0].split('?')[0], target);
+      } else assert.deepEqual(row.redirects, []);
       checks++;
     }
     console.log('PASS real React DOM: disallowed children never render, mount effects or initiate queries');

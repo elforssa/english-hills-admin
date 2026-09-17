@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
-import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, SCHOOL_YEAR_OPTIONS } from '../src/lib/receiptPresentation.js';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
 
@@ -12,7 +12,8 @@ assert.equal(stableKey(), 'request-1');
 assert.equal(stableKey(), 'request-1');
 assert.equal(generated, 1, 'an uncertain browser retry must reuse its request key');
 
-assert.deepEqual(SCHOOL_YEAR_OPTIONS, ['2026/2027']);
+assert.equal(SCHOOL_YEAR_OPTIONS.length, 3);
+assert(SCHOOL_YEAR_OPTIONS.includes(DEFAULT_SCHOOL_YEAR));
 assert.equal(buildServiceDescription({ sessionType: 'Yearly', planType: 'Premium', schoolYear: '2026/2027' }), 'Yearly · Premium · 2026/2027');
 assert.equal(buildServiceDescription({ sessionType: 'Adults', planType: 'Premium', schoolYear: '2026/2027' }), 'Adults · 2026/2027');
 assert.equal(buildServiceDescription({ sessionType: 'Other', schoolYear: '2026/2027', serviceDetail: 'Examen Cambridge' }), 'Autre · Examen Cambridge · 2026/2027');
@@ -51,6 +52,19 @@ const dependencies = {
 assert.equal((await deliverReceiptEmail(storedReceipt.id, dependencies)).status, 'skipped');
 assert.equal(storedReceipt.email_delivery_status, 'unknown');
 assert.equal(statusWrites, 0);
+
+const uncertain = await deliverReceiptEmail('synthetic-queued', {
+  loadReceipt: async () => ({ id: 'synthetic-queued', email: 'family@example.test', email_delivery_status: 'queued' }),
+  sendReceipt: async () => ({ id: 'provider-accepted' }),
+  persistStatus: async () => { throw new Error('database unavailable'); },
+});
+assert.equal(uncertain.status, 'unknown', 'provider success with failed status write is unknown');
+const failedWrite = await deliverReceiptEmail('synthetic-queued', {
+  loadReceipt: async () => ({ id: 'synthetic-queued', email: 'family@example.test', email_delivery_status: 'queued' }),
+  sendReceipt: async () => { throw new Error('provider failed'); },
+  persistStatus: async () => { throw new Error('database unavailable'); },
+});
+assert.equal(failedWrite.status, 'unknown', 'provider failure with failed status write is unknown');
 const retryDecision = receiptEmailRetryDecision(storedReceipt);
 assert.equal(retryDecision.allowed, false);
 if (retryDecision.allowed) await deliverReceiptEmail(storedReceipt.id, dependencies);
@@ -77,7 +91,7 @@ coordinator.userSelectedCharge();
 const refreshed = coordinator.startChargeLoad('student-a');
 assert.deepEqual(coordinator.resolveChargeLoad(refreshed, [intended, alternate]), { status: 'ready' });
 assert.deepEqual(emptyChargeTerms(), {
-  charge_id: '', session_type: '', school_year: '2026/2027', service_detail: '',
+  charge_id: '', session_type: '', school_year: DEFAULT_SCHOOL_YEAR, service_detail: '',
   service_description: '', plan_type: 'Standard',
   level: '', gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
 });

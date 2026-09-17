@@ -131,8 +131,8 @@ export default function LearningAssessments() {
   const [modal, setModal] = useState(false);
 
   const load = () => Promise.all([
-    entities.LearningAssessment.list('-created_date', 100),
-    entities.Student.list('full_name', 200),
+    entities.LearningAssessment.listAll('-created_date'),
+    entities.Student.listAll('full_name'),
   ]).then(([a, s]) => { setAssessments(a); setStudents(s); setLoading(false); });
 
   useEffect(() => { load(); }, []);

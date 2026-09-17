@@ -92,7 +92,7 @@ export default function TeacherForm() {
             </div>
             <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
               <Upload size={14} /> {uploading ? 'Téléversement…' : 'Photo'}
-              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} disabled={uploading} />
+              <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handlePhoto} disabled={uploading} />
             </label>
           </div>
           <div className="col-span-2"><label className={labelClass}>Nom complet *</label><input className={inputClass} value={form.full_name} onChange={e => set('full_name', e.target.value)} required /></div>

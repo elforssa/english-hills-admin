@@ -23,8 +23,12 @@ export default function PublicEnrollment() {
   const [turnstileToken, setTurnstileToken] = useState('');
   const turnstileContainerRef = useRef(null);
   const turnstileWidgetId = useRef(null);
+  const submissionId = useRef(null);
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => {
+    submissionId.current = null;
+    setForm(f => ({ ...f, [k]: v }));
+  };
 
   // Render the Turnstile widget once the script + DOM are ready.
   useEffect(() => {
@@ -71,6 +75,7 @@ export default function PublicEnrollment() {
     }
 
     setSubmitting(true);
+    if (!submissionId.current) submissionId.current = crypto.randomUUID();
     try {
       const res = await fetch('/api/public/inscription', {
         method: 'POST',
@@ -88,6 +93,7 @@ export default function PublicEnrollment() {
           niveau_cefr:    form.niveau_cefr    || undefined,
           notes:          form.notes          || undefined,
           consent:        form.consent,
+          idempotency_key: submissionId.current,
           turnstileToken: turnstileToken || undefined,
         }),
       });
@@ -239,7 +245,7 @@ export default function PublicEnrollment() {
                 <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:opacity-80">
                   politique de confidentialité
                 </a>
-                {' '}et à la loi 09-08 relative à la protection des données personnelles (CNDP).
+                {'. '}Je peux contacter le centre pour exercer mes droits sur ces données.
               </label>
             </div>
 
@@ -259,7 +265,7 @@ export default function PublicEnrollment() {
               value={form._hp || ''}
               onChange={e => set('_hp', e.target.value)}
             />
-            <p className="text-xs text-gray-400 text-center">Vos données sont confidentielles et ne seront utilisées que pour votre inscription.</p>
+            <p className="text-xs text-gray-500 text-center">Vos données servent au traitement de votre demande et aux suites décrites dans la politique de confidentialité.</p>
           </form>
         </div>
       </div>
