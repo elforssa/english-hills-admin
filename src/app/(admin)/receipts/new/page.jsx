@@ -28,6 +28,7 @@ export default function ReceiptNew() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['Receipt'] }),
       queryClient.invalidateQueries({ queryKey: ['Student'] }),
+      queryClient.invalidateQueries({ queryKey: ['Enrollment'] }),
       queryClient.invalidateQueries({ queryKey: ['Charge'] }),
     ]);
     if (!data.receipt_id) {
@@ -35,7 +36,10 @@ export default function ReceiptNew() {
       router.push('/finance');
       return;
     }
-    toast.success(data.replayed ? 'Paiement déjà enregistré — reçu existant affiché.' : 'Paiement enregistré et reçu émis.');
+    toast.success(data.replayed ? 'Paiement déjà enregistré — reçu existant affiché.'
+      : data.group_pending ? 'Paiement enregistré. Apprenant inscrit — groupe à affecter.'
+        : data.enrollment_confirmed ? 'Paiement enregistré. Inscription confirmée.'
+        : 'Paiement enregistré et reçu émis.');
     router.push(`/receipts/${data.receipt_id}/print`);
   };
 

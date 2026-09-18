@@ -27,7 +27,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     ...emptyStudent, ...emptyChargeTerms(), school_year: DEFAULT_SCHOOL_YEAR,
     payment_date: localBusinessDate(), payment_method: 'Espèces', transaction_reference: '', note: '',
     update_contacts: false, request_email: false, email_recipient: '', ...initialData,
-    student_id: '', charge_id: '',
+    student_id: '', charge_id: '', enrollment_id: '',
   });
   const [search, setSearch] = useState(initialData.student_name || '');
   const [students, setStudents] = useState([]);
@@ -38,6 +38,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [charges, setCharges] = useState([]);
   const [chargesLoading, setChargesLoading] = useState(false);
   const [chargesError, setChargesError] = useState('');
+  const [enrollments, setEnrollments] = useState([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+  const [enrollmentsError, setEnrollmentsError] = useState('');
   const [duplicateMatches, setDuplicateMatches] = useState([]);
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -106,6 +109,22 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   }, [form.student_id]);
 
   useEffect(() => {
+    if (!form.student_id) { setEnrollments([]); setEnrollmentsError(''); setEnrollmentsLoading(false); return undefined; }
+    let active = true;
+    setEnrollmentsLoading(true); setEnrollmentsError(''); setEnrollments([]);
+    getBrowserClient().from('enrollments')
+      .select('id,status,session_type,school_year,group_id,date_inscription')
+      .eq('student_id', form.student_id).order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        setEnrollmentsLoading(false);
+        if (error) setEnrollmentsError(error.message || 'Inscriptions indisponibles.');
+        else setEnrollments(data || []);
+      });
+    return () => { active = false; };
+  }, [form.student_id]);
+
+  useEffect(() => {
     if (mode !== 'new') return undefined;
     const name = form.student_name.trim();
     if (name.length < 2) { setDuplicateMatches([]); return undefined; }
@@ -121,9 +140,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const resetLearner = (nextMode) => {
     studentLookupVersion.current += 1; searchGate.current.invalidate(); initialCharge.current.clearStudent();
     setMode(nextMode); setSearch(''); setStudents([]); setSearchState('idle'); setSearchError(''); setSearchLimit(SEARCH_PAGE_SIZE);
-    setCharges([]); setChargesError(''); setDuplicateMatches([]); setDuplicateWarning('');
+    setCharges([]); setChargesError(''); setEnrollments([]); setEnrollmentsError(''); setDuplicateMatches([]); setDuplicateWarning('');
     setForm((current) => ({
-      ...current, ...emptyStudent, ...emptyChargeTerms(), payment_amount: '', transaction_reference: '', note: '',
+      ...current, ...emptyStudent, ...emptyChargeTerms(), enrollment_id: '', payment_amount: '', transaction_reference: '', note: '',
       update_contacts: false, request_email: false, email_recipient: '',
     }));
   };
@@ -134,7 +153,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     setMode('existing'); setStudents([]); setSearch(student.full_name || ''); setSearchState('idle');
     setDuplicateMatches([]); setDuplicateWarning('');
     setForm((current) => ({
-      ...current, ...emptyStudent, ...emptyChargeTerms(), student_id: student.id, student_name: student.full_name || '',
+      ...current, ...emptyStudent, ...emptyChargeTerms(), enrollment_id: '', student_id: student.id, student_name: student.full_name || '',
       phone: student.telephone || '', student_email: student.email || '', parent_email: student.parent_email || '',
       payment_amount: '', transaction_reference: '', note: '', update_contacts: false,
       request_email: false, email_recipient: student.parent_email || student.email || '',
@@ -153,13 +172,13 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const selectCharge = (id) => {
     initialCharge.current.userSelectedCharge();
     const charge = charges.find((item) => item.id === id);
-    if (!charge) { setForm((current) => ({ ...current, ...emptyChargeTerms() })); return; }
+    if (!charge) { setForm((current) => ({ ...current, ...emptyChargeTerms(), enrollment_id: '' })); return; }
     applyCharge(charge);
   };
 
   const applyCharge = (charge) => {
     setForm((current) => ({
-      ...current, charge_id: charge.id, session_type: charge.session_type, school_year: charge.school_year || '',
+      ...current, charge_id: charge.id, enrollment_id: charge.session_type === 'Other' ? '' : charge.enrollment_id || '', session_type: charge.session_type, school_year: charge.school_year || '',
       service_detail: '', service_description: charge.service_description, plan_type: charge.plan_type || 'Standard',
       level: charge.level || '', gross_amount: charge.gross_amount, discount_amount: charge.discount_amount,
       due_date: charge.due_date || '', payment_amount: '',
@@ -167,6 +186,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   };
 
   const selectedCharge = charges.find((item) => item.id === form.charge_id);
+  const enrollmentChoices = enrollments.filter((row) => row.status !== 'Rejected'
+    && (!row.session_type || row.session_type === form.session_type)
+    && (!row.school_year || !form.school_year || row.school_year === form.school_year));
   const gross = Number(form.gross_amount || 0);
   const discount = Number(form.discount_amount || 0);
   const net = selectedCharge ? Number(selectedCharge.net_amount) : Math.max(0, gross - discount);
@@ -186,14 +208,22 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!form.charge_id && (!Number.isFinite(gross) || gross < 0 || discount < 0 || discount > gross)) return toast.error('Vérifiez le prix convenu et la remise.');
     if (!Number.isFinite(todayPayment) || todayPayment < 0) return toast.error('Le paiement ne peut pas être négatif.');
     if (todayPayment > net - paidBefore) return toast.error(`Le paiement dépasse le solde de ${money(net - paidBefore)} MAD.`);
+    if (todayPayment > 0 && form.student_id && form.session_type !== 'Other' && !selectedCharge?.enrollment_id
+      && (enrollmentsLoading || enrollmentsError)) return toast.error('Vérifiez les inscriptions existantes avant d’encaisser ce paiement.');
+    if (todayPayment > 0 && form.student_id && form.session_type !== 'Other'
+      && !selectedCharge?.enrollment_id && enrollmentChoices.length > 0 && !form.enrollment_id)
+      return toast.error('Choisissez une inscription existante ou créez-en une distincte.');
+    if (form.enrollment_id && form.enrollment_id !== 'new' && !selectedCharge?.enrollment_id
+      && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
     if (todayPayment > 0 && form.request_email && !/^\S+@\S+\.\S+$/.test(form.email_recipient.trim())) return toast.error('Indiquez un destinataire email valide ou désactivez l’envoi.');
-    onSubmit({ ...form, service_description: servicePreview, idempotency_key: idempotencyKey.current() });
+    onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
+      service_description: servicePreview, idempotency_key: idempotencyKey.current() });
   };
 
   const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
 
   return <form onSubmit={submit} className="space-y-5">
-    <Step number="1" title="Apprenant" subtitle="Recherchez un dossier ou créez un prospect minimal">
+    <Step number="1" title="Apprenant" subtitle="Recherchez un dossier ou créez un apprenant ; le paiement des cours confirme son inscription">
       <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5" role="tablist" aria-label="Mode de sélection de l’apprenant">
         <ModeButton active={mode === 'existing'} onClick={() => resetLearner('existing')} icon={Users}>Rechercher un apprenant</ModeButton>
         <ModeButton active={mode === 'new'} onClick={() => resetLearner('new')} icon={UserPlus}>Nouvel apprenant</ModeButton>
@@ -226,9 +256,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {chargesLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des soldes…</SearchMessage>}
       {chargesError && <SearchMessage icon={AlertCircle} tone="error">Impossible de charger les soldes : {chargesError}</SearchMessage>}
       {form.student_id && charges.length > 0 && <div className="space-y-3"><Field label="Choisir un engagement"><select className={input} value={form.charge_id} onChange={(e) => selectCharge(e.target.value)}><option value="">Créer une nouvelle session</option>{charges.map((charge) => <option key={charge.id} value={charge.id}>{charge.session_type}{charge.school_year ? ` · ${charge.school_year}` : ''} · reste {money(charge.balance)} MAD</option>)}</select></Field>{selectedCharge && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-black text-amber-950">{selectedCharge.service_description}</p><p className="mt-1 text-sm text-amber-900">{selectedCharge.session_type}{selectedCharge.school_year ? ` · année ${selectedCharge.school_year}` : ''}{selectedCharge.session_type === 'Yearly' && selectedCharge.plan_type ? ` · ${selectedCharge.plan_type}` : ''}</p><div className="mt-3 grid grid-cols-3 gap-2"><MiniAmount label="Prix net" value={selectedCharge.net_amount} /><MiniAmount label="Déjà payé" value={selectedCharge.paid_amount} /><MiniAmount label="Solde" value={selectedCharge.balance} /></div>{selectedCharge.due_date && <p className="mt-2 text-xs text-amber-800">Échéance : {selectedCharge.due_date}</p>}</div>}</div>}
+      {form.student_id && form.session_type && form.session_type !== 'Other' && !selectedCharge?.enrollment_id && <div className="mt-4">
+        {enrollmentsLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des inscriptions…</SearchMessage>}
+        {enrollmentsError && <SearchMessage icon={AlertCircle} tone="error">Inscriptions indisponibles : {enrollmentsError}</SearchMessage>}
+        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new">Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
+      </div>}
       {!lockedCharge && <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, session_type: e.target.value, plan_type: 'Standard', level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
-        <Field label="Année scolaire *"><select required className={input} value={form.school_year} onChange={(e) => set('school_year', e.target.value)}>{[...new Set([form.school_year, ...SCHOOL_YEAR_OPTIONS].filter(Boolean))].map((year) => <option key={year}>{year}</option>)}</select></Field>
+        <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', session_type: e.target.value, plan_type: 'Standard', level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
+        <Field label="Année scolaire *"><select required className={input} value={form.school_year} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', school_year: e.target.value }))}>{[...new Set([form.school_year, ...SCHOOL_YEAR_OPTIONS].filter(Boolean))].map((year) => <option key={year}>{year}</option>)}</select></Field>
         {form.session_type === 'Yearly' && <Field label="Formule *"><div className="flex gap-2">{['Standard','Premium'].map((plan) => <button type="button" key={plan} onClick={() => set('plan_type', plan)} className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-bold ${form.plan_type === plan ? 'border-primary bg-primary text-white' : 'bg-white'}`}>{plan}</button>)}</div><p className="mt-1 text-[11px] text-muted-foreground">Premium est disponible uniquement pour Yearly.</p></Field>}
         {form.session_type === 'Other' && <Field label="Description du service *"><input required minLength={3} maxLength={120} className={input} value={form.service_detail} onChange={(e) => set('service_detail', e.target.value)} placeholder="Description courte et précise" /></Field>}
         <Field label="Niveau (facultatif)"><select className={input} value={form.level} onChange={(e) => set('level', e.target.value)}><option value="">Non renseigné</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></Field>
@@ -242,7 +277,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
         <Field label="Montant payé aujourd’hui *"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement *"><input required type="date" className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /></Field><Field label="Mode de paiement *"><select required className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select><p className="mt-1 text-[11px] font-medium text-muted-foreground">Espèces est sélectionné par défaut.</p></Field><Field label="Référence (facultative)"><input maxLength={120} className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note interne (non imprimée)"><textarea maxLength={500} rows={2} className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4"><Amount label="Prix net" value={net} /><Amount label="Déjà payé" value={paidBefore} /><Amount label="Payé aujourd’hui" value={todayPayment} accent /><Amount label="Solde restant" value={balanceAfter} warning={balanceAfter > 0} /></div>
-      {todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis et aucun email ne sera envoyé.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
+      {todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
     </Step>
 
     <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : 'Enregistrer l’engagement'}</button></div>

@@ -56,7 +56,9 @@ jobs:
           test "$(wc -l < .env.local)" -eq 3
           grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
       - name: Rollback-only migration regression
-        run: docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
+        run: |
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-paid-enrollment.sql
       - name: Synthetic database and API role suites
         run: |
           npm run dev -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &

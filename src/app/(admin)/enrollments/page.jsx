@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
-import { groupMatchesSelection } from '@/lib/academicPrograms';
+import { getLevelsForSession, groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { ENROLLMENT_STATUS_COLORS } from '@/lib/statusColors';
 
 const PAGE_SIZE = 20;
+const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status;
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -22,9 +23,10 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
 
   const selectedStudent = students.find(s => s.id === form.student_id);
   const selectedGroup = groups.find(g => g.id === form.group_id);
+  const effectiveSession = form.session_type || selectedStudent?.session_type || 'Yearly';
   const availableGroups = groups.filter(group => (
     !selectedStudent
-    || groupMatchesSelection(group, selectedStudent.session_type || 'Yearly', selectedStudent.niveau_cefr)
+    || groupMatchesEnrollment(group, form, selectedStudent)
     || group.id === form.group_id
   ));
 
@@ -32,7 +34,8 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form, student_id: form.student_id || null, group_id: form.group_id || null };
+      const payload = { ...form, student_id: form.student_id || null, group_id: form.group_id || null,
+        status: form.status === 'Confirmed' && form.group_id ? 'Validated' : form.status };
 
       if (form.id) {
         await entities.Enrollment.update(form.id, payload);
@@ -55,6 +58,7 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
           <DialogTitle>{form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {(form.session_type || form.school_year) && <p className="rounded-lg bg-slate-50 p-3 text-sm font-medium">Session : {form.session_type || 'Non renseignée'} · Année : {form.school_year || 'Non renseignée'} · Niveau : {form.level || 'À définir'}</p>}
           <div>
             <label htmlFor="enrollment-student" className={labelClass}>Apprenant *</label>
             <select id="enrollment-student" className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required disabled={Boolean(form.id)}>
@@ -70,19 +74,30 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
                 {selectedStudent.telephone && <div className="flex items-center gap-1.5"><Phone size={12} className="shrink-0" /> {selectedStudent.telephone}</div>}
                 {selectedStudent.email && <div className="flex items-center gap-1.5"><Mail size={12} className="shrink-0" /> {selectedStudent.email}</div>}
                 {selectedStudent.age_category && <div className="flex items-center gap-1.5"><User size={12} className="shrink-0" /> {selectedStudent.age_category}</div>}
-                <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> Session&nbsp;: {selectedStudent.session_type || 'Yearly'}</div>
-                {selectedStudent.niveau_cefr && <div className="flex items-center gap-1.5"><BookOpen size={12} className="shrink-0" /> Niveau&nbsp;: {selectedStudent.niveau_cefr}</div>}
+                {!form.session_type && <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> Session du dossier&nbsp;: {selectedStudent.session_type || 'Yearly'}</div>}
+                {!form.session_type && selectedStudent.niveau_cefr && <div className="flex items-center gap-1.5"><BookOpen size={12} className="shrink-0" /> Niveau du dossier&nbsp;: {selectedStudent.niveau_cefr}</div>}
                 <div className="text-blue-600 font-medium">Statut&nbsp;: {selectedStudent.status}</div>
               </div>
             )}
           </div>
+          {selectedStudent && <div>
+            <label htmlFor="enrollment-level" className={labelClass}>Niveau de cette inscription</label>
+            <select id="enrollment-level" className={inputClass} value={form.level || ''} onChange={e => setForm(f => ({ ...f, level: e.target.value || null,
+              group_id: e.target.value && selectedGroup?.niveau !== e.target.value ? '' : f.group_id }))}>
+              <option value="">— À définir lors de l’affectation —</option>
+              {getLevelsForSession(effectiveSession, form.level).map(level => <option key={level} value={level}>{level}</option>)}
+            </select>
+          </div>}
           <div>
             <label htmlFor="enrollment-group" className={labelClass}>Groupe</label>
-            <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => set('group_id', e.target.value)} required={['Validated','Trial'].includes(form.status)}>
+            <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => {
+              const group = groups.find(g => g.id === e.target.value);
+              setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
+            }} required={['Validated','Trial'].includes(form.status)}>
               <option value="">— Choisir un groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
-            {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de l&apos;apprenant.</p>}
+            {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de cette inscription.</p>}
             {selectedGroup && (
               <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-1">
                 {selectedGroup.horaire && <div className="flex items-center gap-1.5"><Clock size={12} className="shrink-0" /> {selectedGroup.horaire}</div>}
@@ -95,7 +110,7 @@ function EnrollmentModal({ enrollment, students, groups, onSave, onClose }) {
           <div>
             <label htmlFor="enrollment-status" className={labelClass}>Statut</label>
             <select id="enrollment-status" className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
-              {['Submitted','Under Review','Validated','Rejected','Trial'].map(s => <option key={s}>{s}</option>)}
+              {['Submitted','Under Review','Confirmed','Validated','Rejected','Trial'].map(s => <option key={s} value={s}>{enrollmentLabel(s)}</option>)}
             </select>
           </div>
           <div>
@@ -190,7 +205,7 @@ export default function Enrollments() {
   };
   const handleDelete = async (id) => { if (!confirm('Supprimer ?')) return; try { await entities.Enrollment.delete(id); await load(); } catch { /* entities already reported the error */ } };
 
-  const PENDING_STATUSES = ['Submitted', 'Under Review', 'Rejected', 'Trial'];
+  const PENDING_STATUSES = ['Submitted', 'Under Review', 'Confirmed', 'Rejected', 'Trial'];
   const filtered = enrollments.filter(e => {
     if (filterStatus === 'all') return true;
     if (filterStatus) return e.status === filterStatus;
@@ -211,6 +226,7 @@ export default function Enrollments() {
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">En attente (défaut)</option>
           <option value="all">Tous les statuts</option>
+          <option value="Confirmed">Groupe à affecter</option>
           {['Submitted','Under Review','Validated','Rejected','Trial'].map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
@@ -229,13 +245,15 @@ export default function Enrollments() {
                         {st?.telephone && <p className="text-xs text-muted-foreground">{st.telephone}</p>}
                         {st?.age_category && <p className="text-xs text-muted-foreground">{st.age_category}</p>}
                         <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)} · {e.date_inscription}</p>
+                        {(e.session_type || e.school_year) && <p className="text-xs text-muted-foreground">{e.session_type || 'Session non renseignée'} · {e.school_year || 'Année non renseignée'} · {e.level || 'Niveau à définir'}</p>}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{e.status}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span>
                     </div>
                     <div className="flex gap-2 mt-3">
                       {e.status !== 'Validated' && <button aria-label={`Valider l'inscription de ${studentName(e.student_id)}`} onClick={() => handleValidate(e.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>}
                       {e.status !== 'Rejected' && <button aria-label={`Refuser l'inscription de ${studentName(e.student_id)}`} onClick={() => handleReject(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>}
                       <button aria-label={`Modifier l'inscription de ${studentName(e.student_id)}`} onClick={() => setModal(e)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
+                      {e.status === 'Confirmed' && <button onClick={() => setModal(e)} className="text-xs font-semibold text-primary">Affecter un groupe</button>}
                       <button aria-label={`Supprimer l'inscription de ${studentName(e.student_id)}`} onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
                     </div>
                   </div>
@@ -246,12 +264,12 @@ export default function Enrollments() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border text-xs font-semibold text-muted-foreground">
-                    {['Apprenant','Tél / Catégorie','Groupe','Date','Statut','Actions'].map(h => <th key={h} className="text-left px-4 py-3">{h}</th>)}
+                    {['Apprenant','Tél / Catégorie','Session / année','Groupe','Date','Statut','Actions'].map(h => <th key={h} className="text-left px-4 py-3">{h}</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {paged.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">Aucune inscription trouvée.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">Aucune inscription trouvée.</td></tr>
                   )}
                   {paged.map(e => {
                     const st = getStudent(e.student_id);
@@ -262,14 +280,16 @@ export default function Enrollments() {
                           <div>{st?.telephone || '—'}</div>
                           {st?.age_category && <div className="text-muted-foreground/70">{st.age_category}</div>}
                         </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{e.session_type || '—'} · {e.school_year || '—'} · {e.level || 'Niveau à définir'}</td>
                         <td className="px-4 py-3 text-muted-foreground">{groupName(e.group_id)}</td>
                         <td className="px-4 py-3 text-muted-foreground">{e.date_inscription}</td>
-                        <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{e.status}</span></td>
+                        <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span></td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
                             {e.status !== 'Validated' && <button onClick={() => handleValidate(e.id)} title="Valider" className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>}
                             {e.status !== 'Rejected' && <button onClick={() => handleReject(e.id)} title="Refuser" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>}
                             <button onClick={() => setModal(e)} title="Modifier" className="p-1 rounded hover:bg-muted text-muted-foreground"><Edit size={14} /></button>
+                            {e.status === 'Confirmed' && <button onClick={() => setModal(e)} className="text-xs font-semibold text-primary">Affecter un groupe</button>}
                             <button onClick={() => handleDelete(e.id)} title="Supprimer" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                           </div>
                         </td>
