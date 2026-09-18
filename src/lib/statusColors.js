@@ -11,6 +11,7 @@ export const PAYMENT_STATUS_COLORS = {
 export const ENROLLMENT_STATUS_COLORS = {
   'Submitted':    'bg-blue-100   text-blue-700',
   'Under Review': 'bg-yellow-100 text-yellow-700',
+  'Confirmed':    'bg-emerald-100 text-emerald-700',
   'Validated':    'bg-green-100  text-green-700',
   'Rejected':     'bg-red-100    text-red-700',
   'Trial':        'bg-purple-100 text-purple-700',

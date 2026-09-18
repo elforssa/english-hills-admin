@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
 import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
+import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
 
@@ -20,6 +21,13 @@ assert.equal(buildServiceDescription({ sessionType: 'Other', schoolYear: '2026/2
 assert.equal(receiptSchoolYear({ school_year_snapshot: '2026/2027' }), '2026/2027');
 assert.equal(receiptSchoolYear({ service_description: 'Legacy 2024 text only' }), '', 'historical text must not be parsed for a year');
 assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Yearly · Standard · 2026/2027');
+
+const yearlyStudentInAdults = { session_type: 'Yearly', niveau_cefr: 'Child 1' };
+const adultEnrollment = { session_type: 'Adults', level: 'Beginning 1' };
+assert.equal(groupMatchesEnrollment({ session_type: 'Adults', niveau: 'Beginning 1' }, adultEnrollment, yearlyStudentInAdults), true);
+assert.equal(groupMatchesEnrollment({ session_type: 'Yearly', niveau: 'Child 1' }, adultEnrollment, yearlyStudentInAdults), false);
+assert.equal(groupMatchesEnrollment({ session_type: 'Adults', niveau: 'Intermediate 1' }, { session_type: 'Adults' }, yearlyStudentInAdults), true,
+  'an unplaced paid enrollment should show all levels in its session');
 
 const searchGate = createLatestRequestGate();
 const staleSearch = searchGate.begin();

@@ -8,7 +8,7 @@ charge='41000000-0000-0000-0000-000000000001'
 retry_charge='41000000-0000-0000-0000-000000000002'
 
 cleanup() {
-  psql "$db_url" -v ON_ERROR_STOP=1 -q -c "delete from public.financial_events where actor_id='$actor'; delete from public.financial_requests where actor_id='$actor'; delete from public.receipts where charge_id in ('$charge','$retry_charge'); delete from public.charges where id in ('$charge','$retry_charge'); delete from public.students where id='$student';" || true
+  psql "$db_url" -v ON_ERROR_STOP=1 -q -c "delete from public.financial_events where actor_id='$actor'; delete from public.financial_requests where actor_id='$actor'; delete from public.receipts where charge_id in ('$charge','$retry_charge'); delete from public.charges where id in ('$charge','$retry_charge'); delete from public.enrollments where student_id='$student'; delete from public.students where id='$student';" || true
 }
 trap cleanup EXIT
 cleanup
@@ -40,5 +40,6 @@ call_payment "$retry_charge" 20 '51000000-0000-0000-0000-000000000003' "$retry_t
 wait "$retry_pid_one"
 wait "$retry_pid_two"
 psql "$db_url" -v ON_ERROR_STOP=1 -Atq -c "select case when count(*)=1 and sum(montant_paye)=20 then 'ok' else 'bad' end from public.receipts where charge_id='$retry_charge'" | grep -q '^ok$'
+psql "$db_url" -v ON_ERROR_STOP=1 -Atq -c "select case when (select count(*) from public.enrollments where student_id='$student' and status='Confirmed')=2 and (select count(*) from public.receipts where charge_id in ('$charge','$retry_charge') and enrollment_id is not null)=2 then 'ok' else 'bad' end" | grep -q '^ok$'
 
 echo 'receipt concurrency tests passed'
