@@ -59,6 +59,8 @@ jobs:
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-paid-enrollment.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-student-placement.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-enrollment-workflow.sql
       - name: Synthetic database and API role suites
         run: |
           npm run dev -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &

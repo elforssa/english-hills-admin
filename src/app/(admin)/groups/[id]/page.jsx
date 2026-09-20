@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { getBrowserClient } from '@/lib/supabase';
+import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import { groupMatchesEnrollment } from '@/lib/academicPrograms';
+import { useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -19,6 +23,9 @@ export default function GroupDetail() {
   const { role } = useAuth();
   const canManage = role === 'admin' || role === 'director';
 
+  const queryClient = useQueryClient();
+  const [enrollments, setEnrollments] = useState([]);
+  const [reload, setReload] = useState(0);
   const [group, setGroup] = useState(null);
   const [teacher, setTeacher] = useState(null);
   const [students, setStudents] = useState([]); // roster (in this group)
@@ -36,21 +43,28 @@ export default function GroupDetail() {
         const [t] = await getTeacherDirectory({ id: g.teacher_id });
         setTeacher(t || null);
       }
-      const [roster, everyone] = await Promise.all([
-        entities.Student.filterAll({ groupe_id: id }, 'full_name'),
+      const [registrations, everyone] = await Promise.all([
+        entities.Enrollment.listAll('-created_at'),
         entities.Student.listAll('full_name'),
       ]);
-      setStudents(roster);
+      setEnrollments(registrations);
+      const members = groupMemberIds(everyone, registrations, id);
+      setStudents(everyone.filter(s => members.has(s.id)));
       setAllStudents(everyone);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [id]);
+  }, [id, reload]);
 
-  const available = allStudents.filter(s => (
-    s.groupe_id !== id
-    && (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
-    && (!s.niveau_cefr || s.niveau_cefr === group.niveau)
-  ));
+  const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
+    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));
+  const available = allStudents.filter(s => !students.some(member => member.id === s.id)
+    && (matchingPending(s).length > 0 || ((s.session_type || 'Yearly') === (group.session_type || 'Yearly')
+      && (!s.niveau_cefr || s.niveau_cefr === group.niveau))));
+  const refreshMemberships = () => {
+    queryClient.invalidateQueries({ queryKey: ['Student'] });
+    queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+    setReload(value => value + 1);
+  };
 
   const addToGroup = async (s) => {
     setBusyId(s.id);
@@ -60,10 +74,11 @@ export default function GroupDetail() {
         session_type: group.session_type || 'Yearly',
         niveau_cefr: group.niveau,
       };
-      await entities.Student.update(s.id, groupAssignment);
-      const updated = { ...s, ...groupAssignment };
-      setStudents(prev => [...prev, updated].sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')));
-      setAllStudents(prev => prev.map(x => (x.id === s.id ? updated : x)));
+      const pending = matchingPending(s);
+      if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
+      if (pending.length === 1) await entities.Enrollment.update(pending[0].id, { group_id: id, level: group.niveau });
+      else await entities.Student.update(s.id, groupAssignment);
+      refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch {
       // entities.js toasts on error
@@ -76,9 +91,9 @@ export default function GroupDetail() {
     if (!confirm(`Retirer ${s.full_name} de ce groupe ?`)) return;
     setBusyId(s.id);
     try {
-      await entities.Student.update(s.id, { groupe_id: null });
-      setStudents(prev => prev.filter(x => x.id !== s.id));
-      setAllStudents(prev => prev.map(x => (x.id === s.id ? { ...x, groupe_id: null } : x)));
+      const { error } = await getBrowserClient().rpc('remove_student_group', { p_student: s.id, p_group: id });
+      if (error) { toast.error(error.message); return; }
+      refreshMemberships();
       toast.success(`${s.full_name} retiré(e) du groupe`);
     } catch {
       // toasted
@@ -169,12 +184,12 @@ export default function GroupDetail() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
                     <td className="px-4 py-3">
-                      {s.session_type
-                        ? <span className={`text-xs font-medium px-2 py-0.5 rounded ${SESSION_TYPE_COLORS[s.session_type] || 'bg-gray-100 text-gray-600'}`}>{s.session_type}</span>
+                      {group.session_type
+                        ? <span className={`text-xs font-medium px-2 py-0.5 rounded ${SESSION_TYPE_COLORS[group.session_type] || 'bg-gray-100 text-gray-600'}`}>{group.session_type}</span>
                         : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {s.niveau_cefr ? <span className="inline-block text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{s.niveau_cefr}</span> : '—'}
+                      {group.niveau ? <span className="inline-block text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{group.niveau}</span> : '—'}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                     <td className="px-4 py-3">

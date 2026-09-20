@@ -39,7 +39,8 @@ export default function ReceiptNew() {
     toast.success(data.replayed ? 'Paiement déjà enregistré — reçu existant affiché.'
       : data.group_pending ? 'Paiement enregistré. Apprenant inscrit — groupe à affecter.'
         : data.enrollment_confirmed ? 'Paiement enregistré. Inscription confirmée.'
-        : 'Paiement enregistré et reçu émis.');
+        : data.student_enrolled ? 'Paiement enregistré. Apprenant inscrit.'
+          : 'Paiement enregistré et reçu émis.');
     router.push(`/receipts/${data.receipt_id}/print`);
   };
 

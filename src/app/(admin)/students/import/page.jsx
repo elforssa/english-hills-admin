@@ -1,5 +1,7 @@
 'use client';
 
+import { importedStudentStatus } from '@/lib/enrollmentWorkflow.mjs';
+
 // =============================================================================
 // /students/import — bulk-create students from a CSV.
 //
@@ -127,6 +129,7 @@ function validateRows(rawRows) {
         if (v === '' || v === undefined) continue;
         data[k] = v;
       }
+      data.status = importedStudentStatus(data.status);
       return { idx, ok: true, data };
     }
     return {

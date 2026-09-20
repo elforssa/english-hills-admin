@@ -6,6 +6,7 @@ import {
   AlertTriangle, ArrowUpRight, BookOpenCheck, CalendarCheck2, Crown,
   GraduationCap, UsersRound,
 } from 'lucide-react';
+import { isPendingPreEnrollment, studentNeedsGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
 
 const ACTIVE_STUDENT_STATUSES = new Set(['Enrolled', 'Trial', 'Alumni']);
@@ -82,7 +83,6 @@ export default function AcademicOperationsReport({
   const data = useMemo(() => {
     const studentsById = new Map(students.map((student) => [student.id, student]));
     const membersByGroup = new Map(groups.map((group) => [group.id, new Set()]));
-    const enrolledWithGroup = new Set();
 
     students.forEach((student) => {
       if (student.groupe_id && membersByGroup.has(student.groupe_id)) membersByGroup.get(student.groupe_id).add(student.id);
@@ -90,9 +90,6 @@ export default function AcademicOperationsReport({
     enrollments.forEach((enrollment) => {
       if (['Validated', 'Trial'].includes(enrollment.status) && enrollment.group_id && membersByGroup.has(enrollment.group_id)) {
         membersByGroup.get(enrollment.group_id).add(enrollment.student_id);
-      }
-      if (['Validated', 'Trial'].includes(enrollment.status) && enrollment.group_id) {
-        enrolledWithGroup.add(enrollment.student_id);
       }
     });
 
@@ -102,12 +99,17 @@ export default function AcademicOperationsReport({
     const unassignedGroups = sessionGroups
       .filter((group) => !group.teacher_id)
       .map((group) => ({ id: group.id, label: `${group.name} · ${group.session_type || 'Yearly'} · ${group.niveau}` }));
-    const studentsWithoutGroup = sessionStudents
-      .filter((student) => !student.groupe_id && !enrolledWithGroup.has(student.id))
-      .map((student) => ({ id: student.id, label: `${student.full_name} · ${student.session_type || 'Yearly'} · ${student.niveau_cefr || 'niveau non défini'}` }));
+    const studentsWithoutGroup = activeStudents
+      .filter((student) => studentNeedsGroup(student, enrollments, sessionFilter))
+      .map((student) => {
+        const pending = enrollments.filter(e => e.student_id === student.id && e.status === 'Confirmed' && !e.group_id
+          && (!sessionFilter || (e.session_type || student.session_type || 'Yearly') === sessionFilter));
+        const sessions = pending.map(e => [e.session_type || student.session_type || 'Yearly', e.school_year].filter(Boolean).join(' · '));
+        return { id: student.id, label: `${student.full_name} · ${sessions.length ? sessions.join(' / ') : student.session_type || 'Yearly'}` };
+      });
     const enrollmentsToReview = enrollments
-      .filter((enrollment) => ['Submitted', 'Under Review'].includes(enrollment.status))
-      .filter((enrollment) => !sessionFilter || (studentsById.get(enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
+      .filter(isPendingPreEnrollment)
+      .filter((enrollment) => !sessionFilter || (enrollment.session_type || studentsById.get(enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
       .map((enrollment) => ({ id: enrollment.id, label: `${studentsById.get(enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
 
     const activePremium = sessionStudents.filter((student) => student.plan_type === 'Premium'
@@ -184,7 +186,7 @@ export default function AcademicOperationsReport({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <ActionList title="Groupes sans enseignant" description="À affecter avant l’ouverture des cours." items={data.unassignedGroups} href="/groups" empty="Tous les groupes visibles ont un enseignant." accent="rose" />
-          <ActionList title="Apprenants sans groupe" description="Actifs mais sans groupe direct ou inscription validée." items={data.studentsWithoutGroup} href="/students" empty="Tous les apprenants actifs sont affectés." />
+          <ActionList title="Apprenants sans groupe" description="Apprenants actifs avec un groupe à affecter, y compris pour une session supplémentaire." items={data.studentsWithoutGroup} href="/students" empty="Tous les apprenants actifs sont affectés." />
           <ActionList title="Inscriptions à examiner" description="Demandes académiques en attente d’une décision." items={data.enrollmentsToReview} href="/enrollments" empty="Aucune inscription ne demande de revue." />
         </div>
 

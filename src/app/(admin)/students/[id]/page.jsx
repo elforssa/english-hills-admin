@@ -5,6 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import EnrollmentModal from '@/components/students/EnrollmentModal';
+import { useQueryClient } from '@tanstack/react-query';
 import StorageImage from '@/components/StorageImage';
 import { ArrowLeft, Edit, FileText, Plus, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,9 +20,15 @@ const PREMIUM_STATUS_LABELS = {
 };
 
 export default function StudentDetail() {
+  const { role } = useAuth();
+  const canManage = ['admin', 'director'].includes(role);
   const params = useParams();
   const id = params?.id;
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [enrollments, setEnrollments] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [enrollmentModal, setEnrollmentModal] = useState(null);
   const [student, setStudent] = useState(null);
   const [payments, setPayments] = useState([]);
   const [charges, setCharges] = useState([]);
@@ -47,10 +56,14 @@ export default function StudentDetail() {
       entities.PremiumMembership.filterAll({ student_id: id }, '-created_at'),
       entities.PremiumGroup.listAll('name'),
       getBrowserClient().from('charge_balances').select('*').eq('student_id', id),
-    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult]) => {
+      entities.Enrollment.filterAll({ student_id: id }, '-created_at'),
+      entities.Group.listAll('name'),
+    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult, enrollmentRows, groupRows]) => {
       if (!active) return;
       if (chargeResult.error) throw chargeResult.error;
       setStudent(s[0]);
+      setEnrollments(enrollmentRows);
+      setGroups(groupRows);
       setPayments(p);
       setAttendance(a);
       setAssessments(as_);
@@ -156,6 +169,28 @@ export default function StudentDetail() {
           )}
         </div>
       </Section>
+
+      <Section title="Inscriptions et groupes">
+        {student.groupe_id && <p className="mb-3 text-sm">Groupe du dossier : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
+        {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription de session enregistrée. <Link href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
+          <div className="space-y-3">{enrollments.map(enrollment => (
+            <div key={enrollment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
+              <div><p className="font-semibold">{enrollment.session_type || student.session_type || 'Session'} · {enrollment.school_year || 'Année non renseignée'}</p>
+                <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
+                <p className="text-xs">{enrollment.status === 'Confirmed' ? 'Inscrit — groupe à affecter' : enrollment.status}</p>
+              </div>
+              <button disabled={!canManage} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+            </div>
+          ))}</div>
+        )}
+      </Section>
+      {enrollmentModal && <EnrollmentModal key={enrollmentModal.id} enrollment={enrollmentModal} students={[student]} groups={groups}
+        onClose={() => setEnrollmentModal(null)} onSave={() => {
+          setEnrollmentModal(null);
+          queryClient.invalidateQueries({ queryKey: ['Student'] });
+          queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+          setReload(value => value + 1);
+        }} />}
 
       {student.plan_type === 'Premium' && (
         <Section title="Programme Premium">

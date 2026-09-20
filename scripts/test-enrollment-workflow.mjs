@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { isPreEnrollment, isPendingPreEnrollment, studentNeedsGroup, groupMemberIds, importedStudentStatus } from '../src/lib/enrollmentWorkflow.mjs';
+assert.equal(importedStudentStatus(''), 'Enrolled');
+assert.equal(importedStudentStatus(undefined), 'Enrolled');
+assert.equal(importedStudentStatus('Alumni'), 'Alumni');
+for (const status of ['Confirmed','Validated']) assert.equal(isPreEnrollment({status}),false);
+for (const status of ['Rejected','Trial','Confirmed','Validated']) assert.equal(isPendingPreEnrollment({status}),false);
+for (const status of ['Submitted','Under Review']) assert.equal(isPendingPreEnrollment({status}),true);
+const student = {id:'s',status:'Enrolled',session_type:'Yearly',groupe_id:'yearly'};
+const registrations = [{student_id:'s',status:'Validated',group_id:'yearly',session_type:'Yearly'},
+  {student_id:'s',status:'Confirmed',group_id:null,session_type:'Adults'}];
+assert.equal(studentNeedsGroup(student, registrations),true);
+assert.equal(studentNeedsGroup(student, registrations,'Adults'),true);
+assert.equal(studentNeedsGroup(student, registrations,'Yearly'),false);
+assert.equal(studentNeedsGroup({...student,groupe_id:null},[]),true);
+registrations[1]={...registrations[1],status:'Validated',group_id:'adults'};
+assert.equal(studentNeedsGroup(student, registrations),false);
+assert.deepEqual([...groupMemberIds([student],registrations,'yearly')],['s']);
+assert.deepEqual([...groupMemberIds([student],registrations,'adults')],['s']);
+registrations[1]={...registrations[1],status:'Confirmed',group_id:null};
+assert.equal(groupMemberIds([student],registrations,'adults').size,0);
+console.log('PASS enrollment queue, placement reporting, roster deduplication and import defaults');

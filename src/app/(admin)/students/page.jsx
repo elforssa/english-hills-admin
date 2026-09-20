@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Download, Upload, UserSearch, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import EnrollmentModal from '@/components/students/EnrollmentModal';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { exportToCsv } from '@/utils/exportCsv';
-import { useEntityUpdate } from '@/lib/queries';
+import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
@@ -43,6 +44,23 @@ function InlineSelect({ value, options, onChange, empty, label, className = '' }
 
 export default function Students() {
   const update = useEntityUpdate('Student');
+  const queryClient = useQueryClient();
+  const [placement, setPlacement] = useState(null);
+  const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement) });
+  const renderGroup = (student) => (
+    <div className="space-y-1">
+      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {(student.pending_enrollments || []).map(enrollment => (
+        <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
+          onClick={() => setPlacement({ student, enrollment })}>
+          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
+        </button>
+      ))}
+      {!student.groupe_id && !student.pending_enrollments?.length && (
+        <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
+      )}
+    </div>
+  );
 
   // Keep the current server value visible until persistence succeeds.
   const patchStudentFields = async (id, data) => {
@@ -54,6 +72,7 @@ export default function Students() {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterGroup, setFilterGroup] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [filterSession, setFilterSession] = useState('');
@@ -65,7 +84,7 @@ export default function Students() {
   const filters = {
     p_search: search, p_status: filterStatus, p_age_category: filterCat,
     p_session: filterSession, p_level: filterLevel, p_incomplete: filterIncomplete,
-    p_source: filterSource, p_plan: filterPlan,
+    p_source: filterSource, p_plan: filterPlan, p_group: filterGroup,
   };
   const { data: result, isLoading: loading, isError, refetch } = useQuery({
     queryKey: ['Student', 'page', filters, page],
@@ -93,6 +112,7 @@ export default function Students() {
         Email: s.email || '',
         Téléphone: s.telephone || '',
         Catégorie: s.age_category || '',
+        Groupe: s.group_name || 'À affecter',
         Session: s.session_type || '',
         Niveau: s.niveau_cefr || '',
         Statut: s.status || '',
@@ -146,6 +166,10 @@ export default function Students() {
           <option value="">Toutes catégories</option>
           {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
         </select>
+        <select aria-label="Filtrer par affectation de groupe" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterGroup} onChange={e => { setFilterGroup(e.target.value); setPage(1); }}>
+          <option value="">Groupes : tous</option>
+          <option value="unassigned">Groupe à affecter</option>
+        </select>
         <select aria-label="Filtrer par session" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
           <option value="">Toutes sessions</option>
           {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
@@ -169,6 +193,14 @@ export default function Students() {
         </select>
       </div>
 
+      {placement && (groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
+        : groupsError ? <div role="alert" className="mb-4 text-sm">Impossible de charger les groupes. <button className="text-primary underline" onClick={() => reloadGroups()}>Réessayer</button> <button onClick={() => setPlacement(null)}>Annuler</button></div>
+          : <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
+            onClose={() => setPlacement(null)} onSave={() => {
+              setPlacement(null);
+              queryClient.invalidateQueries({ queryKey: ['Student'] });
+              queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+            }} />)}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
           <SkeletonTable rows={10} cols={6} />
@@ -189,14 +221,15 @@ export default function Students() {
           <>
             <div className="sm:hidden divide-y divide-border">
               {paged.map(s => (
-                <Link key={s.id} href={`/students/${s.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]">{s.full_name}{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link href={`/students/${s.id}`}>{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
+                    {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
-                </Link>
+                </div>
               ))}
             </div>
             <div className="hidden sm:block overflow-x-auto">
@@ -205,6 +238,7 @@ export default function Students() {
                   <tr className="bg-muted border-b border-border">
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nom</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Catégorie</th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Groupe</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Session</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Niveau</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Téléphone</th>
@@ -227,6 +261,7 @@ export default function Students() {
                           onChange={v => patchStudent(s.id, 'age_category', v)}
                         />
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground">{renderGroup(s)}</td>
                       <td className="px-4 py-3">
                         <InlineSelect
                           value={s.session_type || 'Yearly'}

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
+import { isPendingPreEnrollment } from '@/lib/enrollmentWorkflow.mjs';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 
@@ -57,7 +58,7 @@ export default function Dashboard() {
         teachers: teachers.length,
         groups: groups.length,
         totalEncaisse: Number(financeResult.data?.total_encaisse || 0),
-        enrollmentsPending: pendingEnroll.filter(e => ['Submitted', 'Under Review', 'Rejected'].includes(e.status)).length,
+        enrollmentsPending: pendingEnroll.filter(isPendingPreEnrollment).length,
         testsPlanifies: plannedTests.length,
       });
       setRecentReceipts(receipts.slice(0, 5));

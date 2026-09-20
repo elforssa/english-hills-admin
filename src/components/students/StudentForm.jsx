@@ -63,7 +63,7 @@ export default function StudentForm() {
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
-    niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Prospect',
+    niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Enrolled',
     referral_source: '', groupe_id: '', plan_type: 'Standard',
     premium_start_date: '', premium_end_date: '', photo_url: '', notes: '',
   });
@@ -190,7 +190,7 @@ export default function StudentForm() {
       niveau_cefr:    parsed.data.niveau_cefr    || null,
       session_type:   parsed.data.session_type   || 'Yearly',
       referral_source: parsed.data.referral_source || null,
-      status:         parsed.data.status         || null,
+      status:         isEdit ? (parsed.data.status || null) : 'Enrolled',
       date_naissance: parsed.data.date_naissance || null,
       telephone:      parsed.data.telephone      || null,
       email:          parsed.data.email          || null,
@@ -315,9 +315,9 @@ export default function StudentForm() {
           </div>
           <div>
             <label htmlFor="status" className={labelClass}>Statut</label>
-            <select id="status" className={inputClass} value={form.status || ''} onChange={e => set('status', e.target.value)}>
+            <select id="status" disabled={!isEdit} className={inputClass} value={form.status || ''} onChange={e => set('status', e.target.value)}>
               <option value="">— Non défini —</option>
-              {STATUSES.map(s => <option key={s}>{s}</option>)}
+              {(isEdit ? STATUSES : ['Enrolled']).map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="col-span-2">
