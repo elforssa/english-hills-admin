@@ -1,5 +1,7 @@
 'use client';
 
+import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import Link from 'next/link';
@@ -97,11 +99,12 @@ export default function Groups() {
     entities.Group.listAll('-created_date'),
     getTeacherDirectory(),
     entities.Student.listAll('full_name'),
-  ]).then(([g, t, s]) => {
+    entities.Enrollment.listAll('-created_at'),
+  ]).then(([g, t, s, e]) => {
     setGroups(g);
     setTeachers(t);
     const c = {};
-    s.forEach(x => { if (x.groupe_id) c[x.groupe_id] = (c[x.groupe_id] || 0) + 1; });
+    g.forEach(group => { c[group.id] = groupMemberIds(s, e, group.id).size; });
     setCounts(c);
     setLoading(false);
   });

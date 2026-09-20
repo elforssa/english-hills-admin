@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs",
+    "test": "node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-enrollment-workflow.mjs",
     "test:middleware": "node scripts/test-middleware-security.mjs"
   },
   "dependencies": {

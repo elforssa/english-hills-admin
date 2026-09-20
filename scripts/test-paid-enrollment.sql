@@ -123,8 +123,8 @@ insert into paid_case values ('other', public.create_charge_payment(jsonb_build_
   'idempotency_key','72000000-0000-0000-0000-000000000015')));
 do $$ begin
   if (select count(*) from public.enrollments where student_id='72000000-0000-0000-0000-000000000023') <> 0
-    or (select status from public.students where id='72000000-0000-0000-0000-000000000023') <> 'Prospect' then
-    raise exception 'Other service created enrollment';
+    or (select status from public.students where id='72000000-0000-0000-0000-000000000023') <> 'Enrolled' then
+    raise exception 'Other service must enroll student without creating a tuition enrollment';
   end if;
 end $$;
 
