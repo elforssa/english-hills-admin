@@ -21,8 +21,12 @@ insert into public.students(id,full_name,email,status) values
   ('00000000-0000-4000-8000-00000000d003','Trial Child','trial@example.invalid','Prospect');
 insert into public.enrollments(student_id,group_id,status) values
   ('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001','Trial');
--- Keep the fixture enrollment-only, as older rows can have no primary group.
+-- Model a pre-existing enrollment-only record for the legacy RLS test. Normal
+-- group removal now synchronizes enrollments; suspend only that new trigger
+-- while constructing this synthetic historical state, then restore it.
+alter table public.students disable trigger student_enrollment_assignment_sync;
 update public.students set groupe_id=null where id='00000000-0000-4000-8000-00000000d003';
+alter table public.students enable trigger student_enrollment_assignment_sync;
 update public.profiles set linked_student_id='00000000-0000-4000-8000-00000000d001'
 where id='00000000-0000-4000-8000-00000000a003';
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
