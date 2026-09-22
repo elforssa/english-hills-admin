@@ -185,7 +185,7 @@ export default function StudentsDirectory() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {['Apprenant','Niveau','Groupe','Téléphone','Email','Statut',''].map(h => (
+                {['Apprenant','Niveau','Groupe','Téléphone','Email','Statut'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">{h}</th>
                 ))}
               </tr>
@@ -202,7 +202,7 @@ export default function StudentsDirectory() {
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: lvlColor }}>
                           {s.full_name?.[0]?.toUpperCase() || '?'}
                         </div>
-                        <span className="font-medium">{s.full_name}</span>
+                        <Link href={`/students/${s.id}`} className="font-medium hover:text-primary hover:underline focus-visible:underline">{s.full_name}</Link>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -216,9 +216,6 @@ export default function StudentsDirectory() {
                         <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                         {s.status || 'Prospect'}
                       </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={`/students/${s.id}`} className="text-xs font-semibold hover:underline" style={{ color: 'var(--brand)' }}>Voir →</Link>
                     </td>
                   </tr>
                 );

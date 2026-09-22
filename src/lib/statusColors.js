@@ -6,6 +6,7 @@ export const PAYMENT_STATUS_COLORS = {
   'Acompte versé': 'bg-amber-50   text-amber-700',
   'En attente':    'bg-blue-50    text-blue-700',
   'En retard':     'bg-red-50     text-red-700',
+  'Aucun engagement': 'bg-slate-100 text-slate-600',
 };
 
 export const ENROLLMENT_STATUS_COLORS = {
