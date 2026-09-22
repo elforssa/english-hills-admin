@@ -6,7 +6,7 @@ import { Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from '
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { getLevelsForSession, groupMatchesEnrollment } from '@/lib/academicPrograms';
+import { getLevelsForSession, groupMatchesEnrollment, groupMatchesSelection } from '@/lib/academicPrograms';
 
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status;
 
@@ -23,7 +23,9 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const effectiveSession = form.session_type || selectedStudent?.session_type || 'Yearly';
   const availableGroups = groups.filter(group => (
     !selectedStudent
-    || groupMatchesEnrollment(group, form, selectedStudent)
+    || (assignmentOnly
+      ? groupMatchesSelection(group, effectiveSession, '')
+      : groupMatchesEnrollment(group, form, selectedStudent))
     || group.id === form.group_id
   ));
 
@@ -57,7 +59,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           <DialogTitle>{assignmentOnly ? 'Affecter un groupe' : form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {(form.session_type || form.school_year) && <p className="rounded-lg bg-slate-50 p-3 text-sm font-medium">Session : {form.session_type || 'Non renseignée'} · Année : {form.school_year || 'Non renseignée'} · Niveau : {form.level || 'À définir'}</p>}
+          {(form.session_type || form.school_year) && <p className="rounded-lg bg-slate-50 p-3 text-sm font-medium">Session : {form.session_type || 'Non renseignée'} · Année : {form.school_year || 'Non renseignée'}{!assignmentOnly && ` · Niveau : ${form.level || 'À définir'}`}</p>}
           <div>
             <label htmlFor="enrollment-student" className={labelClass}>Apprenant *</label>
             <select id="enrollment-student" className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required disabled={Boolean(form.id)}>
@@ -79,7 +81,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
               </div>
             )}
           </div>
-          {selectedStudent && <div>
+          {selectedStudent && !assignmentOnly && <div>
             <label htmlFor="enrollment-level" className={labelClass}>Niveau de cette inscription</label>
             <select id="enrollment-level" className={inputClass} value={form.level || ''} onChange={e => setForm(f => ({ ...f, level: e.target.value || null,
               group_id: e.target.value && selectedGroup?.niveau !== e.target.value ? '' : f.group_id }))}>
@@ -91,14 +93,15 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
             <label htmlFor="enrollment-group" className={labelClass}>Groupe</label>
             <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => {
               const group = groups.find(g => g.id === e.target.value);
-              setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
+              setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || (assignmentOnly ? null : f.level) || null }));
             }} required={assignmentOnly || form.status === 'Trial'}>
               <option value="">— Choisir un groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
-            {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de cette inscription.</p>}
+            {selectedStudent && <p className="text-xs text-muted-foreground mt-1">{assignmentOnly ? 'Groupes filtrés par session. Le niveau sera repris du groupe choisi.' : 'Groupes filtrés par session et niveau de cette inscription.'}</p>}
             {selectedGroup && (
               <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-1">
+                {assignmentOnly && <div>Niveau : {selectedGroup.niveau || 'Non renseigné'}</div>}
                 {selectedGroup.horaire && <div className="flex items-center gap-1.5"><Clock size={12} className="shrink-0" /> {selectedGroup.horaire}</div>}
                 {selectedGroup.jours && <div className="flex items-center gap-1.5"><Calendar size={12} className="shrink-0" /> {selectedGroup.jours}</div>}
                 {selectedGroup.salle && <div className="flex items-center gap-1.5"><Building2 size={12} className="shrink-0" /> Salle&nbsp;: {selectedGroup.salle}</div>}
@@ -129,4 +132,3 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     </Dialog>
   );
 }
-
