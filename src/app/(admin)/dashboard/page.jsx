@@ -10,6 +10,7 @@ import { isPendingPreEnrollment } from '@/lib/enrollmentWorkflow.mjs';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
+import ContextLink from '@/components/ContextLink';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -246,7 +247,7 @@ export default function Dashboard() {
                       {r.nom_prenom?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      {r.student_id ? <Link href={`/students/${r.student_id}`} className="block text-sm font-semibold text-primary truncate hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.nom_prenom}</Link> : <p className="text-sm font-semibold text-foreground truncate">{r.nom_prenom}</p>}
+                      {r.student_id ? <ContextLink href={`/students/${r.student_id}`} className="block text-sm font-semibold text-primary truncate hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.nom_prenom}</ContextLink> : <p className="text-sm font-semibold text-foreground truncate">{r.nom_prenom}</p>}
                       <Link href={recordHref(`/receipts/${r.id}/print`, '/dashboard')} className="inline-flex min-h-8 items-center text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.receipt_number || `#${r.id.slice(-8).toUpperCase()}`}</Link>
                       <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.date}</p>
                     </div>

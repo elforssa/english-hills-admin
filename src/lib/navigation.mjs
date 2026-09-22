@@ -1,18 +1,38 @@
-// Accept only internal list destinations. This value can come from a URL.
-export function safeReturnTo(value, fallback = '/students') {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return fallback;
+const ORIGIN = 'https://english-hills.local';
+const RETURN_SCREENS = new Set([
+  '/students', '/students-directory', '/teachers', '/receipts', '/dashboard', '/finance',
+  '/attendance', '/assessments', '/payroll', '/dismissal', '/enrollments',
+  '/timetable', '/groups', '/premium-sessions', '/learning-assessments',
+  '/leave-requests', '/placement-tests', '/certificates', '/portfolios', '/activity-log',
+]);
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const PROFILE = new RegExp(`^/(students|teachers|groups)/${UUID}$`, 'i');
+const RECEIPT_PREVIEW = new RegExp(`^/receipts/${UUID}/print$`, 'i');
+
+function isSafeDestination(value, depth = 0) {
+  if (depth > 6 || typeof value !== 'string' || value.length > 4096
+    || !value.startsWith('/') || value.startsWith('//') || /[\\\u0000-\u001f]/.test(value)) return false;
+  // Reject encoded path separators and dot segments before URL normalizes them.
+  const rawPath = value.split(/[?#]/, 1)[0];
+  if (/%(?:2e|2f|5c)/i.test(rawPath)) return false;
   try {
-    const url = new URL(value, 'https://english-hills.local');
-    if (url.origin !== 'https://english-hills.local') return fallback;
-    const listPath = ['/students', '/students-directory', '/teachers', '/receipts', '/dashboard', '/finance'].includes(url.pathname);
-    const profilePath = /^\/(students|teachers)\/[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(url.pathname);
-    if (!listPath && !profilePath) return fallback;
-    return `${url.pathname}${url.search}`;
-  } catch { return fallback; }
+    const url = new URL(value, ORIGIN);
+    if (url.origin !== ORIGIN || url.hash) return false;
+    if (!RETURN_SCREENS.has(url.pathname) && !PROFILE.test(url.pathname) && !RECEIPT_PREVIEW.test(url.pathname)) return false;
+    const nested = url.searchParams.getAll('returnTo');
+    return nested.length <= 1 && (nested.length === 0 || isSafeDestination(nested[0], depth + 1));
+  } catch { return false; }
+}
+
+// Accept only supported internal destinations, including validated nested returns.
+export function safeReturnTo(value, fallback = '/students') {
+  if (!isSafeDestination(value)) return fallback;
+  const url = new URL(value, ORIGIN);
+  return `${url.pathname}${url.search}`;
 }
 
 export function recordHref(path, returnTo) {
-  return `${path}?returnTo=${encodeURIComponent(returnTo)}`;
+  return `${path}${path.includes('?') ? '&' : '?'}returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`;
 }
 
 export function listHref(path, fields) {

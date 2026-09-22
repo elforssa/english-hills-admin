@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entities } from '@/lib/entities';
 import { History, Search } from 'lucide-react';
-import Link from 'next/link';
+import ContextLink from '@/components/ContextLink';
 
 const ACTION_COLORS = {
   INSERT: 'bg-green-100 text-green-700',
@@ -123,7 +123,7 @@ export default function ActivityLog() {
                         ? r.changed_columns.join(', ')
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{targetHref(r) ? <Link href={targetHref(r)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded" aria-label={`Ouvrir ${r.target_table} ${r.target_id}`}>{r.target_id.slice(0, 8)}</Link> : r.target_id ? r.target_id.slice(0, 8) : '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{targetHref(r) ? <ContextLink href={targetHref(r)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded" aria-label={`Ouvrir ${r.target_table} ${r.target_id}`}>{r.target_id.slice(0, 8)}</ContextLink> : r.target_id ? r.target_id.slice(0, 8) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

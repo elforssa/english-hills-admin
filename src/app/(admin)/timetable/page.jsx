@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import ContextLink from '@/components/ContextLink';
 import PersonLink from '@/components/PersonLink';
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
@@ -22,11 +22,20 @@ export default function Timetable() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterTerme, setFilterTerme] = useState('');
+  const [urlReady, setUrlReady] = useState(false);
   const [role, setRole] = useState(null);
   const [myTeacherId, setMyTeacherId] = useState(null);
   const [premiumSessions, setPremiumSessions] = useState([]);
   const [premiumGroups, setPremiumGroups] = useState([]);
   const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    setFilterTerme(new URLSearchParams(window.location.search).get('term') || '');
+    setUrlReady(true);
+  }, []);
+  useEffect(() => {
+    if (urlReady) window.history.replaceState(window.history.state, '', `/timetable${filterTerme ? `?term=${encodeURIComponent(filterTerme)}` : ''}`);
+  }, [urlReady, filterTerme]);
 
   useEffect(() => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -100,7 +109,7 @@ export default function Timetable() {
                   ) : (
                     groupsByDay[day].map((g, i) => (
                       <div key={g.id} className={`p-2 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
-                        <Link href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</Link>
+                        <ContextLink href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</ContextLink>
                         <p className="opacity-75">{g.horaire}</p>
                         <PersonLink kind="teacher" id={g.teacher_id} className="opacity-75">{teacherName(g.teacher_id)}</PersonLink>
                         {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
@@ -121,7 +130,7 @@ export default function Timetable() {
                 <div className="p-3 space-y-2">
                   {groupsByDay[day].map((g, i) => (
                     <div key={g.id} className={`p-2.5 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
-                      <Link href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</Link>
+                      <ContextLink href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</ContextLink>
                       {g.horaire && <p className="opacity-75 mt-0.5">{g.horaire}</p>}
                       {g.teacher_id && <PersonLink kind="teacher" id={g.teacher_id} className="opacity-75">{teacherName(g.teacher_id)}</PersonLink>}
                       {g.salle && <p className="opacity-60">Salle {g.salle}</p>}

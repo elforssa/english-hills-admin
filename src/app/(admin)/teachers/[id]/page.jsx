@@ -27,11 +27,11 @@ export default function TeacherProfile() {
     const { error } = await getBrowserClient().rpc('soft_delete_teacher', { p_teacher_id: id });
     if (error) { toast.error(error.message || "Échec de l’archivage de l’enseignant."); return; }
     toast.success('Enseignant archivé');
-    router.push('/teachers');
+    router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'));
   };
 
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
-  if (!teacher || teacher.deleted_at) return <div className="p-8"><p>Enseignant introuvable ou archivé.</p><Link href="/teachers" className="text-primary underline">Retour aux enseignants</Link></div>;
+  if (!teacher || teacher.deleted_at) return <div className="p-8"><p>Enseignant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'))} className="min-h-10 text-primary underline">Retour</button></div>;
 
   const fields = [
     ['Email', teacher.email], ['Téléphone', teacher.telephone],
@@ -40,7 +40,7 @@ export default function TeacherProfile() {
     ['Certifications', teacher.certifications?.join(', ')],
   ];
   return <div className="p-4 lg:p-8 max-w-3xl">
-    <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'))} className="inline-flex items-center gap-2 min-h-10 text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"><ArrowLeft size={16} /> Enseignants</button>
+    <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'))} className="inline-flex items-center gap-2 min-h-10 text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"><ArrowLeft size={16} /> Retour</button>
     <div className="flex flex-wrap items-center gap-4 mt-4 mb-6">
       <div className="w-16 h-16 rounded-full overflow-hidden bg-muted flex items-center justify-center">
         {teacher.photo_url ? <StorageImage src={teacher.photo_url} alt="" className="w-full h-full object-cover" /> : <span className="text-xl font-bold">{teacher.full_name?.[0] || '?'}</span>}

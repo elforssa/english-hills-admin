@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
-import { recordHref, safeReturnTo } from '@/lib/navigation.mjs';
+import { safeReturnTo } from '@/lib/navigation.mjs';
+import ContextLink from '@/components/ContextLink';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
@@ -86,12 +87,12 @@ export default function StudentDetail() {
     const { error } = await sb.rpc('soft_delete_student', { p_student_id: id });
     if (error) { toast.error('Erreur : ' + error.message); return; }
     toast.success('Apprenant archivé');
-    router.push('/students');
+    router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')));
   };
 
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
   if (loadError) return <div className="p-8" role="alert">Impossible de charger la fiche complète. <button className="text-primary underline" onClick={() => setReload((value) => value + 1)}>Réessayer</button></div>;
-  if (!student) return <div className="p-8 text-muted-foreground"><p>Apprenant introuvable ou archivé.</p><Link href="/students" className="inline-flex min-h-10 items-center text-primary underline">Retour aux apprenants</Link></div>;
+  if (!student) return <div className="p-8 text-muted-foreground"><p>Apprenant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="inline-flex min-h-10 items-center text-primary underline">Retour</button></div>;
 
   const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
   const paymentSummary = studentPaymentSummary(charges);
@@ -110,7 +111,7 @@ export default function StudentDetail() {
   return (
     <div className="mx-auto max-w-5xl p-4 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <button aria-label="Retour à la liste des apprenants" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+        <button aria-label="Retour" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ArrowLeft size={15} />
         </button>
         <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
@@ -287,7 +288,7 @@ export default function StudentDetail() {
                 const status = receiptStatus(p);
                 return (
                 <tr key={p.id}>
-                  <td className="py-2"><Link href={recordHref(`/receipts/${p.id}/print`, `/students/${id}`)} className="inline-flex min-h-10 items-center text-primary font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.receipt_number || `#${p.id.slice(-8).toUpperCase()}`}</Link></td>
+                  <td className="py-2"><ContextLink href={`/receipts/${p.id}/print`} className="inline-flex min-h-10 items-center text-primary font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.receipt_number || `#${p.id.slice(-8).toUpperCase()}`}</ContextLink></td>
                   <td className="py-2">{p.date || '—'}</td>
                   <td className="py-2">
                     {money(amounts.net)} MAD

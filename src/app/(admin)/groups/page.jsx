@@ -4,7 +4,7 @@ import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
-import Link from 'next/link';
+import ContextLink from '@/components/ContextLink';
 import { entities, auth } from '@/lib/entities';
 import { Plus, Edit, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -94,7 +94,24 @@ export default function Groups() {
   const [filterTerme, setFilterTerme] = useState('');
   const [filterSession, setFilterSession] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
+  const [urlReady, setUrlReady] = useState(false);
   const [counts, setCounts] = useState({});
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setFilterSession(params.get('session') || '');
+    setFilterLevel(params.get('level') || '');
+    setFilterTerme(params.get('term') || '');
+    setUrlReady(true);
+  }, []);
+  useEffect(() => {
+    if (!urlReady) return;
+    const params = new URLSearchParams();
+    if (filterSession) params.set('session', filterSession);
+    if (filterLevel) params.set('level', filterLevel);
+    if (filterTerme) params.set('term', filterTerme);
+    window.history.replaceState(window.history.state, '', `/groups${params.size ? `?${params}` : ''}`);
+  }, [urlReady, filterSession, filterLevel, filterTerme]);
 
   const load = () => Promise.all([
     entities.Group.listAll('-created_date'),
@@ -167,7 +184,7 @@ export default function Groups() {
                 <div key={g.id} className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/groups/${g.id}`} className="font-semibold text-sm text-primary hover:underline">{g.name}</Link>
+                      <ContextLink href={`/groups/${g.id}`} className="font-semibold text-sm text-primary hover:underline">{g.name}</ContextLink>
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · {g.session_type || 'Yearly'} · {g.categorie}</p>
                       <PersonLink kind="teacher" id={g.teacher_id} className="text-xs">{teacherName(g.teacher_id)}</PersonLink>
                       <p className="text-xs text-muted-foreground">{g.jours} {g.horaire} {g.salle ? `· ${g.salle}` : ''}</p>
@@ -203,7 +220,7 @@ export default function Groups() {
                   {filtered.map(g => (
                     <tr key={g.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">
-                        <Link href={`/groups/${g.id}`} className="text-primary hover:underline">{g.name}</Link>
+                        <ContextLink href={`/groups/${g.id}`} className="text-primary hover:underline">{g.name}</ContextLink>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <span className="inline-flex items-center gap-1"><Users size={13} /> {counts[g.id] || 0}</span>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
@@ -15,6 +14,8 @@ import { ArrowLeft, Users, UserSearch, UserPlus, X, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
+import ContextLink from '@/components/ContextLink';
+import { safeReturnTo } from '@/lib/navigation.mjs';
 
 export default function GroupDetail() {
   const params = useParams();
@@ -118,8 +119,8 @@ export default function GroupDetail() {
 
   return (
     <div className="p-4 lg:p-8">
-      <button onClick={() => router.push('/groups')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
-        <ArrowLeft size={15} /> Retour aux groupes
+      <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/groups'))} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+        <ArrowLeft size={15} /> Retour
       </button>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
@@ -146,7 +147,7 @@ export default function GroupDetail() {
           {meta.map(([label, val]) => (
             <div key={label}>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="font-medium">{label === 'Enseignant' && teacher && canManage ? <Link href={`/teachers/${teacher.id}`} className="inline-flex min-h-10 items-center rounded text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{teacher.full_name}</Link> : val || '—'}</p>
+              <p className="font-medium">{label === 'Enseignant' && teacher && canManage ? <ContextLink href={`/teachers/${teacher.id}`} className="inline-flex min-h-10 items-center rounded text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{teacher.full_name}</ContextLink> : val || '—'}</p>
             </div>
           ))}
         </div>
@@ -180,7 +181,7 @@ export default function GroupDetail() {
                 {students.map(s => (
                   <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                     <td className="px-4 py-3 font-medium text-foreground">
-                      {canManage ? <Link href={`/students/${s.id}`} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link> : s.full_name}
+                      {canManage ? <ContextLink href={`/students/${s.id}`} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</ContextLink> : s.full_name}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
                     <td className="px-4 py-3">
