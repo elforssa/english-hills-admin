@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { PAYROLL_STATUS_COLORS } from '@/lib/statusColors';
+import PersonLink from '@/components/PersonLink';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -137,6 +138,7 @@ export default function PayrollPage() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const load = () => Promise.all([
     entities.Payroll.listAll('-created_date'),
@@ -195,10 +197,11 @@ export default function PayrollPage() {
               {payrolls.map(p => (
                 <div key={p.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm">{p.teacher_name}</p>
+                    <p className="font-semibold text-sm"><PersonLink kind="teacher" id={p.teacher_id}>{p.teacher_name}</PersonLink></p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[p.statut]}`}>{p.statut}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{p.mois} {p.annee} · {p.contract_type}</p>
+                  <button onClick={() => setDetail(p)} className="block min-h-10 text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Fiche de paie {p.mois} {p.annee}</button>
+                  <p className="text-xs text-muted-foreground">{p.contract_type}</p>
                   <p className="text-sm font-bold mt-1" style={{ color: 'var(--brand)' }}>Net: {(p.salaire_net || 0).toLocaleString('fr-MA')} MAD</p>
                   <div className="flex gap-2 mt-2">
                     {p.statut === 'Brouillon' && <button onClick={() => handleValidate(p.id)} className="text-xs px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded">Valider</button>}
@@ -220,9 +223,9 @@ export default function PayrollPage() {
                 <tbody className="divide-y divide-border">
                   {payrolls.map(p => (
                     <tr key={p.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{p.teacher_name}</td>
+                      <td className="px-4 py-3 font-medium"><PersonLink kind="teacher" id={p.teacher_id}>{p.teacher_name}</PersonLink></td>
                       <td className="px-4 py-3 text-muted-foreground">{p.contract_type}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.mois} {p.annee}</td>
+                      <td className="px-4 py-3"><button onClick={() => setDetail(p)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Fiche {p.mois} {p.annee}</button></td>
                       <td className="px-4 py-3">{(p.salaire_brut || 0).toLocaleString('fr-MA')}</td>
                       <td className="px-4 py-3 text-red-600">{((p.cotisation_cnss || 0) + (p.cotisation_amo || 0)).toLocaleString('fr-MA')}</td>
                       <td className="px-4 py-3 text-red-600">{(p.ir_retenu || 0).toLocaleString('fr-MA')}</td>
@@ -245,6 +248,19 @@ export default function PayrollPage() {
         )}
       </div>
       {modal && <PayrollModal teachers={teachers} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
+      <Dialog open={Boolean(detail)} onOpenChange={(open) => { if (!open) setDetail(null); }}>
+        <DialogContent><DialogHeader><DialogTitle>Fiche de paie {detail?.mois} {detail?.annee}</DialogTitle></DialogHeader>
+          {detail && <div className="space-y-2 text-sm">
+            <p>Enseignant : {detail.teacher_name}</p>
+            <p>Contrat : {detail.contract_type || '—'}</p>
+            <p>Salaire brut : {(detail.salaire_brut || 0).toLocaleString('fr-MA')} MAD</p>
+            <p>CNSS et AMO : {((detail.cotisation_cnss || 0) + (detail.cotisation_amo || 0)).toLocaleString('fr-MA')} MAD</p>
+            <p>IR : {(detail.ir_retenu || 0).toLocaleString('fr-MA')} MAD</p>
+            <p>Salaire net : {(detail.salaire_net || 0).toLocaleString('fr-MA')} MAD</p>
+            <p>Statut : {detail.statut || '—'}</p>
+          </div>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

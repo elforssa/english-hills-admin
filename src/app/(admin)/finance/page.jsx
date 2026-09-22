@@ -7,14 +7,13 @@ import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
-import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import PersonLink from '@/components/PersonLink';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 const RELANCER_SHOWN = 10;
 
 export default function Finance() {
-  const { role } = useAuth();
   const [summary, setSummary] = useState(null);
   const [relancer, setRelancer] = useState([]);
   const [sources, setSources] = useState([]);
@@ -180,7 +179,7 @@ export default function Finance() {
               {relancer.length}{relancer.length >= 50 ? '+' : ''} engagement{relancer.length > 1 ? 's' : ''} avec solde impayé · {totalRestant.toLocaleString('fr-MA')} MAD à recouvrer
             </p>
           </div>
-          <Link href="/receipts" className="text-xs font-medium text-primary hover:underline whitespace-nowrap">Tous les reçus →</Link>
+          <Link href="/students?status=all_shown&payment=due" className="inline-flex min-h-10 items-center text-xs font-medium text-primary hover:underline whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Tous les apprenants · reste à payer →</Link>
         </div>
         {loading ? (
           <div className="p-4 animate-pulse space-y-2">
@@ -200,7 +199,7 @@ export default function Finance() {
                 return (
                   <div key={r.id} className="px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm text-foreground truncate">{r.nom_prenom}</p>
+                      <p className="font-semibold text-sm text-foreground truncate"><PersonLink id={r.student_id}>{r.nom_prenom}</PersonLink></p>
                       <p className="text-xs text-muted-foreground mt-0.5">{r.session_type} · {r.service_description}{r.due_date ? ` · échéance ${r.due_date}` : ''}</p>
                       {r.telephone && (
                         <a href={`tel:${r.telephone}`} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mt-0.5">
@@ -216,7 +215,6 @@ export default function Finance() {
                       <Link href={`/receipts/new?student_id=${r.student_id}&charge_id=${r.id}`} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white rounded-md bg-primary hover:opacity-90 whitespace-nowrap">
                         <Wallet size={12} /> Encaisser
                       </Link>
-                      {role === 'director' && <Link href={`/finance/charges/${r.id}/edit`} className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:underline whitespace-nowrap">Corriger</Link>}
                     </div>
                   </div>
                 );
@@ -224,8 +222,8 @@ export default function Finance() {
             </div>
             {relancer.length > RELANCER_SHOWN && (
               <div className="px-4 lg:px-6 py-3 border-t border-border text-center">
-                <Link href="/receipts" className="text-xs font-medium text-primary hover:underline">
-                  + {relancer.length - RELANCER_SHOWN} autre{relancer.length - RELANCER_SHOWN > 1 ? 's' : ''} · voir tous les reçus →
+                <Link href="/students?status=all_shown&payment=due" className="inline-flex min-h-10 items-center text-xs font-medium text-primary hover:underline">
+                  + {relancer.length - RELANCER_SHOWN} autre{relancer.length - RELANCER_SHOWN > 1 ? 's' : ''} · voir tous les apprenants à relancer →
                 </Link>
               </div>
             )}

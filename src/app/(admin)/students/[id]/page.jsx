@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
+import { safeReturnTo } from '@/lib/navigation.mjs';
+import ContextLink from '@/components/ContextLink';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
@@ -85,12 +87,12 @@ export default function StudentDetail() {
     const { error } = await sb.rpc('soft_delete_student', { p_student_id: id });
     if (error) { toast.error('Erreur : ' + error.message); return; }
     toast.success('Apprenant archivé');
-    router.push('/students');
+    router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')));
   };
 
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
   if (loadError) return <div className="p-8" role="alert">Impossible de charger la fiche complète. <button className="text-primary underline" onClick={() => setReload((value) => value + 1)}>Réessayer</button></div>;
-  if (!student) return <div className="p-8 text-muted-foreground">Apprenant introuvable.</div>;
+  if (!student) return <div className="p-8 text-muted-foreground"><p>Apprenant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="inline-flex min-h-10 items-center text-primary underline">Retour</button></div>;
 
   const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
   const paymentSummary = studentPaymentSummary(charges);
@@ -109,7 +111,7 @@ export default function StudentDetail() {
   return (
     <div className="mx-auto max-w-5xl p-4 lg:p-8">
       <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <button aria-label="Retour à la liste des apprenants" onClick={() => router.push('/students')} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+        <button aria-label="Retour" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
           <ArrowLeft size={15} />
         </button>
         <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
@@ -130,7 +132,7 @@ export default function StudentDetail() {
           <Edit size={14} /> Modifier
         </Link>
         <button onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50">
-          <Trash2 size={14} /> Supprimer
+          <Trash2 size={14} /> Archiver
         </button>
       </div>
 
@@ -138,7 +140,7 @@ export default function StudentDetail() {
         {[
           { label: 'Niveau', value: student.niveau_cefr || '—' },
           { label: 'Taux de présence', value: presenceRate !== null ? `${presenceRate}%` : '—' },
-          { label: 'Solde restant', value: `${money(paymentSummary.balance)} MAD` },
+          { label: 'Solde restant actuel', value: paymentSummary.status === 'Aucun engagement' ? 'Aucun engagement' : `${money(paymentSummary.balance)} MAD` },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -166,6 +168,7 @@ export default function StudentDetail() {
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[charge.settlement_status] || PAYMENT_STATUS_COLORS['En attente']}`}>{charge.settlement_status}</span>
                   <span className="font-semibold">{money(charge.balance)} MAD restants</span>
                   {canManage && Number(charge.balance) > 0 && <Link href={`/receipts/new?student_id=${student.id}&charge_id=${charge.id}`} className="text-xs font-semibold text-primary hover:underline">Encaisser</Link>}
+                  {role === 'director' && <Link href={`/finance/charges/${charge.id}/edit`} className="text-xs font-semibold text-rose-700 hover:underline">Corriger l’engagement</Link>}
                 </div>
               </div>
             ))}
@@ -277,7 +280,7 @@ export default function StudentDetail() {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="pb-2">Date</th><th className="pb-2">Total</th><th className="pb-2">Payé</th><th className="pb-2">Restant</th><th className="pb-2">Statut</th><th className="pb-2"></th>
+              <th className="pb-2">Reçu</th><th className="pb-2">Date</th><th className="pb-2">Total</th><th className="pb-2">Payé</th><th className="pb-2">Restant historique</th><th className="pb-2">Statut</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
               {payments.map(p => {
@@ -285,6 +288,7 @@ export default function StudentDetail() {
                 const status = receiptStatus(p);
                 return (
                 <tr key={p.id}>
+                  <td className="py-2"><ContextLink href={`/receipts/${p.id}/print`} className="inline-flex min-h-10 items-center text-primary font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.receipt_number || `#${p.id.slice(-8).toUpperCase()}`}</ContextLink></td>
                   <td className="py-2">{p.date || '—'}</td>
                   <td className="py-2">
                     {money(amounts.net)} MAD
@@ -292,7 +296,6 @@ export default function StudentDetail() {
                   <td className="py-2">{money(amounts.payment)} MAD</td>
                   <td className="py-2">{money(amounts.balance)} MAD</td>
                   <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.voided_at ? 'bg-rose-100 text-rose-700' : PAYMENT_STATUS_COLORS[status] || 'bg-yellow-100 text-yellow-700'}`}>{status}</span></td>
-                  <td className="py-2"><Link href={`/receipts/${p.id}/print`} className="text-xs text-muted-foreground hover:text-primary"><FileText size={13} /></Link></td>
                 </tr>
               );})}
             </tbody>

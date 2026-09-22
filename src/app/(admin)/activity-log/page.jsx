@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entities } from '@/lib/entities';
 import { History, Search } from 'lucide-react';
+import ContextLink from '@/components/ContextLink';
 
 const ACTION_COLORS = {
   INSERT: 'bg-green-100 text-green-700',
@@ -24,6 +25,13 @@ function fmt(iso) {
   return new Date(iso).toLocaleString('fr-MA', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
+}
+
+function targetHref(row) {
+  if (row.action === 'DELETE' || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(row.target_id || '')) return null;
+  const routes = { students: 'students', teachers: 'teachers', groups: 'groups', receipts: 'receipts' };
+  const route = routes[row.target_table];
+  return route ? `/${route}/${row.target_id}${route === 'receipts' ? '/print' : ''}` : null;
 }
 
 export default function ActivityLog() {
@@ -115,7 +123,7 @@ export default function ActivityLog() {
                         ? r.changed_columns.join(', ')
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{r.target_id ? r.target_id.slice(0, 8) : '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{targetHref(r) ? <ContextLink href={targetHref(r)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded" aria-label={`Ouvrir ${r.target_table} ${r.target_id}`}>{r.target_id.slice(0, 8)}</ContextLink> : r.target_id ? r.target_id.slice(0, 8) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

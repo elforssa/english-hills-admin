@@ -10,6 +10,7 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { getLevelsForSession } from '@/lib/academicPrograms';
+import PersonLink from '@/components/PersonLink';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -216,8 +217,9 @@ export default function Assessments() {
                 <div key={a.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-semibold text-sm">{studentName(a.student_id)}</p>
-                      <p className="text-xs text-muted-foreground">{groupName(a.group_id)} · {a.terme}</p>
+                      <p className="font-semibold text-sm"><PersonLink id={a.student_id}>{studentName(a.student_id)}</PersonLink></p>
+                      <button onClick={() => setPrinting(a)} className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Bulletin {a.terme}</button>
+                      <p className="text-xs text-muted-foreground">{groupName(a.group_id)}</p>
                     </div>
                     <span className="text-xs font-bold text-white px-2 py-0.5 rounded flex-shrink-0 bg-primary">{a.niveau_actuel}</span>
                   </div>
@@ -229,7 +231,6 @@ export default function Assessments() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(a)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    <button onClick={() => setPrinting(a)} className="p-1.5 rounded hover:bg-blue-50 text-muted-foreground hover:text-blue-600"><Printer size={15} /></button>
                     <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -253,9 +254,9 @@ export default function Assessments() {
                   )}
                   {filteredAssessments.map(a => (
                     <tr key={a.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{studentName(a.student_id)}</td>
+                      <td className="px-4 py-3 font-medium"><PersonLink id={a.student_id}>{studentName(a.student_id)}</PersonLink></td>
                       <td className="px-4 py-3 text-muted-foreground">{groupName(a.group_id)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{a.terme}</td>
+                      <td className="px-4 py-3"><button onClick={() => setPrinting(a)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Bulletin {a.terme}</button></td>
                       <td className="px-4 py-3">{a.note_oral ?? '—'}</td>
                       <td className="px-4 py-3">{a.note_ecrit ?? '—'}</td>
                       <td className="px-4 py-3">{a.note_devoirs ?? '—'}</td>
@@ -264,7 +265,6 @@ export default function Assessments() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => setModal(a)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          <button onClick={() => setPrinting(a)} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"><Printer size={12} /> Bulletin</button>
                           <button onClick={() => handleDelete(a.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                         </div>
                       </td>

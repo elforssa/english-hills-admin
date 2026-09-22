@@ -16,6 +16,7 @@ import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusCol
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -58,6 +59,7 @@ export default function ParentPortal() {
   const [reEnrolling, setReEnrolling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('overview');
+  const [previewReceipt, setPreviewReceipt] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -394,7 +396,7 @@ export default function ParentPortal() {
             <div>
               <p className="text-xs text-muted-foreground">Solde restant dû</p>
               <p className={`text-xl font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {balanceDue.toLocaleString('fr-MA')} MAD
+                {charges.some(charge => !charge.voided_at) ? `${balanceDue.toLocaleString('fr-MA')} MAD` : 'Aucun engagement enregistré'}
               </p>
             </div>
             <button
@@ -408,7 +410,8 @@ export default function ParentPortal() {
             {receipts.map(r => (
               <div key={r.id} className="flex items-center justify-between px-4 py-3 gap-3">
                 <div>
-                  <p className="text-sm font-medium">{r.date}{r.receipt_number ? ` · ${r.receipt_number}` : ''}</p>
+                  <button type="button" onClick={() => setPreviewReceipt(r)} className="inline-flex min-h-10 items-center text-left text-sm font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{r.receipt_number || `Reçu du ${r.date}`}</button>
+                  <p className="text-xs text-muted-foreground">{r.date}</p>
                   <p className="text-xs text-muted-foreground">{receiptServiceSummary(r)} · {r.service_description || 'Reçu historique'} · {r.mode_paiement}</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -418,7 +421,7 @@ export default function ParentPortal() {
                   </div>
                   <button
                     onClick={() => downloadReceiptPDF(r)}
-                    title="Télécharger le reçu (PDF)"
+                    title="Télécharger le reçu (PDF)" aria-label={`Télécharger le reçu ${r.receipt_number || r.date}`}
                     className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground"
                   >
                     <FileDown size={14} />
@@ -435,9 +438,8 @@ export default function ParentPortal() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {portfolios.filter(p => p.visible_to_parent).map(p => (
             <div key={p.id} className="bg-card border border-border rounded-xl p-4">
-              <p className="font-semibold text-sm">{p.title}</p>
+              {p.file_url ? <button type="button" onClick={() => openStoredFile(p.file_url)} className="block min-h-10 text-left font-semibold text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.title}</button> : <><p className="font-semibold text-sm">{p.title}</p><p className="text-xs text-muted-foreground">Aucun fichier joint</p></>}
               <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-              {p.file_url && <button type="button" onClick={() => openStoredFile(p.file_url)} className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir le fichier →</button>}
               {p.teacher_note && <p className="text-xs text-muted-foreground mt-2 italic">&quot;{p.teacher_note}&quot;</p>}
             </div>
           ))}
@@ -539,6 +541,20 @@ export default function ParentPortal() {
           recipients={recipients}
         />
       )}
+
+      <Dialog open={Boolean(previewReceipt)} onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reçu {previewReceipt?.receipt_number || (previewReceipt?.date ? `du ${previewReceipt.date}` : '')}</DialogTitle></DialogHeader>
+          {previewReceipt && <div className="space-y-2 text-sm">
+            <p>Apprenant : {previewReceipt.nom_prenom}</p>
+            <p>Date : {previewReceipt.date || '—'}</p>
+            <p>Montant payé : {money(receiptAmounts(previewReceipt).payment)} MAD</p>
+            <p>Restant indiqué sur ce reçu : {money(receiptAmounts(previewReceipt).balance)} MAD</p>
+            <p>Statut : {receiptStatus(previewReceipt)}</p>
+            <button type="button" onClick={() => downloadReceiptPDF(previewReceipt)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><FileDown size={15} /> Télécharger le PDF</button>
+          </div>}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

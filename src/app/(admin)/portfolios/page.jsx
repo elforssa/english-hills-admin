@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
-import { Plus, Upload, FileText, Video, Mic, Trash2, Eye, Check } from 'lucide-react';
+import { Plus, Upload, FileText, Video, Mic, Trash2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { openStoredFile as openFile } from '@/lib/storage';
+import PersonLink from '@/components/PersonLink';
 
 // Registry refs use authorized signing; legacy URL/path compatibility ends after backfill.
 async function openStoredFile(stored) {
@@ -241,18 +242,13 @@ export default function Portfolios() {
                     <Icon size={16} style={{ color: 'var(--brand)' }} />
                   </div>
                   <div className="flex gap-1">
-                    {p.file_url && (
-                      <button type="button" onClick={() => openStoredFile(p.file_url)} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary">
-                        <Eye size={14} />
-                      </button>
-                    )}
-                    <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600">
+                    <button onClick={() => handleDelete(p.id)} aria-label={`Supprimer le projet ${p.title}`} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
-                <p className="font-semibold text-sm mb-1 truncate">{p.title}</p>
-                <p className="text-xs text-muted-foreground mb-2">{studentName(p.student_id)}</p>
+                {p.file_url ? <button type="button" onClick={() => openStoredFile(p.file_url)} className="block text-left font-semibold text-sm text-primary mb-1 min-h-10 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.title}</button> : <><p className="font-semibold text-sm mb-1">{p.title}</p><p className="text-xs text-muted-foreground">Aucun fichier joint</p></>}
+                <p className="text-xs text-muted-foreground mb-2"><PersonLink id={p.student_id}>{studentName(p.student_id)}</PersonLink></p>
                 <div className="flex flex-wrap gap-1.5">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{p.niveau}</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{p.terme}</span>

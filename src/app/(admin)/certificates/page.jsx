@@ -6,6 +6,7 @@ import { Plus, Award, Printer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import PersonLink from '@/components/PersonLink';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -202,12 +203,12 @@ export default function Certificates() {
             {certs.map(c => (
               <div key={c.id} className="p-4 flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-sm">{c.student_name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Niveau {c.niveau_complete} · {c.terme} {c.annee}</p>
+                  <p className="font-semibold text-sm"><PersonLink id={c.student_id}>{c.student_name}</PersonLink></p>
+                  <button onClick={() => setPrinting(c)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Certificat {c.terme} {c.annee}</button>
+                  <p className="text-xs text-muted-foreground mt-0.5">Niveau {c.niveau_complete}</p>
                   <p className="text-xs text-muted-foreground">Émis le {c.date_emission}</p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => setPrinting(c)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Printer size={15} /></button>
                   <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
                 </div>
               </div>
@@ -225,14 +226,13 @@ export default function Certificates() {
               <tbody className="divide-y divide-border">
                 {certs.map(c => (
                   <tr key={c.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{c.student_name}</td>
+                    <td className="px-4 py-3 font-medium"><PersonLink id={c.student_id}>{c.student_name}</PersonLink></td>
                     <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{c.niveau_complete}</span></td>
-                    <td className="px-4 py-3 text-muted-foreground">{c.terme}</td>
+                    <td className="px-4 py-3"><button onClick={() => setPrinting(c)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Certificat {c.terme}</button></td>
                     <td className="px-4 py-3 text-muted-foreground">{c.annee}</td>
                     <td className="px-4 py-3 text-muted-foreground">{c.date_emission}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => setPrinting(c)} className="flex items-center gap-1 text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}><Printer size={13} /> Imprimer</button>
                         <button onClick={() => handleDelete(c.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                       </div>
                     </td>

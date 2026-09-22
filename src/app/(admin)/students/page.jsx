@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Download, Upload, UserSearch, Crown } from 'lucide-react';
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { listHref, recordHref } from '@/lib/navigation.mjs';
 
 const PAGE_SIZE = 20;
 
@@ -82,6 +83,31 @@ export default function Students() {
   const [filterPlan, setFilterPlan] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
   const [page, setPage] = useState(1);
+  const [urlReady, setUrlReady] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSearch(params.get('q') || '');
+    setFilterStatus(params.get('status') || '');
+    setFilterGroup(params.get('group') || '');
+    setFilterCat(params.get('category') || '');
+    setFilterLevel(params.get('level') || '');
+    setFilterSession(params.get('session') || '');
+    setFilterIncomplete(params.get('incomplete') === '1');
+    setFilterSource(params.get('source') || '');
+    setFilterPlan(params.get('plan') || '');
+    const payment = params.get('payment') || '';
+    setFilterPayment(['', 'due', 'unpaid', 'partial', 'overdue', 'paid', 'none'].includes(payment) ? payment : '');
+    setPage(Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1));
+    setUrlReady(true);
+  }, []);
+
+  const listUrl = listHref('/students', { q: search, status: filterStatus, group: filterGroup,
+    category: filterCat, level: filterLevel, session: filterSession,
+    incomplete: filterIncomplete ? '1' : '', source: filterSource,
+    plan: filterPlan, payment: filterPayment, page });
+  useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
+  const studentHref = (id) => recordHref(`/students/${id}`, listUrl);
 
   const filters = {
     p_search: search, p_status: filterStatus, p_age_category: filterCat,
@@ -89,8 +115,9 @@ export default function Students() {
     p_source: filterSource, p_plan: filterPlan, p_group: filterGroup,
     p_payment: filterPayment,
   };
-  const { data: result, isLoading: loading, isError, refetch } = useQuery({
+  const { data: result, isLoading: queryLoading, isError, refetch } = useQuery({
     queryKey: ['Student', 'page', filters, page],
+    enabled: urlReady,
     queryFn: async () => {
       const { data, error } = await getBrowserClient().rpc('search_students_page', {
         ...filters, p_page: page, p_page_size: PAGE_SIZE,
@@ -99,6 +126,7 @@ export default function Students() {
       return data;
     },
   });
+  const loading = !urlReady || queryLoading;
   const paged = result?.rows || [];
   const matchedCount = Number(result?.count || 0);
 
@@ -237,7 +265,7 @@ export default function Students() {
               {paged.map(s => (
                 <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link href={`/students/${s.id}`}>{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link href={studentHref(s.id)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
@@ -265,7 +293,7 @@ export default function Students() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5"><Link href={`/students/${s.id}`} className="hover:text-primary hover:underline focus-visible:underline">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
+                        <span className="inline-flex items-center gap-1.5"><Link href={studentHref(s.id)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect

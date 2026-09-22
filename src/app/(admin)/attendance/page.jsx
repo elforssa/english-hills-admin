@@ -7,6 +7,7 @@ import { CheckCircle, XCircle, Clock, AlertCircle, Download } from 'lucide-react
 import { exportToCsv } from '@/utils/exportCsv';
 import { getBrowserClient } from '@/lib/supabase';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
+import PersonLink from '@/components/PersonLink';
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -193,7 +194,7 @@ export default function Attendance() {
               return (
                 <div key={student.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">{student.full_name}</p>
+                    <p className="text-sm font-medium"><PersonLink id={student.id}>{student.full_name}</PersonLink></p>
                     <p className="text-xs text-muted-foreground">{student.niveau_cefr}</p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">

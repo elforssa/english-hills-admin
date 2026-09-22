@@ -9,6 +9,7 @@ import { isPreEnrollment, isPendingPreEnrollment } from '@/lib/enrollmentWorkflo
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import { ENROLLMENT_STATUS_COLORS } from '@/lib/statusColors';
+import PersonLink from '@/components/PersonLink';
 
 const PAGE_SIZE = 20;
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status;
@@ -122,10 +123,11 @@ export default function Enrollments() {
                   <div key={e.id} className="p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div>
-                        <p className="font-semibold text-sm">{studentName(e.student_id)}</p>
+                        <p className="font-semibold text-sm"><PersonLink id={e.student_id}>{studentName(e.student_id)}</PersonLink></p>
                         {st?.telephone && <p className="text-xs text-muted-foreground">{st.telephone}</p>}
                         {st?.age_category && <p className="text-xs text-muted-foreground">{st.age_category}</p>}
-                        <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)} · {e.date_inscription}</p>
+                        <button onClick={() => setModal(e)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Pré-inscription du {e.date_inscription || '—'}</button>
+                        <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)}</p>
                         {(e.session_type || e.school_year) && <p className="text-xs text-muted-foreground">{e.session_type || 'Session non renseignée'} · {e.school_year || 'Année non renseignée'} · {e.level || 'Niveau à définir'}</p>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span>
@@ -156,14 +158,14 @@ export default function Enrollments() {
                     const st = getStudent(e.student_id);
                     return (
                       <tr key={e.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3 font-medium">{studentName(e.student_id)}</td>
+                        <td className="px-4 py-3 font-medium"><PersonLink id={e.student_id}>{studentName(e.student_id)}</PersonLink></td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">
                           <div>{st?.telephone || '—'}</div>
                           {st?.age_category && <div className="text-muted-foreground/70">{st.age_category}</div>}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">{e.session_type || '—'} · {e.school_year || '—'} · {e.level || 'Niveau à définir'}</td>
                         <td className="px-4 py-3 text-muted-foreground">{groupName(e.group_id)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{e.date_inscription}</td>
+                        <td className="px-4 py-3"><button onClick={() => setModal(e)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{e.date_inscription || '—'}</button></td>
                         <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span></td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">

@@ -15,6 +15,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // asset: references use the authenticated signer; legacy refs remain compatible until backfill.
 async function openStoredFile(stored) {
@@ -63,6 +64,7 @@ export default function StudentPortal() {
   const [office, setOffice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('progress');
+  const [previewReceipt, setPreviewReceipt] = useState(null);
   // Portfolio upload form state
   const [pfTitle, setPfTitle] = useState('');
   const [pfType, setPfType] = useState('Other');
@@ -307,8 +309,8 @@ export default function StudentPortal() {
 
       {tab === 'finance' && (
         <div className="space-y-4">
-          <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{money(charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0))} MAD</p></div>
-          <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><p className="text-sm font-bold">{receipt.receipt_number} · {receipt.date}</p><p className="text-xs text-muted-foreground">{receiptServiceSummary(receipt)} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu"><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
+          <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{charges.some(charge => !charge.voided_at) ? `${money(charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0))} MAD` : 'Aucun engagement enregistré'}</p></div>
+          <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><button type="button" onClick={() => setPreviewReceipt(receipt)} className="inline-flex min-h-10 items-center text-left text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{receipt.receipt_number || `Reçu du ${receipt.date}`}</button><p className="text-xs text-muted-foreground">{receipt.date} · {receiptServiceSummary(receipt)} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu" aria-label={`Télécharger le reçu ${receipt.receipt_number || receipt.date}`}><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
         </div>
       )}
 
@@ -336,9 +338,8 @@ export default function StudentPortal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {portfolios.map(p => (
               <div key={p.id} className="bg-card border border-border rounded-xl p-4">
-                <p className="font-semibold text-sm">{p.title}</p>
+                {p.file_url ? <button type="button" onClick={() => openStoredFile(p.file_url)} className="block min-h-10 text-left font-semibold text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.title}</button> : <><p className="font-semibold text-sm">{p.title}</p><p className="text-xs text-muted-foreground">Aucun fichier joint</p></>}
                 <p className="text-xs text-muted-foreground">{p.project_type} · {p.terme} {p.annee}</p>
-                {p.file_url && <button type="button" onClick={() => openStoredFile(p.file_url)} className="text-xs font-medium mt-2 inline-block" style={{ color: 'var(--brand)' }}>Voir →</button>}
                 {p.teacher_note && <p className="text-xs text-muted-foreground mt-2 italic">&quot;{p.teacher_note}&quot;</p>}
               </div>
             ))}
@@ -405,6 +406,19 @@ export default function StudentPortal() {
           recipients={recipients}
         />
       )}
+      <Dialog open={Boolean(previewReceipt)} onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reçu {previewReceipt?.receipt_number || (previewReceipt?.date ? `du ${previewReceipt.date}` : '')}</DialogTitle></DialogHeader>
+          {previewReceipt && <div className="space-y-2 text-sm">
+            <p>Apprenant : {previewReceipt.nom_prenom}</p>
+            <p>Date : {previewReceipt.date || '—'}</p>
+            <p>Montant payé : {money(receiptAmounts(previewReceipt).payment)} MAD</p>
+            <p>Restant indiqué sur ce reçu : {money(receiptAmounts(previewReceipt).balance)} MAD</p>
+            <p>Statut : {receiptStatus(previewReceipt)}</p>
+            <button type="button" onClick={() => downloadReceiptPDF(previewReceipt)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><FileDown size={15} /> Télécharger le PDF</button>
+          </div>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

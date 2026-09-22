@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { entities, auth } from '@/lib/entities';
 import { Search, Phone, Mail, Users, ArrowRight, BookOpen } from 'lucide-react';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { recordHref } from '@/lib/navigation.mjs';
 
 const STATUS_CONFIG = {
   Enrolled: { bg: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', dot: 'bg-emerald-500' },
@@ -32,6 +33,25 @@ export default function StudentsDirectory() {
   const [filterSession, setFilterSession] = useState('');
   const [filterLevel, setFilterLevel] = useState('');
   const [view, setView] = useState('grid');
+  const [urlReady, setUrlReady] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setSearch(params.get('q') || '');
+    setFilterStatus(params.get('status') || '');
+    setFilterCat(params.get('category') || '');
+    setFilterSession(params.get('session') || '');
+    setFilterLevel(params.get('level') || '');
+    setView(params.get('view') === 'list' ? 'list' : 'grid');
+    setUrlReady(true);
+  }, []);
+
+  const listParams = new URLSearchParams();
+  Object.entries({ q: search, status: filterStatus, category: filterCat,
+    session: filterSession, level: filterLevel, view: view === 'list' ? 'list' : '' })
+    .forEach(([key, value]) => { if (value) listParams.set(key, value); });
+  const listUrl = `/students-directory${listParams.size ? `?${listParams}` : ''}`;
+  useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
 
   useEffect(() => {
     let active = true;
@@ -136,7 +156,7 @@ export default function StudentsDirectory() {
             const lvlColor = LEVEL_COLORS[s.niveau_cefr] || 'var(--brand)';
             const grp = groupName(s.groupe_id);
             return (
-              <Link key={s.id} href={`/students/${s.id}`} className="group bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 block">
+              <Link key={s.id} href={recordHref(`/students/${s.id}`, listUrl)} className="group bg-card border border-border rounded-2xl p-5 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 block focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-base flex-shrink-0" style={{ backgroundColor: lvlColor }}>
                     {s.full_name?.[0]?.toUpperCase() || '?'}
@@ -202,7 +222,7 @@ export default function StudentsDirectory() {
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: lvlColor }}>
                           {s.full_name?.[0]?.toUpperCase() || '?'}
                         </div>
-                        <Link href={`/students/${s.id}`} className="font-medium hover:text-primary hover:underline focus-visible:underline">{s.full_name}</Link>
+                        <Link href={recordHref(`/students/${s.id}`, listUrl)} className="inline-flex min-h-10 items-center font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>
                       </div>
                     </td>
                     <td className="px-4 py-3">
