@@ -11,6 +11,7 @@ import { receiptSchoolYear } from '@/lib/receiptPresentation';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, Edit, Mail, Printer } from 'lucide-react';
+import { safeReturnTo } from '@/lib/navigation.mjs';
 
 export default function ReceiptPrint() {
   const { id } = useParams();
@@ -49,8 +50,9 @@ export default function ReceiptPrint() {
 
   return <div className="min-h-screen bg-slate-100 p-4 print:bg-white print:p-0 lg:p-8">
     <div className="mx-auto mb-5 flex max-w-[148mm] flex-wrap items-center justify-between gap-3 print:hidden">
-      <button onClick={() => router.push('/receipts')} className="inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={15} /> Tous les reçus</button>
+      <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/receipts'))} className="inline-flex min-h-10 items-center gap-2 rounded text-sm text-muted-foreground hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><ArrowLeft size={15} /> Retour</button>
       <div className="flex flex-wrap gap-2">
+        {['admin', 'director'].includes(role) && receipt.student_id && <Link href={`/students/${receipt.student_id}`} className="inline-flex min-h-10 items-center rounded px-2 text-sm font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{receipt.nom_prenom}</Link>}
         {role === 'director' && !receipt.voided_at && <Link href={`/receipts/${id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger le paiement</Link>}
         {role === 'director' && receipt.charge_id && <Link href={`/finance/charges/${receipt.charge_id}/edit`} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold"><Edit size={15} /> Corriger l’engagement</Link>}
         {['admin','director'].includes(role) && emailRetryable && !receipt.voided_at && <button onClick={retryEmail} disabled={retryingEmail} className="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm font-semibold disabled:opacity-60"><Mail size={15} /> {retryingEmail ? 'Nouvel envoi…' : 'Réessayer l’email'}</button>}

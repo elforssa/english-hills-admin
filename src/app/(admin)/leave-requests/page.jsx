@@ -6,6 +6,7 @@ import { Plus, CheckCircle, XCircle, Trash2, Calendar, AlertTriangle } from 'luc
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import PersonLink from '@/components/PersonLink';
 
 const STATUS_COLORS = {
   'En attente': 'bg-yellow-100 text-yellow-700',
@@ -155,7 +156,7 @@ export default function LeaveRequests() {
           <div>
             <p className="text-sm font-semibold text-amber-800">{alerts.length} enseignant(s) en congé sans remplaçant assigné</p>
             <div className="mt-1 space-y-0.5">
-              {alerts.map(l => <p key={l.id} className="text-xs text-amber-700">{l.teacher_name} · {l.date_debut} → {l.date_fin}</p>)}
+              {alerts.map(l => <p key={l.id} className="text-xs text-amber-700"><PersonLink kind="teacher" id={l.teacher_id}>{l.teacher_name}</PersonLink> · {l.date_debut} → {l.date_fin}</p>)}
             </div>
           </div>
         </div>
@@ -167,7 +168,7 @@ export default function LeaveRequests() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {teacherBalances.map(t => (
               <div key={t.id} className="bg-muted rounded-lg p-3">
-                <p className="text-xs font-semibold truncate">{t.full_name}</p>
+                <p className="text-xs font-semibold truncate"><PersonLink kind="teacher" id={t.id}>{t.full_name}</PersonLink></p>
                 <div className="flex items-center gap-2 mt-1.5">
                   <div className="flex-1 bg-white rounded-full h-1.5">
                     <div className="h-1.5 rounded-full" style={{ width: `${Math.min(100, (t.used / ANNUAL_DAYS) * 100)}%`, backgroundColor: t.remaining < 5 ? '#B91C2E' : 'var(--brand)' }} />
@@ -188,17 +189,17 @@ export default function LeaveRequests() {
               {leaves.map(l => (
                 <div key={l.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm">{l.teacher_name}</p>
+                    <p className="font-semibold text-sm"><PersonLink kind="teacher" id={l.teacher_id}>{l.teacher_name}</PersonLink></p>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[l.status] || ''}`}>{l.status}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{l.type_conge} · {l.date_debut} → {l.date_fin} ({diffDays(l.date_debut, l.date_fin)} j)</p>
+                  <button onClick={() => setModal(l)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut} au {l.date_fin}</button>
+                  <p className="text-xs text-muted-foreground">{l.type_conge} · {diffDays(l.date_debut, l.date_fin)} j</p>
                   {l.remplacant && <p className="text-xs text-muted-foreground mt-0.5">Remplaçant: {l.remplacant}</p>}
                   <div className="flex gap-2 mt-3">
                     {l.status === 'En attente' && <>
                       <button onClick={() => handleApprove(l)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>
                       <button onClick={() => handleRefuse(l)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>
                     </>}
-                    <button onClick={() => setModal(l)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Plus size={15} className="rotate-45" /></button>
                     <button onClick={() => handleDelete(l.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -214,9 +215,9 @@ export default function LeaveRequests() {
                 <tbody className="divide-y divide-border">
                   {leaves.map(l => (
                     <tr key={l.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{l.teacher_name}</td>
+                      <td className="px-4 py-3 font-medium"><PersonLink kind="teacher" id={l.teacher_id}>{l.teacher_name}</PersonLink></td>
                       <td className="px-4 py-3 text-muted-foreground">{l.type_conge}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{l.date_debut}</td>
+                      <td className="px-4 py-3"><button onClick={() => setModal(l)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut}</button></td>
                       <td className="px-4 py-3 text-muted-foreground">{l.date_fin}</td>
                       <td className="px-4 py-3 text-muted-foreground">{diffDays(l.date_debut, l.date_fin)} j</td>
                       <td className="px-4 py-3 text-muted-foreground">{l.remplacant || '—'}</td>
@@ -227,7 +228,6 @@ export default function LeaveRequests() {
                             <button onClick={() => handleApprove(l)} className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>
                             <button onClick={() => handleRefuse(l)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>
                           </>}
-                          <button onClick={() => setModal(l)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Plus size={14} className="rotate-45" /></button>
                           <button onClick={() => handleDelete(l.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                         </div>
                       </td>

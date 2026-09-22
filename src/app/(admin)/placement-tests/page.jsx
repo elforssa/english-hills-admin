@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
+import PersonLink from '@/components/PersonLink';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -201,10 +202,11 @@ export default function PlacementTests() {
               {tests.map(t => (
                 <div key={t.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm">{t.student_name}</p>
+                    <p className="font-semibold text-sm"><PersonLink id={t.student_id}>{t.student_name}</PersonLink></p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[t.status] || 'bg-gray-100 text-gray-500'}`}>{t.status}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t.date_test} {t.heure ? `à ${t.heure}` : ''} {t.examinateur ? `· ${t.examinateur}` : ''}</p>
+                  <button onClick={() => setModal(t)} className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Test du {t.date_test || '—'}</button>
+                  <p className="text-xs text-muted-foreground">{t.heure ? `à ${t.heure}` : ''} {t.examinateur ? `· ${t.examinateur}` : ''}</p>
                   <div className="flex items-center gap-3 mt-2">
                     {t.score != null && <span className="text-xs font-semibold">Score: {t.score}</span>}
                     {t.niveau_recommande && <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{t.niveau_recommande}</span>}
@@ -228,8 +230,8 @@ export default function PlacementTests() {
                 <tbody className="divide-y divide-border">
                   {tests.map(t => (
                     <tr key={t.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{t.student_name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{t.date_test}</td>
+                      <td className="px-4 py-3 font-medium"><PersonLink id={t.student_id}>{t.student_name}</PersonLink></td>
+                      <td className="px-4 py-3"><button onClick={() => setModal(t)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Test du {t.date_test || '—'}</button></td>
                       <td className="px-4 py-3 text-muted-foreground">{t.heure || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{t.examinateur || '—'}</td>
                       <td className="px-4 py-3 font-semibold">{t.score ?? '—'}</td>

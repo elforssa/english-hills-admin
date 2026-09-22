@@ -146,7 +146,7 @@ export default function GroupDetail() {
           {meta.map(([label, val]) => (
             <div key={label}>
               <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="font-medium">{val || '—'}</p>
+              <p className="font-medium">{label === 'Enseignant' && teacher && canManage ? <Link href={`/teachers/${teacher.id}`} className="inline-flex min-h-10 items-center rounded text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{teacher.full_name}</Link> : val || '—'}</p>
             </div>
           ))}
         </div>
@@ -180,7 +180,7 @@ export default function GroupDetail() {
                 {students.map(s => (
                   <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                     <td className="px-4 py-3 font-medium text-foreground">
-                      <Link href={`/students/${s.id}`} className="hover:underline">{s.full_name}</Link>
+                      {canManage ? <Link href={`/students/${s.id}`} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link> : s.full_name}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
                     <td className="px-4 py-3">

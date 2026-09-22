@@ -6,6 +6,7 @@ import { Plus, Brain, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import PersonLink from '@/components/PersonLink';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -129,6 +130,7 @@ export default function LearningAssessments() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const load = () => Promise.all([
     entities.LearningAssessment.listAll('-created_date'),
@@ -165,10 +167,10 @@ export default function LearningAssessments() {
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand-tint)' }}>
                   <Brain size={16} style={{ color: 'var(--brand)' }} />
                 </div>
-                <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                <button onClick={() => handleDelete(a.id)} aria-label={`Supprimer l’évaluation de ${a.student_name}`} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600"><Trash2 size={14} /></button>
               </div>
-              <p className="font-semibold text-sm">{a.student_name}</p>
-              <p className="text-xs text-muted-foreground mb-3">{a.date_assessment}</p>
+              <p className="font-semibold text-sm"><PersonLink id={a.student_id}>{a.student_name}</PersonLink></p>
+              <button type="button" onClick={() => setDetail(a)} className="mb-3 inline-flex min-h-10 items-center text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Évaluation du {a.date_assessment || '—'}</button>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {a.kolb_style && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${KOLB_COLORS[a.kolb_style]}`}>{a.kolb_style}</span>}
                 {a.dominant_intelligence && <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{a.dominant_intelligence}</span>}
@@ -188,6 +190,16 @@ export default function LearningAssessments() {
         </div>
       )}
       {modal && <AssessmentModal students={students} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
+      <Dialog open={Boolean(detail)} onOpenChange={(open) => { if (!open) setDetail(null); }}>
+        <DialogContent><DialogHeader><DialogTitle>Évaluation du {detail?.date_assessment || '—'}</DialogTitle></DialogHeader>
+          {detail && <div className="space-y-2 text-sm">
+            <p>Apprenant : {detail.student_name}</p>
+            <p>Style Kolb : {detail.kolb_style || '—'}</p>
+            <p>Intelligence dominante : {detail.dominant_intelligence || '—'}</p>
+            <p>Notes de l’enseignant : {detail.teacher_notes || '—'}</p>
+          </div>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Plus, CheckCircle, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { getBrowserClient } from '@/lib/supabase';
+import PersonLink from '@/components/PersonLink';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -199,7 +200,7 @@ export default function Dismissal() {
                   return (
                     <div key={l.id} className="p-4">
                       <div className="flex items-start justify-between mb-1">
-                        <p className="font-semibold text-sm">{l.student_name}</p>
+                        <p className="font-semibold text-sm"><PersonLink id={l.student_id}>{l.student_name}</PersonLink></p>
                         <span className="text-xs text-muted-foreground">{l.timestamp ? schoolTime(l.timestamp) : '—'}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{l.adult_name} · {adult?.relation || '—'}</p>
@@ -220,7 +221,7 @@ export default function Dismissal() {
                       const adult = adults.find(a => a.id === l.adult_id);
                       return (
                         <tr key={l.id} className="hover:bg-muted/30">
-                          <td className="px-4 py-3 font-medium">{l.student_name}</td>
+                          <td className="px-4 py-3 font-medium"><PersonLink id={l.student_id}>{l.student_name}</PersonLink></td>
                           <td className="px-4 py-3">{l.adult_name}</td>
                           <td className="px-4 py-3 text-muted-foreground">{adult?.relation || '—'}</td>
                           <td className="px-4 py-3 text-muted-foreground">{l.staff_name}</td>

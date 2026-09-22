@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import PersonLink from '@/components/PersonLink';
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
 import { entities, auth } from '@/lib/entities';
@@ -98,9 +100,9 @@ export default function Timetable() {
                   ) : (
                     groupsByDay[day].map((g, i) => (
                       <div key={g.id} className={`p-2 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
-                        <p className="font-semibold">{g.name}</p>
+                        <Link href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</Link>
                         <p className="opacity-75">{g.horaire}</p>
-                        <p className="opacity-60">{teacherName(g.teacher_id)}</p>
+                        <PersonLink kind="teacher" id={g.teacher_id} className="opacity-75">{teacherName(g.teacher_id)}</PersonLink>
                         {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
                       </div>
                     ))
@@ -119,9 +121,9 @@ export default function Timetable() {
                 <div className="p-3 space-y-2">
                   {groupsByDay[day].map((g, i) => (
                     <div key={g.id} className={`p-2.5 rounded border text-xs ${COLORS[i % COLORS.length]}`}>
-                      <p className="font-semibold">{g.name}</p>
+                      <Link href={`/groups/${g.id}`} className="inline-flex min-h-9 items-center font-semibold underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{g.name}</Link>
                       {g.horaire && <p className="opacity-75 mt-0.5">{g.horaire}</p>}
-                      {g.teacher_id && <p className="opacity-60">{teacherName(g.teacher_id)}</p>}
+                      {g.teacher_id && <PersonLink kind="teacher" id={g.teacher_id} className="opacity-75">{teacherName(g.teacher_id)}</PersonLink>}
                       {g.salle && <p className="opacity-60">Salle {g.salle}</p>}
                     </div>
                   ))}

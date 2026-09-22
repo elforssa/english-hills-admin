@@ -3,33 +3,26 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { entities } from '@/lib/entities';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getBrowserClient } from '@/lib/supabase';
 import StorageImage from '@/components/StorageImage';
+import { recordHref } from '@/lib/navigation.mjs';
 
 export default function Teachers() {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [urlReady, setUrlReady] = useState(false);
+
+  useEffect(() => {
+    setSearch(new URLSearchParams(window.location.search).get('q') || '');
+    setUrlReady(true);
+  }, []);
+  const listUrl = `/teachers${search ? `?q=${encodeURIComponent(search)}` : ''}`;
+  useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
 
   const load = () => entities.Teacher.listAll('-created_date').then(d => { setTeachers(d); setLoading(false); });
   useEffect(() => { load(); }, []);
-
-  const handleDelete = async (id) => {
-    // Soft delete (deleted_at) via RPC so HR history is retained, not a hard
-    // DELETE. The RPC is role-gated (admin/director) server-side.
-    if (!confirm('Archiver cet enseignant ? Sa fiche sera masquée mais conservée.')) return;
-    const sb = getBrowserClient();
-    const { error } = await sb.rpc('soft_delete_teacher', { p_teacher_id: id });
-    if (error) {
-      toast.error(error.message || "Échec de la suppression de l'enseignant.");
-      return;
-    }
-    toast.success('Enseignant archivé');
-    load();
-  };
 
   const filtered = teachers.filter(t => !search || t.full_name?.toLowerCase().includes(search.toLowerCase()));
 
@@ -65,13 +58,9 @@ export default function Teachers() {
                       : <span className="text-sm font-bold text-muted-foreground">{t.full_name?.[0] || '?'}</span>}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-foreground truncate">{t.full_name}</p>
+                    <Link href={recordHref(`/teachers/${t.id}`, listUrl)} className="block font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded truncate py-1">{t.full_name}</Link>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/teachers/${t.id}/edit`} className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></Link>
-                  <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{t.email || '—'}</p>
