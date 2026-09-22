@@ -13,6 +13,7 @@ import { ArrowLeft, Edit, FileText, Plus, Trash2, Crown, CalendarDays, Clock3 } 
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { studentPaymentSummary } from '@/lib/studentPayment';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
@@ -92,7 +93,7 @@ export default function StudentDetail() {
   if (!student) return <div className="p-8 text-muted-foreground">Apprenant introuvable.</div>;
 
   const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
-  const totalRestant = charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0);
+  const paymentSummary = studentPaymentSummary(charges);
   const present = attendance.filter(a => a.status === 'Présent').length;
   const presenceRate = attendance.length ? Math.round((present / attendance.length) * 100) : null;
 
@@ -137,7 +138,7 @@ export default function StudentDetail() {
         {[
           { label: 'Niveau', value: student.niveau_cefr || '—' },
           { label: 'Taux de présence', value: presenceRate !== null ? `${presenceRate}%` : '—' },
-          { label: 'Solde restant', value: `${money(totalRestant)} MAD` },
+          { label: 'Solde restant', value: `${money(paymentSummary.balance)} MAD` },
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -145,6 +146,32 @@ export default function StudentDetail() {
           </div>
         ))}
       </div>
+
+      <Section title="Situation des paiements">
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PAYMENT_STATUS_COLORS[paymentSummary.status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{paymentSummary.status}</span>
+          {paymentSummary.balance > 0 && <span className="font-semibold">{money(paymentSummary.balance)} MAD restants</span>}
+        </div>
+        {charges.filter((charge) => !charge.voided_at).length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucun engagement actif enregistré.</p>
+        ) : (
+          <div className="space-y-2">
+            {charges.filter((charge) => !charge.voided_at).map((charge) => (
+              <div key={charge.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm">
+                <div>
+                  <p className="font-semibold">{charge.session_type || 'Session'}{charge.school_year ? ` · ${charge.school_year}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">{charge.service_description || 'Engagement'}{charge.due_date ? ` · échéance ${charge.due_date}` : ''}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[charge.settlement_status] || PAYMENT_STATUS_COLORS['En attente']}`}>{charge.settlement_status}</span>
+                  <span className="font-semibold">{money(charge.balance)} MAD restants</span>
+                  {canManage && Number(charge.balance) > 0 && <Link href={`/receipts/new?student_id=${student.id}&charge_id=${charge.id}`} className="text-xs font-semibold text-primary hover:underline">Encaisser</Link>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
 
       <Section title="Informations personnelles">
         <div className="grid grid-cols-2 gap-4 text-sm">

@@ -12,7 +12,8 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
+import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
+import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const PAGE_SIZE = 20;
@@ -79,12 +80,14 @@ export default function Students() {
   const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [filterSource, setFilterSource] = useState('');
   const [filterPlan, setFilterPlan] = useState('');
+  const [filterPayment, setFilterPayment] = useState('');
   const [page, setPage] = useState(1);
 
   const filters = {
     p_search: search, p_status: filterStatus, p_age_category: filterCat,
     p_session: filterSession, p_level: filterLevel, p_incomplete: filterIncomplete,
     p_source: filterSource, p_plan: filterPlan, p_group: filterGroup,
+    p_payment: filterPayment,
   };
   const { data: result, isLoading: loading, isError, refetch } = useQuery({
     queryKey: ['Student', 'page', filters, page],
@@ -116,6 +119,8 @@ export default function Students() {
         Session: s.session_type || '',
         Niveau: s.niveau_cefr || '',
         Statut: s.status || '',
+        'Statut paiement': s.payment_status || 'Aucun engagement',
+        'Solde restant (MAD)': Number(s.payment_balance || 0),
         Formule: s.plan_type || 'Standard',
         Source: s.referral_source || '',
         'Date naissance': s.date_naissance || '',
@@ -162,6 +167,15 @@ export default function Students() {
           <option value="all_shown">Tous les statuts</option>
           {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select aria-label="Filtrer par paiement" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
+          <option value="">Paiements : tous</option>
+          <option value="due">Reste à payer (tous)</option>
+          <option value="unpaid">En attente</option>
+          <option value="partial">Acompte versé</option>
+          <option value="overdue">En retard</option>
+          <option value="paid">Soldé</option>
+          <option value="none">Aucun engagement</option>
+        </select>
         <select aria-label="Filtrer par catégorie" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
           <option value="">Toutes catégories</option>
           {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
@@ -203,7 +217,7 @@ export default function Students() {
             }} />)}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <SkeletonTable rows={10} cols={6} />
+          <SkeletonTable rows={10} cols={8} />
         ) : isError ? (
           <div className="p-10 text-center" role="alert"><p className="text-sm font-medium">Impossible de charger les apprenants.</p><button className="mt-3 rounded-md bg-primary px-4 py-2 text-sm text-white" onClick={() => refetch()}>Réessayer</button></div>
         ) : matchedCount === 0 ? (
@@ -227,6 +241,7 @@ export default function Students() {
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
+                    <p className="mt-1 text-xs"><span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD restants</span>}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                 </div>
@@ -243,14 +258,14 @@ export default function Students() {
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Niveau</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Téléphone</th>
                     <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Statut</th>
-                    <th className="px-4 py-3"></th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Paiement</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5">{s.full_name}{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
+                        <span className="inline-flex items-center gap-1.5"><Link href={`/students/${s.id}`} className="hover:text-primary hover:underline focus-visible:underline">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         <InlineSelect
@@ -285,9 +300,7 @@ export default function Students() {
                       <td className="px-4 py-3">
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                       </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/students/${s.id}`} className="text-xs font-medium text-primary hover:underline">Voir</Link>
-                      </td>
+                      <td className="px-4 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="block mt-1 text-xs font-semibold text-foreground">{money(s.payment_balance)} MAD restants</span>}</td>
                     </tr>
                   ))}
                 </tbody>
