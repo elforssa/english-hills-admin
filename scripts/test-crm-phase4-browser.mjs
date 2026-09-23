@@ -73,7 +73,8 @@ try {
  await more('Clôturer comme non qualifié');await dialog().getByLabel('Motif',{exact:true}).selectOption('age_not_suitable');await save();await done();assert.equal(detail(lead).status,'NOT_QUALIFIED');
  console.log('PASS task stale version, qualification without placement booking, Lost eligibility/required explanation, reopen and Not Qualified');
  // New -> conversation -> qualified via the supported compound command.
- const compound=intake('Qualification synthétique');await open(compound);await more('Qualifier / avancer');await dialog().getByLabel('Note',{exact:true}).fill('Projet confirmé au téléphone');await fillTask();await save();await done();assert.equal(detail(compound).status,'QUALIFIED');
+ const compound=intake('Qualification synthétique');await open(compound);await more('Qualifier / avancer');await dialog().getByLabel('Note',{exact:true}).fill('Projet confirmé au téléphone');await dialog().getByLabel('Le parent souhaite…',{exact:true}).selectOption('center_visit');await fillTask();await save();await done();assert.equal(detail(compound).status,'QUALIFIED');
+ // Use a center visit for generic completion: Phase 5 confirms placement tasks by booking.
  // Non-call completion and cancellation preserve an explicit next action.
  await page.getByRole('button',{name:'Marquer comme fait',exact:true}).click();await dialog().getByLabel('Résultat de l’action',{exact:true}).fill('Préparation terminée');await fillTask();await save();await done();assert.ok(detail(compound).open_tasks.every(t=>t.task_type==='callback'));
  await page.getByRole('button',{name:'Annuler l’action',exact:true}).click();await dialog().getByLabel('Motif',{exact:true}).fill('Autre créneau demandé');await fillTask();await save();await done();assert.ok(detail(compound).next_task);

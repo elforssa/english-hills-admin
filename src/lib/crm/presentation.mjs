@@ -13,7 +13,7 @@ export const TASKS = {
   callback: 'Rappel',
   whatsapp_followup: 'Suivi WhatsApp',
   confirm_placement_test: 'Préparer un test de niveau',
-  post_test_followup: 'Suivi après test',
+  post_test_followup: 'Rappeler le parent · Résultat disponible',
   center_visit: 'Visite au centre',
   enrollment_followup: 'Suivi de pré-inscription'
 };
@@ -44,6 +44,10 @@ export const NOT_QUALIFIED = {
   other: 'Autre'
 };
 export const EVENTS = {
+  placement_test_booked: 'Test de niveau réservé',
+  placement_test_rescheduled: 'Test de niveau reprogrammé',
+  placement_test_attended: 'Test passé',
+  placement_result_entered: 'Résultat saisi',
   lead_created: 'Prospect créé',
   submission_received: 'Nouvelle demande',
   note_added: 'Note ajoutée',
@@ -116,6 +120,9 @@ export function commandError(error) {
   if (error?.code === '40001') return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
   if (error?.code === '42501') return 'Vous n’avez pas accès à cette action.';
   const message = error?.message || '';
+  if (/placement already scheduled/i.test(message)) return 'Un test est déjà prévu. Ouvrez-le pour le reprogrammer.';
+  if (/recommended level|missing result/i.test(message)) return 'Renseignez le niveau recommandé avant de valider le résultat.';
+  if (/future placement|invalid placement/i.test(message)) return 'Vérifiez la date, l’heure et le résultat du test.';
   if (message.includes('No effective follow-up policy')) return 'Le calendrier de suivi n’est pas encore configuré. Demandez à un directeur de le publier.';
   if (message.includes('minimum spacing')) return 'Le délai minimum entre deux appels n’est pas encore écoulé (3 heures par défaut).';
   if (message.includes('five current-cycle')) return 'Cinq appels sans réponse dans la séquence actuelle sont nécessaires.';
