@@ -10,12 +10,15 @@ import { ACTIVE, CALL_TASKS, EVENTS, TASKS, OUTCOMES, LOST, NOT_QUALIFIED, dateL
 import { LifecycleBadge, Pager, ReadState } from './CrmShared';
 import CrmActionDialog from './CrmActionDialog';
 import LeadPlacementSection from './LeadPlacementSection';
+import LeadEnrollmentSection from './LeadEnrollmentSection';
+import CrmEnrollmentDialog from './CrmEnrollmentDialog';
 import PlacementTestModal from '@/components/placement/PlacementTestModal';
 export default function LeadDetailSheet({
   leadId,
   onClose
 }) {
   const moreRef = useRef(null);
+  const [enrolling, setEnrolling] = useState(false);
   const [placement, setPlacement] = useState(undefined);
   const [action, setAction] = useState(null),
     [historyOffset, setHistoryOffset] = useState(0),
@@ -60,11 +63,13 @@ export default function LeadDetailSheet({
    {(lead.open_task_count > 1 || taskOffset > 0) && <details><summary className="cursor-pointer text-sm font-medium">Toutes les prochaines actions ({lead.open_task_count})</summary><ReadState query={tasks}>{tasks.data?.map(task => <div key={task.id} className="mt-3 rounded-lg border p-3 text-sm"><p className="font-medium">{TASKS[task.task_type] || 'Action'}</p><p className="mt-1 text-slate-500">{dateLabel(task.due_at)}</p>{task.instructions && <p className="mt-2 whitespace-pre-wrap">{task.instructions}</p>}<div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="outline" className="min-h-11" onClick={() => open(CALL_TASKS.includes(task.task_type) ? 'call' : 'complete', task)}>{CALL_TASKS.includes(task.task_type) ? 'Résultat d’appel' : 'Fait'}</Button><Button size="sm" variant="ghost" onClick={() => open('reschedule', task)}>Replanifier</Button><Button size="sm" variant="ghost" onClick={() => open('cancel', task)}>Annuler</Button></div></div>)}</ReadState><Pager offset={taskOffset} total={lead.open_task_count} size={10} onChange={setTaskOffset} /></details>}
   </>}
   {['LOST', 'NOT_QUALIFIED'].includes(lead.status) && <Button onClick={() => open('reopen')}>Rouvrir le prospect</Button>}
+  <LeadEnrollmentSection lead={lead} onStart={() => setEnrolling(true)} />
   <LeadPlacementSection lead={lead} onOpen={setPlacement} />
   <section><h3 className="mb-4 font-semibold">Historique</h3><ReadState query={history} empty="Aucun échange enregistré.">{history.data?.rows?.length ? <ol className="space-y-4 border-l border-slate-200 pl-5">{history.data.rows.map(item => <li key={item.id}><p className="text-xs text-slate-400">{dateLabel(item.occurred_at)}{item.actor_name && <span className="ml-2" title={item.actor_name}>{/synthe|receptionist|director|admin|system|service_role/i.test(item.actor_name) ? 'Équipe' : item.actor_name}</span>}</p><p className="mt-1 text-sm font-medium">{EVENTS[item.event_type] || 'Activité'}{item.outcome && !item.event_type.startsWith('call_') ? ` · ${OUTCOMES[item.outcome] || LOST[item.outcome] || NOT_QUALIFIED[item.outcome] || 'Mise à jour'}` : ''}</p>{item.body && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">{activityBody(item.body)}</p>}</li>)}</ol> : null}</ReadState><Pager offset={historyOffset} total={history.data?.total || 0} size={20} onChange={setHistoryOffset} /></section>
   <details onToggle={e => setFormsOpen(e.currentTarget.open)}><summary className="cursor-pointer border-t py-4 text-sm font-semibold">Réponses aux formulaires</summary>{formsOpen && <ReadState query={forms} empty="Aucune réponse enregistrée.">{forms.data?.rows?.length ? forms.data.rows.map(sub => <section key={sub.id} className="mb-4 rounded-lg bg-slate-50 p-4"><p className="text-sm font-medium">{sub.source_label || 'Demande'}</p><p className="mb-3 text-xs text-slate-400">{dateLabel(sub.occurred_at)}</p><dl className="space-y-3">{sub.answers.map((answer, i) => <div key={i}><dt className="text-xs text-slate-500">{answer.label || answer.key}</dt><dd className="mt-1 break-words text-sm">{Array.isArray(answer.value) ? answer.value.map(v => typeof v === 'boolean' ? v ? 'Oui' : 'Non' : String(v ?? '—')).join(' · ') : typeof answer.value === 'boolean' ? answer.value ? 'Oui' : 'Non' : String(answer.value ?? '—')}</dd></div>)}</dl>{!sub.answers.length && <p className="text-sm text-slate-500">Aucune réponse complémentaire.</p>}</section>) : null}</ReadState>}<Pager offset={formOffset} total={forms.data?.total || 0} size={5} onChange={setFormOffset} /></details>
  </div>}</ReadState>
  {action && lead && <CrmActionDialog key={`${action.name}:${action.task?.id || ''}`} action={action.name} lead={lead} task={lead.open_tasks?.find(t => t.id === action.task?.id) || action.task} onClose={() => setAction(null)} returnFocusRef={moreRef} />}
  {placement !== undefined && lead && <PlacementTestModal key={placement?.id || 'booking'} test={placement} crmLead={lead} onSave={() => setPlacement(undefined)} onClose={() => setPlacement(undefined)} />}
+ {enrolling && lead && <CrmEnrollmentDialog lead={lead} onClose={() => setEnrolling(false)} />}
  </SheetContent></Sheet>;
 }

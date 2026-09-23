@@ -15,7 +15,7 @@ export const TASKS = {
   confirm_placement_test: 'Préparer un test de niveau',
   post_test_followup: 'Rappeler le parent · Résultat disponible',
   center_visit: 'Visite au centre',
-  enrollment_followup: 'Suivi de pré-inscription'
+  enrollment_followup: 'Finaliser l’inscription'
 };
 export const OUTCOMES = {
   no_answer: 'Pas de réponse',
@@ -44,6 +44,9 @@ export const NOT_QUALIFIED = {
   other: 'Autre'
 };
 export const EVENTS = {
+  enrollment_started: 'Inscription commencée',
+  lead_converted: 'Inscription confirmée',
+  conversion_review_required: 'Inscription à vérifier par la direction',
   placement_test_booked: 'Test de niveau réservé',
   placement_test_rescheduled: 'Test de niveau reprogrammé',
   placement_test_attended: 'Test passé',
@@ -120,6 +123,11 @@ export function commandError(error) {
   if (error?.code === '40001') return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
   if (error?.code === '42501') return 'Vous n’avez pas accès à cette action.';
   const message = error?.message || '';
+  if (/Existing enrollment status requires review/i.test(message)) return 'Une inscription existe sans statut. Demandez à l’administration de la vérifier avant de poursuivre.';
+  if (/Existing enrollment requires explicit selection/i.test(message)) return 'Une inscription existe déjà pour ce programme et cette année. Sélectionnez-la.';
+  if (/Explicit new learner|Explicit student choice/i.test(message)) return 'Vérifiez les correspondances et choisissez explicitement l’apprenant.';
+  if (/Enrollment unavailable|Student unavailable/i.test(message)) return 'Cet apprenant ou cette inscription ne peut pas être rattaché. Vérifiez votre sélection.';
+  if (/Invalid enrollment|Invalid level/i.test(message)) return 'Vérifiez le programme, l’année scolaire, le niveau et le groupe.';
   if (/placement already scheduled/i.test(message)) return 'Un test est déjà prévu. Ouvrez-le pour le reprogrammer.';
   if (/recommended level|missing result/i.test(message)) return 'Renseignez le niveau recommandé avant de valider le résultat.';
   if (/future placement|invalid placement/i.test(message)) return 'Vérifiez la date, l’heure et le résultat du test.';
