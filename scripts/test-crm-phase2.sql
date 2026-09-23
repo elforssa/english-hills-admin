@@ -15,10 +15,11 @@ create function pg_temp.rejects(statement text, expected text) returns void lang
  raise exception 'Expected rejection %: %',expected,statement;
 end $$;
 
+-- Assert the eight Phase 2 tables explicitly; later phases may add protected tables.
 select pg_temp.check_true((select count(*)=8 and bool_and(relrowsecurity)
- from pg_class where relnamespace='public'::regnamespace and relkind='r' and relname like 'crm_%'),'eight tables with RLS');
+ from pg_class where relnamespace='public'::regnamespace and relkind='r' and relname in ('crm_contacts','crm_leads','crm_submissions','crm_submission_attribution','crm_activities','crm_tasks','crm_command_requests','crm_followup_policies')),'eight tables with RLS');
 select pg_temp.check_true((select count(*)=8 from pg_constraint where contype='p'
- and conrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname like 'crm_%')),'eight primary keys');
+ and conrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname in ('crm_contacts','crm_leads','crm_submissions','crm_submission_attribution','crm_activities','crm_tasks','crm_command_requests','crm_followup_policies'))),'eight primary keys');
 select pg_temp.check_true((select count(*)>=35 from pg_constraint where contype='f'
  and conrelid in (select oid from pg_class where relnamespace='public'::regnamespace and relname like 'crm_%')),'business foreign keys');
 select pg_temp.check_true((select count(*)>=40 from pg_constraint where contype='c'

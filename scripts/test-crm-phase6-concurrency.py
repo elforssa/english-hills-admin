@@ -167,6 +167,14 @@ finally:
         students=set(json.loads(ids))|set(extra_students)
         student_list=','.join(quote(s) for s in students) or 'null'
         sql(f"""begin;
+-- Phase 7 adds derived children; retain compatibility with baseline 084 too.
+do $cleanup$ begin
+ if to_regclass('public.crm_revenue_entries') is not null then
+  execute 'alter table public.crm_revenue_entries disable trigger crm_revenue_immutable';
+  execute 'delete from public.crm_revenue_entries where financial_event_id in(select id from public.financial_events where actor_id=''{actor}'')';
+  execute 'alter table public.crm_revenue_entries enable trigger crm_revenue_immutable';
+ end if;
+end $cleanup$;
 delete from public.financial_events where actor_id='{actor}';
 delete from public.financial_requests where actor_id='{actor}';
 delete from public.receipts where student_id in({student_list});
