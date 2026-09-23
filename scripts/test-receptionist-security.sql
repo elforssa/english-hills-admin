@@ -60,7 +60,9 @@ select pg_temp.denied($q$select public.void_financial_receipt(gen_random_uuid(),
 select pg_temp.denied($q$select public.void_financial_charge(gen_random_uuid(),'test reason',gen_random_uuid())$q$);
 select pg_temp.denied($q$select public.get_finance_charge_summary()$q$);
 select pg_temp.denied($q$select public.soft_delete_student('77000000-0000-0000-0000-000000000020')$q$);
-select pg_temp.denied($q$truncate public.placement_tests$q$);
+-- CRM references now reject plain TRUNCATE before authorization is reached.
+-- CASCADE must not let a receptionist bypass the table/trigger protections.
+select pg_temp.denied($q$truncate public.placement_tests cascade$q$);
 select pg_temp.denied($q$truncate public.app_config$q$);
 select pg_temp.denied($q$insert into public.enrollments(student_id,status) values('77000000-0000-0000-0000-000000000020','Submitted')$q$);
 update public.profiles set full_name='Receptionist self edit',phone='0000000000' where id=auth.uid();
