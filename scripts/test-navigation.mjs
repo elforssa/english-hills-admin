@@ -30,11 +30,11 @@ console.log('Navigation URL regressions passed');
 const { ROLE_HOME, loginDestination, receptionistCanAccess } = await import('../src/lib/roleAccess.mjs');
 for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestination(role), home);
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
-for (const path of ['/students', '/enrollments', '/settings', '/placement-tests', '/students/00000000-0000-0000-0000-000000000001']) {
+for (const path of ['/crm/today', '/crm/leads', '/students', '/enrollments', '/settings', '/placement-tests', '/students/00000000-0000-0000-0000-000000000001']) {
   assert.equal(receptionistCanAccess(path), true);
   assert.equal(loginDestination('receptionist', path), path);
 }
 for (const path of ['/finance', '/students/new', '/students/00000000-0000-0000-0000-000000000001/edit', '/settings/users', '/integrations', '//example.com', '/\\example.com']) {
-  assert.equal(loginDestination('receptionist', path), '/placement-tests');
+  assert.equal(loginDestination('receptionist', path), '/crm/today');
 }
 console.log('PASS receptionist login destinations and exact operational route boundaries');

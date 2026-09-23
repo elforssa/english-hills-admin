@@ -70,3 +70,10 @@ export const PAYROLL_STATUS_COLORS = {
   'Validé': 'bg-blue-100 text-blue-700',
   'Payé': 'bg-emerald-100 text-emerald-700',
 };
+
+export const CRM_STATUS_COLORS = {
+  NEW: 'bg-blue-50 text-blue-800', CONTACTING: 'bg-amber-50 text-amber-900',
+  ENGAGED: 'bg-teal-50 text-teal-800', QUALIFIED: 'bg-emerald-50 text-emerald-800',
+  LOST: 'bg-slate-100 text-slate-600', NOT_QUALIFIED: 'bg-stone-100 text-stone-700',
+  CONVERTED: 'bg-green-50 text-green-800',
+};

@@ -16,6 +16,8 @@ const OPERATIONS = [...ADMIN, 'receptionist'];
 const STAFF = ['admin', 'director', 'teacher'];
 
 const NAV = [
+  { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar, roles: OPERATIONS },
+  { href: '/crm/leads', label: 'Prospects', icon: Users, roles: OPERATIONS },
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
   { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
   {
@@ -160,7 +162,15 @@ function NavItem({ item, onNavigate }) {
 function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
   const canSee = (item) => !item.roles || item.roles.includes(userRole);
 
-  const filteredNav = NAV
+  const receptionistNav = [
+    { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar },
+    { href: '/crm/leads', label: 'Prospects', icon: Users },
+    { href: '/placement-tests', label: 'Tests de niveau', icon: BookOpen },
+    { href: '/students', label: 'Apprenants', icon: GraduationCap },
+    { href: '/enrollments', label: 'Pré-inscriptions', icon: ClipboardList },
+    { href: '/settings', label: 'Mon compte', icon: Shield },
+  ];
+  const filteredNav = (userRole === 'receptionist' ? receptionistNav : NAV)
     .filter(canSee)
     .map((item) => (item.children ? { ...item, children: item.children.filter(canSee) } : item))
     .filter((item) => !item.children || item.children.length > 0);

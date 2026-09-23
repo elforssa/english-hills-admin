@@ -122,7 +122,7 @@ export async function middleware(request) {
   if (role === 'receptionist') {
     if (receptionistCanAccess(pathname)) return response;
     const url = request.nextUrl.clone();
-    url.pathname = '/placement-tests';
+    url.pathname = '/crm/today';
     url.search = '';
     return redirect(url);
   }

@@ -28,7 +28,7 @@ function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
   if (['admin', 'director'].includes(role)) return null;
-  if (role === 'receptionist') return receptionistCanAccess(path) ? null : '/placement-tests';
+  if (role === 'receptionist') return receptionistCanAccess(path) ? null : '/crm/today';
   if (role === 'teacher') return teacherPaths.some(p => path === p || path.startsWith(p + '/')) ? null : '/teacher-portal';
   return path === '/' + role + '-portal' || path === '/settings' ? null : '/' + role + '-portal';
 }
@@ -219,7 +219,7 @@ try {
     headers: { Cookie: 'sb-127-auth-token-code-verifier=base64-' + Buffer.from(JSON.stringify('local-verifier')).toString('base64url') }, redirect: 'manual',
   });
   assert.equal(receptionistCallback.status, 307);
-  assert.equal(new URL(receptionistCallback.headers.get('location'), app).pathname, '/placement-tests');
+  assert.equal(new URL(receptionistCallback.headers.get('location'), app).pathname, '/crm/today');
   assert.ok(receptionistCallback.headers.getSetCookie().some(c => c.includes('auth-token=')));
   checks++;
   assert.deepEqual(unexpected, []);

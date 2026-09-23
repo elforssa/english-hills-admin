@@ -51,7 +51,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     }
 
     // An explicit allowlist cannot expand the receptionist operational surface.
-    if (role === 'receptionist' && !receptionistCanAccess(pathname)) return '/placement-tests';
+    if (role === 'receptionist' && !receptionistCanAccess(pathname)) return '/crm/today';
 
     // Explicit per-route allowlist takes precedence
     if (Array.isArray(allowedRoles)) {

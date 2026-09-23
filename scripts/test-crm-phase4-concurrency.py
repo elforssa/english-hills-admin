@@ -49,10 +49,10 @@ hours = {str(i): [['10:00', '12:30'], ['15:20', '20:00']] for i in range(2, 7)}
 hours.update({'1': [['15:00', '20:00']], '7': []})
 created = False
 try:
-    assert sql("select count(*) from supabase_migrations.schema_migrations where version='080';").stdout.strip() == '1'
+    assert sql("select count(*) from supabase_migrations.schema_migrations where version='082';").stdout.strip() == '1'
     sql(f"""begin;
 insert into auth.users(id,email,aud,role,created_at,updated_at)
-values('{actor}','crm-phase3-concurrency-{actor}@example.invalid','authenticated','authenticated',now(),now());
+values('{actor}','crm-phase4-concurrency-{actor}@example.invalid','authenticated','authenticated',now(),now());
 update public.profiles set role='director' where id='{actor}';
 commit;""")
     created = True
@@ -61,43 +61,33 @@ commit;""")
     assert abs(policies[0]['version'] - policies[1]['version']) == 1
     print('PASS concurrent policy publication uses distinct increasing versions', flush=True)
 
-    key = str(uuid.uuid4())
-    payload = {'display_name': 'Concurrency synthetic', 'learner_name': 'Concurrency learner', 'source_label': 'Manual'}
-    results = race('create_manual_lead', [(key, payload), (key, payload)])
-    assert results[0] == results[1] and 'error' not in results[0], results
-    lead = results[0]['lead']['id']
-    assert sql(f"select count(*) from public.crm_leads where id='{lead}';").stdout.strip() == '1'
-    print('PASS simultaneous intake replay returns the identical committed result', flush=True)
-
-    payload = {'lead_id': lead, 'expected_version': 1, 'outcome': 'no_answer'}
-    key = str(uuid.uuid4())
-    results = race('record_call_outcome', [(key, payload), (key, payload)])
-    assert results[0] == results[1] and results[0].get('failed_attempts') == 1, results
-    assert len(results[0]['open_tasks']) == 1
-    print('PASS simultaneous failed-call replay: one attempt, one next task', flush=True)
-
-    version = results[0]['lead']['version']
-    results = race('add_note', [(str(uuid.uuid4()), {'lead_id': lead, 'expected_version': version, 'note': n}) for n in ('First', 'Second')])
+    for decision in ('callback', 'qualify', 'lost', 'not_qualified'):
+        intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision test', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
+        lead = intake['lead']['id']
+        task = intake['open_tasks'][0]
+        payload = {'lead_id': lead, 'expected_version': 1, 'task_id': task['id'], 'expected_task_version': task['version'], 'decision': decision, 'note': 'Parent conversation'}
+        if decision in ('callback', 'qualify'):
+            payload['next_task'] = {'task_type': 'callback' if decision == 'callback' else 'confirm_placement_test', 'due_at': sql("select (now()+interval '1 day')::text").stdout.strip()}
+            if decision == 'qualify':
+                payload['qualification_step'] = 'placement_test'
+        else:
+            payload['reason'] = 'not_interested' if decision == 'lost' else 'program_not_suitable'
+        key = str(uuid.uuid4())
+        results = race('record_conversation_decision', [(key, payload), (key, payload)])
+        assert results[0] == results[1] and 'error' not in results[0], results
+        assert len(results[0]['open_tasks']) == (1 if decision in ('callback', 'qualify') else 0), results
+        assert sql(f"select count(*) from public.crm_activities where lead_id='{lead}' and event_type='conversation_recorded'").stdout.strip() == '1'
+        assert command('record_conversation_decision', key, payload) == results[0]
+        assert 'Request key payload conflict' in command('record_conversation_decision', key, payload | {'note': 'Changed'}).get('error', '')
+        print('PASS concurrent + network replay: ' + decision, flush=True)
+    intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
+    lead = intake['lead']['id']
+    payload = {'lead_id': lead, 'expected_version': 1, 'decision': 'lost', 'reason': 'not_interested', 'note': 'Parent conversation'}
+    results = race('record_conversation_decision', [(str(uuid.uuid4()), payload), (str(uuid.uuid4()), payload)])
     assert sum('error' in r for r in results) == 1, results
     assert 'Stale lead version' in next(r['error'] for r in results if 'error' in r)
-    print('PASS independent simultaneous mutations reject the stale version', flush=True)
+    print('PASS competing decisions: one commit, one stale rejection', flush=True)
 
-    # Finish a non-call task through competing independent completion requests.
-    version = int(sql(f"select version from public.crm_leads where id='{lead}';").stdout)
-    due = sql("select (now()+interval '1 day')::text;").stdout.strip()
-    scheduled = command('schedule_task', str(uuid.uuid4()), {'lead_id': lead, 'expected_version': version, 'task': {'task_type': 'whatsapp_followup', 'due_at': due}})
-    task = next(t for t in scheduled['open_tasks'] if t['task_type'] == 'whatsapp_followup')
-    data = {'lead_id': lead, 'expected_version': scheduled['lead']['version'], 'task_id': task['id'], 'expected_task_version': task['version'], 'outcome': 'Sent'}
-    results = race('complete_task', [(str(uuid.uuid4()), data), (str(uuid.uuid4()), data)])
-    assert sum('error' in r for r in results) == 1, results
-    assert 'Stale lead version' in next(r['error'] for r in results if 'error' in r)
-    assert sql(f"select count(*) from public.crm_activities where task_id='{task['id']}' and event_type='task_completed';").stdout.strip() == '1'
-    print('PASS concurrent task completion writes exactly one completion event', flush=True)
-
-    # Changed payload cannot reuse an already committed request key.
-    conflict = command('record_call_outcome', key, payload | {'outcome': 'busy'})
-    assert 'Request key payload conflict' in conflict.get('error', ''), conflict
-    print('PASS changed-payload request replay is rejected', flush=True)
 finally:
     if created:
         # The single data-modifying CTE removes both sides of circular FKs in

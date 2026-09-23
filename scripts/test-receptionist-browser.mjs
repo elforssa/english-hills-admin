@@ -41,14 +41,13 @@ try {
   await page.getByLabel('Adresse email', { exact: true }).fill(email);
   await page.getByLabel('Mot de passe', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-  await page.waitForURL(app + '/placement-tests');
-  await page.getByRole('heading', { name: 'Tests de niveau' }).waitFor();
-  await page.getByRole('button', { name: 'Apprenants', exact: true }).click();
-  await page.getByRole('button', { name: 'Inscriptions', exact: true }).click();
+  await page.waitForURL(app + '/crm/today');
+  await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
-  assert.deepEqual(new Set(links), new Set(['/students','/placement-tests','/enrollments','/settings']));
+  assert.deepEqual(new Set(links), new Set(['/crm/today','/crm/leads','/students','/placement-tests','/enrollments','/settings']));
   console.log('PASS real receptionist login, forged metadata ignored, permitted home and sidebar');
 
+  await page.goto(app + '/placement-tests');
   await page.getByRole('button', { name: 'Planifier un test' }).click();
   await page.getByPlaceholder('Ou saisir le nom manuellement...').fill(run);
   await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
@@ -77,8 +76,8 @@ try {
   for (const path of ['/finance','/reports','/teachers','/students/new',`/students/${student}/edit`,'/settings/users','/integrations']) {
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
-    assert.equal(new URL(blocked.headers().location, app).pathname, '/placement-tests');
-    await page.goto(app + path); await page.waitForURL(app + '/placement-tests');
+    assert.equal(new URL(blocked.headers().location, app).pathname, '/crm/today');
+    await page.goto(app + path); await page.waitForURL(app + '/crm/today');
   }
   for (const path of ['/api/admin/invite','/api/admin/update-role','/api/admin/payroll','/api/email/send']) {
     const result = await page.request.post(app + path, { data: { role: 'director', userId: user, email } });
