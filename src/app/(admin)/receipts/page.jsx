@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Download, CheckSquare, Square } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -18,6 +19,7 @@ import { listHref, recordHref } from '@/lib/navigation.mjs';
 const PAGE_SIZE = 25;
 
 export default function Receipts() {
+  const { role } = useAuth();
   const [receipts, setReceipts] = useState([]); const [total, setTotal] = useState(0); const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [searchInput, setSearchInput] = useState(''); const [search, setSearch] = useState(''); const [page, setPage] = useState(1);
@@ -71,6 +73,7 @@ export default function Receipts() {
     }
   };
   return <div className="mx-auto max-w-7xl p-4 lg:p-8">
+    {role === 'director' && <Link href="/receipts/deletions" className="mb-3 inline-flex min-h-10 items-center text-sm text-muted-foreground underline">Historique des suppressions</Link>}
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm"><div><p className="text-xs font-bold uppercase tracking-widest text-primary">Réception · Finance</p><h1 className="mt-1 text-2xl font-bold tracking-tight">Reçus de paiement</h1><p className="mt-1 text-sm text-muted-foreground">{total} reçu{total > 1 ? 's' : ''} émis</p></div><Button asChild><Link href="/receipts/new"><Plus size={15} /> Encaisser</Link></Button></header>
     <div className="mb-5 flex flex-wrap items-center gap-3"><div className="relative max-w-sm flex-1"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input aria-label="Rechercher les reçus" className="w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-sm" placeholder="Nom ou numéro de reçu…" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></div>{selected.size > 0 && <button onClick={downloadSelected} disabled={generating} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"><Download size={15} />{generating ? 'Génération…' : `PDF (${selected.size})`}</button>}</div>
     <div className="overflow-hidden rounded-xl border bg-card">{loading ? <SkeletonTable rows={10} cols={8} /> : loadError ? <div role="alert" className="p-8 text-center text-sm"><p>Impossible de charger les reçus.</p><Button variant="outline" className="mt-3" onClick={load}>Réessayer</Button></div> : receipts.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun reçu.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b bg-muted text-xs text-muted-foreground"><th className="w-8 px-4 py-3"><button aria-label="Sélectionner tous les reçus de cette page" aria-pressed={allChecked} onClick={toggleAll} className="rounded p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">{allChecked ? <CheckSquare size={16} /> : <Square size={16} />}</button></th>{['Reçu','Apprenant','Session / service','Date','Prix net','Ce paiement','Solde après ce reçu','Statut'].map((heading) => <th key={heading} className="px-4 py-3 text-left">{heading}</th>)}</tr></thead><tbody className="divide-y">{receipts.map((receipt) => {

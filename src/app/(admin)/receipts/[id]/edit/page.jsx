@@ -20,7 +20,7 @@ export default function ReceiptCorrection() {
 
   const voidReceipt = async () => {
     if (reason.trim().length < 3) return toast.error('Indiquez le motif de correction.');
-    if (!confirm('Annuler ce paiement ? Le reçu original restera visible et le solde sera recalculé.')) return;
+    if (!confirm('Annuler ce paiement ? Le reçu original restera visible. Le montant de ce paiement redeviendra dû. Pour une entrée créée par erreur, utilisez Supprimer le reçu.')) return;
     setSaving(true);
     const { data, error } = await getBrowserClient().rpc('void_financial_receipt', {
       p_receipt_id: id, p_reason: reason.trim(), p_idempotency_key: crypto.randomUUID(),
@@ -38,6 +38,7 @@ export default function ReceiptCorrection() {
       <div className="flex items-start gap-3"><span className="rounded-xl bg-amber-50 p-2 text-amber-700"><ShieldCheck size={22} /></span><div><h1 className="text-xl font-black">Correction contrôlée</h1><p className="mt-1 text-sm text-muted-foreground">Un reçu émis est immuable. Une correction annule le paiement avec une trace d’audit, puis permet de saisir un paiement de remplacement.</p></div></div>
       <dl className="mt-6 grid grid-cols-2 gap-4 rounded-xl bg-muted/50 p-4 text-sm"><div><dt className="text-muted-foreground">Reçu</dt><dd className="font-bold">{receipt.receipt_number}</dd></div><div><dt className="text-muted-foreground">Apprenant</dt><dd className="font-bold">{receipt.nom_prenom}</dd></div><div><dt className="text-muted-foreground">Paiement</dt><dd className="font-bold">{money(amounts.payment)} MAD</dd></div>{receipt.school_year_snapshot && <div><dt className="text-muted-foreground">Année scolaire</dt><dd className="font-bold">{receipt.school_year_snapshot}</dd></div>}<div><dt className="text-muted-foreground">Service</dt><dd className="font-bold">{receipt.service_description || 'Historique'}</dd></div></dl>
       {receipt.voided_at ? <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><b>Déjà annulé</b><p>{receipt.void_reason}</p></div> : role !== 'director' ? <p className="mt-5 rounded-xl bg-muted p-4 text-sm">Seul un directeur peut annuler ou corriger un paiement émis.</p> : <div className="mt-5"><label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Motif obligatoire</label><textarea className="min-h-24 w-full rounded-xl border p-3 text-sm" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ex. montant saisi par erreur…" /><button onClick={voidReceipt} disabled={saving} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white"><Ban size={16} /> {saving ? 'Annulation…' : 'Annuler ce paiement'}</button></div>}
+      {role === 'director' && <div className="mt-5 border-t pt-5 text-sm"><p>Le reçu et le montant dû ont été créés par erreur ?</p><Link href={`/receipts/${id}/delete`} className="inline-flex min-h-10 items-center font-semibold text-destructive underline">Supprimer le reçu et annuler le montant dû</Link></div>}
       {receipt.voided_at && receipt.charge_id && <Link href={`/receipts/new?student_id=${receipt.student_id}&charge_id=${receipt.charge_id}`} className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">Saisir le paiement corrigé</Link>}
     </div>
   </div>;
