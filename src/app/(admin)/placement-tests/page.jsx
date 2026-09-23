@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
 import { Plus, Edit, Trash2 } from 'lucide-react';
@@ -52,7 +53,8 @@ async function notifyPlacementResult({ before, after, students }) {
 }
 
 function TestModal({ test, groups, students, onSave, onClose }) {
-  const [form, setForm] = useState(test || { student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '' });
+  const { role } = useAuth();
+  const [form, setForm] = useState({ student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '', ...test });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const selectedStudent = students.find(student => student.id === form.student_id);
@@ -87,7 +89,7 @@ function TestModal({ test, groups, students, onSave, onClose }) {
       // Fire notification email if the result/affectation was just published.
       let notified = false;
       try {
-        notified = await notifyPlacementResult({
+        notified = role !== 'receptionist' && await notifyPlacementResult({
           before: test || null,
           after: saved,
           students,
@@ -161,6 +163,7 @@ function TestModal({ test, groups, students, onSave, onClose }) {
 }
 
 export default function PlacementTests() {
+  const { role } = useAuth();
   const [tests, setTests] = useState([]);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
@@ -213,7 +216,7 @@ export default function PlacementTests() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(t)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                    {role !== 'receptionist' && <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -244,7 +247,7 @@ export default function PlacementTests() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => setModal(t)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          <button onClick={() => handleDelete(t.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                          {role !== 'receptionist' && <button onClick={() => handleDelete(t.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>

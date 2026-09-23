@@ -32,9 +32,10 @@ assert.equal(sql("select count(*) from vault.secrets where name in ('receipt_web
 assert.equal(sql("select count(*) from supabase_migrations.schema_migrations where version='042'"), '1');
 // Last-director races require exactly our synthetic directors. Never remove or
 // demote pre-existing directors to manufacture this condition.
-assert.equal(sql("select count(*) from public.profiles where role='director'"), '0',
-  'Use a disposable local instance with no pre-existing directors for this suite');
-const roles = ['pending','parent','student','teacher','admin','director'];
+const initialDirectors = Number(sql("select count(*) from public.profiles where role='director'"));
+if (!process.argv.includes('--preserve-directors')) assert.equal(initialDirectors, 0,
+  'Use a disposable local instance or --preserve-directors (skips global last-director races)');
+const roles = ['pending','parent','student','teacher','admin','director','receptionist'];
 const run = `batch2-${randomUUID()}`;
 const password = randomBytes(24).toString('base64url');
 const users = [];
@@ -115,7 +116,7 @@ try {
     } else { deny(result); assert.equal(snapshot(target.id),before); }
     checks++;
   }
-  console.log('PASS 216 caller/current/requested role transitions and audit attribution');
+  console.log('PASS 343 caller/current/requested role transitions and audit attribution');
   for(const actor of actors) for(const current of roles) for(const desired of roles) {
     setRole(target.id,current);
     const before=snapshot(target.id);
@@ -134,7 +135,7 @@ try {
     assert.equal(sql(`select count(*) from public.pending_roles where email='${target.email}';`),'0');
     checks++;
   }
-  console.log('PASS 216 invitation transitions, privileged reinvites and repeated activation');
+  console.log('PASS 343 invitation transitions, privileged reinvites and repeated activation');
   setRole(target.id,'pending');
   for(const actor of [null,...actors,service]) {
     const before=snapshot(target.id);
@@ -169,7 +170,7 @@ try {
   ]) { deny(await rpc(actor,fn,args)); checks++; }
   console.log('PASS direct table bypasses, queue writes, anonymous and service-key-only RPC denial');
 
-  for(const current of ['parent','student','teacher','admin','director']) {
+  for(const current of ['parent','student','teacher','admin','director','receptionist']) {
     setRole(target.id,current); queue(target,'student',director);
     const before=snapshot(target.id);
     assert.equal(ok(await rpc(target,'apply_pending_role')),null);
@@ -215,6 +216,7 @@ try {
   assert.equal(sql("select bool_and(proconfig @> array['search_path=pg_catalog, pg_temp']) from pg_proc where proname in ('change_user_role','prepare_role_invitation','apply_pending_role','guard_directors');"),'t');
   checks+=6;
 
+  if (initialDirectors === 0) {
   // Real two-connection races: both transactions attempt removal of the only
   // two directors. Exercise row-trigger protection, Auth cascades and stronger
   // isolation. Failure must be a safeguard/serialization error, not a deadlock.
@@ -256,9 +258,10 @@ try {
   assert.equal(sql("select count(*) from public.profiles where role='director'"),'1');
   setRole(director.id,'director'); setRole(target.id,'pending'); checks++;
   console.log('PASS concurrent demote/delete/mixed races and authenticated RPC races');
+  } else console.log('SKIP global last-director races: preserving pre-existing local directors');
 
   if(process.argv.includes('--app')) {
-    for(const [actor,role] of [[admin,'teacher'],[director,'admin']]) {
+    for(const [actor,role] of [[admin,'teacher'],[director,'admin'],[director,'receptionist']]) {
       setRole(target.id,'pending');
       ok(await app(actor,'/api/admin/update-role',{userId:target.id,role}));
       assert.equal(getRole(target.id),role);
@@ -271,20 +274,20 @@ try {
     assert.equal((await app(director,'/api/admin/invite',{email:director.email,role:'student'})).status,409);
     assert.equal(snapshot(director.id),before);
     const newEmail=`${run}-new-invite@example.invalid`; emails.add(newEmail);
-    ok(await app(director,'/api/admin/invite',{email:newEmail,role:'teacher'}));
+    ok(await app(director,'/api/admin/invite',{email:newEmail,role:'receptionist'}));
     const newId=sql(`select id from auth.users where email='${newEmail}';`);
     assert.ok(newId); users.push({id:newId,email:newEmail});
     assert.equal(getRole(newId),'pending');
     assert.equal(sql(`select invited_by from public.pending_roles where email='${newEmail}';`),director.id);
-    assert.equal(ok(await rpc(director,'prepare_role_invitation',{p_email:newEmail,p_role:'teacher'})).needsDelivery,true);
+    assert.equal(ok(await rpc(director,'prepare_role_invitation',{p_email:newEmail,p_role:'receptionist'})).needsDelivery,true);
     // Simulate email verification locally, then exercise a real Auth login and
     // activation. This is not a browser/email-link end-to-end test.
     ok(await request(service,`/auth/v1/admin/users/${newId}`,'PUT',{password,email_confirm:true}));
     const session=ok(await request(null,'/auth/v1/token?grant_type=password','POST',{email:newEmail,password}));
     const invited={id:newId,token:session.access_token};
-    assert.equal(ok(await rpc(invited,'apply_pending_role')),'teacher');
+    assert.equal(ok(await rpc(invited,'apply_pending_role')),'receptionist');
     assert.equal(ok(await rpc(invited,'apply_pending_role')),null);
-    assert.equal(getRole(newId),'teacher');
+    assert.equal(getRole(newId),'receptionist');
     checks+=3;
     console.log('PASS real HTTP role changes, existing invitations and new local Auth invitation');
   }

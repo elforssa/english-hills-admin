@@ -16,13 +16,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
 import { ArrowRight, CheckCircle, KeyRound, Loader2, Lock, Mail } from 'lucide-react';
 
-const PORTAL_FOR_ROLE = {
-  director: '/dashboard',
-  admin:    '/dashboard',
-  teacher:  '/teacher-portal',
-  parent:   '/parent-portal',
-  student:  '/student-portal',
-};
+import { loginDestination } from '@/lib/roleAccess.mjs';
 
 function safeReturnTo(raw) {
   if (typeof raw !== 'string' || raw.length === 0) return null;
@@ -101,7 +95,7 @@ function LoginInner() {
       }
     }
 
-    const target = returnTo || PORTAL_FOR_ROLE[appliedRole] || '/unauthorized';
+    const target = loginDestination(appliedRole, returnTo);
     router.replace(target);
   }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
@@ -15,6 +16,8 @@ const PAGE_SIZE = 20;
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status;
 
 export default function Enrollments() {
+  const { role } = useAuth();
+  const isReceptionist = role === 'receptionist';
   const [enrollments, setEnrollments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -126,18 +129,18 @@ export default function Enrollments() {
                         <p className="font-semibold text-sm"><PersonLink id={e.student_id}>{studentName(e.student_id)}</PersonLink></p>
                         {st?.telephone && <p className="text-xs text-muted-foreground">{st.telephone}</p>}
                         {st?.age_category && <p className="text-xs text-muted-foreground">{st.age_category}</p>}
-                        <button onClick={() => setModal(e)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Pré-inscription du {e.date_inscription || '—'}</button>
+                        <button disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Pré-inscription du {e.date_inscription || '—'}</button>
                         <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)}</p>
                         {(e.session_type || e.school_year) && <p className="text-xs text-muted-foreground">{e.session_type || 'Session non renseignée'} · {e.school_year || 'Année non renseignée'} · {e.level || 'Niveau à définir'}</p>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span>
                     </div>
                     <div className="flex gap-2 mt-3">
-                      {e.status !== 'Validated' && <button aria-label={`Valider l'inscription de ${studentName(e.student_id)}`} onClick={() => handleValidate(e.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>}
-                      {e.status !== 'Rejected' && <button aria-label={`Refuser l'inscription de ${studentName(e.student_id)}`} onClick={() => handleReject(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>}
-                      <button aria-label={`Modifier l'inscription de ${studentName(e.student_id)}`} onClick={() => setModal(e)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
+                      {!isReceptionist && e.status !== 'Validated' && <button aria-label={`Valider l'inscription de ${studentName(e.student_id)}`} onClick={() => handleValidate(e.id)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>}
+                      {!isReceptionist && e.status !== 'Rejected' && <button aria-label={`Refuser l'inscription de ${studentName(e.student_id)}`} onClick={() => handleReject(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>}
+                      <button aria-label={`Modifier l'inscription de ${studentName(e.student_id)}`} disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
 
-                      <button aria-label={`Supprimer l'inscription de ${studentName(e.student_id)}`} onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                      {!isReceptionist && <button aria-label={`Supprimer l'inscription de ${studentName(e.student_id)}`} onClick={() => handleDelete(e.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                     </div>
                   </div>
                 );
@@ -165,15 +168,15 @@ export default function Enrollments() {
                         </td>
                         <td className="px-4 py-3 text-muted-foreground text-xs">{e.session_type || '—'} · {e.school_year || '—'} · {e.level || 'Niveau à définir'}</td>
                         <td className="px-4 py-3 text-muted-foreground">{groupName(e.group_id)}</td>
-                        <td className="px-4 py-3"><button onClick={() => setModal(e)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{e.date_inscription || '—'}</button></td>
+                        <td className="px-4 py-3"><button disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{e.date_inscription || '—'}</button></td>
                         <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span></td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2">
-                            {e.status !== 'Validated' && <button onClick={() => handleValidate(e.id)} title="Valider" className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>}
-                            {e.status !== 'Rejected' && <button onClick={() => handleReject(e.id)} title="Refuser" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>}
-                            <button onClick={() => setModal(e)} title="Modifier" className="p-1 rounded hover:bg-muted text-muted-foreground"><Edit size={14} /></button>
+                            {!isReceptionist && e.status !== 'Validated' && <button onClick={() => handleValidate(e.id)} title="Valider" className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>}
+                            {!isReceptionist && e.status !== 'Rejected' && <button onClick={() => handleReject(e.id)} title="Refuser" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>}
+                            <button disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} title="Modifier" className="p-1 rounded hover:bg-muted text-muted-foreground"><Edit size={14} /></button>
 
-                            <button onClick={() => handleDelete(e.id)} title="Supprimer" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                            {!isReceptionist && <button onClick={() => handleDelete(e.id)} title="Supprimer" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                           </div>
                         </td>
                       </tr>

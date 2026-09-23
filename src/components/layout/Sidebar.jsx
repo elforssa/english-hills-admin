@@ -12,28 +12,29 @@ import {
 import { useAuth } from '@/context/AuthContext';
 
 const ADMIN = ['admin', 'director'];
+const OPERATIONS = [...ADMIN, 'receptionist'];
 const STAFF = ['admin', 'director', 'teacher'];
 
 const NAV = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
   { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
   {
-    label: 'Apprenants', icon: Users, roles: ADMIN,
+    label: 'Apprenants', icon: Users, roles: OPERATIONS,
     children: [
       { href: '/students-directory', label: 'Annuaire', roles: ADMIN },
-      { href: '/students', label: 'Liste des apprenants', roles: ADMIN },
+      { href: '/students', label: 'Liste des apprenants', roles: OPERATIONS },
       { href: '/students/new', label: 'Ajouter un apprenant', roles: ADMIN },
       { href: '/dismissal', label: 'Sortie des jeunes', roles: ADMIN },
     ],
   },
   {
-    label: 'Académique', icon: BookOpen, roles: [...ADMIN, 'teacher'],
+    label: 'Académique', icon: BookOpen, roles: [...OPERATIONS, 'teacher'],
     children: [
       { href: '/groups', label: 'Groupes & niveaux', roles: [...ADMIN, 'teacher'] },
       { href: '/attendance', label: 'Présences', roles: [...ADMIN, 'teacher'] },
       { href: '/timetable', label: 'Emploi du temps', roles: [...ADMIN, 'teacher'] },
       { href: '/premium-sessions', label: 'Heures Premium', roles: [...ADMIN, 'teacher'] },
-      { href: '/placement-tests', label: 'Tests de niveau', roles: ADMIN },
+      { href: '/placement-tests', label: 'Tests de niveau', roles: OPERATIONS },
       { href: '/assessments', label: 'Notes & bulletins', roles: [...ADMIN, 'teacher'] },
     ],
   },
@@ -46,9 +47,9 @@ const NAV = [
     ],
   },
   {
-    label: 'Inscriptions', icon: ClipboardList, roles: ADMIN,
+    label: 'Inscriptions', icon: ClipboardList, roles: OPERATIONS,
     children: [
-      { href: '/enrollments', label: 'Pré-inscriptions', roles: ADMIN },
+      { href: '/enrollments', label: 'Pré-inscriptions', roles: OPERATIONS },
     ],
   },
   {
@@ -87,6 +88,7 @@ const NAV = [
   { href: '/teacher-portal', label: 'Mon espace enseignant', icon: GraduationCap, roles: ['teacher'] },
   { href: '/parent-portal', label: 'Espace Parents', icon: Users, roles: ['parent'] },
   { href: '/student-portal', label: 'Mon espace apprenant', icon: BookOpen, roles: ['student'] },
+  { href: '/settings', label: 'Mon compte', icon: Shield, roles: ['receptionist'] },
   { href: '/settings', label: 'Paramètres', icon: Shield, roles: ADMIN },
   { href: '/inscription', label: 'Formulaire public', icon: UserPlus, roles: ADMIN },
 ];
@@ -174,6 +176,7 @@ function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
         <p className="text-white/70 text-[10px] font-medium tracking-widest uppercase mt-2">
           {userRole === 'director' ? 'Directeur' :
            userRole === 'admin' ? 'Administrateur' :
+           userRole === 'receptionist' ? 'Accueil' :
            userRole === 'teacher' ? 'Enseignant' :
            userRole === 'parent' ? 'Parent' :
            userRole === 'student' ? 'Apprenant' : 'Plateforme'}

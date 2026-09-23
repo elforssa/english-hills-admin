@@ -8,6 +8,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
+import { receptionistCanAccess } from './lib/roleAccess.mjs';
 
 // Paths that are reachable without a session.
 const PUBLIC_PATHS = new Set([
@@ -114,6 +115,14 @@ export async function middleware(request) {
     if (pathname === '/unauthorized') return response;
     const url = request.nextUrl.clone();
     url.pathname = '/unauthorized';
+    url.search = '';
+    return redirect(url);
+  }
+
+  if (role === 'receptionist') {
+    if (receptionistCanAccess(pathname)) return response;
+    const url = request.nextUrl.clone();
+    url.pathname = '/placement-tests';
     url.search = '';
     return redirect(url);
   }

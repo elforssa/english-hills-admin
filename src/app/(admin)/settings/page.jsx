@@ -1,4 +1,7 @@
 'use client';
+import { useAuth } from '@/context/AuthContext';
+
+import { ReceptionistAccount } from '@/components/students/ReceptionistOperations';
 
 import { useEffect, useState } from 'react';
 import { entities, auth, users } from '@/lib/entities';
@@ -33,6 +36,7 @@ const CENTER_INFO_KEY = 'eh_center_info';
 const ROLE_CONFIG = [
   { value: 'director', label: 'Directeur', color: '#B91C2E' },
   { value: 'admin', label: 'Admin', color: 'var(--brand)' },
+  { value: 'receptionist', label: 'Accueil', color: '#0369a1' },
   { value: 'teacher', label: 'Enseignant', color: '#7c3aed' },
   { value: 'parent', label: 'Parent', color: '#0891b2' },
   { value: 'student', label: 'Apprenant', color: '#059669' },
@@ -71,7 +75,7 @@ function UserManagement({ currentUser }) {
   const cancelEdit = () => { setEditingId(null); setEditRole(''); };
 
   const saveRole = async (userId) => {
-    if (!isDirector && (editRole === 'director' || editRole === 'admin')) {
+    if (!isDirector && (['director', 'admin', 'receptionist'].includes(editRole))) {
       toast.error('Seul le directeur peut attribuer ce rôle.');
       return;
     }
@@ -87,7 +91,7 @@ function UserManagement({ currentUser }) {
 
   const availableRoles = isDirector
     ? ROLE_CONFIG
-    : ROLE_CONFIG.filter(r => !['director', 'admin'].includes(r.value));
+    : ROLE_CONFIG.filter(r => !['director', 'admin', 'receptionist'].includes(r.value));
 
   return (
     <div className="bg-card border border-border rounded-xl p-6">
@@ -131,7 +135,7 @@ function UserManagement({ currentUser }) {
                     >
                       {getRoleLabel(u.role || 'parent')}
                     </span>
-                    {(isDirector || (isAdmin && u.role !== 'director' && u.role !== 'admin')) && (
+                    {(isDirector || (isAdmin && !['director', 'admin', 'receptionist'].includes(u.role))) && (
                       <button onClick={() => startEdit(u)} className="p-1 rounded hover:bg-muted text-muted-foreground"><Edit2 size={13} /></button>
                     )}
                   </div>
@@ -161,6 +165,7 @@ function InviteUserForm({ currentUser }) {
         { value: 'teacher', label: 'Enseignant' },
         { value: 'admin',   label: 'Admin' },
         { value: 'director', label: 'Directeur' },
+        { value: 'receptionist', label: 'Accueil' },
       ]
     : [
         { value: 'student', label: 'Apprenant' },
@@ -349,7 +354,12 @@ function CurrentTermSettings() {
   );
 }
 
-export default function Settings() {
+export default function SettingsPage() {
+  const { role } = useAuth();
+  return role === 'receptionist' ? <ReceptionistAccount /> : <Settings />;
+}
+
+function Settings() {
   const [tab, setTab] = useState('center');
   const [currentUser, setCurrentUser] = useState(null);
   const [centerInfo, setCenterInfo] = useState(() => {
@@ -565,6 +575,7 @@ export default function Settings() {
             {[
               { role: 'director', label: 'Directeur', desc: 'Accès complet + attribution de tous les rôles', color: '#B91C2E' },
               { role: 'admin', label: 'Admin', desc: 'Gestion complète de la plateforme, présences, sortie des jeunes, inscriptions', color: 'var(--brand)' },
+              { role: 'receptionist', label: 'Accueil', desc: 'Tests de niveau, consultation des apprenants et pré-inscriptions, sans encaissement ni administration', color: '#0369a1' },
               { role: 'teacher', label: 'Enseignant', desc: 'Ses groupes, présences, notes, portfolios apprenants', color: '#7c3aed' },
               { role: 'parent', label: 'Parent', desc: "Données de son enfant uniquement (présences, notes, paiements, portfolio)", color: '#0891b2' },
               { role: 'student', label: 'Apprenant', desc: 'Sa progression, portfolio, présences', color: '#059669' },
