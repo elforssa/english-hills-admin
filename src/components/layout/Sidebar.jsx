@@ -18,6 +18,7 @@ const STAFF = ['admin', 'director', 'teacher'];
 const NAV = [
   { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar, roles: OPERATIONS },
   { href: '/crm/leads', label: 'Prospects', icon: Users, roles: OPERATIONS },
+  { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
   { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
   {

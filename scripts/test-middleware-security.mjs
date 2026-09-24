@@ -3,7 +3,7 @@
 // server, then checks HTTP role gates and ProtectedRoute in Chromium. No database,
 // production credentials, emails or storage are used.
 import assert from 'node:assert/strict';
-import { receptionistCanAccess } from '../src/lib/roleAccess.mjs';
+import { receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME } from '../src/lib/roleAccess.mjs';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -27,6 +27,7 @@ const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfo
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
+  if (role === 'admin' && (path === '/crm/analytics' || path.startsWith('/crm/analytics/'))) return '/dashboard';
   if (['admin', 'director'].includes(role)) return null;
   if (role === 'receptionist') return receptionistCanAccess(path) ? null : '/crm/today';
   if (role === 'teacher') return teacherPaths.some(p => path === p || path.startsWith(p + '/')) ? null : '/teacher-portal';
@@ -92,7 +93,7 @@ for (const role of roles) {
     } },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role === 'missing' ? null : { role } }) }) }) }),
   });
-  const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess);
+  const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', 'isDirectorAnalyticsPath', 'ROLE_HOME', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME);
   for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite']) {
     const r = await middleware(new NextRequest(app + path));
     for (const cookie of cookies) {

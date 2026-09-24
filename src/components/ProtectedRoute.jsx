@@ -23,7 +23,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
+import { receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME } from '@/lib/roleAccess.mjs';
 
 const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
@@ -49,6 +49,8 @@ export default function ProtectedRoute({ children, allowedRoles }) {
       const returnTo = encodeURIComponent(pathname || '/');
       return `/login?returnTo=${returnTo}`;
     }
+
+    if (role !== 'director' && isDirectorAnalyticsPath(pathname)) return ROLE_HOME[role] || '/unauthorized';
 
     // An explicit allowlist cannot expand the receptionist operational surface.
     if (role === 'receptionist' && !receptionistCanAccess(pathname)) return '/crm/today';
