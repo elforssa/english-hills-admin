@@ -16,7 +16,7 @@ function ReviewItem({ item, onDone }) {
     try {
       const candidate = item.candidates.find(c => c.id === action);
       const contact = item.contact_candidates?.find(c => `contact:${c.id}` === action);
-      await crmRpc('crm_resolve_meta_intake', { p_request: crypto.randomUUID(), p_submission: item.id,
+      await crmRpc('crm_resolve_external_intake', { p_request: crypto.randomUUID(), p_submission: item.id,
         p_action: candidate ? 'attach' : contact ? 'new' : action,
         p_data: candidate ? { lead_id: candidate.id, expected_version: candidate.version } : action === 'new' || contact
           ? { contact_name: name.trim(), learner_name: learner.trim(), program_interest_text: program.trim(), ...(contact ? { contact_id: contact.id, contact_version: contact.version } : {}) } : {} });

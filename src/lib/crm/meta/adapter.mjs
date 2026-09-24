@@ -1,7 +1,5 @@
 import { MetaError, boundedBody, providerId } from './protocol.mjs';
-const sessions = ['Yearly', 'Adults', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau', 'Other'];
-const technical = /^(campaignid|campaignname|adsetid|adsetname|adid|adname|accountid|pageid|formid|formname|metaleadid|leadgenid|externalsubmissionid|rawpayload|trackingid|fbclid|fbc|fbp|accesstoken|appsecret|verifytoken|utmsource|utmmedium|utmcampaign|utmcontent|utmterm)$/;
-const safeKey = key => !technical.test(key.toLowerCase().replace(/[^a-z0-9]/g, ''));
+import { normalizeForm, safeKey } from '../intake/form.mjs';
 const text = (value, max = 200) => typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : null;
 export async function graphGet({ apiVersion, token, id, fields, fetchImpl = fetch }) {
   if (!/^v[0-9]{1,3}\.0$/.test(apiVersion) || !providerId(id)) throw new MetaError('invalid_provider_data');
@@ -52,29 +50,7 @@ export async function retrieveLead(job, token, fetchImpl) {
 export function normalizeLead(job, retrieved, mapping) {
   if (!mapping) throw new MetaError('missing_mapping');
   const { lead, ad } = retrieved;
-  const values = new Map(), answers = [];
-  for (const field of lead.field_data) {
-    if (!field || !text(field.name, 100) || !Array.isArray(field.values) || field.values.length > 30 || values.has(field.name)) throw new MetaError('invalid_provider_data');
-    if (!safeKey(field.name)) continue;
-    if (field.values.some(v => !['string', 'number', 'boolean'].includes(typeof v) || (typeof v === 'string' && v.length > 2000) || (typeof v === 'number' && !Number.isFinite(v)))) throw new MetaError('invalid_provider_data');
-    const value = field.values.length === 1 ? field.values[0] : field.values;
-    values.set(field.name, value);
-    const configured = text(mapping.question_labels?.[field.name]);
-    answers.push({ key: field.name, label: configured || field.name.replace(/[_-]+/g, ' '), value,
-      value_type: Array.isArray(value) ? 'array' : typeof value, label_source: configured ? 'mapping' : 'provider_key' });
-  }
-  const fields = {};
-  for (const [canonical, key] of Object.entries(mapping.field_map)) {
-    const value = values.get(key);
-    if (value != null && !Array.isArray(value)) fields[canonical] = String(value).trim();
-  }
-  const core = {};
-  for (const key of ['contact_name', 'phone', 'whatsapp', 'email', 'learner_name', 'program_interest_text']) core[key] = text(fields[key], key === 'email' ? 254 : 200);
-  if (core.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(core.email)) core.email = null;
-  core.learner_age = /^\d{1,3}$/.test(fields.learner_age || '') && Number(fields.learner_age) <= 120 ? Number(fields.learner_age) : null;
-  core.learner_birth_date = /^\d{4}-\d{2}-\d{2}$/.test(fields.learner_birth_date || '') && Number.isFinite(Date.parse(fields.learner_birth_date)) && Date.parse(fields.learner_birth_date) <= Date.now() ? fields.learner_birth_date : null;
-  core.session_type = sessions.includes(fields.session_type) ? fields.session_type : mapping.default_session_type || null;
-  core.program_interest_text ||= mapping.default_program_interest_text || null;
+  const { core_fields: core, form_answers: answers } = normalizeForm(lead.field_data, mapping);
   const campaign = providerId(ad?.campaign?.id) ? ad.campaign : null;
   const adset = providerId(ad?.adset?.id) ? ad.adset : null;
   const attribution = {
