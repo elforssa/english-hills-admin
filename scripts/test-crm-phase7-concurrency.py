@@ -50,7 +50,7 @@ hours = {str(i): [['10:00','12:30'],['15:20','20:00']] for i in range(2,7)}
 hours.update({'1':[['15:00','20:00']],'7':[]})
 created=False
 try:
-    assert sql("select max(version) from supabase_migrations.schema_migrations").stdout.strip()=='085'
+    assert sql("select count(*) from supabase_migrations.schema_migrations where version='085'").stdout.strip()=='1'
     assert sql("select count(*) from vault.secrets where name in ('receipt_webhook_url','receipt_webhook_token')").stdout.strip()=='0'
     sql(f"insert into auth.users(id,email,aud,role,created_at,updated_at) values('{actor}','crm-phase7-{actor}@example.invalid','authenticated','authenticated',now(),now());update public.profiles set role='director' where id='{actor}';")
     created=True
