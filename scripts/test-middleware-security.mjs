@@ -3,6 +3,7 @@
 // server, then checks HTTP role gates and ProtectedRoute in Chromium. No database,
 // production credentials, emails or storage are used.
 import assert from 'node:assert/strict';
+import { receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME } from '../src/lib/roleAccess.mjs';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -21,12 +22,14 @@ const base = 'http://127.0.0.1:55431';
 const app = 'http://127.0.0.1:3241';
 const key = 'middleware-local-test';
 let checks = 0;
-const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director'];
+const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director', 'receptionist'];
 const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/premium-sessions', '/dashboard', '/', '/settings'];
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
+  if (role === 'admin' && (path === '/crm/analytics' || path.startsWith('/crm/analytics/'))) return '/dashboard';
   if (['admin', 'director'].includes(role)) return null;
+  if (role === 'receptionist') return receptionistCanAccess(path) ? null : '/crm/today';
   if (role === 'teacher') return teacherPaths.some(p => path === p || path.startsWith(p + '/')) ? null : '/teacher-portal';
   return path === '/' + role + '-portal' || path === '/settings' ? null : '/' + role + '-portal';
 }
@@ -90,7 +93,7 @@ for (const role of roles) {
     } },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role === 'missing' ? null : { role } }) }) }) }),
   });
-  const middleware = new Function('createServerClient', 'NextResponse', middlewareSource + '\nreturn middleware;')(fake, NextResponse);
+  const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', 'isDirectorAnalyticsPath', 'ROLE_HOME', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME);
   for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite']) {
     const r = await middleware(new NextRequest(app + path));
     for (const cookie of cookies) {
@@ -103,7 +106,7 @@ for (const role of roles) {
     if (!path.startsWith('/login') && !path.startsWith('/api/')) {
       const target = expected(role, path);
       assert.equal(r.status, target ? 307 : 200);
-      if (target) assert.equal(new URL(r.headers.get('location')).pathname, target);
+      if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target);
     }
     checks++;
   }
@@ -135,6 +138,7 @@ const stub = createServer(async (req, res) => {
     const selected = String(data.refresh_token || '').replace('refresh-', '');
     if (users[selected]) { refreshes++; return send(200, session(selected)); }
     if (data.auth_code === 'local-callback-code') return send(200, session('parent'));
+    if (data.auth_code === 'local-receptionist-code') return send(200, session('receptionist'));
     return send(400, { message: 'Invalid fixture token' });
   }
   if (url.pathname === '/rest/v1/profiles') {
@@ -179,7 +183,7 @@ try {
       const r = await fetch(app + path, { headers: { Cookie }, redirect: 'manual' });
       const target = expected(role, path);
       assert.equal(r.status, target ? 307 : 200, role + ' ' + path);
-      if (target) { assert.equal(new URL(r.headers.get('location')).pathname, target, role + ' ' + path); assert.ok(!(await r.text()).includes('self.__next_f')); }
+      if (target) { assert.equal(new URL(r.headers.get('location'), app).pathname, target, role + ' ' + path); assert.ok(!(await r.text()).includes('self.__next_f')); }
       else await r.arrayBuffer();
       checks++;
     }
@@ -188,7 +192,7 @@ try {
         const r = await fetch(app + path + '?_rsc=fixture', { headers: { Cookie, ...extras }, redirect: 'manual' });
         const target = expected(role, path);
         assert.equal(r.status, target ? 307 : 200, 'RSC ' + role + ' ' + path);
-        if (target) assert.equal(new URL(r.headers.get('location')).pathname, target);
+        if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target);
         await r.arrayBuffer(); checks++;
       }
     }
@@ -211,6 +215,13 @@ try {
   assert.equal(callback.status, 307);
   assert.equal(new URL(callback.headers.get('location')).pathname, '/parent-portal');
   assert.ok(callback.headers.getSetCookie().some(c => c.includes('auth-token=')));
+  checks++;
+  const receptionistCallback = await fetch(app + '/login/callback?code=local-receptionist-code&next=/finance', {
+    headers: { Cookie: 'sb-127-auth-token-code-verifier=base64-' + Buffer.from(JSON.stringify('local-verifier')).toString('base64url') }, redirect: 'manual',
+  });
+  assert.equal(receptionistCallback.status, 307);
+  assert.equal(new URL(receptionistCallback.headers.get('location'), app).pathname, '/crm/today');
+  assert.ok(receptionistCallback.headers.getSetCookie().some(c => c.includes('auth-token=')));
   checks++;
   assert.deepEqual(unexpected, []);
   console.log('PASS HTTP expired-session renewal, refreshed redirect cookies and code-exchange callback');

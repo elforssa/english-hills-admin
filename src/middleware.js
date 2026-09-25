@@ -8,6 +8,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
+import { receptionistCanAccess, isDirectorAnalyticsPath, ROLE_HOME } from './lib/roleAccess.mjs';
 
 // Paths that are reachable without a session.
 const PUBLIC_PATHS = new Set([
@@ -109,11 +110,26 @@ export async function middleware(request) {
 
   const role = profile?.role || 'pending';
 
+  if (role !== 'director' && isDirectorAnalyticsPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = ROLE_HOME[role] || '/unauthorized';
+    url.search = '';
+    return redirect(url);
+  }
+
   // Pending / unknown → /unauthorized.
   if (role === 'pending') {
     if (pathname === '/unauthorized') return response;
     const url = request.nextUrl.clone();
     url.pathname = '/unauthorized';
+    url.search = '';
+    return redirect(url);
+  }
+
+  if (role === 'receptionist') {
+    if (receptionistCanAccess(pathname)) return response;
+    const url = request.nextUrl.clone();
+    url.pathname = '/crm/today';
     url.search = '';
     return redirect(url);
   }

@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { fetchInsightsFixture } from '../src/lib/crm/insights/adapter.mjs';
+import { processInsightsFixture } from '../src/lib/crm/insights/worker.mjs';
+import { isDirectorAnalyticsPath, loginDestination } from '../src/lib/roleAccess.mjs';
+const config={mode:'mock',account_id:'1100',currency:'MAD',timezone:'Africa/Casablanca',api_version:'v99.0',secret_ref:'CRM_META_INSIGHTS_TOKEN_FIXTURE'};
+const row={account_id:'1100',campaign_id:'1101',adset_id:'1102',ad_id:'1103',ad_name:'Fixture',date_start:'2026-01-01',date_stop:'2026-01-01',spend:'12.345678',impressions:'90',reach:'80',clicks:'4',inline_link_clicks:'2',actions:[{action_type:'lead',value:'99',ignored:'secret'}]};
+const args={config,from:'2026-01-01',to:'2026-01-02',token:'fixture-secret'};
+const response=(data,status=200)=>new Response(JSON.stringify(data),{status});
+let checks=0;
+function mock(insights,metadata={account_id:'1100',currency:'MAD',timezone_name:'Africa/Casablanca'}) {return async(url,options)=>{
+ const u=new URL(url);assert.equal(u.host,'graph.facebook.com');assert(!url.includes('fixture-secret'));assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer fixture-secret');checks++;
+ if(u.pathname.endsWith('/act_1100'))return response(metadata);
+ if(/\/(campaigns|adsets|ads)$/.test(u.pathname))return response({data:[]});
+ return insights(u);
+};}
+let calls=0;
+const result=await fetchInsightsFixture({...args,mockFetch:mock(u=>{assert.equal(u.searchParams.get('level'),'ad');assert.equal(u.searchParams.get('time_increment'),'1');return response(++calls===1?{data:[row],paging:{next:'https://evil.invalid/steal?access_token=secret',cursors:{after:'cursor1'}}}:{data:[{...row,date_start:'2026-01-02',date_stop:'2026-01-02'}]});})});
+assert.equal(result.rows.length,2);assert.equal(result.rows[0].spend,'12.345678');assert.deepEqual(result.rows[0].actions,[{action_type:'lead',value:'99'}]);
+for(const [status,code] of [[429,'rate_limit'],[500,'provider_unavailable'],[401,'provider_auth'],[403,'provider_auth'],[302,'invalid_data']])await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(()=>response({},status))}),new RegExp(code));
+for(const metadata of [{account_id:'999',currency:'MAD',timezone_name:'Africa/Casablanca'},{account_id:'1100',currency:'USD',timezone_name:'Africa/Casablanca'},{account_id:'1100',currency:'MAD',timezone_name:'UTC'}])await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(()=>response({data:[]}),metadata)}),/invalid_data/);
+for(const bad of [{...row,spend:'NaN'},{...row,spend:'-1'},{...row,level:'campaign'},{...row,date_stop:'2026-01-02'},{...row,date_start:'2025-12-31',date_stop:'2025-12-31'},{...row,clicks:'-1'},{...row,actions:{}},{...row,ad_id:'not-id'}])await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(()=>response({data:[bad]}))}),/invalid_data/);
+await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(()=>response({data:[row,row]}))}),/invalid_data/);
+let partial=0;await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(()=>++partial===1?response({data:[row],paging:{next:'ignored',cursors:{after:'x'}}}):response({},500))}),e=>e.message==='provider_unavailable'&&e.rowsProcessed===1);
+let asyncCalls=0;const asyncResult=await fetchInsightsFixture({...args,mockFetch:mock(u=>{asyncCalls++;if(u.pathname.endsWith('/act_1100/insights'))return response({report_run_id:'9999'});if(u.pathname.endsWith('/9999'))return response({async_status:'Job Completed'});return response({data:[row]});})});assert.equal(asyncResult.rows.length,1);assert.equal(asyncCalls,3);
+await assert.rejects(fetchInsightsFixture({...args,mockFetch:mock(u=>response(u.pathname.endsWith('/act_1100/insights')?{report_run_id:'9999'}:{async_status:'Job Running'}))}),/async_pending/);
+await assert.rejects(fetchInsightsFixture(args),/live_not_available/);
+await assert.rejects(processInsightsFixture({rpc:()=>assert.fail('must not claim')}),/live_not_available/);
+const log=[];const run={id:'run',lease_token:'lease',date_from:args.from,date_to:args.to,config};
+const rpc=async(name,data)=>{log.push({name,data});return name==='crm_claim_insights_sync'?run:null;};
+assert.equal((await processInsightsFixture({rpc,env:{CRM_META_INSIGHTS_TOKEN_FIXTURE:'fixture-secret'},mockFetch:mock(()=>response({data:[row]}))})).status,'completed');assert.equal(log.at(-1).name,'crm_finish_insights_sync');
+log.length=0;assert.equal((await processInsightsFixture({rpc,env:{},mockFetch:mock(()=>assert.fail())})).status,'failed');assert.equal(log.at(-1).data.p_code,'missing_secret');
+assert(isDirectorAnalyticsPath('/crm/analytics/extra'));assert(!isDirectorAnalyticsPath('/crm/analytics-other'));
+for(const role of ['admin','receptionist','teacher','parent','student'])assert.notEqual(loginDestination(role,'/crm/analytics'),'/crm/analytics');assert.equal(loginDestination('director','/crm/analytics'),'/crm/analytics');
+console.log(`PASS Phase 11 provider validation, pagination, async, sanitized errors, partial isolation, worker and role routing (${checks} mock requests)`);

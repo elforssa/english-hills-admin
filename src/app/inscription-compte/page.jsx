@@ -17,13 +17,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ArrowRight, CheckCircle, Loader2, Lock, Mail, User as UserIcon } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
 
-const PORTAL_FOR_ROLE = {
-  director: '/dashboard',
-  admin:    '/dashboard',
-  teacher:  '/teacher-portal',
-  parent:   '/parent-portal',
-  student:  '/student-portal',
-};
+import { ROLE_HOME as PORTAL_FOR_ROLE } from '@/lib/roleAccess.mjs';
 
 function InscriptionCompteInner() {
   const router       = useRouter();

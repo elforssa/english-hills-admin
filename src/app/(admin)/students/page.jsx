@@ -1,4 +1,7 @@
 'use client';
+import { useAuth } from '@/context/AuthContext';
+
+import { ReceptionistStudents } from '@/components/students/ReceptionistOperations';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -44,7 +47,12 @@ function InlineSelect({ value, options, onChange, empty, label, className = '' }
   );
 }
 
-export default function Students() {
+export default function StudentsPage() {
+  const { role } = useAuth();
+  return role === 'receptionist' ? <ReceptionistStudents /> : <Students />;
+}
+
+function Students() {
   const update = useEntityUpdate('Student');
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);

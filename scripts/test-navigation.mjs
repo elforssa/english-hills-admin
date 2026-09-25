@@ -25,3 +25,16 @@ for (const unsafe of ['/students/%2e%2e/finance', '/groups/%2fetc', '/student-po
   assert.equal(safeReturnTo(unsafe), '/students');
 }
 console.log('Navigation URL regressions passed');
+
+// Role-aware login defaults cannot reopen an unauthorized receptionist page.
+const { ROLE_HOME, loginDestination, receptionistCanAccess } = await import('../src/lib/roleAccess.mjs');
+for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestination(role), home);
+assert.equal(loginDestination('pending', '/students'), '/unauthorized');
+for (const path of ['/crm/today', '/crm/leads', '/students', '/enrollments', '/settings', '/placement-tests', '/students/00000000-0000-0000-0000-000000000001']) {
+  assert.equal(receptionistCanAccess(path), true);
+  assert.equal(loginDestination('receptionist', path), path);
+}
+for (const path of ['/finance', '/students/new', '/students/00000000-0000-0000-0000-000000000001/edit', '/settings/users', '/integrations', '//example.com', '/\\example.com']) {
+  assert.equal(loginDestination('receptionist', path), '/crm/today');
+}
+console.log('PASS receptionist login destinations and exact operational route boundaries');

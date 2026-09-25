@@ -112,9 +112,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!form.student_id) { setEnrollments([]); setEnrollmentsError(''); setEnrollmentsLoading(false); return undefined; }
     let active = true;
     setEnrollmentsLoading(true); setEnrollmentsError(''); setEnrollments([]);
-    getBrowserClient().from('enrollments')
-      .select('id,status,session_type,school_year,group_id,date_inscription')
-      .eq('student_id', form.student_id).order('created_at', { ascending: false })
+    getBrowserClient().rpc('receipt_enrollment_candidates', { p_student: form.student_id })
       .then(({ data, error }) => {
         if (!active) return;
         setEnrollmentsLoading(false);
@@ -189,6 +187,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const enrollmentChoices = enrollments.filter((row) => row.status !== 'Rejected'
     && (!row.session_type || row.session_type === form.session_type)
     && (!row.school_year || !form.school_year || row.school_year === form.school_year));
+  const hasCrmEnrollment = enrollmentChoices.some(row => row.crm_linked);
   const gross = Number(form.gross_amount || 0);
   const discount = Number(form.discount_amount || 0);
   const net = selectedCharge ? Number(selectedCharge.net_amount) : Math.max(0, gross - discount);
@@ -213,6 +212,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (todayPayment > 0 && form.student_id && form.session_type !== 'Other'
       && !selectedCharge?.enrollment_id && enrollmentChoices.length > 0 && !form.enrollment_id)
       return toast.error('Choisissez une inscription existante ou créez-en une distincte.');
+    if (todayPayment > 0 && !selectedCharge?.enrollment_id && hasCrmEnrollment && (!form.enrollment_id || form.enrollment_id === 'new'))
+      return toast.error('Sélectionnez l’inscription CRM existante avant d’enregistrer le paiement.');
     if (form.enrollment_id && form.enrollment_id !== 'new' && !selectedCharge?.enrollment_id
       && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
     if (todayPayment > 0 && form.request_email && !/^\S+@\S+\.\S+$/.test(form.email_recipient.trim())) return toast.error('Indiquez un destinataire email valide ou désactivez l’envoi.');
@@ -259,7 +260,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {form.student_id && form.session_type && form.session_type !== 'Other' && !selectedCharge?.enrollment_id && <div className="mt-4">
         {enrollmentsLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des inscriptions…</SearchMessage>}
         {enrollmentsError && <SearchMessage icon={AlertCircle} tone="error">Inscriptions indisponibles : {enrollmentsError}</SearchMessage>}
-        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new">Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
+        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.crm_linked ? 'Inscription CRM · ' : ''}{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new" disabled={hasCrmEnrollment}>Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">{hasCrmEnrollment && <>Une inscription CRM existe pour ce programme et cette année : sélectionnez-la. Pour une inscription réellement distincte, créez-la d’abord dans la fiche apprenant. </>}Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
       </div>}
       {!lockedCharge && <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', session_type: e.target.value, plan_type: 'Standard', level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>

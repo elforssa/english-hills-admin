@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
 
-const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
+const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director', 'receptionist'];
 const PRIVILEGED_ROLES = ['admin', 'director'];
 
 const RATE_LIMITS = [

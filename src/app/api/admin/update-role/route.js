@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 
-const ASSIGNABLE_ROLES = ['student', 'parent', 'teacher', 'admin', 'director'];
+const ASSIGNABLE_ROLES = ['student', 'parent', 'teacher', 'admin', 'director', 'receptionist'];
 
 const RATE_LIMITS = [
   { scope: 'role_update:minute', max: 10,  windowSeconds: 60 },

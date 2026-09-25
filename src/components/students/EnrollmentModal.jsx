@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { getBrowserClient } from '@/lib/supabase';
 import { entities } from '@/lib/entities';
 import { Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +16,8 @@ const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 export default function EnrollmentModal({ enrollment, students, groups, onSave, onClose, assignmentOnly = false }) {
+  const { role } = useAuth();
+  const isReceptionist = role === 'receptionist';
   const [form, setForm] = useState(enrollment || { student_id: '', group_id: '', status: 'Submitted', date_inscription: new Date().toISOString().split('T')[0], notes: '' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -35,7 +39,15 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
         status: form.status === 'Confirmed' && form.group_id ? 'Validated'
           : form.status === 'Validated' && !form.group_id ? 'Confirmed' : form.status };
 
-      if (form.id) {
+      if (isReceptionist) {
+        const { error } = await getBrowserClient().rpc('save_receptionist_enrollment', {
+          p_student: payload.student_id, p_enrollment: form.id || null, p_group: payload.group_id,
+          p_status: payload.status, p_level: payload.level || null,
+          p_date: payload.date_inscription || null, p_notes: payload.notes || null,
+        });
+        if (error) { toast.error(error.message); return; }
+        toast.success(form.id ? 'Mis à jour' : 'Inscription créée');
+      } else if (form.id) {
         await entities.Enrollment.update(form.id, assignmentOnly
           ? { group_id: payload.group_id, level: payload.level } : payload);
         toast.success('Mis à jour');
@@ -109,7 +121,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           <div hidden={assignmentOnly}>
             <label htmlFor="enrollment-status" className={labelClass}>Statut</label>
             <select id="enrollment-status" className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
-              {['Submitted','Under Review','Confirmed','Validated','Rejected','Trial'].map(s => <option key={s} value={s}>{enrollmentLabel(s)}</option>)}
+              {(isReceptionist ? (assignmentOnly ? ['Confirmed','Validated'] : ['Submitted','Under Review','Trial']) : ['Submitted','Under Review','Confirmed','Validated','Rejected','Trial']).map(s => <option key={s} value={s}>{enrollmentLabel(s)}</option>)}
             </select>
           </div>
           <div hidden={assignmentOnly}>

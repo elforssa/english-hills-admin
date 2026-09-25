@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { prepareLifecyclePayload, postLifecycleFixture } from '../src/lib/crm/lifecycle/adapter.mjs';
+import { processLifecycleFixtures } from '../src/lib/crm/lifecycle/worker.mjs';
+const mapping={mode:'mock',dataset_id:'123456',api_version:'v99.0',secret_ref:'CRM_META_LIFECYCLE_TOKEN_FIXTURE',events:{qualified:'FixtureQualified',converted:'FixtureConverted'},action_source:'system_generated'};
+const d={mapping,event_kind:'qualified',event_time:1700000000,event_id:'stable-fixture',matching:{adult_contact:true,lead_id:'456',email:' PARENT@EXAMPLE.INVALID ',phone:'+212612345678',learner_name:'NEVER',learner_age:12,notes:'PRIVATE'}};
+const payload=prepareLifecyclePayload(d);const u=payload.data[0].user_data;
+assert.equal(u.em[0],createHash('sha256').update('parent@example.invalid').digest('hex'));assert.equal(u.ph[0],createHash('sha256').update('212612345678').digest('hex'));
+assert(!JSON.stringify(payload).match(/NEVER|PRIVATE|learner|parent@example|212612/));
+assert.throws(()=>prepareLifecyclePayload({...d,matching:{...d.matching,adult_contact:false}}));
+assert.throws(()=>prepareLifecyclePayload({...d,matching:{adult_contact:true,email:'person@example.invalid'}}));
+const website=prepareLifecyclePayload({...d,matching:{adult_contact:true,fbc:'observed-fbc',fbp:'observed-fbp',fbclid:'not-a-match',utm_campaign:'untrusted',campaign_id:'forged'}});
+assert.deepEqual(website.data[0].user_data,{fbc:'observed-fbc',fbp:'observed-fbp'});
+assert.deepEqual(prepareLifecyclePayload({...d,payload,mapping:{events:{qualified:'Changed'}}}),payload);
+const call=mockFetch=>postLifecycleFixture({mapping,payload,token:'fixture-only',mockFetch});
+let bodies=[];
+const accepted=async(url,options)=>{assert.equal(url,'https://graph.facebook.com/v99.0/123456/events');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer fixture-only');bodies.push(options.body);return Response.json({events_received:1,fbtrace_id:'safe_trace',ignored_sensitive:'never-retain'});};
+assert.deepEqual(await call(accepted),{http_status:200,outcome:'sent',request_id:'safe_trace'});assert.equal((await call(accepted)).outcome,'sent');assert.equal(bodies[0],bodies[1]);
+assert.equal((await call(async()=>new Response('',{status:429,headers:{'Retry-After':'120'}}))).retry_after,120);
+for(const [status,outcome] of [[500,'retry'],[503,'retry'],[401,'blocked'],[403,'blocked'],[400,'dead']])assert.equal((await call(async()=>new Response('secret provider error',{status}))).outcome,outcome);
+assert.equal((await call(async()=>new Response('malformed'))).outcome,'unknown');
+assert.equal((await call(async()=>Response.json({events_received:0}))).outcome,'unknown');
+assert.equal((await call(async()=>{throw Error('socket closed after acceptance');})).outcome,'unknown');
+const timeout=await postLifecycleFixture({mapping,payload,token:'fixture',timeoutMs:5,mockFetch:async(_url,{signal})=>new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true}))});assert.equal(timeout.error_code,'timeout');
+assert.equal((await call(async()=>Response.json({error:{code:190,message:'secret'}}))).outcome,'blocked');
+assert.equal((await call(async()=>Response.json({error:{code:190,message:'secret'}},{status:400}))).outcome,'blocked');
+assert.equal((await call(async()=>Response.json({error:{code:4}},{status:400}))).outcome,'retry');
+await assert.rejects(()=>postLifecycleFixture({mapping,payload,token:'fixture'}),/live_not_available/);
+await assert.rejects(()=>processLifecycleFixtures({rpc:()=>{throw Error('must not claim');}}),/live_not_available/);
+const saved=[],calls=[];let frozen=null;let attempt=0;
+const rpc=async(name,args)=>{calls.push(name);
+ if(name==='crm_claim_external_deliveries')return[{id:'delivery',lease_token:'lease'}];
+ if(name==='crm_get_external_delivery')return{...d,payload:frozen};
+ if(name==='crm_prepare_external_delivery'){if(frozen)assert.deepEqual(args.p_payload,frozen);frozen=args.p_payload;return 'hash';}
+ if(name==='crm_begin_external_attempt')return ++attempt;
+ if(name==='crm_finish_external_attempt'){saved.push(args.p_result);return;}
+ throw Error(name);
+};
+let providerAccepted=false;
+await processLifecycleFixtures({rpc,env:{CRM_META_LIFECYCLE_TOKEN_FIXTURE:'fixture-only'},mockFetch:async()=>{providerAccepted=true;throw Error('response lost');}});
+assert(providerAccepted);assert.equal(saved[0].outcome,'unknown');
+await processLifecycleFixtures({rpc,env:{CRM_META_LIFECYCLE_TOKEN_FIXTURE:'fixture-only'},mockFetch:accepted});assert.equal(saved[1].outcome,'sent');assert.equal(attempt,2);assert.deepEqual(frozen,payload);
+assert(calls.indexOf('crm_prepare_external_delivery')<calls.indexOf('crm_begin_external_attempt'));
+let held=false;
+await processLifecycleFixtures({env:{},mockFetch:()=>{throw Error('No secret, no HTTP');},rpc:async(name)=>{
+ if(name==='crm_claim_external_deliveries')return[{id:'x',lease_token:'y'}];if(name==='crm_get_external_delivery')return d;if(name==='crm_block_external_delivery'){held=true;return;}throw Error(name);
+}});assert(held);
+const uncertain=await processLifecycleFixtures({env:{CRM_META_LIFECYCLE_TOKEN_FIXTURE:'fixture'},mockFetch:()=>{throw Error('No HTTP after uncertain start');},rpc:async(name)=>{
+ if(name==='crm_claim_external_deliveries')return[{id:'x',lease_token:'y'}];if(name==='crm_get_external_delivery')return d;if(name==='crm_prepare_external_delivery')return 'hash';
+ if(name==='crm_begin_external_attempt')throw Error('commit acknowledgment lost');if(name==='crm_block_external_delivery')throw Error('attempt already exists');throw Error(name);
+}});assert.equal(uncertain[0].status,'unknown');
+const route=readFileSync('src/app/api/internal/crm/lifecycle/process/route.js','utf8');assert(!route.includes('processLifecycleFixtures'));assert(!route.includes('postLifecycleFixture'));assert(!route.includes('fetch('));
+console.log('PASS Phase 10 hashing/contact privacy, frozen payload, mock success/replay/429/500/auth/validation/timeouts/malformed responses, worker attempts and hard live guard');

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { phoneLinks,casablancaInstant,retryKey,commandError } from '../src/lib/crm/presentation.mjs';
+assert.deepEqual(phoneLinks({phone_e164:'+212612345678',whatsapp_e164:'+33612345678'}),{tel:'tel:+212612345678',whatsapp:'https://wa.me/33612345678'});
+assert.deepEqual(phoneLinks({phone_e164:'javascript:alert(1)',whatsapp_e164:'0612345678'}),{tel:null,whatsapp:null});
+assert.equal(casablancaInstant('2026-09-23T15:20'),'2026-09-23T14:20:00.000Z');
+assert.equal(casablancaInstant('2026-02-20T15:20'),'2026-02-20T15:20:00.000Z');
+assert.throws(()=>casablancaInstant('invalid'));
+let ids=0;const first=retryKey(null,'note',{expected_version:1,note:'Hello'},()=>String(++ids));
+assert.equal(retryKey(first,'note',{expected_version:1,note:'Hello'},()=>String(++ids)),first);
+assert.notEqual(retryKey(first,'note',{expected_version:2,note:'Hello'},()=>String(++ids)).key,first.key);
+assert.match(commandError({code:'40001',message:'private sql details'}),/actualisées/);
+assert.match(commandError({code:'22023',message:'No effective follow-up policy; ask a director to publish one'}),/directeur/);
+assert.doesNotMatch(commandError({message:'secret table internals'}),/secret|internals/);
+const files=['CrmWorkspace.jsx','LeadDetailSheet.jsx','CrmActionDialog.jsx'];
+for(const file of files){const code=readFileSync(new URL('../src/components/crm/'+file,import.meta.url),'utf8');assert.doesNotMatch(code,/\.from\(|\.insert\(|\.update\(|crm_get_submission_attribution|raw_payload|campaign_id/);}
+const migration=readFileSync(new URL('../supabase/migrations/081_crm_today_read_model.sql',import.meta.url),'utf8');
+assert.doesNotMatch(migration,/\b(insert into|update public\.|delete from|create table|alter table|select \*)\b/i);
+assert.equal((migration.match(/stable security definer/g)||[]).length,6);
+console.log('PASS Phase 4 time conversion, normalized links, request replay, safe errors and scope checks');

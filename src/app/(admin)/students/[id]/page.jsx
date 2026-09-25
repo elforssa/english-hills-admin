@@ -1,5 +1,7 @@
 'use client';
 
+import { ReceptionistStudentDetail } from '@/components/students/ReceptionistOperations';
+
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -22,7 +24,12 @@ const PREMIUM_STATUS_LABELS = {
   Cancelled: 'Annulée', Missed: 'Absence',
 };
 
-export default function StudentDetail() {
+export default function StudentDetailPage() {
+  const { role } = useAuth();
+  return role === 'receptionist' ? <ReceptionistStudentDetail /> : <StudentDetail />;
+}
+
+function StudentDetail() {
   const { role } = useAuth();
   const canManage = ['admin', 'director'].includes(role);
   const params = useParams();

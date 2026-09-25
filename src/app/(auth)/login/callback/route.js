@@ -10,13 +10,7 @@
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase';
 
-const PORTAL_FOR_ROLE = {
-  director: '/dashboard',
-  admin:    '/dashboard',
-  teacher:  '/teacher-portal',
-  parent:   '/parent-portal',
-  student:  '/student-portal',
-};
+import { loginDestination } from '@/lib/roleAccess.mjs';
 
 // Open-redirect guard. We only honour `next` when it is an internal,
 // absolute-path URL with no host component. Anything else (protocol-relative
@@ -64,6 +58,6 @@ export async function GET(request) {
     }
   }
 
-  const target = next || PORTAL_FOR_ROLE[appliedRole] || '/unauthorized';
+  const target = loginDestination(appliedRole, next);
   return NextResponse.redirect(`${origin}${target}`);
 }

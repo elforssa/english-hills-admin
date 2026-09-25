@@ -1,16 +1,13 @@
 'use client';
 
+import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
-import { entities, auth, integrations } from '@/lib/entities';
+import { entities } from '@/lib/entities';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import PlacementTestModal from '@/components/placement/PlacementTestModal';
 import { Button } from '@/components/ui/button';
-import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
-
-const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
-const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 const STATUS_COLORS = {
   'Planifié': 'bg-blue-100 text-blue-700',
@@ -19,148 +16,8 @@ const STATUS_COLORS = {
   'Affecté': 'bg-green-100 text-green-700',
 };
 
-// Wraps the placement-test save with an outbound notification email when
-// the test transitions into "Résultat saisi" or "Affecté" — the two states
-// in which the student/parent can act on the outcome.
-async function notifyPlacementResult({ before, after, students }) {
-  const RESULT_STATES = new Set(['Résultat saisi', 'Affecté']);
-  const justEnteredResultState =
-    RESULT_STATES.has(after?.status) && !RESULT_STATES.has(before?.status);
-  if (!justEnteredResultState) return false;
-
-  const student = students.find(s => s.id === after.student_id);
-  const recipients = [];
-  if (student?.parent_email) recipients.push(student.parent_email);
-  if (student?.email && student.email !== student?.parent_email) {
-    recipients.push(student.email);
-  }
-  if (recipients.length === 0) return false;
-
-  await integrations.Core.SendEmail({
-    to: recipients,
-    subject: '[English Hills] Résultat de test de niveau',
-    body:
-      `Bonjour,\n\n` +
-      `Le test de niveau de ${after.student_name || student?.full_name || ''} est disponible.\n\n` +
-      `Niveau recommandé : ${after.niveau_recommande || '—'}\n` +
-      (after.score != null ? `Score : ${after.score}\n` : '') +
-      (after.notes ? `\nNotes de l'examinateur :\n${after.notes}\n` : '') +
-      `\nVous serez contacté(e) pour la suite (affectation à un groupe).\n\n` +
-      `— English Hills Language Center`,
-  });
-  return true;
-}
-
-function TestModal({ test, groups, students, onSave, onClose }) {
-  const [form, setForm] = useState(test || { student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const selectedStudent = students.find(student => student.id === form.student_id);
-  const availableLevels = selectedStudent
-    ? getLevelsForSession(selectedStudent.session_type || 'Yearly', form.niveau_recommande)
-    : ALL_LEVELS;
-  const availableGroups = groups.filter(group => (
-    !selectedStudent
-    || groupMatchesSelection(group, selectedStudent.session_type || 'Yearly', form.niveau_recommande)
-    || group.id === form.groupe_affecte_id
-  ));
-
-  const handleStudentChange = (id) => {
-    const s = students.find(s => s.id === id);
-    set('student_id', id);
-    set('student_name', s?.full_name || '');
-    if (s?.niveau_cefr) set('niveau_recommande', s.niveau_cefr);
-    set('groupe_affecte_id', '');
-  };
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    const data = { ...form, student_id: form.student_id || null, groupe_affecte_id: form.groupe_affecte_id || null, score: form.score !== '' ? parseFloat(form.score) : null };
-    try {
-      let saved;
-      if (form.id) {
-        saved = await entities.PlacementTest.update(form.id, data);
-      } else {
-        saved = await entities.PlacementTest.create(data);
-      }
-
-      // Fire notification email if the result/affectation was just published.
-      let notified = false;
-      try {
-        notified = await notifyPlacementResult({
-          before: test || null,
-          after: saved,
-          students,
-        });
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[placement-tests] notification email failed:', err);
-        // integrations.SendEmail already toasted; carry on.
-      }
-
-      toast.success((form.id ? 'Test mis à jour' : 'Test créé') + (notified ? ' — Email envoyé' : ''));
-      onSave();
-    } catch {
-      // entities.js already toasted — keep modal open for retry.
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{form.id ? 'Modifier le test' : 'Nouveau test de niveau'}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="col-span-2">
-            <label className={labelClass}>Apprenant *</label>
-            <select className={inputClass} value={form.student_id || ''} onChange={e => handleStudentChange(e.target.value)}>
-              <option value="">— Choisir un apprenant ou saisir manuellement —</option>
-              {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-            </select>
-            {!form.student_id && (
-              <input className={`${inputClass} mt-2`} placeholder="Ou saisir le nom manuellement..." value={form.student_name} onChange={e => set('student_name', e.target.value)} required={!form.student_id} />
-            )}
-          </div>
-            <div><label className={labelClass}>Date *</label><input type="date" className={inputClass} value={form.date_test} onChange={e => set('date_test', e.target.value)} required /></div>
-            <div><label className={labelClass}>Heure</label><input type="time" className={inputClass} value={form.heure || ''} onChange={e => set('heure', e.target.value)} /></div>
-            <div><label className={labelClass}>Examinateur</label><input className={inputClass} value={form.examinateur || ''} onChange={e => set('examinateur', e.target.value)} /></div>
-            <div><label className={labelClass}>Statut</label>
-              <select className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
-                {['Planifié','Passé','Résultat saisi','Affecté'].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div><label className={labelClass}>Score</label><input type="number" className={inputClass} value={form.score || ''} onChange={e => set('score', e.target.value)} min="0" max="100" /></div>
-            <div><label className={labelClass}>Niveau recommandé</label>
-              <select className={inputClass} value={form.niveau_recommande} onChange={e => set('niveau_recommande', e.target.value)}>
-                {availableLevels.map(n => <option key={n}>{n}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2"><label className={labelClass}>Groupe affecté</label>
-              <select className={inputClass} value={form.groupe_affecte_id || ''} onChange={e => {
-                const group = groups.find(item => item.id === e.target.value);
-                setForm(f => ({ ...f, groupe_affecte_id: e.target.value, niveau_recommande: group?.niveau || f.niveau_recommande }));
-              }}>
-                <option value="">— Choisir —</option>
-                {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
-              </select>
-            </div>
-            <div className="col-span-2"><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function PlacementTests() {
+  const { role } = useAuth();
   const [tests, setTests] = useState([]);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
@@ -202,7 +59,7 @@ export default function PlacementTests() {
               {tests.map(t => (
                 <div key={t.id} className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm"><PersonLink id={t.student_id}>{t.student_name}</PersonLink></p>
+                    <p className="font-semibold text-sm"><PersonLink id={t.student_id}>{t.student_name}</PersonLink>{t.crm_lead_id && <span className="ml-2 text-xs font-normal text-muted-foreground">Prospect CRM</span>}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[t.status] || 'bg-gray-100 text-gray-500'}`}>{t.status}</span>
                   </div>
                   <button onClick={() => setModal(t)} className="text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Test du {t.date_test || '—'}</button>
@@ -213,7 +70,7 @@ export default function PlacementTests() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(t)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                    {role !== 'receptionist' && !t.crm_lead_id && <button onClick={() => handleDelete(t.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -230,7 +87,7 @@ export default function PlacementTests() {
                 <tbody className="divide-y divide-border">
                   {tests.map(t => (
                     <tr key={t.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium"><PersonLink id={t.student_id}>{t.student_name}</PersonLink></td>
+                      <td className="px-4 py-3 font-medium"><PersonLink id={t.student_id}>{t.student_name}</PersonLink>{t.crm_lead_id && <span className="ml-2 text-xs font-normal text-muted-foreground">Prospect CRM</span>}</td>
                       <td className="px-4 py-3"><button onClick={() => setModal(t)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Test du {t.date_test || '—'}</button></td>
                       <td className="px-4 py-3 text-muted-foreground">{t.heure || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{t.examinateur || '—'}</td>
@@ -244,7 +101,7 @@ export default function PlacementTests() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => setModal(t)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          <button onClick={() => handleDelete(t.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                          {role !== 'receptionist' && !t.crm_lead_id && <button onClick={() => handleDelete(t.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>
@@ -255,7 +112,7 @@ export default function PlacementTests() {
           </>
         )}
       </div>
-      {modal !== null && <TestModal test={modal.id ? modal : null} groups={groups} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <PlacementTestModal test={modal.id ? modal : null} groups={groups} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }
