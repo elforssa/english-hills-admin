@@ -1,4 +1,4 @@
-name: CRM intake scheduler
+name: CRM Intake Scheduler
 
 on:
   schedule:

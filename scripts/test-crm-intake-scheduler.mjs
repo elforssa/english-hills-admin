@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { runScheduledIntake } from '../src/lib/crm/intake/scheduler.mjs';
 
 const workflow = readFileSync(new URL('../.github/workflows/crm-intake-scheduler.yml', import.meta.url), 'utf8');
+assert.match(workflow, /^name: CRM Intake Scheduler$/m);
 assert.match(workflow, /cron: '2-57\/5 \* \* \* \*'/);
 assert.match(workflow, /workflow_dispatch:/);
 assert.match(workflow, /secrets\.CRM_INTAKE_SCHEDULER_TOKEN/);
