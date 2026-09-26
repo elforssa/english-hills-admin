@@ -49,6 +49,17 @@ assert.equal(normalized.core_fields.learner_name,'Adam');assert.equal(normalized
 assert(!normalized.form_answers.some(a=>['campaign_id','landing_page','referrer','cookies'].includes(a.key)));assert.equal(normalized.form_answers.find(a=>a.key==='consent').value_type,'boolean');
 assert.deepEqual(normalized.form_answers.find(a=>a.key==='days').value,['Lundi','Mardi']);
 assert.equal(normalizeWebsite({payload:{...payload,answers:{other_name:'Lina'},contact:data.contact}},{...map,field_map:{learner_name:'other_name'},default_program_interest_text:'Summer'}).core_fields.program_interest_text,'Summer');
+for (const form of ['general_contact_v1', 'campaign_adult_lead_v1']) {
+ const inquiry = normalizeWebsite({payload:{...payload,form_key:form,contact:{name:'Business contact',email:'business@example.invalid'},answers:{program_interest:'Formation entreprise',company_size:'10-20'}}},
+  {id:form,form_name:'Inquiry',field_map:{program_interest_text:'program_interest'},question_labels:{}});
+ assert.equal(inquiry.core_fields.contact_name,'Business contact');
+ assert.equal(inquiry.core_fields.learner_name,null);
+ assert.equal(inquiry.core_fields.program_interest_text,'Formation entreprise');
+ assert.equal(inquiry.form_answers.find(a=>a.key==='company_size').value,'10-20');
+}
+const parentInquiry=normalizeWebsite({payload:{...payload,contact:{name:'Parent'},answers:{learner_name:'Child A',program_interest:'Yearly'}}},
+ {id:'campaign_parent_lead_v1',field_map:{learner_name:'learner_name',program_interest_text:'program_interest'},question_labels:{}});
+assert.equal(parentInquiry.core_fields.learner_name,'Child A');
 assert.throws(()=>normalizeWebsite({payload},null),e=>e.code==='missing_mapping');
 let finalizations=0;
 await processExternalJobs({env:{},fetchImpl:async()=>{throw Error('Website must never call Meta');},rpc:async(name,args)=>{
