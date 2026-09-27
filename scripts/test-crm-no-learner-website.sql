@@ -1,4 +1,4 @@
--- Local synthetic regression for migration 092. Every fixture rolls back.
+-- Local synthetic regression for mapping learner policy. Every fixture rolls back.
 \set ON_ERROR_STOP on
 begin;
 create function pg_temp.ok(v boolean,label text) returns void language plpgsql as $$ begin if v is not true then raise exception 'FAIL: %',label;end if;end $$;
@@ -18,9 +18,11 @@ select crm_create_followup_policy(gen_random_uuid(),'{"weekly_hours":{"1":[["10:
 create temp table fx(k text primary key,v jsonb);
 insert into fx values('site',crm_save_website_connection('{"connection_key":"phase92-site","origin":"https://school.example"}'));
 select crm_save_website_connection('{"connection_key":"phase92-site","origin":"https://school.example","enabled":true}',(select (v->>'id')::uuid from fx where k='site'),1);
-select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"general_contact_v1","field_map":{"program_interest_text":"program_interest"},"effective_from":"2020-01-01Z"}');
-select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"campaign_adult_lead_v1","field_map":{"program_interest_text":"program_interest"},"effective_from":"2020-01-01Z"}');
+select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"general_contact_v1","learner_policy":"optional","field_map":{"program_interest_text":"program_interest"},"effective_from":"2020-01-01Z"}');
+select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"campaign_adult_lead_v1","learner_policy":"optional","field_map":{"program_interest_text":"program_interest"},"effective_from":"2020-01-01Z"}');
 select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"campaign_parent_lead_v1","field_map":{"learner_name":"learner_name","program_interest_text":"program_interest"},"effective_from":"2020-01-01Z"}');
+
+select crm_publish_website_form_mapping((select (v->>'id')::uuid from fx where k='site'),'{"form_key":"custom_inquiry","learner_policy":"optional","field_map":{},"effective_from":"2020-01-01Z"}');
 
 create function pg_temp.ingest(form text,contact_name text,email text,learner text,program text) returns jsonb
 language plpgsql as $$ declare request uuid:=gen_random_uuid();j crm_ingestion_jobs;m jsonb;begin
@@ -38,6 +40,8 @@ language plpgsql as $$ declare request uuid:=gen_random_uuid();j crm_ingestion_j
 end $$;
 
 select pg_temp.actor(true);
+insert into fx values('custom',pg_temp.ingest('custom_inquiry','Custom contact','custom@example.invalid',null,'Custom program'));
+select pg_temp.ok((select learner_name is null from crm_leads where id=(select (v->>'lead_id')::uuid from fx where k='custom')),'arbitrary website mapping can allow unnamed learners');
 insert into fx values('general',pg_temp.ingest('general_contact_v1','Business contact','business@example.invalid',null,'Formation entreprise'));
 select pg_temp.ok((select l.learner_name is null and l.learner_name_normalized is null and l.status='NEW'
  from crm_leads l where l.id=(select (v->>'lead_id')::uuid from fx where k='general')),'general form creates unnamed NEW lead');

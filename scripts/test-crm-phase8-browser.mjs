@@ -10,6 +10,8 @@ assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,'http://127.0.0.1:54321');
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
 assert.equal(sql("select count(*) from vault.secrets where name in ('crm_meta_worker_url','crm_meta_worker_token')"),'0');
 const q=s=>"'"+String(s).replaceAll("'","''")+"'";
+const learnerPolicy=process.env.CRM_TEST_LEARNER_POLICY || 'required';
+assert(['required','optional'].includes(learnerPolicy));
 const run=randomUUID(),password=randomBytes(20).toString('hex'),connection=randomUUID(),mapping=randomUUID();
 let director,receptionist,browser,page;
 const users=[];
@@ -22,10 +24,15 @@ try {
  [director,receptionist]=users;
  sql(`begin;set local request.jwt.claim.sub='${director.id}';select crm_create_followup_policy(gen_random_uuid(),'{"weekly_hours":{"1":[["10:00","20:00"]],"2":[["10:00","20:00"]],"3":[["10:00","20:00"]],"4":[["10:00","20:00"]],"5":[["10:00","20:00"]],"6":[["10:00","20:00"]],"7":[]}}');
  insert into crm_integration_connections(id,connection_key,page_id,api_version,enabled,created_by,updated_by) values('${connection}','test-${run}','88888','v99.0',true,'${director.id}','${director.id}');
- insert into crm_form_mappings(id,connection_id,form_key,version,field_map,effective_from,created_by) values('${mapping}','${connection}','3',1,'{}','2020-01-01','${director.id}');commit;`);
+ insert into crm_form_mappings(id,connection_id,form_key,version,field_map,effective_from,created_by,learner_policy) values('${mapping}','${connection}','3',1,'{}','2020-01-01','${director.id}','${learnerPolicy}');commit;`);
  const centerBefore=sql('select jsonb_build_array((select count(*) from students),(select count(*) from enrollments),(select count(*) from placement_tests),(select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events))');
  const payload={occurred_at:new Date().toISOString(),core_fields:{contact_name:'Sara demande Meta',phone:'0612345678',program_interest_text:'Annual'},form_answers:[{key:'days',label:'Jours préférés',value:['Lundi','Mardi'],value_type:'array',label_source:'mapping'},{key:'consent',label:'Souhaite un rappel',value:true,value_type:'boolean',label_source:'mapping'},{key:'age',label:'Âge',value:12,value_type:'number',label_source:'mapping'}],source_label:'Meta • Annual',attribution:{external_submission_id:'2',page_id:'88888',form_id:'3',campaign_id:'987654321987654321',attribution_status:'partial'}};
- sql(`begin;set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';select crm_accept_meta_events('[{"page_id":"88888","leadgen_id":"2","form_id":"3","created_time":1700000000}]');select crm_claim_meta_jobs();select crm_finalize_meta_job(id,lease_token,'${mapping}',${q(JSON.stringify(payload))}) from crm_ingestion_jobs where connection_id='${connection}';commit;`);
+ if(learnerPolicy==='optional') {
+  // A named child makes the next unnamed inquiry ambiguous, exercising optional review.
+  const named={...payload,core_fields:{...payload.core_fields,learner_name:'Existing child'},attribution:{...payload.attribution,external_submission_id:'1'}};
+  sql(`begin;set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';select crm_accept_meta_events('[{"page_id":"88888","leadgen_id":"1","form_id":"3","created_time":1700000000}]');select crm_claim_meta_jobs();select crm_finalize_meta_job(id,lease_token,'${mapping}',${q(JSON.stringify(named))}) from crm_ingestion_jobs where connection_id='${connection}' and status='processing';commit;`);
+ }
+ sql(`begin;set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';select crm_accept_meta_events('[{"page_id":"88888","leadgen_id":"2","form_id":"3","created_time":1700000000}]');select crm_claim_meta_jobs();select crm_finalize_meta_job(id,lease_token,'${mapping}',${q(JSON.stringify(payload))}) from crm_ingestion_jobs where connection_id='${connection}' and status='processing';commit;`);
  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});
  await context.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());
  page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -42,12 +49,17 @@ try {
  await expect(review).toContainText('Lundi, Mardi');await expect(review).toContainText('Oui');await expect(review).toContainText('12');assert(!(await page.locator('body').innerText()).includes('987654321987654321'));
  await page.screenshot({path:'/private/tmp/hills-phase8-review.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/private/tmp/hills-phase8-review-mobile.png',fullPage:true});
- await review.getByLabel('Apprenant de la demande',{exact:true}).fill('Adam demande Meta');await review.getByRole('button',{name:'Confirmer la décision'}).click();await expect(review).toHaveCount(0);
- const lead=sql(`select lead_id from crm_submissions where form_mapping_id='${mapping}'`);
- assert(lead);await page.goto(`http://localhost:3101/crm/leads?lead=${lead}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
- await expect(page.getByRole('dialog')).toContainText('Adam demande Meta');assert(!(await page.locator('body').innerText()).includes('987654321987654321'));
+ if(learnerPolicy==='required') await review.getByLabel('Apprenant de la demande',{exact:true}).fill('Adam demande Meta');
+ else { await expect(review.getByLabel('Apprenant (facultatif) de la demande',{exact:true})).toHaveValue('');await expect(review.getByRole('button',{name:'Confirmer la décision'})).toBeEnabled(); }
+ await review.getByRole('button',{name:'Confirmer la décision'}).click();await expect(review).toHaveCount(0);
+ const lead=sql(`select s.lead_id from crm_submissions s join crm_ingestion_jobs j on j.submission_id=s.id where s.form_mapping_id='${mapping}' and j.external_key='88888:2'`);
+ assert(lead);if(learnerPolicy==='optional')assert.equal(sql(`select learner_name is null and learner_name_normalized is null from crm_leads where id='${lead}'`),'t');await page.goto(`http://localhost:3101/crm/leads?lead=${lead}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
+ await expect(page.getByRole('dialog')).toContainText(learnerPolicy==='required'?'Adam demande Meta':'Apprenant à préciser');assert(!(await page.locator('body').innerText()).includes('987654321987654321'));
  assert.equal(sql('select jsonb_build_array((select count(*) from students),(select count(*) from enrollments),(select count(*) from placement_tests),(select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events))'),centerBefore);
  assert.deepEqual(errors,[]);console.log('PASS receptionist intake review, safe typed answers, explicit resolution, normal lead drawer, mobile and no center side effects');
+} catch(error) {
+ if(page) await page.screenshot({path:'/private/tmp/crm-phase8-failure.png',fullPage:true}).catch(()=>{});
+ throw error;
 } finally {
  if(browser)await browser.close();
  if(director){sql(`begin;lock table crm_ingestion_jobs,crm_submissions,crm_submission_attribution,crm_leads,crm_tasks,crm_activities,crm_followup_policies,crm_form_mappings in access exclusive mode;

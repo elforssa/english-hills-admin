@@ -1,5 +1,11 @@
 # Website inquiries without a named learner
 
+Historical behavior through migration 092 is described below. Migration 093
+supersedes the form-key rule with an immutable mapping policy; see
+[the mapping policy documentation](crm-mapping-learner-policy.md). Existing
+versions retain their semantics, while new optional versions must explicitly
+publish `learner_policy: "optional"`.
+
 Migration 092 changes the shared external-intake functions for two website form
 keys only: `general_contact_v1` and `campaign_adult_lead_v1`. These forms can
 represent a business or adult inquiry before a separate learner is identified.
