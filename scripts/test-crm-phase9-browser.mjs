@@ -28,8 +28,8 @@ try {
  insert into crm_integration_connections(id,provider,connection_key,settings,enabled,created_by,updated_by) values('${connection}','website','test-${run}','{"origin":"http://localhost:3199"}',true,'${director.id}','${director.id}');
  insert into crm_form_mappings(id,channel,connection_id,form_key,form_name,version,field_map,question_labels,default_program_interest_text,default_session_type,effective_from,created_by)
  values('${mapping}','website','${connection}','annual','Programme annuel',1,'{"learner_name":"child"}','{"child":"Apprenant","days":"Jours préférés"}','Annual','Yearly','2020-01-01','${director.id}');
- insert into crm_form_mappings(id,channel,connection_id,form_key,form_name,version,field_map,question_labels,effective_from,created_by)
- values('${optionalMapping}','website','${connection}','general_contact_v1','General contact inquiry',1,'{"program_interest_text":"program_interest"}','{}','2020-01-01','${director.id}');commit;`);
+ insert into crm_form_mappings(id,channel,connection_id,form_key,form_name,version,field_map,question_labels,effective_from,created_by,learner_policy)
+ values('${optionalMapping}','website','${connection}','general_contact_v1','General contact inquiry',1,'{"program_interest_text":"program_interest"}','{}','2020-01-01','${director.id}','optional');commit;`);
  const centerQuery='select jsonb_build_array((select count(*) from students),(select count(*) from enrollments),(select count(*) from placement_tests),(select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events))';
  const centerBefore=sql(centerQuery);
  browser=await chromium.launch({headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}});

@@ -48,7 +48,7 @@ export default function CrmIntakeReview() {
   if (review.isError) return <p className="mb-5 text-sm text-slate-600">Les demandes à vérifier sont indisponibles. <button className="underline" onClick={() => review.refetch()}>Réessayer</button></p>;
   if (!review.data?.total) return null;
   return <section className="mb-6 overflow-hidden rounded-xl border bg-white" aria-label="Demandes à vérifier">
-    <div className="px-4 py-3"><h2 className="font-semibold text-slate-900">À vérifier <span className="ml-2 text-sm font-normal text-slate-500">{review.data.total}</span></h2><p className="mt-1 text-xs text-slate-500">Précisez l’apprenant et le programme avant de commencer le suivi.</p></div>
+    <div className="px-4 py-3"><h2 className="font-semibold text-slate-900">À vérifier <span className="ml-2 text-sm font-normal text-slate-500">{review.data.total}</span></h2><p className="mt-1 text-xs text-slate-500">Vérifiez les informations de la demande avant de commencer le suivi.</p></div>
     {review.data.rows.map(item => <ReviewItem key={item.id} item={item} onDone={() => { setOffset(0); refresh(); }} />)}
     <Pager offset={offset} total={review.data.total} size={10} onChange={setOffset} />
   </section>;

@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import uuid
 assert (Path('.git/HEAD').read_text().strip().startswith('ref: refs/heads/codex/'))
+learner_policy=os.environ.get('CRM_TEST_LEARNER_POLICY','required')
+assert learner_policy in ('required','optional')
 actor=str(uuid.uuid4()); connection=str(uuid.uuid4()); mapping=str(uuid.uuid4()); page=str(uuid.uuid4().int)[:24]
 args=['psql','-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
 def sql(s,check=True):
@@ -24,7 +26,7 @@ try:
  sql(f"""begin;insert into auth.users(id,email,aud,role) values('{actor}','phase8-{actor}@example.invalid','authenticated','authenticated');
  update profiles set role='director' where id='{actor}';
  insert into crm_integration_connections(id,connection_key,page_id,api_version,enabled,created_by,updated_by) values('{connection}','test-{actor}','{page}','v99.0',true,'{actor}','{actor}');
- insert into crm_form_mappings(id,connection_id,form_key,version,field_map,effective_from,created_by) values('{mapping}','{connection}','3',1,'{{}}','2020-01-01','{actor}');
+ insert into crm_form_mappings(id,connection_id,form_key,version,field_map,effective_from,created_by,learner_policy) values('{mapping}','{connection}','3',1,'{{}}','2020-01-01','{actor}','{learner_policy}');
  set local request.jwt.claim.sub='{actor}';select public.crm_create_followup_policy(gen_random_uuid(),'{{"weekly_hours":{{"1":[["10:00","20:00"]],"2":[["10:00","20:00"]],"3":[["10:00","20:00"]],"4":[["10:00","20:00"]],"5":[["10:00","20:00"]],"6":[["10:00","20:00"]],"7":[]}}}}');commit;""");created=True
  event=json.dumps([dict(page_id=page,leadgen_id='2',form_id='3',created_time=1700000000)])
  parallel(lambda _:worker(f'select public.crm_accept_meta_events({q(event)})'))
@@ -36,12 +38,26 @@ try:
  newer=json.loads(worker('select public.crm_claim_meta_jobs(1)').stdout.strip())[0]
  assert newer['lease_token']!=lease
  assert worker(f"select public.crm_fail_meta_job('{job}','{lease}','network')",False).returncode!=0
- data=dict(occurred_at='2026-09-01T10:00:00Z',core_fields=dict(contact_name='Synthetic concurrent parent',phone='0612345678',learner_name='Synthetic child',program_interest_text='Annual'),form_answers=[],source_label='Meta',attribution=dict(external_submission_id='2',page_id=page,form_id='3',attribution_status='partial'))
+ data=dict(occurred_at='2026-09-01T10:00:00Z',core_fields=dict(contact_name='Synthetic concurrent parent',phone='0612345678',learner_name=None if learner_policy=='optional' else 'Synthetic child',program_interest_text='Annual'),form_answers=[],source_label='Meta',attribution=dict(external_submission_id='2',page_id=page,form_id='3',attribution_status='partial'))
  cmd=f"select public.crm_finalize_meta_job('{job}','{newer['lease_token']}','{mapping}',{q(json.dumps(data))})"
  results=parallel(lambda _:worker(cmd,False))
  assert sorted(r.returncode for r in results)==[0,3],[r.stderr for r in results]
  assert sql(f"select count(*) from crm_submissions where form_mapping_id='{mapping}'").stdout.strip()=='1'
  assert sql(f"select count(*) from crm_tasks where lead_id in(select lead_id from crm_submissions where form_mapping_id='{mapping}') and task_type='first_contact'").stdout.strip()=='1'
+ # Independent simultaneous inquiries must reuse the same compatible opportunity.
+ for external in ('4','5'):
+  worker(f"select public.crm_accept_meta_events({q(json.dumps([dict(page_id=page,leadgen_id=external,form_id='3',created_time=1700000000)]))})")
+ jobs=json.loads(worker('select public.crm_claim_meta_jobs(2)').stdout.strip())
+ assert len(jobs)==2
+ def finalize_next(i):
+  payload={**data,'attribution':{**data['attribution'],'external_submission_id':jobs[i]['payload']['leadgen_id']}}
+  return worker(f"select public.crm_finalize_meta_job('{jobs[i]['id']}','{jobs[i]['lease_token']}','{mapping}',{q(json.dumps(payload))})")
+ parallel(finalize_next)
+ assert sql(f"select count(distinct lead_id) from crm_submissions where form_mapping_id='{mapping}'").stdout.strip()=='1'
+ assert sql(f"select count(*) from crm_tasks where lead_id in(select lead_id from crm_submissions where form_mapping_id='{mapping}') and task_type='first_contact'").stdout.strip()=='1'
+ if learner_policy=='optional':
+  assert sql(f"select learner_name is null and learner_name_normalized is null from crm_leads where first_submission_id in(select id from crm_submissions where form_mapping_id='{mapping}')").stdout.strip()=='t'
+ print(f'PASS {learner_policy} concurrent independent inquiries reuse one lead and task',flush=True)
  print('PASS duplicate callbacks, concurrent claims, crash recovery, stale worker fencing, concurrent finalization exactly once',flush=True)
 finally:
  if created:

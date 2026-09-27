@@ -63,3 +63,20 @@ await assert.rejects(retrieveLead(job, 'fake-token', async () => Response.json({
 await assert.rejects(graphGet({ apiVersion: 'v99.0', token: 'fake', id: '2', fields: 'id', fetchImpl: async () => new Response(new ReadableStream({ start(controller) { controller.error(Error('network interrupted')); } })) }), e => e.code === 'network');
 assert(new MetaError('timeout').message === 'timeout');
 console.log('PASS Phase 8 webhook/provider/mapping/worker fixtures');
+
+// Optional Yearly mapping preserves arbitrary questions without inferring identity.
+const yearly = normalizeLead({payload:{page_id:'1'}}, {lead:{id:'2',form_id:'3',created_time:'2026-09-01T10:00:00Z',field_data:[
+ {name:'full_name',values:['Synthetic parent']},{name:'phone_number',values:['0612345678']},
+ {name:'whatsapp_number',values:['0612345679']},{name:"âge_de_l'enfant",values:['7-8']},{name:'travel_to_almaz',values:['Oui']}
+]}}, {learner_policy:'optional',field_map:{contact_name:'full_name',phone:'phone_number',whatsapp:'whatsapp_number'},
+ default_session_type:'Yearly',default_program_interest_text:'Programme annuel'});
+assert.equal(yearly.core_fields.contact_name,'Synthetic parent');
+assert.equal(yearly.core_fields.phone,'0612345678');
+assert.equal(yearly.core_fields.whatsapp,'0612345679');
+assert.equal(yearly.core_fields.learner_name,null);
+assert.equal(yearly.core_fields.learner_age,null);
+assert.equal(yearly.core_fields.session_type,'Yearly');
+assert.equal(yearly.core_fields.program_interest_text,'Programme annuel');
+assert.equal(yearly.form_answers.find(a=>a.key==="âge_de_l'enfant").value,'7-8');
+assert.equal(yearly.form_answers.find(a=>a.key==='travel_to_almaz').value,'Oui');
+console.log('PASS optional Meta Yearly normalization and flexible answers');
