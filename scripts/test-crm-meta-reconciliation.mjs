@@ -10,9 +10,13 @@ const form = (key = '31') => ({ connection_id: 'fake-uuid', form_key: key, page_
   access_token_secret_ref: 'CRM_META_PAGE_TOKEN_TEST', started_at: iso(-20), lookback_minutes: 60, lease_token: 'lease' });
 const env = { CRM_META_PAGE_TOKEN_TEST: 'synthetic-token' };
 function harness({ forms = [form()], pages = [[lead('51')]], status = 200 } = {}) {
-  let graphCalls = 0, cursorSeen = [], failures = [], leases = [...forms], jobs = new Map();
+  let graphCalls = 0, cursorSeen = [], failures = [], leases = [...forms], jobs = new Map(), activeForm;
   const rpc = async (name, args) => {
-    if (name === 'crm_claim_meta_reconciliation') return leases.shift() || null;
+    if (name === 'crm_claim_meta_reconciliation') {
+      const claimed = leases.shift() || null;
+      activeForm = claimed?.form_key;
+      return claimed;
+    }
     if (name === 'crm_enqueue_meta_reconciled') {
       let enqueued = 0;
       for (const event of args.p_events) { const key = `${event.page_id}:${event.leadgen_id}`; if (!jobs.has(key)) { jobs.set(key, event); enqueued++; } }
@@ -25,7 +29,10 @@ function harness({ forms = [form()], pages = [[lead('51')]], status = 200 } = {}
     graphCalls++;
     assert.equal(options.headers.Authorization, 'Bearer synthetic-token');
     assert.equal(url.host, 'graph.facebook.com');
+    if (activeForm === '31') assert.equal(url.pathname, '/v26.0/31/leads');
+    else assert.equal(url.pathname, `/v26.0/${activeForm}/leads`);
     assert.equal(url.searchParams.get('fields'), 'id,created_time,form_id,ad_id,field_data');
+    assert.equal(url.searchParams.get('limit'), '25');
     cursorSeen.push(url.searchParams.get('after'));
     return Response.json(status === 200 ? { data: pages[graphCalls - 1] || [], paging: { cursors: { after: graphCalls === 1 ? 'cursor+/=' : `cursor${graphCalls}` } } } : { error: { code: 613 } }, { status });
   };

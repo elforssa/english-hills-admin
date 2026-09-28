@@ -27,7 +27,9 @@ const mapping = { id: 'mapping', field_map: { contact_name: 'parent', phone: 'ph
  question_labels: { parent: 'Parent', days: 'Jours préférés' }, form_name: 'Rentrée', default_program_interest_text: 'Annual English', default_session_type: 'Yearly' };
 const fetchSuccess = async (url, options) => {
  assert.equal(url.hostname, 'graph.facebook.com'); assert(!url.searchParams.has('access_token'));assert.equal(options.headers.Authorization, 'Bearer fake-token');
- return Response.json(url.pathname.endsWith('/2') ? lead : { id: '4', name: 'Ad snapshot', campaign: { id: '5', name: 'Campaign snapshot' }, adset: { id: '6', name: 'Adset snapshot' } });
+ if (url.pathname === '/v99.0/2') return Response.json(lead);
+ assert.equal(url.pathname, '/v99.0/4');
+ return Response.json({ id: '4', name: 'Ad snapshot', campaign: { id: '5', name: 'Campaign snapshot' }, adset: { id: '6', name: 'Adset snapshot' } });
 };
 const retrieved = await retrieveLead(job, 'fake-token', fetchSuccess);
 const normalized = normalizeLead(job, retrieved, mapping);
@@ -37,6 +39,14 @@ assert(!normalized.form_answers.some(a => a.key === 'campaign_id'));
 assert(!JSON.stringify(normalized.attribution.raw_payload).includes('SECRET-ID'));
 assert.deepEqual(normalized.form_answers.find(a => a.key === 'days').value, ['lundi', 'mardi']);
 assert.equal(normalized.form_answers.find(a => a.key === 'consent').value_type, 'boolean');
+for (const edge of ['leads/extra', '/leads', 'leads?after=evil', 'https://evil.example/leads', '', null]) {
+ await assert.rejects(graphGet({ apiVersion: 'v99.0', token: 'fake', id: '2', edge, fields: 'id',
+  fetchImpl: async () => { throw Error('Unexpected fetch'); } }), e => e.code === 'invalid_provider_data');
+}
+for (const id of ['2/leads', 'https://evil.example', '2?fields=id']) {
+ await assert.rejects(graphGet({ apiVersion: 'v99.0', token: 'fake', id, edge: 'leads', fields: 'id',
+  fetchImpl: async () => { throw Error('Unexpected fetch'); } }), e => e.code === 'invalid_provider_data');
+}
 const other = normalizeLead(job, { lead: { ...lead, field_data: [{ name: 'guardian_name', values: ['Other guardian'] }] } }, { ...mapping, field_map: { contact_name: 'guardian_name' }, default_program_interest_text: 'Summer' });
 assert.equal(other.core_fields.contact_name, 'Other guardian');assert.equal(other.core_fields.learner_name, null);assert.equal(other.core_fields.program_interest_text, 'Summer');
 assert.throws(() => normalizeLead(job, retrieved, null), e => e.code === 'missing_mapping');
