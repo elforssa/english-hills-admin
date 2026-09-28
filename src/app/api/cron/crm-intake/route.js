@@ -6,8 +6,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export function GET(request) {
-  // GitHub Actions supplies a dedicated scheduler bearer. It is intentionally
-  // separate from the existing worker endpoint credential.
+  // Supabase pg_cron (primary) and GitHub Actions (backup) supply the same
+  // dedicated scheduler bearer. It stays separate from the worker credential.
   return runScheduledIntake(request, {
     env: process.env,
     rpc: metaRpc,

@@ -9,7 +9,7 @@ import time
 platform = Path(sys.argv[1]).read_text()
 assert 'CREATE TABLE auth.users' in platform and 'CREATE TABLE storage.objects' in platform
 assert 'CREATE TABLE public.' not in platform and '\nCOPY ' not in platform
-files = sorted(Path('supabase/migrations').glob('*.sql'))
+files = sorted(f for f in Path('supabase/migrations').glob('*.sql') if int(f.name[:3]) <= 94)
 assert [f.name[:3] for f in files] == [f'{i:03}' for i in range(1, 95)]
 container = 'supabase_db_hills-admin-next'
 
