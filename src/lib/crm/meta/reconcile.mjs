@@ -20,7 +20,7 @@ export async function reconcileMetaLeads({ rpc, env, fetchImpl }) {
     const lower = Math.max(Date.parse(form.started_at), Date.now() - form.lookback_minutes * 60000);
     let after, priorTime = Infinity;
     for (let page = 0; page < MAX_PAGES; page += 1) {
-      const body = await graphGet({ apiVersion: form.api_version, token: env[ref], id: form.form_key,
+      const body = await graphGet({ apiVersion: form.api_version, token: env[ref], id: form.form_key, edge: 'leads',
         fields: FIELDS, after, limit: PAGE_SIZE, fetchImpl });
       if (!Array.isArray(body.data) || body.data.length > PAGE_SIZE) throw new MetaError('invalid_provider_data');
       const events = [];
