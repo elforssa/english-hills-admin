@@ -25,11 +25,14 @@ const request = authorization => new Request('https://admin.example/api/cron/crm
 });
 
 let calls = 0;
+let discoveryCalls = 0;
+const idleDiscovery = { forms: 0, discovered: 0, enqueued: 0, failed: 0 };
 const guardedDependencies = {
   env,
   rpc: async () => { throw new Error('RPC must not run before authorization'); },
   fetchImpl: async () => { throw new Error('Fetch must not run before authorization'); },
   processJobs: async () => { calls += 1; return []; },
+  reconcile: async () => { discoveryCalls += 1; return idleDiscovery; },
 };
 
 for (const authorization of [undefined, 'Bearer invalid', `Bearer ${workerToken}`]) {
@@ -44,6 +47,7 @@ const missingServerSecret = await runScheduledIntake(request(`Bearer ${token}`),
 assert.equal(missingServerSecret.status, 401);
 assert.deepEqual(await missingServerSecret.json(), { error: 'Unauthorized' });
 assert.equal(calls, 0);
+assert.equal(discoveryCalls, 0);
 
 let received;
 const invoked = await runScheduledIntake(request(`Bearer ${token}`), {
@@ -59,7 +63,15 @@ assert.equal(calls, 1);
 assert.equal(received.limit, 3);
 assert.equal(received.env, env);
 const invokedBody = await invoked.json();
-assert.deepEqual(invokedBody, { ok: true, processed: 2, succeeded: 1, failed: 1 });
+assert.deepEqual(invokedBody, { ok: true, processed: 2, succeeded: 1, failed: 1, reconciliation: idleDiscovery });
+let boundedWorkerLimit;
+const discoveryRun = await runScheduledIntake(request(`Bearer ${token}`), {
+  ...guardedDependencies,
+  reconcile: async () => ({ forms: 1, discovered: 50, enqueued: 50, failed: 0 }),
+  processJobs: async options => { boundedWorkerLimit = options.limit; return []; },
+});
+assert.equal(boundedWorkerLimit, 2);
+assert.equal((await discoveryRun.json()).reconciliation.enqueued, 50);
 
 const failed = await runScheduledIntake(request(`Bearer ${token}`), {
   ...guardedDependencies,
@@ -103,16 +115,16 @@ const rpc = async (name, args) => {
 };
 
 const duplicateResults = await Promise.all([
-  runScheduledIntake(request(`Bearer ${token}`), { env, rpc, fetchImpl: fetch }),
-  runScheduledIntake(request(`Bearer ${token}`), { env, rpc, fetchImpl: fetch }),
+  runScheduledIntake(request(`Bearer ${token}`), { env, rpc, fetchImpl: fetch, reconcile: async () => idleDiscovery }),
+  runScheduledIntake(request(`Bearer ${token}`), { env, rpc, fetchImpl: fetch, reconcile: async () => idleDiscovery }),
 ]);
 assert.deepEqual(duplicateResults.map(result => result.status), [200, 200]);
 assert.equal(finalizations, 1);
 assert.deepEqual(
   await Promise.all(duplicateResults.map(result => result.json())),
   [
-    { ok: true, processed: 1, succeeded: 1, failed: 0 },
-    { ok: true, processed: 0, succeeded: 0, failed: 0 },
+    { ok: true, processed: 1, succeeded: 1, failed: 0, reconciliation: idleDiscovery },
+    { ok: true, processed: 0, succeeded: 0, failed: 0, reconciliation: idleDiscovery },
   ],
 );
 

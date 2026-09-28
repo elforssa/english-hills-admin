@@ -1,10 +1,18 @@
 import { MetaError, boundedBody, providerId } from './protocol.mjs';
 import { normalizeForm, safeKey } from '../intake/form.mjs';
 const text = (value, max = 200) => typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : null;
-export async function graphGet({ apiVersion, token, id, fields, fetchImpl = fetch }) {
+export async function graphGet({ apiVersion, token, id, fields, after, limit, fetchImpl = fetch }) {
   if (!/^v[0-9]{1,3}\.0$/.test(apiVersion) || !providerId(id)) throw new MetaError('invalid_provider_data');
   const url = new URL(`https://graph.facebook.com/${apiVersion}/${id}`);
   url.searchParams.set('fields', fields);
+  if (after !== undefined) {
+    if (typeof after !== 'string' || after.length > 512 || !/^[A-Za-z0-9_+/=-]+$/.test(after)) throw new MetaError('invalid_provider_data');
+    url.searchParams.set('after', after);
+  }
+  if (limit !== undefined) {
+    if (!Number.isInteger(limit) || limit < 1 || limit > 25) throw new MetaError('invalid_provider_data');
+    url.searchParams.set('limit', String(limit));
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {

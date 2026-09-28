@@ -22,7 +22,7 @@ select pg_temp.ok((select status='blocked' from crm_ingestion_jobs),'disabled ca
 select pg_temp.ok(public.crm_claim_meta_jobs()='[]','disabled jobs not claimed');
 select pg_temp.denied('select crm_claim_meta_jobs(null)','22023');
 select set_config('request.jwt.claim.sub','88000000-0000-0000-0000-000000000001',true);select set_config('request.jwt.claim.role','authenticated',true);
-select public.crm_save_meta_connection((select v||'{"enabled":true}' from fx where k='connection')-array['id','provider','settings','version','created_at','updated_at','created_by','updated_by'],(select (v->>'id')::uuid from fx where k='connection'),1);
+select public.crm_save_meta_connection((select v||'{"enabled":true}' from fx where k='connection')-array['id','provider','settings','version','created_at','updated_at','created_by','updated_by','insights_settings','lifecycle_settings','lifecycle_destination_id'],(select (v->>'id')::uuid from fx where k='connection'),1);
 select public.crm_retry_meta_job((select id from crm_ingestion_jobs));
 select set_config('request.jwt.claim.sub','',true);select set_config('request.jwt.claim.role','service_role',true);
 insert into fx values('claim',public.crm_claim_meta_jobs());

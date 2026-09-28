@@ -29,7 +29,7 @@ function ReviewItem({ item, onDone }) {
     <summary className="cursor-pointer text-sm font-medium text-slate-800">{item.contact_name || 'Contact à préciser'} · {item.learner_name || 'Apprenant à préciser'}</summary>
     <div className="mt-3 space-y-3 text-sm">
       <p className="text-slate-600">{[item.phone, item.email, item.program_interest_text].filter(Boolean).join(' · ')}</p>
-      <dl className="grid gap-1">{item.answers.map(a => <div key={a.key}><dt className="inline text-slate-500">{a.label} : </dt><dd className="inline">{Array.isArray(a.value) ? a.value.join(', ') : typeof a.value === 'boolean' ? a.value ? 'Oui' : 'Non' : String(a.value ?? '')}</dd></div>)}</dl>
+      <dl className="grid gap-1">{item.answers.map(a => <div key={a.key}><dt className="inline text-slate-500">{a.label} : </dt><dd className="inline">{Array.isArray(a.display_value ?? a.value) ? (a.display_value ?? a.value).join(', ') : typeof (a.display_value ?? a.value) === 'boolean' ? (a.display_value ?? a.value) ? 'Oui' : 'Non' : String(a.display_value ?? a.value ?? '')}</dd></div>)}</dl>
       <label className="block">Après vérification avec le contact<select aria-label="Décision pour la demande" className="mt-1 block h-11 w-full rounded-md border bg-white px-3" value={action} onChange={e => setAction(e.target.value)}>
         <option value="new">Créer un nouveau contact et prospect</option>
         {item.candidates.map(c => <option key={c.id} value={c.id}>Rattacher à {c.learner_name || c.contact_name} · {c.program || 'Programme à préciser'} · {c.contact_name}</option>)}
