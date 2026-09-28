@@ -12,7 +12,11 @@ export function normalizeForm(fieldData, mapping) {
     const value = field.values.length === 1 ? field.values[0] : field.values;
     values.set(field.name, value);
     const configured = text(mapping.question_labels?.[field.name]);
+    const options = mapping.option_labels?.[field.name];
+    const display = v => typeof v === 'string' ? text(options?.[v], 200) || v : v;
+    const displayValue = Array.isArray(value) ? value.map(display) : display(value);
     answers.push({ key: field.name, label: configured || field.name.replace(/[_-]+/g, ' '), value,
+      ...(JSON.stringify(displayValue) !== JSON.stringify(value) ? { display_value: displayValue } : {}),
       value_type: Array.isArray(value) ? 'array' : typeof value, label_source: configured ? 'mapping' : 'provider_key' });
   }
   const fields = {};
