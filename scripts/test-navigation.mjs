@@ -27,14 +27,40 @@ for (const unsafe of ['/students/%2e%2e/finance', '/groups/%2fetc', '/student-po
 console.log('Navigation URL regressions passed');
 
 // Role-aware login defaults cannot reopen an unauthorized receptionist page.
-const { ROLE_HOME, loginDestination, receptionistCanAccess } = await import('../src/lib/roleAccess.mjs');
+const { ROLE_HOME, loginDestination, receptionistCanAccess, hasCapability } = await import('../src/lib/roleAccess.mjs');
 for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestination(role), home);
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
-for (const path of ['/crm/today', '/crm/leads', '/students', '/enrollments', '/settings', '/placement-tests', '/students/00000000-0000-0000-0000-000000000001']) {
+for (const path of ['/crm/today', '/crm/leads', '/students', '/students-directory', '/students/new',
+  '/enrollments', '/settings', '/placement-tests', '/groups', '/timetable', '/attendance',
+  '/premium-sessions', '/assessments', '/receipts', '/receipts/new', '/teachers',
+  '/students/00000000-0000-0000-0000-000000000001',
+  '/students/00000000-0000-0000-0000-000000000001/edit',
+  '/groups/00000000-0000-0000-0000-000000000001',
+  '/teachers/00000000-0000-0000-0000-000000000001',
+  '/teachers/00000000-0000-0000-0000-000000000001/edit',
+  '/receipts/00000000-0000-0000-0000-000000000001/print']) {
   assert.equal(receptionistCanAccess(path), true);
   assert.equal(loginDestination('receptionist', path), path);
 }
-for (const path of ['/finance', '/students/new', '/students/00000000-0000-0000-0000-000000000001/edit', '/settings/users', '/integrations', '//example.com', '/\\example.com']) {
+for (const path of ['/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
+  '/teachers/new', '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
+  '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
+  '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics',
+  '/students/%2fetc', '/groups/not-a-uuid', '//example.com', '/\\example.com']) {
   assert.equal(loginDestination('receptionist', path), '/crm/today');
 }
+for (const role of ['director', 'admin', 'receptionist']) {
+  for (const capability of ['canManageStudents','canManageGroups','canManageFinanceOperations','canManageTeacherOperations'])
+    assert.equal(hasCapability(role, capability), true);
+}
+for (const role of ['teacher','parent','student','pending',null]) {
+  for (const capability of ['canManageStudents','canManageFinanceOperations','canManageTeacherOperations'])
+    assert.equal(hasCapability(role, capability), false);
+}
+for (const capability of ['canViewFinanceAnalytics','canManageUsers','canManageSystemSettings',
+  'canViewTeacherCompensation','canManagePayroll','canManageIntegrations','canCorrectFinance'])
+  assert.equal(hasCapability('receptionist', capability), false);
+assert.equal(hasCapability('director', 'canCorrectFinance'), true);
+assert.equal(hasCapability('admin', 'canCorrectFinance'), false);
+assert.equal(hasCapability('director', 'unknown'), false);
 console.log('PASS receptionist login destinations and exact operational route boundaries');

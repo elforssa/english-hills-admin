@@ -12,11 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
+import { useAuth } from '@/context/AuthContext';
+import { getBrowserClient } from '@/lib/supabase';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
-function GroupModal({ group, teachers, onSave, onClose }) {
+function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
   const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: '2025-2026' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -31,8 +33,18 @@ function GroupModal({ group, teachers, onSave, onClose }) {
   };
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
-    const payload = { ...form, teacher_id: form.teacher_id || null };
-    if (form.id) { await entities.Group.update(form.id, payload); toast.success('Groupe mis à jour'); }
+    const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
+      niveau: form.niveau, teacher_id: form.teacher_id || null, salle: form.salle || null,
+      jours: form.jours || null, horaire: form.horaire || null, capacite_max: form.capacite_max,
+      terme: form.terme || null, annee: form.annee || null, categorie: form.categorie || null };
+    if (receptionist) {
+      const { error } = await getBrowserClient().rpc('save_receptionist_group', {
+        p_group: form.id || crypto.randomUUID(), p_expected_updated_at: form.id ? form.updated_at : null,
+        p_changes: payload,
+      });
+      if (error) { toast.error(error.message); setSaving(false); return; }
+      toast.success(form.id ? 'Groupe mis à jour' : 'Groupe créé');
+    } else if (form.id) { await entities.Group.update(form.id, payload); toast.success('Groupe mis à jour'); }
     else { await entities.Group.create(payload); toast.success('Groupe créé'); }
     onSave();
   };
@@ -87,6 +99,7 @@ function GroupModal({ group, teachers, onSave, onClose }) {
 }
 
 export default function Groups() {
+  const { role } = useAuth();
   const [groups, setGroups] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +209,7 @@ export default function Groups() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(g)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    <button onClick={() => handleDelete(g.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                    {role !== 'receptionist' && <button onClick={() => handleDelete(g.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -235,7 +248,7 @@ export default function Groups() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => setModal(g)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          <button onClick={() => handleDelete(g.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                          {role !== 'receptionist' && <button onClick={() => handleDelete(g.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>
@@ -246,7 +259,7 @@ export default function Groups() {
           </>
         )}
       </div>
-      {modal !== null && <GroupModal group={modal.id ? modal : null} teachers={teachers} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <GroupModal group={modal.id ? modal : null} teachers={teachers} receptionist={role === 'receptionist'} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }

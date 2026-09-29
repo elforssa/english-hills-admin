@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { entities } from '@/lib/entities';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useAuth } from '@/context/AuthContext';
+import { getBrowserClient } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
   BookOpenCheck, CalendarDays, CheckCircle2, Crown, Plus,
@@ -51,7 +52,13 @@ function membershipCovers(membership, date) {
 
 export default function PremiumSessionsPage() {
   const { role } = useAuth();
-  const canManage = role === 'admin' || role === 'director';
+  const canManage = role === 'admin' || role === 'director' || role === 'receptionist';
+  const isReceptionist = role === 'receptionist';
+  const operationalRpc = async (name, args) => {
+    const { data, error } = await getBrowserClient().rpc(name, args);
+    if (error) { toast.error(error.message); throw error; }
+    return data;
+  };
   const [tab, setTab] = useState('groups');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -77,7 +84,7 @@ export default function PremiumSessionsPage() {
         entities.PremiumGroup.listAll('name'),
         entities.PremiumMembership.listAll('-created_at'),
         entities.PremiumSession.listAll('-scheduled_date'),
-        entities.PremiumHomework.listAll('-submitted_at'),
+        isReceptionist ? Promise.resolve([]) : entities.PremiumHomework.listAll('-submitted_at'),
         entities.PremiumAttendance.listAll('-created_at'),
         entities.Student.listAll('full_name'),
         getTeacherDirectory(),
@@ -95,7 +102,7 @@ export default function PremiumSessionsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isReceptionist]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -134,7 +141,12 @@ export default function PremiumSessionsPage() {
     }
     setSaving(true);
     try {
-      await entities.PremiumGroup.create({
+      if (isReceptionist) await operationalRpc('create_receptionist_premium_group', {
+        p_group: crypto.randomUUID(), p_name: form.name.trim(), p_teacher: form.teacher_id,
+        p_weekday: Number(form.weekday), p_start_time: form.start_time,
+        p_academic_year: form.academic_year.trim() || null, p_notes: form.notes.trim() || null,
+      });
+      else await entities.PremiumGroup.create({
         name: form.name.trim(), teacher_id: form.teacher_id, weekday: Number(form.weekday),
         start_time: form.start_time, duration_minutes: 60, academic_year: form.academic_year.trim() || null,
         target_size: 5, notes: form.notes.trim() || null, active: true,
@@ -154,7 +166,11 @@ export default function PremiumSessionsPage() {
     const startDate = [today, student?.premium_start_date].filter(Boolean).sort().at(-1);
     setSaving(true);
     try {
-      await entities.PremiumMembership.create({
+      if (isReceptionist) await operationalRpc('save_receptionist_premium_membership', {
+        p_membership: crypto.randomUUID(), p_expected_updated_at: null,
+        p_group: groupId, p_student: studentId, p_start_date: startDate,
+      });
+      else await entities.PremiumMembership.create({
         premium_group_id: groupId, student_id: studentId, start_date: startDate,
         end_date: student?.premium_end_date || null, active: true,
       });
@@ -169,7 +185,10 @@ export default function PremiumSessionsPage() {
   const removeMember = async (membership) => {
     setSaving(true);
     try {
-      await entities.PremiumMembership.update(membership.id, { active: false, end_date: today });
+      if (isReceptionist) await operationalRpc('save_receptionist_premium_membership', {
+        p_membership: membership.id, p_expected_updated_at: membership.updated_at,
+      });
+      else await entities.PremiumMembership.update(membership.id, { active: false, end_date: today });
       toast.success('Apprenant retiré de l’atelier');
       await load();
     } finally {
@@ -189,10 +208,13 @@ export default function PremiumSessionsPage() {
     }
     setSaving(true);
     try {
-      await Promise.all(dates.map((scheduledDate) => entities.PremiumSession.create({
-        premium_group_id: group.id, teacher_id: group.teacher_id, scheduled_date: scheduledDate,
-        start_time: group.start_time, duration_minutes: 60, status: 'Scheduled',
-      })));
+      await Promise.all(dates.map((scheduledDate) => isReceptionist
+        ? operationalRpc('save_receptionist_premium_session', {
+          p_session: crypto.randomUUID(), p_expected_updated_at: null,
+          p_changes: { premium_group_id: group.id, scheduled_date: scheduledDate },
+        })
+        : entities.PremiumSession.create({ premium_group_id: group.id, teacher_id: group.teacher_id,
+          scheduled_date: scheduledDate, start_time: group.start_time, duration_minutes: 60, status: 'Scheduled' })));
       toast.success(`${dates.length} séance(s) ajoutée(s) au planning`);
       await load();
       setTab('sessions');
@@ -203,10 +225,16 @@ export default function PremiumSessionsPage() {
 
   const updateSessionStatus = async (session, status) => {
     try {
-      const updated = await entities.PremiumSession.update(session.id, {
-        status, completed_at: status === 'Completed' ? new Date().toISOString() : null,
+      if (isReceptionist) await operationalRpc('save_receptionist_premium_session', {
+        p_session: session.id, p_expected_updated_at: session.updated_at, p_changes: { status },
       });
-      setSessions((current) => current.map((item) => item.id === session.id ? updated : item));
+      else {
+        const updated = await entities.PremiumSession.update(session.id, {
+          status, completed_at: status === 'Completed' ? new Date().toISOString() : null,
+        });
+        setSessions((current) => current.map((item) => item.id === session.id ? updated : item));
+      }
+      if (isReceptionist) await load();
       toast.success(`Séance ${STATUS_LABELS[status].toLowerCase()}`);
     } catch { /* entities reports errors */ }
   };
@@ -222,8 +250,15 @@ export default function PremiumSessionsPage() {
     }
     setSaving(true);
     try {
-      const updated = await entities.PremiumSession.update(session.id, { scheduled_date: scheduledDate, start_time: startTime });
-      setSessions((current) => current.map((item) => item.id === session.id ? updated : item));
+      if (isReceptionist) await operationalRpc('save_receptionist_premium_session', {
+        p_session: session.id, p_expected_updated_at: session.updated_at,
+        p_changes: { scheduled_date: scheduledDate, start_time: startTime },
+      });
+      else {
+        const updated = await entities.PremiumSession.update(session.id, { scheduled_date: scheduledDate, start_time: startTime });
+        setSessions((current) => current.map((item) => item.id === session.id ? updated : item));
+      }
+      if (isReceptionist) await load();
       setRescheduleDrafts((current) => ({ ...current, [session.id]: {} }));
       toast.success('Séance replanifiée');
     } finally {
@@ -234,10 +269,14 @@ export default function PremiumSessionsPage() {
   const setStudentAttendance = async (session, studentId, status) => {
     const existing = attendance.find((item) => item.premium_session_id === session.id && item.student_id === studentId);
     try {
-      const saved = existing
+      const saved = isReceptionist ? await operationalRpc('save_receptionist_premium_attendance', {
+        p_session: session.id, p_student: studentId, p_status: status,
+        p_expected_updated_at: existing?.updated_at || null,
+      }) : existing
         ? await entities.PremiumAttendance.update(existing.id, { status })
         : await entities.PremiumAttendance.create({ premium_session_id: session.id, student_id: studentId, status });
-      setAttendance((current) => existing
+      if (isReceptionist) await load();
+      else setAttendance((current) => existing
         ? current.map((item) => item.id === existing.id ? saved : item)
         : [...current, saved]);
     } catch { /* entities reports errors */ }
@@ -331,7 +370,7 @@ export default function PremiumSessionsPage() {
             return (
               <article key={session.id} className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-border bg-slate-50 px-5 py-4">
-                  <div><p className="text-xs font-black uppercase tracking-wide text-primary">{displayDate(session.scheduled_date)} · {String(session.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group?.name || 'Atelier Premium'}</h2><p className="mt-1 text-xs text-muted-foreground"><PersonLink kind="teacher" id={session.teacher_id}>{teachersById[session.teacher_id]?.full_name || 'Enseignant'}</PersonLink> · {roster.length} apprenant(s) · {sessionHomework.length} demande(s) reçue(s)</p></div>
+                  <div><p className="text-xs font-black uppercase tracking-wide text-primary">{displayDate(session.scheduled_date)} · {String(session.start_time).slice(0, 5)}</p><h2 className="mt-1 text-lg font-black">{group?.name || 'Atelier Premium'}</h2><p className="mt-1 text-xs text-muted-foreground"><PersonLink kind="teacher" id={session.teacher_id}>{teachersById[session.teacher_id]?.full_name || 'Enseignant'}</PersonLink> · {roster.length} apprenant(s){!isReceptionist && ` · ${sessionHomework.length} demande(s) reçue(s)`}</p></div>
                   <div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{STATUS_LABELS[session.status]}</span>{session.status === 'Scheduled' && <button onClick={() => updateSessionStatus(session, 'Confirmed')} className="rounded-md border border-border bg-white px-3 py-1.5 text-xs font-bold">Confirmer</button>}{session.status !== 'Completed' && session.status !== 'Cancelled' && <button onClick={() => updateSessionStatus(session, 'Completed')} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-white"><CheckCircle2 size={13} /> Terminer</button>}{canManage && session.status !== 'Cancelled' && session.status !== 'Completed' && <button onClick={() => updateSessionStatus(session, 'Cancelled')} className="px-2 py-1 text-xs font-bold text-rose-700">Annuler</button>}</div>
                 </div>
                 <div className="divide-y divide-border">
@@ -339,7 +378,7 @@ export default function PremiumSessionsPage() {
                     const student = studentsById[membership.student_id];
                     const submission = sessionHomework.find((item) => item.student_id === membership.student_id);
                     const marked = attendance.find((item) => item.premium_session_id === session.id && item.student_id === membership.student_id);
-                    return <div key={membership.id} className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 lg:items-center px-5 py-3"><div><p className="text-sm font-bold"><PersonLink id={student?.id}>{student?.full_name || 'Apprenant'}</PersonLink></p><p className="text-[11px] text-muted-foreground">NIV {student?.niveau_cefr || '—'} · {submission ? `Devoir ${submission.status === 'Prepared' ? 'prêt' : 'reçu'}` : 'Aucun devoir envoyé'}</p></div><div className="flex flex-wrap gap-1">{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <button key={value} aria-label={`${student?.full_name || 'Apprenant'} : ${label}`} aria-pressed={marked?.status === value} onClick={() => setStudentAttendance(session, membership.student_id, value)} className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${marked?.status === value ? PREMIUM_ATTENDANCE_STATUS_COLORS[value] : 'border-border bg-white text-muted-foreground'}`}>{label}</button>)}</div>{submission && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><BookOpenCheck size={13} /> {submission.title}</span>}</div>;
+                    return <div key={membership.id} className="grid grid-cols-1 lg:grid-cols-[1fr_auto_auto] gap-3 lg:items-center px-5 py-3"><div><p className="text-sm font-bold"><PersonLink id={student?.id}>{student?.full_name || 'Apprenant'}</PersonLink></p><p className="text-[11px] text-muted-foreground">NIV {student?.niveau_cefr || '—'}{!isReceptionist && ` · ${submission ? `Devoir ${submission.status === 'Prepared' ? 'prêt' : 'reçu'}` : 'Aucun devoir envoyé'}`}</p></div><div className="flex flex-wrap gap-1">{Object.entries(ATTENDANCE_LABELS).map(([value, label]) => <button key={value} aria-label={`${student?.full_name || 'Apprenant'} : ${label}`} aria-pressed={marked?.status === value} onClick={() => setStudentAttendance(session, membership.student_id, value)} className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${marked?.status === value ? PREMIUM_ATTENDANCE_STATUS_COLORS[value] : 'border-border bg-white text-muted-foreground'}`}>{label}</button>)}</div>{!isReceptionist && submission && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><BookOpenCheck size={13} /> {submission.title}</span>}</div>;
                   })}
                   {!roster.length && <p className="px-5 py-6 text-center text-xs text-muted-foreground">Aucun apprenant sur la liste à cette date.</p>}
                 </div>

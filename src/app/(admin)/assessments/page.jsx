@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
+import { useAuth } from '@/context/AuthContext';
+import ReceptionistAssessments from '@/components/students/ReceptionistAssessments';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -130,7 +132,12 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   );
 }
 
-export default function Assessments() {
+export default function AssessmentsPage() {
+  const { role } = useAuth();
+  return role === 'receptionist' ? <ReceptionistAssessments /> : <Assessments />;
+}
+
+function Assessments() {
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);

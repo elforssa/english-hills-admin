@@ -27,3 +27,17 @@ export async function getMyTeacher() {
   const [teacher] = await getTeacherDirectory({ id });
   return teacher || null;
 }
+
+// Fixed eight-field operational projection; never cache or spread an HR row.
+export async function getTeacherOperations({ id = null } = {}) {
+  const rows = [];
+  const limit = 100;
+  for (let offset = 0; ; offset += limit) {
+    const { data, error } = await getBrowserClient().rpc('get_teacher_operations', {
+      p_teacher_id: id, p_limit: limit, p_offset: offset,
+    });
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (id || !data || data.length < limit) return rows;
+  }
+}

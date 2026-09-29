@@ -29,7 +29,8 @@ export function ReceptionistStudents() {
     return () => { active = false; clearTimeout(timer); };
   }, [search, page]);
   return <main className="mx-auto max-w-5xl p-4 lg:p-8 space-y-5">
-    <h1 className="text-2xl font-bold">Apprenants</h1>
+    <div className="flex items-center justify-between gap-4"><h1 className="text-2xl font-bold">Apprenants</h1>
+      <Link className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground" href="/students/new">Nouvel apprenant</Link></div>
     <label className="block">Rechercher un apprenant
       <input className="mt-2 block w-full rounded-md border p-2" value={search} maxLength={120}
         onChange={e => { setSearch(e.target.value); setPage(1); }} />

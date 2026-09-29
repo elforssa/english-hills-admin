@@ -8,7 +8,7 @@ import { Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from '
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { getLevelsForSession, groupMatchesEnrollment } from '@/lib/academicPrograms';
+import { getLevelsForSession, groupMatchesEnrollment, SESSION_TYPES } from '@/lib/academicPrograms';
 
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status;
 
@@ -19,6 +19,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const { role } = useAuth();
   const isReceptionist = role === 'receptionist';
   const [form, setForm] = useState(enrollment || { student_id: '', group_id: '', status: 'Submitted', date_inscription: new Date().toISOString().split('T')[0], notes: '' });
+  const operationalAssignmentOnly = assignmentOnly || (isReceptionist && ['Confirmed','Validated'].includes(form.status));
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -44,6 +45,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           p_student: payload.student_id, p_enrollment: form.id || null, p_group: payload.group_id,
           p_status: payload.status, p_level: payload.level || null,
           p_date: payload.date_inscription || null, p_notes: payload.notes || null,
+          p_session: payload.session_type || null, p_school_year: payload.school_year || null,
         });
         if (error) { toast.error(error.message); return; }
         toast.success(form.id ? 'Mis à jour' : 'Inscription créée');
@@ -66,10 +68,14 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md max-h-[calc(100vh-2rem)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{assignmentOnly ? 'Affecter un groupe' : form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</DialogTitle>
+          <DialogTitle>{operationalAssignmentOnly ? 'Affecter un groupe' : form.id ? 'Modifier' : 'Nouvelle pré-inscription'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {(form.session_type || form.school_year) && <p className="rounded-lg bg-slate-50 p-3 text-sm font-medium">Session : {form.session_type || 'Non renseignée'} · Année : {form.school_year || 'Non renseignée'} · Niveau : {form.level || 'À définir'}</p>}
+          {isReceptionist && !form.id && <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>Session<select className={inputClass} value={form.session_type || selectedStudent?.session_type || 'Yearly'} onChange={e => setForm(v => ({ ...v, session_type: e.target.value, level: null, group_id: '' }))}>{SESSION_TYPES.map(session => <option key={session}>{session}</option>)}</select></label>
+            <label className={labelClass}>Année scolaire<input className={inputClass} placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}" value={form.school_year || ''} onChange={e => set('school_year', e.target.value)} /></label>
+          </div>}
           <div>
             <label htmlFor="enrollment-student" className={labelClass}>Apprenant *</label>
             <select id="enrollment-student" className={inputClass} value={form.student_id} onChange={e => setForm(f => ({ ...f, student_id: e.target.value, group_id: '' }))} required disabled={Boolean(form.id)}>
@@ -104,7 +110,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
             <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => {
               const group = groups.find(g => g.id === e.target.value);
               setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
-            }} required={assignmentOnly || form.status === 'Trial'}>
+            }} required={operationalAssignmentOnly || form.status === 'Trial'}>
               <option value="">— Choisir un groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
             </select>
@@ -118,17 +124,17 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
               </div>
             )}
           </div>
-          <div hidden={assignmentOnly}>
+          <div hidden={operationalAssignmentOnly}>
             <label htmlFor="enrollment-status" className={labelClass}>Statut</label>
             <select id="enrollment-status" className={inputClass} value={form.status} onChange={e => set('status', e.target.value)}>
-              {(isReceptionist ? (assignmentOnly ? ['Confirmed','Validated'] : ['Submitted','Under Review','Trial']) : ['Submitted','Under Review','Confirmed','Validated','Rejected','Trial']).map(s => <option key={s} value={s}>{enrollmentLabel(s)}</option>)}
+              {(isReceptionist ? (operationalAssignmentOnly ? ['Confirmed','Validated'] : ['Submitted','Under Review','Trial']) : ['Submitted','Under Review','Confirmed','Validated','Rejected','Trial']).map(s => <option key={s} value={s}>{enrollmentLabel(s)}</option>)}
             </select>
           </div>
-          <div hidden={assignmentOnly}>
+          <div hidden={operationalAssignmentOnly}>
             <label htmlFor="enrollment-date" className={labelClass}>Date</label>
             <input id="enrollment-date" type="date" className={inputClass} value={form.date_inscription || ''} onChange={e => set('date_inscription', e.target.value)} />
           </div>
-          <div hidden={assignmentOnly}>
+          <div hidden={operationalAssignmentOnly}>
             <label htmlFor="enrollment-notes" className={labelClass}>Notes</label>
             <textarea id="enrollment-notes" className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />
           </div>
@@ -141,4 +147,3 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     </Dialog>
   );
 }
-

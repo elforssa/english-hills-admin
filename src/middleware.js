@@ -127,7 +127,8 @@ export async function middleware(request) {
   }
 
   if (role === 'receptionist') {
-    if (receptionistCanAccess(pathname)) return response;
+    if (receptionistCanAccess(pathname) &&
+      (pathname !== '/settings' || !request.nextUrl.search)) return response;
     const url = request.nextUrl.clone();
     url.pathname = '/crm/today';
     url.search = '';

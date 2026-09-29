@@ -36,15 +36,16 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   await page.goto(app + '/login?returnTo=/finance');
-  // Wait for hydration before dispatching form events against the real app.
-  await page.waitForFunction(() => Object.keys(document.querySelector('#email') || {}).some(k => k.startsWith('__reactProps')));
+  await page.getByLabel('Adresse email', { exact: true }).waitFor();
   await page.getByLabel('Adresse email', { exact: true }).fill(email);
   await page.getByLabel('Mot de passe', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
   await page.waitForURL(app + '/crm/today');
   await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
+  for (const button of await page.locator('nav button').all()) await button.click();
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
-  assert.deepEqual(new Set(links), new Set(['/crm/today','/crm/leads','/students','/placement-tests','/enrollments','/settings']));
+  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/premium-sessions','/assessments','/placement-tests','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
+  for (const path of ['/finance','/reports','/payroll','/teachers/new','/integrations','/settings/users']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS real receptionist login, forged metadata ignored, permitted home and sidebar');
 
   await page.goto(app + '/placement-tests');
@@ -57,7 +58,8 @@ try {
   await page.getByLabel('Rechercher un apprenant').fill(run);
   await page.getByRole('link', { name: run, exact: true }).click();
   await page.getByRole('heading', { name: run, exact: true }).waitFor();
-  assert.equal(await page.getByRole('link', { name: /Encaisser|Nouveau reçu|Corriger/ }).count(), 0);
+  assert.equal(await page.getByRole('link', { name: 'Nouveau reçu' }).count(), 1);
+  assert.equal(await page.getByRole('link', { name: /Corriger/ }).count(), 0);
   await page.getByRole('button', { name: 'Nouvelle pré-inscription' }).click();
   await page.getByLabel('Statut', { exact: true }).selectOption('Trial');
   await page.getByLabel('Groupe', { exact: true }).selectOption(group);
@@ -73,7 +75,13 @@ try {
   await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await page.getByText('Compte mis à jour', { exact: true }).waitFor();
   assert.equal(sql(`select full_name from public.profiles where id='${user}'`), 'Phase 1 self-service');
-  for (const path of ['/finance','/reports','/teachers','/students/new',`/students/${student}/edit`,'/settings/users','/integrations']) {
+  for (const path of ['/students/new',`/students/${student}/edit`,'/groups',`/groups/${group}`,
+    '/timetable','/attendance','/premium-sessions','/assessments','/receipts','/receipts/new',
+    `/receipts/${student}/print`,'/teachers',`/teachers/${student}`,`/teachers/${student}/edit`]) {
+    const allowed = await page.request.get(app + path, { maxRedirects: 0 });
+    assert.equal(allowed.status(), 200, `Server access for ${path}`);
+  }
+  for (const path of ['/finance','/reports','/payroll','/teachers/new','/settings/users','/integrations']) {
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
     assert.equal(new URL(blocked.headers().location, app).pathname, '/crm/today');
