@@ -1,12 +1,14 @@
 # Current state
 
-Earlier deployment evidence below was reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d737d44391b0` (PR #29). The repository owner later supplied the Batch 1 Production facts below. This correction branch did not query or mutate Production.
+Earlier deployment evidence below was reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d737d44391b0` (PR #29). The repository owner later supplied the Batch 1 Production facts below. This architecture branch did not query or mutate Production.
 
 ## Owner-confirmed Receptionist Batch 1 release
 
-The repository owner reports that PR #31 merged, migration 096 was deployed, and `elforssa.2@gmail.com` has stored role `receptionist` in Production. An independent Production check confirmed `get_teacher_operations` returns only `id`, `full_name`, `email`, `telephone`, `certifications`, `niveaux_autorises`, `photo_url`, and `updated_at`, without compensation fields. These are owner-supplied Production findings, not this branch's live verification. Production acceptance also found `/students` still uses a simplified receptionist-only list. The shared Students UI correction on `sol/receptionist-batch1-ui-alignment` is review-branch work and has not been deployed or accepted in Production.
+On 2026-09-29 the owner confirmed [PR #31](https://github.com/elforssa/english-hills-admin/pull/31) and [PR #32](https://github.com/elforssa/english-hills-admin/pull/32) merged, migrations 096 and 097 deployed, and Batch 1 Production acceptance complete. PR #32 merge/source commit is `3c9b9132f29a5fafea44bbb7c93435e15b74bf6e`; its Vercel Production deployment was verified READY. The migration ledger contains exactly `097 | receptionist_group_assignment_filter`. Shared receptionist Students UI and permission restrictions were verified; Meta reconciliation and scheduler remained healthy with no Production runtime errors. The safe teacher projection was also verified in earlier owner-supplied checks. This architecture task fetched current main at that commit but did not independently query Production.
 
-## Verified Production activation
+**001–097 are deployed and immutable.** New database work starts after 097, checking current main for occupied numbers. [Completed Batch 1 plan](../architecture/plans/completed/receptionist-batch1-permissions.md).
+
+## Earlier verified Production activation (PR #29 history)
 
 Evidence independently verified on 2026-09-29 after PR #29 and supplied by the repository owner during PR #30 review; this documentation update did not query or mutate Production.
 
@@ -26,9 +28,9 @@ Evidence independently verified on 2026-09-29 after PR #29 and supplied by the r
 - Main implements pg_cron + pg_net as primary five-minute trigger, with GitHub Actions backup calling the same protected `/api/cron/crm-intake`. Production activation of 095 was verified on 2026-09-29 as recorded above.
 - Website `/api/public/crm-inquiry` durably queues inquiries for the shared resolver. Public `/api/public/inscription` remains a distinct student/enrollment registration flow; the marketing website is external to this repository.
 - Meta inbound retrieval has real Graph HTTP transport. Lifecycle feedback and Insights have fixture/mock transports only; Insights endpoint reports `live_sync_enabled: false`. Code capability does not prove a live connection is configured.
-- Dedicated receptionist exists since 077; Batch 1 expanded operational routes and database permissions in merged 096. See [current role boundaries](SECURITY_RULES.md). The Production Students list still has the simplified receptionist fork pending the correction above.
+- Dedicated receptionist exists since 077; Batch 1 expanded operational routes and database permissions in merged 096. See [current role boundaries](SECURITY_RULES.md). PR #32 completed the shared Students list and enrollment-aware group filter in 097; Production acceptance is recorded above.
 
-The original Batch 1 branch and PR #31 are merged. Migration 096 is deployed per the owner and is immutable. Review-branch correction PR #32 adds forward migration 097 to align the receptionist's group-assignment filter with the existing enrollment workflow; 097 has not been deployed to Production.
+Batch 1 is complete; its historical plan is archived under `plans/completed/`.
 
 ## Documentation discrepancies
 
@@ -36,4 +38,6 @@ The imported AGENTS/CLAUDE guidance incorrectly claimed receptionist was removed
 
 ## Active planned work
 
-**Receptionist operations — PARTIALLY IMPLEMENTED.** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) defines the wider direction. Batch 1 permissions are deployed per owner evidence; the shared Students UI correction is under review. Today dashboard, CRM detail presentation and dedicated walk-in changes remain planned. This status grants no deployment authorization for the correction.
+**Receptionist operations — PARTIALLY IMPLEMENTED overall; Batch 1 COMPLETED.** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) retains the wider Today, CRM detail and dedicated walk-in direction as planned.
+
+**CRM Batch 2 — proposed architecture, owner decisions pending.** [Live Meta lifecycle feedback plan](../architecture/plans/crm-batch2-meta-lifecycle-feedback.md) assesses existing mock-only 088 infrastructure and remaining live-delivery work. No Batch 2 application/schema implementation or activation is claimed. [Feature index](../architecture/FEATURE_INDEX.md).

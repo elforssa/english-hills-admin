@@ -32,3 +32,9 @@ Every substantial PR asks:
 5. Did an operational flow change? Update WORKFLOWS.md.
 
 Follow links rather than duplicate rules. Do not update docs mechanically when nothing changed.
+
+## Substantial-work lifecycle
+
+Use separate architecture, implementation, fresh independent review and release tasks/agent instances for substantial or high-risk work: architecture → human owner approval → implementation → CI → fresh independent reviewer → implementer fixes → fresh re-review of the new SHA → human release approval → release/operator → Production verification → documentation closeout. Small low-risk maintenance does not require the full sequence.
+
+Use the [architecture](docs/ai/templates/ARCHITECTURE_TASK.md), [implementation](docs/ai/templates/IMPLEMENTATION_TASK.md), [review](docs/ai/templates/REVIEW_TASK.md) and [rollout](docs/ai/templates/PRODUCTION_ROLLOUT.md) templates. Read the approved plan directly from the repository; the owner should not need to relay architecture between conversations. Find features in the [feature index](docs/architecture/FEATURE_INDEX.md), active contracts in [plans](docs/architecture/plans), and finished plans in [completed](docs/architecture/plans/completed). Record approval scope and evidence in the plan. Planned, implemented, merged, deployed and Production-verified are distinct states. Closeout updates evidence and links; it never retroactively rewrites historical findings.
