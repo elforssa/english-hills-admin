@@ -1,5 +1,7 @@
 # Phase 10 — CRM lifecycle outbox (mock-only)
 
+> Batch 2 implementation note (review branch, 2026-09-29): migrations 098–100 add the approved eligibility, live-delivery, retention, scheduler and director-operations boundaries without changing the deployed Phase 10 baseline below. The new scheduler is created inactive and no provider contract is seeded, so live configuration/activation fail closed. This code is not merged, deployed, Production verified or approved for Production release. Provider-contract verification and active-form evidence readiness remain mandatory prerequisites.
+
 Code readiness and live activation are separate. This phase has **no live send path**. The server endpoint only reconciles committed CRM milestones; the outbound worker requires an injected mock HTTP function. No environment variable can turn this implementation into a live sender. No real Meta destination, token, app, dataset or account was configured.
 
 ## Evidence and provider assumptions

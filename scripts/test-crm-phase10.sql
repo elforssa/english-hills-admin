@@ -70,6 +70,8 @@ select pg_temp.ok((select status='unknown' and next_attempt_at>now() and attempt
 select pg_temp.denied($q$update crm_external_delivery_attempts set error_code='changed'$q$);
 select pg_temp.actor(1);
 select crm_configure_lifecycle((select (v->>'id')::uuid from fx where k='meta'),2,jsonb_set(pg_temp.config(),'{events,qualified}','"FutureQualified"'));
+select pg_temp.denied($q$select crm_retry_external_delivery(id) from crm_external_deliveries$q$,'22023');
+update crm_external_deliveries set next_attempt_at=now() where status='unknown';
 select crm_retry_external_delivery(id) from crm_external_deliveries;
 select pg_temp.actor(0);select crm_claim_external_deliveries();
 select pg_temp.ok((select payload->'data'->0->>'event_name'='FixtureQualified' and mapping_version=1 from crm_external_deliveries),'config change never mutates prepared event');

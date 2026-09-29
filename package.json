@@ -10,6 +10,8 @@
     "lint": "next lint",
     "test": "node scripts/test-local-feature-branch.mjs && node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-enrollment-workflow.mjs",
     "test:crm-intake": "node scripts/test-crm-phase8.mjs && node scripts/test-crm-phase9.mjs && node scripts/test-crm-intake-scheduler.mjs",
+    "test:crm-lifecycle": "node scripts/test-crm-phase10.mjs && node scripts/test-crm-batch2.mjs",
+    "test:crm-lifecycle-browser": "node scripts/test-crm-batch2-browser.mjs",
     "test:middleware": "node scripts/test-middleware-security.mjs",
     "test:navigation": "node scripts/test-navigation.mjs && node scripts/test-navigation-components.mjs"
   },

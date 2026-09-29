@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { fetchInsightsFixture } from '../src/lib/crm/insights/adapter.mjs';
 import { processInsightsFixture } from '../src/lib/crm/insights/worker.mjs';
-import { isDirectorAnalyticsPath, loginDestination } from '../src/lib/roleAccess.mjs';
+import { isDirectorAnalyticsPath, isDirectorLifecyclePath, loginDestination } from '../src/lib/roleAccess.mjs';
 const config={mode:'mock',account_id:'1100',currency:'MAD',timezone:'Africa/Casablanca',api_version:'v99.0',secret_ref:'CRM_META_INSIGHTS_TOKEN_FIXTURE'};
 const row={account_id:'1100',campaign_id:'1101',adset_id:'1102',ad_id:'1103',ad_name:'Fixture',date_start:'2026-01-01',date_stop:'2026-01-01',spend:'12.345678',impressions:'90',reach:'80',clicks:'4',inline_link_clicks:'2',actions:[{action_type:'lead',value:'99',ignored:'secret'}]};
 const args={config,from:'2026-01-01',to:'2026-01-02',token:'fixture-secret'};
@@ -30,5 +30,7 @@ const rpc=async(name,data)=>{log.push({name,data});return name==='crm_claim_insi
 assert.equal((await processInsightsFixture({rpc,env:{CRM_META_INSIGHTS_TOKEN_FIXTURE:'fixture-secret'},mockFetch:mock(()=>response({data:[row]}))})).status,'completed');assert.equal(log.at(-1).name,'crm_finish_insights_sync');
 log.length=0;assert.equal((await processInsightsFixture({rpc,env:{},mockFetch:mock(()=>assert.fail())})).status,'failed');assert.equal(log.at(-1).data.p_code,'missing_secret');
 assert(isDirectorAnalyticsPath('/crm/analytics/extra'));assert(!isDirectorAnalyticsPath('/crm/analytics-other'));
+assert(isDirectorLifecyclePath('/crm/integrations/lifecycle'));assert(!isDirectorLifecyclePath('/crm/integrations/lifecycle-other'));
 for(const role of ['admin','receptionist','teacher','parent','student'])assert.notEqual(loginDestination(role,'/crm/analytics'),'/crm/analytics');assert.equal(loginDestination('director','/crm/analytics'),'/crm/analytics');
+for(const role of ['admin','receptionist','teacher','parent','student'])assert.notEqual(loginDestination(role,'/crm/integrations/lifecycle'),'/crm/integrations/lifecycle');assert.equal(loginDestination('director','/crm/integrations/lifecycle'),'/crm/integrations/lifecycle');
 console.log(`PASS Phase 11 provider validation, pagination, async, sanitized errors, partial isolation, worker and role routing (${checks} mock requests)`);

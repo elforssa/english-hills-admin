@@ -78,6 +78,10 @@ export function isDirectorAnalyticsPath(path) {
   return path === '/crm/analytics' || path?.startsWith('/crm/analytics/');
 }
 
+export function isDirectorLifecyclePath(path) {
+  return path === '/crm/integrations/lifecycle' || path?.startsWith('/crm/integrations/lifecycle/');
+}
+
 export function loginDestination(role, requested) {
   const home = ROLE_HOME[role] || '/unauthorized';
   if (typeof requested !== 'string' || !requested.startsWith('/') ||
@@ -86,7 +90,7 @@ export function loginDestination(role, requested) {
   try { url = new URL(requested, 'https://english-hills.local'); } catch { return home; }
   if (url.origin !== 'https://english-hills.local' || /%(?:2f|5c|00)/i.test(requested)) return home;
   const path = normalizeRoutePath(url.pathname);
-  if (!path || (role !== 'director' && isDirectorAnalyticsPath(path))) return home;
+  if (!path || (role !== 'director' && (isDirectorAnalyticsPath(path) || isDirectorLifecyclePath(path)))) return home;
   if (role === 'receptionist' && (!receptionistCanAccess(path) ||
     (path === '/settings' && (url.search || url.hash)))) return home;
   if (!ROLE_HOME[role]) return home;

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
   LogOut, ChevronDown, ChevronRight, Shield, Menu, X,
-  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History,
+  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History, RadioTower,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
@@ -20,6 +20,7 @@ const NAV = [
   { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar, roles: OPERATIONS },
   { href: '/crm/leads', label: 'Prospects', icon: Users, roles: OPERATIONS },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
+  { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
   { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
   {

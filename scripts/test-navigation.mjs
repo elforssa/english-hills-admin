@@ -45,7 +45,7 @@ for (const path of ['/crm/today', '/crm/leads', '/students', '/students-director
 for (const path of ['/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
   '/teachers/new', '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
-  '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics',
+  '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',
   '/students/%2fetc', '/groups/not-a-uuid', '//example.com', '/\\example.com']) {
   assert.equal(loginDestination('receptionist', path), '/crm/today');
 }
