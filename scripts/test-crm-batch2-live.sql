@@ -78,6 +78,65 @@ select
   clock_timestamp()-interval '1 day',clock_timestamp()+interval '1 day','8c000000-0000-0000-0000-000000000001'
 from fixture_policy;
 
+select pg_temp.denied(format($q$
+  insert into public.crm_lifecycle_eligibility_policies(
+    connection_id,form_mapping_id,version,notice_version,notice_text_digest,
+    adult_field_key,adult_accepted_values,sharing_field_key,sharing_accepted_values,
+    effective_from,effective_until,created_by)
+  values(%L,%L,99,'overlap',repeat('9',64),'adult_confirmed','["yes"]',
+    'meta_share','["yes"]',clock_timestamp()-interval '12 hours',
+    clock_timestamp()+interval '12 hours','8c000000-0000-0000-0000-000000000001')
+$q$,(select id from fx where k='connection'),(select id from fx where k='mapping')),'23P01');
+select pg_temp.ok(
+  (select count(*)=1 from public.crm_lifecycle_eligibility_policies
+    where connection_id=(select id from fx where k='connection')
+      and form_mapping_id=(select id from fx where k='mapping')),
+  'overlapping policy intervals are rejected instead of creating an ambiguous permissive fallback'
+);
+
+select pg_temp.actor(1);
+create temp table no_epoch_fx(k text primary key,id uuid);
+insert into no_epoch_fx values('connection',(public.crm_save_meta_connection(
+  '{"connection_key":"batch2-live-no-epoch","page_id":"881001","api_version":"v99.0"}')->>'id')::uuid);
+insert into no_epoch_fx values('mapping',(public.crm_publish_meta_form_mapping(
+  (select id from no_epoch_fx where k='connection'),
+  '{"form_key":"881002","field_map":{},"effective_from":"2020-01-01Z"}')->>'id')::uuid);
+select public.crm_configure_lifecycle(
+  (select id from no_epoch_fx where k='connection'),1,
+  jsonb_build_object('mode','live','enabled',false,'dataset_id','881003',
+    'secret_ref','CRM_META_LIFECYCLE_TOKEN_BATCH2_NO_EPOCH',
+    'contract_id',(select id from fixture_contract),'max_attempts',3));
+insert into no_epoch_fx values('policy',gen_random_uuid());
+insert into public.crm_lifecycle_eligibility_policies(
+  id,connection_id,form_mapping_id,version,notice_version,notice_text_digest,
+  adult_field_key,adult_accepted_values,sharing_field_key,sharing_accepted_values,
+  effective_from,effective_until,created_by)
+select
+  (select id from no_epoch_fx where k='policy'),
+  (select id from no_epoch_fx where k='connection'),
+  (select id from no_epoch_fx where k='mapping'),1,'notice-v1',repeat('8',64),
+  'adult_confirmed','["yes"]','meta_share','["yes"]',
+  clock_timestamp()-interval '300 days',clock_timestamp()+interval '1 day',
+  '8c000000-0000-0000-0000-000000000001';
+insert into no_epoch_fx values('evidence',gen_random_uuid());
+insert into public.crm_lifecycle_eligibility_evidence(
+  id,connection_id,policy_id,event_type,effective_at,recorded_at,source_kind,reason_code,
+  source_external_id,source_projection,source_request_key)
+select
+  (select id from no_epoch_fx where k='evidence'),
+  (select id from no_epoch_fx where k='connection'),
+  (select id from no_epoch_fx where k='policy'),'grant',
+  clock_timestamp()-interval '200 days',clock_timestamp()-interval '200 days',
+  'form_response','explicit_form_evidence','881099',
+  '{"page_id":"881001","form_id":"881002","notice_version":"notice-v1"}',gen_random_uuid();
+select pg_temp.ok(
+  not exists(select 1 from public.crm_lifecycle_activation_epochs
+    where connection_id=(select id from no_epoch_fx where k='connection')),
+  'configured live retention fixture has no activation epoch'
+);
+
+select pg_temp.actor(0);
+
 create function pg_temp.intake(external_id text,page_id text default '880001',form_id text default '880002') returns uuid language plpgsql as $$
 declare submission uuid; lead uuid;
 begin
@@ -289,7 +348,7 @@ create temp table cleanup_result as select public.crm_cleanup_lifecycle_retentio
 select pg_temp.ok(
   (select (result->>'terminated')::integer >= 1 and (result->>'payloads_erased')::integer >= 1
       and (result->>'attempts_erased')::integer >= 1 and (result->>'checks_erased')::integer >= 1
-      and (result->>'evidence_erased')::integer >= 4 from cleanup_result),
+      and (result->>'evidence_erased')::integer >= 5 from cleanup_result),
   'retention reports terminalization plus payload, attempt, negative-check and grant/revocation erasure'
 );
 select pg_temp.ok(
@@ -319,6 +378,11 @@ select pg_temp.ok(
      from public.crm_lifecycle_eligibility_evidence
     where id in ((select grant_id from old_unreferenced_evidence),(select revoke_id from old_unreferenced_evidence))),
   'unreferenced grant and revocation evidence expire at the bounded provider horizon instead of policy end'
+);
+select pg_temp.ok(
+  (select redacted_at is not null and submission_id is null and source_external_id is null and source_projection is null
+     from public.crm_lifecycle_eligibility_evidence where id=(select id from no_epoch_fx where k='evidence')),
+  'configured live provider horizon bounds unreferenced evidence even before the first activation epoch'
 );
 select pg_temp.ok(
   (select payload is null and payload_hash is null and matching_submission_id is null and payload_erased_at is not null

@@ -431,8 +431,14 @@ begin
         coalesce((select min(rv.effective_at) from public.crm_lifecycle_eligibility_evidence rv where rv.supersedes_evidence_id=e.id and rv.event_type='revoke'),p.effective_until),
         case when exists(select 1 from public.crm_lifecycle_activation_epochs open_epoch where open_epoch.connection_id=e.connection_id and open_epoch.ended_at is null)
           then p.effective_until else coalesce((select max(ep.ended_at) from public.crm_lifecycle_activation_epochs ep where ep.connection_id=e.connection_id),p.effective_until) end,
-        coalesce(e.effective_at+make_interval(secs=>(select min(pc.maximum_event_age_seconds)::integer from public.crm_lifecycle_activation_epochs ep
-          join public.crm_lifecycle_provider_contracts pc on pc.id=ep.provider_contract_id where ep.connection_id=e.connection_id)),p.effective_until))
+        coalesce(e.effective_at+make_interval(secs=>(select min(h.maximum_event_age_seconds)::integer from (
+          select pc.maximum_event_age_seconds from public.crm_lifecycle_activation_epochs ep
+            join public.crm_lifecycle_provider_contracts pc on pc.id=ep.provider_contract_id where ep.connection_id=e.connection_id
+          union all
+          select pc.maximum_event_age_seconds from public.crm_integration_connections c
+            join public.crm_lifecycle_provider_contracts pc on pc.id=(c.lifecycle_settings->>'contract_id')::uuid
+           where c.id=e.connection_id and c.lifecycle_settings->>'mode'='live'
+        ) h)),p.effective_until))
        from public.crm_lifecycle_eligibility_policies p where p.id=e.policy_id)<=now()-interval '90 days'))
    order by e.recorded_at,e.id limit p_limit for update skip locked loop
   update public.crm_lifecycle_eligibility_checks set submission_id=null,evidence_digest=null,redacted_at=clock_timestamp()

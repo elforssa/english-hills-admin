@@ -43,6 +43,12 @@ select pg_temp.ok(
   not has_function_privilege('service_role', 'crm_security.invoke_crm_lifecycle_scheduler()', 'execute'),
   'database scheduler invoker remains private'
 );
+select pg_temp.ok(
+  exists(select 1 from pg_constraint
+    where conrelid='public.crm_lifecycle_eligibility_policies'::regclass
+      and conname='crm_lifecycle_policy_no_overlap' and contype='x'),
+  'policy interval overlap is enforced by a concurrency-safe exclusion constraint'
+);
 
 select vault.create_secret(
   'https://scheduler.example/api/cron/crm-lifecycle',

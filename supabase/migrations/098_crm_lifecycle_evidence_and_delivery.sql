@@ -4,6 +4,8 @@
 -- forward migration records the verified contract.
 begin;
 
+create extension if not exists btree_gist with schema extensions;
+
 create table public.crm_lifecycle_provider_contracts (
   id uuid primary key default gen_random_uuid(),
   contract_key text not null unique check(contract_key ~ '^[a-z][a-z0-9_-]{2,63}$'),
@@ -67,6 +69,12 @@ create table public.crm_lifecycle_eligibility_policies (
   check(retired_at is null or retired_at > effective_from),
   check((retired_at is null) = (retired_by is null))
 );
+alter table public.crm_lifecycle_eligibility_policies
+  add constraint crm_lifecycle_policy_no_overlap exclude using gist (
+    connection_id with =,
+    form_mapping_id with =,
+    (tstzrange(effective_from,least(effective_until,coalesce(retired_at,effective_until)),'[)')) with &&
+  );
 
 create table public.crm_lifecycle_eligibility_checks (
   id uuid primary key default gen_random_uuid(),
