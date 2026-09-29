@@ -1,6 +1,10 @@
 # Current state
 
-Evidence reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d737d44391b0` (PR #29). This is the application/schema baseline for this documentation change; no production queries or mutations were performed.
+Earlier deployment evidence below was reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d737d44391b0` (PR #29). The repository owner later supplied the Batch 1 Production facts below. This correction branch did not query or mutate Production.
+
+## Owner-confirmed Receptionist Batch 1 release
+
+The repository owner reports that PR #31 merged, migration 096 was deployed, and `elforssa.2@gmail.com` has stored role `receptionist` in Production. An independent Production check confirmed `get_teacher_operations` returns only `id`, `full_name`, `email`, `telephone`, `certifications`, `niveaux_autorises`, `photo_url`, and `updated_at`, without compensation fields. These are owner-supplied Production findings, not this branch's live verification. Production acceptance also found `/students` still uses a simplified receptionist-only list. The shared Students UI correction on `sol/receptionist-batch1-ui-alignment` is review-branch work and has not been deployed or accepted in Production.
 
 ## Verified Production activation
 
@@ -22,9 +26,9 @@ Evidence independently verified on 2026-09-29 after PR #29 and supplied by the r
 - Main implements pg_cron + pg_net as primary five-minute trigger, with GitHub Actions backup calling the same protected `/api/cron/crm-intake`. Production activation of 095 was verified on 2026-09-29 as recorded above.
 - Website `/api/public/crm-inquiry` durably queues inquiries for the shared resolver. Public `/api/public/inscription` remains a distinct student/enrollment registration flow; the marketing website is external to this repository.
 - Meta inbound retrieval has real Graph HTTP transport. Lifecycle feedback and Insights have fixture/mock transports only; Insights endpoint reports `live_sync_enabled: false`. Code capability does not prove a live connection is configured.
-- Dedicated receptionist exists since 077. Current routes are Today, prospects, placement tests, students/list-detail, enrollments and settings. Broader finance, academic and teacher operations access is absent; see [current role boundaries](SECURITY_RULES.md).
+- Dedicated receptionist exists since 077; Batch 1 expanded operational routes and database permissions in merged 096. See [current role boundaries](SECURITY_RULES.md). The Production Students list still has the simplified receptionist fork pending the correction above.
 
-The `astra/receptionist-batch1-permissions` branch adds operational permissions and forward migration 096 for independent review. This is branch implementation evidence only; the deployment inventory above does not claim 096 or its UI is in Production.
+The original Batch 1 branch and PR #31 are merged. Migration 096 is deployed per the owner and is immutable. Review-branch correction PR #32 adds forward migration 097 to align the receptionist's group-assignment filter with the existing enrollment workflow; 097 has not been deployed to Production.
 
 ## Documentation discrepancies
 
@@ -32,4 +36,4 @@ The imported AGENTS/CLAUDE guidance incorrectly claimed receptionist was removed
 
 ## Active planned work
 
-**Receptionist operations redesign — APPROVED / PLANNED, not fully implemented.** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) defines expanded operational access, Today dashboard, CRM detail changes and walk-in direction. It grants no current permission and is not deployment authorization.
+**Receptionist operations — PARTIALLY IMPLEMENTED.** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) defines the wider direction. Batch 1 permissions are deployed per owner evidence; the shared Students UI correction is under review. Today dashboard, CRM detail presentation and dedicated walk-in changes remain planned. This status grants no deployment authorization for the correction.

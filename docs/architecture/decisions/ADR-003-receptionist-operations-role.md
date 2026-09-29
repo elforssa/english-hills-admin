@@ -2,7 +2,7 @@
 
 ## Status
 
-**APPROVED / PLANNED, not fully implemented.** Explicit product decision supplied for this context foundation; this document does not authorize production deployment.
+**APPROVED / PARTIALLY IMPLEMENTED.** Batch 1 permissions are merged and deployed per repository-owner evidence; the wider dashboard, CRM detail and walk-in direction remains planned. This document does not authorize deployment of follow-up changes.
 
 ## Date
 
@@ -52,9 +52,11 @@ Use the same underlying enrollment/payment engine as CRM enrollment. Do not forc
 
 Implement the expanded role across navigation, page guards, APIs/RPCs and RLS together. Operational finance and teacher views need boundaries distinct from analytics/HR. Do not infer authorization for destructive corrections, financial voids or privileged confirmation merely from “full operational”: specify and review granular commands before implementation.
 
-### Batch 1 architecture refinement — implemented on branch
+### Batch 1 architecture refinement
 
-[Receptionist Batch 1 permissions plan](../plans/receptionist-batch1-permissions.md) is the implementation contract for operational permissions and navigation across UI, route, API/RPC and database layers. The implementation branch adds a shared application capability map, separately enforced SQL authorization, safe teacher projections and the existing enrollment/payment engines in forward migration 096. Production deployment is separate and unapproved.
+[Receptionist Batch 1 permissions plan](../plans/receptionist-batch1-permissions.md) was the implementation contract for operational permissions and navigation across UI, route, API/RPC and database layers. Merged PR #31 added a shared application capability map, separately enforced SQL authorization, safe teacher projections and the existing enrollment/payment engines in migration 096. The owner reports 096 deployed in Production. The post-release Students UI correction is separate review-branch work and is not yet deployed.
+
+Receptionist and management roles should use one operational Students list layout and its bounded filters, payment state and placement context. Capability gates remove only management actions such as bulk import/export, unrestricted programme edits and student archive. The receptionist form remains a narrow security adapter for its distinct RPC write contract; student detail and the list layout are shared. Do not create a second simplified receptionist list.
 
 For Batch 1, keep financial void/correction/deletion/cancellation director-only; allow ordinary charge/payment/receipt operations and their existing trusted confirmation effects. Keep teacher HR and authorization-sensitive identity edits restricted. Reuse receipt routes for operational finance while denying the analytics `/finance` page. These conservative boundaries require no new destructive-finance product decision; widening them later requires explicit approval. The plan's exact matrices govern implementation, not broad interpretation of “full operational.”
 
@@ -64,6 +66,6 @@ Preserve the [security rules](../../ai/SECURITY_RULES.md), [lifecycle ADR](ADR-0
 
 ## Implementation status
 
-**APPROVED / PARTIALLY IMPLEMENTED ON BRANCH, not deployed by this PR.** Migration [077](../../../supabase/migrations/077_receptionist_role_and_operational_access.sql) restored receptionist and narrow operational access. The Batch 1 branch adds [096](../../../supabase/migrations/096_receptionist_operational_permissions.sql), operational UI/routes and tests. Dashboard/detail redesign and a dedicated walk-in journey remain planned. Existing in-person receipt/student paths do not complete that UX.
+**APPROVED / PARTIALLY IMPLEMENTED.** Migration [077](../../../supabase/migrations/077_receptionist_role_and_operational_access.sql) restored receptionist and narrow operational access. Merged Batch 1 PR #31 added [096](../../../supabase/migrations/096_receptionist_operational_permissions.sql), operational UI/routes and tests; the owner reports Production deployment. The shared Students UI correction remains unmerged and undeployed. Dashboard/detail redesign and a dedicated walk-in journey remain planned. Existing in-person receipt/student paths do not complete that UX.
 
 The Batch 1 plan resolves implementation boundaries conservatively: no free confirmation or destructive finance powers, explicit safe teacher fields, and no identity reassignment. Broader destructive/HR/identity powers remain outside this approval. The later dashboard/detail/walk-in redesign remains planned.

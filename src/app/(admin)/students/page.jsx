@@ -1,8 +1,6 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
 
-import { ReceptionistStudents } from '@/components/students/ReceptionistOperations';
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +17,8 @@ import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } fro
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { listHref, recordHref } from '@/lib/navigation.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PAGE_SIZE = 20;
 
@@ -49,36 +49,27 @@ function InlineSelect({ value, options, onChange, empty, label, className = '' }
 
 export default function StudentsPage() {
   const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistStudents /> : <Students />;
-}
-
-function Students() {
+  const canEditProgramme = hasCapability(role, 'canEditStudentProgramme');
+  const canImport = hasCapability(role, 'canImportStudents');
+  const canExport = hasCapability(role, 'canExportStudents');
   const update = useEntityUpdate('Student');
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);
-  const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement) });
-  const renderGroup = (student) => (
-    <div className="space-y-1">
-      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
-      {(student.pending_enrollments || []).map(enrollment => (
-        <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
-          onClick={() => setPlacement({ student, enrollment })}>
-          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
-        </button>
-      ))}
-      {!student.groupe_id && !student.pending_enrollments?.length && (
-        <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
-      )}
-    </div>
-  );
+  const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement && !placement.choices) });
 
   // Keep the current server value visible until persistence succeeds.
-  const patchStudentFields = async (id, data) => {
+  const patchStudentFields = async (student, data) => {
     try {
-      await update.mutateAsync({ id, data });
-    } catch { /* entities.update already reports the failure */ }
+      if (role === 'receptionist') {
+        const { error } = await getBrowserClient().rpc('save_receptionist_student', {
+          p_student: student.id, p_expected_updated_at: student.updated_at, p_changes: data,
+        });
+        if (error) throw error;
+        await queryClient.invalidateQueries({ queryKey: ['Student'] });
+      } else await update.mutateAsync({ id: student.id, data });
+    } catch (error) { if (role === 'receptionist') toast.error(error.message); }
   };
-  const patchStudent = (id, field, value) => patchStudentFields(id, { [field]: value === '' ? null : value });
+  const patchStudent = (student, field, value) => patchStudentFields(student, { [field]: value === '' ? null : value });
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -137,6 +128,50 @@ function Students() {
   const loading = !urlReady || queryLoading;
   const paged = result?.rows || [];
   const matchedCount = Number(result?.count || 0);
+  const studentIds = paged.map(student => student.id);
+  const { data: pageEnrollments = [], isFetching: enrollmentsLoading, isError: enrollmentsError, refetch: reloadEnrollments } = useQuery({
+    queryKey: ['Student', 'placement-enrollments', studentIds],
+    enabled: role === 'receptionist' && studentIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await getBrowserClient().from('enrollments')
+        .select('id,student_id,status,group_id,session_type,level,school_year,date_inscription,notes,created_at')
+        .in('student_id', studentIds)
+        .in('status', ['Submitted', 'Under Review', 'Trial', 'Confirmed', 'Validated'])
+        .order('created_at', { ascending: true }).order('id', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const renderGroup = (student) => {
+    if (role !== 'receptionist') return <div className="space-y-1">
+      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {(student.pending_enrollments || []).map(enrollment => (
+        <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
+          onClick={() => setPlacement({ student, enrollment })}>
+          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
+        </button>
+      ))}
+      {!student.groupe_id && !student.pending_enrollments?.length && <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
+    </div>;
+
+    if (enrollmentsLoading) return <span className="text-xs text-muted-foreground">Chargement des inscriptions…</span>;
+    if (enrollmentsError) return <button className="text-xs text-primary underline" onClick={() => reloadEnrollments()}>Réessayer le chargement des inscriptions</button>;
+    const relevant = pageEnrollments.filter(enrollment => enrollment.student_id === student.id);
+    const awaitingGroup = relevant.filter(enrollment => !enrollment.group_id);
+    return <div className="space-y-1">
+      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
+        Groupe à affecter · {awaitingGroup[0].status} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
+      </button>}
+      {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
+      {!student.groupe_id && relevant.length === 0 && <button className="text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>}
+      {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
+    </div>;
+  };
 
   const exportStudents = async () => {
     try {
@@ -172,19 +207,19 @@ function Students() {
           <p className="text-muted-foreground text-sm mt-1">{loading || isError ? '—' : matchedCount} apprenants correspondants · {loading || isError ? '—' : result.total} au total</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
-          <button
+          {canExport && <button
             onClick={exportStudents}
             disabled={loading || isError}
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
           >
             <Download size={15} /> CSV
-          </button>
-          <Link
+          </button>}
+          {canImport && <Link
             href="/students/import"
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted"
           >
             <Upload size={15} /> Import CSV
-          </Link>
+          </Link>}
           <Button asChild>
             <Link href="/students/new">
               <Plus size={15} /> Ajouter
@@ -243,9 +278,16 @@ function Students() {
         </select>
       </div>
 
-      {placement && (groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
+      {placement && (placement.choices ? <EnrollmentChoiceDialog student={placement.student} enrollments={placement.choices}
+        onSelect={enrollment => setPlacement({ student: placement.student, enrollment })} onClose={() => setPlacement(null)} />
+        : groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
         : groupsError ? <div role="alert" className="mb-4 text-sm">Impossible de charger les groupes. <button className="text-primary underline" onClick={() => reloadGroups()}>Réessayer</button> <button onClick={() => setPlacement(null)}>Annuler</button></div>
-          : <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
+          : placement.enrollment ? <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
+            onClose={() => setPlacement(null)} onSave={() => {
+              setPlacement(null);
+              queryClient.invalidateQueries({ queryKey: ['Student'] });
+              queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+            }} /> : <DossierGroupPlacement student={placement.student} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
               setPlacement(null);
               queryClient.invalidateQueries({ queryKey: ['Student'] });
@@ -309,28 +351,28 @@ function Students() {
                           label={`Catégorie de ${s.full_name}`}
                           options={AGE_CATEGORIES}
                           empty="— Non défini —"
-                          onChange={v => patchStudent(s.id, 'age_category', v)}
+                          onChange={v => patchStudent(s, 'age_category', v)}
                         />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{renderGroup(s)}</td>
                       <td className="px-4 py-3">
-                        <InlineSelect
+                        {canEditProgramme ? <InlineSelect
                           value={s.session_type || 'Yearly'}
                           label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
-                          onChange={v => patchStudentFields(s.id, { session_type: v, niveau_cefr: null, groupe_id: null })}
-                        />
+                          onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null, groupe_id: null })}
+                        /> : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{s.session_type || 'Yearly'}</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <InlineSelect
+                        {canEditProgramme ? <InlineSelect
                           value={s.niveau_cefr}
                           label={`Niveau de ${s.full_name}`}
                           options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
-                          onChange={v => patchStudentFields(s.id, { niveau_cefr: v || null, groupe_id: null })}
-                        />
+                          onChange={v => patchStudentFields(s, { niveau_cefr: v || null, groupe_id: null })}
+                        /> : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-4 py-3">
@@ -348,4 +390,63 @@ function Students() {
       </div>
     </div>
   );
+}
+
+function EnrollmentChoiceDialog({ student, enrollments, onSelect, onClose }) {
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Choisir une inscription pour {student.full_name}</DialogTitle></DialogHeader>
+      <p className="text-sm text-muted-foreground">Sélectionnez l’inscription à laquelle affecter le groupe.</p>
+      <div className="space-y-2">
+        {enrollments.map(enrollment => <button key={enrollment.id} type="button" className="block w-full rounded-md border border-border p-3 text-left text-sm hover:border-primary"
+          onClick={() => onSelect(enrollment)}>
+          <span className="block font-semibold">{enrollment.status} · {enrollment.session_type || student.session_type || 'Session'} · {enrollment.level || 'Niveau à définir'}</span>
+          <span className="text-xs text-muted-foreground">{enrollment.school_year || 'Année non renseignée'} · Réf. {enrollment.id.slice(0, 8)}</span>
+        </button>)}
+      </div>
+    </DialogContent>
+  </Dialog>;
+}
+
+function DossierGroupPlacement({ student, groups, onClose, onSave }) {
+  const [groupId, setGroupId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const matchingGroups = groups.filter(group => !group.deleted_at
+    && (group.session_type || 'Yearly') === (student.session_type || 'Yearly')
+    && group.niveau === student.niveau_cefr);
+
+  const assign = async (event) => {
+    event.preventDefault();
+    if (!groupId) return;
+    setSaving(true);
+    try {
+      const { error } = await getBrowserClient().rpc('assign_receptionist_student_group', {
+        p_student: student.id, p_enrollment: null, p_group: groupId,
+        p_student_updated_at: student.updated_at, p_enrollment_updated_at: null,
+      });
+      if (error) throw error;
+      toast.success('Groupe affecté');
+      onSave();
+    } catch (error) { toast.error(error.message); }
+    finally { setSaving(false); }
+  };
+
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Affecter un groupe à {student.full_name}</DialogTitle></DialogHeader>
+      {!student.niveau_cefr
+        ? <p className="text-sm text-muted-foreground">Le niveau doit être défini avant l’affectation directe. Créez une pré-inscription depuis la <Link href={`/students/${student.id}`} className="text-primary underline" onClick={onClose}>fiche apprenant</Link> pour choisir un niveau et un groupe.</p>
+        : <form onSubmit={assign} className="space-y-4">
+          <label className="block text-sm font-medium">Groupe compatible
+            <select aria-label="Groupe compatible" required className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2" value={groupId} onChange={event => setGroupId(event.target.value)}>
+              <option value="">— Choisir un groupe —</option>
+              {matchingGroups.map(group => <option key={group.id} value={group.id}>{group.name} · {group.niveau}</option>)}
+            </select>
+          </label>
+          {matchingGroups.length === 0 && <p className="text-sm text-muted-foreground">Aucun groupe compatible disponible.</p>}
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving || !groupId}>{saving ? 'Enregistrement…' : 'Affecter'}</Button></div>
+        </form>}
+    </DialogContent>
+  </Dialog>;
 }

@@ -32,7 +32,7 @@ Automatic acquisition matching corroborates contact identity and learner/program
 
 ## Existing in-person entry paths
 
-On the Batch 1 implementation branch, receptionist can create zero-charge commitments and receipts for new or existing learners through the existing financial RPC, and retry eligible receipt email. The same engine retains enrollment/conversion safeguards. Receptionist can create a narrow student dossier, add or edit pre-enrollments, assign groups, record attendance, schedule Premium workshops and update operational teacher fields. Receipt void/correction/deletion, finance analytics and teacher compensation remain restricted. These usable staff paths do not complete the planned walk-in redesign, and 096 has not been deployed to Production.
+Batch 1 permits receptionist to create zero-charge commitments and receipts for new or existing learners through the existing financial RPC, and retry eligible receipt email. The same engine retains enrollment/conversion safeguards. Receptionist can create a narrow student dossier, add or edit pre-enrollments, assign groups, record attendance, schedule Premium workshops and update operational teacher fields. Receipt void/correction/deletion, finance analytics and teacher compensation remain restricted. The owner reports 096 deployed. The pending UI correction makes `/students` use the shared operational list, retaining its filters, placement and payment context while routing receptionist writes through narrow RPCs and hiding management-only tools. That UI correction is not yet deployed. These staff paths do not complete the planned walk-in redesign.
 
 ## Approved future workflows
 

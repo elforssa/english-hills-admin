@@ -7,8 +7,9 @@ import { entities, integrations } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import StorageImage from '@/components/StorageImage';
+import { ArrowLeft } from 'lucide-react';
 
-const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white';
+const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary';
 const categories = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
 const sources = ['Réseaux sociaux (Facebook / Instagram)','Recherche Google','Famille / Ami(e)',
   'Passage devant le centre (walk-in)','Ancien élève / Réinscription'];
@@ -68,9 +69,10 @@ export default function ReceptionistStudentForm() {
     router.push(`/students/${studentId}`);
   };
   if (isEdit && !original) return <div className="p-8 text-muted-foreground">Chargement…</div>;
-  return <div className="p-4 lg:p-8 max-w-2xl">
+  return <div className="p-8 max-w-2xl">
+    <button type="button" onClick={() => router.push('/students')} className="mb-6 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft size={15} /> Retour</button>
     <h1 className="text-2xl font-bold mb-6">{isEdit ? 'Modifier l’apprenant' : 'Ajouter un apprenant'}</h1>
-    <form onSubmit={submit} className="bg-card border rounded-lg p-6 space-y-4">
+    <form onSubmit={submit} className="bg-card border border-border rounded-lg p-6 space-y-5">
       {isEdit && <div className="flex items-center gap-3">
         {form.photo_url && <StorageImage src={form.photo_url} alt="" className="w-12 h-12 object-cover rounded-full" />}
         <label className="text-sm">Photo<input type="file" accept="image/jpeg,image/png" disabled={uploading}
