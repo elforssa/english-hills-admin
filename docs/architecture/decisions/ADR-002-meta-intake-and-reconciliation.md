@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; implemented on main. Production evidence and the migration 095 activation gap are recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
+Accepted; implemented on main. Production activation was verified on 2026-09-29; the latest operational evidence belongs in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
 
 ## Date
 
@@ -39,4 +39,4 @@ Keep signed webhook verification, fixed Graph host/validated IDs/edges, bounded 
 
 ## Implementation status
 
-[086 ingestion](../../../supabase/migrations/086_crm_meta_ingestion.sql), [087 shared queue](../../../supabase/migrations/087_crm_website_ingestion.sql), [094 reconciliation](../../../supabase/migrations/094_crm_meta_reconciliation.sql), [reconciler](../../../src/lib/crm/meta/reconcile.mjs), [095 primary trigger](../../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql), [backup workflow](../../../.github/workflows/crm-intake-scheduler.yml). Main includes the `/leads` edge fix from PR #28. Release notes establish 094 applied and reconciliation subsequently enabled, with webhook disabled; PR #29 explicitly says 095 was not applied. Do not label the primary trigger live without fresh activation evidence. [Runbook](../../crm-intake-scheduler.md).
+[086 ingestion](../../../supabase/migrations/086_crm_meta_ingestion.sql), [087 shared queue](../../../supabase/migrations/087_crm_website_ingestion.sql), [094 reconciliation](../../../supabase/migrations/094_crm_meta_reconciliation.sql), [reconciler](../../../src/lib/crm/meta/reconcile.mjs), [095 primary trigger](../../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql), [backup workflow](../../../.github/workflows/crm-intake-scheduler.yml). Main includes the `/leads` edge fix from PR #28. Migration 095 implements the primary scheduler. Production activation was verified on 2026-09-29; [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns the latest operational evidence. [Runbook](../../crm-intake-scheduler.md).

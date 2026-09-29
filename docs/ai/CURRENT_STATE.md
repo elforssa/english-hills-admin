@@ -2,11 +2,16 @@
 
 Evidence reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d737d44391b0` (PR #29). This is the application/schema baseline for this documentation change; no production queries or mutations were performed.
 
-## Deployment evidence
+## Verified Production activation
 
-- **Last documented production migration: 094**, explicitly reported applied in [PR #27](https://github.com/elforssa/english-hills-admin/pull/27). This is a release-record assertion, not a fresh database-ledger verification.
-- **Latest migration on main: 095**, [primary intake scheduler](../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql). [PR #29](https://github.com/elforssa/english-hills-admin/pull/29) explicitly reports it NOT applied and Vault scheduler values NOT changed. Merge alone does not establish activation.
-- PR #29 reports Meta reconciliation enabled and realtime webhook intake disabled. PR #27 links the webhook restriction to the unpublished Meta app. Present provider mode, current Vercel deployment SHA, live website configuration and actual scheduler health have not been independently verified here. Obtain sanitized deployment/ledger evidence before upgrading these assertions.
+Evidence independently verified on 2026-09-29 after PR #29 and supplied by the repository owner during PR #30 review; this documentation update did not query or mutate Production.
+
+- Production migration ledger includes **095 `crm_intake_pg_cron_scheduler`**. Main also contains [migration 095](../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql); implementation and activation are separately established.
+- Supabase cron job `crm-intake-primary` has schedule `*/5 * * * *` and `active = true`. Automatic pg_cron runs succeeded; Production `/api/cron/crm-intake` calls returned HTTP 200.
+- Production Vercel deployment `dpl_7uPQH4WD9MU8PL2txH8SaFBtAudE` is **READY**, sourced from `main` commit `1a370069d9ddd92d531c2a84dc84d737d44391b0`; `admin.english-hills.com` aliases it.
+- Production Meta realtime intake is disabled (`enabled = false`); `meta_reconciliation.enabled = true`. Reconciliation has operated with `last_error_code = null`.
+- Real Meta intake has been demonstrated end-to-end: at least three real ingestion jobs completed successfully, producing three Meta submissions and three CRM leads. Leads started as NEW with first-contact tasks, without automatically creating students or enrollments. No customer identities or payloads are recorded here.
+- [PR #29](https://github.com/elforssa/english-hills-admin/pull/29)'s “095 not applied” statement describes the **pre-activation** state and is superseded by this evidence. Merge alone is still not proof of activation. Live website configuration is not established by this evidence.
 
 ## Implemented on main
 
@@ -14,7 +19,7 @@ Evidence reviewed 2026-09-29 against main commit `1a370069d9ddd92d531c2a84dc84d7
 - CRM migrations 078–091 provide lifecycle commands, Today, activities/tasks, placement, enrollment conversion, revenue attribution, durable intake and director reporting. 092–093 add optional learner handling through immutable mapping policy; 094 adds reconciliation and option labels.
 - Lifecycle is NEW → CONTACTING → ENGAGED → QUALIFIED → CONVERTED, with LOST/NOT_QUALIFIED closures. Linked Confirmed/Validated enrollment is conversion evidence; starting enrollment is insufficient. [Rules](PRODUCT_RULES.md).
 - Meta webhook and reconciliation share `crm_ingestion_jobs`. The reconciliation activation watermark is database-owned `settings.meta_reconciliation.started_at`; per-form lease/due/error state is in `crm_meta_reconciliation_state`. It is rolling lookback discovery, not a persisted pagination/high-water cursor. [ADR-002](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
-- Main implements pg_cron + pg_net as primary five-minute trigger, with GitHub Actions backup calling the same protected `/api/cron/crm-intake`. Production activation of 095 remains unconfirmed as above.
+- Main implements pg_cron + pg_net as primary five-minute trigger, with GitHub Actions backup calling the same protected `/api/cron/crm-intake`. Production activation of 095 was verified on 2026-09-29 as recorded above.
 - Website `/api/public/crm-inquiry` durably queues inquiries for the shared resolver. Public `/api/public/inscription` remains a distinct student/enrollment registration flow; the marketing website is external to this repository.
 - Meta inbound retrieval has real Graph HTTP transport. Lifecycle feedback and Insights have fixture/mock transports only; Insights endpoint reports `live_sync_enabled: false`. Code capability does not prove a live connection is configured.
 - Dedicated receptionist exists since 077. Current routes are Today, prospects, placement tests, students/list-detail, enrollments and settings. Broader finance, academic and teacher operations access is absent; see [current role boundaries](SECURITY_RULES.md).

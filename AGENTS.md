@@ -10,7 +10,7 @@ Code, cumulative migrations and runtime evidence establish implementation. Histo
 
 ## Safety and execution
 
-- Never push directly to `main`. Use a feature branch and a reviewed PR; main deploys through Vercel.
+- Never push directly to `main`. Use an isolated named feature branch (any agent/model, never `main` or `master`) and a reviewed PR; main deploys through Vercel.
 - Production Supabase, Vercel configuration and production migrations require explicit deployment approval. Never automatically run `supabase db push --linked` or destructive SQL against a linked project.
 - Develop and test with local Supabase at `http://127.0.0.1:54321`, synthetic data and external email disabled. Never use a production service-role key locally or copy real student, parent, teacher, payment or Auth data without explicit authorization.
 - Deployed migrations are immutable. Make forward migrations and test locally first; check deployment evidence before deciding a migration is editable.
