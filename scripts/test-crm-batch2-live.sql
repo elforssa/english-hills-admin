@@ -192,7 +192,16 @@ select pg_temp.ok(
   'evidence from a disabled-period milestone cannot cross into a later activation epoch'
 );
 
-insert into fx values('late_lead',pg_temp.intake('880014'));
+insert into fx values('unrepairable_lead',pg_temp.intake('880014'));
+insert into fx values('unrepairable_activity',pg_temp.milestone((select id from fx where k='unrepairable_lead'),'batch2-live-unrepairable-evidence'));
+select public.crm_reconcile_external_deliveries();
+select pg_temp.ok(
+  (select status='blocked' and last_error_code='sharing_evidence_missing' and eligibility_evidence_id is null
+     from public.crm_external_deliveries where lead_id=(select id from fx where k='unrepairable_lead')),
+  'an older delivery without evidence remains safely blocked'
+);
+
+insert into fx values('late_lead',pg_temp.intake('880015'));
 insert into fx values('late_activity',pg_temp.milestone((select id from fx where k='late_lead'),'batch2-live-late-evidence'));
 select public.crm_reconcile_external_deliveries();
 create temp table late_delivery_before as
@@ -221,14 +230,14 @@ create temp table late_evidence as
 select public.crm_record_lifecycle_evidence_check(
   (select first_submission_id from public.crm_leads where id=(select id from fx where k='late_lead')),
   (select id from fixture_policy),true,'eligible',repeat('6',64)) result;
-select public.crm_reconcile_external_deliveries();
+select public.crm_reconcile_external_deliveries(1);
 select pg_temp.ok(
   (select count(*)=1 and bool_and(id=(select id from late_delivery_before)
       and provider_event_id=(select provider_event_id from late_delivery_before)
       and status='pending' and last_error_code is null
       and eligibility_evidence_id=(select (result->>'evidence_id')::uuid from late_evidence))
      from public.crm_external_deliveries where lead_id=(select id from fx where k='late_lead')),
-  'later valid evidence repairs the same deterministic pre-attempt delivery without duplication'
+  'route-filtered repair skips an older ineligible row and repairs the same deterministic delivery without duplication'
 );
 
 create function pg_temp.live_payload(d public.crm_external_deliveries) returns jsonb language sql as $$

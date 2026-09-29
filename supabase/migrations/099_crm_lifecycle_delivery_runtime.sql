@@ -194,10 +194,12 @@ begin
  if auth.role() is distinct from 'service_role' then perform crm_security.require_reader(true);end if;
  if p_limit is null or p_limit not between 1 and 200 then raise exception 'Invalid limit' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended('crm:lifecycle:reconcile',0));
- for repair_delivery in select * from public.crm_external_deliveries
-  where delivery_mode='live' and status='blocked' and last_error_code='sharing_evidence_missing' and eligibility_evidence_id is null
-    and attempt_count=0 and payload is null and payload_hash is null and provider_event_name is null and terminal_at is null and payload_erased_at is null
-  order by updated_at,id limit p_limit for update skip locked loop
+ for repair_delivery in select d.* from public.crm_external_deliveries d
+  cross join lateral (select crm_security.lifecycle_route(d.lead_id) value) route
+  where d.delivery_mode='live' and d.status='blocked' and d.last_error_code='sharing_evidence_missing' and d.eligibility_evidence_id is null
+    and d.attempt_count=0 and d.payload is null and d.payload_hash is null and d.provider_event_name is null and d.terminal_at is null and d.payload_erased_at is null
+    and route.value->>'reason' is null and route.value->>'evidence_id' is not null
+  order by d.updated_at,d.id limit p_limit for update of d skip locked loop
   r:=crm_security.lifecycle_route(repair_delivery.lead_id);
   if (r->>'evidence_id') is not null and crm_security.repair_lifecycle_evidence(repair_delivery.id,(r->>'evidence_id')::uuid) then n:=n+1;end if;
  end loop;

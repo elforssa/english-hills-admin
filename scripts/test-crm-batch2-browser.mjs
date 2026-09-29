@@ -35,6 +35,13 @@ try {
     insert into public.crm_form_mappings(id,connection_id,channel,form_key,version,form_name,field_map,effective_from,created_by)
     values('${mapping}','${connection}','meta_instant_form','${formId}',1,'Batch 2 browser form','{}','2020-01-01Z','${user.id}');`);
 
+  // Compile every route before opening the browser. This keeps dev-server HMR
+  // from replacing controlled login fields or page chunks during a cold run.
+  for(const path of ['/login?returnTo=/crm/integrations/lifecycle','/crm/integrations/lifecycle','/api/internal/crm/lifecycle/process']){
+    const warmed=await fetch(app+path,{redirect:'manual'});
+    assert(warmed.status<500,`Cold route warmup failed for ${path}: ${warmed.status}`);
+  }
+
   browser=await chromium.launch({headless:true});
   const context=await browser.newContext({viewport:{width:1440,height:1000}});
   await context.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());
@@ -49,13 +56,23 @@ try {
     }
   });
 
-  await page.goto(app+'/login?returnTo=/crm/integrations/lifecycle');
-  await page.getByLabel('Adresse email',{exact:true}).waitFor();
-  await page.getByLabel('Adresse email',{exact:true}).fill(email);
-  await page.getByLabel('Mot de passe',{exact:true}).fill(password);
-  await expect(page.getByRole('button',{name:'Se connecter',exact:true})).toBeEnabled();
-  await page.getByRole('button',{name:'Se connecter',exact:true}).click();
-  await page.waitForURL(url=>!url.pathname.startsWith('/login'));
+  let signedIn=false;
+  for(let attempt=0;attempt<3 && !signedIn;attempt++){
+    await page.goto(app+'/login?returnTo=/crm/integrations/lifecycle');
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Adresse email',{exact:true}).fill(email);
+    await page.getByLabel('Mot de passe',{exact:true}).fill(password);
+    const submit=page.getByRole('button',{name:'Se connecter',exact:true});
+    try { await expect(submit).toBeEnabled({timeout:15000}); }
+    catch { continue; }
+    await submit.click();
+    try { await page.waitForURL(url=>!url.pathname.startsWith('/login'),{timeout:12000}); signedIn=true; }
+    catch(error){
+      const loginError=await page.locator('.text-red-700').first().textContent().catch(()=>null);
+      if(loginError) throw new Error(`Local director login failed: ${loginError}`,{cause:error});
+    }
+  }
+  assert(signedIn,'Director login did not complete after three hydrated page loads');
   await page.goto(app+'/crm/integrations/lifecycle');
   await expect(page.getByTestId('lifecycle-operations')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Retour de cycle Meta'})).toBeVisible();
