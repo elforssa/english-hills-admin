@@ -18,6 +18,8 @@ const sql = statement => execFileSync('psql', ['-X','-qAt','-h','127.0.0.1','-p'
 const run = 'receptionist-browser-' + randomUUID(), email = run + '@example.invalid';
 const password = randomBytes(24).toString('base64url');
 const student = randomUUID(), group = randomUUID();
+const readyStudent = randomUUID(), unsetStudent = randomUUID();
+const readyName = run + ' ready', unsetName = run + ' unset';
 let user, browser;
 try {
   const response = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
@@ -26,7 +28,10 @@ try {
   assert.equal(response.status, 200); user = (await response.json()).id;
   sql(`update public.profiles set role='receptionist' where id='${user}';
     insert into public.groups(id,name,session_type,niveau) values('${group}','${run}','Yearly','Child 1');
-    insert into public.students(id,full_name,status,session_type) values('${student}','${run}','Prospect','Yearly');`);
+    insert into public.students(id,full_name,status,session_type,niveau_cefr) values
+      ('${student}','${run}','Prospect','Yearly',null),
+      ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
+      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null);`);
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route('**/*', route => {
@@ -36,6 +41,7 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   await page.goto(app + '/login?returnTo=/finance');
+  await page.waitForLoadState('networkidle');
   await page.getByLabel('Adresse email', { exact: true }).waitFor();
   await page.getByLabel('Adresse email', { exact: true }).fill(email);
   await page.getByLabel('Mot de passe', { exact: true }).fill(password);
@@ -69,6 +75,14 @@ try {
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${student}' and group_id='${group}' and status='Trial'`), '1');
   console.log('PASS prospect placement creation, student search/detail and operational trial enrollment');
 
+  await page.goto(app + `/groups/${group}`);
+  await page.getByRole('heading', { name: run, exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Ajouter des apprenants' }).click();
+  const picker = page.getByRole('dialog');
+  await picker.getByText(readyName, { exact: true }).waitFor();
+  assert.equal(await picker.getByText(unsetName, { exact: true }).count(), 0);
+  console.log('PASS group picker offers matching level and excludes unset-level dossier');
+
   await page.goto(app + '/settings');
   await page.getByRole('heading', { name: 'Mon compte', exact: true }).waitFor();
   await page.getByLabel('Nom', { exact: true }).fill('Phase 1 self-service');
@@ -98,10 +112,11 @@ try {
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'
       union select id from public.enrollments where student_id='${student}'
-      union select unnest(array['${user}'::uuid,'${student}'::uuid,'${group}'::uuid]);
+      union select unnest(array['${user}'::uuid,'${student}'::uuid,
+        '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${group}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
     delete from public.enrollments where student_id='${student}';
-    delete from public.students where id='${student}';
+    delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}');
     delete from public.groups where id='${group}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);

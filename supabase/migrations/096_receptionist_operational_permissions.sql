@@ -258,7 +258,7 @@ set search_path=pg_catalog,pg_temp as $$ declare g public.groups%rowtype;
       operational_security.valid_session_level(v_session,v_level) is not true then
       raise exception 'Invalid group session/level' using errcode='22023'; end if;
     if (v_session is distinct from g.session_type or v_level is distinct from g.niveau) and (
-      exists(select 1 from public.enrollments e where e.group_id=p_group and e.status in ('Trial','Confirmed','Validated'))
+      exists(select 1 from public.enrollments e where e.group_id=p_group)
       or exists(select 1 from public.students s where s.groupe_id=p_group and s.deleted_at is null)) then
       raise exception 'Reassign learners before changing group session or level' using errcode='23514'; end if;
     update public.groups set
@@ -303,11 +303,15 @@ begin
     raise exception 'Existing enrollment session/year is immutable' using errcode='42501'; end if;
   effective_session:=coalesce(e.session_type,p_session,s.session_type);
   effective_year:=coalesce(e.school_year,p_school_year);
-  effective_level:=coalesce(p_level,e.level,s.niveau_cefr);
+  effective_level:=coalesce(p_level,e.level,case
+    when operational_security.valid_session_level(effective_session,s.niveau_cefr)
+    then s.niveau_cefr end);
   if effective_session not in ('Yearly','Adults','Summer Camp','Communication Junior',
       'Communication Adult','One-to-One','Mise à niveau','Other') or
     (effective_year is not null and effective_year !~ '^[0-9]{4}/[0-9]{4}$') then
     raise exception 'Invalid enrollment session/year' using errcode='22023'; end if;
+  if operational_security.valid_session_level(effective_session,effective_level) is not true then
+    raise exception 'Invalid enrollment session/level' using errcode='23514'; end if;
   if p_group is not null then
     select * into g from public.groups where id=p_group for share;
     if not found or g.session_type is distinct from effective_session then

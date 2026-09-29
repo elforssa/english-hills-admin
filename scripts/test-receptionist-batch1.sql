@@ -24,6 +24,33 @@ insert into public.groups(id,name,session_type,niveau,teacher_id)
 insert into public.enrollments(id,student_id,status,session_type,level,school_year)
  values('96000000-0000-0000-0000-000000000040',
  '96000000-0000-0000-0000-000000000020','Confirmed','Yearly','Child 1','2026/2027');
+insert into public.students(id,full_name,status,session_type,niveau_cefr) values
+ ('96000000-0000-0000-0000-000000000022','Submitted learner','Enrolled','Yearly','Child 1'),
+ ('96000000-0000-0000-0000-000000000023','Review learner','Enrolled','Yearly','Child 1'),
+ ('96000000-0000-0000-0000-000000000024','Unset level learner','Enrolled','Yearly',null),
+ ('96000000-0000-0000-0000-000000000025','Inherited Child learner','Enrolled','Yearly','Child 1'),
+ ('96000000-0000-0000-0000-000000000026','Inherited Adult learner','Enrolled','Adults','Beginning 1'),
+ ('96000000-0000-0000-0000-000000000027','Unset paid learner','Enrolled','Yearly',null),
+ ('96000000-0000-0000-0000-000000000028','Rejected learner','Enrolled','Yearly','Child 1');
+insert into public.groups(id,name,session_type,niveau) values
+ ('96000000-0000-0000-0000-000000000032','Submitted group','Yearly','Child 1'),
+ ('96000000-0000-0000-0000-000000000033','Review group','Yearly','Child 1'),
+ ('96000000-0000-0000-0000-000000000035','Rejected group','Yearly','Child 1');
+insert into public.enrollments(id,student_id,group_id,status,session_type,level,school_year) values
+ ('96000000-0000-0000-0000-000000000042','96000000-0000-0000-0000-000000000022',
+  '96000000-0000-0000-0000-000000000032','Submitted','Yearly','Child 1','2026/2027'),
+ ('96000000-0000-0000-0000-000000000043','96000000-0000-0000-0000-000000000023',
+  '96000000-0000-0000-0000-000000000033','Under Review','Yearly','Child 1','2026/2027'),
+ ('96000000-0000-0000-0000-000000000044','96000000-0000-0000-0000-000000000027',
+  null,'Confirmed','Yearly',null,'2026/2027'),
+ ('96000000-0000-0000-0000-000000000045','96000000-0000-0000-0000-000000000028',
+  '96000000-0000-0000-0000-000000000035','Rejected','Yearly','Child 1','2026/2027');
+insert into public.assessments(id,student_id,group_id,commentaire) values
+ ('96000000-0000-0000-0000-000000000060','96000000-0000-0000-0000-000000000020',
+  '96000000-0000-0000-0000-000000000030','Read only assessment');
+insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
+ ('96000000-0000-0000-0000-000000000061','96000000-0000-0000-0000-000000000020',
+  'Synthetic adult','0600000000','Parent');
 
 create function pg_temp.denied(statement text) returns void language plpgsql as $$ begin
  begin execute statement; exception when insufficient_privilege then return; end;
@@ -32,6 +59,50 @@ end $$;
 create function pg_temp.invalid(statement text) returns void language plpgsql as $$ begin
  begin execute statement; exception when check_violation or invalid_parameter_value or serialization_failure then return; end;
  raise exception 'Expected validation rejection: %',statement;
+end $$;
+create function pg_temp.no_direct_write(table_name text, fixture_id uuid) returns void language plpgsql as $$
+declare before_row jsonb; after_row jsonb; affected bigint; before_count bigint;
+  after_count bigint; insert_allowed boolean:=false; insert_columns text;
+  insert_values text; rejection_code text; begin
+ if not exists(select 1 from pg_policies where schemaname='public' and tablename=table_name
+   and policyname='receptionist_insert_deny' and permissive='RESTRICTIVE'
+   and cmd='INSERT' and position('receptionist' in coalesce(with_check,''))>0) then
+   raise exception 'Missing restrictive INSERT boundary: %',table_name; end if;
+ execute format('select count(*) from public.%I',table_name) into before_count;
+ execute format('select to_jsonb(t) from public.%I t where id=$1',table_name)
+   into before_row using fixture_id;
+ if before_row is null then raise exception 'Missing readable fixture: %',table_name; end if;
+ select string_agg(format('%I',a.attname),',' order by a.attnum),
+   string_agg(case when a.attname='id' then '$2' else format('t.%I',a.attname) end,
+     ',' order by a.attnum) into insert_columns,insert_values
+ from pg_attribute a join pg_class c on c.oid=a.attrelid
+   join pg_namespace n on n.oid=c.relnamespace
+ where n.nspname='public' and c.relname=table_name and a.attnum>0
+   and not a.attisdropped and a.attgenerated='' and a.attidentity='';
+ begin
+   execute format('insert into public.%I(%s) select %s from public.%I t where t.id=$1',
+     table_name,insert_columns,insert_values,table_name) using fixture_id,gen_random_uuid();
+   insert_allowed:=true;
+ exception when others then get stacked diagnostics rejection_code=returned_sqlstate; end;
+ if insert_allowed then raise exception 'Direct INSERT allowed: %',table_name; end if;
+ if rejection_code<>'42501' then
+   raise exception 'Direct INSERT rejected by non-permission rule on %: %',table_name,rejection_code; end if;
+ begin
+   execute format('update public.%I set updated_at=updated_at where id=$1',table_name) using fixture_id;
+   get diagnostics affected=row_count;
+   if affected<>0 then raise exception 'Direct UPDATE allowed: %',table_name; end if;
+ exception when insufficient_privilege then null; end;
+ begin
+   execute format('delete from public.%I where id=$1',table_name) using fixture_id;
+   get diagnostics affected=row_count;
+   if affected<>0 then raise exception 'Direct DELETE allowed: %',table_name; end if;
+ exception when insufficient_privilege then null; end;
+ execute format('select to_jsonb(t) from public.%I t where id=$1',table_name)
+   into after_row using fixture_id;
+ execute format('select count(*) from public.%I',table_name) into after_count;
+ if after_count<>before_count then raise exception 'Direct-write row count changed: %',table_name; end if;
+ if after_row is distinct from before_row then
+   raise exception 'Direct-write probe persisted a change: %',table_name; end if;
 end $$;
 
 select set_config('request.jwt.claim.sub','96000000-0000-0000-0000-000000000003',true);
@@ -77,6 +148,93 @@ do $$ begin
  if found then raise exception 'Direct confirmation allowed'; end if;
  if exists(select 1 from public.app_config) or exists(select 1 from public.payroll) or
    exists(select 1 from public.financial_events) then raise exception 'Restricted table read'; end if;
+end $$;
+
+-- Every assigned enrollment, including pre-confirmation, holds the group's
+-- session/level fixed. Rejected commands must leave both sides unchanged.
+do $$ declare v_group uuid; v_enrollment uuid; before_group jsonb; before_enrollment jsonb;
+  v_version timestamptz; v_student_version timestamptz; v_enrollment_version timestamptz;
+  v_new uuid; before_student jsonb; begin
+ foreach v_group in array array['96000000-0000-0000-0000-000000000032'::uuid,
+   '96000000-0000-0000-0000-000000000033'::uuid,
+   '96000000-0000-0000-0000-000000000035'::uuid] loop
+   v_enrollment:=case when v_group='96000000-0000-0000-0000-000000000032'
+     then '96000000-0000-0000-0000-000000000042'::uuid
+     when v_group='96000000-0000-0000-0000-000000000033'
+       then '96000000-0000-0000-0000-000000000043'::uuid
+     else '96000000-0000-0000-0000-000000000045'::uuid end;
+   select to_jsonb(g),g.updated_at into before_group,v_version from public.groups g where g.id=v_group;
+   select to_jsonb(e) into before_enrollment from public.enrollments e where e.id=v_enrollment;
+   perform pg_temp.invalid(format('select public.save_receptionist_group(%L,%L,%L::jsonb)',
+     v_group,v_version,'{"session_type":"Adults","niveau":"Beginning 1"}'));
+   if (select to_jsonb(g) from public.groups g where g.id=v_group) is distinct from before_group
+     or (select to_jsonb(e) from public.enrollments e where e.id=v_enrollment)
+       is distinct from before_enrollment then
+     raise exception 'Rejected pre-confirmation group mutation persisted'; end if;
+   perform public.save_receptionist_group(v_group,v_version,'{"salle":"Compatible room"}');
+   if not exists(select 1 from public.groups where id=v_group and salle='Compatible room'
+     and session_type='Yearly' and niveau='Child 1') then
+     raise exception 'Compatible group edit failed'; end if;
+ end loop;
+ -- An empty group can still be changed to another valid programme.
+ perform public.save_receptionist_group('96000000-0000-0000-0000-000000000034',null,
+   '{"name":"Empty programme group","session_type":"Yearly","niveau":"Child 1"}');
+ select updated_at into v_version from public.groups where id='96000000-0000-0000-0000-000000000034';
+ perform public.save_receptionist_group('96000000-0000-0000-0000-000000000034',v_version,
+   '{"session_type":"Adults","niveau":"Beginning 1"}');
+ if not exists(select 1 from public.groups where id='96000000-0000-0000-0000-000000000034'
+   and session_type='Adults' and niveau='Beginning 1') then
+   raise exception 'Empty group programme change failed'; end if;
+
+ -- An explicit Child 1/Adults combination is rejected with no new row.
+ perform pg_temp.invalid($q$select public.save_receptionist_enrollment(
+   '96000000-0000-0000-0000-000000000025',null,null,'Submitted','Child 1',current_date,null,
+   'Adults','2026/2027')$q$);
+ if exists(select 1 from public.enrollments where student_id='96000000-0000-0000-0000-000000000025') then
+   raise exception 'Rejected explicit level persisted'; end if;
+ -- Choosing another session without a level clears incompatible dossier
+ -- inheritance, as the enrollment form's empty-level option promises.
+ v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000025',
+   null,null,'Submitted',null,current_date,null,'Adults','2026/2027');
+ if not exists(select 1 from public.enrollments where id=v_new and session_type='Adults'
+   and level is null) or exists(select 1 from public.enrollments where id=v_new
+     and level='Child 1') then raise exception 'Incompatible inherited level was copied'; end if;
+ v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000025',
+   null,null,'Submitted',null,current_date,null,'Yearly','2026/2027');
+ if not exists(select 1 from public.enrollments where id=v_new and session_type='Yearly'
+   and level='Child 1') then raise exception 'Compatible Yearly inheritance failed'; end if;
+ v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000026',
+   null,null,'Submitted',null,current_date,null,'Adults','2026/2027');
+ if not exists(select 1 from public.enrollments where id=v_new and session_type='Adults'
+   and level='Beginning 1') then raise exception 'Compatible Adults inheritance failed'; end if;
+
+ -- No dossier or paid-enrollment assignment silently supplies an unset level.
+ select updated_at into v_student_version from public.students
+   where id='96000000-0000-0000-0000-000000000024';
+ select to_jsonb(s) into before_student from public.students s
+   where id='96000000-0000-0000-0000-000000000024';
+ perform pg_temp.invalid(format('select public.assign_receptionist_student_group(%L,null,%L,%L,null)',
+   '96000000-0000-0000-0000-000000000024',
+   '96000000-0000-0000-0000-000000000030',v_student_version));
+ if (select to_jsonb(s) from public.students s
+   where id='96000000-0000-0000-0000-000000000024') is distinct from before_student then
+   raise exception 'Unset dossier level changed after rejection'; end if;
+ select updated_at into v_student_version from public.students
+   where id='96000000-0000-0000-0000-000000000027';
+ select to_jsonb(s) into before_student from public.students s
+   where id='96000000-0000-0000-0000-000000000027';
+ select updated_at into v_enrollment_version from public.enrollments
+   where id='96000000-0000-0000-0000-000000000044';
+ select to_jsonb(e) into before_enrollment from public.enrollments e
+   where id='96000000-0000-0000-0000-000000000044';
+ perform pg_temp.invalid(format('select public.assign_receptionist_student_group(%L,%L,%L,%L,%L)',
+   '96000000-0000-0000-0000-000000000027','96000000-0000-0000-0000-000000000044',
+   '96000000-0000-0000-0000-000000000030',v_student_version,v_enrollment_version));
+ if (select to_jsonb(e) from public.enrollments e
+   where id='96000000-0000-0000-0000-000000000044') is distinct from before_enrollment or
+   (select to_jsonb(s) from public.students s
+     where id='96000000-0000-0000-0000-000000000027') is distinct from before_student then
+   raise exception 'Unset paid level changed after rejection'; end if;
 end $$;
 
 -- Exact safe writes and optimistic version checks.
@@ -171,6 +329,25 @@ select pg_temp.denied($q$select public.create_charge_payment(jsonb_build_object(
  'student_id','96000000-0000-0000-0000-000000000020','session_type','Other','school_year','2026/2027',
  'service_detail','Synthetic material','gross_amount',100,'payment_amount',0,'payment_method','Espèces',
  'update_contacts',true,'student_email','forged@example.test'))$q$);
+
+-- Readable operational tables remain non-writable except through bounded RPCs.
+-- Probe INSERT, UPDATE and DELETE as receptionist, and compare each readable
+-- fixture before/after so a silent RLS zero-row result is also verified.
+do $$ declare v_charge uuid; v_receipt uuid; v_premium_attendance uuid; begin
+ select id into v_charge from public.charges
+   where student_id='96000000-0000-0000-0000-000000000020' limit 1;
+ select id into v_receipt from public.receipts where email='newpayer@example.test' limit 1;
+ select id into v_premium_attendance from public.premium_attendance
+   where premium_session_id='96000000-0000-0000-0000-000000000052' limit 1;
+ perform pg_temp.no_direct_write('receipts',v_receipt);
+ perform pg_temp.no_direct_write('charges',v_charge);
+ perform pg_temp.no_direct_write('assessments','96000000-0000-0000-0000-000000000060');
+ perform pg_temp.no_direct_write('authorized_adults','96000000-0000-0000-0000-000000000061');
+ perform pg_temp.no_direct_write('premium_groups','96000000-0000-0000-0000-000000000050');
+ perform pg_temp.no_direct_write('premium_group_memberships','96000000-0000-0000-0000-000000000051');
+ perform pg_temp.no_direct_write('premium_sessions','96000000-0000-0000-0000-000000000052');
+ perform pg_temp.no_direct_write('premium_attendance',v_premium_attendance);
+end $$;
 
 -- Existing role scopes are unchanged; new school-wide mutations are reception-only.
 reset role;

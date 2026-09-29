@@ -57,10 +57,12 @@ export default function GroupDetail() {
   }, [id, reload]);
 
   const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
-    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));
+    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student)
+    && (role !== 'receptionist' || (e.level || student.niveau_cefr) === group.niveau));
   const available = allStudents.filter(s => !students.some(member => member.id === s.id)
     && (matchingPending(s).length > 0 || ((s.session_type || 'Yearly') === (group.session_type || 'Yearly')
-      && (!s.niveau_cefr || s.niveau_cefr === group.niveau))));
+      && (role !== 'receptionist' ? (!s.niveau_cefr || s.niveau_cefr === group.niveau)
+        : s.niveau_cefr === group.niveau))));
   const refreshMemberships = () => {
     queryClient.invalidateQueries({ queryKey: ['Student'] });
     queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
