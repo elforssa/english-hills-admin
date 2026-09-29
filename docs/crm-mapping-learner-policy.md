@@ -1,5 +1,7 @@
 # Immutable form-mapping learner policy
 
+> Implementation/activation reference with historical phase notes. Deployment and enablement statements below describe that phase, not necessarily the present environment; consult [CURRENT_STATE](ai/CURRENT_STATE.md). Later reconciliation/scheduling behavior is documented in [ADR-002](architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
+
 Migration 093 replaces migration 092's website-only form-key check with
 `crm_form_mappings.learner_policy`, a non-null `required` / `optional` field.
 Both publishing RPCs accept the field, reject null, invalid values and unknown

@@ -45,11 +45,12 @@ using the receipt ID as its stable Resend idempotency key. Historical `unknown`
 status is never rewritten by webhook, lookup-error, or retry paths. Local tests
 do not configure webhook secrets and send no email.
 
-## Migration development status
+## Historical migration development status
 
-Migration 055 is unreleased on this feature branch and is absent from
-`origin/main`, so the fixes were applied directly to 055 rather than adding a
-forward migration. `scripts/test-receipt-migration-rehearsal.sh` requires the
+At the original feature-branch review, migration 055 was unreleased and absent
+from main, so fixes were made there. That is historical context only: 055 is
+now on main and must not be edited as an unreleased migration. Consult
+[CURRENT_STATE](ai/CURRENT_STATE.md) for deployment evidence. `scripts/test-receipt-migration-rehearsal.sh` requires the
 explicit `--confirm-disposable-local` flag, resets local Supabase through 054,
 loads synthetic historical fixtures, applies 055, verifies the migrated data
 and a later installment, and restores the complete local schema on exit.
@@ -89,7 +90,7 @@ student/receipt history, and repeat execution. Migration 055 remains unchanged a
 release. Backup configuration and a real recipient-approved email delivery test are
 separate operational checks; successful reconciliation does not establish either.
 
-### School-year workflow (057, unreleased)
+### School-year workflow (057; historical implementation record)
 
 New agreements store the selected school year (UI catalogue: 2026/2027). Receipts
 snapshot that year; existing agreements without a known year remain undated.

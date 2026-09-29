@@ -1,5 +1,7 @@
 # CRM production rollout proposal — Phase 12
 
+> Historical Phase 12 evidence/procedure, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) for the reviewed main baseline and later release evidence. Preserve these original assertions in their historical context.
+
 **Review document, not deployment authorization.** Baseline code: `8452dde85d9d8b7d894c5ab7c6c8dd041efd0fef`. Production is last confirmed at 001–076; verify it again before approval. No real data was used in rehearsal. All external integrations remain unauthorized.
 
 ## Pre-deploy gates

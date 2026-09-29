@@ -1,5 +1,7 @@
 # Phase 8 — Meta inbound intake
 
+> Implementation/activation reference with historical phase notes. Deployment and enablement statements below describe that phase, not necessarily the present environment; consult [CURRENT_STATE](ai/CURRENT_STATE.md). Later reconciliation/scheduling behavior is documented in [ADR-002](architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
+
 This implements code for mocked/local verification. **Live Meta activation is not ready.** No real Page subscription, token, lead or provider request was used.
 
 ## Provider verification boundary

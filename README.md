@@ -3,6 +3,10 @@
 ## Overview
 Full management platform for English Hills Language Center (Almaz, Casablanca, Morocco). Built with Next.js 15, Supabase, and Tailwind CSS.
 
+## Engineering context
+
+Start with [AGENTS.md](AGENTS.md) and its linked [current state](docs/ai/CURRENT_STATE.md), architecture, product rules, workflows, security rules and ADRs. Current main and production activation are tracked separately.
+
 ## Tech Stack
 - Next.js 15 (App Router)
 - Supabase (PostgreSQL + Auth + Storage + Edge Functions)
@@ -31,7 +35,7 @@ Full management platform for English Hills Language Center (Almaz, Casablanca, M
 17. HR / Payroll
 18. Leave Management
 19. Finance Dashboard
-20. Multi-Role Access (director, admin, teacher, parent, student)
+20. Multi-Role Access (director, admin, receptionist, teacher, parent, student)
 21. Security (RLS-backed)
 22. Privacy controls (legal and operational review remains open)
 
@@ -40,15 +44,15 @@ Full management platform for English Hills Language Center (Almaz, Casablanca, M
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. Public — embedded in the browser bundle. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key. Public; pair with RLS for security. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin key. **Never commit.** Used by `scripts/migrateData.js` and any future admin API routes. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin key. **Never commit.** Used only by authorized server handlers/workers and explicitly approved scripts. |
 | `RESEND_API_KEY` | Resend API key (`re_*`). Configure before go-live. |
 | `RESEND_FROM_ADDRESS` | Verified sender, e.g. `English Hills <noreply@english-hills.com>`. |
 
 Copy `.env.example` to `.env.local` and fill in the values. `.env.local` is gitignored.
 
 ## Database
-- 34 public tables in the local schema after migration 071 (recheck after future migrations)
-- RLS enabled on every table — see [supabase/migrations/006_rls_policies.sql](supabase/migrations/006_rls_policies.sql)
+- Inspect cumulative migrations and current grants/RLS rather than a historical table count or only migration 006.
+- Main includes migrations through 095; [current state](docs/ai/CURRENT_STATE.md) records production evidence separately.
 - Migrations live in [supabase/migrations/](supabase/migrations/)
 - Apply pending migrations to local Supabase first: `supabase migration up --local`
 
@@ -66,7 +70,7 @@ Run `npm test`, `npm run lint`, and `npm run build` on a non-main branch. Run ro
 
 ### Pull-request CI
 
-Open a pull request from a `codex/` feature branch to run `.github/workflows/verify.yml`. Its **app** job runs `npm ci`, `npm test` (including receipt regressions), lint, build, `npm audit --audit-level=moderate`, installs Playwright Chromium, and runs `npm run test:middleware`. The middleware harness rebuilds Next against an in-memory mock Auth URL using dummy keys, then checks HTTP routes and real React child protection in Chromium. Its **local-database** job starts local Supabase, generates `.env.local` only from the local CLI status, runs the rollback-only SQL fixture, then starts the app with external email disabled and runs Batch 3A, Batch 4A, and the 1,205-row report/export fixture. The fixture scripts remove their synthetic accounts and rows. Neither job uses a linked project or production secrets. Review both job logs; a local pass does not mean GitHub CI has run.
+Open a pull request from a feature branch (`codex/` by default) to run `.github/workflows/verify.yml`. Its **app** job runs `npm ci`, `npm test` (including receipt regressions), lint, build, `npm audit --audit-level=moderate`, installs Playwright Chromium, and runs `npm run test:middleware`. The middleware harness rebuilds Next against an in-memory mock Auth URL using dummy keys, then checks HTTP routes and real React child protection in Chromium. Its **local-database** job starts local Supabase, generates `.env.local` only from the local CLI status, runs the rollback-only SQL fixture, then starts the app with external email disabled and runs Batch 3A, Batch 4A, and the 1,205-row report/export fixture. The fixture scripts remove their synthetic accounts and rows. Neither job uses a linked project or production secrets. Review both job logs; a local pass does not mean GitHub CI has run.
 
 To repeat the database checks locally, confirm `.env.local` points to `http://127.0.0.1:54321`, start local Supabase, and run:
 
@@ -85,10 +89,10 @@ Run the database suites sequentially. To repeat the independent mock middleware/
 ## Deployment
 - Vercel project pointed at this repo (main branch deploys to production)
 - Custom domain `admin.english-hills.com` wired via CNAME in Vercel DNS
-- Environment variables mirrored from `.env.local` in Vercel project settings
+- Production environment variables are managed separately in Vercel with explicit approval; never copy local credentials/configuration into Production.
 
 ## Data Migration
-One-time legacy import from the previous platform. Place JSON exports (one file per entity) in `base44-export/`, then:
+Historical one-time import tooling; not a routine setup step. Importing real data or writing Production requires explicit approval. Place authorized JSON exports (one file per entity) in `base44-export/`, then:
 
 ```sh
 node --env-file=.env.local scripts/migrateData.js
@@ -98,7 +102,7 @@ The script reads each entity in foreign-key-respecting order, maps records to th
 
 ## Security
 - RLS and database triggers protect application records; verify each new table and policy when changing the schema.
-- Five active roles: director, admin, teacher, parent, student; pending accounts have no operational role.
+- Six operational roles: director, admin, receptionist, teacher, parent, student; pending accounts have no operational role. See [role boundaries](docs/ai/SECURITY_RULES.md).
 - Privacy, retention, processing locations, and Law 09-08 obligations require review by the center and counsel. The app does not claim completed legal compliance.
 
 ## License

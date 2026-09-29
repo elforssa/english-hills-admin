@@ -1,5 +1,7 @@
 # Phase 12 integrated validation evidence
 
+> Historical Phase 12 evidence/procedure, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) for the reviewed main baseline and later release evidence. Preserve these original assertions in their historical context.
+
 Run date: 24 September 2026. Starting code: `8452dde85d9d8b7d894c5ab7c6c8dd041efd0fef`, branch `codex/director-receipt-deletion`, Phase 11 committed. Starting local ledger: exactly 001–090. Production remains **last-confirmed** 001–076 and was not accessed. No Git command, commit, push, deployment, live token/provider activation, historical migration rewrite or existing-development-database reset was performed.
 
 ## Outcome and exact change

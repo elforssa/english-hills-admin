@@ -1,5 +1,7 @@
 # CRM operations and activation gates
 
+> Implementation/activation reference with historical phase notes. Deployment and enablement statements below describe that phase, not necessarily the present environment; consult [CURRENT_STATE](ai/CURRENT_STATE.md). Later reconciliation/scheduling behavior is documented in [ADR-002](architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
+
 Phase 12 is a local release-readiness review. This document grants no deployment, live-provider or production-write permission. Use with [rollout](crm-production-rollout.md), [acceptance checklist](crm-release-checklist.md), [Meta inbound](crm-meta-ingestion.md), [website](crm-website-inquiries.md), [lifecycle](crm-meta-lifecycle.md) and [Insights/reporting](crm-meta-insights.md).
 
 ## Observe without exposing customer data
