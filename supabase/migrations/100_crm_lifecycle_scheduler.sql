@@ -23,7 +23,7 @@ begin
   if scheduler_url is null or btrim(scheduler_url)='' or scheduler_token is null or btrim(scheduler_token)='' then
     raise exception 'CRM lifecycle scheduler Vault configuration is missing' using errcode='22023';
   end if;
-  if scheduler_url !~ '^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/api/cron/crm-lifecycle$' then
+  if scheduler_url is distinct from 'https://admin.english-hills.com/api/cron/crm-lifecycle' then
     raise exception 'CRM lifecycle scheduler URL is invalid' using errcode='22023';
   end if;
   if octet_length(scheduler_token)>4096 then raise exception 'CRM lifecycle scheduler token is invalid' using errcode='22023';end if;

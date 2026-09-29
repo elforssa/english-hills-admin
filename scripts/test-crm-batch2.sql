@@ -35,13 +35,29 @@ select pg_temp.ok(
 select pg_temp.ok(
   position('crm_lifecycle_scheduler_url' in pg_get_functiondef('crm_security.invoke_crm_lifecycle_scheduler()'::regprocedure)) > 0
   and position('crm_lifecycle_scheduler_token' in pg_get_functiondef('crm_security.invoke_crm_lifecycle_scheduler()'::regprocedure)) > 0
-  and position('/api/cron/crm-lifecycle' in pg_get_functiondef('crm_security.invoke_crm_lifecycle_scheduler()'::regprocedure)) > 0
+  and position('https://admin.english-hills.com/api/cron/crm-lifecycle' in pg_get_functiondef('crm_security.invoke_crm_lifecycle_scheduler()'::regprocedure)) > 0
   and position('crm_intake_scheduler_' in pg_get_functiondef('crm_security.invoke_crm_lifecycle_scheduler()'::regprocedure)) = 0,
-  'scheduler URL/token/path are lifecycle-specific'
+  'scheduler URL is a fixed first-party host and URL/token names are lifecycle-specific'
 );
 select pg_temp.ok(
   not has_function_privilege('service_role', 'crm_security.invoke_crm_lifecycle_scheduler()', 'execute'),
   'database scheduler invoker remains private'
+);
+
+select vault.create_secret(
+  'https://scheduler.example/api/cron/crm-lifecycle',
+  'crm_lifecycle_scheduler_url',
+  'Batch 2 synthetic untrusted scheduler URL'
+);
+select vault.create_secret(
+  'synthetic-lifecycle-scheduler-token',
+  'crm_lifecycle_scheduler_token',
+  'Batch 2 synthetic scheduler token'
+);
+select pg_temp.denied('select crm_security.invoke_crm_lifecycle_scheduler()', '22023');
+select pg_temp.ok(
+  not exists(select 1 from net.http_request_queue where url = 'https://scheduler.example/api/cron/crm-lifecycle'),
+  'untrusted Vault hostname is rejected before bearer-token enqueue'
 );
 
 select pg_temp.ok(

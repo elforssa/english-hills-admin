@@ -108,11 +108,16 @@ assert.equal(isDirectorLifecyclePath('/crm/integrations/lifecycle'), true);
 for (const role of ['admin','receptionist','teacher','parent','student']) assert.equal(loginDestination(role, '/crm/integrations/lifecycle'), role === 'receptionist' ? '/crm/today' : ({ admin: '/dashboard', teacher: '/teacher-portal', parent: '/parent-portal', student: '/student-portal' })[role]);
 
 const migration98 = readFileSync(new URL('../supabase/migrations/098_crm_lifecycle_evidence_and_delivery.sql', import.meta.url), 'utf8');
+const migration99 = readFileSync(new URL('../supabase/migrations/099_crm_lifecycle_delivery_runtime.sql', import.meta.url), 'utf8');
 const migration100 = readFileSync(new URL('../supabase/migrations/100_crm_lifecycle_scheduler.sql', import.meta.url), 'utf8');
 assert(!/insert\s+into\s+public\.crm_lifecycle_provider_contracts/i.test(migration98));
+assert.match(migration99, /deduplication_window_elapsed/);
+assert.match(migration99, /diagnostics_erased_at=clock_timestamp\(\)/);
+assert.match(migration99, /not c\.eligible and c\.redacted_at is null/);
 assert.match(migration100, /crm-lifecycle-primary/);
 assert.match(migration100, /cron\.alter_job\(lifecycle_job, active => false\)/);
 assert.match(migration100, /crm_lifecycle_scheduler_(url|token)/);
+assert.match(migration100, /https:\/\/admin\.english-hills\.com\/api\/cron\/crm-lifecycle/);
 assert(!migration100.includes('crm_intake_scheduler_token'));
 
 console.log('PASS Batch 2 explicit evidence, lead-ID-only payload, live transport classification, independent scheduler auth, route gate and fail-closed migrations');

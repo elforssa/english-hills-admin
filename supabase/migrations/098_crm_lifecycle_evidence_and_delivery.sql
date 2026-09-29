@@ -142,8 +142,19 @@ alter table public.crm_external_deliveries
   add column terminal_at timestamptz,
   add column payload_erased_at timestamptz,
   add constraint crm_delivery_erasure_consistent check(payload_erased_at is null or (payload is null and payload_hash is null)),
-  add constraint crm_delivery_live_refs check(delivery_mode <> 'live' or (provider_contract_id is not null and activation_epoch_id is not null and eligibility_evidence_id is not null and send_deadline is not null));
-alter table public.crm_external_delivery_attempts add column diagnostics_erased_at timestamptz;
+  add constraint crm_delivery_live_refs check(delivery_mode <> 'live'
+    or (provider_contract_id is not null and activation_epoch_id is not null and eligibility_evidence_id is not null and send_deadline is not null)
+    or (status in ('blocked','suppressed') and payload is null and payload_hash is null));
+alter table public.crm_external_delivery_attempts
+  add column diagnostics_erased_at timestamptz,
+  alter column started_at drop not null,
+  alter column outcome drop not null,
+  drop constraint crm_external_delivery_attempts_check,
+  drop constraint crm_external_delivery_attempts_outcome_check,
+  add constraint crm_delivery_attempt_state check(
+    (diagnostics_erased_at is null and outcome in ('started','sent','retry','blocked','dead','unknown') and ((outcome='started')=(finished_at is null)))
+    or (diagnostics_erased_at is not null and outcome is null and started_at is null and finished_at is null)
+  );
 
 create index crm_lifecycle_policy_lookup on public.crm_lifecycle_eligibility_policies(connection_id, form_mapping_id, effective_from, effective_until);
 create index crm_lifecycle_evidence_active on public.crm_lifecycle_eligibility_evidence(submission_id, connection_id, policy_id, effective_at) where event_type = 'grant';
@@ -266,9 +277,10 @@ begin
   diagnostic_erasure := old.finished_at is not null
     and old.finished_at <= clock_timestamp() - interval '90 days'
     and old.diagnostics_erased_at is null and new.diagnostics_erased_at is not null
+    and new.started_at is null and new.finished_at is null and new.outcome is null
     and new.http_status is null and new.provider_request_id is null and new.response_summary is null and new.error_code is null
-    and (to_jsonb(new) - array['http_status','provider_request_id','response_summary','error_code','diagnostics_erased_at'])
-      = (to_jsonb(old) - array['http_status','provider_request_id','response_summary','error_code','diagnostics_erased_at']);
+    and (to_jsonb(new) - array['started_at','finished_at','outcome','http_status','provider_request_id','response_summary','error_code','diagnostics_erased_at'])
+      = (to_jsonb(old) - array['started_at','finished_at','outcome','http_status','provider_request_id','response_summary','error_code','diagnostics_erased_at']);
   if diagnostic_erasure then return new; end if;
   if old.finished_at is not null
      or row(new.id,new.delivery_id,new.attempt_number,new.lease_token,new.started_at) is distinct from row(old.id,old.delivery_id,old.attempt_number,old.lease_token,old.started_at) then

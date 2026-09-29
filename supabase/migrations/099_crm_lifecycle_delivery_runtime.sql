@@ -53,7 +53,11 @@ begin
  select * into contract from public.crm_lifecycle_provider_contracts where id=p_contract and active for share;
  if c.id is null or c.version is distinct from p_version or contract.id is null or c.lifecycle_settings->>'mode' is distinct from 'live'
   or (c.lifecycle_settings->>'contract_id')::uuid is distinct from contract.id or coalesce((c.lifecycle_settings->>'enabled')::boolean,false)
-  or exists(select 1 from public.crm_lifecycle_activation_epochs where connection_id=c.id and ended_at is null) then
+  or exists(select 1 from public.crm_lifecycle_activation_epochs where connection_id=c.id and ended_at is null)
+  or not exists(select 1 from public.crm_lifecycle_eligibility_policies p join public.crm_form_mappings m on m.id=p.form_mapping_id
+    where p.connection_id=c.id and m.connection_id=c.id and m.channel='meta_instant_form'
+      and m.effective_from<=started and (m.retired_at is null or m.retired_at>started)
+      and p.effective_from<=started and p.effective_until>started and p.retired_at is null) then
   raise exception 'Destination is not ready for prospective activation' using errcode='22023';end if;
  insert into public.crm_lifecycle_activation_epochs(connection_id,provider_contract_id,started_at,activated_by)
  values(c.id,contract.id,started,'release_operator') returning id into epoch;
@@ -179,12 +183,29 @@ end $$;
 
 create function crm_security.claim_lifecycle_deliveries(p_limit integer,p_live boolean) returns jsonb
 language plpgsql set search_path=pg_catalog,pg_temp as $$
-declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;
+declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;dedup_deadline timestamptz;retry_at timestamptz;
 begin
  for d in select * from public.crm_external_deliveries where (delivery_mode='live')=p_live and payload_erased_at is null and
   (((status in ('pending','retry','unknown')) and next_attempt_at<=now()) or (status='sending' and lease_until<=now()))
   order by next_attempt_at,id limit p_limit for update skip locked loop
-  if d.status='sending' then update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired' where delivery_id=d.id and finished_at is null;end if;
+  if d.status='sending' then
+   update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired' where delivery_id=d.id and finished_at is null;
+   if d.delivery_mode='live' then
+    select min(started_at)+make_interval(secs=>(d.mapping_snapshot->>'deduplication_window_seconds')::integer) into dedup_deadline
+      from public.crm_external_delivery_attempts where delivery_id=d.id;
+    retry_at:=clock_timestamp()+interval '30 seconds';
+    if d.attempt_count>=d.max_attempts then
+     update public.crm_external_deliveries set status='dead',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,next_attempt_at=null,last_error_code='attempts_exhausted',updated_at=now() where id=d.id;
+    elsif d.send_deadline is null or retry_at>=d.send_deadline then
+     update public.crm_external_deliveries set status='suppressed',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,next_attempt_at=null,last_error_code='provider_age_expired',updated_at=now() where id=d.id;
+    elsif dedup_deadline is null or retry_at>=dedup_deadline then
+     update public.crm_external_deliveries set status='unknown',lease_token=null,lease_until=null,next_attempt_at=null,last_error_code='deduplication_window_elapsed',updated_at=now() where id=d.id;
+    else
+     update public.crm_external_deliveries set status='unknown',lease_token=null,lease_until=null,next_attempt_at=retry_at,last_error_code='lease_expired',updated_at=now() where id=d.id;
+    end if;
+    continue;
+   end if;
+  end if;
   reason:=crm_security.lifecycle_hold(d);terminal_reason:=reason in ('activation_ended','provider_age_expired','identity_redacted','scope_excluded','historical_event','payload_erased','sharing_revoked');
   if d.attempt_count>=d.max_attempts then update public.crm_external_deliveries set status='dead',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,last_error_code='attempts_exhausted',updated_at=now() where id=d.id;
   elsif terminal_reason then update public.crm_external_deliveries set status='suppressed',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,last_error_code=reason,updated_at=now() where id=d.id;
@@ -264,7 +285,7 @@ end $$;
 
 create or replace function public.crm_finish_external_attempt(p_delivery uuid,p_lease uuid,p_result jsonb) returns void
 language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
-declare d public.crm_external_deliveries;state text;code text;delay integer;
+declare d public.crm_external_deliveries;state text;code text;delay integer;retry_at timestamptz;dedup_deadline timestamptz;
 begin
  perform crm_security.require_meta_worker();select * into d from public.crm_external_deliveries where id=p_delivery for update;
  if not found or d.status<>'sending' or d.lease_token is distinct from p_lease or d.lease_until<=now() then raise exception 'Stale lease' using errcode='40001';end if;
@@ -276,20 +297,30 @@ begin
  update public.crm_external_delivery_attempts set outcome=state,finished_at=clock_timestamp(),http_status=(p_result->>'http_status')::int,provider_request_id=p_result->>'request_id',
   response_summary=case when state='sent' then '{"accepted":true}'::jsonb else null end,error_code=code where delivery_id=d.id and lease_token=p_lease and finished_at is null;
  if not found then raise exception 'Attempt missing' using errcode='40001';end if;
- delay:=least(86400,greatest(30,coalesce((p_result->>'retry_after')::int,0),least(21600,30*power(2,d.attempt_count)::int)+(random()*30)::int));
- if state in ('retry','unknown') and (d.attempt_count>=d.max_attempts or (d.send_deadline is not null and now()+make_interval(secs=>delay)>=d.send_deadline)) then state:='dead';code:='attempts_exhausted';end if;
+ delay:=least(86400,greatest(30,coalesce((p_result->>'retry_after')::int,0),least(21600,30*power(2,d.attempt_count)::int)+(random()*30)::int));retry_at:=now()+make_interval(secs=>delay);
+ if state='unknown' and d.delivery_mode='live' then
+  select min(started_at)+make_interval(secs=>(d.mapping_snapshot->>'deduplication_window_seconds')::integer) into dedup_deadline
+    from public.crm_external_delivery_attempts where delivery_id=d.id;
+  if dedup_deadline is null or retry_at>=dedup_deadline then retry_at:=null;code:='deduplication_window_elapsed';end if;
+ end if;
+ if state in ('retry','unknown') and (d.attempt_count>=d.max_attempts or (d.send_deadline is not null and coalesce(retry_at,now())>=d.send_deadline)) then state:='dead';code:='attempts_exhausted';retry_at:=null;end if;
  update public.crm_external_deliveries set status=state,lease_token=null,lease_until=null,updated_at=now(),last_error_code=code,
-  next_attempt_at=case when state in ('retry','unknown') then now()+make_interval(secs=>delay) end,sent_at=case when state='sent' then now() else sent_at end,
+  next_attempt_at=case when state in ('retry','unknown') then retry_at end,sent_at=case when state='sent' then now() else sent_at end,
   terminal_at=case when state in ('sent','dead') then coalesce(terminal_at,clock_timestamp()) else terminal_at end where id=d.id;
 end $$;
 
 create or replace function public.crm_retry_external_delivery(p_delivery uuid) returns void
 language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
-declare d public.crm_external_deliveries;cfg jsonb;hold text;
+declare d public.crm_external_deliveries;cfg jsonb;hold text;dedup_deadline timestamptz;
 begin
  perform crm_security.require_reader(true);select * into d from public.crm_external_deliveries where id=p_delivery for update;
  if not found or d.status not in ('blocked','retry','unknown') or d.attempt_count>=d.max_attempts or d.payload_erased_at is not null
   or (d.next_attempt_at is not null and d.next_attempt_at>now()) then raise exception 'Delivery not eligible for retry' using errcode='22023';end if;
+ if d.delivery_mode='live' and d.status='unknown' then
+  select min(started_at)+make_interval(secs=>(d.mapping_snapshot->>'deduplication_window_seconds')::integer) into dedup_deadline
+    from public.crm_external_delivery_attempts where delivery_id=d.id;
+  if d.last_error_code='deduplication_window_elapsed' or dedup_deadline is null or now()+interval '8 seconds'>=dedup_deadline then raise exception 'Verified deduplication window required' using errcode='22023';end if;
+ end if;
  if d.payload is null then select lifecycle_settings into cfg from public.crm_integration_connections where id=d.connection_id;
   if d.delivery_mode='live' and ((cfg->>'activation_epoch_id')::uuid is distinct from d.activation_epoch_id or (cfg->>'contract_id')::uuid is distinct from d.provider_contract_id) then
    raise exception 'Frozen live contract required' using errcode='22023';end if;
@@ -367,32 +398,47 @@ create trigger crm_lifecycle_evidence_immutable before update or delete on publi
 
 create function public.crm_cleanup_lifecycle_retention(p_limit integer default 100) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
-declare payloads integer:=0;attempts integer:=0;evidence integer:=0;terminated integer:=0;r record;
+declare payloads integer:=0;attempts integer:=0;evidence integer:=0;checks integer:=0;terminated integer:=0;redacted_revocations integer:=0;r record;
 begin
  perform crm_security.require_meta_worker();if p_limit is null or p_limit not between 1 and 500 then raise exception 'Invalid cleanup limit' using errcode='22023';end if;
  for r in select * from public.crm_external_deliveries where status in ('blocked','retry','unknown','sending') and
-  ((send_deadline is not null and send_deadline<=now()) or (activation_epoch_id is not null and exists(select 1 from public.crm_lifecycle_activation_epochs e where e.id=activation_epoch_id and e.ended_at is not null)))
+  ((send_deadline is not null and send_deadline<=now()) or (activation_epoch_id is not null and exists(select 1 from public.crm_lifecycle_activation_epochs e where e.id=activation_epoch_id and e.ended_at is not null))
+    or (delivery_mode in ('mock','mock_legacy') and created_at<=now()-interval '90 days'))
   order by updated_at,id limit p_limit for update skip locked loop
   if r.status='sending' then update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired' where delivery_id=r.id and finished_at is null;end if;
   update public.crm_external_deliveries set status='suppressed',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,
-   last_error_code=case when r.send_deadline is not null and r.send_deadline<=now() then 'provider_age_expired' else 'activation_ended' end,updated_at=now() where id=r.id;terminated:=terminated+1;
+   last_error_code=case when r.send_deadline is not null and r.send_deadline<=now() then 'provider_age_expired' when r.delivery_mode in ('mock','mock_legacy') then 'retention_expired' else 'activation_ended' end,updated_at=now() where id=r.id;terminated:=terminated+1;
  end loop;
  with due as (select id from public.crm_external_deliveries where terminal_at<=now()-interval '30 days' and payload_erased_at is null order by terminal_at,id limit p_limit for update skip locked)
  update public.crm_external_deliveries d set payload=null,payload_hash=null,matching_submission_id=null,payload_erased_at=clock_timestamp(),updated_at=now() from due where d.id=due.id;
  get diagnostics payloads=row_count;
  with due as (select id from public.crm_external_delivery_attempts where finished_at<=now()-interval '90 days' and diagnostics_erased_at is null order by finished_at,id limit p_limit for update skip locked)
- update public.crm_external_delivery_attempts a set http_status=null,provider_request_id=null,response_summary=null,error_code=null,diagnostics_erased_at=clock_timestamp() from due where a.id=due.id;
+ update public.crm_external_delivery_attempts a set started_at=null,finished_at=null,outcome=null,http_status=null,provider_request_id=null,response_summary=null,error_code=null,diagnostics_erased_at=clock_timestamp() from due where a.id=due.id;
  get diagnostics attempts=row_count;
+ with due as (select c.id from public.crm_lifecycle_eligibility_checks c join public.crm_lifecycle_eligibility_policies p on p.id=c.policy_id
+  where not c.eligible and c.redacted_at is null and least(p.effective_until,coalesce(p.retired_at,p.effective_until))<=now()-interval '90 days'
+  order by c.checked_at,c.id limit p_limit for update of c skip locked)
+ update public.crm_lifecycle_eligibility_checks c set submission_id=null,evidence_digest=null,redacted_at=clock_timestamp() from due where c.id=due.id;
+ get diagnostics checks=row_count;
  for r in select e.* from public.crm_lifecycle_eligibility_evidence e where e.event_type='grant' and e.redacted_at is null and (
    (exists(select 1 from public.crm_external_deliveries d where d.eligibility_evidence_id=e.id) and not exists(select 1 from public.crm_external_deliveries d where d.eligibility_evidence_id=e.id and (d.terminal_at is null or d.terminal_at>now()-interval '90 days')))
    or (not exists(select 1 from public.crm_external_deliveries d where d.eligibility_evidence_id=e.id) and
-      (select least(p.effective_until,coalesce((select max(ep.ended_at) from public.crm_lifecycle_activation_epochs ep where ep.connection_id=e.connection_id),p.effective_until)) from public.crm_lifecycle_eligibility_policies p where p.id=e.policy_id)<=now()-interval '90 days'))
+      (select least(
+        p.effective_until,coalesce(p.retired_at,p.effective_until),
+        coalesce((select min(rv.effective_at) from public.crm_lifecycle_eligibility_evidence rv where rv.supersedes_evidence_id=e.id and rv.event_type='revoke'),p.effective_until),
+        case when exists(select 1 from public.crm_lifecycle_activation_epochs open_epoch where open_epoch.connection_id=e.connection_id and open_epoch.ended_at is null)
+          then p.effective_until else coalesce((select max(ep.ended_at) from public.crm_lifecycle_activation_epochs ep where ep.connection_id=e.connection_id),p.effective_until) end,
+        coalesce(e.effective_at+make_interval(secs=>(select min(pc.maximum_event_age_seconds)::integer from public.crm_lifecycle_activation_epochs ep
+          join public.crm_lifecycle_provider_contracts pc on pc.id=ep.provider_contract_id where ep.connection_id=e.connection_id)),p.effective_until))
+       from public.crm_lifecycle_eligibility_policies p where p.id=e.policy_id)<=now()-interval '90 days'))
    order by e.recorded_at,e.id limit p_limit for update skip locked loop
   update public.crm_lifecycle_eligibility_checks set submission_id=null,evidence_digest=null,redacted_at=clock_timestamp()
    where submission_id=r.submission_id and policy_id=r.policy_id and redacted_at is null;
-  update public.crm_lifecycle_eligibility_evidence set submission_id=null,source_external_id=null,source_projection=null,redacted_at=clock_timestamp() where id=r.id;evidence:=evidence+1;
+  update public.crm_lifecycle_eligibility_evidence set submission_id=null,source_external_id=null,source_projection=null,redacted_at=clock_timestamp()
+   where supersedes_evidence_id=r.id and redacted_at is null;get diagnostics redacted_revocations=row_count;
+  update public.crm_lifecycle_eligibility_evidence set submission_id=null,source_external_id=null,source_projection=null,redacted_at=clock_timestamp() where id=r.id;evidence:=evidence+1+redacted_revocations;
  end loop;
- return jsonb_build_object('terminated',terminated,'payloads_erased',payloads,'attempts_erased',attempts,'evidence_erased',evidence);
+ return jsonb_build_object('terminated',terminated,'payloads_erased',payloads,'attempts_erased',attempts,'checks_erased',checks,'evidence_erased',evidence);
 end $$;
 
 revoke all on all functions in schema crm_security from public,anon,authenticated,service_role;
