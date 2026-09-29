@@ -52,6 +52,12 @@ Use the same underlying enrollment/payment engine as CRM enrollment. Do not forc
 
 Implement the expanded role across navigation, page guards, APIs/RPCs and RLS together. Operational finance and teacher views need boundaries distinct from analytics/HR. Do not infer authorization for destructive corrections, financial voids or privileged confirmation merely from “full operational”: specify and review granular commands before implementation.
 
+### Batch 1 architecture refinement — planned
+
+[Receptionist Batch 1 permissions plan](../plans/receptionist-batch1-permissions.md) is the implementation contract for operational permissions and navigation across UI, route, API/RPC and database layers. Use a small shared application capability map with separately enforced SQL authorization, safe teacher projections and the existing enrollment/payment engines. Migration 096 is expected; no migration or application change is implemented by this architecture document.
+
+For Batch 1, keep financial void/correction/deletion/cancellation director-only; allow ordinary charge/payment/receipt operations and their existing trusted confirmation effects. Keep teacher HR and authorization-sensitive identity edits restricted. Reuse receipt routes for operational finance while denying the analytics `/finance` page. These conservative boundaries require no new destructive-finance product decision; widening them later requires explicit approval. The plan's exact matrices govern implementation, not broad interpretation of “full operational.”
+
 ## Security/invariants
 
 Preserve the [security rules](../../ai/SECURITY_RULES.md), [lifecycle ADR](ADR-001-crm-lifecycle.md) and existing financial audit/conversion boundaries. Never broaden full teacher rows or grant admin as a shortcut. Preserve task/activity/status separation and real acquisition provenance.
@@ -60,4 +66,4 @@ Preserve the [security rules](../../ai/SECURITY_RULES.md), [lifecycle ADR](ADR-0
 
 **APPROVED / PLANNED, not fully implemented.** Migration [077](../../../supabase/migrations/077_receptionist_role_and_operational_access.sql) already restores receptionist and narrow operational access. [Current route allowlist](../../../src/lib/roleAccess.mjs) is limited to Today, prospects, placement tests, students list/detail, enrollments and settings. CRM enrollment, placement and history exist, but broad academic, receipt/payment and teacher access plus the specified dashboard/detail redesign are not implemented as this approved package. Existing in-person receipt/student paths are not proof of completed receptionist walk-in UX.
 
-Implementation review must resolve granular operational mutation permissions (especially confirmation, correction/void and teacher field exposure) without changing the approved allow/deny boundary. No new product rule is invented here.
+The Batch 1 plan resolves implementation boundaries conservatively: no free confirmation or destructive finance powers, explicit safe teacher fields, and no identity reassignment. Broader destructive/HR/identity powers remain outside this approval. Batch 1 and the later dashboard/detail/walk-in redesign remain planned, not implemented.
