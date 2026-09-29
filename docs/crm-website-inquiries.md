@@ -1,5 +1,7 @@
 # Phase 9 — website CRM inquiries
 
+> Implementation/activation reference with historical phase notes. Deployment and enablement statements below describe that phase, not necessarily the present environment; consult [CURRENT_STATE](ai/CURRENT_STATE.md). Later reconciliation/scheduling behavior is documented in [ADR-002](architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
+
 This repository has an admin application and official public pre-registration, not a marketing landing page. No marketing page was invented. `/api/public/inscription` and its student/enrollment behavior are unchanged. The external landing site must integrate the helper/contract below.
 
 ## Endpoint and public contract
