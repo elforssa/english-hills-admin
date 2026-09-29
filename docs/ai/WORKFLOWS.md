@@ -32,8 +32,8 @@ Automatic acquisition matching corroborates contact identity and learner/program
 
 ## Existing in-person entry paths
 
-The current receipt form supports new learners and existing learner balances through the same financial RPC; manual student creation and manual CRM prospect creation also exist. These are usable staff entry paths, not evidence that the planned receptionist walk-in redesign is complete. Receptionists currently cannot open the receipt route or use its financial authorization.
+On the Batch 1 implementation branch, receptionist can create zero-charge commitments and receipts for new or existing learners through the existing financial RPC, and retry eligible receipt email. The same engine retains enrollment/conversion safeguards. Receptionist can create a narrow student dossier, add or edit pre-enrollments, assign groups, record attendance, schedule Premium workshops and update operational teacher fields. Receipt void/correction/deletion, finance analytics and teacher compensation remain restricted. These usable staff paths do not complete the planned walk-in redesign, and 096 has not been deployed to Production.
 
 ## Approved future workflows
 
-**Not fully implemented:** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) expands receptionist Today and operational access, reorganizes CRM detail, and defines walk-in enrollment through the same enrollment/payment engine. A walk-in ready to enroll should not need a fake Meta lead; create a manual prospect only when not enrolling yet. This approval does not widen today's route/RPC/RLS permissions.
+**Not fully implemented:** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) also calls for a redesigned Today dashboard, CRM detail and walk-in enrollment flow. A walk-in ready to enroll should not need a fake Meta lead; create a manual prospect only when not enrolling yet. Those later product changes remain planned.

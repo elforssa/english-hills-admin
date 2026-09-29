@@ -7,8 +7,15 @@ import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import StorageImage from '@/components/StorageImage';
 import { recordHref } from '@/lib/navigation.mjs';
+import { useAuth } from '@/context/AuthContext';
+import { getTeacherOperations } from '@/lib/teacher-directory';
 
 export default function Teachers() {
+  const { role } = useAuth();
+  return <TeachersForRole key={role} role={role} />;
+}
+
+function TeachersForRole({ role }) {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -21,8 +28,13 @@ export default function Teachers() {
   const listUrl = `/teachers${search ? `?q=${encodeURIComponent(search)}` : ''}`;
   useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
 
-  const load = () => entities.Teacher.listAll('-created_date').then(d => { setTeachers(d); setLoading(false); });
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const load = role === 'receptionist' ? getTeacherOperations() : entities.Teacher.listAll('-created_date');
+    load.then(d => { if (active) setTeachers(d); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [role]);
 
   const filtered = teachers.filter(t => !search || t.full_name?.toLowerCase().includes(search.toLowerCase()));
 
@@ -33,11 +45,11 @@ export default function Teachers() {
           <h1 className="text-2xl font-bold">Enseignants</h1>
           <p className="text-muted-foreground text-sm mt-1">{teachers.length} enseignants</p>
         </div>
-        <Button asChild className="self-start sm:self-auto">
+        {role !== 'receptionist' && <Button asChild className="self-start sm:self-auto">
           <Link href="/teachers/new">
             <Plus size={15} /> Ajouter
           </Link>
-        </Button>
+        </Button>}
       </div>
 
       <div className="relative mb-5 max-w-sm">
@@ -59,7 +71,7 @@ export default function Teachers() {
                   </div>
                   <div className="min-w-0">
                     <Link href={recordHref(`/teachers/${t.id}`, listUrl)} className="block font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded truncate py-1">{t.full_name}</Link>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>
+                    {role !== 'receptionist' && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>}
                   </div>
                 </div>
               </div>

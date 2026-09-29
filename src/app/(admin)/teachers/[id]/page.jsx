@@ -9,8 +9,15 @@ import StorageImage from '@/components/StorageImage';
 import { ArrowLeft, Edit, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { safeReturnTo } from '@/lib/navigation.mjs';
+import { useAuth } from '@/context/AuthContext';
+import { getTeacherOperations } from '@/lib/teacher-directory';
 
 export default function TeacherProfile() {
+  const { role } = useAuth();
+  return <TeacherProfileForRole key={role} role={role} />;
+}
+
+function TeacherProfileForRole({ role }) {
   const { id } = useParams();
   const router = useRouter();
   const [teacher, setTeacher] = useState(null);
@@ -18,9 +25,10 @@ export default function TeacherProfile() {
 
   useEffect(() => {
     if (!id) return;
-    entities.Teacher.filter({ id }).then((rows) => setTeacher(rows[0] || null))
+    const load = role === 'receptionist' ? getTeacherOperations({ id }) : entities.Teacher.filter({ id });
+    load.then((rows) => setTeacher(rows[0] || null))
       .catch(() => setTeacher(null)).finally(() => setLoading(false));
-  }, [id]);
+  }, [id, role]);
 
   const archive = async () => {
     if (!confirm('Archiver cet enseignant ? Sa fiche sera masquée mais conservée.')) return;
@@ -35,7 +43,7 @@ export default function TeacherProfile() {
 
   const fields = [
     ['Email', teacher.email], ['Téléphone', teacher.telephone],
-    ['Type de contrat', teacher.contract_type],
+    ...(role === 'receptionist' ? [] : [['Type de contrat', teacher.contract_type]]),
     ['Niveaux autorisés', teacher.niveaux_autorises?.join(', ')],
     ['Certifications', teacher.certifications?.join(', ')],
   ];
@@ -47,7 +55,7 @@ export default function TeacherProfile() {
       </div>
       <h1 className="text-2xl font-bold flex-1 min-w-40">{teacher.full_name}</h1>
       <Link href={`/teachers/${id}/edit`} className="inline-flex items-center gap-2 min-h-10 px-4 border rounded-md hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><Edit size={15} /> Modifier</Link>
-      <button onClick={archive} className="inline-flex items-center gap-2 min-h-10 px-4 border border-red-200 rounded-md text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700"><Archive size={15} /> Archiver</button>
+      {role !== 'receptionist' && <button onClick={archive} className="inline-flex items-center gap-2 min-h-10 px-4 border border-red-200 rounded-md text-red-700 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-700"><Archive size={15} /> Archiver</button>}
     </div>
     <div className="bg-card border border-border rounded-lg p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
       {fields.map(([label, value]) => <div key={label}><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium mt-1">{value || '—'}</p></div>)}

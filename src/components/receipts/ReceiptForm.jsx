@@ -8,6 +8,7 @@ import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } fro
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
 
 const SEARCH_PAGE_SIZE = 20;
@@ -15,6 +16,7 @@ const emptyStudent = { student_id: '', student_name: '', phone: '', student_emai
 const studentColumns = 'id,full_name,telephone,email,parent_email,niveau_cefr,session_type,plan_type,status';
 
 export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = {} }) {
+  const { role } = useAuth();
   const idempotencyKey = useRef(null);
   if (!idempotencyKey.current) idempotencyKey.current = createStableIdempotencyKey();
   const initialCharge = useRef(null);
@@ -249,7 +251,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-primary">Apprenant sélectionné</p><p className="mt-1 text-xl font-black">{form.student_name}</p><p className="mt-1 text-sm text-muted-foreground">{[form.phone, form.student_email, form.parent_email].filter(Boolean).join(' · ') || 'Contacts non renseignés'}</p></div><button type="button" onClick={() => resetLearner('existing')} className="rounded-full p-2 hover:bg-white" aria-label="Changer d’apprenant"><X size={17} /></button></div>
         {!chargesLoading && !chargesError && <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${charges.length ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>{charges.length ? `${charges.length} engagement(s) avec un solde restant` : 'Aucun solde restant'}</p>}
         <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={form.update_contacts} onChange={(e) => set('update_contacts', e.target.checked)} /> Mettre à jour explicitement les contacts du dossier</label>
-        {form.update_contacts && <div className="mt-3 grid gap-3 sm:grid-cols-3"><Field label="Téléphone"><input className={input} value={form.phone} onChange={(e) => checkSharedPhone(e.target.value)} /></Field><Field label="Email apprenant"><input type="email" className={input} value={form.student_email} onChange={(e) => set('student_email', e.target.value)} /></Field><Field label="Email parent"><input type="email" className={input} value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} /></Field></div>}
+        {form.update_contacts && <div className="mt-3 grid gap-3 sm:grid-cols-3"><Field label="Téléphone"><input className={input} value={form.phone} onChange={(e) => checkSharedPhone(e.target.value)} /></Field>{role !== 'receptionist' && <><Field label="Email apprenant"><input type="email" className={input} value={form.student_email} onChange={(e) => set('student_email', e.target.value)} /></Field><Field label="Email parent"><input type="email" className={input} value={form.parent_email} onChange={(e) => set('parent_email', e.target.value)} /></Field></>}</div>}
       </div>}
     </Step>
 

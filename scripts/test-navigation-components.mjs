@@ -54,4 +54,6 @@ assert.equal(new URL(group, 'https://english-hills.local').searchParams.get('ret
 const filteredGroup = href(ContextLink, { href: `/groups/${id}` }, '/groups', 'session=Yearly&level=A1&term=Et%C3%A9');
 assert.equal(new URL(filteredGroup, 'https://english-hills.local').searchParams.get('returnTo'), '/groups?session=Yearly&level=A1&term=Et%C3%A9');
 assert.equal(href(PersonLink, { id }, '/groups', '', 'teacher'), null);
+assert.ok(href(PersonLink, { id }, '/groups', '', 'receptionist')?.startsWith(`/students/${id}`));
+assert.ok(href(PersonLink, { kind: 'teacher', id }, '/groups', '', 'receptionist')?.startsWith(`/teachers/${id}`));
 console.log('Navigation component context and role regressions passed');

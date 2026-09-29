@@ -1,11 +1,9 @@
 'use client';
 
-import { ReceptionistStudentDetail } from '@/components/students/ReceptionistOperations';
-
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { entities, auth } from '@/lib/entities';
+import { entities, auth, integrations } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
@@ -18,6 +16,8 @@ import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { openStoredFile } from '@/lib/storage';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
@@ -25,13 +25,12 @@ const PREMIUM_STATUS_LABELS = {
 };
 
 export default function StudentDetailPage() {
-  const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistStudentDetail /> : <StudentDetail />;
+  return <StudentDetail />;
 }
 
 function StudentDetail() {
   const { role } = useAuth();
-  const canManage = ['admin', 'director'].includes(role);
+  const canManage = hasCapability(role, 'canManageStudents');
   const params = useParams();
   const id = params?.id;
   const router = useRouter();
@@ -97,6 +96,20 @@ function StudentDetail() {
     router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')));
   };
 
+  const appendDocument = async (enrollment, file) => {
+    if (!file) return;
+    try {
+      const { file_url } = await integrations.Core.UploadFile({ file, purpose: 'enrollment_document',
+        studentId: id, enrollmentId: enrollment.id });
+      const { error } = await getBrowserClient().rpc('append_receptionist_enrollment_document', {
+        p_enrollment: enrollment.id, p_expected_updated_at: enrollment.updated_at, p_asset: file_url,
+      });
+      if (error) throw error;
+      toast.success('Document ajouté');
+      setReload(value => value + 1);
+    } catch (error) { toast.error(error.message); }
+  };
+
   if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
   if (loadError) return <div className="p-8" role="alert">Impossible de charger la fiche complète. <button className="text-primary underline" onClick={() => setReload((value) => value + 1)}>Réessayer</button></div>;
   if (!student) return <div className="p-8 text-muted-foreground"><p>Apprenant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="inline-flex min-h-10 items-center text-primary underline">Retour</button></div>;
@@ -138,9 +151,9 @@ function StudentDetail() {
         <Link href={`/students/${id}/edit`} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
           <Edit size={14} /> Modifier
         </Link>
-        <button onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50">
+        {hasCapability(role, 'canArchiveStudents') && <button onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50">
           <Trash2 size={14} /> Archiver
-        </button>
+        </button>}
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-5">
@@ -208,6 +221,7 @@ function StudentDetail() {
       </Section>
 
       <Section title="Inscriptions et groupes">
+        {role === 'receptionist' && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: new Date().toISOString().slice(0, 10) })}>Nouvelle pré-inscription</button>}
         {student.groupe_id && <p className="mb-3 text-sm">Groupe du dossier : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
         {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription de session enregistrée. <Link href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
           <div className="space-y-3">{enrollments.map(enrollment => (
@@ -217,6 +231,14 @@ function StudentDetail() {
                 <p className="text-xs">{enrollment.status === 'Confirmed' ? 'Inscrit — groupe à affecter' : enrollment.status}</p>
               </div>
               <button disabled={!canManage} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+              {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
+                {(enrollment.documents_urls || []).map((ref, index) => <button key={ref} type="button"
+                  className="text-xs text-primary underline" onClick={() => openStoredFile(ref).catch(error => toast.error(error.message))}>
+                  Document {index + 1}</button>)}
+                <label className="text-xs text-primary underline cursor-pointer">Ajouter un document
+                  <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
+                    onChange={event => appendDocument(enrollment, event.target.files?.[0])} /></label>
+              </div>}
             </div>
           ))}</div>
         )}

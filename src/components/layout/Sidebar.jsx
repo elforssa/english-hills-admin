@@ -10,6 +10,7 @@ import {
   Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
 
 const ADMIN = ['admin', 'director'];
 const OPERATIONS = [...ADMIN, 'receptionist'];
@@ -24,29 +25,29 @@ const NAV = [
   {
     label: 'Apprenants', icon: Users, roles: OPERATIONS,
     children: [
-      { href: '/students-directory', label: 'Annuaire', roles: ADMIN },
+      { href: '/students-directory', label: 'Annuaire', roles: OPERATIONS },
       { href: '/students', label: 'Liste des apprenants', roles: OPERATIONS },
-      { href: '/students/new', label: 'Ajouter un apprenant', roles: ADMIN },
+      { href: '/students/new', label: 'Ajouter un apprenant', roles: OPERATIONS },
       { href: '/dismissal', label: 'Sortie des jeunes', roles: ADMIN },
     ],
   },
   {
     label: 'Académique', icon: BookOpen, roles: [...OPERATIONS, 'teacher'],
     children: [
-      { href: '/groups', label: 'Groupes & niveaux', roles: [...ADMIN, 'teacher'] },
-      { href: '/attendance', label: 'Présences', roles: [...ADMIN, 'teacher'] },
-      { href: '/timetable', label: 'Emploi du temps', roles: [...ADMIN, 'teacher'] },
-      { href: '/premium-sessions', label: 'Heures Premium', roles: [...ADMIN, 'teacher'] },
+      { href: '/groups', label: 'Groupes & niveaux', roles: [...OPERATIONS, 'teacher'] },
+      { href: '/attendance', label: 'Présences', roles: [...OPERATIONS, 'teacher'] },
+      { href: '/timetable', label: 'Emploi du temps', roles: [...OPERATIONS, 'teacher'] },
+      { href: '/premium-sessions', label: 'Heures Premium', roles: [...OPERATIONS, 'teacher'] },
       { href: '/placement-tests', label: 'Tests de niveau', roles: OPERATIONS },
-      { href: '/assessments', label: 'Notes & bulletins', roles: [...ADMIN, 'teacher'] },
+      { href: '/assessments', label: 'Notes & bulletins', roles: [...OPERATIONS, 'teacher'] },
     ],
   },
   {
-    label: 'Finance', icon: CreditCard, roles: ADMIN,
+    label: 'Finance', icon: CreditCard, roles: OPERATIONS,
     children: [
       { href: '/finance', label: 'Tableau de bord finance', roles: ADMIN },
-      { href: '/receipts/new', label: 'Nouveau reçu', roles: ADMIN },
-      { href: '/receipts', label: 'Tous les reçus', roles: ADMIN },
+      { href: '/receipts/new', label: 'Nouveau reçu', roles: OPERATIONS },
+      { href: '/receipts', label: 'Tous les reçus', roles: OPERATIONS },
     ],
   },
   {
@@ -56,9 +57,9 @@ const NAV = [
     ],
   },
   {
-    label: 'Enseignants & RH', icon: GraduationCap, roles: ADMIN,
+    label: 'Enseignants & RH', icon: GraduationCap, roles: OPERATIONS,
     children: [
-      { href: '/teachers', label: 'Liste des enseignants', roles: ADMIN },
+      { href: '/teachers', label: 'Liste des enseignants', roles: OPERATIONS },
       { href: '/teachers/new', label: 'Ajouter un enseignant', roles: ADMIN },
       { href: '/leave-requests', label: 'Congés & absences', roles: ADMIN },
       { href: '/payroll', label: 'Paie & RH', roles: ADMIN },
@@ -161,19 +162,13 @@ function NavItem({ item, onNavigate }) {
 }
 
 function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
-  const canSee = (item) => !item.roles || item.roles.includes(userRole);
-
-  const receptionistNav = [
-    { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar },
-    { href: '/crm/leads', label: 'Prospects', icon: Users },
-    { href: '/placement-tests', label: 'Tests de niveau', icon: BookOpen },
-    { href: '/students', label: 'Apprenants', icon: GraduationCap },
-    { href: '/enrollments', label: 'Pré-inscriptions', icon: ClipboardList },
-    { href: '/settings', label: 'Mon compte', icon: Shield },
-  ];
-  const filteredNav = (userRole === 'receptionist' ? receptionistNav : NAV)
+  const canSee = (item) => (!item.roles || item.roles.includes(userRole)) &&
+    (userRole !== 'receptionist' || !item.href || receptionistCanAccess(item.href));
+  const filteredNav = NAV
     .filter(canSee)
-    .map((item) => (item.children ? { ...item, children: item.children.filter(canSee) } : item))
+    .map((item) => (item.children ? { ...item,
+      label: userRole === 'receptionist' && item.label === 'Enseignants & RH' ? 'Enseignants' : item.label,
+      children: item.children.filter(canSee) } : item))
     .filter((item) => !item.children || item.children.length > 0);
 
   return (

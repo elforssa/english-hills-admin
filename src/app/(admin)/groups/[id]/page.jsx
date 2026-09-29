@@ -22,7 +22,7 @@ export default function GroupDetail() {
   const id = params?.id;
   const router = useRouter();
   const { role } = useAuth();
-  const canManage = role === 'admin' || role === 'director';
+  const canManage = role === 'admin' || role === 'director' || role === 'receptionist';
 
   const queryClient = useQueryClient();
   const [enrollments, setEnrollments] = useState([]);
@@ -57,10 +57,12 @@ export default function GroupDetail() {
   }, [id, reload]);
 
   const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
-    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));
+    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student)
+    && (role !== 'receptionist' || (e.level || student.niveau_cefr) === group.niveau));
   const available = allStudents.filter(s => !students.some(member => member.id === s.id)
     && (matchingPending(s).length > 0 || ((s.session_type || 'Yearly') === (group.session_type || 'Yearly')
-      && (!s.niveau_cefr || s.niveau_cefr === group.niveau))));
+      && (role !== 'receptionist' ? (!s.niveau_cefr || s.niveau_cefr === group.niveau)
+        : s.niveau_cefr === group.niveau))));
   const refreshMemberships = () => {
     queryClient.invalidateQueries({ queryKey: ['Student'] });
     queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
@@ -77,12 +79,19 @@ export default function GroupDetail() {
       };
       const pending = matchingPending(s);
       if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
-      if (pending.length === 1) await entities.Enrollment.update(pending[0].id, { group_id: id, level: group.niveau });
+      if (role === 'receptionist') {
+        const selected = pending[0] || null;
+        const { error } = await getBrowserClient().rpc('assign_receptionist_student_group', {
+          p_student: s.id, p_enrollment: selected?.id || null, p_group: id,
+          p_student_updated_at: s.updated_at, p_enrollment_updated_at: selected?.updated_at || null,
+        });
+        if (error) throw error;
+      } else if (pending.length === 1) await entities.Enrollment.update(pending[0].id, { group_id: id, level: group.niveau });
       else await entities.Student.update(s.id, groupAssignment);
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
-    } catch {
-      // entities.js toasts on error
+    } catch (error) {
+      toast.error(error.message);
     } finally {
       setBusyId(null);
     }
@@ -92,7 +101,14 @@ export default function GroupDetail() {
     if (!confirm(`Retirer ${s.full_name} de ce groupe ?`)) return;
     setBusyId(s.id);
     try {
-      const { error } = await getBrowserClient().rpc('remove_student_group', { p_student: s.id, p_group: id });
+      const matching = enrollments.filter(e => e.student_id === s.id && e.group_id === id && ['Validated','Trial'].includes(e.status));
+      if (role === 'receptionist' && matching.length > 1) { toast.error('Sélectionnez une inscription depuis la fiche apprenant.'); return; }
+      const { error } = role === 'receptionist'
+        ? await getBrowserClient().rpc('assign_receptionist_student_group', {
+          p_student: s.id, p_enrollment: matching[0]?.id || null, p_group: null,
+          p_student_updated_at: s.updated_at, p_enrollment_updated_at: matching[0]?.updated_at || null,
+        })
+        : await getBrowserClient().rpc('remove_student_group', { p_student: s.id, p_group: id });
       if (error) { toast.error(error.message); return; }
       refreshMemberships();
       toast.success(`${s.full_name} retiré(e) du groupe`);

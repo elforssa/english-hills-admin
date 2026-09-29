@@ -154,11 +154,11 @@ try {
 
   const t = await create('teachers', { full_name: `${run} Teacher`, email: teacher.email });
   const tOther = await create('teachers', { full_name: `${run} Other Teacher`, email: otherTeacher.email });
-  const group = await create('groups', { name: `${run} Group`, niveau: 'A1', teacher_id: t.id });
-  const otherGroup = await create('groups', { name: `${run} Other Group`, niveau: 'A1', teacher_id: tOther.id });
-  const child = await create('students', { full_name: `${run} Child`, email: student.email, parent_email: parent.email, groupe_id: group.id });
-  const childTwo = await create('students', { full_name: `${run} Child Two`, parent_email: parent.email, groupe_id: group.id });
-  const unrelated = await create('students', { full_name: `${run} Unrelated`, email: otherStudent.email, parent_email: otherParent.email, groupe_id: otherGroup.id });
+  const group = await create('groups', { name: `${run} Group`, niveau: 'Child 1', teacher_id: t.id });
+  const otherGroup = await create('groups', { name: `${run} Other Group`, niveau: 'Child 1', teacher_id: tOther.id });
+  const child = await create('students', { full_name: `${run} Child`, email: student.email, parent_email: parent.email, niveau_cefr: 'Child 1', groupe_id: group.id });
+  const childTwo = await create('students', { full_name: `${run} Child Two`, parent_email: parent.email, niveau_cefr: 'Child 1', groupe_id: group.id });
+  const unrelated = await create('students', { full_name: `${run} Unrelated`, email: otherStudent.email, parent_email: otherParent.email, niveau_cefr: 'Child 1', groupe_id: otherGroup.id });
 
   // Unsupported identities, forged subjects, and arbitrary reservation arguments fail closed.
   for (const actor of [null, pending, missing, parent, otherParent, otherTeacher]) await denied(() => rpc(actor, 'reserve_storage_asset', { p_purpose: 'portfolio', p_student_id: child.id }));

@@ -54,7 +54,7 @@ set local role authenticated;
 select pg_temp.denied($q$select public.change_user_role('77000000-0000-0000-0000-000000000003','director')$q$);
 select pg_temp.denied($q$update public.profiles set role='director' where id=auth.uid()$q$);
 select pg_temp.denied($q$select public.prepare_role_invitation('another@example.test','student')$q$);
-select pg_temp.denied($q$select public.create_charge_payment('{}'::jsonb)$q$);
+select pg_temp.denied($q$select public.create_charge_payment_financial('{}'::jsonb)$q$);
 select pg_temp.denied($q$select public.delete_mistaken_receipt(gen_random_uuid(),'test reason',gen_random_uuid())$q$);
 select pg_temp.denied($q$select public.void_financial_receipt(gen_random_uuid(),'test reason',gen_random_uuid())$q$);
 select pg_temp.denied($q$select public.void_financial_charge(gen_random_uuid(),'test reason',gen_random_uuid())$q$);
@@ -68,8 +68,7 @@ select pg_temp.denied($q$insert into public.enrollments(student_id,status) value
 update public.profiles set full_name='Receptionist self edit',phone='0000000000' where id=auth.uid();
 do $$ begin
  if not exists(select 1 from public.students where id='77000000-0000-0000-0000-000000000020') then raise exception 'Student read missing'; end if;
- if exists(select 1 from public.charges) or exists(select 1 from public.receipts)
-   or exists(select 1 from public.app_config) or exists(select 1 from public.pending_roles)
+ if not exists(select 1 from public.charges) or exists(select 1 from public.app_config) or exists(select 1 from public.pending_roles)
    or exists(select 1 from public.financial_events) then raise exception 'Unauthorized read'; end if;
  update public.students set full_name='forged mutation' where id='77000000-0000-0000-0000-000000000020';
  if found then raise exception 'Student dossier write allowed'; end if;
@@ -201,4 +200,4 @@ end $$;
 reset role;
 rollback to savepoint last_director_fixture;
 rollback;
-\echo PASS receptionist role, invitation, operational RLS/RPC, self-service, finance denial and TRUNCATE guards
+\echo PASS receptionist role, invitation, operational RLS/RPC, self-service, restricted finance and TRUNCATE guards
