@@ -28,7 +28,7 @@ Evidence independently verified on 2026-09-29 after PR #29 and supplied by the r
 - Meta inbound retrieval has real Graph HTTP transport. Lifecycle feedback and Insights have fixture/mock transports only; Insights endpoint reports `live_sync_enabled: false`. Code capability does not prove a live connection is configured.
 - Dedicated receptionist exists since 077; Batch 1 expanded operational routes and database permissions in merged 096. See [current role boundaries](SECURITY_RULES.md). The Production Students list still has the simplified receptionist fork pending the correction above.
 
-The original Batch 1 branch and PR #31 are merged. Migration 096 is deployed per the owner and is immutable; any future database change needs a new forward migration. The present UI correction requires no migration.
+The original Batch 1 branch and PR #31 are merged. Migration 096 is deployed per the owner and is immutable. Review-branch correction PR #32 adds forward migration 097 to align the receptionist's group-assignment filter with the existing enrollment workflow; 097 has not been deployed to Production.
 
 ## Documentation discrepancies
 

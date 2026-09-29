@@ -13,19 +13,21 @@ const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').fl
 }));
 const base = 'http://127.0.0.1:54321', app = 'http://localhost:3101';
 assert.equal(env.NEXT_PUBLIC_SUPABASE_URL, base);
-const sql = statement => execFileSync('psql', ['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],
-  { input: statement, encoding: 'utf8', env: { ...process.env, PGPASSWORD: 'postgres' } }).trim();
+const sql = statement => execFileSync('docker', ['exec','-i','supabase_db_hills-admin-next',
+  'psql','-X','-qAt','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],
+  { input: statement, encoding: 'utf8' }).trim();
 const run = 'receptionist-browser-' + randomUUID(), email = run + '@example.invalid';
 const password = randomBytes(24).toString('base64url');
 const student = randomUUID(), group = randomUUID();
 const readyStudent = randomUUID(), unsetStudent = randomUUID();
 const submittedStudent = randomUUID(), reviewStudent = randomUUID(), confirmedStudent = randomUUID(), multipleStudent = randomUUID();
+const validatedStudent = randomUUID(), validatedEnrollment = randomUUID();
 const submittedEnrollment = randomUUID(), reviewEnrollment = randomUUID(), confirmedEnrollment = randomUUID();
-const multipleSubmitted = randomUUID(), multipleReview = randomUUID(), incompatibleGroup = randomUUID();
+const multipleSubmitted = randomUUID(), multipleReview = randomUUID(), incompatibleGroup = randomUUID(), wrongLevelGroup = randomUUID();
 const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const submittedName = run + ' submitted', reviewName = run + ' review';
-const confirmedName = run + ' confirmed', multipleName = run + ' multiple';
+const confirmedName = run + ' confirmed', multipleName = run + ' multiple', validatedName = run + ' validated legacy';
 let user, browser;
 try {
   const response = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
@@ -35,21 +37,29 @@ try {
   sql(`update public.profiles set role='receptionist' where id='${user}';
     insert into public.groups(id,name,session_type,niveau) values
       ('${group}','${run}','Yearly','Child 1'),
-      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1');
-    insert into public.students(id,full_name,status,session_type,niveau_cefr) values
-      ('${student}','${run}','Prospect','Yearly',null),
-      ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
-      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null),
-      ('${submittedStudent}','${submittedName}','Enrolled','Yearly','Child 1'),
-      ('${reviewStudent}','${reviewName}','Enrolled','Yearly','Child 1'),
-      ('${confirmedStudent}','${confirmedName}','Enrolled','Yearly','Child 1'),
-      ('${multipleStudent}','${multipleName}','Enrolled','Yearly','Child 1');
+      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1'),
+      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2');
+    insert into public.students(id,full_name,status,session_type,niveau_cefr,groupe_id) values
+      ('${student}','${run}','Prospect','Yearly',null,null),
+      ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1',null),
+      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null,null),
+      ('${submittedStudent}','${submittedName}','Enrolled','Yearly','Child 1','${group}'),
+      ('${reviewStudent}','${reviewName}','Enrolled','Yearly','Child 1','${group}'),
+      ('${confirmedStudent}','${confirmedName}','Enrolled','Yearly','Child 1',null),
+      ('${multipleStudent}','${multipleName}','Enrolled','Yearly','Child 1',null),
+      ('${validatedStudent}','${validatedName}','Enrolled','Yearly','Child 1','${group}');
     insert into public.enrollments(id,student_id,status,session_type,level,school_year) values
       ('${submittedEnrollment}','${submittedStudent}','Submitted','Yearly','Child 1','2026/2027'),
       ('${reviewEnrollment}','${reviewStudent}','Under Review','Yearly','Child 1','2026/2027'),
       ('${confirmedEnrollment}','${confirmedStudent}','Confirmed','Yearly','Child 1','2026/2027'),
       ('${multipleSubmitted}','${multipleStudent}','Submitted','Yearly','Child 1','2026/2027'),
       ('${multipleReview}','${multipleStudent}','Under Review','Yearly','Child 1','2027/2028');
+    -- Simulate a legacy unassigned Validated row. Current triggers reject creation
+    -- of this state; the checked assignment must still allow its repair.
+    set session_replication_role=replica;
+    insert into public.enrollments(id,student_id,status,session_type,level,school_year)
+      values('${validatedEnrollment}','${validatedStudent}','Validated','Yearly','Child 1','2026/2027');
+    set session_replication_role=origin;
     insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
       values('${teacher}','${teacherName}','${run}-teacher@example.invalid','0600000000',
         'Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');`);
@@ -79,18 +89,26 @@ try {
       // The assertions below require captured bodies from settled pages.
     }));
   });
-  await page.goto(app + '/login?returnTo=/finance');
-  await page.waitForLoadState('networkidle');
-  // Cold dev builds can render the form before React attaches its input handlers.
-  await page.waitForFunction(() => {
-    const input = document.querySelector('input[type=email]');
-    return input && Object.keys(input).some(key => key.startsWith('__reactProps$'));
-  });
-  await page.getByLabel('Adresse email', { exact: true }).waitFor();
-  await page.getByLabel('Adresse email', { exact: true }).fill(email);
-  await page.getByLabel('Mot de passe', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
-  await page.waitForURL(app + '/crm/today');
+  // Cold dev builds may serve the form before hydration. An enabled submit
+  // after both controlled fields are filled verifies that React handled input.
+  let signedIn = false;
+  for (let attempt = 0; attempt < 3 && !signedIn; attempt++) {
+    await page.goto(app + '/login?returnTo=/finance');
+    await page.waitForLoadState('networkidle');
+    await page.getByLabel('Adresse email', { exact: true }).fill(email);
+    await page.getByLabel('Mot de passe', { exact: true }).fill(password);
+    if (!(await page.getByRole('button', { name: 'Se connecter', exact: true }).isEnabled())) continue;
+    await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
+    try {
+      await page.waitForURL(app + '/crm/today', { timeout: 12000 });
+      signedIn = true;
+    } catch (error) {
+      const loginError = await page.locator('.text-red-700').first().textContent().catch(() => null);
+      if (loginError) throw new Error(`Local receptionist login failed: ${loginError}`, { cause: error });
+      // A cold Next build can trigger a full reload between hydration and submit.
+    }
+  }
+  assert(signedIn, 'Login did not complete after three page loads');
   await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
   assert.equal(sql(`select role from public.profiles where id='${user}'`), 'receptionist');
   assert(authHeader, 'Authenticated receptionist requests were not observed');
@@ -177,13 +195,38 @@ try {
     'student',s.updated_at,'enrollment',e.updated_at)::text
     from public.students s join public.enrollments e on e.student_id=s.id
     where e.id='${submittedEnrollment}'`));
-  const incompatible = await page.request.post(`${base}/rest/v1/rpc/assign_receptionist_student_group`, {
-    headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    data: { p_student: submittedStudent, p_enrollment: submittedEnrollment, p_group: incompatibleGroup,
-      p_student_updated_at: assignmentVersions.student, p_enrollment_updated_at: assignmentVersions.enrollment },
-  });
-  assert(incompatible.status() >= 400, 'Incompatible enrollment/group assignment was accepted');
-  assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${submittedEnrollment}'`), 'unset');
+  const assignmentState = () => sql(`select jsonb_build_object(
+    'student',to_jsonb(s),'enrollment',to_jsonb(e))::text
+    from public.students s join public.enrollments e on e.student_id=s.id
+    where e.id='${submittedEnrollment}'`);
+  const stateBeforeRejections = assignmentState();
+  for (const [targetGroup, kind] of [[incompatibleGroup, 'wrong-session'], [wrongLevelGroup, 'same-session wrong-level']]) {
+    const incompatible = await page.request.post(`${base}/rest/v1/rpc/assign_receptionist_student_group`, {
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      data: { p_student: submittedStudent, p_enrollment: submittedEnrollment, p_group: targetGroup,
+        p_student_updated_at: assignmentVersions.student, p_enrollment_updated_at: assignmentVersions.enrollment },
+    });
+    assert(incompatible.status() >= 400, `${kind} enrollment/group assignment was accepted`);
+    assert.equal(assignmentState(), stateBeforeRejections, `${kind} rejection changed persisted student/enrollment state`);
+  }
+
+  async function assertFilterKeepsAction(name, studentId) {
+    await page.goto(app + '/students?status=all_shown');
+    await page.getByLabel('Rechercher un apprenant').fill(name);
+    const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
+    await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
+    await row.getByText(run, { exact: true }).waitFor(); // existing dossier group
+    const filtered = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/search_students_page')
+      && response.request().postDataJSON()?.p_group === 'unassigned');
+    await page.getByRole('combobox', { name: 'Filtrer par affectation de groupe' }).selectOption('unassigned');
+    const result = await filtered;
+    assert.equal(result.status(), 200);
+    assert((await result.json()).rows.some(item => item.id === studentId), `${name} disappeared from the group filter`);
+    await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
+  }
+  await assertFilterKeepsAction(submittedName, submittedStudent);
+  await assertFilterKeepsAction(reviewName, reviewStudent);
+  await assertFilterKeepsAction(validatedName, validatedStudent);
 
   async function assignEnrollmentFromList(name, enrollmentId, expectedStatus) {
     await page.goto(app + '/students?status=all_shown');
@@ -193,6 +236,7 @@ try {
     const dialog = page.getByRole('dialog');
     await dialog.locator('#enrollment-group').waitFor();
     assert.equal(await dialog.locator(`#enrollment-group option[value="${incompatibleGroup}"]`).count(), 0);
+    assert.equal(await dialog.locator(`#enrollment-group option[value="${wrongLevelGroup}"]`).count(), 0);
     await dialog.locator('#enrollment-group').selectOption(group);
     const saved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
     await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
@@ -208,6 +252,8 @@ try {
   await assignEnrollmentFromList(submittedName, submittedEnrollment, 'Submitted');
   await assignEnrollmentFromList(reviewName, reviewEnrollment, 'Under Review');
   await assignEnrollmentFromList(confirmedName, confirmedEnrollment, 'Validated');
+  await assignEnrollmentFromList(validatedName, validatedEnrollment, 'Validated');
+  assert.equal(sql(`select groupe_id from public.students where id='${validatedStudent}'`), group);
 
   await page.goto(app + '/students?status=all_shown');
   await page.getByLabel('Rechercher un apprenant').fill(multipleName);
@@ -232,7 +278,7 @@ try {
   await chosenDialog.waitFor({ state: 'hidden' });
   assert.equal(sql(`select group_id from public.enrollments where id='${multipleReview}'`), group);
   assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${multipleSubmitted}'`), 'unset');
-  console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, explicit multiple choice and incompatible denial');
+  console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, legacy Validated, explicit multiple choice and incompatible denials');
 
   await page.goto(app + `/students/${readyStudent}`);
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
@@ -311,17 +357,19 @@ try {
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'
       union select id from public.enrollments where student_id in ('${student}','${submittedStudent}',
-        '${reviewStudent}','${confirmedStudent}','${multipleStudent}')
+        '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}')
       union select unnest(array['${user}'::uuid,'${student}'::uuid,
         '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${submittedStudent}'::uuid,
         '${reviewStudent}'::uuid,'${confirmedStudent}'::uuid,'${multipleStudent}'::uuid,
-        '${teacher}'::uuid,'${group}'::uuid,'${incompatibleGroup}'::uuid]);
+        '${validatedStudent}'::uuid,'${teacher}'::uuid,'${group}'::uuid,
+        '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
     delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
-      '${reviewStudent}','${confirmedStudent}','${multipleStudent}');
+      '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}');
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
-      '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}');
-    delete from public.groups where id in ('${group}','${incompatibleGroup}');
+      '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}',
+      '${validatedStudent}');
+    delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}');
     delete from public.teachers where id='${teacher}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);
