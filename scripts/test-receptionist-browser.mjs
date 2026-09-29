@@ -19,8 +19,13 @@ const run = 'receptionist-browser-' + randomUUID(), email = run + '@example.inva
 const password = randomBytes(24).toString('base64url');
 const student = randomUUID(), group = randomUUID();
 const readyStudent = randomUUID(), unsetStudent = randomUUID();
+const submittedStudent = randomUUID(), reviewStudent = randomUUID(), confirmedStudent = randomUUID(), multipleStudent = randomUUID();
+const submittedEnrollment = randomUUID(), reviewEnrollment = randomUUID(), confirmedEnrollment = randomUUID();
+const multipleSubmitted = randomUUID(), multipleReview = randomUUID(), incompatibleGroup = randomUUID();
 const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
+const submittedName = run + ' submitted', reviewName = run + ' review';
+const confirmedName = run + ' confirmed', multipleName = run + ' multiple';
 let user, browser;
 try {
   const response = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
@@ -28,11 +33,23 @@ try {
     body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'director' } }) });
   assert.equal(response.status, 200); user = (await response.json()).id;
   sql(`update public.profiles set role='receptionist' where id='${user}';
-    insert into public.groups(id,name,session_type,niveau) values('${group}','${run}','Yearly','Child 1');
+    insert into public.groups(id,name,session_type,niveau) values
+      ('${group}','${run}','Yearly','Child 1'),
+      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1');
     insert into public.students(id,full_name,status,session_type,niveau_cefr) values
       ('${student}','${run}','Prospect','Yearly',null),
       ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
-      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null);
+      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null),
+      ('${submittedStudent}','${submittedName}','Enrolled','Yearly','Child 1'),
+      ('${reviewStudent}','${reviewName}','Enrolled','Yearly','Child 1'),
+      ('${confirmedStudent}','${confirmedName}','Enrolled','Yearly','Child 1'),
+      ('${multipleStudent}','${multipleName}','Enrolled','Yearly','Child 1');
+    insert into public.enrollments(id,student_id,status,session_type,level,school_year) values
+      ('${submittedEnrollment}','${submittedStudent}','Submitted','Yearly','Child 1','2026/2027'),
+      ('${reviewEnrollment}','${reviewStudent}','Under Review','Yearly','Child 1','2026/2027'),
+      ('${confirmedEnrollment}','${confirmedStudent}','Confirmed','Yearly','Child 1','2026/2027'),
+      ('${multipleSubmitted}','${multipleStudent}','Submitted','Yearly','Child 1','2026/2027'),
+      ('${multipleReview}','${multipleStudent}','Under Review','Yearly','Child 1','2027/2028');
     insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
       values('${teacher}','${teacherName}','${run}-teacher@example.invalid','0600000000',
         'Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');`);
@@ -64,9 +81,11 @@ try {
   });
   await page.goto(app + '/login?returnTo=/finance');
   await page.waitForLoadState('networkidle');
-  // Wait for React hydration before filling controlled login inputs on a cold dev build.
-  await page.getByRole('button', { name: 'Connexion par lien magique', exact: true }).click();
-  await page.getByRole('button', { name: 'Retour à la connexion par mot de passe', exact: true }).click();
+  // Cold dev builds can render the form before React attaches its input handlers.
+  await page.waitForFunction(() => {
+    const input = document.querySelector('input[type=email]');
+    return input && Object.keys(input).some(key => key.startsWith('__reactProps$'));
+  });
   await page.getByLabel('Adresse email', { exact: true }).waitFor();
   await page.getByLabel('Adresse email', { exact: true }).fill(email);
   await page.getByLabel('Mot de passe', { exact: true }).fill(password);
@@ -149,9 +168,71 @@ try {
   await page.getByRole('button', { name: 'Affecter', exact: true }).click();
   const groupResult = await groupSave;
   assert.equal(groupResult.status(), 200, await groupResult.text());
+  assert.equal(groupResult.request().postDataJSON().p_enrollment, null);
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   assert.equal(sql(`select groupe_id from public.students where id='${readyStudent}'`), group);
-  console.log('PASS shared student filters, payment state, safe category edit and checked group assignment');
+  console.log('PASS shared student filters, payment state, safe category edit and dossier-only assignment');
+
+  const assignmentVersions = JSON.parse(sql(`select json_build_object(
+    'student',s.updated_at,'enrollment',e.updated_at)::text
+    from public.students s join public.enrollments e on e.student_id=s.id
+    where e.id='${submittedEnrollment}'`));
+  const incompatible = await page.request.post(`${base}/rest/v1/rpc/assign_receptionist_student_group`, {
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    data: { p_student: submittedStudent, p_enrollment: submittedEnrollment, p_group: incompatibleGroup,
+      p_student_updated_at: assignmentVersions.student, p_enrollment_updated_at: assignmentVersions.enrollment },
+  });
+  assert(incompatible.status() >= 400, 'Incompatible enrollment/group assignment was accepted');
+  assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${submittedEnrollment}'`), 'unset');
+
+  async function assignEnrollmentFromList(name, enrollmentId, expectedStatus) {
+    await page.goto(app + '/students?status=all_shown');
+    await page.getByLabel('Rechercher un apprenant').fill(name);
+    const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
+    await row.getByRole('button', { name: /Groupe à affecter/ }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.locator('#enrollment-group').waitFor();
+    assert.equal(await dialog.locator(`#enrollment-group option[value="${incompatibleGroup}"]`).count(), 0);
+    await dialog.locator('#enrollment-group').selectOption(group);
+    const saved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    const response = await saved;
+    assert.equal(response.status(), 200, await response.text());
+    const body = response.request().postDataJSON();
+    assert.equal(body.p_enrollment, enrollmentId, `Wrong enrollment selected for ${name}`);
+    assert.equal(body.p_group, group);
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(sql(`select group_id from public.enrollments where id='${enrollmentId}'`), group);
+    assert.equal(sql(`select status from public.enrollments where id='${enrollmentId}'`), expectedStatus);
+  }
+  await assignEnrollmentFromList(submittedName, submittedEnrollment, 'Submitted');
+  await assignEnrollmentFromList(reviewName, reviewEnrollment, 'Under Review');
+  await assignEnrollmentFromList(confirmedName, confirmedEnrollment, 'Validated');
+
+  await page.goto(app + '/students?status=all_shown');
+  await page.getByLabel('Rechercher un apprenant').fill(multipleName);
+  const multipleRow = page.getByRole('row').filter({ has: page.getByRole('link', { name: multipleName, exact: true }) });
+  const assignmentWritesBefore = pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group)$/.test(path)).length;
+  await multipleRow.getByRole('button', { name: /Choisir l’inscription à affecter \(2\)/ }).click();
+  const chooser = page.getByRole('dialog');
+  await chooser.getByRole('heading', { name: /Choisir une inscription/ }).waitFor();
+  await chooser.getByRole('button', { name: new RegExp(multipleSubmitted.slice(0, 8)) }).waitFor();
+  await chooser.getByRole('button', { name: new RegExp(multipleReview.slice(0, 8)) }).waitFor();
+  assert.equal(pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group)$/.test(path)).length,
+    assignmentWritesBefore, 'Multiple enrollments were assigned before explicit selection');
+  assert.equal(sql(`select count(*) from public.enrollments where student_id='${multipleStudent}' and group_id is not null`), '0');
+  await chooser.getByRole('button', { name: new RegExp(`Under Review.*${multipleReview.slice(0, 8)}`) }).click();
+  const chosenDialog = page.getByRole('dialog');
+  await chosenDialog.locator('#enrollment-group').selectOption(group);
+  const chosenSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
+  await chosenDialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  const chosenResponse = await chosenSave;
+  assert.equal(chosenResponse.status(), 200, await chosenResponse.text());
+  assert.equal(chosenResponse.request().postDataJSON().p_enrollment, multipleReview);
+  await chosenDialog.waitFor({ state: 'hidden' });
+  assert.equal(sql(`select group_id from public.enrollments where id='${multipleReview}'`), group);
+  assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${multipleSubmitted}'`), 'unset');
+  console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, explicit multiple choice and incompatible denial');
 
   await page.goto(app + `/students/${readyStudent}`);
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
@@ -229,13 +310,18 @@ try {
   if (user) sql(`begin;
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'
-      union select id from public.enrollments where student_id='${student}'
+      union select id from public.enrollments where student_id in ('${student}','${submittedStudent}',
+        '${reviewStudent}','${confirmedStudent}','${multipleStudent}')
       union select unnest(array['${user}'::uuid,'${student}'::uuid,
-        '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${teacher}'::uuid,'${group}'::uuid]);
+        '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${submittedStudent}'::uuid,
+        '${reviewStudent}'::uuid,'${confirmedStudent}'::uuid,'${multipleStudent}'::uuid,
+        '${teacher}'::uuid,'${group}'::uuid,'${incompatibleGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
-    delete from public.enrollments where student_id='${student}';
-    delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}');
-    delete from public.groups where id='${group}';
+    delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
+      '${reviewStudent}','${confirmedStudent}','${multipleStudent}');
+    delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
+      '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}');
+    delete from public.groups where id in ('${group}','${incompatibleGroup}');
     delete from public.teachers where id='${teacher}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);

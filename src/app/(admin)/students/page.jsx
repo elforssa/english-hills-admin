@@ -55,23 +55,7 @@ export default function StudentsPage() {
   const update = useEntityUpdate('Student');
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);
-  const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement) });
-  const renderGroup = (student) => (
-    <div className="space-y-1">
-      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
-      {(student.pending_enrollments || []).map(enrollment => (
-        <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
-          onClick={() => setPlacement({ student, enrollment })}>
-          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
-        </button>
-      ))}
-      {!student.groupe_id && !student.pending_enrollments?.length && (
-        role === 'receptionist'
-          ? <button className="text-xs font-semibold text-primary hover:underline" onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>
-          : <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
-      )}
-    </div>
-  );
+  const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement && !placement.choices) });
 
   // Keep the current server value visible until persistence succeeds.
   const patchStudentFields = async (student, data) => {
@@ -144,6 +128,50 @@ export default function StudentsPage() {
   const loading = !urlReady || queryLoading;
   const paged = result?.rows || [];
   const matchedCount = Number(result?.count || 0);
+  const studentIds = paged.map(student => student.id);
+  const { data: pageEnrollments = [], isFetching: enrollmentsLoading, isError: enrollmentsError, refetch: reloadEnrollments } = useQuery({
+    queryKey: ['Student', 'placement-enrollments', studentIds],
+    enabled: role === 'receptionist' && studentIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await getBrowserClient().from('enrollments')
+        .select('id,student_id,status,group_id,session_type,level,school_year,date_inscription,notes,created_at')
+        .in('student_id', studentIds)
+        .in('status', ['Submitted', 'Under Review', 'Trial', 'Confirmed', 'Validated'])
+        .order('created_at', { ascending: true }).order('id', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const renderGroup = (student) => {
+    if (role !== 'receptionist') return <div className="space-y-1">
+      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {(student.pending_enrollments || []).map(enrollment => (
+        <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
+          onClick={() => setPlacement({ student, enrollment })}>
+          Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
+        </button>
+      ))}
+      {!student.groupe_id && !student.pending_enrollments?.length && <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
+    </div>;
+
+    if (enrollmentsLoading) return <span className="text-xs text-muted-foreground">Chargement des inscriptions…</span>;
+    if (enrollmentsError) return <button className="text-xs text-primary underline" onClick={() => reloadEnrollments()}>Réessayer le chargement des inscriptions</button>;
+    const relevant = pageEnrollments.filter(enrollment => enrollment.student_id === student.id);
+    const awaitingGroup = relevant.filter(enrollment => !enrollment.group_id);
+    return <div className="space-y-1">
+      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
+        Groupe à affecter · {awaitingGroup[0].status} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
+      </button>}
+      {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
+      {!student.groupe_id && relevant.length === 0 && <button className="text-xs font-semibold text-primary hover:underline"
+        onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>}
+      {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
+    </div>;
+  };
 
   const exportStudents = async () => {
     try {
@@ -250,7 +278,9 @@ export default function StudentsPage() {
         </select>
       </div>
 
-      {placement && (groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
+      {placement && (placement.choices ? <EnrollmentChoiceDialog student={placement.student} enrollments={placement.choices}
+        onSelect={enrollment => setPlacement({ student: placement.student, enrollment })} onClose={() => setPlacement(null)} />
+        : groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
         : groupsError ? <div role="alert" className="mb-4 text-sm">Impossible de charger les groupes. <button className="text-primary underline" onClick={() => reloadGroups()}>Réessayer</button> <button onClick={() => setPlacement(null)}>Annuler</button></div>
           : placement.enrollment ? <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
@@ -360,6 +390,22 @@ export default function StudentsPage() {
       </div>
     </div>
   );
+}
+
+function EnrollmentChoiceDialog({ student, enrollments, onSelect, onClose }) {
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Choisir une inscription pour {student.full_name}</DialogTitle></DialogHeader>
+      <p className="text-sm text-muted-foreground">Sélectionnez l’inscription à laquelle affecter le groupe.</p>
+      <div className="space-y-2">
+        {enrollments.map(enrollment => <button key={enrollment.id} type="button" className="block w-full rounded-md border border-border p-3 text-left text-sm hover:border-primary"
+          onClick={() => onSelect(enrollment)}>
+          <span className="block font-semibold">{enrollment.status} · {enrollment.session_type || student.session_type || 'Session'} · {enrollment.level || 'Niveau à définir'}</span>
+          <span className="text-xs text-muted-foreground">{enrollment.school_year || 'Année non renseignée'} · Réf. {enrollment.id.slice(0, 8)}</span>
+        </button>)}
+      </div>
+    </DialogContent>
+  </Dialog>;
 }
 
 function DossierGroupPlacement({ student, groups, onClose, onSave }) {
