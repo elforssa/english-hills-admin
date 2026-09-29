@@ -1,8 +1,6 @@
 'use client';
 import { useAuth } from '@/context/AuthContext';
 
-import { ReceptionistStudents } from '@/components/students/ReceptionistOperations';
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +17,8 @@ import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } fro
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { listHref, recordHref } from '@/lib/navigation.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const PAGE_SIZE = 20;
 
@@ -49,10 +49,9 @@ function InlineSelect({ value, options, onChange, empty, label, className = '' }
 
 export default function StudentsPage() {
   const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistStudents /> : <Students />;
-}
-
-function Students() {
+  const canEditProgramme = hasCapability(role, 'canEditStudentProgramme');
+  const canImport = hasCapability(role, 'canImportStudents');
+  const canExport = hasCapability(role, 'canExportStudents');
   const update = useEntityUpdate('Student');
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);
@@ -67,18 +66,26 @@ function Students() {
         </button>
       ))}
       {!student.groupe_id && !student.pending_enrollments?.length && (
-        <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
+        role === 'receptionist'
+          ? <button className="text-xs font-semibold text-primary hover:underline" onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>
+          : <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
       )}
     </div>
   );
 
   // Keep the current server value visible until persistence succeeds.
-  const patchStudentFields = async (id, data) => {
+  const patchStudentFields = async (student, data) => {
     try {
-      await update.mutateAsync({ id, data });
-    } catch { /* entities.update already reports the failure */ }
+      if (role === 'receptionist') {
+        const { error } = await getBrowserClient().rpc('save_receptionist_student', {
+          p_student: student.id, p_expected_updated_at: student.updated_at, p_changes: data,
+        });
+        if (error) throw error;
+        await queryClient.invalidateQueries({ queryKey: ['Student'] });
+      } else await update.mutateAsync({ id: student.id, data });
+    } catch (error) { if (role === 'receptionist') toast.error(error.message); }
   };
-  const patchStudent = (id, field, value) => patchStudentFields(id, { [field]: value === '' ? null : value });
+  const patchStudent = (student, field, value) => patchStudentFields(student, { [field]: value === '' ? null : value });
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -172,19 +179,19 @@ function Students() {
           <p className="text-muted-foreground text-sm mt-1">{loading || isError ? '—' : matchedCount} apprenants correspondants · {loading || isError ? '—' : result.total} au total</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
-          <button
+          {canExport && <button
             onClick={exportStudents}
             disabled={loading || isError}
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
           >
             <Download size={15} /> CSV
-          </button>
-          <Link
+          </button>}
+          {canImport && <Link
             href="/students/import"
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted"
           >
             <Upload size={15} /> Import CSV
-          </Link>
+          </Link>}
           <Button asChild>
             <Link href="/students/new">
               <Plus size={15} /> Ajouter
@@ -245,7 +252,12 @@ function Students() {
 
       {placement && (groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
         : groupsError ? <div role="alert" className="mb-4 text-sm">Impossible de charger les groupes. <button className="text-primary underline" onClick={() => reloadGroups()}>Réessayer</button> <button onClick={() => setPlacement(null)}>Annuler</button></div>
-          : <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
+          : placement.enrollment ? <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
+            onClose={() => setPlacement(null)} onSave={() => {
+              setPlacement(null);
+              queryClient.invalidateQueries({ queryKey: ['Student'] });
+              queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+            }} /> : <DossierGroupPlacement student={placement.student} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
               setPlacement(null);
               queryClient.invalidateQueries({ queryKey: ['Student'] });
@@ -309,28 +321,28 @@ function Students() {
                           label={`Catégorie de ${s.full_name}`}
                           options={AGE_CATEGORIES}
                           empty="— Non défini —"
-                          onChange={v => patchStudent(s.id, 'age_category', v)}
+                          onChange={v => patchStudent(s, 'age_category', v)}
                         />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{renderGroup(s)}</td>
                       <td className="px-4 py-3">
-                        <InlineSelect
+                        {canEditProgramme ? <InlineSelect
                           value={s.session_type || 'Yearly'}
                           label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
-                          onChange={v => patchStudentFields(s.id, { session_type: v, niveau_cefr: null, groupe_id: null })}
-                        />
+                          onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null, groupe_id: null })}
+                        /> : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{s.session_type || 'Yearly'}</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <InlineSelect
+                        {canEditProgramme ? <InlineSelect
                           value={s.niveau_cefr}
                           label={`Niveau de ${s.full_name}`}
                           options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
-                          onChange={v => patchStudentFields(s.id, { niveau_cefr: v || null, groupe_id: null })}
-                        />
+                          onChange={v => patchStudentFields(s, { niveau_cefr: v || null, groupe_id: null })}
+                        /> : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-4 py-3">
@@ -348,4 +360,47 @@ function Students() {
       </div>
     </div>
   );
+}
+
+function DossierGroupPlacement({ student, groups, onClose, onSave }) {
+  const [groupId, setGroupId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const matchingGroups = groups.filter(group => !group.deleted_at
+    && (group.session_type || 'Yearly') === (student.session_type || 'Yearly')
+    && group.niveau === student.niveau_cefr);
+
+  const assign = async (event) => {
+    event.preventDefault();
+    if (!groupId) return;
+    setSaving(true);
+    try {
+      const { error } = await getBrowserClient().rpc('assign_receptionist_student_group', {
+        p_student: student.id, p_enrollment: null, p_group: groupId,
+        p_student_updated_at: student.updated_at, p_enrollment_updated_at: null,
+      });
+      if (error) throw error;
+      toast.success('Groupe affecté');
+      onSave();
+    } catch (error) { toast.error(error.message); }
+    finally { setSaving(false); }
+  };
+
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Affecter un groupe à {student.full_name}</DialogTitle></DialogHeader>
+      {!student.niveau_cefr
+        ? <p className="text-sm text-muted-foreground">Le niveau doit être défini avant l’affectation directe. Créez une pré-inscription depuis la <Link href={`/students/${student.id}`} className="text-primary underline" onClick={onClose}>fiche apprenant</Link> pour choisir un niveau et un groupe.</p>
+        : <form onSubmit={assign} className="space-y-4">
+          <label className="block text-sm font-medium">Groupe compatible
+            <select aria-label="Groupe compatible" required className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2" value={groupId} onChange={event => setGroupId(event.target.value)}>
+              <option value="">— Choisir un groupe —</option>
+              {matchingGroups.map(group => <option key={group.id} value={group.id}>{group.name} · {group.niveau}</option>)}
+            </select>
+          </label>
+          {matchingGroups.length === 0 && <p className="text-sm text-muted-foreground">Aucun groupe compatible disponible.</p>}
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+            <Button type="submit" disabled={saving || !groupId}>{saving ? 'Enregistrement…' : 'Affecter'}</Button></div>
+        </form>}
+    </DialogContent>
+  </Dialog>;
 }

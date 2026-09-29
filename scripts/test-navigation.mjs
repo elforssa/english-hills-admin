@@ -58,8 +58,13 @@ for (const role of ['teacher','parent','student','pending',null]) {
     assert.equal(hasCapability(role, capability), false);
 }
 for (const capability of ['canViewFinanceAnalytics','canManageUsers','canManageSystemSettings',
-  'canViewTeacherCompensation','canManagePayroll','canManageIntegrations','canCorrectFinance'])
+  'canViewTeacherCompensation','canManagePayroll','canManageIntegrations','canCorrectFinance',
+  'canImportStudents','canExportStudents','canEditStudentProgramme'])
   assert.equal(hasCapability('receptionist', capability), false);
+for (const role of ['director', 'admin']) {
+  for (const capability of ['canImportStudents', 'canExportStudents', 'canEditStudentProgramme'])
+    assert.equal(hasCapability(role, capability), true);
+}
 assert.equal(hasCapability('director', 'canCorrectFinance'), true);
 assert.equal(hasCapability('admin', 'canCorrectFinance'), false);
 assert.equal(hasCapability('director', 'unknown'), false);
