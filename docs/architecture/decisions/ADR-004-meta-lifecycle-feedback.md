@@ -2,7 +2,7 @@
 
 ## Status
 
-**APPROVED — repository owner approval dated 2026-09-29, Batch 2 plan revision 2, D1–D7 all Option A.** Not implemented or approved for Production release. See [approved plan and implementation contract](../plans/crm-batch2-meta-lifecycle-feedback.md). Architecture authorizes a separate implementation task within that contract; this update is documentation-only. Official provider-contract verification and form readiness remain completion/activation prerequisites, not unresolved product decisions.
+**APPROVED — repository owner approval dated 2026-09-29, Batch 2 plan revision 2, D1–D7 all Option A. Implementation is under review and is not merged, deployed, Production verified or approved for Production release.** See [approved plan and implementation contract](../plans/crm-batch2-meta-lifecycle-feedback.md). Official provider-contract verification and form readiness remain completion/activation prerequisites, not unresolved product decisions.
 
 ## Context
 
@@ -42,4 +42,4 @@ Verify official exact Meta event contract, API version, event-age rules, dedupli
 
 ## Existing implementation / follow-up evidence
 
-Existing foundation: [088](../../../supabase/migrations/088_crm_meta_lifecycle_delivery.sql), [fixture worker](../../../src/lib/crm/lifecycle/worker.mjs), [ADR-001](ADR-001-crm-lifecycle.md) and [ADR-002](ADR-002-meta-intake-and-reconciliation.md). Batch 2 changes are not implemented. Record approved decisions, implementation PR/migrations and Production verification separately as they occur. Approval records the intended implementation boundary; it does not claim these changes are deployed or authorize Production mutation.
+Existing deployed foundation: [088](../../../supabase/migrations/088_crm_meta_lifecycle_delivery.sql), [fixture worker](../../../src/lib/crm/lifecycle/worker.mjs), [ADR-001](ADR-001-crm-lifecycle.md) and [ADR-002](ADR-002-meta-intake-and-reconciliation.md). The review branch adds forward migrations [098](../../../supabase/migrations/098_crm_lifecycle_evidence_and_delivery.sql), [099](../../../supabase/migrations/099_crm_lifecycle_delivery_runtime.sql) and [100](../../../supabase/migrations/100_crm_lifecycle_scheduler.sql), plus the scheduler, fail-closed live adapter and director operations UI. It seeds no provider contract and leaves the lifecycle cron inactive. Record the final implementation PR/SHA and any later Production verification separately. This evidence does not claim deployment or authorize Production mutation.

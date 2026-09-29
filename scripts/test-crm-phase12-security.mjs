@@ -1,19 +1,21 @@
 // Full CRM role matrix through real LOCAL Auth/PostgREST. No customer data.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-assert(readFileSync('.git/HEAD','utf8').startsWith('ref: refs/heads/codex/'));
-const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(l=>{const m=l.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
+assert(execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim().startsWith('codex/'));
+const parseEnv=value=>Object.fromEntries(value.split('\n').flatMap(l=>{const m=l.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
+const local=existsSync('.env.local')?parseEnv(readFileSync('.env.local','utf8')):parseEnv(execFileSync('npx',['supabase','status','-o','env'],{encoding:'utf8'}));
+const env={...local,NEXT_PUBLIC_SUPABASE_URL:process.env.NEXT_PUBLIC_SUPABASE_URL||local.NEXT_PUBLIC_SUPABASE_URL||local.API_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY:process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||local.NEXT_PUBLIC_SUPABASE_ANON_KEY||local.ANON_KEY,SUPABASE_SERVICE_ROLE_KEY:process.env.SUPABASE_SERVICE_ROLE_KEY||local.SUPABASE_SERVICE_ROLE_KEY||local.SERVICE_ROLE_KEY};
 assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,'http://127.0.0.1:54321');
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
 const roles=['director','admin','receptionist','teacher','parent','student','pending'];const users=[],clients={};const nil='00000000-0000-0000-0000-000000000001';let checks=0;
 const root=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const cases=[
  ['crm_get_today',{},'operations'],['crm_search_leads',{p_query:'phase12 synthetic'},'operations'],['crm_list_intake_review',{},'operations'],['crm_get_workspace_detail',{p_lead:nil},'operations'],['crm_list_placements',{p_lead:nil},'operations'],['crm_get_enrollment_context',{p_lead:nil},'operations'],
- ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
- ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],
+ ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
+ ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],
 ];
 try {
  for(const role of roles){
@@ -22,11 +24,11 @@ try {
   const client=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});const login=await client.auth.signInWithPassword({email,password});assert.ifError(login.error);clients[role]=client;
  }
  clients.anon=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});clients.service=root;
- const tables=sql("select c.relname,a.attname from pg_class c join pg_index i on i.indrelid=c.oid and i.indisprimary join pg_attribute a on a.attrelid=c.oid and a.attnum=i.indkey[0] where c.relnamespace='public'::regnamespace and c.relname like 'crm_%' order by 1").split('\n').map(row=>row.split('|'));
+ const tables=sql("select c.relname,a.attname,a.atttypid::regtype::text from pg_class c join pg_index i on i.indrelid=c.oid and i.indisprimary join pg_attribute a on a.attrelid=c.oid and a.attnum=i.indkey[0] where c.relnamespace='public'::regnamespace and c.relname like 'crm_%' order by 1").split('\n').map(row=>row.split('|'));
  for(const [role,client] of Object.entries(clients)){
-  for(const [table,primaryKey] of tables){
+  for(const [table,primaryKey,primaryType] of tables){
    const read=await client.from(table).select('*').limit(1);assert.equal(read.error?.code,'42501',`${role} direct read ${table}`);checks++;
-   const write=await client.from(table).delete().eq(primaryKey,nil);assert.equal(write.error?.code,'42501',`${role} direct delete ${table}`);checks++;
+   const write=await client.from(table).delete().eq(primaryKey,primaryType==='boolean'?false:nil);assert.equal(write.error?.code,'42501',`${role} direct delete ${table}`);checks++;
   }
   for(const [name,args,access] of cases){
    const allowed=access==='operations'?['director','admin','receptionist'].includes(role):role===access;
@@ -38,5 +40,9 @@ try {
  }
  console.log(`PASS Phase12 real REST/table/RPC matrix: ${checks} checks, 9 identities, forged director metadata ignored`);
 } finally {
- for(const id of users){const {error}=await root.auth.admin.deleteUser(id);assert.ifError(error);sql(`delete from activity_log where actor_id='${id}' or target_id='${id}'`);}
+ for(const id of users){
+  sql(`delete from activity_log where actor_id='${id}' or target_id='${id}'`);
+  if(sql(`select role from profiles where id='${id}'`)==='director')sql(`begin;alter table profiles disable trigger role_security_guard;delete from profiles where id='${id}';update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table profiles enable trigger role_security_guard;commit;`);
+  const {error}=await root.auth.admin.deleteUser(id);assert.ifError(error);
+ }
 }
