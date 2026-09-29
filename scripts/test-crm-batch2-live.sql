@@ -181,6 +181,110 @@ select pg_temp.ok(
   'explicit operator activation opens a prospective epoch'
 );
 
+create temp table disabled_evidence as
+select public.crm_record_lifecycle_evidence_check(
+  (select first_submission_id from public.crm_leads where id=(select id from fx where k='disabled_lead')),
+  (select id from fixture_policy),true,'eligible',repeat('7',64)) result;
+select pg_temp.ok(
+  not crm_security.repair_lifecycle_evidence(
+    (select id from public.crm_external_deliveries where lead_id=(select id from fx where k='disabled_lead')),
+    (select (result->>'evidence_id')::uuid from disabled_evidence)),
+  'evidence from a disabled-period milestone cannot cross into a later activation epoch'
+);
+
+insert into fx values('late_lead',pg_temp.intake('880014'));
+insert into fx values('late_activity',pg_temp.milestone((select id from fx where k='late_lead'),'batch2-live-late-evidence'));
+select public.crm_reconcile_external_deliveries();
+create temp table late_delivery_before as
+select id,provider_event_id from public.crm_external_deliveries where lead_id=(select id from fx where k='late_lead');
+select pg_temp.ok(
+  (select status='blocked' and last_error_code='sharing_evidence_missing' and eligibility_evidence_id is null
+      and attempt_count=0 and payload is null and provider_event_name is null
+     from public.crm_external_deliveries where id=(select id from late_delivery_before)),
+  'reconciliation records one pre-attempt delivery while evidence evaluation is still pending'
+);
+select pg_temp.ok(
+  not crm_security.repair_lifecycle_evidence(
+    (select id from late_delivery_before),(select (result->>'evidence_id')::uuid from disabled_evidence)),
+  'evidence from another submission cannot repair the blocked delivery'
+);
+select pg_temp.ok(
+  not crm_security.repair_lifecycle_evidence(
+    (select id from late_delivery_before),(select id from no_epoch_fx where k='evidence')),
+  'evidence from another destination cannot repair the blocked delivery'
+);
+select pg_temp.denied(format(
+  'update public.crm_external_deliveries set eligibility_evidence_id=%L,status=''pending'',last_error_code=null where id=%L',
+  (select (result->>'evidence_id')::uuid from disabled_evidence),(select id from late_delivery_before)),'42501');
+
+create temp table late_evidence as
+select public.crm_record_lifecycle_evidence_check(
+  (select first_submission_id from public.crm_leads where id=(select id from fx where k='late_lead')),
+  (select id from fixture_policy),true,'eligible',repeat('6',64)) result;
+select public.crm_reconcile_external_deliveries();
+select pg_temp.ok(
+  (select count(*)=1 and bool_and(id=(select id from late_delivery_before)
+      and provider_event_id=(select provider_event_id from late_delivery_before)
+      and status='pending' and last_error_code is null
+      and eligibility_evidence_id=(select (result->>'evidence_id')::uuid from late_evidence))
+     from public.crm_external_deliveries where lead_id=(select id from fx where k='late_lead')),
+  'later valid evidence repairs the same deterministic pre-attempt delivery without duplication'
+);
+
+create function pg_temp.live_payload(d public.crm_external_deliveries) returns jsonb language sql as $$
+  select jsonb_build_object('data',jsonb_build_array(jsonb_build_object(
+    'event_name',d.mapping_snapshot->'events'->>d.event_kind,
+    'event_id',d.provider_event_id,
+    'event_time',floor(extract(epoch from d.event_time))::bigint,
+    'action_source',d.mapping_snapshot->>'action_source',
+    'user_data',jsonb_build_object('lead_id',e.source_external_id))))
+  from public.crm_lifecycle_eligibility_evidence e where e.id=d.eligibility_evidence_id
+$$;
+
+select public.crm_claim_external_deliveries(1,true);
+create temp table pre_attempt_lease as
+select lease_token from public.crm_external_deliveries where id=(select id from late_delivery_before);
+update public.crm_external_deliveries set lease_until=clock_timestamp()-interval '1 second' where id=(select id from late_delivery_before);
+select public.crm_claim_external_deliveries(1,true);
+select pg_temp.ok(
+  (select status='sending' and lease_token is distinct from (select lease_token from pre_attempt_lease)
+      and attempt_count=0 and not exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id)
+     from public.crm_external_deliveries d where id=(select id from late_delivery_before)),
+  'an expired lease with no durable attempt is safely reclaimed under a new fence token'
+);
+select pg_temp.denied(format(
+  'select public.crm_begin_external_attempt(%L,%L)',(select id from late_delivery_before),(select lease_token from pre_attempt_lease)),'40001');
+select pg_temp.denied(format(
+  'select public.crm_finish_external_attempt(%L,%L,''{"outcome":"sent","http_status":200}'')',
+  (select id from late_delivery_before),(select lease_token from pre_attempt_lease)),'40001');
+select public.crm_prepare_external_delivery(id,lease_token,pg_temp.live_payload(d))
+  from public.crm_external_deliveries d where id=(select id from late_delivery_before);
+select public.crm_begin_external_attempt(id,lease_token)
+  from public.crm_external_deliveries where id=(select id from late_delivery_before);
+create temp table begun_attempt_lease as
+select lease_token from public.crm_external_deliveries where id=(select id from late_delivery_before);
+select pg_temp.ok(
+  not crm_security.repair_lifecycle_evidence(
+    (select id from late_delivery_before),(select (result->>'evidence_id')::uuid from disabled_evidence)),
+  'evidence identity cannot be repaired after a durable provider attempt begins'
+);
+select pg_temp.denied(format(
+  'update public.crm_external_deliveries set eligibility_evidence_id=%L where id=%L',
+  (select (result->>'evidence_id')::uuid from disabled_evidence),(select id from late_delivery_before)),'42501');
+update public.crm_external_deliveries set lease_until=clock_timestamp()-interval '1 second' where id=(select id from late_delivery_before);
+create temp table attempted_expiry_claim as select public.crm_claim_external_deliveries(1,true) result;
+select pg_temp.ok(
+  (select result='[]'::jsonb from attempted_expiry_claim)
+  and (select status='unknown' and last_error_code='lease_expired' and next_attempt_at>clock_timestamp()
+      and attempt_count=1 from public.crm_external_deliveries where id=(select id from late_delivery_before))
+  and (select outcome='unknown' and error_code='lease_expired' and finished_at is not null
+      from public.crm_external_delivery_attempts where delivery_id=(select id from late_delivery_before)),
+  'an expired lease after durable attempt begin preserves uncertainty and deduplication delay'
+);
+select pg_temp.denied(format(
+  'select public.crm_finish_external_attempt(%L,%L,''{"outcome":"sent","http_status":200}'')',
+  (select id from late_delivery_before),(select lease_token from begun_attempt_lease)),'40001');
+
 select pg_temp.actor(1);
 select pg_temp.denied(format(
   'select public.crm_retry_external_delivery(%L)',
@@ -244,15 +348,6 @@ select pg_temp.ok(
      from public.crm_external_deliveries where provider_event_id='eh:batch2:held-live'),
   'one bounded claim scan retires an ineligible head row and still leases fresh eligible work'
 );
-create function pg_temp.live_payload(d public.crm_external_deliveries) returns jsonb language sql as $$
-  select jsonb_build_object('data',jsonb_build_array(jsonb_build_object(
-    'event_name',d.mapping_snapshot->'events'->>d.event_kind,
-    'event_id',d.provider_event_id,
-    'event_time',floor(extract(epoch from d.event_time))::bigint,
-    'action_source',d.mapping_snapshot->>'action_source',
-    'user_data',jsonb_build_object('lead_id',e.source_external_id))))
-  from public.crm_lifecycle_eligibility_evidence e where e.id=d.eligibility_evidence_id
-$$;
 select pg_temp.denied(
   $$select public.crm_prepare_external_delivery(id,lease_token,
       jsonb_set(pg_temp.live_payload(d),'{data,0,value}','1'::jsonb))
@@ -397,13 +492,15 @@ select pg_temp.ok(
   ),
   'retained nonmatching tombstone permanently excludes cleaned source evidence from claiming'
 );
+create temp table grants_after_cleanup as
+select count(*) total from public.crm_lifecycle_eligibility_evidence where policy_id=(select id from fixture_policy) and event_type='grant';
 create temp table post_cleanup_record as
 select public.crm_record_lifecycle_evidence_check(
   (select first_submission_id from public.crm_leads where id=(select id from fx where k='live_lead')),
   (select id from fixture_policy),true,'eligible',repeat('e',64)) result;
 select pg_temp.ok(
   (select result->>'eligible'='false' and result->>'evidence_id' is null from post_cleanup_record)
-  and (select count(*)=3 from public.crm_lifecycle_eligibility_evidence where policy_id=(select id from fixture_policy) and event_type='grant'),
+  and (select total=(select count(*) from public.crm_lifecycle_eligibility_evidence where policy_id=(select id from fixture_policy) and event_type='grant') from grants_after_cleanup),
   'direct replay after cleanup cannot reconstruct a grant or matching projection'
 );
 create temp table second_cleanup as select public.crm_cleanup_lifecycle_retention(100) result;

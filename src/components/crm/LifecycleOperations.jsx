@@ -42,7 +42,7 @@ export default function LifecycleOperations() {
       form_mapping_id: policy.mapping, notice_version: policy.noticeVersion, notice_text_digest: policy.noticeDigest,
       adult_field_key: policy.adultKey, adult_accepted_values: policy.adultValues.split(',').map(v => v.trim()).filter(Boolean),
       sharing_field_key: policy.sharingKey, sharing_accepted_values: policy.sharingValues.split(',').map(v => v.trim()).filter(Boolean),
-      notice_field_key: policy.noticeKey || null, notice_accepted_values: policy.noticeKey ? policy.noticeValues.split(',').map(v => v.trim()).filter(Boolean) : null,
+      ...(policy.noticeKey ? { notice_field_key: policy.noticeKey, notice_accepted_values: policy.noticeValues.split(',').map(v => v.trim()).filter(Boolean) } : {}),
       effective_from: new Date(policy.starts).toISOString(), effective_until: new Date(policy.ends).toISOString(),
     },
   }));

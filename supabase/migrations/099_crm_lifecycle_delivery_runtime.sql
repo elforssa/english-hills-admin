@@ -120,16 +120,91 @@ begin
   when a.consent_evidence->'meta_lifecycle_sharing' is distinct from 'true'::jsonb or a.consent_evidence->'adult_contact' is distinct from 'true'::jsonb then 'sharing_evidence_missing' else null end);
 end $$;
 
+create or replace function crm_security.protect_delivery() returns trigger
+language plpgsql set search_path=pg_catalog,pg_temp as $$
+declare retention_erasure boolean;terminal_backfill boolean;evidence_repair boolean:=false;repair_route jsonb;
+begin
+ if tg_op='DELETE' then raise exception 'Delivery history immutable' using errcode='42501';end if;
+ terminal_backfill:=old.status in ('sent','dead','suppressed') and old.terminal_at is null and new.terminal_at is not null
+  and (to_jsonb(new)-array['terminal_at','updated_at'])=(to_jsonb(old)-array['terminal_at','updated_at']);
+ if terminal_backfill then return new;end if;
+ retention_erasure:=old.terminal_at is not null and old.terminal_at<=clock_timestamp()-interval '30 days'
+  and old.payload_erased_at is null and new.payload_erased_at is not null and new.payload is null and new.payload_hash is null and new.matching_submission_id is null
+  and (to_jsonb(new)-array['payload','payload_hash','matching_submission_id','payload_erased_at','updated_at'])
+    =(to_jsonb(old)-array['payload','payload_hash','matching_submission_id','payload_erased_at','updated_at']);
+ if retention_erasure then return new;end if;
+ if old.delivery_mode='live' and old.status='blocked' and old.last_error_code='sharing_evidence_missing'
+  and old.eligibility_evidence_id is null and new.eligibility_evidence_id is not null
+  and old.attempt_count=0 and new.attempt_count=0 and old.payload is null and old.payload_hash is null and old.provider_event_name is null
+  and new.payload is null and new.payload_hash is null and new.provider_event_name is null
+  and old.lease_token is null and old.lease_until is null and old.sent_at is null and old.terminal_at is null and old.payload_erased_at is null
+  and new.status='pending' and new.next_attempt_at is not null and new.last_error_code is null
+  and not exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=old.id)
+  and (to_jsonb(new)-array['eligibility_evidence_id','status','next_attempt_at','last_error_code','updated_at'])
+    =(to_jsonb(old)-array['eligibility_evidence_id','status','next_attempt_at','last_error_code','updated_at']) then
+   repair_route:=crm_security.lifecycle_route(old.lead_id);
+   evidence_repair:=(repair_route->>'reason') is null
+    and (repair_route->>'submission_id')::uuid is not distinct from old.matching_submission_id
+    and (repair_route->>'connection_id')::uuid is not distinct from old.connection_id
+    and (repair_route->>'epoch_id')::uuid is not distinct from old.activation_epoch_id
+    and (repair_route->>'contract_id')::uuid is not distinct from old.provider_contract_id
+    and (repair_route->>'evidence_id')::uuid is not distinct from new.eligibility_evidence_id
+    and (repair_route->>'epoch_started_at')::timestamptz<=old.event_time
+    and (repair_route->>'evidence_effective_at')::timestamptz<=old.event_time
+    and old.send_deadline>clock_timestamp();
+ end if;
+ if evidence_repair then return new;end if;
+ if row(new.activity_id,new.lead_id,new.connection_id,new.event_kind,new.event_time,new.provider_event_id,new.attribution_submission_id,new.matching_submission_id,new.created_at,
+        new.delivery_mode,new.provider_contract_id,new.activation_epoch_id,new.eligibility_evidence_id,new.send_deadline)
+    is distinct from
+    row(old.activity_id,old.lead_id,old.connection_id,old.event_kind,old.event_time,old.provider_event_id,old.attribution_submission_id,old.matching_submission_id,old.created_at,
+        old.delivery_mode,old.provider_contract_id,old.activation_epoch_id,old.eligibility_evidence_id,old.send_deadline)
+  or (old.payload is not null and row(new.payload,new.payload_hash,new.provider_event_name,new.mapping_version,new.mapping_snapshot,new.max_attempts)
+    is distinct from row(old.payload,old.payload_hash,old.provider_event_name,old.mapping_version,old.mapping_snapshot,old.max_attempts))
+  or old.status in ('sent','dead','suppressed') then raise exception 'Frozen delivery identity/payload' using errcode='42501';end if;
+ return new;
+end $$;
+
+create function crm_security.repair_lifecycle_evidence(p_delivery uuid,p_evidence uuid) returns boolean
+language plpgsql set search_path=pg_catalog,pg_temp as $$
+declare d public.crm_external_deliveries;e public.crm_lifecycle_eligibility_evidence;r jsonb;
+begin
+ select * into d from public.crm_external_deliveries where id=p_delivery for update;
+ if d.id is null or d.delivery_mode<>'live' or d.status<>'blocked' or d.last_error_code<>'sharing_evidence_missing'
+  or d.eligibility_evidence_id is not null or d.attempt_count<>0 or d.payload is not null or d.payload_hash is not null or d.provider_event_name is not null
+  or d.lease_token is not null or d.lease_until is not null or d.sent_at is not null or d.terminal_at is not null or d.payload_erased_at is not null
+  or exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id) then return false;end if;
+ select * into e from public.crm_lifecycle_eligibility_evidence where id=p_evidence and event_type='grant' for update;
+ if e.id is null or e.redacted_at is not null or e.submission_id is distinct from d.matching_submission_id or e.connection_id is distinct from d.connection_id
+  or e.effective_at>d.event_time or exists(select 1 from public.crm_lifecycle_eligibility_evidence rv where rv.supersedes_evidence_id=e.id and rv.event_type='revoke') then return false;end if;
+ r:=crm_security.lifecycle_route(d.lead_id);
+ if (r->>'reason') is not null or (r->>'submission_id')::uuid is distinct from d.matching_submission_id
+  or (r->>'connection_id')::uuid is distinct from d.connection_id or (r->>'epoch_id')::uuid is distinct from d.activation_epoch_id
+  or (r->>'contract_id')::uuid is distinct from d.provider_contract_id or (r->>'evidence_id')::uuid is distinct from e.id
+  or (r->>'epoch_started_at')::timestamptz>d.event_time or (r->>'evidence_effective_at')::timestamptz>d.event_time
+  or d.send_deadline is null or d.send_deadline<=clock_timestamp() then return false;end if;
+ update public.crm_external_deliveries set eligibility_evidence_id=e.id,status='pending',next_attempt_at=now(),last_error_code=null,updated_at=now() where id=d.id;
+ return found;
+end $$;
+
 create or replace function public.crm_reconcile_external_deliveries(p_limit integer default 100) returns integer
 language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
-declare activity record;r jsonb;cfg jsonb;reason text;state text;n integer:=0;l public.crm_leads;mode text;deadline timestamptz;
+declare activity record;repair_delivery public.crm_external_deliveries;r jsonb;cfg jsonb;reason text;state text;n integer:=0;l public.crm_leads;mode text;deadline timestamptz;
 begin
  if auth.role() is distinct from 'service_role' then perform crm_security.require_reader(true);end if;
  if p_limit is null or p_limit not between 1 and 200 then raise exception 'Invalid limit' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended('crm:lifecycle:reconcile',0));
+ for repair_delivery in select * from public.crm_external_deliveries
+  where delivery_mode='live' and status='blocked' and last_error_code='sharing_evidence_missing' and eligibility_evidence_id is null
+    and attempt_count=0 and payload is null and payload_hash is null and provider_event_name is null and terminal_at is null and payload_erased_at is null
+  order by updated_at,id limit p_limit for update skip locked loop
+  r:=crm_security.lifecycle_route(repair_delivery.lead_id);
+  if (r->>'evidence_id') is not null and crm_security.repair_lifecycle_evidence(repair_delivery.id,(r->>'evidence_id')::uuid) then n:=n+1;end if;
+ end loop;
+ if n>=p_limit then return n;end if;
  for activity in select distinct on (x.lead_id,x.event_type) x.* from public.crm_activities x
   where x.event_type in ('lead_qualified','lead_converted') and not exists(select 1 from public.crm_external_deliveries d where d.lead_id=x.lead_id and d.event_kind=case x.event_type when 'lead_qualified' then 'qualified' else 'converted' end)
-  order by x.lead_id,x.event_type,x.occurred_at,x.id limit p_limit loop
+  order by x.lead_id,x.event_type,x.occurred_at,x.id limit (p_limit-n) loop
   select * into strict l from public.crm_leads where id=activity.lead_id;
   r:=crm_security.lifecycle_route(l.id);cfg:=coalesce(r->'mapping','{}');reason:=r->>'reason';state:='pending';mode:=coalesce(cfg->>'mode','mock');
   if activity.event_type='lead_converted' and (activity.id is distinct from l.conversion_activity_id or activity.enrollment_id is distinct from l.enrollment_id) then reason:='invalid_conversion_evidence';end if;
@@ -183,14 +258,21 @@ end $$;
 
 create function crm_security.claim_lifecycle_deliveries(p_limit integer,p_live boolean) returns jsonb
 language plpgsql set search_path=pg_catalog,pg_temp as $$
-declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;dedup_deadline timestamptz;retry_at timestamptz;
+declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;dedup_deadline timestamptz;retry_at timestamptz;attempt_started boolean;
 begin
  for d in select * from public.crm_external_deliveries where (delivery_mode='live')=p_live and payload_erased_at is null and
   (((status in ('pending','retry','unknown')) and next_attempt_at<=now()) or (status='sending' and lease_until<=now()))
   order by next_attempt_at,id limit least(100,greatest(20,p_limit*20)) for update skip locked loop
   if d.status='sending' then
-   update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired' where delivery_id=d.id and finished_at is null;
-   if d.delivery_mode='live' then
+   select exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id and a.lease_token=d.lease_token) into attempt_started;
+   if not attempt_started then
+    update public.crm_external_deliveries set status='pending',lease_token=null,lease_until=null,next_attempt_at=now(),last_error_code=null,updated_at=now() where id=d.id;
+    d.status:='pending';d.lease_token:=null;d.lease_until:=null;d.next_attempt_at:=now();d.last_error_code:=null;
+   else
+    update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired'
+     where delivery_id=d.id and lease_token=d.lease_token and finished_at is null;
+   end if;
+   if attempt_started and d.delivery_mode='live' then
     select min(started_at)+make_interval(secs=>(d.mapping_snapshot->>'deduplication_window_seconds')::integer) into dedup_deadline
       from public.crm_external_delivery_attempts where delivery_id=d.id;
     retry_at:=clock_timestamp()+interval '30 seconds';

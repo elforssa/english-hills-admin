@@ -2,7 +2,8 @@
 """Local committed synthetic milestones, competing workers, fencing and cleanup. No HTTP."""
 import concurrent.futures,json,os,subprocess
 from pathlib import Path
-assert subprocess.run(['git','branch','--show-current'],capture_output=True,text=True,check=True).stdout.strip().startswith('codex/')
+branch=subprocess.run(['git','branch','--show-current'],capture_output=True,text=True,check=True).stdout.strip()
+assert branch.startswith('codex/') or (os.getenv('GITHUB_ACTIONS')=='true' and os.getenv('GITHUB_EVENT_NAME')=='pull_request')
 args=['psql','-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1']
 def sql(s,check=True):
  r=subprocess.run(args,input=s,text=True,capture_output=True,env={**os.environ,'PGPASSWORD':'postgres'},timeout=60)

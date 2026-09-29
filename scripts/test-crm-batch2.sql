@@ -44,6 +44,11 @@ select pg_temp.ok(
   'database scheduler invoker remains private'
 );
 select pg_temp.ok(
+  not has_function_privilege('service_role', 'crm_security.repair_lifecycle_evidence(uuid,uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'crm_security.repair_lifecycle_evidence(uuid,uuid)', 'execute'),
+  'pre-attempt evidence repair is private to guarded reconciliation'
+);
+select pg_temp.ok(
   exists(select 1 from pg_constraint
     where conrelid='public.crm_lifecycle_eligibility_policies'::regclass
       and conname='crm_lifecycle_policy_no_overlap' and contype='x'),
