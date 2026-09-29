@@ -133,6 +133,15 @@ select pg_temp.denied(
       'events_received',false,'{}','["https://developers.facebook.com/"]',current_date,clock_timestamp())$$,
   '23514'
 );
+select pg_temp.denied(
+  $$insert into public.crm_lifecycle_provider_contracts(
+      contract_key,revision,api_version,qualified_event_name,converted_event_name,
+      action_source,maximum_event_age_seconds,deduplication_window_seconds,
+      accepted_response_field,lead_id_only,required_constants,evidence_urls,verified_on,approved_at)
+    values('invalid_financial_event',1,'v99.0','Purchase','Converted','system_generated',86400,86400,
+      'events_received',true,'{}','["https://developers.facebook.com/"]',current_date,clock_timestamp())$$,
+  '23514'
+);
 
 select pg_temp.ok(
   (select bool_and(coalesce(array_to_string(p.proconfig,','),'') like '%search_path=pg_catalog, pg_temp%')

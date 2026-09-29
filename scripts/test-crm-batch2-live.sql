@@ -78,7 +78,7 @@ select
   clock_timestamp()-interval '1 day',clock_timestamp()+interval '1 day','8c000000-0000-0000-0000-000000000001'
 from fixture_policy;
 
-create function pg_temp.intake(external_id text) returns uuid language plpgsql as $$
+create function pg_temp.intake(external_id text,page_id text default '880001',form_id text default '880002') returns uuid language plpgsql as $$
 declare submission uuid; lead uuid;
 begin
   insert into public.crm_submissions(
@@ -92,7 +92,7 @@ begin
   returning id into submission;
   insert into public.crm_submission_attribution(
     submission_id,provider,external_submission_id,external_scope,page_id,form_id,consent_evidence,attribution_status)
-  values(submission,'meta',external_id,'page:880001:'||submission,'880001','880002','{}','partial');
+  values(submission,'meta',external_id,'page:'||page_id||':'||submission,page_id,form_id,'{}','partial');
   lead := crm_security.accept_external_submission(submission);
   return lead;
 end $$;
@@ -137,6 +137,11 @@ select public.crm_record_lifecycle_evidence_check(
   (select first_submission_id from public.crm_leads where id=(select id from fx where k='live_lead')),
   (select id from fixture_policy),true,'eligible',repeat('b',64));
 insert into fx values('live_activity',pg_temp.milestone((select id from fx where k='live_lead'),'batch2-live-eligible'));
+insert into fx values('wrong_page_lead',pg_temp.intake('880013','999999','880002'));
+select public.crm_record_lifecycle_evidence_check(
+  (select first_submission_id from public.crm_leads where id=(select id from fx where k='wrong_page_lead')),
+  (select id from fixture_policy),true,'eligible',repeat('f',64));
+insert into fx values('wrong_page_activity',pg_temp.milestone((select id from fx where k='wrong_page_lead'),'batch2-live-wrong-page'));
 select public.crm_reconcile_external_deliveries();
 select pg_temp.ok(
   (select status='pending' and delivery_mode='live' and provider_contract_id=(select id from fixture_contract)
@@ -145,8 +150,41 @@ select pg_temp.ok(
      from public.crm_external_deliveries where lead_id=(select id from fx where k='live_lead')),
   'post-activation milestone with explicit evidence is the only live-eligible path'
 );
+select pg_temp.ok(
+  (select status='suppressed' and last_error_code='no_matching_identity'
+     from public.crm_external_deliveries where lead_id=(select id from fx where k='wrong_page_lead')),
+  'wrong Page evidence never becomes a sendable live delivery'
+);
 
+create temp table held_evidence as select gen_random_uuid() id;
+insert into public.crm_lifecycle_eligibility_evidence(
+  id,connection_id,policy_id,event_type,effective_at,source_kind,reason_code,
+  source_external_id,source_projection,source_request_key)
+select id,(select id from fx where k='connection'),(select id from fixture_policy),'grant',clock_timestamp(),
+  'form_response','explicit_form_evidence','880098','{"page_id":"880001","form_id":"880002","notice_version":"notice-v1"}',gen_random_uuid()
+from held_evidence;
+insert into public.crm_external_deliveries(
+  created_at,activity_id,lead_id,connection_id,event_kind,event_time,provider_event_id,
+  mapping_version,mapping_snapshot,attribution_submission_id,matching_submission_id,
+  status,next_attempt_at,max_attempts,delivery_mode,provider_contract_id,activation_epoch_id,
+  eligibility_evidence_id,send_deadline)
+select
+  clock_timestamp()-interval '1 day',(select id from fx where k='disabled_activity'),(select id from fx where k='disabled_lead'),
+  c.id,'converted',a.occurred_at,'eh:batch2:held-live',coalesce((c.lifecycle_settings->>'version')::integer,0),c.lifecycle_settings,
+  l.first_submission_id,l.first_submission_id,'pending',clock_timestamp()-interval '1 day',3,'live',(select id from fixture_contract),
+  (select id from fx where k='epoch'),
+  (select id from held_evidence),
+  clock_timestamp()+interval '1 day'
+from public.crm_integration_connections c
+join public.crm_leads l on l.id=(select id from fx where k='disabled_lead')
+join public.crm_activities a on a.id=(select id from fx where k='disabled_activity')
+where c.id=(select id from fx where k='connection');
 select public.crm_claim_external_deliveries(1,true);
+select pg_temp.ok(
+  (select status='suppressed' and last_error_code='activation_ended'
+     from public.crm_external_deliveries where provider_event_id='eh:batch2:held-live'),
+  'one bounded claim scan retires an ineligible head row and still leases fresh eligible work'
+);
 create function pg_temp.live_payload(d public.crm_external_deliveries) returns jsonb language sql as $$
   select jsonb_build_object('data',jsonb_build_array(jsonb_build_object(
     'event_name',d.mapping_snapshot->'events'->>d.event_kind,
@@ -156,6 +194,18 @@ create function pg_temp.live_payload(d public.crm_external_deliveries) returns j
     'user_data',jsonb_build_object('lead_id',e.source_external_id))))
   from public.crm_lifecycle_eligibility_evidence e where e.id=d.eligibility_evidence_id
 $$;
+select pg_temp.denied(
+  $$select public.crm_prepare_external_delivery(id,lease_token,
+      jsonb_set(pg_temp.live_payload(d),'{data,0,value}','1'::jsonb))
+    from public.crm_external_deliveries d where lead_id=(select id from fx where k='live_lead')$$,
+  '22023'
+);
+select pg_temp.denied(
+  $$select public.crm_prepare_external_delivery(id,lease_token,
+      jsonb_set(pg_temp.live_payload(d),'{data,0,user_data,em}',to_jsonb(repeat('a',64))))
+    from public.crm_external_deliveries d where lead_id=(select id from fx where k='live_lead')$$,
+  '22023'
+);
 select public.crm_prepare_external_delivery(id,lease_token,pg_temp.live_payload(d))
   from public.crm_external_deliveries d where lead_id=(select id from fx where k='live_lead');
 select public.crm_begin_external_attempt(id,lease_token)
@@ -184,10 +234,11 @@ select
   'adult_confirmed','["yes"]','meta_share','["yes"]',
   clock_timestamp()-interval '300 days',clock_timestamp()-interval '200 days','8c000000-0000-0000-0000-000000000001'
 from expired_policy;
-insert into public.crm_lifecycle_eligibility_checks(submission_id,policy_id,checked_at,eligible,reason_code,evidence_digest)
+insert into public.crm_lifecycle_eligibility_checks(submission_id,policy_id,checked_at,eligible,reason_code,evidence_digest,source_marker)
 values(
   (select first_submission_id from public.crm_leads where id=(select id from fx where k='disabled_lead')),
-  (select id from expired_policy),clock_timestamp()-interval '200 days',false,'sharing_missing',repeat('d',64));
+  (select id from expired_policy),clock_timestamp()-interval '200 days',false,'sharing_missing',repeat('d',64),
+  encode(sha256(convert_to('crm:lifecycle:eligibility:'||(select first_submission_id from public.crm_leads where id=(select id from fx where k='disabled_lead'))||':'||(select id from expired_policy),'UTF8')),'hex'));
 
 insert into fx values('revocation',public.crm_revoke_lifecycle_evidence(
   gen_random_uuid(),
@@ -212,6 +263,8 @@ update public.crm_external_deliveries
    set status='suppressed',terminal_at=clock_timestamp()-interval '91 days',next_attempt_at=null,last_error_code='sharing_revoked'
  where lead_id=(select id from fx where k='live_lead');
 
+insert into fx values('mock_lead',pg_temp.intake('880012'));
+insert into fx values('mock_activity',pg_temp.milestone((select id from fx where k='mock_lead'),'batch2-old-mock-source'));
 create temp table old_mock_delivery as select gen_random_uuid() id;
 insert into public.crm_external_deliveries(
   id,
@@ -219,12 +272,12 @@ insert into public.crm_external_deliveries(
   mapping_version,mapping_snapshot,attribution_submission_id,matching_submission_id,
   payload,payload_hash,status,next_attempt_at,last_error_code,max_attempts,delivery_mode)
 select
-  old.id,clock_timestamp()-interval '100 days',(select id from fx where k='disabled_activity'),(select id from fx where k='disabled_lead'),
+  old.id,clock_timestamp()-interval '100 days',(select id from fx where k='mock_activity'),(select id from fx where k='mock_lead'),
   (select id from fx where k='connection'),'converted',clock_timestamp()-interval '100 days','eh:batch2:old-mock',
   1,'{"mode":"mock"}',l.first_submission_id,l.first_submission_id,
   '{"data":[]}',encode(sha256(convert_to('{"data":[]}'::jsonb::text,'UTF8')),'hex'),
   'blocked',clock_timestamp()-interval '100 days','outbound_disabled',3,'mock_legacy'
-from old_mock_delivery old cross join public.crm_leads l where l.id=(select id from fx where k='disabled_lead');
+ from old_mock_delivery old cross join public.crm_leads l where l.id=(select id from fx where k='mock_lead');
 insert into public.crm_external_delivery_attempts(
   delivery_id,attempt_number,lease_token,started_at,finished_at,outcome,error_code)
 values(
@@ -272,10 +325,41 @@ select pg_temp.ok(
      from public.crm_external_deliveries where lead_id=(select id from fx where k='live_lead')),
   'terminal delivery payload and matching reference are erased after 30 days'
 );
+create temp table post_cleanup_claim as select public.crm_claim_lifecycle_evidence(100) result;
+select pg_temp.ok(
+  not exists(
+    select 1 from post_cleanup_claim c cross join lateral jsonb_array_elements(c.result) item
+     where item->>'submission_id'=(select first_submission_id::text from public.crm_leads where id=(select id from fx where k='live_lead'))
+  ),
+  'retained nonmatching tombstone permanently excludes cleaned source evidence from claiming'
+);
+create temp table post_cleanup_record as
+select public.crm_record_lifecycle_evidence_check(
+  (select first_submission_id from public.crm_leads where id=(select id from fx where k='live_lead')),
+  (select id from fixture_policy),true,'eligible',repeat('e',64)) result;
+select pg_temp.ok(
+  (select result->>'eligible'='false' and result->>'evidence_id' is null from post_cleanup_record)
+  and (select count(*)=3 from public.crm_lifecycle_eligibility_evidence where policy_id=(select id from fixture_policy) and event_type='grant'),
+  'direct replay after cleanup cannot reconstruct a grant or matching projection'
+);
+create temp table second_cleanup as select public.crm_cleanup_lifecycle_retention(100) result;
+select pg_temp.ok(
+  (select (result->>'terminated')::integer=0 and (result->>'payloads_erased')::integer=0
+      and (result->>'attempts_erased')::integer=0 and (result->>'checks_erased')::integer=0
+      and (result->>'evidence_erased')::integer=0 from second_cleanup),
+  'retention cleanup is idempotent at the completed boundary'
+);
 select pg_temp.actor(1);
 select pg_temp.denied(format(
   'select public.crm_retry_external_delivery(%L)',
   (select id from public.crm_external_deliveries where lead_id=(select id from fx where k='live_lead'))), '22023');
+select pg_temp.denied(format('select public.crm_retire_lifecycle_policy(%L,0)',(select id from fixture_policy)),'40001');
+select public.crm_retire_lifecycle_policy((select id from fixture_policy),1);
+select pg_temp.ok(
+  (select retired_at is not null and retired_by='8c000000-0000-0000-0000-000000000001'
+     from public.crm_lifecycle_eligibility_policies where id=(select id from fixture_policy)),
+  'policy retirement uses an expected version and records the director actor'
+);
 
 set constraints all immediate;
 rollback;

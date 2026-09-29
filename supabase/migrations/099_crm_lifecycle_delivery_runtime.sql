@@ -187,7 +187,7 @@ declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[]
 begin
  for d in select * from public.crm_external_deliveries where (delivery_mode='live')=p_live and payload_erased_at is null and
   (((status in ('pending','retry','unknown')) and next_attempt_at<=now()) or (status='sending' and lease_until<=now()))
-  order by next_attempt_at,id limit p_limit for update skip locked loop
+  order by next_attempt_at,id limit least(100,greatest(20,p_limit*20)) for update skip locked loop
   if d.status='sending' then
    update public.crm_external_delivery_attempts set outcome='unknown',finished_at=clock_timestamp(),error_code='lease_expired' where delivery_id=d.id and finished_at is null;
    if d.delivery_mode='live' then
@@ -210,7 +210,10 @@ begin
   if d.attempt_count>=d.max_attempts then update public.crm_external_deliveries set status='dead',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,last_error_code='attempts_exhausted',updated_at=now() where id=d.id;
   elsif terminal_reason then update public.crm_external_deliveries set status='suppressed',terminal_at=coalesce(terminal_at,clock_timestamp()),lease_token=null,lease_until=null,last_error_code=reason,updated_at=now() where id=d.id;
   elsif reason is not null then update public.crm_external_deliveries set status='blocked',lease_token=null,lease_until=null,last_error_code=reason,updated_at=now() where id=d.id;
-  else update public.crm_external_deliveries set status='sending',lease_token=gen_random_uuid(),lease_until=now()+interval '2 minutes',updated_at=now() where id=d.id;ids:=array_append(ids,d.id);end if;
+  else
+   update public.crm_external_deliveries set status='sending',lease_token=gen_random_uuid(),lease_until=now()+interval '2 minutes',updated_at=now() where id=d.id;
+   ids:=array_append(ids,d.id);if cardinality(ids)>=p_limit then exit;end if;
+  end if;
  end loop;
  return coalesce((select jsonb_agg(jsonb_build_object('id',id,'lease_token',lease_token)) from public.crm_external_deliveries where id=any(ids)),'[]');
 end $$;

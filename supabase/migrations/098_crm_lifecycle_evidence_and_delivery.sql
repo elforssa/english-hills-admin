@@ -9,8 +9,8 @@ create table public.crm_lifecycle_provider_contracts (
   contract_key text not null unique check(contract_key ~ '^[a-z][a-z0-9_-]{2,63}$'),
   revision integer not null check(revision > 0),
   api_version text not null check(api_version ~ '^v[0-9]{1,3}\.0$'),
-  qualified_event_name text not null check(qualified_event_name ~ '^[A-Za-z][A-Za-z0-9_ ]{0,63}$'),
-  converted_event_name text not null check(converted_event_name ~ '^[A-Za-z][A-Za-z0-9_ ]{0,63}$'),
+  qualified_event_name text not null check(qualified_event_name ~ '^[A-Za-z][A-Za-z0-9_ ]{0,63}$' and lower(qualified_event_name) not in ('purchase','revenue','payment')),
+  converted_event_name text not null check(converted_event_name ~ '^[A-Za-z][A-Za-z0-9_ ]{0,63}$' and lower(converted_event_name) not in ('purchase','revenue','payment')),
   action_source text not null check(action_source in ('system_generated','phone_call','physical_store','other')),
   maximum_event_age_seconds integer not null check(maximum_event_age_seconds between 300 and 7776000),
   deduplication_window_seconds integer not null check(deduplication_window_seconds between 300 and 7776000),
@@ -56,6 +56,7 @@ create table public.crm_lifecycle_eligibility_policies (
   effective_from timestamptz not null check(isfinite(effective_from)),
   effective_until timestamptz not null check(isfinite(effective_until)),
   retired_at timestamptz,
+  retired_by uuid references public.profiles(id),
   created_by uuid not null references public.profiles(id),
   created_at timestamptz not null default clock_timestamp(),
   unique(connection_id, form_mapping_id, version),
@@ -63,7 +64,8 @@ create table public.crm_lifecycle_eligibility_policies (
   check(notice_field_key is null or notice_field_key not in (adult_field_key, sharing_field_key)),
   check((notice_field_key is null) = (notice_accepted_values is null)),
   check(effective_until > effective_from),
-  check(retired_at is null or retired_at > effective_from)
+  check(retired_at is null or retired_at > effective_from),
+  check((retired_at is null) = (retired_by is null))
 );
 
 create table public.crm_lifecycle_eligibility_checks (
@@ -74,8 +76,9 @@ create table public.crm_lifecycle_eligibility_checks (
   eligible boolean not null,
   reason_code text not null check(reason_code in ('eligible','adult_missing','adult_ambiguous','sharing_missing','sharing_ambiguous','notice_mismatch','source_mismatch','source_redacted')),
   evidence_digest text check(evidence_digest ~ '^[a-f0-9]{64}$'),
+  source_marker text not null check(source_marker ~ '^[a-f0-9]{64}$'),
   redacted_at timestamptz,
-  unique(submission_id, policy_id),
+  unique(policy_id, source_marker),
   check(eligible = (reason_code = 'eligible'))
 );
 
@@ -182,8 +185,9 @@ create function crm_security.protect_lifecycle_policy() returns trigger
 language plpgsql set search_path = pg_catalog, pg_temp as $$
 begin
   if tg_op = 'DELETE' then raise exception 'Lifecycle policy history is immutable' using errcode = '42501'; end if;
-  if (to_jsonb(new) - 'retired_at') is distinct from (to_jsonb(old) - 'retired_at')
-     or old.retired_at is not null or new.retired_at is null or new.retired_at < clock_timestamp() then
+  if (to_jsonb(new) - array['retired_at','retired_by']) is distinct from (to_jsonb(old) - array['retired_at','retired_by'])
+     or old.retired_at is not null or old.retired_by is not null or new.retired_at is null or new.retired_by is null
+     or new.retired_at < now() then
     raise exception 'Lifecycle policy history is immutable' using errcode = '42501';
   end if;
   return new;
@@ -326,13 +330,17 @@ begin
   return to_jsonb(p) - array['adult_accepted_values','sharing_accepted_values','notice_accepted_values'];
 end $$;
 
-create function public.crm_retire_lifecycle_policy(p_policy uuid) returns void
+create function public.crm_retire_lifecycle_policy(p_policy uuid,p_version integer) returns void
 language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
+declare policy public.crm_lifecycle_eligibility_policies;
 begin
   perform crm_security.require_reader(true);
-  update public.crm_lifecycle_eligibility_policies set retired_at = greatest(clock_timestamp(), effective_from + interval '1 microsecond')
-   where id = p_policy and retired_at is null;
-  if not found then raise exception 'Active policy required' using errcode = '22023'; end if;
+  select * into policy from public.crm_lifecycle_eligibility_policies where id=p_policy for update;
+  if not found or policy.retired_at is not null then raise exception 'Active policy required' using errcode = '22023'; end if;
+  if policy.version is distinct from p_version then raise exception 'Refresh policy version' using errcode = '40001'; end if;
+  update public.crm_lifecycle_eligibility_policies
+     set retired_at=greatest(clock_timestamp(),effective_from+interval '1 microsecond'),retired_by=auth.uid()
+   where id=policy.id;
 end $$;
 
 create function public.crm_claim_lifecycle_evidence(p_limit integer default 25) returns jsonb
@@ -362,7 +370,8 @@ begin
     where s.channel = 'meta_instant_form' and s.match_status = 'resolved' and a.provider = 'meta' and a.redacted_at is null
       and a.page_id = (select c.page_id from public.crm_integration_connections c where c.id = p.connection_id)
       and a.form_id = m.form_key and a.external_submission_id ~ '^[0-9]{1,32}$'
-      and not exists(select 1 from public.crm_lifecycle_eligibility_checks e where e.submission_id = s.id and e.policy_id = p.id)
+      and not exists(select 1 from public.crm_lifecycle_eligibility_checks e where e.policy_id=p.id
+        and e.source_marker=encode(sha256(convert_to('crm:lifecycle:eligibility:'||s.id||':'||p.id,'UTF8')),'hex'))
     order by s.occurred_at,s.id limit p_limit
   ) x;
   return result;
@@ -370,7 +379,7 @@ end $$;
 
 create function public.crm_record_lifecycle_evidence_check(p_submission uuid,p_policy uuid,p_eligible boolean,p_reason text,p_digest text) returns jsonb
 language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
-declare s public.crm_submissions;a public.crm_submission_attribution;p public.crm_lifecycle_eligibility_policies;m public.crm_form_mappings;check_id uuid;evidence_id uuid;projection jsonb;
+declare s public.crm_submissions;a public.crm_submission_attribution;p public.crm_lifecycle_eligibility_policies;m public.crm_form_mappings;check_id uuid;evidence_id uuid;projection jsonb;marker text;check_redacted timestamptz;
 begin
   perform crm_security.require_meta_worker();
   if p_reason not in ('eligible','adult_missing','adult_ambiguous','sharing_missing','sharing_ambiguous','notice_mismatch','source_mismatch','source_redacted')
@@ -385,10 +394,12 @@ begin
      or a.page_id is distinct from (select page_id from public.crm_integration_connections where id = p.connection_id) then
     p_eligible := false; p_reason := 'source_mismatch';
   elsif a.redacted_at is not null then p_eligible := false; p_reason := 'source_redacted'; end if;
-  insert into public.crm_lifecycle_eligibility_checks(submission_id,policy_id,eligible,reason_code,evidence_digest)
-  values(p_submission,p_policy,p_eligible,p_reason,p_digest) on conflict(submission_id,policy_id) do nothing returning id into check_id;
-  if check_id is null then select id into check_id from public.crm_lifecycle_eligibility_checks where submission_id = p_submission and policy_id = p_policy; end if;
-  select eligible,reason_code into p_eligible,p_reason from public.crm_lifecycle_eligibility_checks where id=check_id;
+  marker:=encode(sha256(convert_to('crm:lifecycle:eligibility:'||p_submission||':'||p_policy,'UTF8')),'hex');
+  insert into public.crm_lifecycle_eligibility_checks(submission_id,policy_id,eligible,reason_code,evidence_digest,source_marker)
+  values(p_submission,p_policy,p_eligible,p_reason,p_digest,marker) on conflict(policy_id,source_marker) do nothing returning id into check_id;
+  if check_id is null then select id into check_id from public.crm_lifecycle_eligibility_checks where policy_id=p_policy and source_marker=marker; end if;
+  select eligible,reason_code,redacted_at into p_eligible,p_reason,check_redacted from public.crm_lifecycle_eligibility_checks where id=check_id;
+  if check_redacted is not null then return jsonb_build_object('check_id',check_id,'eligible',false,'evidence_id',null); end if;
   if p_eligible then
     projection := jsonb_build_object('page_id',a.page_id,'form_id',a.form_id,'notice_version',p.notice_version,'captured_at',s.occurred_at);
     insert into public.crm_lifecycle_eligibility_evidence(submission_id,connection_id,policy_id,event_type,effective_at,source_kind,reason_code,
@@ -417,10 +428,10 @@ begin
 end $$;
 
 revoke all on all functions in schema crm_security from public,anon,authenticated,service_role;
-revoke all on function public.crm_publish_lifecycle_policy(uuid,bigint,jsonb),public.crm_retire_lifecycle_policy(uuid),
+revoke all on function public.crm_publish_lifecycle_policy(uuid,bigint,jsonb),public.crm_retire_lifecycle_policy(uuid,integer),
   public.crm_claim_lifecycle_evidence(integer),public.crm_record_lifecycle_evidence_check(uuid,uuid,boolean,text,text),
   public.crm_revoke_lifecycle_evidence(uuid,uuid,text) from public,anon,authenticated,service_role;
-grant execute on function public.crm_publish_lifecycle_policy(uuid,bigint,jsonb),public.crm_retire_lifecycle_policy(uuid),
+grant execute on function public.crm_publish_lifecycle_policy(uuid,bigint,jsonb),public.crm_retire_lifecycle_policy(uuid,integer),
   public.crm_revoke_lifecycle_evidence(uuid,uuid,text) to authenticated;
 grant execute on function public.crm_claim_lifecycle_evidence(integer),public.crm_record_lifecycle_evidence_check(uuid,uuid,boolean,text,text) to service_role;
 
