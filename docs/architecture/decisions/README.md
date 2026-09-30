@@ -10,4 +10,4 @@ Read [current state](../../ai/CURRENT_STATE.md) before interpreting implementati
 
 Change significant decisions here and synchronize the relevant [context documents](../../../AGENTS.md). Never turn an approved future design into a claim about deployed permissions.
 
-ADR-004 also contains a **proposed, unapproved revision 4** for a five-event commercial funnel and prospective producer ownership; see the [comparison and implementation contract](../plans/crm-meta-funnel-revision-4.md). Existing approved D1–D7 and dormant status remain unchanged.
+ADR-004 also contains **revision 4 owner direction**: five-event Option B approved in principle, repeated occurrences and Qualified initial target approved, revised chronological-attempt ordering awaiting final architecture approval; see the [comparison and implementation contract](../plans/crm-meta-funnel-revision-4.md). Existing approved D1–D7 and dormant status remain unchanged.
