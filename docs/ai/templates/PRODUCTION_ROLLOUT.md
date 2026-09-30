@@ -1,6 +1,6 @@
 # Production rollout / operator task
 
-Inputs: reviewed PR, exact approved head SHA, owner release approval with scope, migration manifest, deployment target, rollout order and recovery owner. Read [AGENTS](../../../AGENTS.md), approved plan and implementation/review evidence. Use a separate release task/agent for substantial work.
+Inputs: reviewed PR, exact approved head SHA, owner release approval with scope, migration manifest, deployment target, rollout order and recovery owner. Read [AGENTS](../../../AGENTS.md), approved plan and implementation/review evidence. Production mutation/activation is Tier 3 under the [risk-tier policy](../../../AGENTS.md#risk-based-lifecycle), even if the originating change was lower risk. Use a separate release task/agent. Reuse implementation/CI evidence where applicable; verify deployment-state checks here.
 
 **Explicit human release approval is required before any Production mutation**, including merge that triggers Vercel, migrations, credentials/configuration or provider activation. Architecture approval is insufficient. Prepare the concrete release checklist before requesting missing approval.
 
