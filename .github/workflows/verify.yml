@@ -83,7 +83,6 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
-          python3 scripts/test-crm-meta-funnel-r4-concurrency.py
           python3 scripts/test-crm-phase10-concurrency.py
           node scripts/test-crm-phase12-security.mjs
       - name: Synthetic database and API role suites
@@ -101,3 +100,5 @@ jobs:
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
           npm run test:crm-lifecycle-browser
+      - name: CRM revision-4 isolated concurrency
+        run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
