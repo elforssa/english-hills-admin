@@ -2,6 +2,8 @@
 
 ## What will change
 
+**Follow-on architecture proposal:** [revision 4 funnel comparison](crm-meta-funnel-revision-4.md) compares A/B/C and proposes a five-event D1 extension for explicit owner approval. It is not approved or implemented and does not supersede revision 3’s binding scope or H3/H4 gates.
+
 After separate implementation review and H3/H4 approval, eligible future Qualified and Converted CRM milestones will be sent automatically to Meta. This plan changes documentation only. Current main is not provider-compatible: Meta requires two CRM source constants that both the application and database currently exclude. No activation is authorized.
 
 ## What staff/users will be able to do

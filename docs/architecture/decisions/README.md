@@ -9,3 +9,5 @@ Read [current state](../../ai/CURRENT_STATE.md) before interpreting implementati
 - [ADR-004: Meta lifecycle feedback consumes CRM facts](ADR-004-meta-lifecycle-feedback.md) — APPROVED / IMPLEMENTED DORMANT, plan revision 2; D1–D7 Option A owner-approved on 2026-09-29. PR #34 and migrations 098–100 completed Production verification on 2026-09-30 with the lifecycle cron inactive and all activation state empty. Live activation remains pending H3/H4 provider-contract, form, entitlement, credential and prospective activation prerequisites.
 
 Change significant decisions here and synchronize the relevant [context documents](../../../AGENTS.md). Never turn an approved future design into a claim about deployed permissions.
+
+ADR-004 also contains a **proposed, unapproved revision 4** for a five-event commercial funnel and prospective producer ownership; see the [comparison and implementation contract](../plans/crm-meta-funnel-revision-4.md). Existing approved D1–D7 and dormant status remain unchanged.
