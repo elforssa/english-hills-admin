@@ -21,14 +21,20 @@ assert.equal(evaluateLifecycleEvidence({ ...candidate, answers: candidate.answer
 
 const liveMapping = {
   mode: 'live', api_version: 'v42.0', dataset_id: '123456', secret_ref: 'CRM_META_LIFECYCLE_TOKEN_TEST',
-  events: { qualified: 'VerifiedQualifiedFixture', converted: 'VerifiedConvertedFixture' }, action_source: 'system_generated',
-  accepted_response_field: 'events_received', accepted_response_count: 1,
+  events: { intake: 'Intake', not_qualified: 'Not qualified', lost: 'Lost', qualified: 'Qualified', converted: 'Converted' }, action_source: 'system_generated',
+  accepted_response_field: 'events_received', accepted_response_count: 1, lifecycle_model: 'r4_stage_entry', uncertainty_policy: 'no_uncertain_replay',
+  required_constants: { event_source: 'crm', lead_event_source: 'English Hills CRM' }, maximum_event_age_seconds: 604800,
 };
-const delivery = { mapping: liveMapping, matching: { lead_id: '987654', adult_contact: true }, event_kind: 'qualified', event_id: 'eh:fixture:destination', event_time: 1700000000 };
+const eventTime = Math.floor(Date.now() / 1000) - 10;
+const delivery = { mapping: liveMapping, matching: { lead_id: '98765432109876543210987654321012', adult_contact: true }, event_kind: 'qualified', event_id: 'eh:fixture:destination', event_time: eventTime, source_generated_time: eventTime - 1 };
 const payload = prepareLifecyclePayload(delivery);
-assert.deepEqual(payload.data[0].user_data, { lead_id: '987654' });
+assert.deepEqual(payload.data[0].user_data, { lead_id: '98765432109876543210987654321012' });
+assert.deepEqual(payload.data[0].custom_data, { event_source: 'crm', lead_event_source: 'English Hills CRM' });
 assert(!JSON.stringify(payload).match(/value|currency|email|phone|learner|child/i));
 assert.throws(() => prepareLifecyclePayload({ ...delivery, matching: { adult_contact: true, email: 'adult@example.invalid' } }), /invalid_identity/);
+assert.throws(() => prepareLifecyclePayload({ ...delivery, mapping: { ...liveMapping, action_source: 'phone_call' } }), /configuration_missing/);
+assert.throws(() => prepareLifecyclePayload({ ...delivery, mapping: { ...liveMapping, maximum_event_age_seconds: 604801 } }), /configuration_missing/);
+assert.throws(() => prepareLifecyclePayload({ ...delivery, mapping: { ...liveMapping, events: { ...liveMapping.events, qualified: 'QualifiedAlias' } } }), /configuration_missing/);
 
 let request;
 const accepted = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', fetchImpl: async (url, options) => {
@@ -40,10 +46,13 @@ assert.equal(request.options.redirect, 'error');
 assert.equal(request.options.cache, 'no-store');
 assert.equal(request.options.headers.Authorization, 'Bearer fixture-secret');
 assert.deepEqual(accepted, { http_status: 200, outcome: 'sent', request_id: 'safe_trace' });
-for (const [status, body, outcome, code] of [[429, {}, 'retry', 'rate_limit'], [401, {}, 'blocked', 'provider_auth'], [503, {}, 'retry', 'provider_unavailable'], [400, { error: { code: 999 } }, 'dead', 'validation']]) {
+for (const [status, body, outcome, code] of [[429, {}, 'unknown', 'rate_limit'], [401, {}, 'blocked', 'provider_auth'], [503, {}, 'unknown', 'provider_unavailable'], [400, { error: { code: 999 } }, 'dead', 'validation']]) {
   const result = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', fetchImpl: async () => new Response(JSON.stringify(body), { status }) });
   assert.equal(result.outcome, outcome); assert.equal(result.error_code, code);
 }
+const contradictorySuccess = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret',
+  fetchImpl: async () => new Response(JSON.stringify({ events_received: 1, error: { code: 190, message: 'contradictory fixture' } }), { status: 200 }) });
+assert.deepEqual(contradictorySuccess, { http_status: 200, outcome: 'unknown', error_code: 'malformed_response' });
 
 const evidenceCalls = [];
 const evidenceResult = await processLifecycleEvidence({ rpc: async (name, args) => {
@@ -72,7 +81,7 @@ const liveResults = await processLifecycleDeliveries({
     if (name === 'crm_claim_external_deliveries') return claimCount++ === 0 ? [{ id: 'delivery-1', lease_token: 'lease-1' }] : [];
     if (name === 'crm_get_external_delivery') return delivery;
     if (name === 'crm_prepare_external_delivery') {
-      assert.deepEqual(args.p_payload.data[0].user_data, { lead_id: '987654' });
+      assert.deepEqual(args.p_payload.data[0].user_data, { lead_id: '98765432109876543210987654321012' });
       return 'a'.repeat(64);
     }
     if (name === 'crm_begin_external_attempt') return 1;
@@ -84,6 +93,39 @@ assert.deepEqual(liveResults, [{ status: 'sent' }]);
 assert.equal(deliveryCalls.filter(([name]) => name === 'crm_claim_external_deliveries').length, 1);
 assert.deepEqual(deliveryCalls[0][1], { p_limit: 1, p_allow_live: true });
 assert.equal(startChecks, 2, 'deadline gate is checked before every possible claim');
+
+let uncertainClaims = 0; let uncertainHttpCalls = 0; let uncertainFinishCalls = 0;
+const uncertainRpc = async (name, args) => {
+  if (name === 'crm_claim_external_deliveries') return uncertainClaims++ === 0 ? [{ id: 'uncertain-delivery', lease_token: 'uncertain-lease' }] : [];
+  if (name === 'crm_get_external_delivery') return delivery;
+  if (name === 'crm_prepare_external_delivery') return 'b'.repeat(64);
+  if (name === 'crm_begin_external_attempt') return 1;
+  if (name === 'crm_finish_external_attempt') { uncertainFinishCalls += 1; assert.equal(args.p_result.outcome, 'unknown'); return null; }
+  throw new Error(name);
+};
+const uncertainOptions = { rpc: uncertainRpc, env: { CRM_META_LIFECYCLE_LIVE_ENABLED: 'true', CRM_META_LIFECYCLE_TOKEN_TEST: 'fixture-secret' }, liveGate: true,
+  fetchImpl: async () => { uncertainHttpCalls += 1; throw new Error('socket closed after possible dispatch'); } };
+assert.deepEqual(await processLifecycleDeliveries(uncertainOptions), [{ status: 'unknown' }]);
+assert.deepEqual(await processLifecycleDeliveries(uncertainOptions), []);
+assert.equal(uncertainHttpCalls, 1, 'a potentially dispatched event identity is called exactly once');
+assert.equal(uncertainFinishCalls, 1);
+
+let finalizeLossClaims = 0; let finalizeLossHttpCalls = 0;
+const finalizeLossOptions = {
+  env: { CRM_META_LIFECYCLE_LIVE_ENABLED: 'true', CRM_META_LIFECYCLE_TOKEN_TEST: 'fixture-secret' }, liveGate: true,
+  fetchImpl: async () => { finalizeLossHttpCalls += 1; return Response.json({ events_received: 1 }); },
+  rpc: async (name) => {
+    if (name === 'crm_claim_external_deliveries') return finalizeLossClaims++ === 0 ? [{ id: 'finalize-loss', lease_token: 'finalize-loss-lease' }] : [];
+    if (name === 'crm_get_external_delivery') return delivery;
+    if (name === 'crm_prepare_external_delivery') return 'c'.repeat(64);
+    if (name === 'crm_begin_external_attempt') return 1;
+    if (name === 'crm_finish_external_attempt') throw new Error('finalize acknowledgement lost after provider success');
+    throw new Error(name);
+  },
+};
+assert.deepEqual(await processLifecycleDeliveries(finalizeLossOptions), [{ status: 'unknown' }]);
+assert.deepEqual(await processLifecycleDeliveries(finalizeLossOptions), []);
+assert.equal(finalizeLossHttpCalls, 1, 'provider success followed by finalize loss is not sent again');
 
 const schedulerToken = 'lifecycle-scheduler-fixture';
 const schedulerRequest = authorization => new Request('https://admin.example/api/cron/crm-lifecycle', { headers: authorization ? { authorization } : {} });
@@ -110,6 +152,9 @@ for (const role of ['admin','receptionist','teacher','parent','student']) assert
 const migration98 = readFileSync(new URL('../supabase/migrations/098_crm_lifecycle_evidence_and_delivery.sql', import.meta.url), 'utf8');
 const migration99 = readFileSync(new URL('../supabase/migrations/099_crm_lifecycle_delivery_runtime.sql', import.meta.url), 'utf8');
 const migration100 = readFileSync(new URL('../supabase/migrations/100_crm_lifecycle_scheduler.sql', import.meta.url), 'utf8');
+const migration101 = readFileSync(new URL('../supabase/migrations/101_crm_meta_funnel_r4_schema_controls.sql', import.meta.url), 'utf8');
+const migration102 = readFileSync(new URL('../supabase/migrations/102_crm_meta_funnel_r4_runtime_safety.sql', import.meta.url), 'utf8');
+const lifecycleUi = readFileSync(new URL('../src/components/crm/LifecycleOperations.jsx', import.meta.url), 'utf8');
 assert(!/insert\s+into\s+public\.crm_lifecycle_provider_contracts/i.test(migration98));
 assert.match(migration99, /deduplication_window_elapsed/);
 assert.match(migration99, /diagnostics_erased_at=clock_timestamp\(\)/);
@@ -119,5 +164,13 @@ assert.match(migration100, /cron\.alter_job\(lifecycle_job, active => false\)/);
 assert.match(migration100, /crm_lifecycle_scheduler_(url|token)/);
 assert.match(migration100, /https:\/\/admin\.english-hills\.com\/api\/cron\/crm-lifecycle/);
 assert(!migration100.includes('crm_intake_scheduler_token'));
+assert(!/insert\s+into\s+public\.crm_lifecycle_provider_contracts/i.test(migration101 + migration102));
+assert.match(migration101, /crm_lifecycle_producer_boundaries/);
+assert.match(migration101, /crm_lifecycle_producer_ownership/);
+assert.match(migration102, /Potentially dispatched delivery cannot be replayed/);
+assert.match(migration102, /lease_expired_after_dispatch/);
+assert.match(migration102, /unattempted_predecessor/);
+assert.match(migration102, /English Hills CRM/);
+for (const label of ['Réception','Non qualifié','Perdu','Qualifié','Converti']) assert(lifecycleUi.includes(label));
 
 console.log('PASS Batch 2 explicit evidence, lead-ID-only payload, live transport classification, independent scheduler auth, route gate and fail-closed migrations');

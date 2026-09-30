@@ -6,11 +6,11 @@ begin;
 do $$
 declare delivery_count integer;
 begin
-  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 100 then
-    raise exception 'Expected migration 100 after Batch 2 upgrade';
+  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 102 then
+    raise exception 'Expected migration 102 after CRM Meta funnel revision-4 upgrade';
   end if;
-  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100')) <> 3 then
-    raise exception 'Migrations 098, 099 and 100 were not all recorded';
+  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100','101','102')) <> 5 then
+    raise exception 'Migrations 098 through 102 were not all recorded';
   end if;
   if to_regclass('public.crm_lifecycle_eligibility_evidence') is null then
     raise exception 'Batch 2 lifecycle evidence table is missing';
@@ -25,6 +25,8 @@ begin
     and d.status='suppressed'
     and d.last_error_code='no_destination'
     and d.delivery_mode='mock_legacy'
+    and d.lifecycle_model='legacy_first_attainment'
+    and d.attempt_boundary_state='not_started'
     and d.provider_contract_id is null
     and d.activation_epoch_id is null
     and d.eligibility_evidence_id is null
@@ -37,6 +39,10 @@ begin
 
   if exists(select 1 from public.crm_lifecycle_provider_contracts) then
     raise exception 'Upgrade unexpectedly seeded a provider contract';
+  end if;
+  if exists(select 1 from public.crm_lifecycle_producer_boundaries)
+     or exists(select 1 from public.crm_lifecycle_producer_ownership) then
+    raise exception 'Upgrade unexpectedly created producer eligibility or ownership';
   end if;
   if (select active from cron.job where jobname='crm-lifecycle-primary') is distinct from false then
     raise exception 'Lifecycle scheduler must remain installed but inactive';
