@@ -31,3 +31,7 @@ Immutable form mappings decide whether learner identity is required or optional.
 Enrollment and group session/level must agree. Confirmed enrollment without a group is valid and awaits placement; assigning a group yields Validated. Removing a group preserves confirmed enrollment and historical attendance. See [enrollment workflow](../../scripts/README-enrollment-workflow.md).
 
 First acquisition touch is immutable; later submissions update latest touch without rewriting attribution. Manual prospects and website inquiries must not be represented as fake Meta acquisitions.
+
+## Approved Meta lifecycle uncertainty rule — not yet implemented
+
+On 2026-09-30 the owner approved no uncertain replay: unknown/ambiguous outcomes after a request may have crossed the network boundary must be held for review, without automatic resend unless authoritative provider evidence later establishes replay safety. Lease recovery and director retry cannot bypass the hold. Known safe/retryable pre-send failures retain reviewed bounded retry rules; never invent a numeric deduplication window. [ADR-004](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md#approved-no-uncertain-replay-policy--2026-09-30-activation-revision-3) and [activation plan revision 3](../architecture/plans/crm-batch2-meta-lifecycle-activation.md) record the approval and future application/SQL consequences. D1–D7 remain unchanged. The correction is unimplemented and H3/H4 remain blocked.
