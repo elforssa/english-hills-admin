@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { evaluateLifecycleEvidence, processLifecycleEvidence } from '../src/lib/crm/lifecycle/evidence.mjs';
-import { prepareLifecyclePayload, postLifecycleLive } from '../src/lib/crm/lifecycle/adapter.mjs';
+import { prepareLifecyclePayload, postLifecycleFixture, postLifecycleLive } from '../src/lib/crm/lifecycle/adapter.mjs';
 import { processLifecycleDeliveries } from '../src/lib/crm/lifecycle/worker.mjs';
 import { runScheduledLifecycle } from '../src/lib/crm/lifecycle/scheduler.mjs';
 import { isDirectorLifecyclePath, loginDestination } from '../src/lib/roleAccess.mjs';
@@ -46,13 +46,46 @@ assert.equal(request.options.redirect, 'error');
 assert.equal(request.options.cache, 'no-store');
 assert.equal(request.options.headers.Authorization, 'Bearer fixture-secret');
 assert.deepEqual(accepted, { http_status: 200, outcome: 'sent', request_id: 'safe_trace' });
-for (const [status, body, outcome, code] of [[429, {}, 'unknown', 'rate_limit'], [401, {}, 'blocked', 'provider_auth'], [503, {}, 'unknown', 'provider_unavailable'], [400, { error: { code: 999 } }, 'dead', 'validation']]) {
+for (const [status, body, outcome, code] of [
+  [429, {}, 'unknown', 'rate_limit'],
+  [401, {}, 'blocked', 'provider_auth'],
+  [503, {}, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 3 } }, 'blocked', 'provider_auth'],
+  [400, { error: { code: 10 } }, 'blocked', 'provider_auth'],
+  [400, { error: { code: 190 } }, 'blocked', 'provider_auth'],
+  [400, { error: { code: 368 } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 999 } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 999, is_transient: true } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 100 } }, 'dead', 'validation'],
+  [400, { error: { code: 100, error_subcode: 33 } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 2 } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 4 } }, 'unknown', 'rate_limit'],
+  [400, { error: { code: 32 } }, 'unknown', 'provider_unavailable'],
+  [400, { error: { code: 613 } }, 'unknown', 'provider_unavailable'],
+]) {
   const result = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', fetchImpl: async () => new Response(JSON.stringify(body), { status }) });
   assert.equal(result.outcome, outcome); assert.equal(result.error_code, code);
+}
+for (const body of ['not-json', '']) {
+  const result = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', fetchImpl: async () => new Response(body, { status: 400 }) });
+  assert.deepEqual(result, { http_status: 400, outcome: 'unknown', error_code: 'malformed_response' });
 }
 const contradictorySuccess = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret',
   fetchImpl: async () => new Response(JSON.stringify({ events_received: 1, error: { code: 190, message: 'contradictory fixture' } }), { status: 200 }) });
 assert.deepEqual(contradictorySuccess, { http_status: 200, outcome: 'unknown', error_code: 'malformed_response' });
+
+const mockMapping = { ...liveMapping, mode: 'mock' };
+for (const graphCode of [32, 613]) {
+  const result = await postLifecycleFixture({ mapping: mockMapping, payload, token: 'fixture-secret',
+    mockFetch: async () => new Response(JSON.stringify({ error: { code: graphCode } }), { status: 400 }) });
+  assert.deepEqual(result, { http_status: 400, outcome: 'retry', error_code: 'rate_limit' });
+}
+const mockTransient = await postLifecycleFixture({ mapping: mockMapping, payload, token: 'fixture-secret',
+  mockFetch: async () => new Response(JSON.stringify({ error: { code: 999, is_transient: true } }), { status: 400 }) });
+assert.deepEqual(mockTransient, { http_status: 400, outcome: 'retry', error_code: 'provider_unavailable' });
+const mockUnknown = await postLifecycleFixture({ mapping: mockMapping, payload, token: 'fixture-secret',
+  mockFetch: async () => new Response(JSON.stringify({ error: { code: 999 } }), { status: 400 }) });
+assert.deepEqual(mockUnknown, { http_status: 400, outcome: 'dead', error_code: 'validation' });
 
 const evidenceCalls = [];
 const evidenceResult = await processLifecycleEvidence({ rpc: async (name, args) => {
@@ -167,7 +200,8 @@ assert(!migration100.includes('crm_intake_scheduler_token'));
 assert(!/insert\s+into\s+public\.crm_lifecycle_provider_contracts/i.test(migration101 + migration102));
 assert.match(migration101, /crm_lifecycle_producer_boundaries/);
 assert.match(migration101, /crm_lifecycle_producer_ownership/);
-assert.match(migration102, /Potentially dispatched delivery cannot be replayed/);
+assert.match(migration102, /lifecycle_retry_hold/);
+assert.match(migration102, /replay_forbidden/);
 assert.match(migration102, /lease_expired_after_dispatch/);
 assert.match(migration102, /unattempted_predecessor/);
 assert.match(migration102, /English Hills CRM/);

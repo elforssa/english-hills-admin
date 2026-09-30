@@ -292,6 +292,11 @@ begin
    evidence_repair:=(repair_route->>'reason') is null and (repair_route->>'evidence_id')::uuid is not distinct from new.eligibility_evidence_id;
  end if;
  if evidence_repair then return new;end if;
+ if old.lifecycle_model='r4_stage_entry' and old.last_error_code='contradictory_chronology'
+  and (new.last_error_code is distinct from 'contradictory_chronology' or new.status not in ('blocked','suppressed')
+   or new.next_attempt_at is not null) then
+  raise exception 'Contradictory chronology is irreversible' using errcode='42501';
+ end if;
  boundary_advance := (old.attempt_boundary_state='not_started' and new.attempt_boundary_state='started' and new.attempt_boundary_at is not null)
   or (old.attempt_boundary_state='started' and new.attempt_boundary_state in ('confirmed','unknown') and new.attempt_boundary_at=old.attempt_boundary_at)
   or (old.attempt_boundary_state=new.attempt_boundary_state and new.attempt_boundary_at is not distinct from old.attempt_boundary_at);
@@ -389,7 +394,7 @@ begin
   elsif exists(select 1 from public.crm_external_deliveries later join public.crm_activities la on la.id=later.activity_id
     where later.lead_id=candidate.lead_id and later.lifecycle_model='r4_stage_entry' and later.attempt_boundary_state<>'not_started'
       and row(later.event_time,la.created_at,later.activity_id)>row(candidate.event_time,candidate.activity_created_at,candidate.activity_id)) then
-   state:='blocked';reason:='contradictory_chronology';end if;
+   state:='suppressed';reason:='contradictory_chronology';end if;
   new_delivery:=null;
   insert into public.crm_external_deliveries(activity_id,lead_id,connection_id,event_kind,event_time,provider_event_id,mapping_version,mapping_snapshot,
    attribution_submission_id,matching_submission_id,status,next_attempt_at,last_error_code,max_attempts,delivery_mode,provider_contract_id,activation_epoch_id,
@@ -439,6 +444,7 @@ language plpgsql set search_path=pg_catalog,pg_temp as $$
 declare c public.crm_integration_connections;a public.crm_submission_attribution;e public.crm_lifecycle_eligibility_evidence;epoch public.crm_lifecycle_activation_epochs;
  o public.crm_lifecycle_producer_ownership;b public.crm_lifecycle_producer_boundaries;p public.crm_lifecycle_eligibility_policies;r jsonb;ordering text;
 begin
+ if d.lifecycle_model='r4_stage_entry' and d.last_error_code='contradictory_chronology' then return 'contradictory_chronology';end if;
  if d.payload_erased_at is not null then return 'payload_erased';end if;
  if d.lifecycle_model='r4_stage_entry' and d.attempt_boundary_state in ('unknown','confirmed') then return 'replay_forbidden';end if;
  select * into c from public.crm_integration_connections where id=d.connection_id;
@@ -487,16 +493,51 @@ begin
  return null;
 end $$;
 
+create function crm_security.lifecycle_retry_hold(d public.crm_external_deliveries) returns text
+language plpgsql set search_path=pg_catalog,pg_temp as $$
+declare cfg jsonb;hold text;
+begin
+ -- Durable chronology and dispatch boundaries are evaluated before mutable
+ -- configuration. Neither a director nor a later settings repair can erase
+ -- these facts or reinterpret them as a fresh pre-dispatch intention.
+ if d.lifecycle_model='r4_stage_entry' and d.last_error_code='contradictory_chronology' then return 'contradictory_chronology';end if;
+ if d.lifecycle_model='r4_stage_entry' and (d.attempt_boundary_state<>'not_started' or d.attempt_count<>0
+  or exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id)) then return 'replay_forbidden';end if;
+ if d.payload_erased_at is not null then return 'payload_erased';end if;
+ if d.payload is null then
+  select lifecycle_settings into cfg from public.crm_integration_connections where id=d.connection_id;
+  if d.delivery_mode='live' and ((cfg->>'activation_epoch_id')::uuid is distinct from d.activation_epoch_id
+   or (cfg->>'contract_id')::uuid is distinct from d.provider_contract_id
+   or cfg->>'lifecycle_model' is distinct from d.lifecycle_model) then return 'frozen_live_contract_required';end if;
+  d.mapping_snapshot:=cfg;d.mapping_version:=coalesce((cfg->>'version')::int,0);d.max_attempts:=coalesce((cfg->>'max_attempts')::int,5);
+ end if;
+ hold:=crm_security.lifecycle_hold(d);if hold is not null then return hold;end if;
+ if d.status not in ('blocked','retry','unknown') then return 'status_not_retryable';end if;
+ if d.attempt_count>=d.max_attempts then return 'attempts_exhausted';end if;
+ if d.next_attempt_at is not null and d.next_attempt_at>now() then return 'backoff_active';end if;
+ return null;
+end $$;
+
 create or replace function crm_security.claim_lifecycle_deliveries(p_limit integer,p_live boolean) returns jsonb
 language plpgsql set search_path=pg_catalog,pg_temp as $$
-declare d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;attempt_started boolean;
+declare candidate record;d public.crm_external_deliveries;reason text;ids uuid[]:=array[]::uuid[];terminal_reason boolean;attempt_started boolean;
 begin
- for d in select * from public.crm_external_deliveries where (delivery_mode='live')=p_live and payload_erased_at is null
+ for candidate in select id,lead_id from public.crm_external_deliveries where (delivery_mode='live')=p_live and payload_erased_at is null
   and (((status in ('pending','retry') or (status='blocked' and lifecycle_model='r4_stage_entry'
       and last_error_code in ('unattempted_predecessor','active_predecessor'))
       or (status='unknown' and lifecycle_model='legacy_first_attainment')) and next_attempt_at<=now())
     or (status='sending' and lease_until<=now()))
-  order by event_time,created_at,id limit least(100,greatest(20,p_limit*20)) for update skip locked loop
+  order by event_time,created_at,id limit least(100,greatest(20,p_limit*20)) loop
+  -- Begin takes the same lead advisory lock before the delivery/ownership rows.
+  -- A competing same-lead worker is skipped instead of creating an inverted
+  -- row-lock/advisory-lock wait cycle.
+  if not pg_try_advisory_xact_lock(hashtextextended('crm:lifecycle:lead:'||candidate.lead_id,0)) then continue;end if;
+  select * into d from public.crm_external_deliveries where id=candidate.id and (delivery_mode='live')=p_live and payload_erased_at is null
+   and (((status in ('pending','retry') or (status='blocked' and lifecycle_model='r4_stage_entry'
+       and last_error_code in ('unattempted_predecessor','active_predecessor'))
+       or (status='unknown' and lifecycle_model='legacy_first_attainment')) and next_attempt_at<=now())
+     or (status='sending' and lease_until<=now())) for update skip locked;
+  if not found then continue;end if;
   if d.status='sending' then
    select exists(select 1 from public.crm_external_delivery_attempts x where x.delivery_id=d.id and x.lease_token=d.lease_token) into attempt_started;
    if not attempt_started then
@@ -628,18 +669,18 @@ begin
   -- A provider response that may have been accepted can never be reduced to a
   -- replayable or confirmed failure. Normalize contradictory/uncertain result
   -- envelopes at the durable boundary even if a caller bypasses the adapter.
-  if coalesce((p_result->>'http_status')::int,0) between 200 and 299 and state<>'sent' then
-   state:='unknown';code:='malformed_response';
-  elsif (p_result->>'http_status')::int=429 then
-   state:='unknown';code:='rate_limit';
-  elsif (p_result->>'http_status')::int>=500 then
-   state:='unknown';code:='provider_unavailable';
-  elsif code in ('rate_limit','provider_unavailable','timeout','network','malformed_response') then
-   state:='unknown';
+  if state='sent' then boundary_state:='confirmed';
+  elsif state='blocked' and code='provider_auth' and (p_result->>'http_status')::int in (400,401,403) then boundary_state:='confirmed';
+  elsif state='dead' and code='validation' and (p_result->>'http_status')::int=400 then boundary_state:='confirmed';
+  else
+   code:=case
+    when coalesce((p_result->>'http_status')::int,0) between 200 and 299 then 'malformed_response'
+    when (p_result->>'http_status')::int=429 then 'rate_limit'
+    when (p_result->>'http_status')::int>=500 then 'provider_unavailable'
+    when code in ('rate_limit','provider_unavailable','timeout','network','malformed_response') then code
+    else 'malformed_response' end;
+   state:='unknown';boundary_state:='unknown';
   end if;
-  if state in ('retry','unknown') then state:='unknown';code:=coalesce(code,'ambiguous_dispatch');boundary_state:='unknown';
-  elsif state='sent' then boundary_state:='confirmed';
-  else boundary_state:='confirmed';end if;
   retry_at:=null;
  else
   boundary_state:=d.attempt_boundary_state;
@@ -661,17 +702,11 @@ language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
 declare d public.crm_external_deliveries;cfg jsonb;hold text;
 begin
  perform crm_security.require_reader(true);select * into d from public.crm_external_deliveries where id=p_delivery for update;
- if not found or d.status not in ('blocked','retry','unknown') or d.attempt_count>=d.max_attempts or d.payload_erased_at is not null
-  or (d.next_attempt_at is not null and d.next_attempt_at>now()) then raise exception 'Delivery not eligible for retry' using errcode='22023';end if;
- if d.lifecycle_model='r4_stage_entry' and (d.attempt_boundary_state<>'not_started' or d.attempt_count<>0
-  or exists(select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id)) then
-  raise exception 'Potentially dispatched delivery cannot be replayed' using errcode='22023';end if;
+ if not found then raise exception 'Delivery not eligible for retry' using errcode='22023';end if;
+ hold:=crm_security.lifecycle_retry_hold(d);if hold is not null then raise exception 'Delivery still held: %',hold using errcode='22023';end if;
  if d.payload is null then select lifecycle_settings into cfg from public.crm_integration_connections where id=d.connection_id;
-  if d.delivery_mode='live' and ((cfg->>'activation_epoch_id')::uuid is distinct from d.activation_epoch_id or (cfg->>'contract_id')::uuid is distinct from d.provider_contract_id
-   or cfg->>'lifecycle_model' is distinct from d.lifecycle_model) then raise exception 'Frozen live contract required' using errcode='22023';end if;
   d.mapping_snapshot:=cfg;d.mapping_version:=coalesce((cfg->>'version')::int,0);d.max_attempts:=coalesce((cfg->>'max_attempts')::int,5);
  end if;
- hold:=crm_security.lifecycle_hold(d);if hold is not null then raise exception 'Delivery still held' using errcode='22023';end if;
  insert into public.crm_lifecycle_retry_audit(delivery_id,requested_by,reason_code,prior_status) values(d.id,auth.uid(),'configuration_repaired',d.status);
  update public.crm_external_deliveries set status='pending',next_attempt_at=now(),last_error_code=null,updated_at=now(),mapping_snapshot=d.mapping_snapshot,mapping_version=d.mapping_version,max_attempts=d.max_attempts where id=d.id;
 end $$;
@@ -694,8 +729,7 @@ begin
   pc.contract_key,pc.revision as contract_revision,ep.started_at as activation_started_at,
   case when d.lifecycle_model='r4_stage_entry' then o.producer else null end producer_owner,
   case when d.lifecycle_model='r4_stage_entry' then crm_security.lifecycle_predecessor_hold(d) end ordering_hold,
-  (d.status in ('blocked','retry','unknown') and d.payload_erased_at is null and d.attempt_boundary_state='not_started' and d.attempt_count=0
-    and not exists(select 1 from public.crm_external_delivery_attempts ax where ax.delivery_id=d.id)) retry_eligible,
+  retry.retry_hold,(retry.retry_hold is null) retry_eligible,
   (select jsonb_agg(jsonb_build_object('number',a.attempt_number,'started_at',a.started_at,'finished_at',a.finished_at,'outcome',a.outcome,
     'http_status',a.http_status,'error_code',a.error_code,'erased_at',a.diagnostics_erased_at) order by a.attempt_number)
    from public.crm_external_delivery_attempts a where a.delivery_id=d.id) attempts
@@ -703,6 +737,7 @@ begin
   left join public.crm_lifecycle_provider_contracts pc on pc.id=d.provider_contract_id
   left join public.crm_lifecycle_activation_epochs ep on ep.id=d.activation_epoch_id
   left join public.crm_lifecycle_producer_ownership o on o.id=d.producer_ownership_id
+  left join lateral (select crm_security.lifecycle_retry_hold(d) retry_hold) retry on true
   order by d.created_at desc,d.id limit p_limit offset p_offset)x;
  return result;
 end $$;

@@ -11,6 +11,9 @@ update public.profiles set role=case right(id::text,1) when '1' then 'director' 
 create function pg_temp.actor(i integer) returns void language plpgsql as $$ begin
  perform set_config('request.jwt.claim.sub',case when i=0 then '' else '8c000000-0000-0000-0000-'||lpad(i::text,12,'0') end,true);
  perform set_config('request.jwt.claim.role',case when i=0 then 'service_role' else 'authenticated' end,true);end $$;
+create function pg_temp.retry_allowed(delivery uuid) returns boolean language plpgsql as $$ begin
+ perform public.crm_retry_external_delivery(delivery);return true;
+exception when sqlstate '22023' then return false;end $$;
 select pg_temp.actor(1);
 select public.crm_create_followup_policy(gen_random_uuid(),'{"weekly_hours":{"1":[["10:00","20:00"]],"2":[["10:00","20:00"]],"3":[["10:00","20:00"]],"4":[["10:00","20:00"]],"5":[["10:00","20:00"]],"6":[["10:00","20:00"]],"7":[]}}');
 create temp table fx(k text primary key,id uuid);
@@ -84,16 +87,52 @@ create function pg_temp.payload(d public.crm_external_deliveries) returns jsonb 
  'event_name',d.mapping_snapshot->'events'->>d.event_kind,'event_id',d.provider_event_id,'event_time',floor(extract(epoch from d.event_time))::bigint,
  'action_source','system_generated','user_data',jsonb_build_object('lead_id',(select source_external_id from public.crm_lifecycle_eligibility_evidence where id=d.eligibility_evidence_id)),
  'custom_data',jsonb_build_object('event_source','crm','lead_event_source','English Hills CRM')))) $$;
+create function pg_temp.finish_case(external_id text,result jsonb) returns uuid language plpgsql as $$
+declare lead uuid;delivery uuid;lease uuid;begin
+ lead:=pg_temp.intake(external_id);perform public.crm_reconcile_external_deliveries(100);
+ select id into strict delivery from public.crm_external_deliveries where lead_id=lead and event_kind='intake';
+ update public.crm_external_deliveries set next_attempt_at=now()+interval '1 day'
+  where id<>delivery and status in ('pending','retry','blocked') and attempt_boundary_state='not_started';
+ select x.lease_token into strict lease from jsonb_to_recordset(crm_security.claim_lifecycle_deliveries(100,true)) x(id uuid,lease_token uuid)
+  where x.id=delivery;
+ perform public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.payload(d))
+  from public.crm_external_deliveries d where d.id=delivery and d.lease_token=lease;
+ perform public.crm_begin_external_attempt(delivery,lease);
+ perform public.crm_finish_external_attempt(delivery,lease,result);
+ return delivery;
+end $$;
 
 insert into fx values('history',pg_temp.intake('882010'));
+create temp table history_order(activity_id uuid primary key,ordinal integer not null);
+select pg_temp.actor(1);
+select pg_temp.act('close_not_qualified',(select id from fx where k='history'),jsonb_build_object('reason','outside_scope'));
+insert into history_order select id,1 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_not_qualified';
+select pg_temp.act('reopen_lead',(select id from fx where k='history'),jsonb_build_object('reason','Synthetic renewed inquiry','next_task',jsonb_build_object('task_type','callback','due_at',now()+interval '1 day')));
+insert into history_order select id,2 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_reopened';
+select pg_temp.qualify((select id from fx where k='history'));
+insert into history_order select id,3 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_qualified';
+select pg_temp.act('close_lost',(select id from fx where k='history'),jsonb_build_object('reason','price'));
+insert into history_order select id,4 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_lost';
+select pg_temp.act('reopen_lead',(select id from fx where k='history'),jsonb_build_object('reason','Synthetic reconsideration','next_task',jsonb_build_object('task_type','callback','due_at',now()+interval '1 day')));
+insert into history_order select id,5 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_reopened'
+ on conflict(activity_id) do nothing;
+select pg_temp.qualify((select id from fx where k='history'));
+insert into history_order select id,6 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_qualified'
+ on conflict(activity_id) do nothing;
+select public.crm_record_conversation_decision(gen_random_uuid(),jsonb_build_object('lead_id',(select id from fx where k='history'),
+ 'expected_version',(select version from public.crm_leads where id=(select id from fx where k='history')),'decision','not_qualified',
+ 'note','Synthetic conversation decision','reason','program_not_suitable'));
+insert into history_order select id,7 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_not_qualified'
+ on conflict(activity_id) do nothing;
+set local session_replication_role=replica;
 with base as (select occurred_at,created_at from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_created')
-insert into public.crm_activities(lead_id,occurred_at,created_at,actor_kind,event_type,source_key,from_status,to_status)
-select (select id from fx where k='history'),base.occurred_at,base.created_at+v.ordinal*interval '1 microsecond','system',v.event_type,'r4-history-'||v.ordinal,v.from_status,v.to_status
-from base cross join (values
- (1,'lead_not_qualified','NEW','NOT_QUALIFIED'),(2,'lead_reopened','NOT_QUALIFIED','CONTACTING'),
- (3,'lead_qualified','ENGAGED','QUALIFIED'),(4,'lead_lost','QUALIFIED','LOST'),(5,'lead_reopened','LOST','ENGAGED'),
- (6,'lead_qualified','ENGAGED','QUALIFIED'),(7,'lead_not_qualified','QUALIFIED','NOT_QUALIFIED')
-) v(ordinal,event_type,from_status,to_status);
+update public.crm_activities a set occurred_at=base.occurred_at+h.ordinal*interval '1 millisecond',
+ created_at=base.created_at+h.ordinal*interval '1 microsecond'
+from history_order h cross join base where a.id=h.activity_id;
+set local session_replication_role=origin;
+select pg_temp.ok((select count(*)=2 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='lead_not_qualified')
+ and exists(select 1 from public.crm_activities where lead_id=(select id from fx where k='history') and event_type='conversation_recorded'),
+ 'repeat closure history originates from crm_close_not_qualified and the committed conversation-decision path');
 select pg_temp.actor(0);insert into fx values('direct',pg_temp.intake('882011'));
 update public.crm_leads set status='QUALIFIED',version=version+1 where id=(select id from fx where k='direct');
 select pg_temp.actor(1);insert into fx values('direct_enrollment',pg_temp.enroll((select id from fx where k='direct')));
@@ -181,6 +220,35 @@ select public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.payload(d
 select public.crm_begin_external_attempt(d.id,d.lease_token) from public.crm_external_deliveries d join qc_converted c on c.id=d.id;
 select public.crm_finish_external_attempt(d.id,d.lease_token,'{"outcome":"sent","http_status":200}') from public.crm_external_deliveries d join qc_converted c on c.id=d.id;
 
+insert into fx values
+ ('provider_code_3',pg_temp.finish_case('882031','{"outcome":"blocked","error_code":"provider_auth","http_status":400}')),
+ ('provider_code_368',pg_temp.finish_case('882032','{"outcome":"unknown","error_code":"provider_unavailable","http_status":400}')),
+ ('provider_code_999',pg_temp.finish_case('882033','{"outcome":"unknown","error_code":"provider_unavailable","http_status":400}')),
+ ('provider_validation',pg_temp.finish_case('882034','{"outcome":"dead","error_code":"validation","http_status":400}')),
+ ('provider_auth',pg_temp.finish_case('882035','{"outcome":"blocked","error_code":"provider_auth","http_status":403}')),
+ ('provider_safe_retry',pg_temp.finish_case('882036','{"outcome":"unknown","error_code":"rate_limit","http_status":400}')),
+ ('provider_auth_no_status',pg_temp.finish_case('882037','{"outcome":"blocked","error_code":"provider_auth"}')),
+ ('provider_auth_mismatch',pg_temp.finish_case('882038','{"outcome":"blocked","error_code":"provider_auth","http_status":404}')),
+ ('provider_validation_mismatch',pg_temp.finish_case('882039','{"outcome":"dead","error_code":"validation","http_status":302}'));
+select pg_temp.ok((select bool_and(d.status='unknown' and d.attempt_boundary_state='unknown' and d.next_attempt_at is null)
+ from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k in ('provider_code_368','provider_code_999','provider_safe_retry')),
+ 'policy-ambiguous, unknown and known-safe retry signals remain held without a confirmed ordering boundary');
+select pg_temp.ok((select bool_and(crm_security.lifecycle_retry_hold(d)='replay_forbidden')
+ from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k in ('provider_code_368','provider_code_999','provider_safe_retry')),
+ 'uncertain provider outcomes are not manually replayable');
+select pg_temp.ok((select d.status='blocked' and d.last_error_code='provider_auth' and d.attempt_boundary_state='confirmed'
+ from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k='provider_code_3')
+ and (select d.status='blocked' and d.last_error_code='provider_auth' from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k='provider_auth'),
+ 'Graph code 3 and known authentication classes are configuration-blocking outcomes');
+select pg_temp.ok((select d.status='dead' and d.last_error_code='validation' and d.attempt_boundary_state='confirmed'
+ from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k='provider_validation'),
+ 'only the focused known validation result becomes a confirmed terminal rejection');
+select pg_temp.ok((select bool_and(d.status='unknown' and d.last_error_code='malformed_response'
+ and d.attempt_boundary_state='unknown' and d.next_attempt_at is null)
+ from fx join public.crm_external_deliveries d on d.id=fx.id
+ where fx.k in ('provider_auth_no_status','provider_auth_mismatch','provider_validation_mismatch')),
+ 'missing or mismatched auth/validation HTTP evidence cannot become a confirmed ordering boundary');
+
 update public.crm_external_deliveries set next_attempt_at=now()+interval '1 day'
 where lifecycle_model='r4_stage_entry' and status in ('pending','retry');
 insert into fx values('revoke_lead',pg_temp.intake('882022'));
@@ -225,12 +293,83 @@ select public.crm_reconcile_external_deliveries(100);
 select pg_temp.ok((select status='suppressed' and last_error_code='contradictory_chronology' from public.crm_external_deliveries
  where lead_id=(select id from fx where k='contradictory') and event_kind='qualified'),'contradictory chronology fails closed');
 
+insert into fx values('late_discovery',pg_temp.intake('882029'));
+with base as (select occurred_at,created_at from public.crm_activities where lead_id=(select id from fx where k='late_discovery') and event_type='lead_created')
+insert into public.crm_activities(lead_id,occurred_at,created_at,actor_kind,event_type,source_key,from_status,to_status)
+select (select id from fx where k='late_discovery'),occurred_at+interval '2 seconds',created_at+interval '2 microseconds',
+ 'system','lead_qualified','r4-late-discovery-qualified','ENGAGED','QUALIFIED' from base;
+select public.crm_reconcile_external_deliveries(100);
+update public.crm_external_deliveries set next_attempt_at=now()
+ where lead_id=(select id from fx where k='late_discovery') and event_kind='intake';
+create temp table late_intake as select x.* from jsonb_to_recordset(crm_security.claim_lifecycle_deliveries(100,true)) x(id uuid,lease_token uuid)
+ join public.crm_external_deliveries d on d.id=x.id where d.lead_id=(select id from fx where k='late_discovery') and d.event_kind='intake';
+select public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.payload(d)) from public.crm_external_deliveries d join late_intake c on c.id=d.id;
+select public.crm_begin_external_attempt(d.id,d.lease_token) from public.crm_external_deliveries d join late_intake c on c.id=d.id;
+select public.crm_finish_external_attempt(d.id,d.lease_token,'{"outcome":"sent","http_status":200}') from public.crm_external_deliveries d join late_intake c on c.id=d.id;
+update public.crm_external_deliveries set next_attempt_at=now()
+ where lead_id=(select id from fx where k='late_discovery') and event_kind='qualified';
+create temp table late_qualified as select x.* from jsonb_to_recordset(crm_security.claim_lifecycle_deliveries(100,true)) x(id uuid,lease_token uuid)
+ join public.crm_external_deliveries d on d.id=x.id where d.lead_id=(select id from fx where k='late_discovery') and d.event_kind='qualified';
+select public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.payload(d)) from public.crm_external_deliveries d join late_qualified c on c.id=d.id;
+select public.crm_begin_external_attempt(d.id,d.lease_token) from public.crm_external_deliveries d join late_qualified c on c.id=d.id;
+select public.crm_finish_external_attempt(d.id,d.lease_token,'{"outcome":"sent","http_status":200}') from public.crm_external_deliveries d join late_qualified c on c.id=d.id;
+with base as (select occurred_at,created_at from public.crm_activities where lead_id=(select id from fx where k='late_discovery') and event_type='lead_created')
+insert into public.crm_activities(lead_id,occurred_at,created_at,actor_kind,event_type,source_key,from_status,to_status)
+select (select id from fx where k='late_discovery'),occurred_at+interval '1 second',created_at+interval '1 microsecond',
+ 'system','lead_lost','r4-late-discovery-earlier-lost','ENGAGED','LOST' from base;
+select public.crm_reconcile_external_deliveries(100);
+insert into fx select 'late_contradiction',id from public.crm_external_deliveries
+ where lead_id=(select id from fx where k='late_discovery') and event_kind='lost';
+select pg_temp.ok((select d.status='suppressed' and d.last_error_code='contradictory_chronology' and d.attempt_count=0
+ and d.attempt_boundary_state='not_started' and d.terminal_at is not null and not exists(
+  select 1 from public.crm_external_delivery_attempts a where a.delivery_id=d.id)
+ from fx join public.crm_external_deliveries d on d.id=fx.id where fx.k='late_contradiction'),
+ 'newly discovered earlier canonical activity is durably suppressed after a later dispatch');
+select pg_temp.actor(1);
+select pg_temp.ok(not pg_temp.retry_allowed((select id from fx where k='late_contradiction'))
+ and (select not (row_data->>'retry_eligible')::boolean and row_data->>'retry_hold'='contradictory_chronology'
+      from jsonb_array_elements(public.crm_list_external_deliveries(100,0)->'rows') row_data
+      where row_data->>'id'=(select id::text from fx where k='late_contradiction')),
+ 'director diagnostics and retry RPC both deny a chronology contradiction');
+select pg_temp.actor(0);
+update public.crm_external_deliveries set next_attempt_at=now()+interval '1 day'
+ where status in ('pending','retry','blocked') and attempt_boundary_state='not_started';
+select pg_temp.ok(not exists(select 1 from jsonb_to_recordset(crm_security.claim_lifecycle_deliveries(100,true)) x(id uuid,lease_token uuid)
+ where x.id=(select id from fx where k='late_contradiction'))
+ and not exists(select 1 from public.crm_lifecycle_retry_audit where delivery_id=(select id from fx where k='late_contradiction')),
+ 'scheduler/config repair cannot revive the contradiction or create a provider attempt');
+select pg_temp.denied(format('update public.crm_external_deliveries set status=''pending'',next_attempt_at=now(),last_error_code=null,terminal_at=null where id=%L',
+ (select id from fx where k='late_contradiction')),'42501');
+
 insert into fx values('legacy_owned',pg_temp.intake('882025'));
 insert into public.crm_lifecycle_producer_ownership(lead_id,connection_id,boundary_id,activation_epoch_id,producer)
 values((select id from fx where k='legacy_owned'),(select id from fx where k='connection'),'8c000000-0000-0000-0000-000000000012',(select id from fx where k='epoch'),'legacy');
 select public.crm_reconcile_external_deliveries(100);
 select pg_temp.ok(not exists(select 1 from public.crm_external_deliveries where lead_id=(select id from fx where k='legacy_owned')),
  'legacy-owned opportunity cannot become EH-native or create a duplicate delivery');
+
+insert into fx values('retryable',pg_temp.intake('882037'));
+select public.crm_reconcile_external_deliveries(100);
+update public.crm_external_deliveries set status='blocked',last_error_code='configuration_missing',next_attempt_at=now()
+ where lead_id=(select id from fx where k='retryable') and event_kind='intake' and attempt_boundary_state='not_started';
+select pg_temp.actor(1);
+select pg_temp.ok((select bool_and((row_data->>'retry_eligible')::boolean=(crm_security.lifecycle_retry_hold(d) is null))
+ from jsonb_array_elements(public.crm_list_external_deliveries(100,0)->'rows') row_data
+ join public.crm_external_deliveries d on d.id=(row_data->>'id')::uuid),
+ 'diagnostic retry eligibility is derived from the authoritative retry helper for every displayed row');
+select pg_temp.ok(not pg_temp.retry_allowed((select id from public.crm_external_deliveries
+ where lead_id=(select id from fx where k='paged') and event_kind='qualified'))
+ and not pg_temp.retry_allowed((select id from fx where k='provider_code_368'))
+ and not pg_temp.retry_allowed((select d.id from revoke_claim c join public.crm_external_deliveries d on d.id=c.id)),
+ 'actual retry RPC rejects ordering, uncertainty, and evidence-revocation holds shown as ineligible');
+select pg_temp.ok((select (row_data->>'retry_eligible')::boolean and row_data->>'retry_hold' is null
+ from jsonb_array_elements(public.crm_list_external_deliveries(100,0)->'rows') row_data
+ where row_data->>'id'=(select id::text from public.crm_external_deliveries
+  where lead_id=(select id from fx where k='retryable') and event_kind='intake'))
+ and pg_temp.retry_allowed((select id from public.crm_external_deliveries
+  where lead_id=(select id from fx where k='retryable') and event_kind='intake')),
+ 'diagnostics expose Retry exactly when the same RPC accepts the repaired unattempted row');
+select pg_temp.actor(0);
 
 insert into public.crm_form_mappings(id,connection_id,channel,form_key,version,form_name,field_map,effective_from,created_by)
 values('8c000000-0000-0000-0000-000000000090',(select id from fx where k='connection'),'meta_instant_form','1086266294126723',1,'Current Yearly','{}',now()+interval '1 day','8c000000-0000-0000-0000-000000000001');
@@ -258,8 +397,14 @@ select pg_temp.actor(1);
 select pg_temp.ok((select crm_security.lifecycle_route((select id from fx where k='paged'))->>'reason'='producer_boundary_invalid')
  and (select crm_security.lifecycle_hold(d)='producer_boundary_invalid' from public.crm_external_deliveries d
    where d.lead_id=(select id from fx where k='paged') and d.event_kind='intake')
+ and not pg_temp.retry_allowed((select id from public.crm_external_deliveries
+   where lead_id=(select id from fx where k='paged') and event_kind='intake'))
+ and (select not (row_data->>'retry_eligible')::boolean and row_data->>'retry_hold'='producer_boundary_invalid'
+   from jsonb_array_elements(public.crm_list_external_deliveries(100,0)->'rows') row_data
+   where row_data->>'id'=(select id::text from public.crm_external_deliveries
+    where lead_id=(select id from fx where k='paged') and event_kind='intake'))
  and (select (public.crm_lifecycle_diagnostics()->'producer_controls'->>'revoked_or_expired_boundaries')::integer>=1),
- 'expired finite producer boundary holds routing/materialized delivery and appears in diagnostics');
+ 'expired producer boundary agrees across routing, diagnostics, and the retry RPC');
 select pg_temp.actor(0);
 set local session_replication_role=replica;
 update public.crm_lifecycle_producer_boundaries b set valid_until=o.valid_until from original_boundary_validity o where b.id='8c000000-0000-0000-0000-000000000012';

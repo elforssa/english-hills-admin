@@ -56,18 +56,20 @@ async function postLifecycle({ mapping, payload, token, fetchImpl, timeoutMs = 8
     if (response.status >= 500) return { ...base, outcome: mapping.mode === 'live' ? 'unknown' : 'retry', error_code: 'provider_unavailable' };
     let body;
     try { body = JSON.parse((await boundedBody(response, 16384)).toString('utf8')); }
-    catch { return { ...base, outcome: response.ok ? 'unknown' : 'dead', error_code: response.ok ? 'malformed_response' : 'validation' }; }
+    catch { return { ...base, outcome: mapping.mode === 'live' || response.ok ? 'unknown' : 'dead', error_code: mapping.mode === 'live' || response.ok ? 'malformed_response' : 'validation' }; }
     if (mapping.mode === 'live' && response.ok && body?.error) return { ...base, outcome: 'unknown', error_code: 'malformed_response' };
-    if ([4, 17, 32, 613].includes(body?.error?.code)) return { ...base, outcome: mapping.mode === 'live' ? 'unknown' : 'retry', error_code: 'rate_limit' };
+    const rateCodes = mapping.mode === 'live' ? [4, 17, 341] : [4, 17, 32, 613];
+    if (rateCodes.includes(body?.error?.code)) return { ...base, outcome: mapping.mode === 'live' ? 'unknown' : 'retry', error_code: 'rate_limit' };
     if (body?.error) {
       const auth = mapping.mode === 'live'
-        ? [102, 190].includes(body.error.code) || body.error.code === 10 || (body.error.code >= 200 && body.error.code <= 299)
+        ? [3, 10, 102, 190].includes(body.error.code) || (body.error.code >= 200 && body.error.code <= 299)
         : [102, 190, 10, 200].includes(body.error.code);
-      const transient = body.error.is_transient || (mapping.mode === 'live' && [1, 2].includes(body.error.code));
-      return { ...base, outcome: auth ? 'blocked' : transient ? mapping.mode === 'live' ? 'unknown' : 'retry' : 'dead',
-        error_code: auth ? 'provider_auth' : transient ? 'provider_unavailable' : 'validation' };
+      const transient = mapping.mode === 'live' ? [1, 2].includes(body.error.code) : body.error.is_transient === true;
+      const validation = body.error.code === 100 && body.error.error_subcode == null;
+      return { ...base, outcome: auth ? 'blocked' : transient ? mapping.mode === 'live' ? 'unknown' : 'retry' : validation ? 'dead' : mapping.mode === 'live' ? 'unknown' : 'dead',
+        error_code: auth ? 'provider_auth' : transient || (mapping.mode === 'live' && !validation) ? 'provider_unavailable' : 'validation' };
     }
-    if (!response.ok) return { ...base, outcome: 'dead', error_code: 'validation' };
+    if (!response.ok) return { ...base, outcome: mapping.mode === 'live' ? 'unknown' : 'dead', error_code: mapping.mode === 'live' ? 'malformed_response' : 'validation' };
     const acceptedField = mapping.mode === 'live' ? mapping.accepted_response_field : 'events_received';
     const acceptedCount = mapping.mode === 'live' ? mapping.accepted_response_count : 1;
     if (!/^[a-z][a-z0-9_]{0,63}$/.test(acceptedField || '') || body?.[acceptedField] !== acceptedCount) return { ...base, outcome: 'unknown', error_code: 'malformed_response' };
