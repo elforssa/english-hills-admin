@@ -2,6 +2,8 @@
 
 ## What will change
 
+**Follow-on architecture proposal:** [revision 4 funnel comparison](crm-meta-funnel-revision-4.md) compares A/B/C and proposes a five-event D1 extension for explicit owner approval. The owner approved Option B in principle, activity-backed repeated occurrences and Qualified as initial target on 2026-09-30. Its revised chronological-attempt ordering awaits final architecture approval; nothing is implemented and H3/H4 remain blocked. The revision 3 assessments below remain historical to their two-event scope. Its first-event shutdown rule must be reconciled in the final revision-4 release manifest: an unknown receipt alone must not become a lead-wide stop for later independently eligible events; independent safety incidents still stop delivery.
+
 After separate implementation review and H3/H4 approval, eligible future Qualified and Converted CRM milestones will be sent automatically to Meta. This plan changes documentation only. Current main is not provider-compatible: Meta requires two CRM source constants that both the application and database currently exclude. No activation is authorized.
 
 ## What staff/users will be able to do
