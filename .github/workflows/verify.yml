@@ -66,6 +66,13 @@ jobs:
           supabase migration up --local
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-upgrade-current.sql
           supabase db reset --local --no-seed
+      - name: Stateful 100 to revision-4 upgrade
+        run: |
+          supabase db reset --local --version 100 --no-seed
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-100-setup.sql
+          supabase migration up --local
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-100-current.sql
+          supabase db reset --local --no-seed
       - name: Rollback-only migration regression
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
@@ -80,6 +87,7 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-phase12-e2e.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-live.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
           python3 scripts/test-crm-phase10-concurrency.py
@@ -99,3 +107,5 @@ jobs:
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
           npm run test:crm-lifecycle-browser
+      - name: CRM revision-4 isolated concurrency
+        run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py

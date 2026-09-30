@@ -1,6 +1,10 @@
 # Phase 10 — CRM lifecycle outbox (mock-only)
 
+> Revision-4 implementation note (branch only, 2026-09-30): migrations 101 `crm_meta_funnel_r4_schema_controls` and 102 `crm_meta_funnel_r4_runtime_safety` extend the existing outbox to the approved five-event prospective model. They add no provider contract or release configuration and perform no activation. The branch is not merged or deployed; the Production note below remains authoritative until separately verified after an approved release.
+
 > Batch 2 deployment note (Production verified 2026-09-30): PR #34 and migrations 098–100 deployed the approved eligibility, live-delivery, retention, scheduler and director-operations boundaries without activating outbound delivery. `crm-lifecycle-primary` is installed inactive; provider contracts, eligibility policies/evidence, open activation epochs, live deliveries and enabled lifecycle destinations are all zero. No provider credentials/configuration or form changes were made. Live activation remains blocked pending H3/H4 provider-contract, form-readiness, entitlement, credential and prospective activation approval. The Phase 10 baseline below remains historical context.
+
+> Historical-scope warning: the remainder of this runbook describes the Phase 10 and deployed Batch 2 baselines unless a revision-4 note says otherwise. On the revision-4 branch, reviewed live transport code exists but remains fail closed because no provider contract, policy, boundary, epoch, secret, scheduler activation or server gate is seeded or enabled. Statements below such as “no live send path” are historical, not claims about the branch implementation.
 
 Code readiness and live activation are separate. This phase has **no live send path**. The server endpoint only reconciles committed CRM milestones; the outbound worker requires an injected mock HTTP function. No environment variable can turn this implementation into a live sender. No real Meta destination, token, app, dataset or account was configured.
 
