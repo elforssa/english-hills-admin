@@ -10,7 +10,7 @@ Code, cumulative migrations and runtime evidence establish implementation. Histo
 
 ## Safety and execution
 
-- Never push directly to `main`. Use an isolated named feature branch (any agent/model, never `main` or `master`) and a reviewed PR; main deploys through Vercel.
+- Never push directly to `main`. Use an isolated named feature branch (any agent/model, never `main` or `master`) and a PR with review appropriate to the risk tier below; main deploys through Vercel.
 - Production Supabase, Vercel configuration and production migrations require explicit deployment approval. Never automatically run `supabase db push --linked` or destructive SQL against a linked project.
 - Develop and test with local Supabase at `http://127.0.0.1:54321`, synthetic data and external email disabled. Never use a production service-role key locally or copy real student, parent, teacher, payment or Auth data without explicit authorization.
 - Deployed migrations are immutable. Make forward migrations and test locally first; check deployment evidence before deciding a migration is editable.
@@ -33,8 +33,20 @@ Every substantial PR asks:
 
 Follow links rather than duplicate rules. Do not update docs mechanically when nothing changed.
 
-## Substantial-work lifecycle
+## Risk-based lifecycle
 
-Use separate architecture, implementation, fresh independent review and release tasks/agent instances for substantial or high-risk work: architecture → human owner approval → implementation → CI → fresh independent reviewer → implementer fixes → fresh re-review of the new SHA → human release approval → release/operator → Production verification → documentation closeout. Small low-risk maintenance does not require the full sequence.
+Record the risk tier and rationale in the task/PR. Use the highest applicable tier and reassess when scope grows; a small diff does not lower sensitive work's tier.
+
+| Tier | Scope | Required flow |
+| --- | --- | --- |
+| **1 — low risk** | Copy/text/UI polish, docs, small non-sensitive frontend changes | Implementer + normal scope-appropriate tests/CI. No mandatory independent reviewer unless scope grows into a higher tier. |
+| **2 — normal substantial** | Normal feature work, shared UI/business logic, non-sensitive schema additions | Architecture when needed; implementer + CI + fresh independent reviewer. |
+| **3 — high risk** | Auth/roles/RLS, finance, migrations affecting existing Production data/invariants, external APIs/provider delivery, schedulers/cron, secrets/credentials, conversion/enrollment integrity, Production activation | Full architecture → implementation → CI → fresh independent reviewer → release/operator flow. |
+
+For Tier 3, use separate architecture, implementation, fresh independent review and release tasks/agent instances: architecture → human owner approval → implementation → CI → fresh independent reviewer → implementer fixes → fresh re-review of the new SHA → human release approval → release/operator → Production verification → documentation closeout. Tier 2 also requires fresh independent re-review after fixes. Production mutation/activation remains Tier 3 even when the originating code or docs change was lower risk; existing explicit deployment approval requirements still apply.
+
+## Internal implementation QA
+
+Implementation agents may use internal subagents and self-review autonomously. Use two internal review/fix cycles by default, with a third as the hard maximum per task; then surface unresolved blockers, evidence and the needed decision instead of restarting or looping indefinitely. Internal review is implementation QA, not formal independent review for Tier 2 or Tier 3. Avoid duplicating release/operator checks during implementation unless needed to prove correctness; hand off existing evidence and leave deployment-state checks to release.
 
 Use the [architecture](docs/ai/templates/ARCHITECTURE_TASK.md), [implementation](docs/ai/templates/IMPLEMENTATION_TASK.md), [review](docs/ai/templates/REVIEW_TASK.md) and [rollout](docs/ai/templates/PRODUCTION_ROLLOUT.md) templates. Read the approved plan directly from the repository; the owner should not need to relay architecture between conversations. Find features in the [feature index](docs/architecture/FEATURE_INDEX.md), active contracts in [plans](docs/architecture/plans), and finished plans in [completed](docs/architecture/plans/completed). Record approval scope and evidence in the plan. Planned, implemented, merged, deployed and Production-verified are distinct states. Closeout updates evidence and links; it never retroactively rewrites historical findings.

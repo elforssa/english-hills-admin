@@ -1,6 +1,8 @@
 # Architecture task
 
-Task inputs: feature/problem, repository, current-main baseline, constraints, owner and output plan path. Architecture only; no application implementation, migrations applied, merge, deployment or Production mutation.
+Use this task when architecture is needed for Tier 2 and always for Tier 3 under the [risk-tier policy](../../../AGENTS.md#risk-based-lifecycle).
+
+Task inputs: feature/problem, risk tier/rationale, repository, current-main baseline, constraints, owner and output plan path. Architecture only; no application implementation, migrations applied, merge, deployment or Production mutation.
 
 1. Read [AGENTS](../../../AGENTS.md), [feature index](../../architecture/FEATURE_INDEX.md), relevant durable AI docs, ADRs and plans. Fetch current main, preserve unrelated work and create a dedicated architecture branch/worktree.
 2. Inspect actual code and cumulative database architecture, latest function definitions, ACLs/RLS and tests. Separate existing capability from missing capability. Record baseline SHA and evidence limits; owner-supplied deployment evidence is not your independent verification.
