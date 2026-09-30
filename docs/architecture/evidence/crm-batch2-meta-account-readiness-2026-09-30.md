@@ -1,5 +1,8 @@
 # Owner summary
 
+**Historical revision-3 evidence record.** The two-event restrictions and pending broader-scope choices below describe that assessment only and are superseded by [finally approved revision 4](../plans/crm-meta-funnel-revision-4.md) for event scope, occurrences, ordering, producer ownership and implementation. Account observations and unresolved form/provider/credential evidence remain relevant; H3/H4 remain blocked. This record is not an operative two-event implementation contract.
+
+
 ## What will change
 
 Record the initial inspection and subsequent authenticated read-only Meta evidence supplied by the repository owner. Ownership/assets and the dataset/ad-account relationship are now substantially verified; aggregate CRM events/funnel behavior are observed. The current Yearly form **does not satisfy D2** for future EH-native lifecycle feedback. The [activation plan remains revision 3](../plans/crm-batch2-meta-lifecycle-activation.md), already advanced by the approved no-uncertain-replay decision at `74a0ec3132068d8bdb16c4831c10a8f716501e18`; this update materially revises its account-readiness assessment.
