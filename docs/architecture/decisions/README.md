@@ -10,4 +10,4 @@ Read [current state](../../ai/CURRENT_STATE.md) before interpreting implementati
 
 Change significant decisions here and synchronize the relevant [context documents](../../../AGENTS.md). Never turn an approved future design into a claim about deployed permissions.
 
-ADR-004 also contains **revision 4 owner direction**: five-event Option B approved in principle, repeated occurrences and Qualified initial target approved, revised chronological-attempt ordering awaiting final architecture approval; see the [comparison and implementation contract](../plans/crm-meta-funnel-revision-4.md). Existing approved D1–D7 and dormant status remain unchanged.
+ADR-004 also records **final owner approval of revision 4** on 2026-09-30 after PR #40: Option B, occurrence/singleton semantics, Qualified initial target and chronological-attempt ordering; see the [approved plan](../plans/crm-meta-funnel-revision-4.md). D2–D7 remain unchanged. Implementation is NOT completed, deployment is NOT authorized and H3/H4 remain blocked; Production retains the dormant two-event implementation.

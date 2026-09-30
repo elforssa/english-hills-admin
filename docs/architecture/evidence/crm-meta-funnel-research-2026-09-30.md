@@ -1,6 +1,6 @@
 # Meta CRM funnel research
 
-Access date: **2026-09-30**. Research for the [proposed revision 4 plan](../plans/crm-meta-funnel-revision-4.md), against repository main `e35438d` (PR #39). Public Meta developer pages below were independently read in the browser, including their rendered body text. No account, credentials, lead records or provider endpoint was accessed. Update dates are page metadata; they are not service guarantees. Search results and third-party tutorials are not contract evidence.
+Access date: **2026-09-30**. Research for the [revision 4 plan](../plans/crm-meta-funnel-revision-4.md), against repository main `e35438d` (PR #39). Public Meta developer pages below were independently read in the browser, including their rendered body text. No account, credentials, lead records or provider endpoint was accessed. Update dates are page metadata; they are not service guarantees. Search results and third-party tutorials are not contract evidence.
 
 ## Authoritative source register
 
@@ -38,3 +38,5 @@ Current Yearly form `1086266294126723` fails D2. Existing submissions stay exclu
 ## Revision 4 ordering interpretation and owner direction
 
 On 2026-09-30 the owner approved B in principle, activity-backed repeat occurrences and the initial Qualified target, and directed chronological attempt ordering before final architecture approval. F1/F2 motivate sending actual earlier stages; the inspected evidence does not establish confirmed receipt of every predecessor as a prerequisite for a later genuine event. The revised plan holds an uncertain identity against replay while permitting later independently eligible outcomes after the earlier send boundary, preserving its unknown audit trail. This is an explicit architecture tradeoff for useful lifecycle coverage, not a newly verified Meta guarantee. No public sources were re-accessed for this owner-direction update. If applicable provider evidence establishes a confirmed-receipt requirement, stop and revise the architecture rather than silently change ordering or replay policy.
+
+Final approval status, recorded 2026-09-30: the owner subsequently stated **“I approve revision 4.”** PR #40 merged as `fdb0987cfc68785b278ce6aacf26425306d5c8ef`. This supersedes the earlier in-principle/pending status described above, including ordering. Architecture is approved; implementation is not completed, deployment is not authorized and H3/H4 remain blocked. No new provider or Production verification is claimed.
