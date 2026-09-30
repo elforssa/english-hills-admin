@@ -4,6 +4,8 @@
 
 **APPROVED AND IMPLEMENTED — repository owner approval dated 2026-09-29, Batch 2 plan revision 2, D1–D7 all Option A. PR #34 and migrations 098–100 completed dormant Production rollout verification on 2026-09-30. Live Meta activation is not complete or approved.** See the [completed implementation/dormant-rollout plan](../plans/completed/crm-batch2-meta-lifecycle-feedback.md). Official provider-contract verification, form readiness, credentials/configuration and H3/H4 activation approval remain prerequisites, not unresolved D1–D7 product decisions.
 
+**Additional architecture decision approved 2026-09-30, activation plan revision 3: no uncertain replay. This correction is NOT IMPLEMENTED; the implemented status above applies to the original dormant D1–D7 scope.** See the approval addendum below. H3/H4 remain blocked.
+
 ## Context
 
 Main already has guarded CRM milestones, an immutable lifecycle outbox, leased attempts and mock-only transport in migration 088. Inbound Meta retrieval/reconciliation is live independently. Working intake and synthetic consent fixtures do not authorize live outbound disclosure. The principal new durable boundary is how independently evidenced eligibility authorizes asynchronous use of existing commercial facts.
@@ -58,4 +60,19 @@ H3/H4 remain blocked. Active-form compliance and asset entitlement remain unveri
 
 ### Revision 2 interpretation — 2026-09-30
 
-The activation plan’s provider-readiness table supersedes revision 1’s categorical full-funnel incompatibility and unresolved SDK string-representation assessment. D1–D7 remain unchanged. No numeric server-only deduplication duration is verified; the 48-hour browser/server value remains inapplicable as an assumed retry guarantee. The plan proposes an explicit unverified/no-uncertain-replay contract and coordinated application/forward migration correction if no guarantee is available. That is **not approved or implemented**; owner approval must precede such work. Existing eligibility, immutable evidence, outbox identity, bounded retries and replay prevention remain mandatory. H3/H4 are still blocked by provider and account-specific evidence gaps.
+The activation plan’s provider-readiness table supersedes revision 1’s categorical full-funnel incompatibility and unresolved SDK string-representation assessment. D1–D7 remain unchanged. No numeric server-only deduplication duration is verified; the 48-hour browser/server value remains inapplicable as an assumed retry guarantee. The plan proposes an explicit unverified/no-uncertain-replay contract and coordinated application/forward migration correction if no guarantee is available. At revision 2 that was **not approved or implemented**. The revision 3 approval below supersedes only the pending policy decision; implementation remains absent. Existing eligibility, immutable evidence, outbox identity, bounded retries and replay prevention remain mandatory. H3/H4 are still blocked by provider and account-specific evidence gaps.
+
+
+### Approved no-uncertain-replay policy — 2026-09-30, activation revision 3
+
+The repository owner explicitly approved the following architecture decision in the follow-up to [PR #39](https://github.com/elforssa/english-hills-admin/pull/39), after documentation head `e4bae3ca20f063b85cc00255335cd5a1bb4869ec`:
+
+> I approve the no-uncertain-replay policy for CRM lifecycle delivery. Unknown or ambiguous provider outcomes must not be automatically resent unless authoritative provider evidence later establishes replay safety.
+
+**APPROVED / NOT IMPLEMENTED.** Known safe/retryable pre-send failures may follow reviewed retry rules. Once a request may have crossed the network boundary, ambiguous receipt must be held for review with no automatic replay. Lease recovery must not silently resend a started uncertain attempt; director retry must enforce the same boundary. Durable attempt history must prevent bypass through status/configuration changes or an uncertain begin/finalize result. A durable begin followed by a crash before observable transport is conservatively uncertain. General provider recovery advice and repaired credentials do not prove non-acceptance.
+
+No numeric deduplication window may be invented to encode unknown provider behavior. The future coordinated application/forward migration correction must represent unverified safety explicitly, freeze the policy in the contract/snapshot and enforce it at claim, prepare/begin, finalization, lease recovery and director retry. The [revision 3 consequence manifest](../plans/crm-batch2-meta-lifecycle-activation.md#exact-future-application--sql-consequences--not-implemented) identifies the exact affected modules/SQL objects and synthetic acceptance cases. No code or migration is authored by this decision record.
+
+Later authoritative replay-safety evidence requires a separately reviewed contract/architecture update; it does not automatically release held rows or authorize rewriting frozen contracts. Preserve age/attempt/backoff/evidence/epoch limits, retention and terminal replay-prevention markers. D7 remains a bounded single eligible retry after repair, never an uncertainty bypass.
+
+D1–D7 are unchanged: Qualified + Converted only, prospective-only Meta-first opportunities, original Meta lead ID only, no child/contact-hash/financial data, immutable identity/time/destination/payload and separate inbound/outbound operation. Actual form/dataset/account evidence and narrower-funnel compatibility remain unresolved, as do remaining transport-contract requirements. **H3/H4 remain blocked.** This policy approval is not implementation commissioning, release approval, provider-test authorization or permission to mutate Production, forms/assets or credentials.

@@ -2,7 +2,7 @@
 
 ## What will change
 
-Record the read-only account-readiness inspection and its access limits after PR #38. No English Hills form or CRM destination configuration was independently verified. The activation plan remains **revision 2**: this inspection does not materially establish English Hills account readiness and no new owner architecture decision has been confirmed. This evidence record is not activation plan revision 3.
+Record the read-only account-readiness inspection and its access limits after PR #38. No English Hills form or CRM destination configuration was independently verified. At initial PR #39 head `e4bae3ca20f063b85cc00255335cd5a1bb4869ec`, the plan remained revision 2 because no new owner decision was confirmed. The subsequent explicit approval below advances the [activation plan to revision 3](../plans/crm-batch2-meta-lifecycle-activation.md); account findings are unchanged.
 
 ## What staff/users will be able to do
 
@@ -94,21 +94,21 @@ These are inherited findings from the [revision 2 evidence register M1–M18](..
 
 Still unresolved: narrower Qualified/Converted-only compatibility and coverage, bearer-header authentication support for the CRM endpoint, numeric server-only replay horizon, exact duplicate acknowledgment and CRM-specific error replay safety. Connector metadata cannot resolve these provider-contract questions.
 
-## Owner decisions required
+## Initial owner-decision status — historical
 
-D1–D7 Option A remain approved. The conditional retry wording in the task is recorded below as **pending owner confirmation**, not inferred approval:
+D1–D7 Option A remain approved. At the initial PR #39 inspection, the conditional retry wording was **pending owner confirmation**. That historical pending status is superseded only for retry policy by the explicit approval addendum below:
 
 > No uncertain replay: unknown/ambiguous provider outcomes must not be automatically resent unless authoritative provider evidence establishes replay safety.
 
 | Decision | Options / consequences | Recommendation and blocking status |
 | --- | --- | --- |
-| Retry-policy architecture | A: explicitly approve the quoted no-uncertain-replay correction, accepting held uncertain deliveries and coordinated SQL/application work. B: leave pending/remain dormant while seeking a verified numeric guarantee. | A recommended; **pending**, blocks the retry correction and H3/H4. No timeout or silence constitutes approval. |
+| Retry-policy architecture | A: explicitly approve the quoted no-uncertain-replay correction, accepting held uncertain deliveries and coordinated SQL/application work. B: leave pending/remain dormant while seeking a verified numeric guarantee. | At initial inspection: A recommended and **pending**. Subsequently **APPROVED** by explicit owner confirmation below; implementation and H3/H4 remain blocked. No timeout or silence constituted approval. |
 | Narrower-funnel scope | A: retain D1–D7/two milestones and obtain applicable authoritative/account evidence. B: separately commission broader-stage architecture. | A; keep dormant, blocks complete provider-ready implementation and H3/H4. |
 | Form / notice / mapping | A: retain only after exact D2 proof and owner approval of notice/typed mapping. B: separately approve prospective replacement/change. | Evidence-dependent; missing facts block H3. No form change authorized here. |
 | Destination / names / credential route | A: approve exact verified business/Page/ad-account/CRM dataset relationships, collision-checked names and least-privilege route with named operators. B: defer. | A only after evidence; blocks H3. A1/A2 alone are insufficient. |
 | Provider tests / final release | A: continue without provider tests and keep H3/H4 closed. B: later explicitly authorize a concrete test or release manifest after prerequisites. | A for this task. No test, preparation mutation or activation approval is implied. |
 
-If the owner supplies the retry decision or authenticated inspection materially adds verified English Hills evidence, prepare activation plan revision 3 and update ADR-004 for any accepted durable decision. Merely merging PR #38 does not approve a new retry design or release gate.
+The initial inspection required a confirmed owner decision or material verified English Hills evidence before revision 3. The later owner confirmation now satisfies that condition; merging PR #38 alone did not. The other owner decisions in the table remain pending.
 
 ## Implementation readiness and source gap confirmation
 
@@ -118,15 +118,21 @@ Read-only source checks at the baseline reconfirm:
 
 - [098 contract schema](../../../supabase/migrations/098_crm_lifecycle_evidence_and_delivery.sql) requires positive numeric `deduplication_window_seconds` and empty `required_constants`; unknown safety must not be represented by an invented number.
 - [099 runtime](../../../supabase/migrations/099_crm_lifecycle_delivery_runtime.sql) can schedule `unknown` after finalization or an expired started-attempt lease while within the stored numeric window. Claim and director retry paths consume that policy. A text-only policy decision cannot change deployed behavior.
-- [Adapter](../../../src/lib/crm/lifecycle/adapter.mjs) omits CRM constants and automatically retries broad HTTP/Graph classes. [Worker](../../../src/lib/crm/lifecycle/worker.mjs) leaves post-start finalization uncertainty for lease recovery. Any later approved no-uncertain-replay implementation must address both response classification and database claim/finalization/lease/manual-retry boundaries.
+- [Adapter](../../../src/lib/crm/lifecycle/adapter.mjs) omits CRM constants and automatically retries broad HTTP/Graph classes. [Worker](../../../src/lib/crm/lifecycle/worker.mjs) leaves post-start finalization uncertainty for lease recovery. The now-approved, future no-uncertain-replay implementation must address both response classification and database claim/finalization/lease/manual-retry boundaries.
 - [Evidence evaluator](../../../src/lib/crm/lifecycle/evidence.mjs) already compares exact typed values and denies missing/ambiguous evidence. Missing account/form evidence must not be described as missing evaluator infrastructure.
 
 D7 remains a bounded single-delivery retry after repair, never a consent, age, identity, uncertainty, epoch or terminal-state bypass. No new automatic or manual replay permission is granted by this record. Preserve all D1–D7, immutable original truth, prospective-only operation and independent inbound intake.
 
+## Owner approval addendum — 2026-09-30
+
+After the initial inspection, the repository owner explicitly approved: “Unknown or ambiguous provider outcomes must not be automatically resent unless authoritative provider evidence later establishes replay safety.” This is recorded as an approved durable architecture decision in [activation plan revision 3](../plans/crm-batch2-meta-lifecycle-activation.md#approved-owner-retryuncertainty-decision--revision-3) and [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md#approved-no-uncertain-replay-policy--2026-09-30-activation-revision-3), not a pending retry choice. The approval requires review holds, no lease-recovery or director bypass, and no invented numeric horizon; known safe/retryable pre-send failures retain reviewed bounded retry rules.
+
+No new account evidence was added. A1–A3/R1, missing form/assets/permissions and the distinction from revision 2 provider facts remain unchanged. The decision is not implemented; complete provider-ready implementation is still not ready, and H3/H4 remain blocked. D1–D7, two milestones, prospective activation, original lead ID only, immutable identity and separate inbound/outbound operation are preserved.
+
 ## IMPLEMENTATION CONTRACT
 
 1. This task changes architecture evidence/navigation documentation only. No code, migrations or external configuration changes; no merge or deployment.
-2. Preserve activation plan revision 2 and ADR-004 decisions until substantive verified account evidence or a confirmed owner decision warrants revision 3. Keep every unresolved item explicitly unverified/pending.
+2. Preserve this account-readiness evidence and record the subsequent approved owner decision in activation plan revision 3 and ADR-004. Keep all other unresolved items explicitly unverified/pending; do not confuse approved policy with implemented behavior.
 3. A follow-up account inspection must establish the form and asset registers above using an authorized session or nonsecret structural evidence, with date/verifier/reference. Do not access/export lead answers or discover secrets to fill gaps.
 4. Later application/SQL corrections require approved architecture, separate implementation, CI and fresh independent review/re-review. Follow the activation plan's exact H3/H4 manifests, stop conditions and recovery order; this report closes no release gate.
 5. Validate this docs-only diff for relative links, source accuracy, secrets/PII absence and `git diff --check`. Application tests are not required for this documentation-only task.
