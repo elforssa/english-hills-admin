@@ -2,11 +2,11 @@
 
 ## What will change
 
-CRM Batch 2 will connect the existing lifecycle outbox to live Meta delivery for approved Qualified and Converted outcomes. It will add explicit sharing eligibility, automatic processing and bounded director diagnostics. This architecture is approved as revision 2 on 2026-09-29; it is not implementation or permission to activate delivery.
+CRM Batch 2 implemented the approved boundaries for connecting the existing lifecycle outbox to live Meta delivery for eligible Qualified and Converted outcomes. Explicit sharing eligibility, bounded processing and director diagnostics are deployed dormant. This completed implementation/dormant-rollout record is not permission or evidence that live delivery is activated.
 
-## What staff/users will be able to do
+## What staff/users can do after dormant deployment
 
-Receptionists will continue recording ordinary CRM actions. Eligible milestones will reach Meta automatically after the CRM transaction commits. Directors will see whether feedback is enabled, delivery outcomes, held events and recent failures, with narrowly controlled retry actions. Meta feedback will consume school records; it will never decide CRM status or enrollment.
+Receptionists continue recording ordinary CRM actions without a delivery control. Directors can inspect the lifecycle operations page and its fail-closed diagnostics, but Production currently has no eligible policy/evidence, provider contract, enabled destination or active scheduler. Only after separately approved H3/H4 activation may eligible milestones reach Meta asynchronously after the CRM transaction commits. Meta feedback will consume school records; it will never decide CRM status or enrollment.
 
 ## What remains restricted
 
@@ -14,11 +14,11 @@ Conversion still requires the existing linked Confirmed/Validated enrollment wor
 
 ## UI impact
 
-Add a small director-only lifecycle operations page and navigation entry. Existing configuration and delivery RPCs have no lifecycle UI consumers today. No Today, CRM detail, walk-in or marketing analytics redesign is included. Eligibility policy setup belongs to director integration operations, not a new receptionist chore.
+The implementation adds a small director-only lifecycle operations page and navigation entry. No Today, CRM detail, walk-in or marketing analytics redesign is included. Eligibility policy setup belongs to director integration operations, not a receptionist chore, and no Production policy was published during dormant rollout.
 
 ## Database impact
 
-Reuse migration 088's delivery and attempt tables, deterministic identity and protected worker RPCs. Add forward migrations after 097 for auditable eligibility evidence/policies, live configuration and activation boundaries, safe delivery checks, retention/redaction and an independent lifecycle scheduler. All deployed migrations 001–097 remain unchanged.
+Migrations 098–100 reuse migration 088's delivery and attempt tables, deterministic identity and protected worker RPCs while adding auditable eligibility evidence/policies, live configuration and activation boundaries, safe delivery checks, retention/redaction and an independent lifecycle scheduler. Deployed migrations 001–097 remained unchanged.
 
 ## Important security decisions
 
@@ -26,38 +26,38 @@ Missing evidence means no delivery. Meta-origin alone and generic website inquir
 
 ## Risks / owner review points
 
-The owner approved acquisition scope, evidence policy, historical cutoff, matching fields, retention and retry policy on 2026-09-29. Form evidence readiness still must be established before activation. Current Meta documentation returned HTTP 429 during this assessment, so exact live event names, required CRM metadata, API version, event-age and deduplication limits remain a provider-contract gate. Do not simply replace mock fetch with real fetch. Provider acceptance does not guarantee ad optimization or improved lead quality. Production rollout needs separate human approval.
+The owner approved acquisition scope, evidence policy, historical cutoff, matching fields, retention and retry policy on 2026-09-29. Form evidence readiness still must be established before activation. Current Meta documentation returned HTTP 429 during this assessment, so exact live event names, required CRM metadata, API version, event-age and deduplication limits remain a provider-contract gate. Do not infer a contract from deployed transport code. Provider acceptance does not guarantee ad optimization or improved lead quality. Provider/form/credential changes and live activation require separate H3/H4 approval.
 
 ---
 
 ## Status and evidence
 
-**APPROVED — revision 2; D1–D7 Option A approved by the repository owner on 2026-09-29. IMPLEMENTATION [PR #34](https://github.com/elforssa/english-hills-admin/pull/34) REVIEW PENDING.** The implementation branch starts from fetched `origin/main` commit `16e9e5f1d906843044d40fe9f05de384ffd29fd3` and adds forward migrations 098–100. It is not merged, deployed, Production verified or approved for Production release. No provider contract is seeded and the lifecycle cron is created inactive; provider/form prerequisites and separate release approval still gate completion/activation. This implementation did not query or mutate Production. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns the deployment inventory.
+**COMPLETED — implementation and dormant Production rollout; live activation pending H3/H4.** Revision 2 and D1–D7 Option A were approved by the repository owner on 2026-09-29. [PR #34](https://github.com/elforssa/english-hills-admin/pull/34), reviewed head `95ba8c1b1c5f00ee6565e1691fb35e5724356646`, merged as `26b8b0d609925d3d72b4be1f5929244acac2bf8b`. Vercel Production deployment `dpl_C2ouisA1fpdonK7PuuT7udC1p7hp` was verified READY from that merge SHA, and migrations 098–100 were verified in the Production ledger on 2026-09-30. `crm-lifecycle-primary` is installed inactive; provider contracts, eligibility policies/evidence, open activation epochs, live deliveries and enabled lifecycle destinations are all zero. No provider credentials/configuration or active-form changes were made and no real or test Meta delivery occurred. The implementation/dormant rollout is complete, but official provider-contract verification, form readiness, entitlement/credentials and separately approved prospective activation remain outstanding. [CURRENT_STATE](../../../ai/CURRENT_STATE.md) owns the current deployment inventory.
 
-Owner approval record: repository owner, **2026-09-29**, **revision 2**, **D1–D7: Option A** as recorded below. Revision 1 was the proposal committed at `0d67c25559abd9683e587b71d52be57337bd2a5d`; revision 2 incorporates the explicit approvals and clarifications. [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md) is APPROVED. No product decision remains unresolved. This approval authorizes only the implementation contract below; it does not authorize Production mutation or wider payload/scope.
+Owner approval record: repository owner, **2026-09-29**, **revision 2**, **D1–D7: Option A** as recorded below. Revision 1 was the proposal committed at `0d67c25559abd9683e587b71d52be57337bd2a5d`; revision 2 incorporates the explicit approvals and clarifications. [ADR-004](../../decisions/ADR-004-meta-lifecycle-feedback.md) is APPROVED. No product decision remains unresolved. This approval authorizes only the implementation contract below; it does not authorize Production mutation or wider payload/scope.
 
-Read [product](../../ai/PRODUCT_RULES.md), [security](../../ai/SECURITY_RULES.md), [ADR-001](../decisions/ADR-001-crm-lifecycle.md), [ADR-002](../decisions/ADR-002-meta-intake-and-reconciliation.md), and [Phase 10 implementation contract](../../crm-meta-lifecycle.md). The latter remains an accurate mock-only baseline, not a live specification.
+Read [product](../../../ai/PRODUCT_RULES.md), [security](../../../ai/SECURITY_RULES.md), [ADR-001](../../decisions/ADR-001-crm-lifecycle.md), [ADR-002](../../decisions/ADR-002-meta-intake-and-reconciliation.md), and [Phase 10 implementation contract](../../../crm-meta-lifecycle.md). The latter remains an accurate mock-only baseline, not a live specification.
 
-## Verified current state
+## Pre-implementation verified state (historical)
 
 | Concern | Evidence on current main | Remaining work |
 | --- | --- | --- |
-| CRM lifecycle | [078](../../../supabase/migrations/078_crm_core_schema.sql), [080](../../../supabase/migrations/080_crm_commands_and_followup_engine.sql), [082](../../../supabase/migrations/082_crm_conversation_decision.sql): guarded actions emit `lead_qualified`; 079/081 own read permissions/Today. | Consume committed facts; preserve status/task/activity separation and call policy. |
-| Placement, conversion, finance | [083](../../../supabase/migrations/083_crm_placement_integration.sql) owns placement milestones. [084](../../../supabase/migrations/084_crm_enrollment_and_conversion.sql) `evaluate_conversion` emits `lead_converted`, retaining enrollment/activity identity; downgrade sets review. [085](../../../supabase/migrations/085_crm_revenue_attribution.sql) owns separate collected-revenue ledger. | No second conversion engine, no payment-triggered marketing event or invented missing Qualified event. |
-| Event generation | [088](../../../supabase/migrations/088_crm_meta_lifecycle_delivery.sql) `crm_reconcile_external_deliveries` reads first committed milestone of each kind, validates conversion identity and creates intentions asynchronously; no CRM/network trigger. | Automatically schedule this existing reconciliation. No synchronous external call in CRM commands. |
+| CRM lifecycle | [078](../../../../supabase/migrations/078_crm_core_schema.sql), [080](../../../../supabase/migrations/080_crm_commands_and_followup_engine.sql), [082](../../../../supabase/migrations/082_crm_conversation_decision.sql): guarded actions emit `lead_qualified`; 079/081 own read permissions/Today. | Consume committed facts; preserve status/task/activity separation and call policy. |
+| Placement, conversion, finance | [083](../../../../supabase/migrations/083_crm_placement_integration.sql) owns placement milestones. [084](../../../../supabase/migrations/084_crm_enrollment_and_conversion.sql) `evaluate_conversion` emits `lead_converted`, retaining enrollment/activity identity; downgrade sets review. [085](../../../../supabase/migrations/085_crm_revenue_attribution.sql) owns separate collected-revenue ledger. | No second conversion engine, no payment-triggered marketing event or invented missing Qualified event. |
+| Event generation | [088](../../../../supabase/migrations/088_crm_meta_lifecycle_delivery.sql) `crm_reconcile_external_deliveries` reads first committed milestone of each kind, validates conversion identity and creates intentions asynchronously; no CRM/network trigger. | Automatically schedule this existing reconciliation. No synchronous external call in CRM commands. |
 | Outbox | 088 `crm_external_deliveries`, `crm_external_delivery_attempts`; `unique(lead_id,event_kind)`, frozen mapping/payload/hash and protected history. | Extend current objects, not another queue. |
 | Identity/concurrency | Event ID `eh:<activity UUID>:<connection UUID or none>`; advisory reconcile lock, `FOR UPDATE SKIP LOCKED`, UUID lease, two-minute expiry, durable begin/finish, stale-lease rejection. | Preserve identity and recovery; close activation/age/retry gaps below. |
 | Retry/error state | pending/sending/retry/unknown/sent/blocked/dead/suppressed; 1–8 attempts (default 5), exponential delay plus jitter; bounded Retry-After; immutable finished attempts. | Real response classification, provider deadline and operational scheduling. |
-| Matching/payload | [adapter](../../../src/lib/crm/lifecycle/adapter.mjs): normalized SHA-256 email/phone; lead ID or fbc/fbp required. SQL independently checks hashes/provenance and closed keys. | Approve minimum live matching contract; do not automatically send every available hash. |
-| Transport | `postLifecycleFixture` and [worker](../../../src/lib/crm/lifecycle/worker.mjs) require injected mockFetch. Configuration and SQL holds require mode=mock. [director endpoint](../../../src/app/api/internal/crm/lifecycle/process/route.js) reconciles only and returns `live_delivery_enabled:false`. | Reviewed server-only live transport plus mode-aware worker/SQL. Environment variables alone cannot activate current code. |
-| Eligibility | 088 requires `consent_evidence.meta_lifecycle_sharing=true` and `adult_contact=true`, rechecks redaction and conversion review before attempts. | Evidence capture is missing: [Meta normalizeLead](../../../src/lib/crm/meta/adapter.mjs) does not populate consent_evidence; [087](../../../supabase/migrations/087_crm_website_ingestion.sql) records website accepted/recorded_at/source only. Tests seed the stronger flags synthetically. |
+| Matching/payload | [adapter](../../../../src/lib/crm/lifecycle/adapter.mjs): normalized SHA-256 email/phone; lead ID or fbc/fbp required. SQL independently checks hashes/provenance and closed keys. | Approve minimum live matching contract; do not automatically send every available hash. |
+| Transport | `postLifecycleFixture` and [worker](../../../../src/lib/crm/lifecycle/worker.mjs) require injected mockFetch. Configuration and SQL holds require mode=mock. [director endpoint](../../../../src/app/api/internal/crm/lifecycle/process/route.js) reconciles only and returns `live_delivery_enabled:false`. | Reviewed server-only live transport plus mode-aware worker/SQL. Environment variables alone cannot activate current code. |
+| Eligibility | 088 requires `consent_evidence.meta_lifecycle_sharing=true` and `adult_contact=true`, rechecks redaction and conversion review before attempts. | Evidence capture is missing: [Meta normalizeLead](../../../../src/lib/crm/meta/adapter.mjs) does not populate consent_evidence; [087](../../../../supabase/migrations/087_crm_website_ingestion.sql) records website accepted/recorded_at/source only. Tests seed the stronger flags synthetically. |
 | Routing | Meta first submission selects its mapping/connection/Page. Website first touch can select an explicit destination and optionally later accepted Meta matching. Manual first touch stays suppressed. | Restrict live scope explicitly; existing mock capability is not product approval for website/later-touch live sharing. |
-| Intake/scheduler | 086/087/092/093 implement shared intake/mapping; [094](../../../supabase/migrations/094_crm_meta_reconciliation.sql) reconciles inbound IDs; [095](../../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql) + [intake scheduler](../../../src/lib/crm/intake/scheduler.mjs) trigger inbound only. | Independent lifecycle endpoint/job; protect existing 60-second inbound budget. |
+| Intake/scheduler | 086/087/092/093 implement shared intake/mapping; [094](../../../../supabase/migrations/094_crm_meta_reconciliation.sql) reconciles inbound IDs; [095](../../../../supabase/migrations/095_crm_intake_pg_cron_scheduler.sql) + [intake scheduler](../../../../src/lib/crm/intake/scheduler.mjs) trigger inbound only. | Independent lifecycle endpoint/job; protect existing 60-second inbound budget. |
 | Director visibility | Configure/list/retry/reconcile RPCs exist; list omits matching payloads/secrets, hardcodes live_available=false. Source search finds no lifecycle consumers in CRM components or queries. Settings has no lifecycle panel. | Small director UI/read model; retain direct RPC authorization. |
-| Insights/reporting | [089](../../../supabase/migrations/089_crm_meta_insights_and_reporting.sql), [090](../../../supabase/migrations/090_crm_director_reporting.sql), [Insights adapter](../../../src/lib/crm/insights/adapter.mjs) and analytics UI exist; transport fixture-only. 091 is task-history performance hardening. | No live spend/ROAS/CAC work. |
+| Insights/reporting | [089](../../../../supabase/migrations/089_crm_meta_insights_and_reporting.sql), [090](../../../../supabase/migrations/090_crm_director_reporting.sql), [Insights adapter](../../../../src/lib/crm/insights/adapter.mjs) and analytics UI exist; transport fixture-only. 091 is task-history performance hardening. | No live spend/ROAS/CAC work. |
 | Receptionist | 096/097 and shared operational Students UI are complete. | No permission widening or manual event controls. |
 
-### Existing outbox gaps that live enablement must fix
+### Pre-implementation outbox gaps addressed by Batch 2
 
 - `not_before` is checked at initial reconciliation but not by `lifecycle_hold` or explicit retry. An old blocked row can adopt repaired settings before preparation. Live checks must enforce the approved cutoff at claim/get/prepare/begin/retry, not rely on initial reconciliation.
 - Existing prepared mock rows freeze mode/configuration, and sent rows are immutable. Never relabel mock attempts as live or resend mock-sent historical identities. Keep them diagnostic-only; activation is prospective.
@@ -180,7 +180,7 @@ All SECURITY DEFINER entry points use qualified names, fixed search_path, stored
 
 ## Testing strategy and acceptance
 
-Local Supabase only (`http://127.0.0.1:54321`), synthetic adult/learner fixtures, no real external sending/email. Inject transport fixtures; test the production adapter wiring without real tokens. Existing [Phase 10 SQL](../../../scripts/test-crm-phase10.sql), [concurrency](../../../scripts/test-crm-phase10-concurrency.py), and [JS](../../../scripts/test-crm-phase10.mjs) are the foundation, not replacements for live-contract coverage.
+Local Supabase only (`http://127.0.0.1:54321`), synthetic adult/learner fixtures, no real external sending/email. Inject transport fixtures; test the production adapter wiring without real tokens. Existing [Phase 10 SQL](../../../../scripts/test-crm-phase10.sql), [concurrency](../../../../scripts/test-crm-phase10-concurrency.py), and [JS](../../../../scripts/test-crm-phase10.mjs) are the foundation, not replacements for live-contract coverage.
 
 Required positive/negative/regression matrix:
 
@@ -195,7 +195,16 @@ Required positive/negative/regression matrix:
 
 ## Production rollout and recovery
 
-Follow [rollout template](../../ai/templates/PRODUCTION_ROLLOUT.md). Implementation approval does not authorize Production mutation. Release approval must name code SHA, forward migrations, provider test/activation scope, destination, contract and evidence policy.
+Dormant rollout evidence, verified 2026-09-30:
+
+- [PR #34](https://github.com/elforssa/english-hills-admin/pull/34) merged only reviewed head `95ba8c1b1c5f00ee6565e1691fb35e5724356646`; merge commit `26b8b0d609925d3d72b4be1f5929244acac2bf8b` has that head as its second parent and the same tree.
+- Vercel deployment `dpl_C2ouisA1fpdonK7PuuT7udC1p7hp` was READY for Production, sourced from the merge commit and aliased by `admin.english-hills.com`; login and protected lifecycle-cron probes were healthy and the runtime error scan was clear.
+- Production project `hopcezradkhrixwwswxn` applied exactly migrations 098, 099 and 100. The final dry run reported no pending migrations.
+- `crm-lifecycle-primary` is installed on the five-minute schedule but inactive and has zero runs. Existing `crm-intake-primary` remained active with successful runs.
+- Provider contracts, eligibility policies, eligibility evidence, open activation epochs, live deliveries and enabled lifecycle destinations were all zero. Scheduler health had no start/success/error timestamps. New lifecycle tables had RLS enabled, no unexpected direct grants and a validated policy exclusion constraint.
+- No provider credential/configuration, active-form change, destination activation, server-gate enablement, scheduler activation or real/test Meta delivery was performed. H1 covered merge/dormant deployment and H2 covered only migrations 098–100. H3/H4 were not granted.
+
+Follow [rollout template](../../../ai/templates/PRODUCTION_ROLLOUT.md). Implementation approval does not authorize Production mutation. Release approval must name code SHA, forward migrations, provider test/activation scope, destination, contract and evidence policy.
 
 Deploy compatible disabled code and apply reviewed schema in the explicitly approved order; verify Vercel READY exact source commit and migration ledger. Provision separate outbound token/scheduler credentials without revealing values. Verify app/Page/dataset/ad-account relationship and official contract in authorized provider tooling. Keep intake settings/job unchanged. Activate one approved destination/policy prospectively, then the independent scheduler. Do not backfill old missing eligibility or reset outbox rows. Observe one approved eligible milestone through acceptance and director diagnostics, plus permission probes and inbound/scheduler/runtime health; distinguish provider receipt from learning/optimization. Record the date and evidence in durable docs only after acceptance.
 
@@ -215,17 +224,16 @@ All seven decisions are resolved: **Option A**, plan revision **2**, approved by
 | D6 — retention | Erase prepared matching payload/hashes 30 days after terminal delivery; minimal attempt diagnostics 90 days; eligibility metadata until referenced deliveries terminal plus 90 days. Afterwards only minimal nonmatching replay-prevention and policy/revocation audit markers. No indefinite provider bodies/tokens/headers/matching identifiers/payloads. |
 | D7 — retry | Director single eligible delivery after repair, bounded by evidence, event age, attempt limits, backoff and stable identity. No sent/dead/suppressed revival or unrestricted bulk resend. Receptionist cannot send/retry. |
 
-## Remaining non-owner implementation and activation prerequisites
+## Remaining H3/H4 activation prerequisites
 
-These are evidence/configuration/verification gates, **not unresolved D1–D7 product decisions**:
+The implementation and dormant Production rollout are complete. These remaining gates apply only to later live activation and are **not unresolved D1–D7 product decisions**:
 
 1. **Provider contract, before live transport completion:** verify and record accessible official Meta requirements for exact event names/required constants, supported API version, lead-ID-only envelope, event-age rules, deduplication scope/window and accepted-response behavior. Do not treat fixtures or tutorials as confirmation. If the verified contract requires broader fields, stop for new owner approval under D5.
 2. **Form readiness, before activation:** inspect the actual active Instant Form through an authorized read and record the exact evidence manifest above. Change/replace a noncompliant form and verify its evidence pipeline before activation; if inspection proves it already complies, record that evidence and close the form-change prerequisite without an unnecessary edit. Current live-form compliance is unknown; missing ingestion/evaluation support is verified.
 3. **Configuration:** supply approved notice text/version and exact actual form field/value mapping; verify destination/business/app/Page/ad-account relationships and credential entitlement; provision separate server/scheduler credentials through the operator boundary. No live secrets or provider configuration in this documentation task.
-4. **Implementation verification:** local synthetic positive/negative/concurrency/retention tests, clean forward-migration replay and upgrade after 097, browser/role checks, CI and fresh independent review of the exact implementation SHA. Recheck current main and deployed inventory first.
-5. **Release:** explicit human approval for Production migration/deployment, provider testing and prospective activation; follow the rollout template and close out only after Production acceptance. Architecture approval does not supply release approval.
+4. **H3/H4 release controls:** obtain explicit H3 approval before provider-contract seeding, form/configuration changes or credential provisioning. After those prerequisites are reviewed and verified, obtain separate H4 approval naming the exact destination, contract revision, policy/form version, prospective cutoff, server gate, database activation epoch, scheduler activation, monitoring owner and recovery procedure. Activate prospectively only; never backfill or release pre-epoch/disabled-period milestones.
 
-Implementation within revision 2 is authorized by architecture in a separate implementation task. These prerequisites may be resolved alongside local implementation, but live transport cannot be considered complete without item 1 and live activation cannot proceed with any applicable prerequisite open. Do not implement alternative scopes behind toggles.
+Live transport cannot be considered provider-ready without item 1, and live activation cannot proceed with any applicable prerequisite open. Do not implement alternative scopes behind toggles. Completion and archival of this plan record only the implementation and dormant Production rollout; they do not close or grant H3/H4.
 
 ## Expected files/modules
 
