@@ -2,7 +2,7 @@
 
 ## What will change
 
-Record the read-only account-readiness inspection and its access limits after PR #38. No English Hills form or CRM destination configuration was independently verified. At initial PR #39 head `e4bae3ca20f063b85cc00255335cd5a1bb4869ec`, the plan remained revision 2 because no new owner decision was confirmed. The subsequent explicit approval below advances the [activation plan to revision 3](../plans/crm-batch2-meta-lifecycle-activation.md); account findings are unchanged.
+Record the initial inspection and subsequent authenticated read-only Meta evidence supplied by the repository owner. Ownership/assets and the dataset/ad-account relationship are now substantially verified; aggregate CRM events/funnel behavior are observed. The current Yearly form **does not satisfy D2** for future EH-native lifecycle feedback. The [activation plan remains revision 3](../plans/crm-batch2-meta-lifecycle-activation.md), already advanced by the approved no-uncertain-replay decision at `74a0ec3132068d8bdb16c4831c10a8f716501e18`; this update materially revises its account-readiness assessment.
 
 ## What staff/users will be able to do
 
@@ -14,7 +14,7 @@ H3 and H4 remain blocked. No application implementation, authored/applied migrat
 
 ## UI impact
 
-None. The available Meta Business browser reached the login page; no authenticated account settings were visible.
+None. The initial agent browser reached login. Subsequent authenticated UI observations were supplied by the owner and are recorded below; this documentation update did not operate Meta.
 
 ## Database impact
 
@@ -26,17 +26,17 @@ Do not infer outbound entitlement from a connected ads-reporting account or heal
 
 ## Risks / owner review points
 
-Access is incomplete, not proof that the required assets or consent controls do not exist. The account exposed by the connector is not yet bound to English Hills. A reporting field named `Qualified` or `Converted` is not evidence of CRM recognition, integration health, stage ordering or replay safety. Implementation readiness, H3 readiness and H4 readiness are all **NO**.
+The authenticated evidence binds the business, Page, ad account and dataset and verifies existing CRM activity at aggregate level. It does not establish the future EH-native credential route or Qualified/Converted-only optimization suitability. The observed form promises that contact details are not shared with third parties and lacks the required explicit adult/sharing/version evidence. Do not infer D2 authorization for existing submissions or treat existing provider activity as EH-native activation. Implementation readiness, H3 readiness and H4 readiness are all **NO**.
 
 ## Baseline, authority and inspection scope
 
 - **Tier 3**, because this concerns external lifecycle disclosure, account entitlement, retries and future Production activation, despite the docs-only diff.
 - Baseline: remote `main` at `4c4b2b03e7462157135206b1c83ecddf3889d7b3`. GitHub reports [PR #38](https://github.com/elforssa/english-hills-admin/pull/38) merged at `2026-09-30T03:51:05Z` with that merge SHA. Owner reports PR #38 reviewed; this task did not perform a fresh independent review of it.
-- Inspection date: **2026-09-30**. Verifier: this architecture task, through the existing Windsor.ai Facebook Ads connector and available Codex browser. No authenticated English Hills Meta administrator inspection was possible.
-- Followed [AGENTS](../../../AGENTS.md), the [architecture task template](../../ai/templates/ARCHITECTURE_TASK.md), [activation plan revision 2](../plans/crm-batch2-meta-lifecycle-activation.md) and [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md). The original working tree and unrelated local files were preserved in an isolated worktree.
+- Initial inspection date: **2026-09-30**. Verifier: this architecture task, through the existing Windsor.ai Facebook Ads connector and available Codex browser. That initial session could not inspect authenticated English Hills settings. Subsequent evidence provenance is separately recorded below.
+- Followed [AGENTS](../../../AGENTS.md), the [architecture task template](../../ai/templates/ARCHITECTURE_TASK.md), [activation plan](../plans/crm-batch2-meta-lifecycle-activation.md) and [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md). The original working tree and unrelated local files were preserved in an isolated worktree.
 - PR #38 changed only the activation plan and ADR-004 relative to PR #37. Read-only source checks reconfirmed the constants constraint and retry behavior in migrations 098/099 and the adapter/worker. No runtime test or account event was used to establish these findings.
 
-## Verified observations and account-fact limits
+## Initial observations and account-fact limits — historical
 
 | Ref | Read-only source / observed fact | What it establishes / does not establish |
 | --- | --- | --- |
@@ -45,41 +45,58 @@ Access is incomplete, not proof that the required assets or consent controls do 
 | A3 | Opening [Meta Business](https://business.facebook.com/) redirected to `/business/loginpage/`, showing sign-in choices. | The available browser was not authenticated for account inspection. No form, Business Settings or Events Manager configuration was reached. No login credentials were read or provisioned. |
 | R1 | [Existing mapping documentation](../../crm-mapping-learner-policy.md) and revision 2 identify candidate form `1086266294126723`. | Verified repository reference and owner-specified inspection target only; not live publication, ownership, contents or D2 compliance. |
 
-The A2 catalog field IDs are `conversions_offsite_conversion_fb_pixel_custom_not_qualified`, `conversions_offsite_conversion_fb_pixel_custom_lost`, `conversions_offsite_conversion_fb_pixel_custom_qualified`, `conversions_offsite_conversion_fb_pixel_custom_converted` and `conversions_offsite_conversion_fb_pixel_custom_intake`. If the owner subsequently confirms this account's relationship to English Hills, verify these names against the exact CRM dataset and integration before approving proposed event names. Do not add these additional kinds to Batch 2.
+The A2 catalog field IDs are `conversions_offsite_conversion_fb_pixel_custom_not_qualified`, `conversions_offsite_conversion_fb_pixel_custom_lost`, `conversions_offsite_conversion_fb_pixel_custom_qualified`, `conversions_offsite_conversion_fb_pixel_custom_converted` and `conversions_offsite_conversion_fb_pixel_custom_intake`. The later authenticated evidence below establishes the asset relationship and visible event names; source coexistence/collision handling still needs approval before using those names for EH-native delivery. Do not add these additional kinds to Batch 2.
 
-**Verified English Hills live form facts: none newly established. Verified English Hills dataset/assets: none newly established.** The nonsecret connector ID/name above must not be promoted into the destination manifest by inference.
+**At the initial inspection**, no English Hills live form or dataset facts were established. The subsequent owner-supplied authenticated evidence below supersedes that readiness limit; A1–A3/R1 remain an accurate record of the original inspection.
 
-## Missing form facts — `1086266294126723`
+## Authenticated account evidence — owner-supplied, revision 3
 
-| Required fact | Current evidence / missing proof |
+**Recorded 2026-09-30**, from the repository owner's follow-up instruction on existing PR #39 after head `74a0ec3132068d8bdb16c4831c10a8f716501e18`. The owner reports authenticated read-only Meta account/form inspection. These are verified account facts **as supplied by the owner**, not an independent reinspection by this documentation agent. Exact inspection timestamp, inspecting operator identity and screenshot/export references were not supplied; do not invent them. Revalidate the final manifest before H3/H4. No lead records, tokens or secrets accompany this evidence.
+
+| Ref | Verified fact | Boundary / consequence |
+| --- | --- | --- |
+| B1 | Business Portfolio **Glory Lot**, ID `1741597822557523`. | Owning business identified. This does not establish every future operator's permissions. |
+| B2 | **English Hills Page** `997579646781805`, owned by Glory Lot. | Page ownership verified; future EH connection UUID/mapping association still needs verification. |
+| B3 | **KAL ad account** `1613720155930784`, owned by Glory Lot. | Resolves the initial connector-account ownership uncertainty. |
+| B4 | **English Hills dataset/pixel** `1152399921284927`, owned by Glory Lot and connected to KAL ad account. | Dataset identity, ownership and ad-account relationship verified. Selection for future EH-native sending still requires an approved destination/connection manifest. |
+| B5 | Dataset receives **Meta Pixel + Conversions API** events. | Existing aggregate traffic, not evidence that dormant EH-native Batch 2 sent anything. |
+| B6 | Dataset has **Conversions API System User** with event-dataset access. | Existing access is verified. Token issuer/scopes/expiry and appropriateness for the future separate outbound credential are not established. |
+| B7 | **English Hills CRM** is a separate system user associated with business-owned app **English-hills**, ID `1069638329182835`; that app currently has **no connected assets**. | Do not conflate these two system users or assume the app can send to the dataset. Exact future credential route remains unresolved. No new assignment or token is authorized. |
+| B8 | Existing CRM events visible through Conversions API: **Intake**, **Not qualified**, **Lost**, **Qualified**, **Converted**. | Actual aggregate event visibility supersedes catalog-only A2. Source-by-source identities/payloads and deduplication/coexistence with a future native sender are not verified. No extra Batch 2 event kinds are approved. |
+| B9 | Meta CRM diagnostics calculate **uploaded-event/raw-lead coverage** and state **at least 60% lead coverage** is required for conversion lead optimization. Existing CRM funnel diagnostics recognize **Not qualified**, **Lost**, **Qualified**, **Converted**. | Current aggregate CRM/funnel behavior verified. Actual coverage percentage, qualifying volume/window, complete stage ordering and future D2-eligible two-milestone-only coverage are not supplied. Do not assert that the threshold is met or that two stages alone suffice. |
+| B10 | Yearly form **Google Spreadsheet integration** is connected to dataset `1152399921284927`. **Yearly-program** is active and connected to **Conversions API**. | Existing integration/connection status verified. Does not authorize modifying/disabling it, reusing its credential or double-sending its events. |
+
+## Verified live form and D2 assessment
+
+| Ref | Observed form fact | Assessment |
+| --- | --- | --- |
+| F1 | Name **Yearly-program**, ID `1086266294126723`, active under English Hills Page context `997579646781805`. | Actual active form identity verified. |
+| F2 | Includes child-age and location/distance questions. Displayed labels/options were verified during the owner-reported inspection. | These are structural observations, not lead answers. A complete verbatim label/option inventory was not supplied here; do not invent it or infer raw API keys/types from labels. |
+| F3 | Contact-information wording says contact details are used only by English Hills and **“Elles ne seront jamais partagées avec des tiers.”** Standard Meta submission/privacy text is present. | This is not explicit English Hills → Meta lifecycle/status-sharing authorization. Standard Meta text does not cure the missing D2 evidence or the English Hills wording conflict. |
+| F4 | No explicit adult-contact confirmation, no explicit English Hills → Meta lifecycle/status-sharing authorization and no immutable lifecycle notice/version were observed. | **Current form D2 compliance: FAILED / NOT SATISFIED for future EH-native lifecycle feedback.** No authorization may be inferred for existing submissions. |
+| F5 | Stale wording refers to **`l'inscription au Pré-Cours`** in the Yearly form. | Correct program/notice wording must be part of any separately approved prospective form remediation. No edit is made here. |
+
+A compliant change/replacement and its notice/mapping/policy must be prospective only. Do not retrofit consent, attach a new notice to old submissions, backfill historical milestones or weaken D2 to match the current form. Current aggregate integration activity is not evidence that existing submissions satisfy the EH-native D2 policy; this report does not adjudicate the existing integration's consent basis.
+
+## Missing form facts and required remediation
+
+- Exact **raw API keys, scalar types and accepted affirmative values** remain unresolved. Repository fixtures (`full_name`, `phone_number`, `whatsapp_number`, `âge_de_l'enfant`, `travel_to_almaz`) are not proof of live keys/values. No sample real lead answers may be collected into Git.
+- The future compliant adult-contact statement, separate lifecycle-sharing authorization, approved notice text, version/reference/digest and exact displayed flow remain to be designed and approved. The reported fragments are not a complete notice archive; linked privacy URL/reference and full text remain to be captured safely.
+- Immutable form/mapping version, connection UUID, exact Page-to-EH-connection association, policy effective interval and prospective rollout boundary remain unresolved. Current ad/ad-set usage and transition/intake continuity need a read-only manifest before any approved form replacement.
+- Record safe structural evidence and exact verifier/date/reference before H3. Displayed labels/options are verified observations; machine-returned keys/types are a separate unresolved contract. Do not send a test or fetch/export real submissions to fill it under this task.
+
+## Remaining dataset, permissions and credential facts
+
+| Item | Verified / still required |
 | --- | --- |
-| Exact Page and ownership | Page ID/name, owning Business Portfolio or partner authority, form-to-Page relationship and connection Page are unverified. |
-| Published form identity | Actual form name, status, language, publication/version/reference, current use by ads/ad sets and immutable mapping identity are unverified. |
-| Exact questions and options | Full live question/disclaimer text, control types, required/optional state and selectable option definitions were not accessible. |
-| Raw keys and typed values | No authoritative structural schema/export was available. Repository examples `full_name`, `phone_number`, `whatsapp_number`, `âge_de_l'enfant`, `travel_to_almaz` are synthetic normalization fixtures, not verified live keys or answers. |
-| Adult-contact confirmation | Exact explicit statement, returned raw key, affirmative scalar type/value and required response behavior are missing. Parent/name/phone fields cannot establish this. |
-| CRM lifecycle-sharing consent/evidence | Exact separate sharing statement, scope covering the approved milestones, raw key and affirmative typed values are missing. Generic inquiry consent and Meta origin are insufficient. |
-| Privacy / notice | Exact displayed text, linked policy URL/reference, lifecycle disclosure wording, immutable version and reproducible digest are missing. No notice wording or legal sufficiency is asserted. |
-| Immutable evidence binding | Approved form/mapping/version, notice version/digest, policy interval and submission-specific evidence binding remain unverified. Existing evidence infrastructure does not supply missing account facts. |
-
-Capture form structure and option definitions only, with verifier/date/source. Do not export submissions to obtain example answers. Use an authorized structural schema or sanitized configuration evidence for returned keys/types; displayed labels alone do not prove machine values. If exact D2 compliance cannot be proven, remain dormant; any future form change/replacement requires separate approval.
-
-## Missing dataset, assets and permissions/credential facts
-
-| Required fact | Current state / next evidence |
-| --- | --- |
-| Business Manager / Business Portfolio | Exact business ID, ownership or partner relationship and inspecting operator authority missing. |
-| Ad Account | A1 is a candidate connector account only. English Hills relationship, serving-form association and dataset/Page access missing. |
-| CRM dataset / Pixel | Exact dataset ID and corresponding Pixel endpoint identity, owner, asset assignments and ad-account association missing. |
-| CRM / Conversion Leads configuration | No Events Manager configuration proving CRM designation or Conversion Leads integration. A website Pixel/custom conversion is not a substitute. |
-| Existing CRM event/stage names | A2 is catalog metadata only. Actual destination names, case, ordering, sources and collision analysis missing. Proposed `Qualified`/`Converted` are not approved by this observation. |
-| Integration / connection | CRM recognition, connection status, data-verification phase and sales-funnel configuration missing. Reporting connectivity and inbound intake are separate. |
-| Coverage / funnel diagnostics | Campaign volume, eligible-lead coverage, stage counts, diagnostic status and optimization eligibility unavailable. No conclusion about thresholds being met or missed. |
-| App / system user | IDs, business ownership, chosen Events Manager versus own-app route, exact Pixel assignment and authorized asset tasks missing. |
-| Token entitlement | Issuer/app/system-user metadata, scopes, dataset entitlement, expiry/rotation owner and post-provisioning validation missing. No token was read, created or tested. Prior rollout recorded no outbound provisioning; current absence was not independently queried. |
-| Required inbound permissions | Revision 2 requires separate validation of `leads_retrieval`, applicable Page subscription/access permissions and lead-access assignment. Exact current granted/required set remains unverified; no grants requested. |
-| Required outbound permissions | Revision 2 M5 records own-business Events Manager/own-app CAPI routes without requested permissions/App Review, with Pixel assignment for the own-app system user. Actual selected route, scopes/tasks and applicability remain unverified. Partner routes need separate official verification. Do not infer a need for `ads_management`/`business_management` or issue new grants from this report. |
-| Credential / recovery operators | Named asset, credential, deployment, monitoring and recovery owners and secure provisioning plan remain required before the relevant gate. |
+| Ownership/assets and dataset relationship | B1–B4 substantially verify account ownership/assets and the dataset/ad-account relationship. Future destination approval and EH connection/configuration binding remain separate. |
+| CRM recognition and coverage | B5/B8–B10 verify existing aggregate events, recognized funnel stages and integration activity. Exact current coverage/volume/window and evidence that the future prospective D2-eligible Qualified/Converted-only subset can meet optimization requirements remain unresolved. Existing broader traffic can mask that subset's behavior. |
+| Source coexistence and event names | `Qualified` and `Converted` already exist. Identify existing producers and decide how a future EH-native sender would coexist without semantic collisions or duplicate outcomes. Same display names do not prove identical event IDs or cross-producer deduplication. No integration change or takeover is authorized. |
+| App / system users | B6/B7 verify two distinct actors and app `1069638329182835` with no connected assets. Exact future issuer/app/system-user/asset tasks and secure dedicated credential route remain undecided. Do not infer native outbound entitlement from existing CAPI System User access. |
+| Token / permissions | Exact granted and required scope set for the selected route, issuer/expiry/rotation metadata and future token-to-dataset entitlement remain unverified. No credential was read, provisioned or tested. Existing third-party/integration access is distinct from the unprovisioned native outbound credential recorded in dormant-rollout history. |
+| Inbound permissions | Keep separate validation of `leads_retrieval`, applicable Page subscription/access permissions and lead-access assignment. Existing inbound health does not establish outbound rights; no grants are requested. |
+| Outbound route requirements | Revision 2 M5 describes own-business Events Manager/own-app routes and Pixel assignment; partner requirements differ. Confirm applicability to the chosen future route rather than requesting `ads_management`/`business_management` by assumption. |
+| Operators and release evidence | Named asset, credential, deployment, monitoring/recovery operators, secure provisioning plan and final read-only evidence references remain required. |
 
 ## Provider-contract facts already established in revision 2
 
@@ -108,7 +125,7 @@ D1–D7 Option A remain approved. At the initial PR #39 inspection, the conditio
 | Destination / names / credential route | A: approve exact verified business/Page/ad-account/CRM dataset relationships, collision-checked names and least-privilege route with named operators. B: defer. | A only after evidence; blocks H3. A1/A2 alone are insufficient. |
 | Provider tests / final release | A: continue without provider tests and keep H3/H4 closed. B: later explicitly authorize a concrete test or release manifest after prerequisites. | A for this task. No test, preparation mutation or activation approval is implied. |
 
-The initial inspection required a confirmed owner decision or material verified English Hills evidence before revision 3. The later owner confirmation now satisfies that condition; merging PR #38 alone did not. The other owner decisions in the table remain pending.
+The initial inspection required a confirmed owner decision or material verified English Hills evidence before revision 3. The later owner confirmation now satisfies that condition; merging PR #38 alone did not. The remaining owner choices are refined by the authenticated evidence; the current decision register is in the [revision 3 plan](../plans/crm-batch2-meta-lifecycle-activation.md#owner-decisions-required). The historical option to retain the form on unverified D2 assumptions is no longer a readiness path: observed D2 failure requires prospective remediation or continued dormancy.
 
 ## Implementation readiness and source gap confirmation
 
@@ -127,13 +144,13 @@ D7 remains a bounded single-delivery retry after repair, never a consent, age, i
 
 After the initial inspection, the repository owner explicitly approved: “Unknown or ambiguous provider outcomes must not be automatically resent unless authoritative provider evidence later establishes replay safety.” This is recorded as an approved durable architecture decision in [activation plan revision 3](../plans/crm-batch2-meta-lifecycle-activation.md#approved-owner-retryuncertainty-decision--revision-3) and [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md#approved-no-uncertain-replay-policy--2026-09-30-activation-revision-3), not a pending retry choice. The approval requires review holds, no lease-recovery or director bypass, and no invented numeric horizon; known safe/retryable pre-send failures retain reviewed bounded retry rules.
 
-No new account evidence was added. A1–A3/R1, missing form/assets/permissions and the distinction from revision 2 provider facts remain unchanged. The decision is not implemented; complete provider-ready implementation is still not ready, and H3/H4 remain blocked. D1–D7, two milestones, prospective activation, original lead ID only, immutable identity and separate inbound/outbound operation are preserved.
+At that retry-policy approval step no new account evidence was added. The later B1–B10/F1–F5 evidence above now supersedes the original account/form readiness gaps; provider-contract facts and the approved retry policy are unchanged. The decision is not implemented; complete provider-ready implementation is still not ready, and H3/H4 remain blocked. D1–D7, two milestones, prospective activation, original lead ID only, immutable identity and separate inbound/outbound operation are preserved.
 
 ## IMPLEMENTATION CONTRACT
 
 1. This task changes architecture evidence/navigation documentation only. No code, migrations or external configuration changes; no merge or deployment.
 2. Preserve this account-readiness evidence and record the subsequent approved owner decision in activation plan revision 3 and ADR-004. Keep all other unresolved items explicitly unverified/pending; do not confuse approved policy with implemented behavior.
-3. A follow-up account inspection must establish the form and asset registers above using an authorized session or nonsecret structural evidence, with date/verifier/reference. Do not access/export lead answers or discover secrets to fill gaps.
+3. Preserve B1–B10/F1–F5 as owner-supplied authenticated evidence, without claiming independent reinspection. Follow-up must resolve the remaining raw-key, notice, credential, source-coexistence and coverage gaps with date/verifier/reference. Do not access/export lead answers or discover secrets to fill gaps.
 4. Later application/SQL corrections require approved architecture, separate implementation, CI and fresh independent review/re-review. Follow the activation plan's exact H3/H4 manifests, stop conditions and recovery order; this report closes no release gate.
 5. Validate this docs-only diff for relative links, source accuracy, secrets/PII absence and `git diff --check`. Application tests are not required for this documentation-only task.
 6. Return branch, SHA and docs-only PR with verified/missing facts and all three readiness outcomes. Do not mark activation or architecture closeout complete while evidence and approvals remain missing.
