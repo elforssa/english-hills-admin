@@ -2,9 +2,9 @@
 
 ## What will change
 
-This **Tier-3 H3 technical package, revision 1, 2026-10-01**, replaces the earlier H3 dossier's current blocker assessment. It proposes a bounded path to a verified provider contract and disabled native destination. **NOT READY FOR H3 OWNER REVIEW** as a fully bound execution package: the exact remaining evidence gaps are listed below. Decisions with concrete alternatives can be reviewed now; they are not execution permission.
+This **Tier-3 H3 technical package, revision 2, 2026-10-01**, replaces the earlier H3 dossier's current blocker assessment. It proposes a bounded path to a verified provider contract and disabled native destination. **NOT READY FOR H3 OWNER REVIEW** as a fully bound execution package: the exact remaining evidence gaps are listed below. Decisions with concrete alternatives can be reviewed now; they are not execution permission.
 
-Read-only research and documentation only. No runtime, migration, seed, credential, account permission or Production configuration change is included. No test or real events were sent. Main baseline: `59754c0bcc2261ec36ccf23c80afece98372999f`.
+Read-only research and documentation only. No runtime, migration, seed, credential, account permission or Production configuration change is included. No test or real events were sent. Revision-2 main baseline: `4236cfcddf851e12884cb6ade3cb436c7762c1ea`. Revision-1 observations below retain their original provenance; revision 2 did not re-query Production.
 
 ## What staff/users will be able to do
 
@@ -30,7 +30,13 @@ None. Migration **103 is Production-verified dormant and immutable**, not a rema
 
 The current bearer/JSON transport is **not proven incompatible**, but endpoint-specific support was not established by the official sources inspected. A concrete documented multipart alternative is proposed below. Same-second timestamps are currently allowed; the provider says the event must follow generation. Holding equality may hold later unattempted occurrences through the existing ordering rule. Local ownership does not constrain Meta's legacy Sheet integration. Missing explicit dataset assignment does not prove lack of effective access for an Admin system user.
 
-## Resolved H3 facts and evidence limits
+## Revision-2 blocker investigation
+
+Read the [dated blocker evidence register](../evidence/crm-h3-blocker-evidence-2026-10-01.md) for primary sources, fresh authenticated app/actor/file/script/Zap bindings, complete-stop design, evidence limits and the human roster. **Execution ownership is closed**: the owner assigned **Maroine EL Forssa** to the accountable human roles. Separate architecture, implementation, independent review and release tasks remain required. The credential-route specificity and legacy stop/drain completeness gaps remain; no token, setting, integration or Production change was made.
+
+Existing Admin rights are inherited over this business-owned dataset; an Employee actor is optional, not a proven Meta requirement. The exact endpoint token permissions and unpublished issuance applicability remain insufficiently evidenced. Actual Yearly sending includes a bound Apps Script and published two-step Zap **379180330**; its four-column queue and dispatch have no form exclusion. The complete-stop alternative must account for retained errors, manual replay/import and the separately displayed managed CAPI association.
+
+## Revision-1 resolved facts and evidence limits
 
 | Fact | Evidence / consequence |
 | --- | --- |
@@ -39,16 +45,16 @@ The current bearer/JSON transport is **not proven incompatible**, but endpoint-s
 | Exact Meta destination | Fresh Business Settings: English Hills pixel/dataset `1152399921284927`, owned by Glory Lot `1741597822557523`, connected to KAL ad account. Following View asset showed KAL ID `1613720155930784`; navigation's `selected_asset_id=120226027857760313` is not the endpoint/ad-account ID. Dataset has existing Pixel/CAPI traffic, not evidence of native delivery. |
 | Native actor and app | Fresh system-user view: English Hills CRM `61594759444572`, **Admin**, English-hills app `1069638329182835` full access; four displayed assets, no dataset listed. Dataset People lists only legacy Conversions API System User `100089438321765`, partial **Use events dataset** access. |
 | App security settings | Fresh Advanced settings for app `1069638329182835`: Require app secret **off**, Server IP allowlist empty, all-calls/app-role version selectors `v26.0`; app shown **Unpublished**. No setting changed; no app secret accessed. This resolves the displayed proof setting, not token validity or all possible route restrictions. |
-| Legacy Sheet identity | Metadata-only Drive lookup found [yearly-program-fb](https://docs.google.com/spreadsheets/d/1CM5bq30zUQJoGZkc0eczRtmJ8eYQ-dkfAzSzDGA_OBM/edit), file ID `1CM5bq30zUQJoGZkc0eczRtmJ8eYQ-dkfAzSzDGA_OBM`, modified `2026-10-01T11:31:45.381Z`. Earlier dossier A5 links the displayed Sheet/tab name to Yearly and dataset. Sheet-properties-only read confirmed `Yearly-program` tab ID `12488651` and another tab `Meta Events`, ID `770646155`. Matching file/tab names are candidate identity, not proof of connector binding; integration IDs and sender configuration remain unverified. The extra tab does not prove an extra sender or its absence. No Sheet rows read. |
+| Legacy Sheet identity | Revision 1 found a candidate file/tab by metadata. Revision 2 follows Meta **View** to the exact file/tab, verifies the bound Apps Script and Zap watching **Meta Events**. [Fresh chain and limits](../evidence/crm-h3-blocker-evidence-2026-10-01.md#verified-legacy-sending-chain). The older name-match limit is closed; complete route/stop feasibility is not. |
 | Receipt uncertainty | Existing conservative receipt/error handling and irreversible attempt boundary are implemented. Unknown response variants and a numeric server-only dedup horizon need not be invented to complete the design. They confer no replay permission. |
 
-Inspection date: 2026-10-01 Asia/Shanghai; UTC checkpoint `2026-10-01T11:35:01Z`. Browser views have no independently exported per-view timestamps. Account observations are not token authorization tests. Production query used `BEGIN READ ONLY`, selected only the listed nonsecret connection columns/JSON keys, then `COMMIT`; no customer tables, secret values or complete configuration blobs were read.
+Revision-1 inspection date: 2026-10-01 Asia/Shanghai; UTC checkpoint `2026-10-01T11:35:01Z`. Browser views have no independently exported per-view timestamps. Account observations are not token authorization tests. Production query used `BEGIN READ ONLY`, selected only the listed nonsecret connection columns/JSON keys, then `COMMIT`; no customer tables, secret values or complete configuration blobs were read.
 
-### Fresh official sources
+### Revision-1 official sources
 
 Web fetch returned 429/unavailable; the browser rendered official pages. No third-party search result supplies contract authority. Historical sources remain in the [earlier dossier](../evidence/crm-h3-readiness-2026-10-01.md#fresh-official-source-register).
 
-| Ref | Source inspected this task | Finding and limit |
+| Ref | Source inspected in revision 1 | Finding and limit |
 | --- | --- | --- |
 | H3-P1 | [CRM payload specification](https://developers.facebook.com/documentation/ads-commerce/conversions-api/conversion-leads-integration/payload-specification), updated June 28, 2026 | Free-form CRM stages, original lead ID, integer seconds, strict-after wording, seven days and required CRM constants. No explicit equality exception. |
 | H3-P2 | [Using the API](https://developers.facebook.com/documentation/ads-commerce/conversions-api/using-the-api), updated July 17, 2026 | Versioned Pixel events edge; `v26.0` multipart example with `data` and `access_token` fields, JSON event envelope example. Error may coexist with accepted batch members. Test-coded events can affect measurement/targeting. No endpoint bearer-header assurance found. |
@@ -132,14 +138,14 @@ Future synthetic acceptance: exact equality, subsecond equality after flooring, 
 
 ## Credential provisioning, storage and rotation design
 
-Recommended candidate route: own-business app `1069638329182835` and native actor `61594759444572` to dataset `1152399921284927`. Existing actor is Admin, so this is not a claim of asset-minimal identity. H3-P5 establishes inherited Admin access; current explicit assignment is absent. Named asset operator must reconcile effective rights with H3-P3's dataset-assignment step and record actual entitlement. Do not add broad grants simply to make the UI list nonempty. A dedicated Employee sender is an alternative least-privilege design requiring its own approved actor/app bindings; do not silently create it or reduce the existing actor's intake rights.
+Recommended candidate route: own-business app `1069638329182835` and native actor `61594759444572` to dataset `1152399921284927`. Revision 2 verifies app ownership and installation. Existing actor is Admin, so this is not a claim of asset-minimal identity. H3-P5 establishes inherited Admin asset access; a dataset entry is not required merely to establish that access. The exact issuance/token permission set and reconciliation of H3-P3's assignment recipe remain open in the [credential evidence](../evidence/crm-h3-blocker-evidence-2026-10-01.md#authoritative-credential-evidence). Do not add broad grants simply to make the UI list nonempty. A dedicated Employee sender is an alternative least-privilege design requiring its own approved actor/app bindings; do not silently create it or reduce the existing actor's intake rights.
 
 | Record | Required content, never secret values |
 | --- | --- |
 | Issuance | Selected route; business/app/system-user/dataset IDs; issuing operator; actual scopes/task labels and machine IDs if available; verification timestamp/reference; issuance time and expiry or documented non-expiring status |
 | Storage | Production Vercel project `english-hills-admin`, server-only `CRM_META_LIFECYCLE_TOKEN_EH_R4`; secret-manager reference and version/metadata only; no local `.env`, Git, chat, preview/dev, browser or ordinary database secret value |
 | Separation | New outbound token; do not copy/revoke inbound or legacy credentials. Scheduler bearer/Vault setup is deferred to a separately enumerated task; it is not necessary for disabled destination preparation |
-| Ownership | Named credential custodian, backup/revocation authority, release operator, review/rotation due date; all must be supplied before execution |
+| Ownership | Named credential custodian, backup/revocation authority, release operator, review/rotation due date; Maroine EL Forssa is assigned to the human roles; actual schedule and protected access must be bound before execution |
 | Validity verification | Authorized operator checks issuer/subject/expiry/scopes/assets using protected tools and records only nonsecret summary. No token echo, Graph Explorer event test or `/events` POST. Metadata is not delivery proof |
 
 Proposed routine policy for owner choice: review metadata every 30 days; rotate before the earlier of actual expiry minus seven days or 90 days from issuance (including non-expiring tokens). These are EH recommendations, not Meta mandates. If issuance lifetime is shorter, set a documented feasible window before use. Emergency rotation/revocation is incident-driven.
@@ -150,7 +156,7 @@ After H4, credential rotation requires the separately approved pause/recovery pr
 
 ## Native-versus-legacy producer exclusion design
 
-H3 design prerequisite: evidence that exclusion can be enforced across the **actual** existing producer paths, without selecting a future form. H4 binds the future source and proves concrete no-overlap. Current evidence establishes the Yearly integration's existence, not comprehensive enforcement. Stable Sheet candidate above is progress, not closure.
+H3 design prerequisite: evidence that exclusion can be enforced across the **actual** existing producer paths, without selecting a future form. H4 binds the future source and proves concrete no-overlap. Revision 2 establishes the exact Yearly file/tab, bound queue-producing Apps Script and published Zap. Current selective exclusion is unavailable: the queue lacks verified original form identity and dispatch has no filter. Read the [complete-stop procedure and remaining gaps](../evidence/crm-h3-blocker-evidence-2026-10-01.md#complete-legacy-outbound-stopdrain-design--later-h4-preparation-only). Complete stop/drain design completeness remains a package blocker; actual stopping remains H4 preparation.
 
 Required legacy manifest per producer: platform/integration ID, Sheet file + numeric tab ID, script/project/deployment/connector revision if any, asset/token-actor identity without token, Page/form selectors, five event mappings, trigger/queue/retry/dead-letter paths, manual import/resend authority, configuration evidence timestamp/digest and accountable operator. Explicitly mark a path absent only with operator/configuration evidence, not because a connector search found nothing.
 
@@ -167,16 +173,16 @@ Drift owner must monitor changes to allowlists, auto-discovery, connectors, manu
 
 ## Owner decisions required
 
-No reapproval of D2, five names, repeats/singletons, Qualified target, original matching or no-uncertain-replay is requested. No response to this document is presumed approval.
+No reapproval of D2, five names, repeats/singletons, Qualified target, original matching or no-uncertain-replay is requested. The [four grouped owner decisions](../evidence/crm-h3-blocker-evidence-2026-10-01.md#small-owner-decision-set-after-evidence-closure) consolidate the detailed alternatives below. The roster answer is assignment only, not execution approval.
 
 | Decision | A / B and consequences | Recommendation / blocking scope |
 | --- | --- | --- |
 | Transport | A: commission documented multipart body-token patch. B: retain bearer/JSON only after authoritative endpoint support evidence | A; exact patch/review/deployment needed before seed/configuration execution, no token in frozen payload |
 | Equality | A: strict exported-second hold with predecessor consequence above. B: obtain provider equality clarification before deciding | A; owner must explicitly accept hold/coverage consequence before implementation; no invented time |
 | Credential actor | A: existing named Admin actor, acknowledging inherited wider rights. B: separately provision an Employee sender with verified minimum app/dataset rights | A is the existing concrete candidate, B reduces identity breadth but requires new exact IDs. Choose explicitly; never modify existing actor rights in this task |
-| Legacy separation | A: verified supported ingress/dispatch/manual exclusion. B: separately approved complete legacy outbound stop/drain | A if actually enforceable; otherwise B. Feasibility evidence is missing, so neither is execution-ready |
+| Legacy separation | A: verified supported ingress/dispatch/manual exclusion. B: separately approved complete legacy outbound stop/drain | B for the existing sender after completing its bounded census/cancellation evidence; A requires separately reviewed provenance/enforcement redesign. Existing v3 cannot enforce A |
 | Contract/configuration | Approve exact manifest, same EH connection, dataset, reference and `max_attempts=5`, or defer | Recommended values below; approval does not authorize seed/deployment/events |
-| Credential governance | Accept proposed 30-day review/90-day-or-expiry rotation and name custodians, or supply another explicit schedule | Must be bound before credential execution |
+| Credential governance | Accept proposed 30-day review/90-day-or-expiry rotation, or supply another explicit schedule; accountable custodian/revocation authority is Maroine EL Forssa | Must be bound before credential execution |
 
 ## Remaining external/account actions — later authorization required
 
@@ -191,7 +197,7 @@ Lack of an already-issued token, already-applied seed, actual approval timestamp
 
 ## Named H3 execution steps, order and recovery
 
-Step names are fixed; human assignees remain **unassigned** pending owner input. Do not infer that repository username or account Admin is the operator. Required roster: H3 owner; Meta asset administrator; credential custodian; legacy sender owner; EH director/configuration operator; independent reviewer; separate release/DB operator; verification/recovery owner. One human may cover approved compatible roles, but independent review and release remain separate task instances under AGENTS.
+Step names are fixed. **Maroine EL Forssa** is the owner-confirmed accountable human for H3 approval, Meta assets, credential custody/token-specific revocation, legacy sending/drift, EH director configuration, release/DB and verification/recovery. The [step-by-step roster](../evidence/crm-h3-blocker-evidence-2026-10-01.md#human-roster-and-task-independence) binds H3-01–08 to these roles. Architecture, implementation, independent review and release must use separate task/agent/session instances under AGENTS; current author/internal QA cannot self-review. H3-07 uses a separate verification task from release. One human may supervise all these tasks. Instance IDs, protected stored-role authority, approvals and actual windows are bound at commissioning; no additional human name is invented. A second backup human is optional continuity planning.
 
 | Order / named step | Responsible role / entry condition | Verification / stop / recovery |
 | --- | --- | --- |
@@ -214,9 +220,10 @@ Actual prospective form/source identity and any creation/publication/binding; fi
 
 ## Exact remaining blockers to a fully bound H3 owner-review package
 
-1. **Effective credential route insufficiently evidenced:** named asset administrator must attest own-business route applicability for the unpublished app, effective Admin versus explicit dataset access, required task/scope set and issuance constraints; choose existing Admin or supply an exact dedicated actor proposal. No token generation is needed to close this design gap.
-2. **Legacy exclusion feasibility unverified:** confirm the candidate file/tab binding, provide nonsecret integration IDs and deployed configuration/revision covering automatic, delayed retry/dead-letter and manual paths, proving supported exclusion; otherwise provide a feasible complete outbound stop/drain design and accountable operator. The Drive name match alone does not close this gap. Actual future cohort binding stays H4.
-3. **Execution roster unassigned:** owner must name the roles in H3-01–08, credential rotation/revocation and legacy drift owners. Bind permitted operations and actual approval/release windows when authorizing execution; do not invent names or blanket-approve unknown operations.
+1. **Credential-route specificity:** authoritative Meta endpoint-specific documentation/support and authenticated nonsecret preflight must bind the minimum dataset task/token scopes, unpublished own-business applicability, actual lifetime/access restrictions and the Admin assignment-recipe reconciliation. Admin inherited asset access, claimed/installed app and current event proof setting are established; token authorization is not. Choose Admin or an exact Employee proposal after that evidence; no issuance is required in this task.
+2. **Complete legacy stop/drain feasibility:** bind the action's destination/Meta subject and connection separation, complete all-account/other-owner/manual route census, establish managed Yearly CAPI disconnect/pending/retry/backfill semantics and exact unfinished-run cancellation/disposition controls. The file/tab/script/Zap IDs and current failure of selective exclusion are established. See the bounded procedure; absence from one UI is not absence of a route. Actual stopping and future-cohort no-overlap verification remain separately authorized H4 preparation.
+
+**Closed blocker — execution ownership:** owner assigned Maroine EL Forssa to the human roster above. Separate implementation, independent review, release and verification task identities and artifact-bound operation windows are future commissioning records, not unknown human owners.
 
 The concrete transport/time choices are **remaining owner decisions**, not missing provider research that must be solved before those choices can be reviewed. Selecting the documented multipart/strict-second path closes the need to prove bearer/equality acceptance; selecting the alternative requires its authoritative evidence before implementation. Unknown duplicate acknowledgment/numeric server-only dedup horizon, absent credentials/seed, future form/mapping/cohort and the completed advisory-D2 implementation are **not additional package blockers**. Exact reviewed patch/seed SHAs and actual approval dates are outputs of later gated steps; they are not falsely asserted as existing.
 
@@ -226,4 +233,4 @@ This PR is architecture/readiness documentation only. Preserve current main code
 
 After explicit owner decision/commissioning, a separate Tier-3 implementation task may touch `src/lib/crm/lifecycle/adapter.mjs`, `worker.mjs` only as needed for transport inputs, `server.js` only if proof storage is approved, and new forward SQL replacing affected R4 reconcile/hold/prepare/begin validation with unchanged locks/ACLs. Review transitive claim/retry/get/prepared-payload paths. Extend existing lifecycle JS and R4/advisory SQL tests for the timestamp/auth cases above. No policy/D2, matching, event scope, owner model, outbox or ordering redesign. Review library/framework local guides before code. Fresh/103-upgrade, role, retention, no-unknown-replay and relevant concurrency checks plus required CI and independent exact-SHA review precede separately authorized release. The seed is a separate reviewed migration only after final provider-contract approval; no credentials or activation data in it.
 
-Stop for any broadening, unsupported legacy exclusion, need to change event truth or successor ordering, new secret/proof requirement, actual nonempty Production inventory or expired provider evidence. Update this package and obtain the affected decision rather than silently implementing. **NOT READY FOR H3 OWNER REVIEW** until the three enumerated package gaps are closed; H3 execution and H4 remain unauthorized.
+Stop for any broadening, unsupported legacy exclusion, need to change event truth or successor ordering, new secret/proof requirement, actual nonempty Production inventory or expired provider evidence. Update this package and obtain the affected decision rather than silently implementing. **NOT READY FOR H3 OWNER REVIEW** until the two enumerated evidence gaps are closed; H3 execution and H4 remain unauthorized.
