@@ -62,3 +62,7 @@ The imported AGENTS/CLAUDE guidance incorrectly claimed receptionist was removed
 
 
 **CRM Meta funnel revision 4 — ARCHITECTURE APPROVED; IMPLEMENTED ON THE REVISION-4 BRANCH; NOT MERGED OR DEPLOYED.** From exact base `e50b1ff0d5bea5f4675f212d7ba1aabcafe980c8`, migrations 101 `crm_meta_funnel_r4_schema_controls` and 102 `crm_meta_funnel_r4_runtime_safety` implement the dormant five-event model, prospective producer boundary/ownership controls, chronological activity-backed occurrences and no-uncertain-replay safeguards. No contract, policy, boundary, epoch or activation is seeded. This repository fact does not change Production: current Production remains on the dormant two-event implementation, H3/H4 are not approved, and provider contract/form/credential/legacy-exclusion prerequisites remain blocked. Merge, deployment and Production verification are separate future states. [Approved plan](../architecture/plans/crm-meta-funnel-revision-4.md).
+
+## PR 46 advisory D2 review clarification
+
+Documentation-only findings fix proposes the [exact sharing-stop locking, scope and retention contract](../architecture/plans/crm-meta-funnel-r4-sharing-stop-contract.md). The former generic lock/submission-only marker is superseded in the proposal. Existing deployed required-D2 policies and Production behavior remain unchanged; 103 is unauthored. New-head independent review and owner final architecture acceptance remain pending. No H3/H4 execution is authorized.
