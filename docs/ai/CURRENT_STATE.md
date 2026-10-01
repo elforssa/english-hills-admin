@@ -1,8 +1,8 @@
 # Current state
 
-## Proposed R4 D2 advisory architecture
+## Owner approved R4 D2 advisory architecture
 
-2026-10-01: the owner requested [advisory custom D2 evidence](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md). This documentation-only proposal identifies schema/runtime/H3 blockers and recommends 103 relaxation plus a separate later provider seed. Architecture is ready for owner review; no implementation/release approval is recorded. Deployed 101/102 still enforce mandatory grants and remain immutable. The [H3 assessment](../architecture/evidence/crm-h3-readiness-2026-10-01.md) removes missing custom proof from future blockers but keeps unresolved H3 provider/transport, credential, exclusion-design, advisory implementation and execution requirements; actual future source/form ID, final mapping, cohort boundary and then-current platform/privacy review are deferred to H4. Runtime and Production gates are unchanged.
+2026-10-01: the owner finally approved [advisory custom D2 evidence](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md). This documentation-only proposal identifies schema/runtime/H3 blockers and recommends 103 relaxation plus a separate later provider seed. Final owner architecture approval is complete for PR #46 at `c404815c5539f1651f7f87274f6ff345a45237ff`; no implementation/deployment/release or H3/H4 approval is recorded. Deployed 101/102 still enforce mandatory grants and remain immutable. The [H3 assessment](../architecture/evidence/crm-h3-readiness-2026-10-01.md) removes missing custom proof from future blockers but keeps unresolved H3 provider/transport, credential, exclusion-design, advisory implementation and execution requirements; actual future source/form ID, final mapping, cohort boundary and then-current platform/privacy review are deferred to H4. Runtime and Production gates are unchanged.
 
 ## H3 preparation after dormant R4 rollout — 2026-10-01
 
@@ -65,4 +65,4 @@ The imported AGENTS/CLAUDE guidance incorrectly claimed receptionist was removed
 
 ## PR 46 advisory D2 review clarification
 
-Documentation-only findings fix proposes the [exact sharing-stop locking, scope and retention contract](../architecture/plans/crm-meta-funnel-r4-sharing-stop-contract.md). The former generic lock/submission-only marker is superseded in the proposal. Existing deployed required-D2 policies and Production behavior remain unchanged; 103 is unauthored. New-head independent review and owner final architecture acceptance remain pending. No H3/H4 execution is authorized.
+The owner-approved documentation-only findings fix defines the [exact sharing-stop locking, scope and retention contract](../architecture/plans/crm-meta-funnel-r4-sharing-stop-contract.md). The former generic lock/submission-only marker is superseded in the proposal. Existing deployed required-D2 policies and Production behavior remain unchanged; 103 is unauthored. Final owner architecture acceptance is complete, including opportunity/contact/pending scopes, mandatory actual stops, the exact lock hierarchy and retention/tombstones. Migration 103 is NOT implemented; deployment is NOT authorized; H3/H4 are NOT approved and remain blocked. [Approval quote and full preserved scope](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md#final-owner-architecture-approval-2026-10-01). No H3/H4 execution is authorized.
