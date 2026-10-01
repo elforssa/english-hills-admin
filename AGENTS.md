@@ -43,7 +43,7 @@ Record the risk tier and rationale in the task/PR. Use the highest applicable ti
 | **2 — normal substantial** | Normal feature work, shared UI/business logic, non-sensitive schema additions | Architecture when needed; implementer + CI + mandatory fresh independent reviewer. |
 | **3 — high risk** | Auth/roles/RLS, finance, migrations affecting existing Production data/invariants, external APIs/provider delivery, schedulers/cron, secrets/credentials, conversion/enrollment integrity, Production activation | Full architecture → implementation → CI → fresh independent reviewer → release/operator flow. |
 
-For Tier 3, use separate architecture, implementation, fresh independent review and release tasks/agent instances. Keep architecture → human owner approval before implementation, and human release approval → release/operator → Production verification → documentation closeout after independent review. Tier 2 and Tier 3 require a fresh independent review of the exact PR head SHA, including fresh re-review after findings are fixed. Production mutation/activation remains Tier 3 even when the originating code or docs change was lower risk; existing explicit deployment approval requirements still apply.
+For Tier 3, use separate architecture, implementation, fresh independent review and release tasks/agent instances. Keep architecture → human owner approval before implementation, and human release approval → release/operator → Production verification → documentation closeout after independent review. Tier 2 and Tier 3 require a fresh independent review of the exact PR head SHA, including fresh re-review after findings are fixed. Actual Production operations (database/data changes, configuration, credentials, schedulers or provider activation) remain Tier 3 even when the originating code or docs change was lower risk. An ordinary Tier 1 source change may receive explicit owner approval to merge and follow the existing automatic deployment path without a mandatory independent AI review; deployment alone does not retroactively raise that source change's review tier. This exception does not cover sensitive policy changes or additional Production operations. Explicit owner release approval remains required for a merge that triggers deployment; see the rollout template.
 
 ### Small changes (Tier 1)
 
@@ -55,21 +55,21 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 ### Normal features (Tier 2)
 
 1. Obtain architecture approval when required, then implement.
-2. Run relevant tests and the required complete validation suite as described below.
+2. Run focused local checks and any explicitly required local validation as described below.
 3. Perform one focused internal self-check and inspect the final diff.
-4. Open the PR and report **READY FOR INDEPENDENT REVIEW** when the handoff conditions are met.
+4. Commit/push and open the PR, wait for required CI for the current revision, then report **READY FOR INDEPENDENT REVIEW** when the handoff conditions are met.
 5. Hand off to a separate independent reviewer; this is mandatory for Tier 2.
 
 ### High-risk changes (Tier 3)
 
 1. Complete the required architecture task and human owner approval.
 2. Implement the approved scope.
-3. Run relevant tests and required complete validation.
+3. Run focused local checks and any explicitly required local validation.
 4. Perform one focused internal self-check and inspect the final diff.
-5. Open the PR.
+5. Commit/push, open the PR and wait for required CI for the current revision.
 6. Report **READY FOR INDEPENDENT REVIEW** only when the exact-SHA handoff conditions below are met.
 7. Have a fresh independent reviewer task review the exact PR SHA and return its verdict.
-8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused validation, runs required full validation once, and requests fresh independent review of the new SHA.
+8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, waits for required CI, and requests fresh independent review of the new SHA.
 9. After review, follow the existing human approval, separate release/operator and Production verification flow.
 
 ## Internal implementation QA
@@ -82,7 +82,7 @@ Avoid duplicating release/operator checks during implementation unless needed to
 
 ## Independent review
 
-Independent review must be performed by a separate reviewer task/session that did not implement the change. It is mandatory for Tier 2 and Tier 3 and optional for Tier 1. The reviewer verifies the actual PR head SHA, checks architecture compliance, security and invariants, assesses tests and their evidence, and challenges implementation assumptions. It returns exactly one formal verdict:
+Independent review must be performed by a separate reviewer task/session that did not implement the change. It is mandatory for Tier 2 and Tier 3 and optional for Tier 1. Fresh review means a current assessment of the new exact SHA by a reviewer independent of implementation; the same independent reviewer may perform re-review, without a new agent/session for every fix. The reviewer verifies the actual PR head SHA, checks architecture compliance, security and invariants, assesses tests and their evidence, and challenges implementation assumptions. It returns exactly one formal verdict:
 
 - **READY FOR FINAL REVIEW**
 - **CHANGES REQUIRED**
@@ -95,11 +95,12 @@ Do not require another internal or independent review cycle merely because a pre
 
 - During development, run focused tests relevant to changed areas.
 - The independent reviewer should inspect and reuse sufficient test/CI evidence tied to the exact head SHA rather than rerun a complete suite by default. Run additional checks when coverage is missing, doubtful or affected by the findings; evidence reuse never waives required checks.
-- Before independent review, run the required complete validation suite once for the handoff SHA. Markdown-only changes use the documentation checks above; existing required CI still applies.
-- After reviewer findings are fixed, run focused regression tests first, perform a targeted internal re-check of affected behavior and safeguards, then run the required complete suite once for the new SHA and request fresh independent review.
+- The implementer owns focused local checks and completion of all required validation. Commit/push and open/update the PR before waiting for remote CI. Passing required CI for the current revision satisfies overlapping suite checks; do not also run the whole suite locally by default. Run additional local/full validation when explicitly required by the approved contract or needed for missing coverage, environment-specific behavior or doubtful evidence. Markdown-only changes use the documentation checks above; existing required CI still applies.
+- After reviewer findings are fixed, run focused local regressions and a targeted internal re-check, commit/push, wait for required CI for the new revision, then request fresh independent re-review. Do not duplicate passing CI locally without a coverage/environment reason.
+- Record PR head SHA, base SHA and the tested merge SHA when CI runs a synthetic merge, plus run links/results and any local tested SHA/tree. Verify evidence corresponds to the current head/base; a changed head or base requires refreshed applicable checks or an explicit assessment of evidence validity, never assumed reuse.
 - For Tier 2 and Tier 3, the fresh reviewer must inspect the new SHA, prior findings and affected regressions; approval of an earlier SHA is stale. Reuse unaffected evidence where sufficient, but do not bypass required checks or exact-SHA review.
 
-Avoid repeated expensive full reviews or suite runs without new findings or risk. Failures, later changes or insufficient evidence still require appropriate validation; “once” does not permit handing off failed or stale checks.
+Avoid repeated expensive full reviews or suite runs without new findings or risk. Failures, later changes or insufficient evidence still require appropriate validation; evidence reuse does not permit handing off failed, incomplete or stale checks.
 
 Path-filtered or reduced docs-only CI is proposed future work, not current policy or an implemented optimization. Any such change needs its own scoped assessment and approval; current required CI remains unchanged.
 
