@@ -54,7 +54,7 @@ try {
   page.on('response',response=>{
     const url=new URL(response.url());
     if(['localhost','127.0.0.1'].includes(url.hostname) && response.status()>=500) serverErrors.push(`${response.status()} ${url.pathname}`);
-    if(/crm_lifecycle_diagnostics|crm_list_external_deliveries|crm_publish_lifecycle_policy|crm_retire_lifecycle_policy|crm_stop_lifecycle_sharing|crm_bind_pending_lifecycle_stop|\/api\/internal\/crm\/lifecycle\/process/.test(response.url())){
+    if(/crm_lifecycle_diagnostics|crm_list_external_deliveries|crm_publish_lifecycle_policy|crm_retire_lifecycle_policy|crm_stop_lifecycle_sharing|crm_list_pending_lifecycle_stops|crm_bind_pending_lifecycle_stop|\/api\/internal\/crm\/lifecycle\/process/.test(response.url())){
       captured.push(response.text().then(body=>({url:response.url(),status:response.status(),body})).catch(()=>null));
     }
   });
@@ -113,14 +113,27 @@ try {
   const stopResponse=page.waitForResponse(response=>response.url().includes('/rest/v1/rpc/crm_stop_lifecycle_sharing'));
   await page.getByRole('button',{name:'Enregistrer l’arrêt permanent'}).click();
   const stopped=await stopResponse;assert.equal(stopped.status(),200);
-  const pendingStop=await stopped.json();assert.match(pendingStop,/^[0-9a-f-]{36}$/);
+  // Binding input must come from rendered UI, never an intercepted RPC body.
+  await expect(page.getByTestId('sharing-stop-id')).toBeVisible();
+  const pendingStop=await page.getByTestId('sharing-stop-id').textContent();assert.match(pendingStop,/^[0-9a-f-]{36}$/);
+  await expect(page.getByLabel('Identifiant de l’arrêt en attente')).toHaveValue(pendingStop);
+  // A deferred review survives reload and is recoverable through authorized UI.
+  await page.reload();
+  await expect(page.getByLabel('Identifiant de l’arrêt en attente')).toHaveValue('');
+  const pendingRow=page.getByTestId('pending-stop-row').filter({hasText:pendingStop});
+  await expect(pendingRow).toBeVisible();
+  await expect(pendingRow.getByText(pendingSource,{exact:true})).toBeVisible();
+  const retrievedStop=await pendingRow.getByTestId('pending-stop-id').textContent();
+  assert.equal(retrievedStop,pendingStop);
+  await pendingRow.getByRole('button',{name:'Reprendre la revue'}).click();
+  await expect(page.getByLabel('Identifiant de l’arrêt en attente')).toHaveValue(retrievedStop);
   assert.equal(sql(`select scope_intent from public.crm_lifecycle_pending_intents where stop_id='${pendingStop}'`),'contact_review');
-  await page.getByLabel('Identifiant de l’arrêt en attente').fill(pendingStop);
   await page.getByLabel('Identifiant du contact vérifié').fill(reviewedContact);
   await page.getByLabel('Référence de la revue').fill('browser-verified-001');
   const bindResponse=page.waitForResponse(response=>response.url().includes('/rest/v1/rpc/crm_bind_pending_lifecycle_stop'));
   await page.getByRole('button',{name:'Confirmer le contact et la portée'}).click();
   const bound=await bindResponse;assert.equal(bound.status(),200);
+  await expect(page.getByTestId('pending-stop-row').filter({hasText:pendingStop})).toHaveCount(0);
   assert.equal(sql(`select count(*) from public.crm_lifecycle_stop_handoffs h join public.crm_lifecycle_sharing_stops s on s.id=h.final_stop_id where h.pending_stop_id='${pendingStop}' and s.contact_id='${reviewedContact}' and s.connection_id is null`),'1');
   assert.equal(sql(`select lead_id is null from public.crm_submissions where id='${pendingSource}'`),'t');
 
@@ -142,13 +155,13 @@ try {
   await page.waitForLoadState('networkidle');
 
   const responses=(await Promise.all(captured)).filter(Boolean);
-  for(const required of ['crm_lifecycle_diagnostics','crm_list_external_deliveries','crm_publish_lifecycle_policy','crm_retire_lifecycle_policy','crm_stop_lifecycle_sharing','crm_bind_pending_lifecycle_stop','/api/internal/crm/lifecycle/process']){
+  for(const required of ['crm_lifecycle_diagnostics','crm_list_external_deliveries','crm_publish_lifecycle_policy','crm_retire_lifecycle_policy','crm_stop_lifecycle_sharing','crm_list_pending_lifecycle_stops','crm_bind_pending_lifecycle_stop','/api/internal/crm/lifecycle/process']){
     assert(responses.some(item=>item.url.includes(required) && item.status<400),`Missing successful browser response: ${required}`);
   }
   const exposed=/secret_ref|access_token|source_external_id|form_answers|learner_|phone|email|\"payload\"|adult_accepted_values|sharing_accepted_values/i;
   for(const response of responses) assert(!exposed.test(response.body),`Sensitive field exposed by ${response.url}`);
   assert.deepEqual(pageErrors,[]); assert.deepEqual(serverErrors,[]);
-  console.log('PASS director advisory controls, publish/retire and grantless broad pending stop/binding network responses, fail-closed gate and no sensitive browser payloads');
+  console.log('PASS director advisory controls, publish/retire and visible returned IDs and deferred broad pending-stop binding through authorized UI, fail-closed gate and no sensitive browser payloads');
   await context.close();
 } finally {
   await browser?.close();

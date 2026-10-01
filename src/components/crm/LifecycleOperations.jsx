@@ -24,6 +24,8 @@ export default function LifecycleOperations() {
   const { role } = useAuth();
   const refresh = useCrmRefresh();
   const diagnostics = useCrmRead('crm_lifecycle_diagnostics', {}, role === 'director');
+  const [pendingOffset, setPendingOffset] = useState(0);
+  const pendingStops = useCrmRead('crm_list_pending_lifecycle_stops', { p_limit: 25, p_offset: pendingOffset }, role === 'director');
   const deliveries = useCrmRead('crm_list_external_deliveries', { p_limit: 50, p_offset: 0 }, role === 'director');
   const gate = useQuery({ queryKey: ['crm', 'lifecycle-server-gate'], queryFn: async () => {
     const response = await fetch('/api/internal/crm/lifecycle/process', { cache: 'no-store' });
@@ -32,6 +34,7 @@ export default function LifecycleOperations() {
   }, enabled: role === 'director', staleTime: 15000 });
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [recordedStop, setRecordedStop] = useState('');
   const [policy, setPolicy] = useState({ connection: '', mapping: '', noticeVersion: '', noticeDigest: '', adultKey: '', adultValues: '', sharingKey: '', sharingValues: '', sharingRefused: '', prohibitedKey: '', prohibitedValues: '', safetyReference: '', noticeKey: '', noticeValues: '', starts: '', ends: '' });
   const [stop, setStop] = useState({ scope: 'opportunity', subject: '', connection: '', reason: 'inquiry_refusal', reference: '', source: '', broadPending: false });
   const [binding, setBinding] = useState({ pending: '', contact: '', connection: '', reference: '' });
@@ -40,7 +43,7 @@ export default function LifecycleOperations() {
 
   const run = async (key, action) => {
     setBusy(key); setError('');
-    try { await action(); await refresh(); await Promise.all([diagnostics.refetch(), deliveries.refetch(), gate.refetch()]); }
+    try { await action(); await refresh(); await Promise.all([diagnostics.refetch(), deliveries.refetch(), pendingStops.refetch(), gate.refetch()]); }
     catch { setError('Action refusée par les contrôles de sécurité ou de version. Actualisez puis réessayez.'); }
     finally { setBusy(''); }
   };
@@ -67,21 +70,25 @@ export default function LifecycleOperations() {
     && (!policy.sharingKey && !policy.sharingValues && !policy.sharingRefused || policy.sharingKey && typedValues(policy.sharingValues) && typedValues(policy.sharingRefused) && /^[A-Za-z0-9:_-]{8,100}$/.test(policy.safetyReference))
     && (!policy.prohibitedKey && !policy.prohibitedValues || policy.prohibitedKey && typedValues(policy.prohibitedValues) && /^[A-Za-z0-9:_-]{8,100}$/.test(policy.safetyReference))
     && (!policy.noticeKey && !policy.noticeValues || policy.noticeKey && typedValues(policy.noticeValues));
-  const submitStop = () => run('stop', () => crmRpc('crm_stop_lifecycle_sharing', {
-    p_request: crypto.randomUUID(), p_scope: stop.scope, p_subject: stop.subject, p_connection: stop.connection || null,
-    p_pending_contact_review: stop.scope === 'submission_pending' && stop.broadPending, p_reason: stop.reason, p_source_submission: stop.source || null, p_decision_reference: stop.reference || null,
-  }));
+  const submitStop = () => run('stop', async () => {
+    const id = await crmRpc('crm_stop_lifecycle_sharing', {
+      p_request: crypto.randomUUID(), p_scope: stop.scope, p_subject: stop.subject, p_connection: stop.connection || null,
+      p_pending_contact_review: stop.scope === 'submission_pending' && stop.broadPending, p_reason: stop.reason, p_source_submission: stop.source || null, p_decision_reference: stop.reference || null,
+    });
+    setRecordedStop(id);
+    if (stop.scope === 'submission_pending' && stop.broadPending) setBinding({ pending: id, contact: '', connection: '', reference: '' });
+  });
   const bindPending = () => run('bind', () => crmRpc('crm_bind_pending_lifecycle_stop', { p_request: crypto.randomUUID(), p_pending_stop: binding.pending, p_contact: binding.contact, p_connection: binding.connection || null, p_decision_reference: binding.reference }));
   if (role !== 'director') return null;
 
   return <div className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-6" data-testid="lifecycle-operations">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-5">
       <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Direction · Intégrations</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">Retour de cycle Meta</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">Supervision des faits Réception, Non qualifié, Perdu, Qualifié et Converti. Meta ne modifie jamais le statut CRM, l’inscription ou la finance.</p></div>
-      <Button variant="outline" onClick={() => Promise.all([diagnostics.refetch(), deliveries.refetch(), gate.refetch()])}><RefreshCw className="mr-2 h-4 w-4" />Actualiser</Button>
+      <Button variant="outline" onClick={() => Promise.all([diagnostics.refetch(), deliveries.refetch(), pendingStops.refetch(), gate.refetch()])}><RefreshCw className="mr-2 h-4 w-4" />Actualiser</Button>
     </header>
 
     {error && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</p>}
-    {(diagnostics.isError || deliveries.isError || gate.isError) && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">Diagnostics indisponibles. Aucun envoi n’est déclenché depuis cette page.</p>}
+    {(diagnostics.isError || deliveries.isError || pendingStops.isError || gate.isError) && <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">Diagnostics indisponibles. Aucun envoi n’est déclenché depuis cette page.</p>}
 
     <section className="grid gap-3 md:grid-cols-3">
       <div className="rounded-lg border border-slate-200 bg-white p-4"><ShieldCheck className="h-5 w-5 text-slate-700" /><p className="mt-3 text-xs uppercase tracking-wider text-slate-500">Contrat fournisseur</p><p className="mt-1 text-lg font-semibold">{data.provider_contract_ready ? 'Vérifié' : 'Non vérifié'}</p><p className="mt-2 text-xs leading-5 text-slate-500">Aucun mode live ne peut être configuré sans contrat officiel enregistré.</p></div>
@@ -125,6 +132,24 @@ export default function LifecycleOperations() {
       </div>
       {stop.scope === 'submission_pending' && <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={stop.broadPending} onChange={e => setStop({ ...stop, broadPending: e.target.checked })} />Demande générale : revue du contact avant résolution</label>}
       <Button className="mt-4" variant="outline" disabled={!stop.subject || (stop.scope !== 'contact' && !stop.connection) || (stop.scope === 'contact' && !/^[A-Za-z0-9:_-]{8,100}$/.test(stop.reference)) || busy === 'stop'} onClick={submitStop}><Ban className="mr-2 h-4 w-4" />Enregistrer l’arrêt permanent</Button>
+      {recordedStop && <p role="status" className="mt-3 text-sm text-slate-700">Arrêt enregistré : <code data-testid="sharing-stop-id">{recordedStop}</code>. Conservez cet identifiant pour la revue.</p>}
+      <div className="mt-6 border-t border-slate-200 pt-4" data-testid="pending-stop-list">
+        <h3 className="text-sm font-semibold">Arrêts en attente de rattachement</h3>
+        <p className="mt-1 text-xs text-slate-500">Retrouvez une demande différée à partir de son identifiant CRM et de sa soumission. Vérifiez le contact et la portée avant de la rattacher.</p>
+        <div className="mt-3 space-y-3">{(pendingStops.data?.rows || []).map(item => <div key={item.id} data-testid="pending-stop-row" className="rounded-md border border-slate-200 p-3 text-xs text-slate-700">
+          <p>Arrêt : <code data-testid="pending-stop-id">{item.id}</code></p>
+          <p className="mt-1">Soumission : <code>{item.pending_submission_id}</code></p>
+          <p className="mt-1">Destination : {data.destinations?.find(destination => destination.id === item.connection_id)?.label || item.connection_id} · {when(item.effective_at)}</p>
+          <p className="mt-1">{item.scope_intent === 'contact_review' ? 'Revue du contact requise' : 'Résolution de la soumission attendue'}</p>
+          {item.scope_intent === 'contact_review' && <Button className="mt-2" size="sm" variant="outline" onClick={() => setBinding({ pending: item.id, contact: '', connection: '', reference: '' })}>Reprendre la revue</Button>}
+        </div>)}</div>
+        {!pendingStops.isLoading && !pendingStops.isError && !pendingStops.data?.rows?.length && <p className="mt-3 text-xs text-slate-500">Aucun arrêt en attente sur cette page.</p>}
+        <div className="mt-3 flex items-center gap-3">
+          <Button size="sm" variant="outline" disabled={pendingOffset === 0 || pendingStops.isFetching} onClick={() => setPendingOffset(Math.max(0, pendingOffset - 25))}>Arrêts précédents</Button>
+          <span className="text-xs text-slate-500">{pendingStops.data?.total || 0} arrêt(s) en attente</span>
+          <Button size="sm" variant="outline" disabled={pendingStops.isFetching || pendingOffset + 25 >= (pendingStops.data?.total || 0)} onClick={() => setPendingOffset(pendingOffset + 25)}>Arrêts suivants</Button>
+        </div>
+      </div>
       <div className="mt-6 border-t border-slate-200 pt-4">
         <h3 className="text-sm font-semibold">Rattacher une demande générale après vérification</h3>
         <p className="mt-1 text-xs text-slate-500">Vérifiez l’autorité du demandeur, le contact CRM et la portée. La résolution doit ensuite confirmer ce même contact ; aucun rapprochement approximatif n’est effectué ici.</p>

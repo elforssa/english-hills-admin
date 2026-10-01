@@ -148,6 +148,26 @@ try:
   assert value("select crm_security.lifecycle_stop_hold('%s','%s')"%(lead,c))=='sharing_stopped'
   materialize();assert value("select count(*) from public.crm_lifecycle_producer_ownership where lead_id='%s'"%lead)=='0'
  print('PASS forced preidentity stop/resolver atomic handoff in both orders',flush=True)
+ # Mandatory later safety handoff versus an already-prepared begin. No optional
+ # collector runs; commit ordering is exclusive G/S versus shared G/L/O.
+ sql("begin;select crm_security.lifecycle_barrier(true);set local session_replication_role=replica;update public.crm_lifecycle_eligibility_policies set sharing_field_key='meta_share',sharing_accepted_values='[true]',sharing_refused_values='[false]',prohibited_field_key='source_safety',prohibited_values='[7]',safety_decision_reference='race-later-reviewed' where id='8c000000-0000-0000-0000-000000000011';commit;")
+ for answer,reason in (({'key':'meta_share','label':'Share','value':False,'value_type':'boolean','label_source':'provider'},'inquiry_refusal'),({'key':'source_safety','label':'Safety','value':7,'value_type':'number','label_source':'provider'},'source_restriction')):
+  for resolution_first in (True,False):
+   lead=new();d,l=prepared(lead);source=new(pending=True)
+   original=value("select first_submission_id from public.crm_leads where id='%s'"%lead)
+   tx("select crm_security.lifecycle_barrier(true);set local session_replication_role=replica;update public.crm_submissions set form_answers='%s' where id='%s'"%(json.dumps([answer]),source))
+   resolution="select crm_security.lifecycle_barrier(true);select crm_security.lifecycle_preidentity_keys('%s','%s');select crm_security.accept_external_submission('%s',null,'%s')"%(source,c,source,lead)
+   if resolution_first:
+    assert force(resolution,begin(d,l)).returncode!=0;no_attempt(d)
+   else:
+    assert force(keys(lead,c)+begin(d,l),resolution).returncode==0
+    tx(finish(d,l));unknown(d)
+   assert value("select count(*) from public.crm_lifecycle_sharing_stops where lead_id='%s' and connection_id='%s' and reason_class='%s'"%(lead,c,reason))=='1'
+   assert value("select count(*) from public.crm_lifecycle_eligibility_checks where submission_id='%s'"%source)=='0'
+   assert value("select first_submission_id from public.crm_leads where id='%s'"%lead)==original
+   assert tx(begin(d,l),check=False).returncode!=0
+ sql("begin;select crm_security.lifecycle_barrier(true);set local session_replication_role=replica;update public.crm_lifecycle_eligibility_policies set sharing_field_key=null,sharing_accepted_values=null,sharing_refused_values=null,prohibited_field_key=null,prohibited_values=null,safety_decision_reference=null where id='8c000000-0000-0000-0000-000000000011';commit;")
+ print('PASS atomic later refusal/restriction handoff versus prepared begin in both orders without optional collection',flush=True)
  # Two actual native destinations linked by a reviewed identity association.
  second=Path('scripts/test-crm-r4-advisory-setup.sql').read_text().replace('8c000000','8b000000').replace('882001','886001').replace('882002','886002').replace('882003','886003').replace('r4-live','r4-live-second').replace('r4_fixture','r4_fixture_second').replace('@example.invalid','-second@example.invalid')
  inv2=json.loads(last(sql(second+'\nselect jsonb_object_agg(k,id) from fx;commit;')))

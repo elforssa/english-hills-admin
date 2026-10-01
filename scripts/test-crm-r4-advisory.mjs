@@ -54,6 +54,12 @@ for(const name of ['crm_prepare_external_delivery','crm_get_external_delivery','
 for(const name of ['crm_claim_lifecycle_evidence','crm_record_lifecycle_evidence_check','crm_revoke_lifecycle_evidence','crm_reconcile_external_deliveries','crm_cleanup_lifecycle_retention','crm_cleanup_lifecycle_stop_audit','crm_finalize_meta_job','crm_finalize_website_job','crm_resolve_meta_intake','crm_publish_lifecycle_policy','crm_publish_lifecycle_producer_boundary','crm_activate_lifecycle_destination','crm_disable_lifecycle','crm_configure_lifecycle','crm_save_meta_connection','crm_publish_meta_form_mapping','crm_retire_meta_form_mapping','crm_retire_lifecycle_policy']) assert(def('public.'+name).includes('lifecycle_barrier'),name);
 assert(def('crm_security.repair_lifecycle_evidence').includes('lifecycle_lock_delivery'));
 assert(def('crm_security.command').includes('lifecycle_barrier'));
+assert(def('crm_security.lifecycle_pending_handoff').includes('lifecycle_materialize_submission_safety'));
+assert(def('crm_security.lifecycle_materialize_submission_safety').includes('lifecycle_has_barrier(true)'));
+assert(!/lifecycle_scope_keys|pg_(?:try_)?advisory|crm_external_deliveries|crm_lifecycle_producer_ownership/.test(def('crm_security.lifecycle_materialize_submission_safety')));
+assert(def('crm_security.command').includes('lifecycle_pending_handoff'));
+assert(def('crm_security.accept_external_submission').includes('lifecycle_pending_handoff'));
+assert(def('public.crm_list_pending_lifecycle_stops').includes('require_reader(true)'));
 assert(def('crm_security.resolve_external_submission').includes('lifecycle_has_intake'));
 assert(def('crm_security.accept_external_submission').includes('lifecycle_has_barrier'));
 for(const [key,text] of [[460046,'barrier'],[460047,'opportunity'],[460048,'submission'],[460049,'reconcile']])assert(sql.includes(String(key)),text);

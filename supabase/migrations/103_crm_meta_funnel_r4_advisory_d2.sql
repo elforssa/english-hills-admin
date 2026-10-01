@@ -319,6 +319,8 @@ begin
   final_id:=crm_security.lifecycle_insert_stop('opportunity',lead,t.connection_id,t.reason_class,gen_random_uuid(),'identity_handoff');
   insert into public.crm_lifecycle_stop_handoffs(pending_stop_id,final_stop_id) values(t.id,final_id) on conflict do nothing;
  end loop;
+ -- Actual source choices are mandatory handoff facts, independent of optional D2.
+ perform crm_security.lifecycle_materialize_submission_safety(p_submission);
 end $$;
 
 -- Typed safety mappings are explicit director-reviewed declarations; no label,
@@ -352,6 +354,39 @@ begin
  if exists(select 1 from jsonb_array_elements(answers) a,jsonb_array_elements(p.prohibited_values) v
   where a->>'key'=p.prohibited_field_key and a->'value'=v) then return 'source_restriction';end if;
  return null;
+end $$;
+-- Trusted identity resolution holds exclusive G before any source/identity rows.
+-- This preidentity branch commits stops with canonical binding, without L/O or
+-- owner/delivery/attempt mutation. Source-specific maps never imply broad scope.
+create function crm_security.lifecycle_materialize_submission_safety(p_submission uuid) returns void
+language plpgsql set search_path=pg_catalog,pg_temp as $$
+declare s public.crm_submissions;subject uuid;p record;reason text;
+begin
+ if not crm_security.lifecycle_has_barrier(true) then
+  raise exception 'Safety handoff requires outermost exclusive barrier' using errcode='42501';end if;
+ select * into s from public.crm_submissions where id=p_submission;
+ if s.id is null or s.match_status<>'resolved' or s.lead_id is null then
+  raise exception 'Committed canonical source binding required' using errcode='22023';end if;
+ subject:=crm_security.lifecycle_lead_root(s.lead_id);
+ if subject is null then raise exception 'Verified canonical safety scope required' using errcode='22023';end if;
+ for p in select pol.id,pol.connection_id,pol.safety_decision_reference
+  from public.crm_lifecycle_eligibility_policies pol
+  join public.crm_form_mappings m on m.id=pol.form_mapping_id and m.connection_id=pol.connection_id
+  join public.crm_integration_connections c on c.id=pol.connection_id and c.provider='meta'
+  join public.crm_submission_attribution a on a.submission_id=s.id and a.provider='meta'
+   and a.page_id=c.page_id and a.form_id=m.form_key and a.redacted_at is null
+  where s.channel='meta_instant_form' and pol.form_mapping_id=s.form_mapping_id
+   and s.occurred_at>=pol.effective_from and s.occurred_at<pol.effective_until
+   and (pol.retired_at is null or s.occurred_at<pol.retired_at)
+   and pol.safety_decision_reference is not null
+   and (pol.sharing_refused_values is not null or pol.prohibited_values is not null)
+  order by pol.id loop
+  reason:=crm_security.lifecycle_safety_hold(s.id,p.id);
+  if reason in ('inquiry_refusal','source_restriction') then
+   perform crm_security.lifecycle_insert_stop('opportunity',subject,p.connection_id,reason,
+    gen_random_uuid(),'form_choice',s.id,p.safety_decision_reference);
+  end if;
+ end loop;
 end $$;
 create function crm_security.lifecycle_evidence_reason(p_submission uuid,p_policy uuid) returns text
 language plpgsql stable set search_path=pg_catalog,pg_temp as $$
@@ -473,7 +508,9 @@ begin
  if t.scope='submission_pending' then
   select committed_at into final_at from public.crm_lifecycle_stop_handoffs where pending_stop_id=t.id;
   if final_at is not null then return final_at;end if;
-  select certified_at into final_at from public.crm_lifecycle_stop_exclusions where stop_id=t.id;return final_at;
+  -- An excluded acquisition source can still object to an eligible lead/contact.
+  -- There is no immutable no-handoff retirement mechanism in this architecture.
+  return null;
  end if;
  select e.ended_at into epoch_end from public.crm_lifecycle_producer_ownership o
  join public.crm_lifecycle_activation_epochs e on e.id=o.activation_epoch_id
@@ -506,7 +543,7 @@ begin
  end if;
  basis:=crm_security.lifecycle_stop_closed_at(t.id);
  if old.closed_at is null and new.closed_at is not null and basis is not null and new.closed_at=basis
-  and new.closure_basis=(case when t.scope='submission_pending' then 'verified_handoff'
+  and new.closure_basis=(case when exists(select 1 from public.crm_lifecycle_stop_handoffs where pending_stop_id=t.id) then 'verified_handoff'
    when exists(select 1 from public.crm_lifecycle_stop_exclusions where stop_id=t.id) then 'permanent_source_exclusion' else 'epoch_ended' end)
   and (to_jsonb(new)-array['closed_at','closure_basis'])=(to_jsonb(old)-array['closed_at','closure_basis']) then return new;end if;
  raise exception 'Stop audit immutable outside guarded closure/redaction' using errcode='42501';
@@ -523,9 +560,9 @@ begin
  insert into public.crm_lifecycle_stop_exclusions(stop_id,exclusion_class)
  select t.id,case when s.channel<>'meta_instant_form' then 'non_meta_first_source' else 'legacy_yearly_source' end
  from public.crm_lifecycle_sharing_stops t left join public.crm_leads l on l.id=t.lead_id
- join public.crm_submissions s on s.id=coalesce(l.first_submission_id,t.pending_submission_id)
+ join public.crm_submissions s on s.id=l.first_submission_id
  left join public.crm_form_mappings m on m.id=s.form_mapping_id
- where t.scope<>'contact' and (s.channel<>'meta_instant_form' or m.form_key='1086266294126723')
+ where t.scope='opportunity' and (s.channel<>'meta_instant_form' or m.form_key='1086266294126723')
   and not exists(select 1 from public.crm_lifecycle_stop_exclusions x where x.stop_id=t.id)
  order by t.id limit p_limit on conflict do nothing;
  for r in select a.*,t.scope,t.effective_at from public.crm_lifecycle_sharing_stop_audit a
@@ -534,7 +571,7 @@ begin
  or coalesce(a.closed_at,crm_security.lifecycle_stop_closed_at(t.id))<=clock_timestamp()-interval '90 days'))) order by a.stop_id limit p_limit for update of a loop
   closed:=coalesce(r.closed_at,crm_security.lifecycle_stop_closed_at(r.stop_id));
   if r.scope<>'contact' and r.closed_at is null and closed is not null then
-   update public.crm_lifecycle_sharing_stop_audit set closed_at=closed,closure_basis=case when r.scope='submission_pending' then 'verified_handoff'
+   update public.crm_lifecycle_sharing_stop_audit set closed_at=closed,closure_basis=case when exists(select 1 from public.crm_lifecycle_stop_handoffs where pending_stop_id=r.stop_id) then 'verified_handoff'
     when exists(select 1 from public.crm_lifecycle_stop_exclusions where stop_id=r.stop_id) then 'permanent_source_exclusion' else 'epoch_ended' end where stop_id=r.stop_id;
   end if;
   if (case when r.scope='contact' then r.effective_at else closed end)<=clock_timestamp()-interval '90 days' then
@@ -2463,6 +2500,25 @@ begin
  return crm_security.lifecycle_cleanup_stop_audit(p_limit);
 end $$;
 
+-- Safe deferred-review retrieval: opaque CRM scope only, no request/proof data.
+create function public.crm_list_pending_lifecycle_stops(p_limit integer default 25,p_offset integer default 0) returns jsonb
+language plpgsql security definer set search_path=pg_catalog,pg_temp as $$
+declare result jsonb;
+begin
+ perform crm_security.require_reader(true);
+ if p_limit is null or p_limit not between 1 and 100 or p_offset is null or p_offset<0 then
+  raise exception 'Invalid pending-stop page' using errcode='22023';end if;
+ select jsonb_build_object('total',(select count(*) from public.crm_lifecycle_sharing_stops t
+  where t.scope='submission_pending' and not exists(select 1 from public.crm_lifecycle_stop_handoffs h where h.pending_stop_id=t.id)),
+  'rows',coalesce(jsonb_agg(to_jsonb(x) order by x.effective_at,x.id),'[]'::jsonb)) into result from (
+  select t.id,t.pending_submission_id,t.connection_id,t.reason_class,t.effective_at,i.scope_intent
+  from public.crm_lifecycle_sharing_stops t join public.crm_lifecycle_pending_intents i on i.stop_id=t.id
+  where t.scope='submission_pending' and not exists(select 1 from public.crm_lifecycle_stop_handoffs h where h.pending_stop_id=t.id)
+  order by t.effective_at,t.id limit p_limit offset p_offset
+ ) x;
+ return result;
+end $$;
+
 revoke all on all functions in schema crm_security from public,anon,authenticated,service_role;
 revoke all on function public.crm_claim_lifecycle_evidence(integer,text) from public,anon,authenticated,service_role;
 grant execute on function public.crm_claim_lifecycle_evidence(integer,text) to service_role;
@@ -2472,5 +2528,7 @@ revoke all on function public.crm_bind_pending_lifecycle_stop(uuid,uuid,uuid,uui
 grant execute on function public.crm_bind_pending_lifecycle_stop(uuid,uuid,uuid,uuid,text) to authenticated;
 revoke all on function public.crm_cleanup_lifecycle_stop_audit(integer) from public,anon,authenticated,service_role;
 grant execute on function public.crm_cleanup_lifecycle_stop_audit(integer) to service_role;
+revoke all on function public.crm_list_pending_lifecycle_stops(integer,integer) from public,anon,authenticated,service_role;
+grant execute on function public.crm_list_pending_lifecycle_stops(integer,integer) to authenticated;
 notify pgrst,'reload schema';
 commit;

@@ -103,6 +103,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-safety.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-retention.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-exclusions.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-review.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
           python3 scripts/test-crm-phase10-concurrency.py
