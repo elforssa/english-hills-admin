@@ -22,7 +22,7 @@ Recommend a forward schema/runtime migration 103 for the advisory amendment; a s
 
 ## Important security decisions
 
-Advisory proof is not legal permission. Applicable consent, notice, purpose, opt-out and other obligations must still be established for the selected form/use. Explicit refusal, withdrawal, privacy requests and known prohibited/minor data remain safety holds. Keep the current Yearly exclusion: its contradictory third-party-sharing promise and legacy-producer association are independent reasons not to admit it automatically. Missing the custom adult checkbox alone does not establish a minor; verified minor/prohibited-data facts must not be ignored.
+Advisory proof is not legal permission. Applicable consent, notice, purpose, opt-out and other obligations must still be established for the selected form/use. Explicit refusal, withdrawal, privacy requests and known prohibited/minor data remain safety holds. Keep the current Yearly-program exclusion because it belongs to the existing/ending legacy cohort and legacy producer path. Its previously observed notice conflict remains historical evidence, not the rationale for inventing a replacement-form H3 gate. Missing the custom adult checkbox alone does not establish a minor; verified minor/prohibited-data facts must not be ignored.
 
 ## Risks / owner review points
 
@@ -90,11 +90,22 @@ For each of Intake, Not qualified, Lost, Qualified and Converted: resolved new M
 
 Retain singleton Intake/Converted, genuine reopen/re-entry repeats for Qualified/Lost/Not-qualified, chronological attempt ordering, Qualified as initial positive target and Converted downstream. Earlier unknown receipt alone does not suppress independent later genuine outcomes, but shared real privacy stops do. No changing event ID, time, destination, epoch, contract or owner to escape unknown state or old eligibility. Pre-cutoff/disabled-period leads never become eligible after this relaxation.
 
-A dedicated new prospective form remains recommended and required by this proposed cutover path to establish clear notice and legacy exclusion; custom D2 checkboxes are optional. Current Yearly remains hard-excluded. Any later proposal to reuse it needs separate privacy/notice, immutable version/time binding and legacy ownership architecture; this request does not authorize that expansion.
+A future native cohort needs an actual prospective Meta source/form ID and final mapping at H4. H3 does not require creation, selection or binding of that form. A separate form is an EH-recommended way to isolate cohorts, not a verified Meta requirement or condition for completing H3. Current Yearly-program remains excluded because it belongs to the existing/ending legacy cohort and legacy producer path. D2 becoming advisory neither transfers those leads nor authorizes reuse of that source. No custom adult/share checkbox is required for H3 or H4 solely by EH D2.
+
+## H3 technical preparation and H4 activation boundary
+
+| Stage | Required scope | Deferred scope |
+| --- | --- | --- |
+| H3 technical preparation | Verified provider contract; transport/authentication and selected app security requirements; destination entitlement and dedicated credentials; reviewed native/legacy exclusion design covering automated, retry and manual paths; reviewed/deployed advisory-D2 forward migration and compatible runtime | Actual future source/form ID, final mapping, cohort policy/boundary publication and then-current cohort-specific platform/privacy approval |
+| H4 live-cohort activation | Actual prospective Meta source/form ID, final source mapping, concrete verified producer boundary for that cohort, then-current Meta/platform/privacy review, exact activation window/epoch and separate operator approval | No relaxation of prospective cutoff, Yearly exclusion, ownership or no-uncertain-replay |
+
+H3 completes technical capability and exclusion design without creating/binding a future form or publishing a cohort boundary. H3 can review and verify existing legacy-path configuration and required exclusion mechanisms; H4 must bind and verify those mechanisms against the actual chosen cohort and establish no overlapping legacy queue/in-flight/manual delivery. An unworkable exclusion design remains an H3 blocker; a missing future form ID is only an H4 dependency. Keep scheduler/live gate/destination activation closed throughout H3.
+
+Verified provider technical requirements are those supported by the H3 dossier's dated official source register (payload, endpoint, matching, time, authentication/entitlement where actually established). Nothing inspected verifies a requirement for a special replacement Instant Form, EH-specific adult/share checkboxes or custom D2 notice digest to complete H3. EH cohort-isolation recommendations and optional proof must be labelled as such. Actual platform and applicable privacy obligations remain mandatory; establish their applicable requirements from authoritative evidence rather than equating them with EH safeguards. Check technical-platform requirements when preparing H3 and perform the final then-current source/use/privacy review at H4, before any live cohort activation.
 
 ## Migration ordering and rollout
 
-**Recommendation: separate migrations, relaxation first.** Proposed 103 `crm_meta_funnel_r4_d2_advisory` owns schema, protected SQL and stop controls; application changes ship as the same reviewed compatibility package. A later seed (104 if available) owns the independently verified provider contract. Seeding does not technically depend on D2 relaxation, but H3 policy/boundary preparation should use the final advisory schema after deployment verification. Do not combine provider evidence/approval dates with a generic policy migration, and do not author an incomplete contract simply to fill 104.
+**Recommendation: separate migrations, relaxation first.** Proposed 103 `crm_meta_funnel_r4_d2_advisory` owns schema, protected SQL and stop controls; application changes ship as the same reviewed compatibility package. A later seed (104 if available) owns the independently verified provider contract. Seeding does not technically depend on D2 relaxation, but H3 technical preparation should use the final advisory schema after deployment verification; cohort policy/boundary binding belongs to H4. Do not combine provider evidence/approval dates with a generic policy migration, and do not author an incomplete contract simply to fill 104.
 
 A combined 103 could atomically relax and seed, but couples a policy decision to unresolved auth/timestamp/contract evidence, prevents independent review and complicates rollback diagnosis. Separate migrations are safer; allocation is provisional. Never modify 098–102. During the upgrade preserve zero activation inventory and closed gates; assert no open epoch/deliveries/boundaries/owners on this dormant deployment, and stop for a separate upgrade plan if facts differ. Verify historical policy fixtures remain required mode locally.
 
@@ -106,14 +117,14 @@ Recovery is forward-only. Close server gate, disable destination/epoch and sched
 | --- | --- | --- |
 | Custom D2 adult/share/notice-answer proof | Optional recommendation; absence not a blocker | Architecture ready to review; deployed behavior still mandatory |
 | Forward schema/runtime | 103 relaxation plus application and stop path required before advisory H3 preparation | Not implemented/reviewed/deployed |
-| Form/platform/privacy | Exact future form/mapping, honest notice/privacy flow and applicable legal/platform assessment remain required; custom proof keys are optional | Incomplete; Yearly promise conflict remains |
+| H4 prospective source/mapping and platform/privacy | Actual future source/form ID, final mapping and then-current applicable platform/privacy review; no bespoke EH replacement-form requirement | Deferred H4 dependency; not an H3 blocker |
 | Provider contract | Exact five-event manifest, auth/proof and strict/equal-second treatment unresolved in inherited H3 dossier | Blocked independently of D2 |
 | Native entitlement/credentials | Dataset assignment and dedicated credential route/metadata missing | Blocked |
-| Legacy exclusion | Stable integration IDs, all retry/manual paths, enforceable no-overlap proof and finite boundary missing | Blocked |
-| Execution package | Actual connection/version/object IDs, windows, named operators and artifact-bound approvals missing | Blocked |
+| H3 native/legacy exclusion design | Stable legacy integration identities, retry/manual paths and workable enforceable separation design | Blocked pending design evidence; actual cohort boundary/no-overlap proof belongs to H4 |
+| Execution package | Actual H3 connection/destination/contract IDs, named operators and closed-gate technical approvals missing; future source/policy/boundary IDs and live windows belong to H4 | Blocked |
 | Optimization/coverage | Remove custom D2 participation as denominator gate; prospective scope, matching, holds and coverage still matter | No performance/recognition guarantee; later natural validation |
 
-The proposal is READY FOR OWNER ARCHITECTURE REVIEW. H3 execution and H4 activation remain NOT READY. These are different decisions; missing provider/account evidence does not prevent reviewing this bounded architecture change.
+The proposal is READY FOR OWNER ARCHITECTURE REVIEW. H3 execution and H4 activation remain NOT READY. These are different decisions; missing provider/account evidence does not prevent reviewing this bounded architecture change. Missing future form identity/mapping/privacy approval is an H4 dependency, not an H3 technical-preparation blocker.
 
 ## Owner decisions required
 
@@ -121,7 +132,7 @@ The proposal is READY FOR OWNER ARCHITECTURE REVIEW. H3 execution and H4 activat
 | --- | --- | --- |
 | Approve this amendment | A: accept future advisory D2 with independent privacy stops. B: retain deployed required D2 until another proposal | A implements the owner's request; artifact-bound acceptance required before implementation |
 | Migration separation | A: 103 relaxation, later independent seed. B: one combined migration after all contract evidence closes | A; clearer dependencies and evidence. Numbers rechecked by implementer |
-| Form copy/choice/legal route | A: future form with honest notice and optional accurately enforced controls. B: defer until exact platform/privacy assessment is complete | No assumed legal basis; final selected form/notice/choice review blocks H3 execution, not architecture review |
+| H3/H4 separation | A: complete technical H3 without a future form; bind prospective source/mapping/boundary and perform then-current platform/privacy review at H4. B: defer technical preparation voluntarily until a cohort is selected | A, per owner clarification; no future-form H3 gate or assumed legal permission |
 
 Settled five-event model, no-uncertain-replay and D3–D7 need no reapproval. This plan neither records completed owner architecture acceptance nor authorizes implementation/release.
 
@@ -131,6 +142,8 @@ Implement only after owner approves this exact amendment revision. Scope: new 10
 
 Acceptance: locally upgrade 001–102 to new migration with closed inventory; required-mode old fixtures unchanged; advisory future no-grant lead reaches ownership and all five exact payloads without adult/share fabrication; singleton/reopen and authentic conversion checks pass; missing/ambiguous optional proof does not block; explicit refusal/withdrawal/privacy stop/known prohibited source does block; grantless stop races against begin and revoke; source identity redaction holds; exact lossless ID matching and closed no-child/no-hash/no-finance payload enforced. Test pre-cutoff/delayed imports, old/later/website/Yearly/disabled-period exclusion; unknown nonreplay, duplicate ownership, invalid boundary/epoch/deadline and predecessor ordering; optional evaluator failure cannot starve otherwise eligible work; required safety storage failures remain closed; cleanup cannot erase stop/unknown markers or change frozen identity. ACL tests prove director-only stop/publish/diagnostics, no direct access or receptionist escalation.
 
-Use repository-required full validation once at handoff after focused regressions, fresh independent review of exact Tier 3 SHA and separate human release approval/operator. Update active R4/ADR/H3/AI docs to implemented only with evidence. Stop for allocation drift, nonempty live inventory, unresolved platform/privacy obligations, identity expansion, weakened exclusive ownership or uncertain replay. No fake Production records or provider requests for verification.
+Use repository-required full validation once at handoff after focused regressions, fresh independent review of exact Tier 3 SHA and separate human release approval/operator. Update active R4/ADR/H3/AI docs to implemented only with evidence. Stop for allocation drift, nonempty live inventory, unresolved applicable technical-platform requirements, identity expansion, weakened exclusive ownership or uncertain replay. No fake Production records or provider requests for verification.
 
 Architecture documentation validation only: links, source inventory, no secrets/customer records, documentation-only diff and whitespace. Application/SQL tests are deferred until authorized implementation.
+
+Owner clarification recorded 2026-10-01: approval covers opening/updating the documentation-only draft PR and this H3/H4 wording correction. It does not approve implementing 103, final architecture acceptance, H3 mutations or H4 activation.

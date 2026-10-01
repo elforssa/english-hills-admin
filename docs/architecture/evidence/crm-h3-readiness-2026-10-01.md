@@ -2,7 +2,7 @@
 
 ## What will change
 
-H3 preparation dossier only, dated **2026-10-01 (Asia/Shanghai)**. It proposes the provider, compliant-form/evidence, producer-boundary and credential manifests below. **NOT READY FOR H3 OWNER REVIEW** as an executable approval package: exact transport evidence, future form binding, legacy exclusion and named execution details remain incomplete. The owner can review the proposals, but cannot safely authorize a blanket H3 execution from them.
+H3 preparation dossier only, dated **2026-10-01 (Asia/Shanghai)**. It covers H3 technical preparation: provider contract, transport/authentication, entitlement/credentials, native/legacy producer exclusion design and the advisory-D2 forward migration. Future source/form, final mapping, concrete cohort boundary and then-current platform/privacy review are deferred H4 dependencies. **NOT READY FOR H3 OWNER REVIEW** as an executable technical package: exact transport evidence, entitlement/credentials, exclusion design, advisory implementation and named H3 execution details remain incomplete. The owner can review the proposals, but cannot safely authorize a blanket H3 execution from them.
 
 ## What staff/users will be able to do
 
@@ -14,11 +14,11 @@ No lifecycle/destination enablement, scheduler activation, live gate, Meta event
 
 ## UI impact
 
-None. Meta documentation and authenticated Business Settings were read only. A future new Instant Form is proposed, not created or published.
+None. Meta documentation and authenticated Business Settings were read only. A separate future Instant Form is an EH recommendation for cohort isolation, not a verified platform requirement or an H3 prerequisite. No form was created or published.
 
 ## Database impact
 
-None now. A separately reviewed forward provider-contract seed is required; **103 is the next available number at refreshed origin/main**, subject to rechecking before authoring. No SQL file is authored or applied here.
+None now. Recommend 103 for advisory-D2 technical changes and a separate later provider-contract seed; recheck allocation before authoring. No SQL file is authored or applied here.
 
 ## Important security decisions
 
@@ -42,15 +42,21 @@ Risk tier **3 preparation/architecture**, because this dossier governs later ext
 | --- | --- | --- | --- |
 | Dormant baseline | Owner reports exact SHA, ledger 001–102 and all closed/empty controls above; source has 101/102 | Operator must reconfirm immediately before any later mutation | Established as owner evidence |
 | API/version/payload | Current official Graph changelog lists v26.0; exact five names/constants match deployed SQL and adapter | Final immutable contract approval; strict timestamp interpretation below | Partial |
-| Destination identity | Fresh UI: English Hills pixel `1152399921284927`, Glory Lot ownership, connected KAL `1613720155930784` | Actual EH connection UUID/key/version and exact form mapping; owner selection approval | Partial |
+| Destination identity | Fresh UI: English Hills pixel `1152399921284927`, Glory Lot ownership, connected KAL `1613720155930784` | Actual EH connection UUID/key/version and destination selection approval; final source mapping deferred to H4 | Partial |
 | Authentication | Official own-business token routes and access-token parameter transport | Endpoint-specific support for deployed JSON + bearer-header request; selected app security requirements | Blocked |
 | Receipt/error/duplicate handling | Ordinary integer receipt schema; general Graph error meanings; deployed conservative holds | v26 CRM response variants/exact duplicate acknowledgment not guaranteed; preserve hold policy | Partial; no replay entitlement |
-| Future form/platform/privacy | Current Yearly excluded; proposed D2 amendment makes custom proof optional | New form identity/mapping, honest notice/privacy/choice review, dates and approvals; custom adult/share raw keys are optional | Blocked independently of missing D2 |
+| H4 prospective source/mapping and platform/privacy | Current Yearly is the existing/ending legacy cohort and remains excluded | Actual prospective source/form ID, final mapping and then-current applicable Meta/platform/privacy review | Deferred H4 dependency; not an H3 blocker |
 | Custom D2 proof | Optional/recommended in revised architecture; still mandatory in deployed SQL | Forward advisory implementation required; no fabricated grant or consent | Not a future eligibility blocker |
 | Outbound entitlement/credential | Native actor/app identified; dataset UI assigns only existing CAPI System User | Native dataset task absent; dedicated token metadata/secure provisioning unapproved | Blocked |
-| Legacy producer exclusion | Fresh UI confirms Yearly-program → `yearly-program-fb` / `Yearly-program` → dataset; immutable controls exist in SQL | Stable Sheet/integration/trigger IDs, all replay paths, enforcement and zero overlapping queue/in-flight proof | Blocked |
+| H3 native/legacy producer exclusion design | Fresh UI confirms Yearly-program → `yearly-program-fb` / `Yearly-program` → dataset; immutable controls exist | Stable legacy IDs, all retry/manual paths and workable enforceable exclusion design; actual cohort boundary/no-overlap verification deferred to H4 | Blocked on design evidence, not future form creation |
 | Forward change and seed | Propose 103 advisory schema/runtime and separate later verified contract seed | Neither implementation nor final contract reviewed/deployed; allocation recheck required | Blocked |
-| Execution ownership | Roles defined below | Actual named assignees, exact approval scope/timestamps, final object IDs and intervals | Blocked |
+| Execution ownership | Roles defined below | Actual named H3 assignees, technical approval scope/timestamps and connection/destination/contract IDs; future cohort IDs and live interval belong to H4 | Blocked |
+
+## H3 and H4 separation
+
+H3 may complete provider/transport/authentication, destination entitlement/credentials, exclusion design and advisory-D2 forward implementation while no future native form exists. H3 does not publish a source-bound cohort policy or producer boundary. H4 selects and binds the actual prospective source/form ID, final mapping and concrete verified boundary, completes then-current Meta/platform/privacy review, and obtains exact live activation approval. A missing future form ID or bespoke notice/checkbox manifest cannot block H3 merely because D2 is advisory.
+
+The dated official source register supports specific provider technical requirements; it does not verify that H3 requires a special replacement Instant Form or EH-specific adult/share controls. Those are EH recommendations. Mandatory platform/privacy obligations remain mandatory, with evidence of applicability and verification status recorded separately. Technical platform requirements remain part of H3; source/use-specific and then-current privacy/platform checks must be completed for H4. Yearly-program remains excluded because it belongs to the existing/ending legacy cohort and legacy producer path; its exclusion is not a new form-compliance test.
 
 ## Fresh official source register
 
@@ -133,11 +139,11 @@ active: true # proposed contract usability only; NOT destination/epoch activatio
 
 The fresh source access date is 2026-10-01; it is not a fabricated completed-contract verification or approval date. Final companion manifest binds dataset `1152399921284927`, Page `997579646781805`, actual EH connection UUID/current version, selected system user/app, auth evidence, timestamp treatment, evidence artifact digest and exact reviewed seed SHA. No arbitrary JSON keys, additional event kinds or non-approved custom data. Contract key is globally unique: a future immutable revision needs a distinct key, not overwriting this one.
 
-## Proposed future form and optional D2 manifest — NOT EXECUTABLE
+## Deferred H4 prospective source and optional D2 manifest — NOT EXECUTABLE
 
 Revised architecture: custom adult/share controls and per-answer notice binding below are optional governance recommendations, not technical eligibility prerequisites. Exact published form/notice identity, applicable platform/legal requirements and truthful choice/withdrawal handling remain mandatory. Deployed 101/102 still require proof until the approved forward amendment is implemented. No legal basis or final form approval is asserted.
 
-Use a **new dedicated Meta Instant Form ID** on the English Hills Page; never reuse current Yearly `1086266294126723`, which deployed 101/102 explicitly reject. Prefer creation while not attached to campaigns and never attach the form to the legacy automatic sender. Publication/campaign edits remain separately approved H3 operations; form existence does not confer eligibility before H4's actual epoch.
+At H4 bind an **actual prospective Meta source/form ID** on the English Hills Page. A separate dedicated form is an EH recommendation for clear cohort isolation, not an H3 requirement or verified Meta requirement. Keep excluded current Yearly `1086266294126723`, which deployed 101/102 explicitly reject. Prefer creation while not attached to campaigns and never attach the form to the legacy automatic sender. Publication/campaign edits belong to separately approved H4 cohort preparation; form existence does not confer eligibility before H4's actual epoch.
 
 Optional exact English wording if the owner selects custom governance controls, subject to privacy approval:
 
@@ -149,7 +155,7 @@ Proposed affirmative control labels: adult “Yes, I confirm”; sharing “Yes,
 
 | Manifest field | Proposed requirement / remaining value |
 | --- | --- |
-| Page / form | Page `997579646781805`; new provider form ID **TBD**; immutable published revision/structural archive **TBD** |
+| Page / form | Page `997579646781805`; actual prospective provider form ID **TBD at H4**; immutable published revision/structural archive **TBD** |
 | Channel / connection | `meta_instant_form`; actual EH Meta connection UUID/key/current version **TBD** |
 | Form mapping | Actual immutable mapping UUID/version/effective time **TBD**; never relabel an old submission |
 | Adult key / values | **Optional** in advisory mode; logical proposal `adult_contact_confirmed`; actual API key, scalar type and exact affirmative value **TBD** |
@@ -165,9 +171,9 @@ If optional controls are selected, actual affirmative/refusal mappings cannot be
 
 Prospective admission is based on original first-submission occurrence, not import/qualification time: `occurred_at >= max(boundary.valid_from, epoch.started_at, policy.effective_from, mapping.effective_from)` and before applicable end/retirement times. Require resolved Meta-first opportunity, correct Page/form/original lead ID, unretracted original source and no actual privacy/safety stop. Custom D2 grant is optional in the proposed advisory mode. Website, later-Meta, current Yearly, legacy/current opportunities, delayed pre-cutoff imports and pre-epoch/disabled-period submissions remain excluded forever from later activation. A new form response attached to an existing opportunity cannot rewrite its first touch or authorize it retroactively. All five kinds independently recheck applicable privacy stops, source integrity, deadlines and ownership; optional D2 proof is not the gate.
 
-## Proposed producer-boundary manifest — NOT EXECUTABLE
+## H3 exclusion design and deferred H4 producer-boundary manifest — NOT EXECUTABLE
 
-Chosen design: **new-form exclusion at every legacy acquisition and outbound path**, established before the form can receive submissions. Legacy keeps only its existing disjoint cohort. Same event names, different IDs, a new Sheet tab, mutable labels, pausing one trigger or presumed Meta deduplication do not establish exclusion.
+Recommended design: **prospective-source exclusion at every legacy acquisition and outbound path**. H3 reviews the enforceable design and legacy route inventory without requiring an actual new form. H4 binds the selected source/cohort and verifies exclusion before native sending can activate. Legacy keeps only its existing disjoint cohort. Same event names, different IDs, a new Sheet tab, mutable labels, pausing one trigger or presumed Meta deduplication do not establish exclusion.
 
 Fresh A5 identifies the Meta Google Spreadsheet integration for Yearly-program: spreadsheet `yearly-program-fb`, tab `Yearly-program`, CAPI destination `1152399921284927`. The legacy owner must still identify stable Google Sheet/file/tab and integration IDs, any Apps Script/automation/connector IDs and deployed configuration revision; Page/form selectors, auto-discovery, triggers, scheduled queues, delayed retries, dead letters, manual CSV/import/resend paths and event mappings. The two other displayed Sheet integrations currently say CAPI not integrated; do not assume that rules out external/manual producers. This repository has no authoritative legacy execution/filter configuration. Connection evidence establishes presence, not enforcement. No Sheet/customer rows are needed in Git.
 
@@ -175,7 +181,7 @@ Required enforcement: explicit form-ID allowlist restricted to legacy forms (new
 
 | Stored boundary field | Final value required |
 | --- | --- |
-| `connection_id`, `form_mapping_id`, `form_key` | Actual EH connection, immutable new mapping and exact new form ID: TBD |
+| `connection_id`, `form_mapping_id`, `form_key` | Actual EH connection, final source mapping and actual prospective source/form ID: TBD at H4 |
 | `page_id`, `dataset_id` | `997579646781805`, `1152399921284927`, checked against connection configuration |
 | `provider_contract_id`, `eligibility_policy_id`, `policy_version` | Actual immutable approved objects: TBD |
 | `notice_version`, `notice_text_digest` | Optional custom D2 pair in proposed advisory schema; if supplied, exact approved policy binding. Actual notice/privacy obligations remain required. |
@@ -188,7 +194,7 @@ Required enforcement: explicit form-ID allowlist restricted to legacy forms (new
 
 Publish only through `crm_publish_lifecycle_producer_boundary` in a later approved operation, after approved active contract, prospective policy and **disabled** `mode=live` configuration. The RPC copies identity/notice bindings and timestamps from authoritative records; it is not a free-form insert. Its evidence-reference string is not a check of the legacy platform. Finite validity and an accountable drift monitor are mandatory.
 
-Per-opportunity ownership uses `crm_lifecycle_producer_ownership`: canonical `lead_id`, `connection_id`, `boundary_id`, `activation_epoch_id`, `producer`, `assigned_at`. Unique `(lead_id, connection_id)` and immutable records prevent local reassignment; canonical first submission resolves original provider identity. Reject route aliases/second ownership; do not copy raw IDs into a new registry. **No ownership rows during H3:** admission requires H4's actual open epoch, eligible natural first submission and valid platform/privacy/source controls. Advisory admission does not require a D2 grant. Existing leads remain excluded without manufacturing legacy ownership records. On rollback, do not hand native opportunities back to the legacy sender; new epochs admit only new prospective leads.
+Per-opportunity ownership uses `crm_lifecycle_producer_ownership`: canonical `lead_id`, `connection_id`, `boundary_id`, `activation_epoch_id`, `producer`, `assigned_at`. Unique `(lead_id, connection_id)` and immutable records prevent local reassignment; canonical first submission resolves original provider identity. Reject route aliases/second ownership; do not copy raw IDs into a new registry. **No ownership rows or source-bound policy/boundary publication during H3:** admission requires H4's actual open epoch, eligible natural first submission and valid platform/privacy/source controls. Advisory admission does not require a D2 grant. Existing leads remain excluded without manufacturing legacy ownership records. On rollback, do not hand native opportunities back to the legacy sender; new epochs admit only new prospective leads.
 
 ## Proposed credential/entitlement plan
 
@@ -199,14 +205,14 @@ Recommended route: own-business, own-app/system-user CAPI route described in P4,
 3. Separately approve a dedicated outbound token issuance bound to the verified actor/app/dataset. Named credential operator records only issuer/app/user/asset IDs, granted scopes/tasks, issue/expiry or documented non-expiring status, rotation/revocation owner and secure storage reference. Never show token values in chat/Git; do not click Generate token under this task. No assertion that a token exists or is valid.
 4. Proposed server-only reference: `CRM_META_LIFECYCLE_TOKEN_EH_R4` (matches deployed worker allowlist). Store value only in approved Production secret/environment storage, never `NEXT_PUBLIC_*`, preview/dev, local `.env`, ordinary CRM tables, payload or URL. Separate provider token from inbound credential and `CRM_META_LIFECYCLE_SCHEDULER_TOKEN`; no scheduler secret rotation is required by this preparation.
 5. After reviewed contract/transport and approved closed-gate provisioning, verify nonsecret token entitlement metadata without an `/events` POST. Token inspection remains a credential-operator action under that separate approval. A metadata check proves entitlement only, not successful CRM delivery.
-6. Configure only an approved disabled destination via its director RPC: actual connection/version, `mode=live`, `enabled=false`, dataset above, secret reference, actual contract UUID, approved bounded attempts. Publish prospective policy and verified boundary only within explicit H3 scope. Keep zero epochs/ownership/deliveries/attempts, scheduler disabled and server gate absent/false. The contract row being active is not permission to enable the destination.
+6. Configure only an approved disabled destination via its director RPC: actual connection/version, `mode=live`, `enabled=false`, dataset above, secret reference, actual contract UUID, approved bounded attempts. Defer actual source mapping, prospective policy and verified cohort boundary to separately approved H4 preparation. Keep zero cohort policies/boundaries, epochs/ownership/deliveries/attempts, scheduler disabled and server gate absent/false. The contract row being active is not permission to enable the destination.
 7. Assign monitoring/recovery ownership and rotation plan. Rotation must not revoke the inbound token or silently reuse legacy credentials. Any transport change, asset mismatch, proof requirement or unexpected scope request stops execution pending review.
 
 No secrets are provisioned by this plan; final assignments, dates, token metadata, EH connection identifiers and credential operator names are missing.
 
 ## Forward migration ordering decision
 
-**Revised recommendation: 103 implements advisory D2 schema/runtime and grant-independent privacy stops; a separate later migration (104 if available) seeds the verified contract.** Independent review/deployment of the generic policy change is safer than coupling it to unresolved provider evidence. Recheck allocation. Neither migration is authored here. Provider seeding technically can occur independently, but policy/boundary H3 preparation should follow the final verified advisory schema.
+**Revised recommendation: 103 implements advisory D2 schema/runtime and grant-independent privacy stops; a separate later migration (104 if available) seeds the verified contract.** Independent review/deployment of the generic policy change is safer than coupling it to unresolved provider evidence. Recheck allocation. Neither migration is authored here. Provider seeding technically can occur independently, but H3 technical preparation should follow the verified advisory schema; actual source policy/boundary binding is deferred to H4.
 
 A forward migration is still required to seed the verified provider contract under the architecture. Refreshed main and inherited Production ledger stop at 102. Allocate the seed separately after the relaxation, once the final contract is complete and approved; never edit deployed 098–102 or insert directly to bypass review. No number is reserved by this dossier.
 
@@ -222,10 +228,10 @@ Settled R4 event scope, repeats/singletons, Qualified target, D3–D7 and no-unc
 | --- | --- | --- |
 | Provider contract | Approve completed v26 R4 manifest / remain dormant | Close bearer/proof and timestamp interpretation, review response conservatism and SDK string inference, approve exact key/revision/constants/digest; no replay permission |
 | Forward implementation/deployment | Commission reviewed advisory schema/runtime first, then separate verified seed (and necessary transport/timestamp fixes) / defer | Exact migration filename and reviewed SHA, local/CI evidence, independent reviewer and named DB release operator; no merge/deploy authorized here |
-| Form/privacy | New dedicated form with approved copy / remain dormant | Approve exact text/translations/privacy URL/contact route, immutable form mapping/identity, future interval and named form/privacy owner; custom adult/share proof controls are optional, with exact typed choice semantics required only if used; creation/publication/campaign changes separately enumerated |
-| Legacy boundary | Durable new-form exclusion / separately approved full outbound stop/drain | Named legacy operator, exact integration/filter revision, manual/retry coverage, no-overlap evidence and finite verification expiry; preserve inbound intake |
+| H4 source/platform/privacy (deferred) | Actual prospective source with then-current applicable review; separate form optional / defer H4 | Approve exact text/translations/privacy URL/contact route, immutable form mapping/identity, future interval and named form/privacy owner; custom adult/share proof controls are optional, with exact typed choice semantics required only if used; creation/publication/campaign changes separately enumerated |
+| H3 exclusion design; H4 cohort enforcement | Durable prospective-cohort exclusion / separately approved full outbound stop/drain | Named legacy operator, exact integration/filter revision, manual/retry coverage, H3 design evidence; H4 concrete cohort no-overlap evidence and finite verification expiry; preserve inbound intake |
 | Credential route | Dedicated native own-app actor / separately specified Events Manager route | Asset admin approves exact dataset task; credential owner approves issuance, approved storage reference, expiry/rotation/revocation and nonsecret verification; no copying legacy/inbound token |
-| H3 configuration execution | Enumerated closed-gate operations / defer | Actual connection/version, contract/mapping/policy/boundary bindings, allowed mutations, named director/operator, pre/post zero inventory and health evidence; provider tests explicitly **not authorized** |
+| H3 configuration execution | Enumerated closed-gate operations / defer | Actual connection/version, contract/destination/credential bindings, reviewed exclusion design, allowed technical mutations, named director/operator and pre/post closed/empty activation inventory and health evidence. Cohort mapping/policy/boundary deferred to H4; provider tests explicitly **not authorized** |
 | Monitoring/recovery | Named native and legacy drift owners / defer | Ability to hold/revoke native boundary and preserve unknown markers; no transfer of owners or epoch reuse |
 
 Approval record: owner name, actual UTC approval timestamp, this dossier/manifest digest and revision, application/seed review SHA, exact asset/object IDs, permitted mutations, assigned operators and execution interval. H3 execution stays blocked until complete. H4 is excluded, not a checkbox bundled with H3.
@@ -234,10 +240,10 @@ Approval record: owner name, actual UTC approval timestamp, this dossier/manifes
 
 1. Deployed bearer-header/JSON authentication has no endpoint-specific proof in inspected official pages; selected app proof/settings unverified.
 2. Strict-after-generation requirement versus allowed equal Unix seconds needs provider clarification or separately reviewed fail-closed handling. Ordinary receipt schema is documented, but v26 CRM variants/exact duplicate acknowledgment remain uncertain and must never trigger replay.
-3. No approved new form ID, complete honest notice/privacy/contact flow and applicable platform/legal assessment, immutable mapping UUID or prospective interval. Custom D2 adult/share proof keys/values are optional; missing proof is no longer a proposed blocker. Yearly's conflicting notice remains an independent issue.
+3. Advisory-D2 schema/runtime and grant-independent privacy stops are not implemented, independently reviewed or deployed. 103 remains unauthored. Missing future form ID, final mapping or custom D2 keys are not H3 technical blockers.
 4. Native system user lacks displayed dataset assignment; selected route, least-privilege entitlement, dedicated credential issuance/storage metadata and named operator approvals are incomplete.
-5. No authoritative legacy Sheet/connector/filter/retry/manual-path configuration or enforceable new-form exclusion/drain evidence. No verified immutable boundary can be published.
-6. Actual EH connection UUID/version and final contract/policy/boundary object bindings, finite validity windows, named operators and exact execution approval are absent. Proposed 103 advisory amendment and separate later provider seed are not authored/reviewed/approved.
+5. No authoritative legacy Sheet/connector/filter/retry/manual-path configuration or sufficient enforceable native/legacy exclusion design evidence. Actual selected-cohort exclusion/no-overlap verification and boundary publication belong to H4.
+6. Actual EH connection UUID/version, final H3 contract/destination/credential bindings, named technical operators and exact closed-gate execution approval are absent. Source/policy/boundary IDs and live windows are deferred to H4. Proposed 103 advisory amendment and separate later provider seed are not authored/reviewed/approved.
 
 Numeric server-only replay horizon is deliberately unknown and **not** a reason to invent a value or reopen approved no-uncertain-replay. Future natural cohort performance cannot be proven while dormant; H3 must explicitly separate technical preparation from H4/post-activation validation and accept that limit without widening disclosure.
 
@@ -251,4 +257,4 @@ Preparation validation: relative links/source cross-check, no credentials/custom
 
 ## D2 revision readiness distinction
 
-[Advisory D2 architecture](../plans/crm-meta-funnel-r4-d2-advisory.md) is **READY FOR OWNER ARCHITECTURE REVIEW**. This dossier remains **NOT READY FOR H3 OWNER REVIEW** as an executable package: provider authentication/timestamp evidence, exact future form/platform/privacy review, native entitlement/credentials, enforceable legacy exclusion, advisory implementation and artifact-bound execution approvals remain incomplete. No form, contract, policy, boundary, grant, owner, epoch, destination, scheduler, live gate or delivery has been changed by this amendment. Missing custom D2 proof is no longer a proposed eligibility/H3 blocker.
+[Advisory D2 architecture](../plans/crm-meta-funnel-r4-d2-advisory.md) is **READY FOR OWNER ARCHITECTURE REVIEW**. This dossier remains **NOT READY FOR H3 OWNER REVIEW** as an executable package: provider authentication/timestamp evidence, native entitlement/credentials, verified workable native/legacy exclusion design, advisory implementation and artifact-bound execution approvals remain incomplete. No form, contract, policy, boundary, grant, owner, epoch, destination, scheduler, live gate or delivery has been changed by this amendment. Missing custom D2 proof is no longer a proposed eligibility/H3 blocker. Future source/form identity, final mapping, concrete cohort boundary and then-current platform/privacy review are deferred H4 requirements; neither a replacement form nor EH custom checkboxes is an H3 prerequisite absent verified external evidence.
