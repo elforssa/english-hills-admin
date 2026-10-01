@@ -15,7 +15,7 @@ const roles=['director','admin','receptionist','teacher','parent','student','pen
 const root=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const cases=[
  ['crm_get_today',{},'operations'],['crm_search_leads',{p_query:'phase12 synthetic'},'operations'],['crm_list_intake_review',{},'operations'],['crm_get_workspace_detail',{p_lead:nil},'operations'],['crm_list_placements',{p_lead:nil},'operations'],['crm_get_enrollment_context',{p_lead:nil},'operations'],
- ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
+ ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_list_pending_lifecycle_stops',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
  ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],
 ];
 try {

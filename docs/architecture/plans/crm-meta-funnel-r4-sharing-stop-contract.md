@@ -1,5 +1,8 @@
 # Owner summary
 
+> **Separate implementation update — 2026-10-01:** The owner authorized implementation only against main `f38cf512e968df68e8dde2cf2bc425ee6ddac9db`. `codex/r4-advisory-d2` contains [migration 103](../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql) and compatible SQL/runtime/UI. [Implementation record](../evidence/crm-r4-advisory-implementation-2026-10-01.md) tracks local validation and handoff. Not merged or deployed; independent exact-head review is required. Earlier “not implemented/unauthored” statements describe the architecture task's dated state. The IMPLEMENTATION CONTRACT and owner approval scope remain authoritative. No provider seed, Meta change, credentials, H3 execution, H4 activation, merge or Production deployment is authorized.
+
+
 ## What will change
 
 Owner-approved clarification of PR #46 independent-review findings at head `509d213cfd3613b3edd54482c0916a7bf2ef980f`, dated 2026-10-01 (Asia/Shanghai). This is the exact future locking, scope and retention contract for [advisory R4 D2](crm-meta-funnel-r4-d2-advisory.md). It replaces the former unspecified common-lock/submission-only stop description. No application or migration is implemented. Final owner architecture acceptance was given for PR #46 at `c404815c5539f1651f7f87274f6ff345a45237ff` on 2026-10-01 (Asia/Shanghai); see the [approval record](crm-meta-funnel-r4-d2-advisory.md#final-owner-architecture-approval-2026-10-01). Architecture approval does not authorize implementation, deployment or H3/H4.

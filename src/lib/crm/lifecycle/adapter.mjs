@@ -4,10 +4,10 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 export function prepareLifecyclePayload(delivery) {
   if (delivery.payload) return delivery.payload;
   const { mapping, matching, event_kind, event_id, event_time, source_generated_time } = delivery;
-  if (!['mock', 'live'].includes(mapping?.mode) || matching?.adult_contact !== true || !mapping.events?.[event_kind]) throw new Error('configuration_missing');
+  if (!['mock', 'live'].includes(mapping?.mode) || (mapping.mode === 'mock' && matching?.adult_contact !== true) || !mapping.events?.[event_kind]) throw new Error('configuration_missing');
   if (!Number.isSafeInteger(event_time) || event_time <= 0) throw new Error('invalid_event_time');
   const user = {};
-  if (/^[0-9]{1,32}$/.test(matching.lead_id || '')) user.lead_id = matching.lead_id;
+  if (typeof matching?.lead_id === 'string' && /^[0-9]{1,32}$/.test(matching.lead_id)) user.lead_id = matching.lead_id;
   if (mapping.mode === 'live') {
     if (!user.lead_id || Object.keys(user).length !== 1) throw new Error('invalid_identity');
     const nowSeconds = Math.floor(Date.now() / 1000);

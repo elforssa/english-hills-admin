@@ -168,6 +168,7 @@ const schedulerRpc = async (name, args) => {
   if (name === 'crm_claim_lifecycle_evidence') return [];
   if (name === 'crm_reconcile_external_deliveries') return 2;
   if (name === 'crm_cleanup_lifecycle_retention') return { payloads_erased: 0 };
+  if (name === 'crm_cleanup_lifecycle_stop_audit') return 0;
   if (name === 'crm_record_lifecycle_scheduler_run') return null;
   throw new Error(name);
 };

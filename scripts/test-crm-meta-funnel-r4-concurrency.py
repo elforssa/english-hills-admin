@@ -76,7 +76,7 @@ try:
     assert sql(f"select count(*) from public.crm_external_delivery_attempts where delivery_id='{intake_id}'").stdout.strip() == '1'
 
     sql(f"update public.crm_external_deliveries set next_attempt_at=now() where id='{successor_id}'")
-    active_finish = f"""select pg_advisory_xact_lock(hashtextextended('crm:lifecycle:lead:{history_lead}',0));
+    active_finish = f"""select pg_advisory_xact_lock_shared(460046,0);select pg_advisory_xact_lock(hashtextextended('crm:lifecycle:lead:{history_lead}',0));
       select pg_sleep(0.5);
       select public.crm_finish_external_attempt('{intake_id}','{intake_lease}','{{"outcome":"sent","http_status":200}}')"""
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:

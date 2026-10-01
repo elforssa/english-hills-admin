@@ -73,6 +73,13 @@ jobs:
           supabase migration up --local
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-100-current.sql
           supabase db reset --local --no-seed
+      - name: Closed 102 to advisory 103 upgrade
+        run: |
+          supabase db reset --local --version 102 --no-seed
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-102-setup.sql
+          supabase migration up --local
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-102-current.sql
+          supabase db reset --local --no-seed
       - name: Rollback-only migration regression
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
@@ -88,6 +95,15 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-live.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
+      - name: Advisory D2 scope, safety and retention acceptance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-safety.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-retention.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-exclusions.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-review.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
           python3 scripts/test-crm-phase10-concurrency.py
@@ -109,3 +125,5 @@ jobs:
           npm run test:crm-lifecycle-browser
       - name: CRM revision-4 isolated concurrency
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
+      - name: Advisory R4 forced sharing-stop race matrix
+        run: python3 scripts/test-crm-r4-advisory-concurrency.py

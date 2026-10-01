@@ -1,5 +1,8 @@
 # Owner summary
 
+> **Separate implementation update — 2026-10-01:** The owner authorized implementation only against main `f38cf512e968df68e8dde2cf2bc425ee6ddac9db`. `codex/r4-advisory-d2` contains [migration 103](../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql) and compatible SQL/runtime/UI. [Implementation record](../evidence/crm-r4-advisory-implementation-2026-10-01.md) tracks local validation and handoff. Not merged or deployed; independent exact-head review is required. Earlier “not implemented/unauthored” statements describe the architecture task's dated state. The IMPLEMENTATION CONTRACT and owner approval scope remain authoritative. No provider seed, Meta change, credentials, H3 execution, H4 activation, merge or Production deployment is authorized.
+
+
 ## What will change
 
 Owner-approved R4 D2 amendment, 2026-10-01 (Asia/Shanghai). The owner requested that custom adult-contact and lifecycle-sharing evidence become an optional, recommended governance safeguard. Missing, incomplete or ambiguous custom D2 proof will no longer by itself deny Meta-native lifecycle eligibility. Final owner architecture approval is recorded below; deployed behavior still requires D2. Architecture approval does not authorize implementation or deployment. Existing deployed required-D2 policies remain unchanged; advisory proof applies only to new future policies, with no historical backfill or reclassification. This approved architecture supersedes the earlier R4 instruction to preserve D2 unchanged for future design; runtime eligibility changes only after reviewed forward implementation and separately authorized release.
