@@ -1,5 +1,13 @@
 # Current state
 
+## H3 preparation after dormant R4 rollout — 2026-10-01
+
+The owner supplied the current Production baseline: SHA `70af2f1331f2539654ffc401507cb310a7785f56`, Supabase project `hopcezradkhrixwwswxn`, ledger exactly 001–102, disabled lifecycle scheduler and absent/false server live gate. Contracts, policies, evidence, epochs, deliveries, attempts, enabled destinations, producer boundaries and ownership are all zero; no EH-native outbound Meta events were sent and inbound intake remains healthy. This preparation task did not independently query Production. These facts supersede earlier not-deployed/two-event statements below and in historical R4 planning documents.
+
+The [H3 readiness dossier](../architecture/evidence/crm-h3-readiness-2026-10-01.md) records fresh official Meta v26.0/payload/credential documentation and read-only authenticated dataset/system-user evidence. Dataset `1152399921284927` is verified; native CRM system user `61594759444572` lacks displayed dataset assignment. H3 remains blocked by transport/timestamp evidence, exact future compliant form/evidence mapping, legacy-producer exclusion, credential/entitlement and final operator approval details. A reviewed forward provider-contract seed remains required; 103 is currently unallocated, not authored or applied. No configuration, credential, form, migration, gate, scheduler or provider event was changed. H4 remains outside scope.
+
+Earlier rollout and plan status below is historical wherever superseded by this dated owner-supplied baseline.
+
 ## CRM Batch 2 dormant Production rollout
 
 On 2026-09-30 the dormant CRM Batch 2 rollout completed Production verification. [PR #34](https://github.com/elforssa/english-hills-admin/pull/34) merged reviewed head `95ba8c1b1c5f00ee6565e1691fb35e5724356646` as merge commit `26b8b0d609925d3d72b4be1f5929244acac2bf8b`. Vercel Production deployment `dpl_C2ouisA1fpdonK7PuuT7udC1p7hp` was verified **READY**, sourced from that merge commit, with `admin.english-hills.com` among its aliases. The Production ledger contains **098 `crm_lifecycle_evidence_and_delivery`**, **099 `crm_lifecycle_delivery_runtime`** and **100 `crm_lifecycle_scheduler`**; migrations 001–100 are deployed and immutable.
