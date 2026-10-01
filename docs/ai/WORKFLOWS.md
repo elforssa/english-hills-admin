@@ -1,5 +1,7 @@
 # Operational workflows
 
+> Finally owner-approved 2026-10-01 (PR #46, architecture head `c404815`): [R4 advisory D2 amendment](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md) changes custom proof from mandatory to recommended while preserving platform/legal/privacy, source/identity, prospective cutoff, producer ownership, five-event and no-uncertain-replay safeguards. Any mandatory-D2 text below describes the deployed baseline until reviewed forward implementation; actual withdrawals/stops remain enforceable even without a grant. The approved opportunity/contact/pending stop scopes and exact lock/retention contract are part of this architecture. Migration 103 is NOT implemented; deployment is NOT authorized; H3/H4 are NOT approved and remain blocked. [Final approval record](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md#final-owner-architecture-approval-2026-10-01).
+
 These describe current code; live activation evidence is in [CURRENT_STATE](CURRENT_STATE.md). See [product rules](PRODUCT_RULES.md) for invariants rather than treating screen labels as authority.
 
 ## Meta lead intake

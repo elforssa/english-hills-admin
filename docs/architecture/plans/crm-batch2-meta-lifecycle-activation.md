@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Finally owner-approved activation-criteria architecture, 2026-10-01 (PR #46, `c404815`):** [R4 advisory D2](crm-meta-funnel-r4-d2-advisory.md) removes custom D2 adult/share/notice-answer evidence as a future technical/H3 blocker after reviewed forward implementation. Existing mandatory-D2 sections remain the deployed baseline, not the revised proposal. Exact form/privacy/platform obligations, prospective identity/mapping/notice and legacy exclusion remain required. [Updated H3 assessment](../evidence/crm-h3-readiness-2026-10-01.md) separates optional proof from actual readiness blockers. H3 is technical provider/transport/authentication, entitlement/credentials, native/legacy exclusion design and advisory-D2 forward preparation. Actual prospective source/form ID, final mapping, concrete cohort boundary and then-current platform/privacy review belong to H4. Any older form-specific H3 gate below is superseded by this approved architecture; no special replacement form or custom checkbox is an H3 prerequisite without verified external evidence. Yearly-program remains excluded as the existing/ending legacy cohort and producer path. Migration 103 is NOT implemented; deployment is NOT authorized; H3/H4 are NOT approved and remain blocked. See the [final approval scope](crm-meta-funnel-r4-d2-advisory.md#final-owner-architecture-approval-2026-10-01).
+
 ## What will change
 
 **Authority:** [approved revision 4](crm-meta-funnel-revision-4.md) is the finally approved architecture for event scope, identity/occurrence semantics, ordering, producer ownership/cutover and the implementation manifest. Its five-event implementation is the approved scope. This activation plan remains authoritative for unresolved provider, form, credential and H3/H4 release prerequisites only where revision 4 has not replaced them. Architecture is approved; implementation is NOT completed; deployment and H3/H4 are NOT authorized. Production remains the dormant two-event implementation. Historical revision-3 findings below are not an alternative implementation contract.
@@ -20,7 +22,7 @@ No UI change here. Future director diagnostics must clearly identify uncertainty
 
 ## Database impact
 
-The forward schema/runtime changes and tests are defined by the [revision-4 implementation manifest](crm-meta-funnel-revision-4.md#exact-future-implementation-manifest). This plan’s compatibility findings supplement that manifest; they do not limit it to two event kinds. Deployed 001–100 remain immutable; no migration is authored or applied here.
+The forward schema/runtime changes and tests are defined by the [revision-4 implementation manifest](crm-meta-funnel-revision-4.md#exact-implementation-manifest). This plan’s compatibility findings supplement that manifest; they do not limit it to two event kinds. Deployed 001–100 remain immutable; no migration is authored or applied here.
 
 ## Important security decisions
 
@@ -401,13 +403,13 @@ Stop before mutation/advance if any required manifest field is unverified, appro
 
 ## Implementation/configuration changes required
 
-**Required later implementation, not performed here:** the [revision-4 implementation manifest](crm-meta-funnel-revision-4.md#exact-future-implementation-manifest) and [implementation contract](crm-meta-funnel-revision-4.md#implementation-contract) are authoritative. The compatibility corrections below supplement that approved five-event scope.
+**Required later implementation, not performed here:** the [revision-4 implementation manifest](crm-meta-funnel-revision-4.md#exact-implementation-manifest) and [implementation contract](crm-meta-funnel-revision-4.md#implementation-contract) are authoritative. The compatibility corrections below supplement that approved five-event scope.
 
 - Forward migration: seed only the completed approved contract; replace the empty-constants constraint/configuration check with exact two-key nonpersonal values; propagate/freeze and independently validate constants in SQL. No generic `custom_data` escape hatch. Tighten documented event-time boundary. Preserve RLS, revoked table grants, worker-only claims and director-only controls.
 - Application: emit approved source constants from the verified frozen contract; apply the reviewed error/uncertainty table; retain the official SDK-supported lossless string lead-ID representation. Keep no em/ph/value/currency and fixed-host transport.
 - Implement and verify [approved revision 4](crm-meta-funnel-revision-4.md), including no-uncertain-replay per event identity, before seeding the completed contract. Scope expansion to Option B is already approved; do not seek that approval again. Applicable provider/cohort facts remain to be verified. Do not invent a numeric retry window or substitute another API.
 
-- Tests: follow the [revision-4 test manifest](crm-meta-funnel-revision-4.md#exact-future-implementation-manifest), including occurrence identity, ordering, uncertainty, security/concurrency, retention, migration upgrade and inbound regressions. Existing `scripts/test-crm-batch2*` provide the local harness; no real/test Meta delivery in CI.
+- Tests: follow the [revision-4 test manifest](crm-meta-funnel-revision-4.md#exact-implementation-manifest), including occurrence identity, ordering, uncertainty, security/concurrency, retention, migration upgrade and inbound regressions. Existing `scripts/test-crm-batch2*` provide the local harness; no real/test Meta delivery in CI.
 - After separately approved deployment, H3 governs exact form/mapping/notice/policy, credential and disabled-destination preparation; H4 governs exact prospective activation. Neither is authorized here.
 
 Historical documentation-only revision-3 task: record the approved durable retry/uncertainty decision in this plan and ADR-004, preserve the account-readiness record with an approval addendum, and synchronize navigation/product-rule references. Current/deployed behavior and permissions are unchanged; the approved policy is not implemented. No application code, migrations, provider forms/configuration, secrets, Vault, Vercel env, scheduler, destination or Production changes. No merge/deploy.
