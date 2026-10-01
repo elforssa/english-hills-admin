@@ -50,7 +50,7 @@ export async function processLifecycleDeliveries({ rpc, env = {}, fetchImpl, liv
       await rpc('crm_prepare_external_delivery', { ...args, p_payload: payload });
       await rpc('crm_begin_external_attempt', args); started = true;
       // This is the last in-process gate before external I/O. Database begin has
-      // already rechecked the activation epoch and evidence under consistent locks.
+      // already rechecked the activation, original source, frozen policy and privacy stops under consistent locks.
       if (!liveGate || env.CRM_META_LIFECYCLE_LIVE_ENABLED !== 'true') throw new Error('live_not_available');
       const outcome = await postLifecycleLive({ mapping: delivery.mapping, payload, token: env[ref], fetchImpl });
       await rpc('crm_finish_external_attempt', { ...args, p_result: outcome });

@@ -12,8 +12,13 @@ export async function runScheduledLifecycle(request, { env, rpc, fetchImpl, live
   try {
     await rpc('crm_record_lifecycle_scheduler_run', { p_status: 'started', p_counts: {}, p_error_code: null });
     counts.evidence = await processLifecycleEvidence({ rpc, limit: 25 });
+    // Advisory proof collection cannot authorize sending or starve eligible work.
+    // Reconcile, cleanup and committed begin still fail closed on safety storage.
+    try { counts.advisory_evidence = await processLifecycleEvidence({ rpc, limit: 25, requirement: 'advisory' }); }
+    catch { counts.advisory_evidence = { unavailable: true }; }
     counts.reconciled = await rpc('crm_reconcile_external_deliveries', { p_limit: 100 });
     counts.cleanup = await rpc('crm_cleanup_lifecycle_retention', { p_limit: 100 });
+    counts.cleanup.stop_audits_erased = await rpc('crm_cleanup_lifecycle_stop_audit', { p_limit: 100 });
     if (now() > deadline - 10000) throw new Error('deadline_exceeded');
     const outcomes = await processLifecycleDeliveries({
       rpc, env, fetchImpl, liveGate, limit: 3,

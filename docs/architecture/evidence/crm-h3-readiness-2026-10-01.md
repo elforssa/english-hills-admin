@@ -1,5 +1,8 @@
 # Owner summary
 
+> **Later implementation-task evidence:** Advisory migration 103/runtime/UI have now been authored on `codex/r4-advisory-d2`; see [the separate implementation record](crm-r4-advisory-implementation-2026-10-01.md). Earlier unauthored/implementation-missing entries below are historical dossier observations. Independent review and separately approved deployment remain dependencies. Provider seed is still unauthored; entitlement, transport/authentication, exclusion-design and execution-package blockers remain. No H3 or H4 operation occurred or is authorized.
+
+
 ## What will change
 
 H3 preparation dossier only, dated **2026-10-01 (Asia/Shanghai)**. It covers H3 technical preparation: provider contract, transport/authentication, entitlement/credentials, native/legacy producer exclusion design and the advisory-D2 forward migration. Future source/form, final mapping, concrete cohort boundary and then-current platform/privacy review are deferred H4 dependencies. **NOT READY FOR H3 OWNER REVIEW** as an executable technical package: exact transport evidence, entitlement/credentials, exclusion design, advisory implementation and named H3 execution details remain incomplete. The owner can review the proposals, but cannot safely authorize a blanket H3 execution from them.

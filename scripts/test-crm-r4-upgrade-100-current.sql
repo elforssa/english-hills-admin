@@ -4,9 +4,9 @@ begin;
 
 do $$
 begin
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 102
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102')) <> 2 then
-  raise exception 'Expected direct migration 100 through 102';
+ if (select max(version::integer) from supabase_migrations.schema_migrations) <> 103
+  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102','103')) <> 3 then
+  raise exception 'Expected direct migration 100 through 103';
  end if;
  if (select count(*) from public.crm_external_deliveries where provider_event_id like 'upgrade100:%') <> 2 then
   raise exception 'Migration-100 delivery identities were changed or duplicated';
@@ -58,4 +58,4 @@ set local request.jwt.claim.sub='8e000000-0000-0000-0000-000000000001';
 select public.crm_lifecycle_diagnostics();
 select public.crm_list_external_deliveries(10,0);
 rollback;
-\echo PASS direct migration-100 to 102 dormant-state upgrade
+\echo PASS direct migration-100 to 103 dormant-state upgrade
