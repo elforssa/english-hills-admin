@@ -35,6 +35,8 @@ The primary trigger exists in migration 095; Production activation was independe
 
 Website acceptance means durable receipt, not immediate lead resolution. Exact-origin checks, validation, rate limiting and optional CAPTCHA precede queueing. Immutable mapping versions normalize core fields and flexible answers; uncertain matching becomes review. [Website contract](../crm-website-inquiries.md).
 
+The source model supports multiple Meta form IDs per Page connection and multiple website form keys per configured origin; immutable mapping versions are independent of campaign/ad attribution. Director configuration RPCs exist, but no inbound connection/mapping onboarding UI was found. Current lifecycle source boundaries are per mapping, while destination/epoch controls are shared; uninterrupted addition of another live source needs separate platform assessment. See the [source-backed multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md). Website immediate CAPI Lead and website lifecycle matching are owner-directed later adapter work, not current runtime capability or an H3 prerequisite.
+
 ## CRM and school operations
 
 ```mermaid
