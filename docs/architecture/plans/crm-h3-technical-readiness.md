@@ -2,9 +2,9 @@
 
 ## What will change
 
-This **Tier-3 H3 technical package, revision 3, 2026-10-01**, replaces the earlier H3 dossier's current blocker assessment. It prepares a reusable dormant Meta outbound connector, independent of the next campaign, form or acquisition channel. It proposes a bounded path to a verified provider contract and disabled native destination. **NOT READY FOR H3 OWNER REVIEW** as a fully bound execution package: the exact remaining credential-route evidence gap is listed below. Decisions with concrete alternatives can be reviewed now; they are not execution permission.
+This **Tier-3 H3 technical package, revision 4, 2026-10-01**, replaces the earlier H3 dossier's current blocker assessment. It prepares a reusable dormant Meta outbound connector, independent of the next campaign, form or acquisition channel. It proposes a bounded path to a verified provider contract and disabled native destination. **NOT READY FOR H3 OWNER REVIEW** as a fully bound execution package: the exact remaining credential-route evidence gap is listed below. Decisions with concrete alternatives can be reviewed now; they are not execution permission.
 
-Read-only research and documentation only. No runtime, migration, seed, credential, account permission or Production configuration change is included. No test or real events were sent. Revision-2/3 main baseline: `4236cfcddf851e12884cb6ade3cb436c7762c1ea`. Revision-1/2 observations below retain their original provenance. Revision 3 assesses repository source and the owner clarification only; no external account or Production access was performed.
+Read-only research and documentation only. No runtime, migration, seed, credential, account permission or Production configuration change is included. No test or real events were sent. Revision-2/3 main baseline: `4236cfcddf851e12884cb6ade3cb436c7762c1ea`. Revision-1/2 observations below retain their original provenance. Revision 3 assessed repository source and the owner clarification only. Revision 4 adds [fresh credential-route documentation and authenticated nonsecret Meta preflight](../evidence/crm-h3-credential-route-2026-10-01.md); no Production access was performed.
 
 ## What staff/users will be able to do
 
@@ -16,7 +16,7 @@ No future form creation/binding, final source mapping, cohort policy/boundary pu
 
 ## UI impact
 
-None in this PR. Future timestamp diagnostics, if commissioned, expose a coarse hold reason only. Public docs and authenticated account settings were inspected read-only. No token-generation, permission-edit or save control was used.
+None in this PR. Future timestamp diagnostics, if commissioned, expose a coarse hold reason only. Public docs and authenticated account settings were inspected read-only. Revision 4 inspected the documented token preflight launcher but never used final issuance, changed a permission or saved a setting; see its evidence record.
 
 ## Database impact
 
@@ -38,7 +38,7 @@ H3 covers provider contract, transport/authentication, credential/dataset entitl
 
 The [revision-2 evidence register](../evidence/crm-h3-blocker-evidence-2026-10-01.md) remains the source for observed assets and legacy configuration. Maroine EL Forssa is the accountable human; task independence remains mandatory. **Legacy stop/drain completeness is removed as an H3 blocker.** Yearly can continue until intentionally retired. Future activation must prove that its exact native source/cohort cannot also be sent by legacy automated, retry or manual paths. That proof may show a genuinely separate native source; it need not redesign legacy selective exclusion or retire unrelated Yearly traffic.
 
-**One H3 package evidence blocker remains:** minimum credential permissions/tasks and account-specific issuance constraints. Admin asset inheritance, own-app ownership/installation and the current proof setting are established; these do not establish an exact outbound token route. No new provider verification is claimed by this scope correction.
+**One H3 package evidence blocker remains:** explicit CRM token-scope applicability and ongoing own-business delivery while the app is unpublished. Revision 4 resolves Admin dataset entitlement/assignment reconciliation, actual lifetime options and proof behavior; see the [exact remaining evidence](../evidence/crm-h3-credential-route-2026-10-01.md#exact-remaining-closure-evidence).
 
 ## Revision-1 resolved facts and evidence limits
 
@@ -142,7 +142,7 @@ Future synthetic acceptance: exact equality, subsecond equality after flooring, 
 
 ## Credential provisioning, storage and rotation design
 
-Recommended candidate route: own-business app `1069638329182835` and native actor `61594759444572` to dataset `1152399921284927`. Revision 2 verifies app ownership and installation. Existing actor is Admin, so this is not a claim of asset-minimal identity. H3-P5 establishes inherited Admin asset access; a dataset entry is not required merely to establish that access. The exact issuance/token permission set and reconciliation of H3-P3's assignment recipe remain open in the [credential evidence](../evidence/crm-h3-blocker-evidence-2026-10-01.md#authoritative-credential-evidence). Do not add broad grants simply to make the UI list nonempty. A dedicated Employee sender is an alternative least-privilege design requiring its own approved actor/app bindings; do not silently create it or reduce the existing actor's intake rights.
+Recommended candidate route: own-business app `1069638329182835` and native actor `61594759444572` to dataset `1152399921284927`. Revision 2 verifies app ownership and installation. Existing actor is Admin, so this is not a claim of asset-minimal identity. H3-P5 establishes inherited Admin asset access; a dataset entry is not required merely to establish that access. Revision 4 reconciles the generic assignment recipe with inherited full access: no additional dataset grant is needed to establish this Admin’s asset access. [Fresh credential evidence](../evidence/crm-h3-credential-route-2026-10-01.md) records available 60-day/Never lifetimes and seven locked selected UI scopes. CRM-specific token scope and ongoing unpublished delivery applicability remain open; a narrow token cannot be promised from this UI. Do not add broad grants simply to make the UI list nonempty. A dedicated Employee sender is an alternative least-privilege design requiring its own approved actor/app bindings; do not silently create it or reduce the existing actor's intake rights.
 
 | Record | Required content, never secret values |
 | --- | --- |
@@ -184,7 +184,7 @@ No reapproval of D2, five names, repeats/singletons, Qualified target, original 
 | --- | --- | --- |
 | Transport | A: commission documented multipart body-token patch. B: retain bearer/JSON only after authoritative endpoint support evidence | A; exact patch/review/deployment needed before seed/configuration execution, no token in frozen payload |
 | Equality | A: strict exported-second hold with predecessor consequence above. B: obtain provider equality clarification before deciding | A; owner must explicitly accept hold/coverage consequence before implementation; no invented time |
-| Credential actor | A: existing named Admin actor, acknowledging inherited wider rights. B: separately provision an Employee sender with verified minimum app/dataset rights | A is the existing concrete candidate, B reduces identity breadth but requires new exact IDs. Choose explicitly; never modify existing actor rights in this task |
+| Credential actor | A: existing named Admin actor, acknowledging inherited wider rights and the seven locked selected UI scopes in revision-4 evidence. B: separately provision an Employee sender with verified minimum app/dataset rights | A is the existing concrete candidate, B reduces identity breadth but requires new exact IDs. Choose explicitly; never modify existing actor rights in this task |
 | Contract/configuration | Approve exact manifest, same EH connection, dataset, reference and `max_attempts=5`, or defer | Recommended values below; approval does not authorize seed/deployment/events |
 | Credential governance | Accept proposed 30-day review/90-day-or-expiry rotation, or supply another explicit schedule; accountable custodian/revocation authority is Maroine EL Forssa | Must be bound before credential execution |
 
@@ -192,7 +192,7 @@ No reapproval of D2, five names, repeats/singletons, Qualified target, original 
 
 These are planned H3 execution actions, not requirements to create secrets during this review task:
 
-1. Record effective own-app native entitlement, actual selected task/scope set and issuer restrictions; assign only specifically approved missing dataset access if needed. Existing explicit **Use events dataset** label is an observed candidate, not a verified machine task ID or permission grant.
+1. Recheck the established own-app native Admin entitlement and observed issuance options; bind the final approved scope bundle and actual issuer restrictions after the two provider confirmations. No additional dataset assignment is required to establish inherited Admin access. Do not mistake the legacy actor’s **Use events dataset** label for an upload-task enum or add grants speculatively.
 2. Issue/store a dedicated outbound credential through approved secure operator tooling; verify nonsecret metadata and rotation/revocation ownership. Never obtain it through this documentation task.
 3. After reviewed/deployed transport/time corrections, deploy the independently reviewed immutable contract seed and configure the existing EH connection **disabled**. Re-read current connection version first; version 2 is an observation, not a future concurrency token.
 Legacy path census, applicable exclusion/retirement design and actual no-overlap evidence are H4 source-activation work, not H3 external actions.
@@ -224,7 +224,7 @@ Actual prospective form/source identity and any creation/publication/binding; fi
 
 ## Exact remaining blocker to a fully bound H3 owner-review package
 
-1. **Credential-route specificity:** authoritative Meta endpoint-specific documentation/support and authenticated nonsecret preflight must bind the minimum dataset task/token scopes, unpublished own-business applicability, actual lifetime/access restrictions and the Admin assignment-recipe reconciliation. Admin inherited asset access, claimed/installed app and current event proof setting are established; token authorization is not. Choose Admin or an exact Employee proposal after that evidence; no issuance is required in this task.
+1. **Credential-route specificity:** obtain explicit Meta confirmation of (a) the OAuth scope set for lead-ID-based CRM lifecycle uploads, since the `ads_read` permission reference explicitly names web events, and (b) ongoing own-business CRM delivery using this Unpublished/Ready-for-testing app without publication or App Review, or the precise required status step. [Revision-4 closure evidence](../evidence/crm-h3-credential-route-2026-10-01.md#exact-remaining-closure-evidence) records the exact questions. Admin dataset inheritance/assignment reconciliation, actual lifetime options and proof behavior are resolved. No token issuance or event test is required.
 **Removed H3 blocker — legacy stop/drain:** the owner clarification places actual-source exclusion investigation and any necessary legacy retirement at H4 activation. No selective long-term coexistence design is required for H3. The reusable fail-closed control contract above remains mandatory.
 
 **Closed blocker — execution ownership:** owner assigned Maroine EL Forssa to the human roster above. Separate implementation, independent review, release and verification task identities and artifact-bound operation windows are future commissioning records, not unknown human owners.
