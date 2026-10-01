@@ -1,5 +1,7 @@
 # Security and permission boundaries
 
+> Proposed 2026-10-01: [R4 advisory D2 amendment](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md) changes custom proof from mandatory to recommended while preserving platform/legal/privacy, source/identity, prospective cutoff, producer ownership, five-event and no-uncertain-replay safeguards. Any mandatory-D2 text below describes the deployed baseline until reviewed forward implementation; actual withdrawals/stops remain enforceable even without a grant.
+
 Authorization is not sidebar visibility. UI, page route, server/API/RPC and RLS/database must agree. Middleware skips API role gating so each handler must authenticate itself. Database role is authoritative; client input and editable Auth metadata are not role proof. Never broaden RLS or remove checks/tests merely to make frontend access work.
 
 ## Current roles

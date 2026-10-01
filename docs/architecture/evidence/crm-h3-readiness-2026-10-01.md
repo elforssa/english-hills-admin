@@ -22,7 +22,7 @@ None now. A separately reviewed forward provider-contract seed is required; **10
 
 ## Important security decisions
 
-Preserve D2 for all five events, original Meta lead ID only, no child/contact-hash/monetary payload expansion, prospective eligibility, exclusive ownership and `no_uncertain_replay`. No credentials or real lead answers belong in this dossier. Unknown provider outcomes remain unreplayable; a new event ID, destination, timestamp or credential must not bypass that rule.
+Proposed [D2 advisory amendment](../plans/crm-meta-funnel-r4-d2-advisory.md): custom adult/share proof is recommended and optional for all five events after forward implementation; deployed D2 remains mandatory today. Preserve Meta/platform requirements, applicable legal/privacy obligations, original Meta lead ID only, no child/contact-hash/monetary payload expansion, prospective eligibility, exclusive ownership and `no_uncertain_replay`. No credentials or real lead answers belong in this dossier. Unknown provider outcomes remain unreplayable; a new event ID, destination, timestamp or credential must not bypass that rule.
 
 ## Risks / owner review points
 
@@ -45,10 +45,11 @@ Risk tier **3 preparation/architecture**, because this dossier governs later ext
 | Destination identity | Fresh UI: English Hills pixel `1152399921284927`, Glory Lot ownership, connected KAL `1613720155930784` | Actual EH connection UUID/key/version and exact form mapping; owner selection approval | Partial |
 | Authentication | Official own-business token routes and access-token parameter transport | Endpoint-specific support for deployed JSON + bearer-header request; selected app security requirements | Blocked |
 | Receipt/error/duplicate handling | Ordinary integer receipt schema; general Graph error meanings; deployed conservative holds | v26 CRM response variants/exact duplicate acknowledgment not guaranteed; preserve hold policy | Partial; no replay entitlement |
-| Future compliant form/evidence | Existing evaluator compares exact typed answers; current Yearly form excluded by 101/102 | New form ID, rendered notice, raw keys/types/values, immutable mapping, dates and approvals | Blocked |
+| Future form/platform/privacy | Current Yearly excluded; proposed D2 amendment makes custom proof optional | New form identity/mapping, honest notice/privacy/choice review, dates and approvals; custom adult/share raw keys are optional | Blocked independently of missing D2 |
+| Custom D2 proof | Optional/recommended in revised architecture; still mandatory in deployed SQL | Forward advisory implementation required; no fabricated grant or consent | Not a future eligibility blocker |
 | Outbound entitlement/credential | Native actor/app identified; dataset UI assigns only existing CAPI System User | Native dataset task absent; dedicated token metadata/secure provisioning unapproved | Blocked |
 | Legacy producer exclusion | Fresh UI confirms Yearly-program → `yearly-program-fb` / `Yearly-program` → dataset; immutable controls exist in SQL | Stable Sheet/integration/trigger IDs, all replay paths, enforcement and zero overlapping queue/in-flight proof | Blocked |
-| Forward seed | 103 unoccupied at refreshed main; 098/101 require immutable contract | No complete approved contract or reviewed migration yet | Blocked |
+| Forward change and seed | Propose 103 advisory schema/runtime and separate later verified contract seed | Neither implementation nor final contract reviewed/deployed; allocation recheck required | Blocked |
 | Execution ownership | Roles defined below | Actual named assignees, exact approval scope/timestamps, final object IDs and intervals | Blocked |
 
 ## Fresh official source register
@@ -132,35 +133,37 @@ active: true # proposed contract usability only; NOT destination/epoch activatio
 
 The fresh source access date is 2026-10-01; it is not a fabricated completed-contract verification or approval date. Final companion manifest binds dataset `1152399921284927`, Page `997579646781805`, actual EH connection UUID/current version, selected system user/app, auth evidence, timestamp treatment, evidence artifact digest and exact reviewed seed SHA. No arbitrary JSON keys, additional event kinds or non-approved custom data. Contract key is globally unique: a future immutable revision needs a distinct key, not overwriting this one.
 
-## Proposed compliant-form/evidence manifest — NOT EXECUTABLE
+## Proposed future form and optional D2 manifest — NOT EXECUTABLE
+
+Revised architecture: custom adult/share controls and per-answer notice binding below are optional governance recommendations, not technical eligibility prerequisites. Exact published form/notice identity, applicable platform/legal requirements and truthful choice/withdrawal handling remain mandatory. Deployed 101/102 still require proof until the approved forward amendment is implemented. No legal basis or final form approval is asserted.
 
 Use a **new dedicated Meta Instant Form ID** on the English Hills Page; never reuse current Yearly `1086266294126723`, which deployed 101/102 explicitly reject. Prefer creation while not attached to campaigns and never attach the form to the legacy automatic sender. Publication/campaign edits remain separately approved H3 operations; form existence does not confer eligibility before H4's actual epoch.
 
-Proposed exact English wording for owner/privacy approval:
+Optional exact English wording if the owner selects custom governance controls, subject to privacy approval:
 
 **Adult confirmation (separate, affirmative, not preselected):** “I confirm that I am 18 years of age or older and that I am the adult contact for this enquiry.”
 
 **Lifecycle sharing (separate, affirmative, not preselected):** “I agree that English Hills may share with Meta the Meta lead ID associated with this enquiry and updates about its status: received (Intake), Not qualified, Lost, Qualified, and Converted (confirmed enrolment). English Hills will use this sharing to measure and improve its advertising. These updates will not include names, email addresses, phone numbers, child details, assessment results, internal notes, or payment information. I can ask English Hills to stop future sharing using the contact method in the linked privacy notice.”
 
-Proposed affirmative control labels: adult “Yes, I confirm”; sharing “Yes, I agree”. These are **display-copy proposals**, not verified API values. Nonaffirmation/missing evidence must deny outbound sharing, and must not be silently defaulted from submitting an enquiry. Approve a usable non-sharing enquiry path and verify it works; no claim is made that the current form already implements this flow. Do not retain conflicting no-third-party-sharing promises or stale Pré-Cours programme wording. Approve any French/Arabic translations independently and bind their exact displayed text; no automatic translation aliases in the evaluator.
+Proposed affirmative control labels: adult “Yes, I confirm”; sharing “Yes, I agree”. These are **display-copy proposals**, not verified API values. Missing/incomplete/ambiguous custom proof alone must not deny future advisory delivery or be silently defaulted to consent/adult confirmation. Explicit refusal or withdrawal must be honored independently of a grant; any published choice must have exact approved semantics and an enforceable stop path. Approve a usable non-sharing enquiry path and verify it works; no claim is made that the current form already implements this flow. Do not retain conflicting no-third-party-sharing promises or stale Pré-Cours programme wording. Approve any French/Arabic translations independently and bind their exact displayed text; no automatic translation aliases in the evaluator.
 
 | Manifest field | Proposed requirement / remaining value |
 | --- | --- |
 | Page / form | Page `997579646781805`; new provider form ID **TBD**; immutable published revision/structural archive **TBD** |
 | Channel / connection | `meta_instant_form`; actual EH Meta connection UUID/key/current version **TBD** |
 | Form mapping | Actual immutable mapping UUID/version/effective time **TBD**; never relabel an old submission |
-| Adult key / values | Logical proposal `adult_contact_confirmed`; actual API key, scalar type and exact affirmative value **TBD** |
-| Sharing key / values | Logical proposal `meta_lifecycle_sharing_confirmed`; separate actual API key/type/affirmative value **TBD** |
-| Notice | Proposed version `eh-meta-lifecycle-r4-en-v1`; approved full notice + working privacy URL/contact mechanism **TBD** |
-| Notice digest | SHA-256 lowercase hex of archived, owner-approved exact UTF-8 notice bytes; UTF-8 without BOM, LF line endings, explicit final-newline rule. Freeze text before computing; **no approved digest yet** |
-| Notice binding | Exact form ID/revision → mapping UUID/version → policy → notice version/digest. If a provider notice-version answer exists, verify exact key/type/value; otherwise omit BOTH optional `notice_field_key` and `notice_accepted_values` from publisher JSON and prove immutable form binding. Do not use JSON null as omission. |
-| Policy | `r4_stage_entry`; exact allowed kinds `[intake, not_qualified, lost, qualified, converted]`; UUID/version allocated by publisher; future UTC effective interval **TBD** |
-| Evidence | Existing evaluator requires exactly one answer per key and exact typed comparison. String `"true"`, boolean `true`, scalar versus array and translated text are distinct. Missing, duplicate, ambiguous or negative answers deny. Capture only structural metadata in Git. |
+| Adult key / values | **Optional** in advisory mode; logical proposal `adult_contact_confirmed`; actual API key, scalar type and exact affirmative value **TBD** |
+| Sharing key / values | **Optional** in advisory mode; logical proposal `meta_lifecycle_sharing_confirmed`; separate actual API key/type/affirmative value **TBD** |
+| Notice | Actual applicable notice/privacy obligations remain required; custom D2 version metadata **optional**. Proposed version `eh-meta-lifecycle-r4-en-v1`; approved full notice + working privacy URL/contact mechanism **TBD** |
+| Notice digest | **Optional custom D2 metadata**; if supplied, SHA-256 lowercase hex of archived, owner-approved exact UTF-8 notice bytes; UTF-8 without BOM, LF line endings, explicit final-newline rule. Freeze text before computing; **no approved digest yet** |
+| Notice binding | Exact form ID/revision → mapping UUID/version → prospective policy remains required. Optional D2 notice/version/digest must match null-safely if supplied; no mandatory custom notice-answer proof. If a provider notice-version answer exists, verify exact key/type/value; otherwise omit BOTH optional `notice_field_key` and `notice_accepted_values` from publisher JSON and prove immutable form binding. Do not use JSON null as omission. |
+| Policy | Proposed new immutable `d2_requirement=advisory`; `r4_stage_entry`; exact allowed kinds `[intake, not_qualified, lost, qualified, converted]`; UUID/version allocated by publisher; future UTC effective interval **TBD** |
+| Evidence | Existing evaluator requires exactly one answer per key and exact typed comparison. String `"true"`, boolean `true`, scalar versus array and translated text are distinct. Missing/duplicate/ambiguous proof is advisory. Actual explicit refusal, privacy withdrawal or known safety restriction is a separate hold. Never mark missing evidence affirmative. Capture only structural metadata in Git. |
 | Verification | Owner approval, authorized form operator, date, non-PII form/schema evidence, normalized mapping proof, archive digest and withdrawal procedure **TBD** |
 
-Actual affirmative arrays cannot be supplied until provider-returned keys/types and the normalizer's result are established. Use non-PII form schema evidence where sufficient; if a provider test submission is needed, obtain separate explicit approval and never insert fake Production evidence. Local synthetic evaluator fixtures may demonstrate comparison behavior but cannot verify live form values.
+If optional controls are selected, actual affirmative/refusal mappings cannot be supplied until provider-returned keys/types and the normalizer's result are established. Their absence is not a D2 eligibility blocker. Use non-PII form schema evidence where sufficient; if a provider test submission is needed, obtain separate explicit approval and never insert fake Production evidence. Local synthetic evaluator fixtures may demonstrate comparison behavior but cannot verify live form values.
 
-Prospective admission is based on original first-submission occurrence, not import/qualification time: `occurred_at >= max(boundary.valid_from, epoch.started_at, policy.effective_from, mapping.effective_from)` and before applicable end/retirement times. Require resolved Meta-first opportunity, correct Page/form/original lead ID, contemporaneous immutable D2 grant and unretracted source. Website, later-Meta, current Yearly, legacy/current opportunities, delayed pre-cutoff imports and pre-epoch/disabled-period submissions remain excluded forever from later activation. A new form response attached to an existing opportunity cannot rewrite its first touch or authorize it retroactively. All five kinds independently recheck evidence/revocation/deadlines/ownership.
+Prospective admission is based on original first-submission occurrence, not import/qualification time: `occurred_at >= max(boundary.valid_from, epoch.started_at, policy.effective_from, mapping.effective_from)` and before applicable end/retirement times. Require resolved Meta-first opportunity, correct Page/form/original lead ID, unretracted original source and no actual privacy/safety stop. Custom D2 grant is optional in the proposed advisory mode. Website, later-Meta, current Yearly, legacy/current opportunities, delayed pre-cutoff imports and pre-epoch/disabled-period submissions remain excluded forever from later activation. A new form response attached to an existing opportunity cannot rewrite its first touch or authorize it retroactively. All five kinds independently recheck applicable privacy stops, source integrity, deadlines and ownership; optional D2 proof is not the gate.
 
 ## Proposed producer-boundary manifest — NOT EXECUTABLE
 
@@ -175,7 +178,7 @@ Required enforcement: explicit form-ID allowlist restricted to legacy forms (new
 | `connection_id`, `form_mapping_id`, `form_key` | Actual EH connection, immutable new mapping and exact new form ID: TBD |
 | `page_id`, `dataset_id` | `997579646781805`, `1152399921284927`, checked against connection configuration |
 | `provider_contract_id`, `eligibility_policy_id`, `policy_version` | Actual immutable approved objects: TBD |
-| `notice_version`, `notice_text_digest` | Exact approved form/policy pair: TBD |
+| `notice_version`, `notice_text_digest` | Optional custom D2 pair in proposed advisory schema; if supplied, exact approved policy binding. Actual notice/privacy obligations remain required. |
 | `lifecycle_model`, `permitted_producer` | `r4_stage_entry`, `eh_native` |
 | `valid_from`, `valid_until` | Finite future UTC interval fully covered by policy: TBD |
 | `legacy_exclusion_verified` | Must be true only after evidence; currently unverified, do not publish |
@@ -185,7 +188,7 @@ Required enforcement: explicit form-ID allowlist restricted to legacy forms (new
 
 Publish only through `crm_publish_lifecycle_producer_boundary` in a later approved operation, after approved active contract, prospective policy and **disabled** `mode=live` configuration. The RPC copies identity/notice bindings and timestamps from authoritative records; it is not a free-form insert. Its evidence-reference string is not a check of the legacy platform. Finite validity and an accountable drift monitor are mandatory.
 
-Per-opportunity ownership uses `crm_lifecycle_producer_ownership`: canonical `lead_id`, `connection_id`, `boundary_id`, `activation_epoch_id`, `producer`, `assigned_at`. Unique `(lead_id, connection_id)` and immutable records prevent local reassignment; canonical first submission resolves original provider identity. Reject route aliases/second ownership; do not copy raw IDs into a new registry. **No ownership rows during H3:** admission requires H4's actual open epoch, eligible natural first submission and valid evidence. Existing leads remain excluded without manufacturing legacy ownership records. On rollback, do not hand native opportunities back to the legacy sender; new epochs admit only new prospective leads.
+Per-opportunity ownership uses `crm_lifecycle_producer_ownership`: canonical `lead_id`, `connection_id`, `boundary_id`, `activation_epoch_id`, `producer`, `assigned_at`. Unique `(lead_id, connection_id)` and immutable records prevent local reassignment; canonical first submission resolves original provider identity. Reject route aliases/second ownership; do not copy raw IDs into a new registry. **No ownership rows during H3:** admission requires H4's actual open epoch, eligible natural first submission and valid platform/privacy/source controls. Advisory admission does not require a D2 grant. Existing leads remain excluded without manufacturing legacy ownership records. On rollback, do not hand native opportunities back to the legacy sender; new epochs admit only new prospective leads.
 
 ## Proposed credential/entitlement plan
 
@@ -201,23 +204,25 @@ Recommended route: own-business, own-app/system-user CAPI route described in P4,
 
 No secrets are provisioned by this plan; final assignments, dates, token metadata, EH connection identifiers and credential operator names are missing.
 
-## Migration 103 decision
+## Forward migration ordering decision
 
-**Yes: a new forward migration is required to seed the verified provider contract under the approved architecture.** Refreshed main and supplied Production ledger stop at 102, so 103 is available at this check. It is not authored now because the contract is incomplete/unapproved. Recheck allocation when work is commissioned; never edit deployed 098/101/102 or insert directly to bypass review.
+**Revised recommendation: 103 implements advisory D2 schema/runtime and grant-independent privacy stops; a separate later migration (104 if available) seeds the verified contract.** Independent review/deployment of the generic policy change is safer than coupling it to unresolved provider evidence. Recheck allocation. Neither migration is authored here. Provider seeding technically can occur independently, but policy/boundary H3 preparation should follow the final verified advisory schema.
 
-The eventual seed should insert exactly one approved immutable R4 contract with official evidence URLs, actual verification/approval dates and null deduplication horizon. It must not create form policy, evidence, producer boundary/ownership, destination enablement, epoch, deliveries, attempts, cron or server settings. Contract usability may be active while every send gate remains closed. Authentication and timestamp corrections, if required, are separately reviewed application/forward-SQL scope; do not pretend a seed fixes them or reserve 103 irrevocably.
+A forward migration is still required to seed the verified provider contract under the architecture. Refreshed main and inherited Production ledger stop at 102. Allocate the seed separately after the relaxation, once the final contract is complete and approved; never edit deployed 098–102 or insert directly to bypass review. No number is reserved by this dossier.
 
-Before deployment: fresh independent review of exact implementation/seed SHA, local 001–102 → seed upgrade verification, positive contract-shape/negative constraint cases, and proof that activation inventory and gates remain dormant. Human approval of that exact deployment is separate from plan review. This task runs documentation checks only.
+The eventual seed should insert exactly one approved immutable R4 contract with official evidence URLs, actual verification/approval dates and null deduplication horizon. It must not create form policy, evidence, producer boundary/ownership, destination enablement, epoch, deliveries, attempts, cron or server settings. Contract usability may be active while every send gate remains closed. Authentication and timestamp corrections, if required, are separately reviewed application/forward-SQL scope; do not pretend a seed fixes them or reserve migration numbers irrevocably.
+
+Before deployment: fresh independent review of exact implementation/seed SHA, local 001–102 → advisory upgrade → separate seed verification, positive contract-shape/negative constraint cases, and proof that activation inventory and gates remain dormant. Human approval of that exact deployment is separate from plan review. This task runs documentation checks only.
 
 ## Owner decisions required
 
-Settled R4 event scope, repeats/singletons, Qualified target, D2–D7 and no-uncertain-replay do **not** need reapproval. Remaining approvals must bind concrete artifacts, named operators, exact SHA/digests and UTC windows; unknown fields cannot be blanket-approved.
+Settled R4 event scope, repeats/singletons, Qualified target, D3–D7 and no-uncertain-replay do **not** need reapproval. The requested D2 amendment is proposed separately for architecture acceptance before implementation. Remaining approvals must bind concrete artifacts, named operators, exact SHA/digests and UTC windows; unknown fields cannot be blanket-approved.
 
 | Approval | Recommended choice / alternative | Exact condition before execution |
 | --- | --- | --- |
 | Provider contract | Approve completed v26 R4 manifest / remain dormant | Close bearer/proof and timestamp interpretation, review response conservatism and SDK string inference, approve exact key/revision/constants/digest; no replay permission |
-| Forward implementation/deployment | Commission reviewed seed (and narrowly necessary transport/timestamp fixes) / defer | Exact migration filename and reviewed SHA, local/CI evidence, independent reviewer and named DB release operator; no merge/deploy authorized here |
-| Form/privacy | New dedicated form with approved copy / remain dormant | Approve exact text/translations/privacy URL/contact route/digest, raw typed mapping, immutable identity, future interval and named form/privacy owner; creation/publication/campaign changes separately enumerated |
+| Forward implementation/deployment | Commission reviewed advisory schema/runtime first, then separate verified seed (and necessary transport/timestamp fixes) / defer | Exact migration filename and reviewed SHA, local/CI evidence, independent reviewer and named DB release operator; no merge/deploy authorized here |
+| Form/privacy | New dedicated form with approved copy / remain dormant | Approve exact text/translations/privacy URL/contact route, immutable form mapping/identity, future interval and named form/privacy owner; custom adult/share proof controls are optional, with exact typed choice semantics required only if used; creation/publication/campaign changes separately enumerated |
 | Legacy boundary | Durable new-form exclusion / separately approved full outbound stop/drain | Named legacy operator, exact integration/filter revision, manual/retry coverage, no-overlap evidence and finite verification expiry; preserve inbound intake |
 | Credential route | Dedicated native own-app actor / separately specified Events Manager route | Asset admin approves exact dataset task; credential owner approves issuance, approved storage reference, expiry/rotation/revocation and nonsecret verification; no copying legacy/inbound token |
 | H3 configuration execution | Enumerated closed-gate operations / defer | Actual connection/version, contract/mapping/policy/boundary bindings, allowed mutations, named director/operator, pre/post zero inventory and health evidence; provider tests explicitly **not authorized** |
@@ -229,10 +234,10 @@ Approval record: owner name, actual UTC approval timestamp, this dossier/manifes
 
 1. Deployed bearer-header/JSON authentication has no endpoint-specific proof in inspected official pages; selected app proof/settings unverified.
 2. Strict-after-generation requirement versus allowed equal Unix seconds needs provider clarification or separately reviewed fail-closed handling. Ordinary receipt schema is documented, but v26 CRM variants/exact duplicate acknowledgment remain uncertain and must never trigger replay.
-3. No approved new form ID, complete rendered notice/privacy/contact flow, reproducible approved digest, actual raw key/type/value map, immutable mapping UUID or prospective interval.
+3. No approved new form ID, complete honest notice/privacy/contact flow and applicable platform/legal assessment, immutable mapping UUID or prospective interval. Custom D2 adult/share proof keys/values are optional; missing proof is no longer a proposed blocker. Yearly's conflicting notice remains an independent issue.
 4. Native system user lacks displayed dataset assignment; selected route, least-privilege entitlement, dedicated credential issuance/storage metadata and named operator approvals are incomplete.
 5. No authoritative legacy Sheet/connector/filter/retry/manual-path configuration or enforceable new-form exclusion/drain evidence. No verified immutable boundary can be published.
-6. Actual EH connection UUID/version and final contract/policy/boundary object bindings, finite validity windows, named operators and exact execution approval are absent. Provider seed 103 is not authored/reviewed/approved.
+6. Actual EH connection UUID/version and final contract/policy/boundary object bindings, finite validity windows, named operators and exact execution approval are absent. Proposed 103 advisory amendment and separate later provider seed are not authored/reviewed/approved.
 
 Numeric server-only replay horizon is deliberately unknown and **not** a reason to invent a value or reopen approved no-uncertain-replay. Future natural cohort performance cannot be proven while dormant; H3 must explicitly separate technical preparation from H4/post-activation validation and accept that limit without widening disclosure.
 
@@ -240,6 +245,10 @@ Numeric server-only replay horizon is deliberately unknown and **not** a reason 
 
 Documentation only: this dossier and a navigation/current-state addendum. Preserve all existing unrelated changes. No SQL, runtime, secrets, Meta configuration, form edits or Production actions. Do not merge or proceed to H4.
 
-A later implementer must close blockers with dated evidence before authoring the immutable seed; a later H3 operator requires explicit artifact-bound approval before each enumerated mutation. Use existing 098/101/102 schema/RPCs, `adapter.mjs`, `evidence.mjs`, worker and approved R4 plan as source. No extra outbound queue or owner model. Recheck current main/ledger and allocation before choosing the migration name.
+A later implementer must close blockers with dated evidence before authoring the immutable seed; a later H3 operator requires explicit artifact-bound approval before each enumerated mutation. Use cumulative 098–102 schema/RPCs, `adapter.mjs`, `evidence.mjs`, worker, R4 plan and the proposed advisory amendment as source. Deployed files are immutable. H3 execution needs the reviewed/deployed forward changes; optional grantless leads need the new independent stop path. No extra outbound queue or owner model. Recheck current main/ledger and allocation before choosing the migration name.
 
 Preparation validation: relative links/source cross-check, no credentials/customer records, documentation-only diff and `git diff --check`. These checks do not replace Tier 3 implementation CI, fresh independent review or human release approval. Final status remains **NOT READY FOR H3 OWNER REVIEW** until the executable-package blockers above are resolved.
+
+## D2 revision readiness distinction
+
+[Advisory D2 architecture](../plans/crm-meta-funnel-r4-d2-advisory.md) is **READY FOR OWNER ARCHITECTURE REVIEW**. This dossier remains **NOT READY FOR H3 OWNER REVIEW** as an executable package: provider authentication/timestamp evidence, exact future form/platform/privacy review, native entitlement/credentials, enforceable legacy exclusion, advisory implementation and artifact-bound execution approvals remain incomplete. No form, contract, policy, boundary, grant, owner, epoch, destination, scheduler, live gate or delivery has been changed by this amendment. Missing custom D2 proof is no longer a proposed eligibility/H3 blocker.

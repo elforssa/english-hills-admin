@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Proposed activation-criteria amendment, 2026-10-01:** [R4 advisory D2](crm-meta-funnel-r4-d2-advisory.md) removes custom D2 adult/share/notice-answer evidence as a future technical/H3 blocker after reviewed forward implementation. Existing mandatory-D2 sections remain the deployed baseline, not the revised proposal. Exact form/privacy/platform obligations, prospective identity/mapping/notice and legacy exclusion remain required. [Updated H3 assessment](../evidence/crm-h3-readiness-2026-10-01.md) separates optional proof from actual readiness blockers.
+
 ## What will change
 
 **Authority:** [approved revision 4](crm-meta-funnel-revision-4.md) is the finally approved architecture for event scope, identity/occurrence semantics, ordering, producer ownership/cutover and the implementation manifest. Its five-event implementation is the approved scope. This activation plan remains authoritative for unresolved provider, form, credential and H3/H4 release prerequisites only where revision 4 has not replaced them. Architecture is approved; implementation is NOT completed; deployment and H3/H4 are NOT authorized. Production remains the dormant two-event implementation. Historical revision-3 findings below are not an alternative implementation contract.

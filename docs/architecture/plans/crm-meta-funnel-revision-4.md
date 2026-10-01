@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Proposed D2 amendment, 2026-10-01:** [Advisory D2 architecture](crm-meta-funnel-r4-d2-advisory.md) is the current owner-review proposal. It removes mandatory custom adult/lifecycle-sharing proof for future native delivery while preserving platform/legal obligations and every other R4 safeguard. Earlier D2-mandatory passages below describe approved/deployed behavior, which remains in force until the amendment is approved, implemented and released. They do not constrain the new proposal. Five-event scope, timing, identities, ownership and no-uncertain-replay remain unchanged. H3/H4 stay blocked independently.
+
 ## What will change
 
 **Revision 4 — ARCHITECTURE APPROVED, 2026-09-30. IMPLEMENTED ON THE REVISION-4 BRANCH; not merged or deployed; H3/H4 NOT approved and remain blocked.** Option B sends `Intake`, `Not qualified`, `Lost`, `Qualified`, `Converted` only for a strictly prospective, D2-compliant, exclusively EH-native cohort. The owner approved Qualified as the initial positive optimization target, with Converted retained downstream. Meta recommends initial receipt and stage updates; its validation measures distinct-lead coverage, not simply event count. The approved scope change does not guarantee optimization.

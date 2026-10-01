@@ -1,0 +1,136 @@
+# Owner summary
+
+## What will change
+
+Proposed R4 D2 amendment, 2026-10-01 (Asia/Shanghai). The owner requested that custom adult-contact and lifecycle-sharing evidence become an optional, recommended governance safeguard. Missing, incomplete or ambiguous custom D2 proof will no longer by itself deny Meta-native lifecycle eligibility. This is architecture only, awaiting artifact-bound owner approval; deployed behavior still requires D2. This proposal supersedes the earlier R4 instruction to preserve D2 unchanged only after approval and implementation.
+
+## What staff/users will be able to do
+
+After a separately reviewed implementation and authorized H3/H4 rollout, the native producer can admit prospective, resolved Meta-first opportunities without a custom D2 grant. Directors can record a sharing stop even when no grant exists. Optional evidence remains accurately recorded; absence never becomes fabricated adult confirmation or consent.
+
+## What remains restricted
+
+Preserve Meta/platform requirements, applicable legal/privacy obligations, original Meta lead ID matching only, no child data, no contact hashes, no financial/payment data, prospective native activation cutoff, no-uncertain-replay, exclusive lifecycle-wide producer ownership and the exact five-event R4 model. Website/later-Meta matching, historical/disabled-period admission and current Yearly traffic remain excluded. No implementation, SQL authoring/application, merge, activation, provider request, credential provisioning or form publication occurs here.
+
+## UI impact
+
+Later change only the director lifecycle policy publisher and diagnostics: optional D2 fields, evidence state labelled as advisory, separate actual privacy/safety holds, and a sharing-stop action available without an evidence ID. Missing D2 must not appear as a retry/eligibility blocker. Retain director-only access and receptionist denial.
+
+## Database impact
+
+Recommend a forward schema/runtime migration 103 for the advisory amendment; a separate later migration (104 if still free) seeds the verified immutable provider contract. Do not edit any deployed migration, including 101/102. Recheck main/ledger allocation before authoring. No migration file is created by this task.
+
+## Important security decisions
+
+Advisory proof is not legal permission. Applicable consent, notice, purpose, opt-out and other obligations must still be established for the selected form/use. Explicit refusal, withdrawal, privacy requests and known prohibited/minor data remain safety holds. Keep the current Yearly exclusion: its contradictory third-party-sharing promise and legacy-producer association are independent reasons not to admit it automatically. Missing the custom adult checkbox alone does not establish a minor; verified minor/prohibited-data facts must not be ignored.
+
+## Risks / owner review points
+
+Tier 3 architecture: this changes external disclosure eligibility and deployed database invariants. Review the prospective advisory mode, grant-independent withdrawal design, source identity change, and split migrations together. Architecture readiness is distinct from H3 execution readiness. No legal-sufficiency conclusion is made.
+
+## Baseline and evidence limits
+
+Inspected cumulative source through 102 at Production source SHA `70af2f1331f2539654ffc401507cb310a7785f56`, H3 dossier commit `32ce9ed`, and the separate dormant-rollout closeout. The main checkout predates R4; it is not the source for this assessment. Production ledger 001–102, empty activation/delivery inventory, disabled lifecycle scheduler, absent/false server gate and healthy intake are inherited owner/operator evidence, not newly queried Production facts. Refreshed `origin/main` remains that SHA and migration allocation stops at 102. The current H3 dossier documents same-day official/account observations; this task does not re-certify those observations. Fresh web access to Meta payload documentation returned 429 and terms redirected to login/blocking. Current platform/legal requirements therefore remain separate verification obligations, not assumptions that D2 exhausts them.
+
+## Complete blocking-path inventory
+
+Paths below are relative to the repository. Latest function definitions, rather than superseded historical bodies, determine live behavior.
+
+| Layer and source | Current D2 dependency | Required forward disposition |
+| --- | --- | --- |
+| `docs/architecture/decisions/ADR-004-meta-lifecycle-feedback.md` | Decision paragraph and D2 A mandate grants; form assessment, R3/R4 approval passages preserve that gate | Proposed amendment changes D2 only; retain dated historical evidence and D3–D7 |
+| `docs/architecture/plans/crm-meta-funnel-revision-4.md` | Owner summary, guardrails, all-kind eligibility, coverage definition/table, approved D1 passages, dispatch, admission, future notice, Intake contract, acceptance matrix and implementation invariant require D2 | Advisory amendment controls future scope; grants no longer define eligible denominator or admission |
+| `docs/architecture/plans/crm-batch2-meta-lifecycle-activation.md` | D2 matrix, form/evidence manifest and publisher/evaluator sections, prospective admission, acceptance, stop conditions, form/notice approvals and implementation contract block H3 | Replace mandatory custom-proof conditions with platform/legal review, prospective identity/ownership and actual withdrawal controls |
+| `docs/ai/PRODUCT_RULES.md`, `SECURITY_RULES.md`, `WORKFLOWS.md`, `CURRENT_STATE.md`, architecture/feature/ADR indexes | Mandatory D2 assertions and compliant-form readiness pointers repeat the dependency | Preserve deployed facts; distinguish proposed advisory policy and later implementation status |
+| `docs/architecture/evidence/crm-h3-readiness-2026-10-01.md` | Security summary, readiness table, form manifest/nonaffirmation rule, admission, grant rechecks, producer manifest, migration decision, owner decisions, blockers and final contract | Updated proposed H3 assessment; custom D2 raw keys/values/digest-of-affirmations removed as execution prerequisite |
+| Historical `crm-batch2-meta-account-readiness-2026-09-30.md`, `crm-meta-funnel-research-2026-09-30.md`, completed Batch 2 plan | Report then-current D2 failure, D2 cohort/coverage and older implementation requirements | Preserve observations/history; active plans link the superseding amendment, never infer new legal permission |
+| 098 `crm_lifecycle_eligibility_policies` | Mandatory adult/sharing keys, typed accepted arrays, notice/version/digest and strict checks | Optional custom answer configuration in advisory policies; make custom D2 notice/version/digest optional too; preserve finite prospective interval, immutable policy version and mapping identity |
+| 098 checks/evidence tables + `crm_claim_lifecycle_evidence`, `crm_record_lifecycle_evidence_check` | Typed proof yields `eligible`/denial and only positive checks create grants | Continue optional proof diagnostics; no fake grants or `eligible=true` for missing evidence. Only configured optional fields are evaluated |
+| 098 `crm_revoke_lifecycle_evidence` | Requires a grant; cannot stop a no-grant lead | Keep legacy revocation history and add a grant-independent append-only stop path |
+| 098 `crm_delivery_live_refs` | Live sending needs nonnull `eligibility_evidence_id` | Permit null proof only for a verified advisory-policy R4 delivery; retain contract/epoch/deadline and producer ownership references |
+| 101 `crm_lifecycle_producer_boundaries` | Mandatory policy/version/notice bindings; hard-coded Yearly exclusion | Reuse policy as prospective admission manifest, with D2 role frozen in policy. Custom D2 notice pair can be absent in advisory mode; keep policy/mapping bindings and Yearly exclusion |
+| 102 `crm_publish_lifecycle_policy` (lines 5–32) | Rejects absent adult/sharing fields/arrays; requires exact evidence manifest; rejects Yearly | Publish new advisory R4 policy versions with optional field group; keep mapping/interval and Yearly restrictions; custom D2 notice/version/digest can be omitted |
+| 102 `crm_publish_lifecycle_producer_boundary`, `crm_activate_lifecycle_destination` (34–66, 186–209) | Policy/notice-dependent publication/activation; no direct grant check | Keep policy identity, validate supported D2 role, use null-safe equality for optional notice bindings; never require optional answer configuration to enable preparation |
+| 102 `lifecycle_producer_eligible` (97–135) | Requires an unredacted, unrevoked D2 grant before assigning immutable ownership | Advisory admission uses canonical first submission, policy/boundary/epoch and source/stop checks; proof is optional |
+| 102 `lifecycle_route` (211–269) | Grant lookup; missing policy OR grant yields `sharing_evidence_missing`; projects evidence time/ID | Missing policy still holds; missing D2 grant in advisory mode does not. Return original protected identity and actual privacy holds |
+| 102 `crm_reconcile_external_deliveries` (339–440) | Inner join to grant excludes ownership and all event candidates; inserts evidence reference | Advisory admission removes required grant join; insert optional proof reference; derive frozen policy from immutable owner/boundary |
+| 102 `lifecycle_hold` (442–494) | Requires grant/policy, rejects absent/redacted/revoked or late grant for every live event; rechecks route | Derive policy from frozen ownership/boundary, independently check source, stops, applicable safeguards and all retained send gates |
+| 102 `crm_get_external_delivery`, `crm_prepare_external_delivery` (577–627) | Original lead ID comes from grant; RPC fabricates internal `adult_contact=true`; payload compares to grant ID | Use canonical protected first-submission attribution; compare losslessly to that source under hold checks; no invented adult confirmation |
+| 102 `crm_begin_external_attempt` (629–653) | Locks evidence row and relies on hold immediately before send | Lock canonical privacy-stop scope/source as well as owner; serialize stop versus attempt without needing a grant |
+| 099 `repair_lifecycle_evidence` and 102 `protect_delivery` | Narrow unattempted missing-proof repair and immutable evidence reference | Preserve historical required-mode repair; advisory must not need repair or retroactively mutate identities. Frozen nullable proof does not gain false meaning |
+| 102 `lifecycle_retry_hold`, `claim_lifecycle_deliveries`, `crm_retry_external_delivery`, list/diagnostics | Transitive `lifecycle_hold` means D2 suppresses claims/retry eligibility and diagnostics | Shared hold fix reaches claim/get/prepare/begin/retry; add safe advisory status separately from real holds; retain unknown/order fencing |
+| 102 `crm_cleanup_lifecycle_retention` | Proof cleanup uses delivery-to-grant links; optional grants without attached deliveries could be cleaned independently | Keep proof retention and source redaction; minimal stop marker must survive optional-proof cleanup and block while the opportunity could send; no renewed replay after retention |
+| `src/lib/crm/lifecycle/evidence.mjs` | Missing/ambiguous adult/share or notice proof returns `eligible:false`; scheduler consumes result before reconciliation | Record evidence presence accurately as advisory; absence is not delivery eligibility. Expose no raw answers in diagnostics |
+| `src/lib/crm/lifecycle/scheduler.mjs` | Mandatory evidence pass precedes reconciliation; an evidence-pass failure aborts the whole run | Advisory-only proof collection must not starve delivery; skip unconfigured proof and isolate optional collection failure. Required safety/stop-storage failure remains fail closed |
+| `src/lib/crm/lifecycle/adapter.mjs:7` | Requires `matching.adult_contact === true` even for live lead-ID payload | Remove this synthetic live-only requirement; retain exact live payload/ID checks and mock path behavior |
+| `src/lib/crm/lifecycle/worker.mjs`, server transport/cron route | No direct D2 evaluator; protected RPCs enforce it | Preserve server kill switch, secrets, leases, begin boundary, classification and no-uncertain-replay; revise evidence-dependent comment only as needed |
+| `src/components/crm/LifecycleOperations.jsx:27–45,78–82,91` | Mandatory custom fields disable policy publishing; revoke button requires evidence ID | Optional proof/notice publisher groups, advisory diagnostics, grant-independent director stop action |
+| `scripts/test-crm-meta-funnel-r4.sql:167–177,258–269`, concurrency fixture and `test-crm-batch2.mjs` | Explicit assertion that D2 absence prevents ownership/Intake/negative events; payload fixtures and revoke races depend on grant | Replace future advisory expectations and add all-five no-grant/stop-race tests; preserve required-mode/historical tests and independent safety checks |
+| Batch 2 live SQL, phase10/phase12 fixtures and migrations 088/099 historical bodies | Earlier consent-evidence mock/live gates, old repair/evidence constraints | Not the current live authority where superseded. Preserve mock-only guards and compatibility; forward upgrade tests must cover cumulative behavior |
+
+`lifecycle_event_candidates` depends on native ownership, so ownership denial indirectly suppresses all five events and later chronological progress. `lifecycle_predecessor_hold` does not itself test D2, but a missing D2 predecessor can hold successors. Fix admission/route/hold rather than changing chronological rules. No separate D2 check was found in the HTTP transport or inbound resolver; do not change inbound website consent or Meta intake.
+
+## Smallest safe forward design
+
+1. Reuse the existing policy, boundary, ownership, epoch and outbox models. Add immutable policy `d2_requirement` with a closed value set `required|advisory`, default `required` to preserve old rows and cumulative fixtures. The future R4 publisher selects advisory explicitly as approved architecture; unknown modes fail closed. No mutable per-connection bypass switch. Existing policy histories remain unchanged; only new future versions can use advisory.
+2. Make adult/share field keys and their accepted arrays, custom D2 notice version/digest and notice-answer configuration nullable only in advisory mode. Boundary notice copies also permit a null pair for advisory policies, enforced through protected publication. When configured, the complete group must satisfy existing distinct-key/type/array constraints; malformed configuration is rejected. Notice-answer matching is optional proof too. Keep form/mapping and immutable policy version mandatory. Custom D2 notice metadata is recommended, not a publication/admission/send prerequisite; when supplied, require a complete valid version/digest pair, frozen and null-safely equal across policy/boundary. Actual legally/platform-required notice remains a separate form/release obligation even without these custom database fields. Publish no placeholders or automatic `true` values.
+3. Keep optional checks/grants truthful. A negative evidence check is an advisory observation, not a send denial. Distinguish missing/ambiguous proof from an actual explicit objection, withdrawal, known minor/prohibited source or legal restriction. An optional opt-in question promising choice must honor explicit refusal; do not repurpose `sharing_missing` to conceal that refusal. If such controls are published, approve exact typed refusal/safety mappings and enforce their stops independently. No arbitrary inference from labels, phone, parent fields or Meta origin.
+4. Add a minimal append-only `crm_lifecycle_sharing_stops` table keyed by canonical first `submission_id` and `connection_id` with idempotent request key, reason, actor/source and real database stop time; no copied provider IDs or raw answers. Narrow director RPC records contact/privacy stops without a grant. Existing grant revocation also records the same canonical stop atomically; already-existing revocations remain effective. Trusted explicit-refusal/known-safety processing uses a narrow validated path. RLS and direct grants remain denied, receptionist denied. No resumption/regrant bypass or delete/reset endpoint in this change.
+5. Reuse `producer_ownership_id → boundary_id → eligibility_policy_id` as the frozen policy reference; all links are already immutable, so no extra delivery policy column is needed. Forward-replace `crm_delivery_live_refs` to admit grantless R4 live rows only with contract, epoch, deadline and producer owner, while preserving 101 `crm_delivery_r4_owner`. A CHECK cannot query policy mode; enforce advisory-only null grants and cross-record equality in protected admission/hold/prepare/begin plus insert/identity guards, not a permissive global null-reference exception. Preserve historical live exceptions for payload-free blocked/suppressed rows. No data backfill into eligibility or ownership.
+6. Remove mandatory grants from advisory ownership/admission/reconciliation/route/hold. Resolve policy through frozen ownership/boundary rather than from grant; preserve finite windows, identities, no overlap, contract, epoch, exact five kinds and source integrity. Optional grant redaction is not source redaction; actual source redaction always holds. Existing revocations/stop records always hold. Policy retirement alone keeps its existing capture semantics; actual privacy withdrawal must use stop/revoke/boundary/destination controls.
+7. Obtain `lead_id` from the canonical nonredacted first-submission attribution, never D2 evidence, later submission or contact data. Payload validation compares that exact original lossless string. Remove live `adult_contact=true` fabrication/adapter prerequisite; do not add hashes, child fields or payment data. Keep the five exact event names and fixed CRM constants.
+8. Serialize grant-independent stops against `crm_begin_external_attempt` using a common lead/connection lock acquired before checking stop state and committing the attempt boundary. Stop wins before begin => no provider-boundary entry; begin wins => possibly in-flight event cannot be recalled, all later attempts/events held. Preserve stale-lease fences, irreversible unknown marker and no uncertain replay. Lock order must be consistent across existing grant revoke, stop, admission and begin.
+9. Separate optional evidence collection failures/counts from mandatory identity/privacy storage checks in the scheduler. Optional collection must never be the hidden eligibility gate; an unverified safety/choice state still holds where required by the published form/platform/legal conditions. Diagnostics use `D2 evidence available/missing/ambiguous` separately from true eligibility. Minimal stop markers retain canonical suppression until sending is permanently impossible; proof cleanup cannot remove stops. Preserve D6 payload/attempt/evidence retention and uncertainty audit markers.
+
+This is the smallest safe scope, not just deletion of two SQL predicates. Reusing grants as fabricated authorization or leaving a no-grant withdrawal hole would violate preserved obligations. No new queue, matching model, producer registry or provider payload is needed.
+
+## Revised eligibility and preserved model
+
+For each of Intake, Not qualified, Lost, Qualified and Converted: resolved new Meta-first opportunity; original Page/form/lead ID; immutable approved mapping and prospective admission policy; verified exclusive boundary; original first submission at or after `max(boundary.valid_from, epoch.started_at, policy.effective_from, mapping.effective_from)` and before all applicable end/retirement limits; actual milestone in the same still-open epoch; valid owner, contract, source and time/deadline; no actual privacy/safety stop; genuine activity/conversion evidence and own nonreplayable attempt history. D2 presence is not a conjunct in advisory mode.
+
+Retain singleton Intake/Converted, genuine reopen/re-entry repeats for Qualified/Lost/Not-qualified, chronological attempt ordering, Qualified as initial positive target and Converted downstream. Earlier unknown receipt alone does not suppress independent later genuine outcomes, but shared real privacy stops do. No changing event ID, time, destination, epoch, contract or owner to escape unknown state or old eligibility. Pre-cutoff/disabled-period leads never become eligible after this relaxation.
+
+A dedicated new prospective form remains recommended and required by this proposed cutover path to establish clear notice and legacy exclusion; custom D2 checkboxes are optional. Current Yearly remains hard-excluded. Any later proposal to reuse it needs separate privacy/notice, immutable version/time binding and legacy ownership architecture; this request does not authorize that expansion.
+
+## Migration ordering and rollout
+
+**Recommendation: separate migrations, relaxation first.** Proposed 103 `crm_meta_funnel_r4_d2_advisory` owns schema, protected SQL and stop controls; application changes ship as the same reviewed compatibility package. A later seed (104 if available) owns the independently verified provider contract. Seeding does not technically depend on D2 relaxation, but H3 policy/boundary preparation should use the final advisory schema after deployment verification. Do not combine provider evidence/approval dates with a generic policy migration, and do not author an incomplete contract simply to fill 104.
+
+A combined 103 could atomically relax and seed, but couples a policy decision to unresolved auth/timestamp/contract evidence, prevents independent review and complicates rollback diagnosis. Separate migrations are safer; allocation is provisional. Never modify 098–102. During the upgrade preserve zero activation inventory and closed gates; assert no open epoch/deliveries/boundaries/owners on this dormant deployment, and stop for a separate upgrade plan if facts differ. Verify historical policy fixtures remain required mode locally.
+
+Recovery is forward-only. Close server gate, disable destination/epoch and scheduler through the existing authorized procedure if rollout fails; never restore old migration files or transfer native owners to legacy. Optional mode never reopens existing blocked/unknown/terminal rows or retroactively manufactures grants. H4 remains separately approved and cron last.
+
+## Updated H3 assessment
+
+| Area | Effect of amendment | Readiness |
+| --- | --- | --- |
+| Custom D2 adult/share/notice-answer proof | Optional recommendation; absence not a blocker | Architecture ready to review; deployed behavior still mandatory |
+| Forward schema/runtime | 103 relaxation plus application and stop path required before advisory H3 preparation | Not implemented/reviewed/deployed |
+| Form/platform/privacy | Exact future form/mapping, honest notice/privacy flow and applicable legal/platform assessment remain required; custom proof keys are optional | Incomplete; Yearly promise conflict remains |
+| Provider contract | Exact five-event manifest, auth/proof and strict/equal-second treatment unresolved in inherited H3 dossier | Blocked independently of D2 |
+| Native entitlement/credentials | Dataset assignment and dedicated credential route/metadata missing | Blocked |
+| Legacy exclusion | Stable integration IDs, all retry/manual paths, enforceable no-overlap proof and finite boundary missing | Blocked |
+| Execution package | Actual connection/version/object IDs, windows, named operators and artifact-bound approvals missing | Blocked |
+| Optimization/coverage | Remove custom D2 participation as denominator gate; prospective scope, matching, holds and coverage still matter | No performance/recognition guarantee; later natural validation |
+
+The proposal is READY FOR OWNER ARCHITECTURE REVIEW. H3 execution and H4 activation remain NOT READY. These are different decisions; missing provider/account evidence does not prevent reviewing this bounded architecture change.
+
+## Owner decisions required
+
+| Decision | Options and consequences | Recommendation / blocking scope |
+| --- | --- | --- |
+| Approve this amendment | A: accept future advisory D2 with independent privacy stops. B: retain deployed required D2 until another proposal | A implements the owner's request; artifact-bound acceptance required before implementation |
+| Migration separation | A: 103 relaxation, later independent seed. B: one combined migration after all contract evidence closes | A; clearer dependencies and evidence. Numbers rechecked by implementer |
+| Form copy/choice/legal route | A: future form with honest notice and optional accurately enforced controls. B: defer until exact platform/privacy assessment is complete | No assumed legal basis; final selected form/notice/choice review blocks H3 execution, not architecture review |
+
+Settled five-event model, no-uncertain-replay and D3–D7 need no reapproval. This plan neither records completed owner architecture acceptance nor authorizes implementation/release.
+
+## IMPLEMENTATION CONTRACT
+
+Implement only after owner approves this exact amendment revision. Scope: new 103 policy/nullability and verified immutable owner/boundary policy reference; grant-independent append-only stop storage/RPC and locks; forward replacements of policy publisher, admission/reconcile/route/hold/get/prepare/begin/revoke as needed; optional evidence scheduler/runtime/UI and safe diagnostics/retention. Review repair/protect/claim/retry/activation/boundary transitive paths and preserve historical required/mock behavior. Separate future verified-contract seed; no deployed file edits or Production changes from an implementation task.
+
+Acceptance: locally upgrade 001–102 to new migration with closed inventory; required-mode old fixtures unchanged; advisory future no-grant lead reaches ownership and all five exact payloads without adult/share fabrication; singleton/reopen and authentic conversion checks pass; missing/ambiguous optional proof does not block; explicit refusal/withdrawal/privacy stop/known prohibited source does block; grantless stop races against begin and revoke; source identity redaction holds; exact lossless ID matching and closed no-child/no-hash/no-finance payload enforced. Test pre-cutoff/delayed imports, old/later/website/Yearly/disabled-period exclusion; unknown nonreplay, duplicate ownership, invalid boundary/epoch/deadline and predecessor ordering; optional evaluator failure cannot starve otherwise eligible work; required safety storage failures remain closed; cleanup cannot erase stop/unknown markers or change frozen identity. ACL tests prove director-only stop/publish/diagnostics, no direct access or receptionist escalation.
+
+Use repository-required full validation once at handoff after focused regressions, fresh independent review of exact Tier 3 SHA and separate human release approval/operator. Update active R4/ADR/H3/AI docs to implemented only with evidence. Stop for allocation drift, nonempty live inventory, unresolved platform/privacy obligations, identity expansion, weakened exclusive ownership or uncertain replay. No fake Production records or provider requests for verification.
+
+Architecture documentation validation only: links, source inventory, no secrets/customer records, documentation-only diff and whitespace. Application/SQL tests are deferred until authorized implementation.

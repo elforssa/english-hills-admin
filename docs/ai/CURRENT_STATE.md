@@ -1,5 +1,9 @@
 # Current state
 
+## Proposed R4 D2 advisory architecture
+
+2026-10-01: the owner requested [advisory custom D2 evidence](../architecture/plans/crm-meta-funnel-r4-d2-advisory.md). This documentation-only proposal identifies schema/runtime/H3 blockers and recommends 103 relaxation plus a separate later provider seed. Architecture is ready for owner review; no implementation/release approval is recorded. Deployed 101/102 still enforce mandatory grants and remain immutable. The [H3 assessment](../architecture/evidence/crm-h3-readiness-2026-10-01.md) removes missing custom proof from future blockers but keeps unresolved provider, platform/privacy/form, credential, legacy-exclusion and execution requirements. Runtime and Production gates are unchanged.
+
 ## H3 preparation after dormant R4 rollout — 2026-10-01
 
 The owner supplied the current Production baseline: SHA `70af2f1331f2539654ffc401507cb310a7785f56`, Supabase project `hopcezradkhrixwwswxn`, ledger exactly 001–102, disabled lifecycle scheduler and absent/false server live gate. Contracts, policies, evidence, epochs, deliveries, attempts, enabled destinations, producer boundaries and ownership are all zero; no EH-native outbound Meta events were sent and inbound intake remains healthy. This preparation task did not independently query Production. These facts supersede earlier not-deployed/two-event statements below and in historical R4 planning documents.
