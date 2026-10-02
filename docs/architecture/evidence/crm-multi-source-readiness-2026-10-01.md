@@ -1,6 +1,6 @@
 # Reusable acquisition platform — repository assessment, 2026-10-01
 
-> **Current credential route — 2026-10-02:** [Revision-5 direct Events Manager evidence](crm-h3-direct-capi-credential-2026-10-02.md) closes the custom-app credential blocker. **READY FOR H3 OWNER REVIEW** for that route; no token issued or execution authorized. The dated findings/alternatives below remain historical and do not impose custom-app scopes/publication or legacy retirement on current H3.
+> **Current credential route — 2026-10-02:** [Revision-5 direct Events Manager evidence](crm-h3-direct-capi-credential-2026-10-02.md) closes the custom-app credential blocker. **ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION** for that route; no token issued or execution authorized. The dated findings/alternatives below remain historical and do not impose custom-app scopes/publication or legacy retirement on current H3.
 
 
 Owner clarification for PR #50; technical package **revision 3**. Inspected repository base `4236cfcddf851e12884cb6ade3cb436c7762c1ea` and PR #50 prior head `741ed05336157341576fd6a8b32219c393a1b440`. This is source/schema inspection, not new Production/account verification or a capacity test. Only documentation changes; no Meta, Zapier, Sheet, credential, SQL or Production action. [H3 package](../plans/crm-h3-technical-readiness.md) owns the provider manifest and execution plan; [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md#owner-clarification-reusable-acquisition-platform-2026-10-01) records the durable direction.

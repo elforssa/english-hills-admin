@@ -2,9 +2,37 @@
 
 ## What will change
 
-This **Tier-3 H3 technical package, revision 5, 2026-10-02**, replaces the earlier H3 dossier's current blocker assessment. It prepares a reusable dormant Meta outbound connector, independent of the next campaign, form or acquisition channel. It proposes a bounded path to a verified provider contract and disabled native destination. **READY FOR H3 OWNER REVIEW**: the final credential-route evidence gap is closed by the documented Events Manager direct CAPI route and authenticated dataset controls. Decisions with concrete alternatives can be reviewed now; they are not execution permission.
+This **Tier-3 H3 technical package, revision 5, 2026-10-02**, replaces the earlier H3 dossier's current blocker assessment. It prepares a reusable dormant Meta outbound connector, independent of the next campaign, form or acquisition channel. It proposes a bounded path to a verified provider contract and disabled native destination. **ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION**: the owner approved revision 5 and the decisions recorded below. The credential evidence blocker is closed; this documentation task does not execute H3.
 
 Read-only research and documentation only. No runtime, migration, seed, credential, account permission or Production configuration change is included. No test or real events were sent. Revision-2/3 main baseline: `4236cfcddf851e12884cb6ade3cb436c7762c1ea`. Revision-1/2 observations below retain their original provenance. Revision 3 assessed repository source and the owner clarification only. Revision 4 adds [fresh credential-route documentation and authenticated nonsecret Meta preflight](../evidence/crm-h3-credential-route-2026-10-01.md); no Production access was performed. Revision 5, based on main `1fbaf091279875f033d294bdfb1436b86711a7ae` after PR #50 merged, selects [Events Manager direct CAPI issuance](../evidence/crm-h3-direct-capi-credential-2026-10-02.md); fresh read-only dataset evidence closes the custom-app blocker. No token was generated.
+
+## Final owner architecture approval — 2026-10-02
+
+**ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION.** The repository owner explicitly approved **PR #51, technical package revision 5**, in this task on 2026-10-02 (Asia/Shanghai), against reviewed head `77c36d5d6c36e7b892ce982baa12d4f5d017fa8e`. This amendment records that decision without changing the approved architecture revision. Source: the owner's direct message; approval and task-boundary excerpts are reproduced below. No exact UTC approval instant was supplied; do not fabricate one for a later seed.
+
+> Final H3 owner approval has now been given for PR #51 revision 5.
+>
+> - multipart/form-data transport using the dedicated direct Events Manager CAPI token
+> - strict exported-second timestamp handling
+> - new EH-only direct Events Manager credential without Dataset Quality API
+> - proposed provider-contract manifest and disabled destination configuration for dataset `1152399921284927`, `max_attempts=5`
+> - credential metadata review every 30 days and rotation before the earlier of 90 days or 7 days before expiry
+> - bounded H3 implementation and dormant preparation only
+>
+> H4 source/form/cohort selection, provider event sending, destination enablement, server live gate and scheduler activation remain unauthorized.
+>
+> Keep the same PR #51.
+> Do not implement H3.
+> Do not generate credentials.
+> Do not change Meta or Production.
+>
+> Update approval/status language from `READY FOR H3 OWNER REVIEW` to architecture approved / ready for separate H3 implementation.
+>
+> Run documentation validation, push to the same PR, and return the new exact SHA.
+>
+> Do not merge.
+
+Approval selects the multipart/strict-second design and its documented equality hold and predecessor consequences, the direct-only credential route, exact proposed manifest/disabled configuration and stated governance schedule. It authorizes the bounded architecture for a **separate H3 implementation task**; this task only records approval. No code, forward migration, seed, credential, Meta setting or Production operation is performed here. Actual implementation artifacts still require exact-SHA CI and independent review; merge/release, credential/operator execution and Production changes retain their separate artifact-bound approval gates. H4 and all provider sending remain unauthorized. Existing dedicated storage, no legacy credential reuse/revocation and fail-closed recovery controls remain mandatory.
 
 ## What staff/users will be able to do
 
@@ -28,7 +56,7 @@ None. Migration **103 is Production-verified dormant and immutable**, not a rema
 
 ## Risks / owner review points
 
-The current bearer/JSON transport is **not proven incompatible**, but endpoint-specific support was not established by the official sources inspected. A concrete documented multipart alternative is proposed below. Same-second timestamps are currently allowed; the provider says the event must follow generation. Holding equality may hold later unattempted occurrences through the existing ordering rule. Local ownership does not constrain Meta's legacy Sheet integration. Missing explicit dataset assignment does not prove lack of effective access for an Admin system user.
+The current bearer/JSON transport is **not proven incompatible**, but endpoint-specific support was not established by the official sources inspected. The owner approved the documented multipart transport below. Same-second timestamps are currently allowed; the provider says the event must follow generation. Holding equality may hold later unattempted occurrences through the existing ordering rule. Local ownership does not constrain Meta's legacy Sheet integration. Missing explicit dataset assignment does not prove lack of effective access for an Admin system user.
 
 ## Owner clarification and revision-3 scope
 
@@ -38,7 +66,7 @@ H3 covers provider contract, transport/authentication, credential/dataset entitl
 
 The [revision-2 evidence register](../evidence/crm-h3-blocker-evidence-2026-10-01.md) remains the source for observed assets and legacy configuration. Maroine EL Forssa is the accountable human; task independence remains mandatory. **Legacy stop/drain completeness is removed as an H3 blocker.** Yearly can continue until intentionally retired. Future activation must prove that its exact native source/cohort cannot also be sent by legacy automated, retry or manual paths. That proof may show a genuinely separate native source; it need not redesign legacy selective exclusion or retire unrelated Yearly traffic.
 
-**No H3 package evidence blocker remains for the selected direct Events Manager route.** [Revision-5 evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md) verifies the dataset’s issuance control and official CRM applicability. Custom app `1069638329182835` / actor `61594759444572` and ads scopes are not selected prerequisites. Owner decisions and later gated execution remain below.
+**No H3 package evidence blocker remains for the selected direct Events Manager route.** [Revision-5 evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md) verifies the dataset’s issuance control and official CRM applicability. Custom app `1069638329182835` / actor `61594759444572` and ads scopes are not selected prerequisites. Approved owner decisions and later gated execution remain below.
 
 ## Revision-1 resolved facts and evidence limits
 
@@ -70,7 +98,7 @@ Web fetch returned 429/unavailable; the browser rendered official pages. No thir
 
 The Graph overview and the events reference's linked Using Graph guide were also read; the latter redirects to the overview. Neither closed the endpoint bearer question. Version v26.0 is evidenced by the current CAPI example and app configuration; prior dossier P1 supplies changelog evidence. Revalidate availability at execution; do not invent an expiry date.
 
-## Exact provider-contract manifest — proposed, not seeded
+## Exact provider-contract manifest — approved design, not seeded
 
 Logical request: **POST `https://graph.facebook.com/v26.0/1152399921284927/events`**, one event per request. The endpoint identity is the dataset/Pixel, never Page/form/ad account. Event envelope has exactly `data:[event]`; event keys are `event_name`, `event_id`, `event_time`, `action_source`, `user_data`, `custom_data`. `user_data` contains only the original lossless decimal-string `lead_id`; `custom_data` contains only the two constants below. No test code, contact hashes, child fields, money or arbitrary passthrough. Authentication is added only at transport time.
 
@@ -120,7 +148,7 @@ Deployed [adapter](../../../src/lib/crm/lifecycle/adapter.mjs): HTTP 2xx, no pro
 
 ## Authentication compatibility and proof
 
-Current deployment sends JSON with `Authorization: Bearer`, no proof. H3-P2 establishes a supported **multipart/form-data** alternative: form field `data` is JSON serialization of the one-element event array, and form field `access_token` is the dedicated token. Proposed decision A uses this documented encoding rather than asserting unverified bearer compatibility. Do not send both token methods or put credentials in query strings. The frozen database payload remains the exact token-free JSON event envelope.
+Current deployment sends JSON with `Authorization: Bearer`, no proof. H3-P2 establishes a supported **multipart/form-data** alternative: form field `data` is JSON serialization of the one-element event array, and form field `access_token` is the dedicated token. Owner-approved decision A uses this documented encoding rather than asserting unverified bearer compatibility. Do not send both token methods or put credentials in query strings. The frozen database payload remains the exact token-free JSON event envelope.
 
 A later implementation must assemble the form only immediately before fetch; let the HTTP library set its multipart boundary. Preserve fixed host/path, redirect rejection, no-store, eight-second timeout, bounded response, one event, classification and zero automatic unknown replay. Do not persist or log form body, token, headers or exceptions containing request data. The direct CRM non-SDK route documents access token plus Pixel ID; it does not require the custom English-hills app secret. That app’s proof switch is not evidence of the managed credential issuer’s policy. Recheck actual route restrictions before issuance/configuration.
 
@@ -128,15 +156,15 @@ If proof is required by the selected route or settings change, **stop**: the dep
 
 The selected Events Manager route needs no custom-app publication/App Review or permission request under the [direct credential evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md). Custom-app Unpublished/Ready-for-testing status is not an H3 prerequisite. Unexpected publication, permission, proof or shared-credential changes at execution stop the operator; do not silently fall back to custom-app issuance.
 
-## Strict timestamp and equality contract — proposed correction
+## Strict timestamp and equality contract — approved correction
 
 H3-P1 requires event time after generation. [Adapter](../../../src/lib/crm/lifecycle/adapter.mjs) rejects only `<`; [103 reconcile](../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql) also rejects only earlier activity time, and delivery export floors both times. No inspected official source permits equality. Intake uses the actual CRM creation activity, not a fabricated generation-time event, so equality is possible but not inevitable.
 
-Recommended rule: for all five live kinds, `floor(event_occurred_at epoch seconds) > floor(original_submission.occurred_at epoch seconds)`. Original submission must retain authentic Meta generation time. Null/invalid source, earlier time and equal exported seconds fail closed before committed begin. Subsecond ordering alone is insufficient. Keep actual activity timestamp, event ID and deadline unchanged. Waiting until the next second does not repair a frozen equal-second event; adding one second, using dispatch time, rebuilding the activity or generating another Intake is forbidden.
+Approved rule: for all five live kinds, `floor(event_occurred_at epoch seconds) > floor(original_submission.occurred_at epoch seconds)`. Original submission must retain authentic Meta generation time. Null/invalid source, earlier time and equal exported seconds fail closed before committed begin. Subsecond ordering alone is insufficient. Keep actual activity timestamp, event ID and deadline unchanged. Waiting until the next second does not repair a frozen equal-second event; adding one second, using dispatch time, rebuilding the activity or generating another Intake is forbidden.
 
 Apply the same rule at reconciliation, pure authoritative hold, payload prepare validation and committed begin revalidation, plus adapter validation **including an already-prepared payload**. The adapter currently returns `delivery.payload` early; changing one comparison alone is insufficient. Use a new safe reason such as `provider_time_not_after_source` with immutable no-repair semantics for affected live occurrences, preserve legacy/mock behavior and the sharing-stop lock hierarchy. No Production event inventory exists to backfill.
 
-Consequence requiring explicit owner acceptance: an equal-second Intake/earlier unattempted event remains held and can hold later occurrences under R4 chronological-attempt ordering. Do not silently mark it sent/attempted, terminalize it merely to advance successors, or suppress the entire opportunity forever by a new rule. Existing deadline/epoch/retention behavior remains. If the owner wants later stages to bypass this hold, that is a separate R4 ordering decision, outside this correction. Alternative: obtain written Meta endpoint-specific equality guidance and review the exact interpretation before retaining equality.
+Consequence accepted with the revision-5 strict-second design: an equal-second Intake/earlier unattempted event remains held and can hold later occurrences under R4 chronological-attempt ordering. Do not silently mark it sent/attempted, terminalize it merely to advance successors, or suppress the entire opportunity forever by a new rule. Existing deadline/epoch/retention behavior remains. If the owner wants later stages to bypass this hold, that is a separate R4 ordering decision, outside this correction. Alternative: obtain written Meta endpoint-specific equality guidance and review the exact interpretation before retaining equality.
 
 Future synthetic acceptance: exact equality, subsecond equality after flooring, +1 second, -1 second, missing generation, future event, 604800-second age/8-second margin, same-second Intake with later stage, prepared-payload path, direct SQL prepare/begin and director retry. Assert zero HTTP/attempt boundary for invalid time, unchanged IDs/timestamps/deadlines, existing predecessor holds and no D2/stop/unknown bypass. No provider POST is needed for these tests.
 
@@ -154,7 +182,7 @@ The current UI defaults to Dataset Quality API and warns that its generation ext
 | Ownership | Named credential custodian, backup/revocation authority, release operator, review/rotation due date; Maroine EL Forssa is assigned to the human roles; actual schedule and protected access must be bound before execution |
 | Validity verification | Authorized operator checks issuer/subject/expiry/scopes/assets using protected tools and records only nonsecret summary. No token echo, Graph Explorer event test or `/events` POST. Metadata is not delivery proof |
 
-Proposed routine policy for owner choice: review metadata every 30 days; rotate before the earlier of actual expiry minus seven days or 90 days from issuance (including non-expiring tokens). These are EH recommendations, not Meta mandates. If issuance lifetime is shorter, set a documented feasible window before use. Emergency rotation/revocation is incident-driven.
+Owner-approved routine policy: review metadata every 30 days; rotate before the earlier of actual expiry minus seven days or 90 days from issuance (including non-expiring tokens). These are approved EH policy, not Meta mandates. If issuance lifetime is shorter, set a documented feasible window before use. Emergency rotation/revocation is incident-driven.
 
 H3 rotation: first bind a verified token-specific replacement/revocation method; if only shared/bulk actions are available, stop and revise recovery without touching legacy. Verify closed/empty gates; issue a dedicated replacement only under separate approval; store under the approved server reference; deploy/redeploy with gate still absent/false; verify nonsecret metadata and READY configuration; revoke only the superseded outbound token after replacement is verified. Keep old secret available only in approved secure recovery storage during the bounded handover, then remove it. Do not print either value. If replacement fails, remain dormant; restore the prior still-valid secret only if authorized and uncompromised. If compromised, revoke it and remain dormant rather than restoring it. A changed app/actor/proof/scope requires re-review, not routine rotation.
 
@@ -178,17 +206,18 @@ At each separately authorized source activation, the release operator must bind:
 
 Use the [legacy evidence/conditional stop procedure](../evidence/crm-h3-blocker-evidence-2026-10-01.md#complete-legacy-outbound-stopdrain-design--later-h4-preparation-only) only if applicable to the eventual source. A stop/drain accounts for and quarantines unsent work; it never sends a backlog to empty a queue. Actual retirement, cancellation and no-overlap verification occur only with future native activation approval. Do not change Yearly, its Sheet/script/Zap, Pixel traffic or inbound acquisition in H3.
 
-## Owner decisions required
+## Approved owner decisions
 
-No reapproval of D2, five names, repeats/singletons, Qualified target, original matching or no-uncertain-replay is requested. The current decisions below supersede the custom-actor alternatives in the earlier evidence register. The roster answer is assignment only, not execution approval.
+The [final owner approval](#final-owner-architecture-approval--2026-10-02) selects revision 5 without reopening D2, five names, repeats/singletons, Qualified target, original matching or no-uncertain-replay. Prior unselected alternatives are not pending owner decisions for this implementation.
 
-| Decision | A / B and consequences | Recommendation / blocking scope |
-| --- | --- | --- |
-| Transport | A: commission documented multipart body-token patch. B: retain bearer/JSON only after authoritative endpoint support evidence | A; exact patch/review/deployment needed before seed/configuration execution, no token in frozen payload |
-| Equality | A: strict exported-second hold with predecessor consequence above. B: obtain provider equality clarification before deciding | A; owner must explicitly accept hold/coverage consequence before implementation; no invented time |
-| Credential route | Owner requested the supported direct Events Manager route; ratify new EH-only issuance without DQA and its bounded recovery/storage contract, or defer execution | Custom-app/Employee alternatives are not H3 prerequisites; no permission request or actor change in this task |
-| Contract/configuration | Approve exact manifest, same EH connection, dataset, reference and `max_attempts=5`, or defer | Recommended values below; approval does not authorize seed/deployment/events |
-| Credential governance | Accept proposed 30-day review/90-day-or-expiry rotation, or supply another explicit schedule; accountable custodian/revocation authority is Maroine EL Forssa | Must be bound before credential execution |
+| Decision | Approved choice / boundary |
+| --- | --- |
+| Transport | Multipart/form-data using the dedicated direct Events Manager CAPI token; token added only at the transport boundary, never to the frozen payload |
+| Equality | Strict exported-second handling; equality/earlier invalid time holds without fabricating time, preserving the documented predecessor/coverage consequence |
+| Credential route | New EH-only direct Events Manager credential **without Dataset Quality API**; exclusive EH use/storage and isolated recovery, no legacy/inbound token reuse or revocation |
+| Contract/configuration | Proposed provider-contract manifest and disabled destination configuration for dataset `1152399921284927`, `max_attempts=5`; exact remaining manifest fields below/above remain as specified, not a seed applied by this task |
+| Credential governance | Metadata review every 30 days; rotation before the earlier of 90 days from issuance or seven days before actual expiry; Maroine EL Forssa remains accountable custodian/revocation authority |
+| Scope | Bounded H3 implementation and dormant preparation only, in separate tasks; no H4 source/form/cohort selection, provider event sending, destination enablement, server live gate or scheduler activation |
 
 ## Remaining external/account actions — later authorization required
 
@@ -207,7 +236,7 @@ Step names are fixed. **Maroine EL Forssa** is the owner-confirmed accountable h
 
 | Order / named step | Responsible role / entry condition | Verification / stop / recovery |
 | --- | --- | --- |
-| H3-01 Evidence freeze | H3 owner + technical author; close package blockers, select decisions, name roster | Bind plan commit/digest, source references, exact assets and allowed actions. If evidence/route differs, revise before execution |
+| H3-01 Evidence freeze | H3 owner + technical author; bind the recorded revision-5 approval, closed evidence gaps and named roster | Bind plan commit/digest, source references, exact assets and allowed actions. If evidence/route differs, revise before execution |
 | H3-02 Compatibility implementation | Separate implementer after architecture owner approval; transport/time modules below only | Synthetic tests, internal QA, exact-head CI and fresh independent review; no provider/Production access. Findings corrected/re-reviewed before release |
 | H3-03 Dormant compatibility release | Separate release operator after exact-SHA release approval | Reconfirm intended Production project/deployment, ledger 001–103, zero lifecycle inventory, disabled cron/gate/destination and healthy intake. Deploy compatible app/forward SQL in reviewed order; stop on any inventory/drift. No seed yet |
 | H3-04 Contract seed | Separate implementer/reviewer then DB release operator, after final provider manifest approval and H3-03 verification | Allocate next free migration, bind UUID/key/revision/evidence/real dates. Local fresh+upgrade tests, exact-head CI/review, separate release approval. Read back exactly one matching row; gates and all other lifecycle inventory stay closed/empty |
@@ -226,18 +255,18 @@ Actual prospective form/source identity and any creation/publication/binding; fi
 
 ## Exact remaining blocker to a fully bound H3 owner-review package
 
-**Credential blocker closed.** [Events Manager direct credential evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md) verifies the actual dataset’s route and authoritative CRM token instructions. No custom-app publication or ads-scope inference is needed. **READY FOR H3 OWNER REVIEW**, not credential-issued, implemented or H3-complete.
+**Credential blocker closed.** [Events Manager direct credential evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md) verifies the actual dataset’s route and authoritative CRM token instructions. No custom-app publication or ads-scope inference is needed. **ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION**, not credential-issued, implemented or H3-complete.
 
 **Removed H3 blocker — legacy stop/drain:** the owner clarification places actual-source exclusion investigation and any necessary legacy retirement at H4 activation. No selective long-term coexistence design is required for H3. The reusable fail-closed control contract above remains mandatory.
 
 **Closed blocker — execution ownership:** owner assigned Maroine EL Forssa to the human roster above. Separate implementation, independent review, release and verification task identities and artifact-bound operation windows are future commissioning records, not unknown human owners.
 
-The concrete transport/time choices are **remaining owner decisions**, not missing provider research that must be solved before those choices can be reviewed. Selecting the documented multipart/strict-second path closes the need to prove bearer/equality acceptance; selecting the alternative requires its authoritative evidence before implementation. Unknown duplicate acknowledgment/numeric server-only dedup horizon, absent credentials/seed, future form/mapping/cohort and the completed advisory-D2 implementation are **not additional package blockers**. Exact reviewed patch/seed SHAs and actual approval dates are outputs of later gated steps; they are not falsely asserted as existing.
+The owner selected the documented multipart/strict-second path, closing the need to prove bearer/equality acceptance. Any later change to that choice requires new evidence and affected architecture approval. Unknown duplicate acknowledgment/numeric server-only dedup horizon, absent credentials/seed, future form/mapping/cohort and the completed advisory-D2 implementation are **not additional package blockers**. Exact reviewed patch/seed SHAs and actual approval dates are outputs of later gated steps; they are not falsely asserted as existing.
 
 ## IMPLEMENTATION CONTRACT
 
 This PR is architecture/readiness documentation only. Preserve current main code, migrations, all Meta/Production state and settled advisory-D2 contracts. Documentation validation: relative links/anchors, source cross-check, no secrets/customer records, docs-only diff and `git diff --check`; existing required CI still applies. No application tests are needed locally for this docs-only diff. Review/merge/release remain governed by [AGENTS](../../../AGENTS.md); this package status is not a formal independent-review verdict or merge approval.
 
-After explicit owner decision/commissioning, a separate Tier-3 implementation task may touch `src/lib/crm/lifecycle/adapter.mjs`, `worker.mjs` only as needed for transport inputs, `server.js` only if proof storage is approved, and new forward SQL replacing affected R4 reconcile/hold/prepare/begin validation with unchanged locks/ACLs. Review transitive claim/retry/get/prepared-payload paths. Extend existing lifecycle JS and R4/advisory SQL tests for the timestamp/auth cases above. No policy/D2, matching, event scope, owner model, outbox or ordering redesign. Review library/framework local guides before code. Fresh/103-upgrade, role, retention, no-unknown-replay and relevant concurrency checks plus required CI and independent exact-SHA review precede separately authorized release. The seed is a separate reviewed migration only after final provider-contract approval; no credentials or activation data in it.
+Under the recorded owner architecture approval, a separately commissioned Tier-3 implementation task may touch `src/lib/crm/lifecycle/adapter.mjs`, `worker.mjs` only as needed for transport inputs, `server.js` only if proof storage is approved, and new forward SQL replacing affected R4 reconcile/hold/prepare/begin validation with unchanged locks/ACLs. Review transitive claim/retry/get/prepared-payload paths. Extend existing lifecycle JS and R4/advisory SQL tests for the timestamp/auth cases above. No policy/D2, matching, event scope, owner model, outbox or ordering redesign. Review library/framework local guides before code. Fresh/103-upgrade, role, retention, no-unknown-replay and relevant concurrency checks plus required CI and independent exact-SHA review precede separately authorized release. The provider-contract design is approved; its seed remains a separate reviewed migration with artifact-bound release approval; no credentials or activation data in it.
 
-Stop for any broadening, source-specific activation work in H3, need to change event truth or successor ordering, new secret/proof requirement, actual nonempty Production inventory or expired provider evidence. Update this package and obtain the affected decision rather than silently implementing. **READY FOR H3 OWNER REVIEW** with the direct credential route; H3 execution and H4 remain unauthorized.
+Stop for any broadening, source-specific activation work in H3, need to change event truth or successor ordering, new secret/proof requirement, actual nonempty Production inventory or expired provider evidence. Update this package and obtain the affected decision rather than silently implementing. **ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION** with the direct credential route. This task executes no H3 work; operational releases require separate approval and H4 remains unauthorized.

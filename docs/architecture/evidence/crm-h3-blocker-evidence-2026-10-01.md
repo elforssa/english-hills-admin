@@ -1,6 +1,6 @@
 # H3 blocker investigation — 2026-10-01
 
-> **Current credential route — 2026-10-02:** [Revision-5 direct Events Manager evidence](crm-h3-direct-capi-credential-2026-10-02.md) closes the custom-app credential blocker. **READY FOR H3 OWNER REVIEW** for that route; no token issued or execution authorized. The dated findings/alternatives below remain historical and do not impose custom-app scopes/publication or legacy retirement on current H3.
+> **Current credential route — 2026-10-02:** [Revision-5 direct Events Manager evidence](crm-h3-direct-capi-credential-2026-10-02.md) closes the custom-app credential blocker. **ARCHITECTURE APPROVED — READY FOR SEPARATE H3 IMPLEMENTATION** for that route; no token issued or execution authorized. The dated findings/alternatives below remain historical and do not impose custom-app scopes/publication or legacy retirement on current H3.
 
 
 > **Revision-4 credential supplement:** [Fresh authoritative and authenticated evidence](crm-h3-credential-route-2026-10-01.md) supersedes the credential-gap assessment below. Admin assignment reconciliation and observed lifetime options are now resolved. The remaining questions are explicit CRM scope applicability and ongoing delivery while unpublished. Earlier observations below retain their original provenance.
