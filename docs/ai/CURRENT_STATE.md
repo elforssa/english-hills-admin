@@ -1,5 +1,9 @@
 # Current state
 
+## H3-05 recovery research — blocked, 2026-10-02
+
+[Recovery-design revision 1](../architecture/plans/crm-h3-05-credential-recovery.md) records fresh official Meta documentation and authenticated read-only account metadata. The [authorized H3-05 operator attempt](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955549306) stopped before issuance. Meta documents individual system-user-token revocation with same-app caller/app-secret prerequisites and all-token identity invalidation; neither is yet bound to a safely recoverable new direct Events Manager credential. Existing managed CAPI assets/traffic are observed; future token issuer and create-versus-reuse behavior remain unresolved. No token, Meta setting, Production configuration or event changed. H3-05 remains BLOCKED; H3-06–08/H4 remain held. Revision 5 remains historical approved architecture; its earlier route-closure statements do not establish recovery. A dedicated-identity alternative is proposed only, pending provider facts and owner amendment approval.
+
 ## H3-04 contract seed — Production verified 2026-10-02
 
 [PR #57](https://github.com/elforssa/english-hills-admin/pull/57), independently reviewed head `142caca2c6f0158b60c6d260cc35735e3505ec68`, merged/deployed as `e3928b369c8790151771d7251aee7030289ec84f`. Production deployment `dpl_6GX4CmHd9QxuGdZgdwJoNoj49X6k` is READY at that exact source and serves `admin.english-hills.com`. Owner-approved migration 106 completed through the explicit-target numbered CLI path in Supabase `hopcezradkhrixwwswxn`; ledger is exactly 001–106 and immutable. Exactly one approved contract exists: `7cf9833e-4f77-4335-b1ec-c047d9353f54` / `eh_meta_crm_r4_v26_r1`. [Exact readback, catalogs, dormancy, health and limitations](../architecture/evidence/crm-h3-04-production-2026-10-02.md).
