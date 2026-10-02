@@ -49,7 +49,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 
 1. Implement the approved scope.
 2. Run relevant checks.
-3. Inspect the final diff; this is the focused internal self-check for a small change.
+3. Inspect the final diff; this is the focused author self-check for a small change.
 4. Finish with the implementation handoff. Independent review is optional unless scope grows into a higher tier.
 
 ### Normal features (Tier 2)
@@ -108,11 +108,11 @@ Path-filtered or reduced docs-only CI is proposed future work, not current polic
 
 ## Implementation handoff
 
-Return branch, exact head SHA, PR number/link, risk tier/rationale, tests/checks completed with results and evidence tied to that SHA, internal QA completed, documentation changes and remaining blockers. Include the approved plan revision and migration filenames when applicable, and identify any unresolved owner decision. Use exactly one implementation status appropriate to the tier:
+Return branch, exact head SHA, PR number/link, risk tier/rationale, tests/checks completed with results and evidence tied to that SHA, author self-check completed, documentation changes and remaining blockers. Include the approved plan revision and migration filenames when applicable, and identify any unresolved owner decision. Use exactly one implementation status appropriate to the tier:
 
-- **Tier 1: IMPLEMENTATION INCOMPLETE** — approved scope, relevant checks/required CI, internal QA or the open PR is incomplete, or implementation handoff blockers remain.
-- **Tier 1: IMPLEMENTATION COMPLETE** — approved scope, relevant checks/required CI and internal QA are complete for the exact current head SHA, the PR is open and no implementation handoff blockers remain. Independent review is optional unless scope grows or the owner requests it.
-- **Tier 2/3: NOT READY FOR INDEPENDENT REVIEW** — implementation, required checks, internal QA or the open PR is incomplete, evidence is failed/missing/stale, or handoff blockers remain.
+- **Tier 1: IMPLEMENTATION INCOMPLETE** — approved scope, relevant checks/required CI, author self-check or the open PR is incomplete, or implementation handoff blockers remain.
+- **Tier 1: IMPLEMENTATION COMPLETE** — approved scope, relevant checks/required CI and author self-check are complete for the exact current head SHA, the PR is open and no implementation handoff blockers remain. Independent review is optional unless scope grows or the owner requests it.
+- **Tier 2/3: NOT READY FOR INDEPENDENT REVIEW** — implementation, required checks, author self-check or the open PR is incomplete, evidence is failed/missing/stale, or handoff blockers remain.
 - **Tier 2/3: READY FOR INDEPENDENT REVIEW** — implementation is complete for the current scope, the exact current head SHA is identified, all required tests/checks pass for that SHA, the author self-check is complete, the PR is open and no handoff blockers remain. The author stops here; the next step is the mandatory separate reviewer task/session launched by the owner/coordinator.
 
 Report any merge/release hold separately and preserve it; implementation completion or review readiness never clears that hold. Implementation completion and readiness are not PR approval, merge authorization or release authorization.
