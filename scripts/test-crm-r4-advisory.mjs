@@ -13,6 +13,43 @@ for (const [kind,name] of Object.entries(mapping.events)) {
  assert(!/adult|child|learner|email|phone|currency|value|hash/i.test(JSON.stringify(p)));
 }
 for (const lead_id of [123,NaN,'1e20','', '1'.repeat(33)]) assert.throws(()=>prepareLifecyclePayload({...delivery,event_kind:'intake',matching:{lead_id}}),/invalid_identity/);
+// All five live kinds must follow original Meta generation in exported integer seconds.
+const realNow = Date.now;
+const now = 1800000000;
+Date.now = () => now * 1000;
+try {
+ for (const event_kind of Object.keys(mapping.events)) {
+  const valid = {...delivery,event_kind,event_time:now-10,source_generated_time:now-11};
+  const payload = prepareLifecyclePayload(valid);
+  assert.equal(prepareLifecyclePayload({...valid,payload,matching:null}), payload);
+  for (const source_generated_time of [now-10,now-9,null,undefined,0,NaN,Infinity,now-10.1]) {
+   for (const prepared of [false,true]) assert.throws(()=>prepareLifecyclePayload({...valid,source_generated_time,...(prepared?{payload,matching:null}:{})}),/invalid_event_time/);
+  }
+  for (const event_time of [now+1, now-604800, now-604792, now-10.1]) {
+   const expired = {...valid,event_time,source_generated_time:now-604801};
+   for (const prepared of [false,true]) assert.throws(()=>prepareLifecyclePayload({...expired,...(prepared?{payload:{data:[{...payload.data[0],event_time}]},matching:null}:{})}),/invalid_event_time/);
+  }
+  assert.equal(prepareLifecyclePayload({...valid,event_time:now-604791,source_generated_time:now-604792}).data[0].event_time,now-604791);
+  assert.throws(()=>prepareLifecyclePayload({...valid,payload:{data:[{...payload.data[0],event_time:now-11}]}}),/invalid_event_time/);
+  // Subsecond times after flooring are equality, never rounded or incremented.
+  assert.throws(()=>prepareLifecyclePayload({...valid,event_time:Math.floor(now-10+0.9),source_generated_time:Math.floor(now-10+0.1)}),/invalid_event_time/);
+ }
+} finally { Date.now = realNow; }
+for (const prepared of [false,true]) {
+ let attempts=0,http=0,prepares=0;
+ const invalid={...delivery,event_kind:'intake',source_generated_time:delivery.event_time};
+ const payload=prepareLifecyclePayload({...invalid,source_generated_time:delivery.event_time-1});
+ const results=await processLifecycleDeliveries({env:{CRM_META_LIFECYCLE_LIVE_ENABLED:'true',CRM_META_LIFECYCLE_TOKEN_TEST:'synthetic'},liveGate:true,limit:1,
+  fetchImpl:async()=>{http++;throw Error('must not dispatch');},rpc:async name=>{
+   if(name==='crm_claim_external_deliveries')return [{id:'equal',lease_token:'synthetic'}];
+   if(name==='crm_get_external_delivery')return {...invalid,...(prepared?{payload,matching:null}:{})};
+   if(name==='crm_prepare_external_delivery'){prepares++;return 'digest';}
+   if(name==='crm_begin_external_attempt'){attempts++;return 1;}
+   if(name==='crm_block_external_delivery')return;
+   throw Error(name);
+  }});
+ assert.deepEqual(results,[{status:'blocked'}]);assert.equal(attempts,0);assert.equal(http,0);assert.equal(prepares,0);
+}
 assert.equal(evaluateLifecycleEvidence({answers:[]}).eligible,false);
 assert.equal(evaluateLifecycleEvidence({sharing_field_key:'share',sharing_accepted_values:[true],answers:[{key:'share',value:'true'}]}).eligible,false);
 assert.equal(evaluateLifecycleEvidence({sharing_field_key:'share',sharing_accepted_values:[true],answers:[{key:'share',value:true}]}).eligible,true);
@@ -43,7 +80,7 @@ for(const broken of ['crm_claim_lifecycle_evidence','crm_reconcile_external_deli
 }
 // Static protocol coverage supplements forced multi-session execution.
 const sql=readFileSync(new URL('../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql',import.meta.url),'utf8');
-const definitions=readFileSync(new URL('../supabase/migrations/102_crm_meta_funnel_r4_runtime_safety.sql',import.meta.url),'utf8')+'\n'+sql;
+const definitions=readFileSync(new URL('../supabase/migrations/102_crm_meta_funnel_r4_runtime_safety.sql',import.meta.url),'utf8')+'\n'+sql+'\n'+readFileSync(new URL('../supabase/migrations/104_crm_lifecycle_strict_exported_seconds.sql',import.meta.url),'utf8');
 const funcs=[...definitions.matchAll(/^create(?: or replace)? function ([\w.]+)\([^]*?\bas (\$function\$|\$\$)([^]*?)\2;/gim)];
 const def=name=>{const found=funcs.findLast(x=>x[1]===name);assert(found,name);return found[3];};
 for(const name of ['lifecycle_hold','lifecycle_route','lifecycle_retry_hold','lifecycle_predecessor_hold']) assert(!/for\s+(?:update|share|key share)|pg_(?:try_)?advisory|\b(?:insert into|update public|delete from)\b/i.test(def('crm_security.'+name)),name+' must be pure');

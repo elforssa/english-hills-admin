@@ -2,16 +2,17 @@ import { createHash } from 'node:crypto';
 import { boundedBody } from '../meta/protocol.mjs';
 const hash = value => createHash('sha256').update(value).digest('hex');
 export function prepareLifecyclePayload(delivery) {
-  if (delivery.payload) return delivery.payload;
+  if (delivery.payload && delivery.mapping?.mode !== 'live') return delivery.payload;
   const { mapping, matching, event_kind, event_id, event_time, source_generated_time } = delivery;
   if (!['mock', 'live'].includes(mapping?.mode) || (mapping.mode === 'mock' && matching?.adult_contact !== true) || !mapping.events?.[event_kind]) throw new Error('configuration_missing');
   if (!Number.isSafeInteger(event_time) || event_time <= 0) throw new Error('invalid_event_time');
   const user = {};
-  if (typeof matching?.lead_id === 'string' && /^[0-9]{1,32}$/.test(matching.lead_id)) user.lead_id = matching.lead_id;
+  const leadId = delivery.payload?.data?.[0]?.user_data?.lead_id ?? matching?.lead_id;
+  if (typeof leadId === 'string' && /^[0-9]{1,32}$/.test(leadId)) user.lead_id = leadId;
   if (mapping.mode === 'live') {
     if (!user.lead_id || Object.keys(user).length !== 1) throw new Error('invalid_identity');
     const nowSeconds = Math.floor(Date.now() / 1000);
-    if (!Number.isSafeInteger(source_generated_time) || source_generated_time <= 0 || event_time < source_generated_time
+    if (!Number.isSafeInteger(source_generated_time) || source_generated_time <= 0 || event_time <= source_generated_time
       || event_time > nowSeconds || !Number.isSafeInteger(mapping.maximum_event_age_seconds)
       || event_time + mapping.maximum_event_age_seconds <= nowSeconds + 8) throw new Error('invalid_event_time');
     const expectedEvents = { intake: 'Intake', not_qualified: 'Not qualified', lost: 'Lost', qualified: 'Qualified', converted: 'Converted' };
@@ -19,6 +20,13 @@ export function prepareLifecyclePayload(delivery) {
       || mapping.action_source !== 'system_generated' || mapping.maximum_event_age_seconds > 604800
       || Object.keys(mapping.events || {}).length !== 5 || Object.entries(expectedEvents).some(([key, value]) => mapping.events?.[key] !== value)
       || JSON.stringify(mapping.required_constants) !== JSON.stringify({ event_source: 'crm', lead_event_source: 'English Hills CRM' })) throw new Error('configuration_missing');
+    // Frozen retries still revalidate original generation time, export time and age.
+    // The protected RPC omits matching when it returns an already-prepared payload.
+    if (delivery.payload) {
+      if (!Array.isArray(delivery.payload.data) || delivery.payload.data.length !== 1
+        || delivery.payload.data[0]?.event_time !== event_time) throw new Error('invalid_event_time');
+      return delivery.payload;
+    }
     return { data: [{
       event_name: mapping.events[event_kind], event_id, event_time,
       action_source: mapping.action_source, user_data: user,
@@ -37,13 +45,21 @@ export function prepareLifecyclePayload(delivery) {
 }
 async function postLifecycle({ mapping, payload, token, fetchImpl, timeoutMs = 8000 }) {
   if (typeof fetchImpl !== 'function') throw new Error('live_not_available');
-  if (!/^v[0-9]{1,3}\.0$/.test(mapping.api_version) || !/^[0-9]{1,32}$/.test(mapping.dataset_id) || !token || JSON.stringify(payload).length > 8192) throw new Error('configuration_missing');
+  if (!/^v[0-9]{1,3}\.0$/.test(mapping.api_version) || !/^[0-9]{1,32}$/.test(mapping.dataset_id) || typeof token !== 'string' || !token
+    || !payload || Object.keys(payload).length !== 1 || !Array.isArray(payload.data) || payload.data.length !== 1
+    || JSON.stringify(payload).length > 8192) throw new Error('configuration_missing');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    // Credentials exist only in this transient transport body, never the frozen envelope.
+    const form = mapping.mode === 'live' ? new FormData() : null;
+    if (form) {
+      form.set('data', JSON.stringify(payload.data));
+      form.set('access_token', token);
+    }
     const response = await fetchImpl(`https://graph.facebook.com/${mapping.api_version}/${mapping.dataset_id}/events`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload), signal: controller.signal, redirect: 'error', cache: 'no-store'
+      method: 'POST', ...(form ? {} : { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }),
+      body: form ?? JSON.stringify(payload), signal: controller.signal, redirect: 'error', cache: 'no-store'
     });
     const base = { http_status: response.status };
     if (response.status === 429) {

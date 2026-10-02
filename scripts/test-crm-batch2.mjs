@@ -44,8 +44,36 @@ const accepted = await postLifecycleLive({ mapping: liveMapping, payload, token:
 assert.equal(request.url, 'https://graph.facebook.com/v42.0/123456/events');
 assert.equal(request.options.redirect, 'error');
 assert.equal(request.options.cache, 'no-store');
-assert.equal(request.options.headers.Authorization, 'Bearer fixture-secret');
+assert.equal(request.options.method, 'POST');
+assert.equal(request.options.headers, undefined, 'HTTP library owns multipart content type/boundary; no bearer auth');
+assert(request.options.body instanceof FormData);
+assert.deepEqual([...request.options.body.keys()], ['data', 'access_token']);
+assert.equal(request.options.body.get('data'), JSON.stringify(payload.data));
+assert.equal(request.options.body.get('access_token'), 'fixture-secret');
+assert(!request.url.includes('fixture-secret') && !request.url.includes('?'));
+assert(!JSON.stringify(payload).includes('fixture-secret'));
+// Exercise the real HTTP library's serialization without any network call.
+const encodedRequest = new Request(request.url, request.options);
+assert.match(encodedRequest.headers.get('content-type'), /^multipart\/form-data; boundary=.+/);
+assert.equal(encodedRequest.headers.get('authorization'), null);
+const decodedForm = await encodedRequest.formData();
+assert.equal(decodedForm.get('data'), JSON.stringify(payload.data));
+assert.equal(decodedForm.get('access_token'), 'fixture-secret');
 assert.deepEqual(accepted, { http_status: 200, outcome: 'sent', request_id: 'safe_trace' });
+for (const invalidPayload of [{ data: [] }, { data: [payload.data[0], payload.data[0]] }, { ...payload, access_token: 'fixture-secret' }]) {
+  await assert.rejects(postLifecycleLive({ mapping: liveMapping, payload: invalidPayload, token: 'fixture-secret',
+    fetchImpl: async () => { throw Error('must not dispatch'); } }), /configuration_missing/);
+}
+const network = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret',
+  fetchImpl: async () => { throw Error('request body access_token=fixture-secret'); } });
+assert.deepEqual(network, { outcome: 'unknown', error_code: 'network' });
+const timeout = await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', timeoutMs: 1,
+  fetchImpl: async (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(Error('fixture-secret')))) });
+assert.deepEqual(timeout, { outcome: 'unknown', error_code: 'timeout' });
+for (const oversized of [new Response('x'.repeat(16385)), new Response('{}', { headers: { 'content-length': '16385' } })]) {
+  assert.deepEqual(await postLifecycleLive({ mapping: liveMapping, payload, token: 'fixture-secret', fetchImpl: async () => oversized }),
+    { http_status: 200, outcome: 'unknown', error_code: 'malformed_response' });
+}
 for (const [status, body, outcome, code] of [
   [429, {}, 'unknown', 'rate_limit'],
   [401, {}, 'blocked', 'provider_auth'],
