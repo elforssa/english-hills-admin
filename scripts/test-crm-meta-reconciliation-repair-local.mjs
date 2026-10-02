@@ -297,7 +297,8 @@ let second=await held('select crm_claim_meta_reconciliation()',()=>rpc('crm_clai
 assert.equal(second,null);
 assert.equal(workerSQL(`select lease_until-updated_at=interval '55 seconds' from crm_meta_reconciliation_state where connection_id='${connection}' and form_key='95002'`),'t');
 // Locked first eligible row is skipped, allowing a different eligible form.
-sql(`update crm_meta_reconciliation_state set next_due_at=now()-interval '1 minute',lease_token=null,lease_until=null where connection_id='${connection}' and form_key in ('95002','95003')`);
+sql(`update crm_meta_reconciliation_state set next_due_at=now()-interval '1 minute',lease_token=null,lease_until=null where connection_id='${connection}' and form_key in ('95002','95003');
+update crm_meta_reconciliation_state set next_due_at=now()-interval '2 minutes' where connection_id='${connection}' and form_key='95002'`);
 second=await held(`select 1 from crm_meta_reconciliation_state where connection_id='${connection}' and form_key='95002' for update`,()=>rpc('crm_claim_meta_reconciliation'));
 assert.equal(second.form_key,'95003');
 const first=await rpc('crm_claim_meta_reconciliation');assert.equal(first.form_key,'95002');assert.notEqual(first.lease_token,second.lease_token);

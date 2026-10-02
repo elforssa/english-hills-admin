@@ -35,4 +35,8 @@ The historical 094-only Python replay remains an unchanged historical contract, 
 
 Final PR head, current base, CI-tested synthetic merge SHA, required run links/results and complete local evidence are recorded in the implementation PR description and final handoff after required current-head CI. This avoids a self-referential commit SHA in the committed evidence document. Any documentation-only evidence closure after a local run does not change tested SQL/runtime/test sources. A separate owner-launched reviewer task/session must inspect the exact final head. No merge, deployment or Production verification is claimed.
 
-Local validated snapshot tree: `d67e8da5828e6c057901aa6e523a817b5b4bc56e` (staged after the successful full local run and documentation checks, before this evidence-only closing line). Runtime, SQL, tests and CI wiring are unchanged between that snapshot and the implementation commit.
+Local validated snapshot tree: `d67e8da5828e6c057901aa6e523a817b5b4bc56e` (staged after the successful full local run and documentation checks, before this evidence-only closing line). This binds the first implementation commit `963059961bf7ba2bd4d22907ff58f156edc87a80`.
+
+An author finding strengthened only the lock-only test fixture: the locked form is now explicitly earlier in due order than the second eligible form. A focused local regression on that change passed overlapping-claim exclusivity and prompt selection of the second form, followed by a clean local reset. SQL/runtime/CI wiring and all other acceptance tests are unchanged; the required final-head CI repeats full acceptance. This is a targeted findings check, not another author review or independent review.
+
+Final locally validated snapshot tree: `d9c662f84fd963ca4566ea9440cf8b987dacc1cc` (after the targeted fixture check, before this evidence-only line).
