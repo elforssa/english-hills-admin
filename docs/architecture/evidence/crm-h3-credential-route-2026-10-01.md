@@ -1,5 +1,8 @@
 # H3 credential-route evidence — 2026-10-01
 
+> **Current credential route — 2026-10-02:** [Revision-5 direct Events Manager evidence](crm-h3-direct-capi-credential-2026-10-02.md) closes the custom-app credential blocker. **READY FOR H3 OWNER REVIEW** for that route; no token issued or execution authorized. The dated findings/alternatives below remain historical and do not impose custom-app scopes/publication or legacy retirement on current H3.
+
+
 **Credential blocker remains**, narrowed to the two provider confirmations below. This read-only supplement supersedes the credential-gap assessment in [the earlier register](crm-h3-blocker-evidence-2026-10-01.md#authoritative-credential-evidence); it does not change legacy/H4 scope. [Technical package revision 4](../plans/crm-h3-technical-readiness.md) remains **NOT READY FOR H3 OWNER REVIEW** as a fully bound execution package.
 
 Tier 3 documentation only, researched against main `4236cfcddf851e12884cb6ade3cb436c7762c1ea` and PR #50 head `79a0c3c6bb5fb2d4cafca3f11c64acb2648c9152` before this supplement. Authoritative pages and authenticated nonsecret Meta settings were read on 2026-10-01 Asia/Shanghai. No exported per-view timestamp/configuration digest was captured. No Meta settings, permissions, assets, code, Production or external integrations changed; no token or event was generated. No secret values or customer records are included.
