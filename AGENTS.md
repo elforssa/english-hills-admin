@@ -56,29 +56,31 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 
 1. Obtain architecture approval when required, then implement.
 2. Run focused local checks and any explicitly required local validation as described below.
-3. Perform one focused internal self-check and inspect the final diff.
+3. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 4. Commit/push and open the PR, wait for required CI for the current revision, then report **READY FOR INDEPENDENT REVIEW** when the handoff conditions are met.
-5. Hand off to a separate independent reviewer; this is mandatory for Tier 2.
+5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner the exact PR head SHA to review rather than reviewing it yourself.
 
 ### High-risk changes (Tier 3)
 
 1. Complete the required architecture task and human owner approval.
 2. Implement the approved scope.
 3. Run focused local checks and any explicitly required local validation.
-4. Perform one focused internal self-check and inspect the final diff.
+4. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
 5. Commit/push, open the PR and wait for required CI for the current revision.
 6. Report **READY FOR INDEPENDENT REVIEW** only when the exact-SHA handoff conditions below are met.
-7. Have a fresh independent reviewer task review the exact PR SHA and return its verdict.
+7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA; the author task must not perform or orchestrate that formal review itself.
 8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, waits for required CI, and requests fresh independent review of the new SHA.
 9. After review, follow the existing human approval, separate release/operator and Production verification flow.
 
-## Internal implementation QA
+## Author self-check before handoff
 
-The implementation agent implements approved scope, runs relevant tests, inspects its own final diff and performs one focused internal self-check before handoff. Its purpose is to catch obvious mistakes, verify changed risk areas, and confirm that tests and documentation accurately describe the change. Focus on security, authorization, migrations, data integrity, concurrency, external providers, retry/error handling and regression risk, as applicable.
+Architecture and implementation authors run relevant checks, inspect their own final diff and perform **one focused self-check** before handoff. Its purpose is to catch obvious mistakes, verify changed risk areas and confirm that tests/documentation accurately describe the change. Focus on security, authorization, migrations, data integrity, concurrency, external providers, retry/error handling and regression risk as applicable.
 
-Internal self-check and independent review are different activities and must never be treated as interchangeable. A detailed self-review, including work by internal implementation subagents, is still internal QA. It does not approve the PR, count as independent review, authorize merge or replace a required reviewer. Do not describe internal checks as “approved,” and do not issue an independent-review verdict from the implementation task.
+The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier.
 
-Avoid duplicating release/operator checks during implementation unless needed to prove correctness; hand off existing evidence and leave deployment-state checks to the separate release task.
+The self-check never approves the PR, counts as independent review, authorizes merge or replaces a required reviewer. Do not describe it as “approved,” and do not issue **READY FOR FINAL REVIEW** / **CHANGES REQUIRED** from an author task. After push and required CI, stop and report the exact PR/head SHA for the owner's reviewer handoff.
+
+Avoid duplicating release/operator checks during authoring unless needed to prove correctness; hand off existing evidence and leave deployment-state checks to the separate release task.
 
 ## Independent review
 
@@ -91,7 +93,7 @@ The implementation agent must not provide its own independent-review verdict. A 
 
 ## Findings-driven review and validation
 
-Do not require another internal or independent review cycle merely because a previous review occurred. Repeat review only when findings require fixes, fixes change architecture, security boundaries or database models, or fixes otherwise materially change risk. After fixes, verify affected behavior and safeguards; broaden the review only when the changes justify it. Surface unresolved blockers and needed decisions instead of looping without new evidence.
+Do not require another author self-check or independent review cycle merely because a previous review occurred. Author tasks must not create internal reviewer/re-review loops. Repeat review only when findings require fixes, fixes change architecture, security boundaries or database models, or fixes otherwise materially change risk. After fixes, verify affected behavior and safeguards; broaden the review only when the changes justify it. Surface unresolved blockers and needed decisions instead of looping without new evidence.
 
 - During development, run focused tests relevant to changed areas.
 - The independent reviewer should inspect and reuse sufficient test/CI evidence tied to the exact head SHA rather than rerun a complete suite by default. Run additional checks when coverage is missing, doubtful or affected by the findings; evidence reuse never waives required checks.
@@ -111,7 +113,7 @@ Return branch, exact head SHA, PR number/link, risk tier/rationale, tests/checks
 - **Tier 1: IMPLEMENTATION INCOMPLETE** — approved scope, relevant checks/required CI, internal QA or the open PR is incomplete, or implementation handoff blockers remain.
 - **Tier 1: IMPLEMENTATION COMPLETE** — approved scope, relevant checks/required CI and internal QA are complete for the exact current head SHA, the PR is open and no implementation handoff blockers remain. Independent review is optional unless scope grows or the owner requests it.
 - **Tier 2/3: NOT READY FOR INDEPENDENT REVIEW** — implementation, required checks, internal QA or the open PR is incomplete, evidence is failed/missing/stale, or handoff blockers remain.
-- **Tier 2/3: READY FOR INDEPENDENT REVIEW** — implementation is complete for the current scope, the exact current head SHA is identified, all required tests/checks pass for that SHA, internal QA is complete, the PR is open and no handoff blockers remain. The next step is the mandatory separate reviewer task.
+- **Tier 2/3: READY FOR INDEPENDENT REVIEW** — implementation is complete for the current scope, the exact current head SHA is identified, all required tests/checks pass for that SHA, the author self-check is complete, the PR is open and no handoff blockers remain. The author stops here; the next step is the mandatory separate reviewer task/session launched by the owner/coordinator.
 
 Report any merge/release hold separately and preserve it; implementation completion or review readiness never clears that hold. Implementation completion and readiness are not PR approval, merge authorization or release authorization.
 
