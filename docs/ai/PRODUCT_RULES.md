@@ -6,6 +6,12 @@
 
 These invariants combine current implementation with the explicitly approved receptionist direction, whose unimplemented parts live only in [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md).
 
+## Reusable acquisition platform — owner clarification 2026-10-01
+
+Support simultaneous Meta Instant Forms, website forms and campaigns/ads. Campaigns may reuse forms; attribution stays separate from connection/form configuration. Adding a campaign must not require code changes. Add supported sources through immutable configuration/mappings; preserve the shared CRM lifecycle and outbox. Future Instant Forms enter EH directly, without routing through the legacy Yearly Sheet/Apps Script/Zapier chain.
+
+Website product direction is durable EH intake followed promptly by acquisition CAPI `Lead`, then later CRM outcomes through a separate website matching adapter. This is future scope, not deployed behavior or permission to extend the current original-Meta-lead-ID-only contract. H3 is independent of the next campaign/source and Yearly retirement. Exact source producer exclusion and any necessary intentional legacy stop/drain are H4 activation work. [ADR clarification](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md#owner-clarification-reusable-acquisition-platform-2026-10-01) and [implemented capabilities/platform gaps](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md).
+
 ## Commercial lifecycle and follow-up
 
 `NEW → CONTACTING → ENGAGED → QUALIFIED → CONVERTED`; `LOST` and `NOT_QUALIFIED` are reasoned closures. This is the commercial progression, not a requirement to manufacture every intermediate event. Commands enforce actual transitions and evidence.
