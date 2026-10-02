@@ -16,6 +16,8 @@ assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,'http://127.0.0.1:54321');
 const sql=query=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{
   input:query,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},
 }).trim();
+// H3-04 makes the verified registry badge available without opening any send gate.
+sql(readFileSync('scripts/test-crm-h3-04-manifest.sql','utf8'));
 const app='http://localhost:3101';
 const base=env.NEXT_PUBLIC_SUPABASE_URL;
 const connection=randomUUID(),mapping=randomUUID(),pendingSource=randomUUID(),reviewedContact=randomUUID();
@@ -79,7 +81,8 @@ try {
   await page.goto(app+'/crm/integrations/lifecycle');
   await expect(page.getByTestId('lifecycle-operations')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Retour de cycle Meta'})).toBeVisible();
-  await expect(page.getByText('Non vérifié',{exact:true})).toBeVisible();
+  await expect(page.getByText('Vérifié',{exact:true})).toBeVisible();
+  await expect(page.getByText('Non vérifié',{exact:true})).toHaveCount(0);
   await expect(page.getByText('Fermé',{exact:true})).toBeVisible();
   await expect(page.getByText('Activation bloquée comme prévu',{exact:true})).toBeVisible();
   await expect(page.getByRole('paragraph').filter({hasText:`batch2-browser-${suffix}`})).toBeVisible();
