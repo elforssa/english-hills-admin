@@ -18,6 +18,10 @@ For an unresolved source, record a pending stop against its durable submission U
 
 New policies published by this branch's UI are prospective advisory R4 policies. Optional proof groups must be complete and truthful; reviewed refusal/restriction mappings remain mandatory safety facts, materialized atomically during trusted source resolution, including later submissions, independently of optional evidence collection. Existing required policies retain their requirement. Diagnostics distinguish optional D2 observations from actual privacy and delivery holds. Publishing, stopping or binding never enables provider delivery; the separate provider seed, H3/H4, release and Production gates remain blocked.
 
+## Bounded reconciliation conflicts — Production verified, 2026-10-02
+
+PR #55 and migration 105 return exact `PT409`/identifier conflicts. Ownership loss ends the current discovery pass without another fetch/enqueue/finish/reclaim, retaining committed counters; shared intake continues. Disabled/inactive form conflicts retain their distinct owned five-minute finish. Unknown conflicts and storage/provider errors retain separate handling. [Production acceptance](../architecture/evidence/crm-meta-reconciliation-stale-lease-production-2026-10-02.md). No activation or source change is authorized.
+
 ## Meta lead intake
 
 A verified webhook stores a canonical event only when realtime intake is enabled. Independently enabled reconciliation leases a due mapped form and discovers recent IDs after its activation watermark. Both deduplicate into the same queue. The worker claims a job, retrieves the lead via Graph, selects its immutable mapping, normalizes answers and transactionally finalizes through the shared resolver. Missing mappings/policy or ambiguous identity remain diagnosable/retryable or in intake review; acceptance must not fabricate a match. See [Meta contract](../crm-meta-ingestion.md), [reconciliation](../crm-meta-reconciliation.md) and [ADR-002](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
