@@ -1,8 +1,12 @@
 # CRM Meta stale-lease repair implementation — 2026-10-02
 
+## Subsequent release — 2026-10-02
+
+[Production verification](crm-meta-reconciliation-stale-lease-production-2026-10-02.md) supersedes pending release state below. PR #55 exact head passed independent review, merged/deployed as `77c4446e03eda99b2a7ad989b395128576c6fa8e`, and migration 105 completed bounded acceptance. This preserves the implementation author’s dated evidence and limits.
+
 ## Scope, authority and state
 
-Tier 3: forward SQL changes an existing Production intake worker RPC error contract. The owner explicitly accepted and commissioned only [plan revision 1](../plans/crm-meta-reconciliation-stale-lease-repair.md#owner-acceptance-and-implementation-commissioning--2026-10-02), merged by [PR #54](https://github.com/elforssa/english-hills-admin/pull/54) as `1f98c4c112b17ef44ef92344167d44cb1fea4bac`. That is this implementation's fetched main/base. Branch: `codex/crm-meta-stale-lease-repair`.
+Tier 3: forward SQL changes an existing Production intake worker RPC error contract. The owner explicitly accepted and commissioned only [plan revision 1](../plans/completed/crm-meta-reconciliation-stale-lease-repair.md#owner-acceptance-and-implementation-commissioning--2026-10-02), merged by [PR #54](https://github.com/elforssa/english-hills-admin/pull/54) as `1f98c4c112b17ef44ef92344167d44cb1fea4bac`. That is this implementation's fetched main/base. Branch: `codex/crm-meta-stale-lease-repair`.
 
 Implemented on branch. Independent review, merge, deployment and Production verification remain pending. This task performs no Production operation or Meta request. Migration-first is a future release recommendation, not an approved release window. H3-03 closeout, H3-04–08/H4, credentials, seeds, configuration, destinations, lifecycle live gate and scheduler activation remain held.
 
