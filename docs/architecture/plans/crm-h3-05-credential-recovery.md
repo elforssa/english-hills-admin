@@ -1,5 +1,9 @@
 # Owner summary
 
+## Separately commissioned Option C research — 2026-10-03
+
+[PR #60 owner authorization](https://github.com/elforssa/english-hills-admin/pull/60#issuecomment-5957692568) now commissions the bounded architecture/research task only. Its [proposed H3 credential amendment revision 6](crm-h3-05-option-c-amendment.md) is **OPTION C ARCHITECTURE BLOCKED**, with fresh official/account evidence and unresolved permission, capacity, app and recovery-authority facts. This supersedes only the earlier need to commission C research, not the requirement to approve the resulting architecture before implementation. Recovery-design revision 1 and the dated Option A history below are preserved. No credential or account/Production operation is authorized.
+
 ## What will change
 
 **Tier 3: RECOVERY DESIGN BLOCKED. H3-05 OPTION A: NOT VIABLE UNDER APPROVED RECOVERY REQUIREMENT.** Recovery-design revision 1, researched 2026-10-02 (Asia/Shanghai), against main `a1eb1791e339d983d6521ed027366d7e74628f4e`, with the 2026-10-03 [Meta support clarification](../evidence/crm-h3-05-option-a-support-2026-10-03.md) recorded as Meta support AI/account-specific support evidence, not independently verified engineering documentation. Documentation only. Risk rationale: credential authority, provider invalidation and possible disruption of Production integrations make this Tier 3 despite the Markdown-only diff. H3-05 remains blocked before issuance. The managed route cannot satisfy English Hills' approved isolated-recovery requirement with the controls currently established; this does not establish that the route is inherently insecure or impossible to use.
