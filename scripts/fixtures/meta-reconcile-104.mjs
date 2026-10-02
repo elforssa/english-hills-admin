@@ -1,5 +1,6 @@
-import { graphGet } from './adapter.mjs';
-import { MetaError, providerId } from './protocol.mjs';
+// Worker from main 1f98c4c (001–104), import paths adjusted only.
+import { graphGet } from '../../src/lib/crm/meta/adapter.mjs';
+import { MetaError, providerId } from '../../src/lib/crm/meta/protocol.mjs';
 
 const FIELDS = 'id,created_time,form_id,ad_id,field_data';
 const PAGE_SIZE = 25;
@@ -52,14 +53,9 @@ export async function reconcileMetaLeads({ rpc, env, fetchImpl }) {
   } catch (error) {
     errorCode = error instanceof MetaError ? error.code : 'storage_unavailable';
   }
-  // Ownership loss ends this pass. Earlier committed batches remain counted.
-  if (errorCode === 'reconciliation_lease_lost') return { forms: 1, discovered, enqueued, failed: 1 };
   try {
     await rpc('crm_finish_meta_reconciliation', { p_connection: form.connection_id, p_form: form.form_key,
       p_lease: form.lease_token, p_error: errorCode });
-  } catch (error) {
-    errorCode = error instanceof MetaError && error.code === 'reconciliation_lease_lost'
-      ? 'reconciliation_lease_lost' : 'storage_unavailable';
-  }
+  } catch { errorCode = 'storage_unavailable'; }
   return { forms: 1, discovered, enqueued, failed: errorCode ? 1 : 0 };
 }

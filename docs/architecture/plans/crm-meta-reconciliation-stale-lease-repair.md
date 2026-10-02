@@ -1,5 +1,11 @@
 # Owner summary
 
+## Owner acceptance and implementation commissioning — 2026-10-02
+
+The owner explicitly commissioned **only the approved Tier-3 stale-lease repair**, naming this revision-1 plan merged through [PR #54](https://github.com/elforssa/english-hills-admin/pull/54) on main `1f98c4c112b17ef44ef92344167d44cb1fea4bac`. This accepts Option A's exact PT409 identifiers, distinct disabled/inactive reasons and two-value finish allowlist, and authorizes a separate implementation branch/PR with the full acceptance matrix. The commissioning message explicitly prohibits merge, Production deployment/migration, session termination, Meta calls, credentials, configuration, activation and H3-04–08/H4. Artifact-bound release ordering/approval remains pending. The proposed/pending language below preserves the architecture task's historical state at authoring; this dated acceptance supersedes it for implementation authorization only.
+
+[Implementation evidence](../evidence/crm-meta-reconciliation-stale-lease-implementation-2026-10-02.md) records branch implementation and validation; independent review, merge, deployment and Production verification are separate pending states.
+
 ## What will change
 
 **Tier 3 — proposed architecture, revision 1, 2026-10-02.** Repair the inbound Meta reconciliation error contract so permanently lost ownership returns a bounded business conflict instead of SQLSTATE `40001`. Two SQL functions and the narrow server/worker error path change in a later, separately commissioned implementation. This PR contains documentation only.

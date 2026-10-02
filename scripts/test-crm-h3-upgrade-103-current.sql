@@ -3,7 +3,7 @@ begin;
 create function pg_temp.ok(v boolean,label text) returns void language plpgsql as $$ begin if v is not true then raise exception 'FAIL: %',label;end if;end $$;
 create function pg_temp.denied(q text,code text default '42501') returns void language plpgsql as $$ begin begin execute q;exception when others then if sqlstate=code then return;end if;raise exception 'Expected %, got %: %',code,sqlstate,sqlerrm;end;raise exception 'Unexpected success: %',q;end $$;
 set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';
-select pg_temp.ok((select max(version::integer)=104 from supabase_migrations.schema_migrations),'upgraded to 104');
+select pg_temp.ok((select max(version::integer)=105 from supabase_migrations.schema_migrations),'upgraded to current 105');
 do $$declare t text;got jsonb;begin
  for t in select k from public.h3_upgrade_snapshot where k<>'acl' loop
   execute format('select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),''[]'') from public.%I t',t) into got;
