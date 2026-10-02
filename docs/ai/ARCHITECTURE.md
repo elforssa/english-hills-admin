@@ -1,5 +1,11 @@
 # Current architecture
 
+## H3-04 immutable contract seed — Production verified 2026-10-02
+
+[PR #57](https://github.com/elforssa/english-hills-admin/pull/57) merged/deployed as `e3928b369c8790151771d7251aee7030289ec84f`; forward migration 106 is verified in Production ledger 001–106. The existing append-only registry contains exactly one approved R4 provider manifest. [Release acceptance](../architecture/evidence/crm-h3-04-production-2026-10-02.md) verifies unchanged schema/functions/owners/ACL/RLS/triggers and dormant independent gates. Manifest active=true cannot initiate delivery: no destination, policy/evidence/boundary/ownership/epoch, token, live gate or active lifecycle cron exists. H3-05–08/H4 remain separately gated. Earlier branch observations below retain their historical limits.
+
+H3-05 Entitlement and dedicated secret is the next gated step; it has not been executed or authorized by this closeout. It requires its own artifact-bound operator approval and fresh preflight under revision 5.
+
 ## H3-04 immutable contract seed — branch implementation 2026-10-02
 
 Forward migration 106 inserts one owner-approved R4 contract into the existing append-only provider registry; schema, ACL/RLS, trigger/security attributes, functions and independent send gates are unchanged. [Manifest and acceptance evidence](../architecture/evidence/crm-h3-04-implementation-2026-10-02.md). No destination/source/policy/boundary/ownership/epoch or live gate is created. Branch implementation is not deployment; [current state](CURRENT_STATE.md) records inherited H3-03 verification through 105.

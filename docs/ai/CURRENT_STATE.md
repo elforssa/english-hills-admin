@@ -1,5 +1,13 @@
 # Current state
 
+## H3-04 contract seed — Production verified 2026-10-02
+
+[PR #57](https://github.com/elforssa/english-hills-admin/pull/57), independently reviewed head `142caca2c6f0158b60c6d260cc35735e3505ec68`, merged/deployed as `e3928b369c8790151771d7251aee7030289ec84f`. Production deployment `dpl_6GX4CmHd9QxuGdZgdwJoNoj49X6k` is READY at that exact source and serves `admin.english-hills.com`. Owner-approved migration 106 completed through the explicit-target numbered CLI path in Supabase `hopcezradkhrixwwswxn`; ledger is exactly 001–106 and immutable. Exactly one approved contract exists: `7cf9833e-4f77-4335-b1ec-c047d9353f54` / `eh_meta_crm_r4_v26_r1`. [Exact readback, catalogs, dormancy, health and limitations](../architecture/evidence/crm-h3-04-production-2026-10-02.md).
+
+All other lifecycle inventory remains zero; destination unconfigured/disabled, lifecycle cron inactive, server live gate and dedicated token absent. No provider event was sent. Intake/reconciliation remain healthy; permissions/schema/functions are unchanged. H3-04 is PRODUCTION VERIFIED; H3-05–08/H4 remain separately gated. Earlier branch-only/seed-unapproved statements below are historical and superseded for this seed alone.
+
+H3-05 Entitlement and dedicated secret is the next gated step; it has not been executed or authorized by this closeout. It requires its own artifact-bound operator approval and fresh preflight under revision 5.
+
 ## H3-04 seed branch and H3-03 prerequisite — 2026-10-02
 
 The separately authorized H3-04 branch adds forward migration 106 with exactly one approved immutable R4 provider contract. [Implementation evidence](../architecture/evidence/crm-h3-04-implementation-2026-10-02.md) binds the UUID, manifest, real approval/verification dates and acceptance. This is branch implementation only, not merged/deployed or Production verified. [H3-03 operator recheck](https://github.com/elforssa/english-hills-admin/pull/53#issuecomment-5950165952) establishes VERIFIED COMPLETE at source `616ee7d37945ed79dc217ac9aef4e3b51b5dea45`, ledger 001–105, dormant gates and healthy intake. Earlier H3-03 holds below are historical. This author performs no Production operation; H3-05–08/H4 and all activation remain separately gated.
