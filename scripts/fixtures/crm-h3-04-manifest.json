@@ -1,0 +1,39 @@
+{
+  "id": "7cf9833e-4f77-4335-b1ec-c047d9353f54",
+  "contract_key": "eh_meta_crm_r4_v26_r1",
+  "revision": 1,
+  "api_version": "v26.0",
+  "qualified_event_name": "Qualified",
+  "converted_event_name": "Converted",
+  "lifecycle_model": "r4_stage_entry",
+  "event_map": {
+    "intake": "Intake",
+    "not_qualified": "Not qualified",
+    "lost": "Lost",
+    "qualified": "Qualified",
+    "converted": "Converted"
+  },
+  "action_source": "system_generated",
+  "maximum_event_age_seconds": 604800,
+  "uncertainty_policy": "no_uncertain_replay",
+  "deduplication_window_seconds": null,
+  "accepted_response_field": "events_received",
+  "accepted_response_count": 1,
+  "lead_id_only": true,
+  "required_constants": {
+    "event_source": "crm",
+    "lead_event_source": "English Hills CRM"
+  },
+  "evidence_urls": [
+    "https://developers.facebook.com/documentation/ads-commerce/conversions-api/conversion-leads-integration/payload-specification",
+    "https://developers.facebook.com/documentation/ads-commerce/conversions-api/using-the-api",
+    "https://developers.facebook.com/documentation/ads-commerce/conversions-api/get-started",
+    "https://developers.facebook.com/docs/graph-api/guides/secure-requests",
+    "https://developers.facebook.com/documentation/facebook-login/guides/access-tokens",
+    "https://developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ads-pixel/events",
+    "https://github.com/facebook/facebook-nodejs-business-sdk/blob/0d245ec888c1af38d68994fd7f2e24cd38abc82f/src/objects/serverside/user-data.js"
+  ],
+  "verified_on": "2026-10-02",
+  "approved_at": "2026-10-02T10:19:01Z",
+  "active": true
+}

@@ -1,12 +1,13 @@
 -- Prove migrations 101/102 preserve migration-100 dormant two-event semantics.
 \set ON_ERROR_STOP on
+\ir test-crm-h3-04-manifest.sql
 begin;
 
 do $$
 begin
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 105
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102','103','104','105')) <> 5 then
-  raise exception 'Expected direct migration 100 through 105';
+ if (select max(version::integer) from supabase_migrations.schema_migrations) <> 106
+  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102','103','104','105','106')) <> 6 then
+  raise exception 'Expected direct migration 100 through 106';
  end if;
  if (select count(*) from public.crm_external_deliveries where provider_event_id like 'upgrade100:%') <> 2 then
   raise exception 'Migration-100 delivery identities were changed or duplicated';
@@ -26,7 +27,7 @@ begin
   or exists(select 1 from public.crm_external_deliveries where lifecycle_model='r4_stage_entry') then
   raise exception 'Upgrade automatically converted the old cohort to five-event/native ownership';
  end if;
- if exists(select 1 from public.crm_lifecycle_provider_contracts)
+ if exists(select 1 from public.crm_lifecycle_provider_contracts where id <> '7cf9833e-4f77-4335-b1ec-c047d9353f54')
   or exists(select 1 from public.crm_lifecycle_activation_epochs)
   or exists(select 1 from public.crm_lifecycle_eligibility_policies)
   or exists(select 1 from public.crm_lifecycle_eligibility_evidence)
