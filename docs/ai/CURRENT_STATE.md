@@ -1,5 +1,10 @@
 # Current state
 
+## H3-04 seed branch and H3-03 prerequisite — 2026-10-02
+
+The separately authorized H3-04 branch adds forward migration 106 with exactly one approved immutable R4 provider contract. [Implementation evidence](../architecture/evidence/crm-h3-04-implementation-2026-10-02.md) binds the UUID, manifest, real approval/verification dates and acceptance. This is branch implementation only, not merged/deployed or Production verified. [H3-03 operator recheck](https://github.com/elforssa/english-hills-admin/pull/53#issuecomment-5950165952) establishes VERIFIED COMPLETE at source `616ee7d37945ed79dc217ac9aef4e3b51b5dea45`, ledger 001–105, dormant gates and healthy intake. Earlier H3-03 holds below are historical. This author performs no Production operation; H3-05–08/H4 and all activation remain separately gated.
+
+
 ## Reconciliation stale-lease repair — Production verified, 2026-10-02
 
 [PR #55](https://github.com/elforssa/english-hills-admin/pull/55), exact reviewed head `bbeebc288e44dbe14727d2dd8391c628f49cd88d`, merged/deployed as `77c4446e03eda99b2a7ad989b395128576c6fa8e`. Production `hopcezradkhrixwwswxn` has exact immutable ledger 001–105; migration 105 and both RPC bodies/security catalogs match the approved repair. Vercel Production `dpl_65dZJzuLD3mxNb9AkQc9rRtbSZea` is READY at that source and serves `admin.english-hills.com`.

@@ -1,5 +1,6 @@
 -- CRM Batch 2 catalog/security regression. Local-only; all fixture writes roll back.
 \set ON_ERROR_STOP on
+\ir test-crm-h3-04-manifest.sql
 begin;
 
 create function pg_temp.ok(v boolean, label text) returns void language plpgsql as $$
@@ -18,8 +19,8 @@ begin
 end $$;
 
 select pg_temp.ok(
-  not exists(select 1 from public.crm_lifecycle_provider_contracts),
-  'no provider contract is guessed or seeded'
+  (select count(*)=1 from public.crm_lifecycle_provider_contracts),
+  'only the owner-approved H3-04 provider contract is seeded'
 );
 select pg_temp.ok(
   (select count(*) = 1 and bool_and(not active)

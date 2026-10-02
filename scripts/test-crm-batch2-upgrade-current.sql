@@ -1,16 +1,17 @@
 -- Verify the persistent 097 fixture after applying migrations 098 -> current.
 \set ON_ERROR_STOP on
 
+\ir test-crm-h3-04-manifest.sql
 begin;
 
 do $$
 declare delivery_count integer;
 begin
-  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 105 then
-    raise exception 'Expected migration 105 after CRM Meta funnel revision-4 upgrade';
+  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 106 then
+    raise exception 'Expected migration 106 after CRM Meta funnel revision-4 upgrade';
   end if;
-  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100','101','102','103','104','105')) <> 8 then
-    raise exception 'Migrations 098 through 105 were not all recorded';
+  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100','101','102','103','104','105','106')) <> 9 then
+    raise exception 'Migrations 098 through 106 were not all recorded';
   end if;
   if to_regclass('public.crm_lifecycle_eligibility_evidence') is null then
     raise exception 'Batch 2 lifecycle evidence table is missing';
@@ -37,7 +38,7 @@ begin
     raise exception 'Legacy delivery did not upgrade exactly once with safe defaults: %',delivery_count;
   end if;
 
-  if exists(select 1 from public.crm_lifecycle_provider_contracts) then
+  if exists(select 1 from public.crm_lifecycle_provider_contracts where id <> '7cf9833e-4f77-4335-b1ec-c047d9353f54') then
     raise exception 'Upgrade unexpectedly seeded a provider contract';
   end if;
   if exists(select 1 from public.crm_lifecycle_producer_boundaries)

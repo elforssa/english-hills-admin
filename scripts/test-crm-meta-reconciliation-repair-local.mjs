@@ -67,7 +67,7 @@ function directConflict(name, a, message) {
 }
 
 console.log('Starting fresh local 001→105 replay');
-cli(['db', 'reset', '--local', '--no-seed']);
+cli(['db', 'reset', '--local', '--version', '105', '--no-seed']);
 assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '105');
 workerSQL(`do $$begin begin perform public.crm_finish_meta_reconciliation('${connection}','95002','${stale}',null);exception when sqlstate 'PT409' then if sqlerrm='crm_reconciliation_lease_lost' then return;end if;raise;end;raise exception 'expected conflict';end$$`);
 sql(readFileSync('scripts/test-crm-meta-reconciliation.sql', 'utf8'));
@@ -75,7 +75,8 @@ console.log('PASS fresh 001→105 replay and historical reconciliation SQL on cu
 cli(['db', 'reset', '--local', '--version', '104', '--no-seed']);
 setup();
 const beforeData = inventory(), beforeCatalog = catalog(), beforeCron = sql('select jsonb_agg(to_jsonb(j) order by jobid) from cron.job j');
-cli(['migration', 'up', '--local']);
+sql(migration);
+sql("insert into supabase_migrations.schema_migrations(version,name,statements) values('105','crm_meta_reconciliation_business_conflicts',array[]::text[])");
 assert.deepEqual(inventory(), beforeData);
 assert.equal(sql('select jsonb_agg(to_jsonb(j) order by jobid) from cron.job j'), beforeCron);
 const afterCatalog = catalog();
@@ -331,4 +332,4 @@ console.log(`Versions: PostgreSQL ${sql('show server_version')}; Supabase CLI ${
 console.log(`Migration105 SHA-256 ${digest}`);
 // Clear all synthetic committed fixtures/instrumentation for subsequent required CI suites.
 cli(['db','reset','--local','--no-seed']);
-console.log('PASS repair acceptance complete; local database reset to clean 001→105');
+console.log('PASS repair acceptance complete; local database reset to current migrations');
