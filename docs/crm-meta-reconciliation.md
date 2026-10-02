@@ -21,3 +21,11 @@ Immutable Meta mapping versions may include `option_labels[question_key][raw_opt
 ## Validation
 
 Run the local-only fresh/upgrade replay with `python3 scripts/test-crm-meta-reconciliation-replay.py /private/tmp/phase12-platform-schema.sql`, the mocked Graph fixtures with `node scripts/test-crm-meta-reconciliation.mjs`, and the standard Phase 8/9, scheduler, browser, lint and build checks. These tests use synthetic data and never call the live Meta API.
+
+## Bounded conflicts — implemented on the repair branch
+
+Migration 105 replaces only enqueue/finish business conflicts. `PT409` with exact `crm_reconciliation_lease_lost` ends the current worker pass immediately, preserving confirmed counters and performing no further discovery, enqueue, finish or reclaim. Owned enqueue conflicts `crm_reconciliation_disabled` and `crm_reconciliation_form_inactive` stop discovery and finish once with their distinct coarse reasons, due again in five minutes. Provider/storage paths retain their existing separate behavior. Unknown 409s and unrelated RPC errors are not ownership loss. Shared durable intake still runs with its existing two-job discovery-tick cap.
+
+The [accepted plan](architecture/plans/crm-meta-reconciliation-stale-lease-repair.md) defines migration-first compatibility and the future operator/recovery procedure; the [implementation evidence](architecture/evidence/crm-meta-reconciliation-stale-lease-implementation-2026-10-02.md) records local acceptance only. Independent review, merge, deployment and Production verification remain pending, and this runbook authorizes no Production action.
+
+Required `test:crm-intake` now includes historical reconciliation JS plus exact-wrapper/worker repair regressions. Required local-database CI runs `npm run test:crm-reconciliation-repair-local`: fresh 001→105, stateful 104→105, original reconciliation SQL, real HTTP/Supabase conflicts, nontransactional invocation counters, ten-second backend quiescence, concurrency and JWT/ACL tests. This command resets local synthetic Supabase only and never reads `.env.local`. The historical 094 replay remains a historical contract, not 105 evidence.

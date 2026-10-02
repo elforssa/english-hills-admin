@@ -3,6 +3,19 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export class MetaError extends Error {
   constructor(code) { super(code); this.code = code; }
 }
+// Translate only the fixed RPC/SQLSTATE/message contract; discard database details.
+export function metaRpcError(name, error) {
+  if (error.code === 'PT409') {
+    if (['crm_enqueue_meta_reconciled', 'crm_finish_meta_reconciliation'].includes(name) &&
+      error.message === 'crm_reconciliation_lease_lost') return new MetaError('reconciliation_lease_lost');
+    if (name === 'crm_enqueue_meta_reconciled') {
+      if (error.message === 'crm_reconciliation_disabled') return new MetaError('reconciliation_disabled');
+      if (error.message === 'crm_reconciliation_form_inactive') return new MetaError('reconciliation_form_inactive');
+    }
+  }
+  return new MetaError(['22023', '23514', '22007', '22008', '23502'].includes(error.code)
+    ? 'invalid_provider_data' : 'storage_unavailable');
+}
 export function secretEquals(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false;
   const x = Buffer.from(a), y = Buffer.from(b);
