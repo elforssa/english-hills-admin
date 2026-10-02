@@ -34,6 +34,12 @@ Read-only research and documentation only. No runtime, migration, seed, credenti
 
 Approval selects the multipart/strict-second design and its documented equality hold and predecessor consequences, the direct-only credential route, exact proposed manifest/disabled configuration and stated governance schedule. It authorizes the bounded architecture for a **separate H3 implementation task**; this task only records approval. No code, forward migration, seed, credential, Meta setting or Production operation is performed here. Actual implementation artifacts still require exact-SHA CI and independent review; merge/release, credential/operator execution and Production changes retain their separate artifact-bound approval gates. H4 and all provider sending remain unauthorized. Existing dedicated storage, no legacy credential reuse/revocation and fail-closed recovery controls remain mandatory.
 
+## H3-02 compatibility implementation — 2026-10-02
+
+On branch `codex/crm-h3-02-compatibility`, the separately commissioned Tier-3 implementation applies [approved H3 revision 5](../plans/crm-h3-technical-readiness.md) to the live adapter and forward [migration 104](../../../supabase/migrations/104_crm_lifecycle_strict_exported_seconds.sql). Live requests use transient multipart `data` (the one-event array) and `access_token`; the frozen envelope stays token-free. Original Meta generation and activity time must export to strictly increasing integer seconds, including prepared-payload revalidation. Equal/earlier seconds remain held without a fabricated time or attempt; existing chronological predecessor, deadline, epoch and retention behavior remains. D2/privacy, matching, ownership, event scope and uncertainty policy are unchanged. [Implementation evidence](../evidence/crm-h3-02-implementation-2026-10-02.md).
+
+This is branch implementation, **not merged, deployed, Production verified or release approved**. The last recorded Production ledger is 001–103 dormant. No provider contract seed, credential, destination/source/cohort configuration, live gate, cron activation or provider event is part of H3-02. H3-03–08 and H4 remain separately gated.
+
 ## What staff/users will be able to do
 
 Nothing new in Production. A later authorized H3 operator can prepare the native sender while every sending gate stays closed. Receptionists gain no controls. The owner receives exact contract fields, outstanding decisions, external actions and ordered stop/recovery instructions.

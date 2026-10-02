@@ -107,6 +107,24 @@ try:
       from public.crm_external_deliveries d join public.crm_external_delivery_attempts a on a.delivery_id=d.id
       where d.id='{direct_intake}'""").stdout.strip()
     assert fenced == 'unknown:unknown:unknown:lease_expired_after_dispatch'
+    # H3-02: an equal-second prepared identity stays unattempted under competing workers.
+    # Synthetic privileged clock mutation models an old prepared equal-second row.
+    # Existing direct lead is already fenced unknown; use history's original source
+    # only for a not-yet-started successor to prove prepared begin revalidation.
+    successor_lease = successor_claim[0]['lease_token']
+    prepare(successor_id, successor_lease)
+    original = sql(f"select first_submission_id from public.crm_leads where id='{history_lead}'").stdout.strip()
+    original_time = sql(f"select occurred_at from public.crm_submissions where id='{original}'").stdout.strip()
+    event_time = sql(f"select event_time from public.crm_external_deliveries where id='{successor_id}'").stdout.strip()
+    sql(f"begin;set local session_replication_role=replica;update public.crm_submissions set occurred_at='{event_time}' where id='{original}';commit;")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        invalid_begins = [pool.submit(worker, f"select public.crm_begin_external_attempt('{successor_id}','{successor_lease}')", False) for _ in range(2)]
+        invalid_results = [f.result(timeout=20) for f in invalid_begins]
+    assert all(r.returncode != 0 and 'Delivery held' in r.stderr for r in invalid_results)
+    assert sql(f"select count(*) from public.crm_external_delivery_attempts where delivery_id='{successor_id}'").stdout.strip() == '0'
+    assert sql(f"select attempt_boundary_state||':'||attempt_count from public.crm_external_deliveries where id='{successor_id}'").stdout.strip() == 'not_started:0'
+    sql(f"begin;set local session_replication_role=replica;update public.crm_submissions set occurred_at='{original_time}' where id='{original}';commit;")
+    print('PASS H3-02 simultaneous begins revalidate an already-prepared equal-second payload without any attempt', flush=True)
     print('PASS R4 concurrent same-lead claims/begins serialize without deadlock; a started predecessor cannot be overtaken; stale finalize loses after fencing', flush=True)
 finally:
     if created:

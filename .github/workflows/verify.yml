@@ -80,6 +80,15 @@ jobs:
           supabase migration up --local
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-102-current.sql
           supabase db reset --local --no-seed
+      - name: Stateful 103 to H3-02 compatibility upgrade
+        env:
+          PGPASSWORD: postgres
+        run: |
+          supabase db reset --local --version 103 --no-seed
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-setup.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-current.sql
+          supabase db reset --local --no-seed
       - name: Rollback-only migration regression
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
@@ -104,6 +113,12 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-retention.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-exclusions.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-review.sql
+      - name: H3-02 strict exported-second acceptance in both D2 modes
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v d2_requirement=required -f scripts/test-crm-r4-provider-time.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v d2_requirement=advisory -f scripts/test-crm-r4-provider-time.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
           python3 scripts/test-crm-phase10-concurrency.py
