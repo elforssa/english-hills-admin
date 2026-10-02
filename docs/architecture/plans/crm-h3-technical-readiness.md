@@ -1,5 +1,9 @@
 # Owner summary
 
+## H3-05 recovery blocker — 2026-10-02
+
+**H3-05: BLOCKED BEFORE ISSUANCE.** The [owner operator authorization](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955112635) and [blocked attempt](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955549306) supersede earlier next-step status below. [Recovery-design revision 1](crm-h3-05-credential-recovery.md) records documented individual-token revocation, its unproven managed-route prerequisites and identity-level alternatives. New-token identity/create-versus-reuse and isolated recovery remain unresolved. No token was generated. Earlier “credential blocker closed” statements mean route availability was established; they do not clear this subsequent recovery blocker. Revision 5's historical approval and H3-04 acceptance remain unchanged. The proposed dedicated-identity amendment is not approved or implemented; do not resume H3-05 or proceed to H3-06–08/H4.
+
 ## H3-04 release acceptance — 2026-10-02
 
 **H3-04: PRODUCTION VERIFIED.** [PR #57 exact-head independent review](https://github.com/elforssa/english-hills-admin/pull/57#issuecomment-5951476000) and [owner release approval](https://github.com/elforssa/english-hills-admin/pull/57#issuecomment-5951495827) bound reviewed head `142caca2c6f0158b60c6d260cc35735e3505ec68`. Merge/deployed source `e3928b369c8790151771d7251aee7030289ec84f` is READY; explicit-target migration 106 completed, with exact ledger 001–106 and exactly one approved contract. [Dated release evidence](../evidence/crm-h3-04-production-2026-10-02.md) binds full manifest/catalog/dormancy/health checks and limitations. Revision 5 and its historical findings remain unchanged. H3-05–08/H4 are separately gated; this overall plan remains active and is not moved to completed.
