@@ -2,7 +2,7 @@
 
 ## Proposed Option C credential amendment — 2026-10-03
 
-Option A is concluded not viable under the approved isolated-recovery requirement. The separately authorized architecture-only [proposed revision 6](crm-h3-05-option-c-amendment.md) defines the bounded owned-app/dedicated-Employee alternative and exact revision-5 statements it would amend. **OPTION C ARCHITECTURE BLOCKED**: required provider facts remain unresolved; no final issuing-app/grant contract or implementation is approved. Revision 5 and its approval below remain historical authority, not authorization to resume issuance. H3-04 stays complete; H3-05–08/H4 remain gated.
+Option A is concluded not viable under the approved isolated-recovery requirement. The separately authorized architecture-only [proposed revision 6](crm-h3-05-option-c-amendment.md) defines the bounded owned-app/dedicated-Employee alternative and exact revision-5 statements it would amend. **OPTION C ARCHITECTURE BLOCKED**: only B1’s supported bounded grant contract and B4’s selected independent invalidation path/authority remain architecture blockers. B2/B3 are fail-closed implementation/preflight gates; B5 is an owner custody decision with later implementation binding and no provider evidence requirement. Neither B1 nor B4 is resolved; no final issuing-app/grant/recovery contract or implementation is approved. Revision 5 and its approval below remain historical authority, not authorization to resume issuance. H3-04 stays complete; H3-05–08/H4 remain gated.
 
 ## H3-05 recovery blocker — 2026-10-02
 

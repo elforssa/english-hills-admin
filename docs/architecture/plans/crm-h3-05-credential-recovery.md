@@ -2,7 +2,7 @@
 
 ## Separately commissioned Option C research — 2026-10-03
 
-[PR #60 owner authorization](https://github.com/elforssa/english-hills-admin/pull/60#issuecomment-5957692568) now commissions the bounded architecture/research task only. Its [proposed H3 credential amendment revision 6](crm-h3-05-option-c-amendment.md) is **OPTION C ARCHITECTURE BLOCKED**, with fresh official/account evidence and unresolved permission, capacity, app and recovery-authority facts. This supersedes only the earlier need to commission C research, not the requirement to approve the resulting architecture before implementation. Recovery-design revision 1 and the dated Option A history below are preserved. No credential or account/Production operation is authorized.
+[PR #60 owner authorization](https://github.com/elforssa/english-hills-admin/pull/60#issuecomment-5957692568) now commissions the bounded architecture/research task only. Its [proposed H3 credential amendment revision 6](crm-h3-05-option-c-amendment.md) is **OPTION C ARCHITECTURE BLOCKED**, with the original dated official/account evidence and review-corrected classification: only B1’s supported bounded grant contract and B4’s selected independent invalidation authority/boundary block architecture. B2 capacity/B3 app setup are implementation/preflight gates; B5 is an owner custody decision, with no provider evidence required and exact tool/ACL binding later. This supersedes only the earlier need to commission C research, not the requirement to approve the resulting architecture before implementation. Recovery-design revision 1 and the dated Option A history below are preserved. No credential or account/Production operation is authorized.
 
 ## What will change
 
