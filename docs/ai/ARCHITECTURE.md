@@ -1,5 +1,9 @@
 # Current architecture
 
+## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
+
+On the implementation branch, [Verify](../../.github/workflows/verify.yml) uses the dependency-free [CI verifier](../../scripts/ci/verify.py) to select only safe docs-only versus full CI. Uncertainty selects full CI. Existing app/database job steps are unchanged; `required` aggregates explicit job results and fails unless the selected path succeeds. No runtime/database architecture or GitHub branch-protection configuration changes; merge/adoption remain pending. See [policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff).
+
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
 Revision 7 at PR #64 is owner-approved as recorded in the [Step 2 approval and preparation contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary). Earlier proposal status below is historical. C2/B1/B4/B5 design is unchanged; no runtime, SQL or deployed architecture changed. External custody selection and a reviewed secret-safe inspector remain execution prerequisites; architecture approval grants no operation authority.
