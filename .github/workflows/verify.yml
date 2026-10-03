@@ -29,7 +29,9 @@ jobs:
       - run: npm run test:middleware
       - run: npm run lint
       - run: npm run build
-      - run: npm audit --audit-level=moderate
+      - run: npm run test:audit-policy
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: npm run audit:policy
   local-database:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
