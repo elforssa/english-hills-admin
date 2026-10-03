@@ -1,5 +1,9 @@
 # Operational workflows
 
+## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
+
+On the implementation branch, authors finish implementation, local checks and one self-check, commit/push, open the PR and confirm remote CI scheduling, then stop polling. Pending CI is handed off with AUTHOR WORK COMPLETE — REMOTE CI PENDING, exact head SHA and CI run reference/status. The coordinator verifies terminal exact-SHA CI later; independent-review readiness still requires successful required CI. [Selection and handoff details](../../AGENTS.md#ci-selection-and-remote-ci-handoff). Branch-protection adoption and merge/release remain separate owner actions; this policy is not merged/adopted yet.
+
 ## H3 Revision 7 Step 4 staged preparation — 2026-10-03
 
 [S4-P1](../architecture/plans/crm-h3-05-revision-7-step-4-created-object-preparation.md) prepares two future commissions with three checkpoints: 4A create/read one permanent C2 then STOP; after actual control evidence is separately reviewed and bound, 4B associate only C2 to Employee `61594989243533`, read back, then 4C grant only endpoint `1152399921284927` under its exact approved task and complete all readbacks. If task evidence needs 4B first, stop after 4B for another authorization. One-submit C2 creation requires a distinct write-ahead ledger; never replay consumed OP-1 or create/replace the Employee. Dataset task REQUIRES POST-C2 NONSECRET READBACK. Proposed factual checkpoint CREATED-OBJECT PREFLIGHT COMPLETE requires separate review/owner adoption; PREFLIGHT VERIFIED remains NO. Preparation authorizes no Meta access/execution or credential A. B5 OWNER DECISION REQUIRED, inspector BLOCKED, and merge/release/credential/Production/H3-06–08/H4 holds remain.

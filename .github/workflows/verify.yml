@@ -4,7 +4,40 @@ on:
   push:
     branches: [main]
 jobs:
+  classify:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify CI routing and documentation checker regressions
+        run: python3 scripts/ci/test_verify.py
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/verify.py classify --base "$BASE" --head "$HEAD"
+  docs:
+    needs: classify
+    if: needs.classify.result == 'success' && needs.classify.outputs.mode == 'docs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify changed Markdown links, anchors, added secrets/PII and whitespace
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/verify.py docs --base "$BASE" --head "$HEAD"
   app:
+    needs: classify
+    if: always() && (needs.classify.result != 'success' || needs.classify.outputs.mode != 'docs')
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
@@ -33,7 +66,8 @@ jobs:
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run audit:policy
   local-database:
-    if: github.event_name == 'pull_request'
+    needs: classify
+    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || needs.classify.outputs.mode != 'docs')
     runs-on: ubuntu-latest
     env:
       DISABLE_EXTERNAL_EMAIL: 'true'
@@ -149,3 +183,18 @@ jobs:
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
       - name: Advisory R4 forced sharing-stop race matrix
         run: python3 scripts/test-crm-r4-advisory-concurrency.py
+  required:
+    if: always()
+    needs: [classify, docs, app, local-database]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require the selected verification path
+        env:
+          EVENT: ${{ github.event_name }}
+          MODE: ${{ needs.classify.outputs.mode }}
+          CLASSIFIER: ${{ needs.classify.result }}
+          DOCS: ${{ needs.docs.result }}
+          APP: ${{ needs.app.result }}
+          DATABASE: ${{ needs.local-database.result }}
+        run: python3 scripts/ci/verify.py gate

@@ -1,5 +1,9 @@
 # Current state
 
+## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
+
+CI + Codex Workflow Efficiency v1 is implemented on this feature branch: [Verify](../../.github/workflows/verify.yml) selects safe `docs/**/*.md`-only PRs for lightweight documentation checks and everything else for existing full CI, with an always-running `required` aggregate. [Author handoff policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff) stops CI polling after confirmed scheduling; the coordinator verifies terminal exact-SHA CI before independent-review readiness. This is branch implementation, not merged/deployed evidence; GitHub branch-protection settings are unchanged. Risk tiers, independent review and release approval gates remain separate from test selection.
+
 ## H3 Revision 7 Step 4 created-object preparation — 2026-10-03
 
 From merged PR #69 / main `408bbe033c1def7bde312728a58d77733ace85fd`, [S4-P1 preparation](../architecture/plans/crm-h3-05-revision-7-step-4-created-object-preparation.md) is documentation branch work only. It recommends 4A C2 creation/readback then STOP, followed by separately reviewed exact-target 4B association / 4C dataset grant with intermediate readback. Permanent Employee remains `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE`; B2 PASS and its consumed allowance are unchanged. Dataset task: **REQUIRES POST-C2 NONSECRET READBACK**. Persistent C2 creation requires a distinct durable write-ahead attempt ledger and one submit/no blind retry; no operational ledger/reservation is established here.
