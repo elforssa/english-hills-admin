@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Historical revision 6 — later proposal:** [Revision 7](crm-h3-05-revision-7-validation.md) now defines the owner-requested support-independent acceptance architecture. It selects C2 in the proposal and exclusive identity-wide recovery with a mandatory rehearsal, and reclassifies B1/B4 as defined architecture contracts with later credential gates. Revision 7 is not owner-approved or executed. The revision-6 blocker language, provider-question dependency and individual-revocation preference below retain their historical context; they are not required next steps for Revision 7. PR #63's research findings remain valid.
+
 ## What will change
 
 **Tier 3: OPTION C ARCHITECTURE BLOCKED.** Proposed **H3 credential amendment revision 6**, draft 2 (review correction), 2026-10-03 (Asia/Shanghai), against main `9d30bc238918e30f11a8fbd0f97dd275c4b61745`. This is a bounded proposed amendment to [approved revision 5](crm-h3-technical-readiness.md), not a replacement of its historical approval and not an approved revision 6. Risk: credential authority, revocation and Meta Production integration, despite documentation-only scope.

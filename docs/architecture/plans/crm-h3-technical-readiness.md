@@ -1,5 +1,9 @@
 # Owner summary
 
+## Proposed Revision 7 validation architecture — 2026-10-03
+
+[Revision 7](crm-h3-05-revision-7-validation.md) is the current proposed credential amendment after merged PR #63; it is not approved or implemented. It selects C2 and exclusive identity-wide invalidation with downtime in the proposal. B1/B4 architecture contracts are defined for owner approval; actual effective authority and recovery remain mandatory later credential-acceptance gates. Meta support/engineering is optional supplemental evidence, never a prerequisite. Synthetic Test Events are rejected as unisolated; credential/dormant acceptance would explicitly leave delivery success unverified until separately authorized H4 use, subject to owner acceptance of that limit. Earlier revision-6 blocker and revision-5 route/rotation language below retain historical context. No H3-05 resumption, H3-06–08, H4, merge/release or operator action is authorized.
+
 ## Proposed Option C credential amendment — 2026-10-03
 
 Option A is concluded not viable under the approved isolated-recovery requirement. The separately authorized architecture-only [proposed revision 6](crm-h3-05-option-c-amendment.md) defines the bounded owned-app/dedicated-Employee alternative and exact revision-5 statements it would amend. **OPTION C ARCHITECTURE BLOCKED**: only B1’s supported bounded grant contract and B4’s selected independent invalidation path/authority remain architecture blockers. B2/B3 are fail-closed implementation/preflight gates; B5 is an owner custody decision with later implementation binding and no provider evidence requirement. Neither B1 nor B4 is resolved; no final issuing-app/grant/recovery contract or implementation is approved. Revision 5 and its approval below remain historical authority, not authorization to resume issuance. H3-04 stays complete; H3-05–08/H4 remain gated.
