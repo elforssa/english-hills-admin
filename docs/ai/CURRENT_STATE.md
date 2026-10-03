@@ -1,5 +1,11 @@
 # Current state
 
+## H3 Revision 7 B2-only architecture proposal — 2026-10-03
+
+From merged Step 3 main `78153eb2504f4eb33b3d2d35a1b8efa209940930`, the owner commissions documentation only. [Proposed B2-1](../architecture/plans/crm-h3-05-revision-7-b2-amendment.md) permits, only after separate review/owner adoption and exact-action operator authorization, one creation submission for the actual permanent EH Lifecycle R4 Employee. Verified creation would resolve B2 PASS; explicit capacity/eligibility denial fails B2 or the exact affected gate; ambiguous submit remains INCONCLUSIVE — POSSIBLE CREATED OBJECT, with separately authorized read-only reconciliation and no retry. C2-independent completion is not established; a discovered app prerequisite stops for a separate sequence decision.
+
+B2 remains INCONCLUSIVE and the historical Step 3 account result remains BLOCKED. Currently knowable B3/human access PASS, B5 OWNER DECISION REQUIRED and inspection BLOCKED are inherited, not newly inspected. No Meta research/mutation, credential, support contact, event or Production operation occurred. This is proposed branch architecture, not adoption/deployment; merge/release, Step 4, credential and H3-06–08/H4 holds remain.
+
 ## H3 Revision 7 Step 3 read-only precreation preflight — 2026-10-03
 
 Against merged Step 2 main `e0f74766f36b5881a11defd38ad2960170cb0458` / PR #65, the owner separately authorized one bounded read-only Meta session. [Dated evidence](../architecture/evidence/crm-h3-r7-step3-preflight-2026-10-03.md) records **READ-ONLY PRECREATION PREFLIGHT BLOCKED**: B2 capacity INCONCLUSIVE (one existing Employee, existing custom app Limited access, no proven remaining quota/managed-user exemption). Currently knowable B3 and current human management access PASS; B5 OWNER DECISION REQUIRED and inspection BLOCKED remain credential prerequisites, not causes of the limited account blocker. Future C2/Employee/grant/token/recovery facts are DEFERRED — POST-CREATION OUTPUT. No full PREFLIGHT VERIFIED or credential acceptance is claimed.

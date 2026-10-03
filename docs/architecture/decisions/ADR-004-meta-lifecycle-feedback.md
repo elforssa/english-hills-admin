@@ -1,5 +1,9 @@
 # ADR-004: Meta lifecycle feedback consumes CRM facts
 
+## Proposed Revision 7 B2 evidence exception — 2026-10-03
+
+[B2-1](../plans/crm-h3-05-revision-7-b2-amendment.md) is a narrow proposed exception after exhausted read-only capacity evidence: one separately authorized creation of the actual permanent EH Lifecycle R4 Employee, with complete before/after inventory and no retries or disposable identity. Verified creation resolves B2 only; denial fails the applicable gate; ambiguity requires separate read-only reconciliation while preserving possible objects. C2-independent completion is unproved and any prerequisite stops for a separate sequence decision. This proposal is not owner-approved or executed, does not authorize mutation, and changes no deployed behavior or other Revision 7 contract. Historical Step 3 B2 INCONCLUSIVE, B5/inspection credential gates and all release/activation holds remain.
+
 ## Revision 7 owner approval recorded — 2026-10-03
 
 The owner explicitly approved Revision 7 at merged PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857`, including C2, B1, exclusive B4 recovery/downtime, B5 and non-event acceptance with delivery unverified until H4. [Approval scope and Step 2 preparation](../plans/crm-h3-05-revision-7-step-2-preparation.md) are the dated source. This supersedes proposal/unapproved status below, not historical findings. No new runtime/deployed behavior or operator authority follows; protected custody selection and safe inspection remain prerequisites.
