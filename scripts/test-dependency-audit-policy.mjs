@@ -80,4 +80,27 @@ reject('unassessed major fix metadata', ({ report: r }) => { r.vulnerabilities.b
 
 reject('additional nested braces installation', ({ lock: l }) => { l.packages[node('other/node_modules/braces')] = { version: '3.0.3', dev: true }; });
 
+const versionCases = [
+  ['3.0.3', 'accepted'],
+  ['3.0.3+build.1', 'accepted'],
+  ['3.0.4', 'blocked'],
+  ['3.0.4+build.1', 'blocked'],
+  ['3.1.0', 'blocked'],
+  ['4.0.0', 'blocked'],
+  ['3.0.4-rc.1', 'accepted'],
+  ['4.0.0-beta.1', 'accepted'],
+  ['not-a-version', 'invalid'],
+];
+for (const [version, expected] of versionCases) {
+  const registryVersions = [...versions, version];
+  if (expected === 'accepted') {
+    assert.equal(check(report, lock, manifest, registryVersions).permitted, 7, version);
+  } else {
+    assert.throws(() => check(report, lock, manifest, registryVersions),
+      expected === 'invalid' ? /Invalid registry SemVer entry/ : /New stable braces release available/, version);
+  }
+  console.log(`PASS registry version ${version}: ${expected}`);
+}
+// Validate the entire list even when an earlier entry would already retire the exception.
+assert.throws(() => check(report, lock, manifest, [...versions, '3.0.4', 'not-a-version']), /Invalid registry SemVer entry/);
 console.log('Audit policy: exact advisory accepted; new advisories, path/classification drift, compatible fixes, release drift and invalid metadata rejected.');

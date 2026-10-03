@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import semver from 'semver';
 import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, posix, resolve } from 'node:path';
@@ -84,13 +85,17 @@ export function validateToolingPaths(lock, manifest) {
 export function validateAudit(report, lock, manifest, publishedBracesVersions) {
   validateToolingPaths(lock, manifest);
   assert.ok(Array.isArray(publishedBracesVersions) && publishedBracesVersions.includes('3.0.3'), 'Invalid registry version metadata');
-  assert.ok(publishedBracesVersions.every((version) => typeof version === 'string'), 'Invalid registry version entry');
-  // Conservative retirement trigger: a new stable upstream release requires assessment,
-  // even if the advisory database has not yet updated its affected range/fix metadata.
-  assert.ok(!publishedBracesVersions.some((version) => {
-    const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-    return match && (Number(match[1]) > 3 || (Number(match[1]) === 3 && (Number(match[2]) > 0 || Number(match[3]) > 3)));
-  }), 'New stable braces release available; reassess and retire the exception');
+  const parsedVersions = publishedBracesVersions.map((version) => {
+    assert.equal(typeof version, 'string', 'Invalid registry version entry');
+    const parsed = semver.parse(version);
+    assert.ok(parsed, 'Invalid registry SemVer entry');
+    return parsed;
+  });
+  // Validate every entry before comparison. Prereleases are not stable fixes;
+  // build metadata follows SemVer precedence and does not mark a prerelease.
+  // A new stable release requires assessment even before advisory metadata updates.
+  assert.ok(!parsedVersions.some((version) => version.prerelease.length === 0 && semver.gt(version, '3.0.3')),
+    'New stable braces release available; reassess and retire the exception');
   assert.equal(report.auditReportVersion, 2, 'Unsupported audit report format');
   assert.ok(!report.error && object(report.vulnerabilities) && object(report.metadata?.vulnerabilities), 'Incomplete audit report');
   const vulnerabilities = report.vulnerabilities;
