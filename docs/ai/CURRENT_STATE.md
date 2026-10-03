@@ -1,5 +1,9 @@
 # Current state
 
+## H3 Revision 7 B2-1 adopted; operator packet prepared — 2026-10-03
+
+The owner's direct preparation commission records [B2-1](../architecture/plans/crm-h3-05-revision-7-b2-amendment.md) OWNER APPROVED and merged at PR #67 / `76c89b7462e48a6dc3cbb936f2b7edd6f07b7059` (source head `c34eb1ef6c8adb6d20571d56a9fd8918692814da`). Earlier proposed/unapproved entries are historical. [OP-1](../architecture/plans/crm-h3-05-revision-7-b2-operator-packet.md) is documentation branch preparation only: one future permanent Employee submission, proposed maximum 30-minute window, durable consumed-attempt ledger, complete inventories, explicit success/denial/ambiguity and separately authorized read-only reconciliation. Human operator, actual window and exact-action approval are not yet supplied. B2 remains INCONCLUSIVE; no Create authority, Meta access/mutation, credential, support, event or Production operation occurred. No deployment/provider success is claimed. This PR's merge/release, future execution, Step 4, credentials and H3-06–08/H4 remain held.
+
 ## H3 Revision 7 B2-only architecture proposal — 2026-10-03
 
 From merged Step 3 main `78153eb2504f4eb33b3d2d35a1b8efa209940930`, the owner commissions documentation only. [Proposed B2-1](../architecture/plans/crm-h3-05-revision-7-b2-amendment.md) permits, only after separate review/owner adoption and exact-action operator authorization, one creation submission for the actual permanent EH Lifecycle R4 Employee. Verified creation would resolve B2 PASS; explicit capacity/eligibility denial fails B2 or the exact affected gate; ambiguous submit remains INCONCLUSIVE — POSSIBLE CREATED OBJECT, with separately authorized read-only reconciliation and no retry. C2-independent completion is not established; a discovered app prerequisite stops for a separate sequence decision.

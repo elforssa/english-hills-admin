@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Owner adoption recorded — 2026-10-03:** the owner's direct follow-on operator-preparation commission states B2-1 is OWNER APPROVED and merged through [PR #67](https://github.com/elforssa/english-hills-admin/pull/67), main `76c89b7462e48a6dc3cbb936f2b7edd6f07b7059`, source head `c34eb1ef6c8adb6d20571d56a9fd8918692814da`. This supersedes the original proposed/unapproved status below; historical findings and scope are preserved. Architecture adoption is not Create authorization. [OP-1 one-action packet](crm-h3-05-revision-7-b2-operator-packet.md) prepares the separate future authorization only. B2 remains INCONCLUSIVE; no Meta mutation is authorized or performed by preparation. Step 4, credential, H3-06–08/H4 and Production holds remain.
+
 Revision: B2-1, 2026-10-03. **PROPOSED — architecture only; not approved or executed.** Tier 3 because this changes a provider mutation gate and permanent identity governance. Base main: `78153eb2504f4eb33b3d2d35a1b8efa209940930`, merged [Step 3 PR #66](https://github.com/elforssa/english-hills-admin/pull/66). The owner's direct commission authorizes drafting, checks and a PR only. Architecture approval record: none for B2-1. Mutation approval record: none.
 
 ## What will change
