@@ -57,7 +57,7 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 1. Obtain architecture approval when required, then implement.
 2. Run focused local checks and any explicitly required local validation as described below.
 3. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
-4. Commit/push and open the PR, wait for required CI for the current revision, then report **READY FOR INDEPENDENT REVIEW** when the handoff conditions are met.
+4. Commit/push and open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below. **READY FOR INDEPENDENT REVIEW** requires terminal successful required CI for the current revision.
 5. Stop the authoring task and hand off to a separate independent reviewer task/session; this is mandatory for Tier 2. Tell the owner the exact PR head SHA to review rather than reviewing it yourself.
 
 ### High-risk changes (Tier 3)
@@ -66,10 +66,10 @@ For Tier 3, use separate architecture, implementation, fresh independent review 
 2. Implement the approved scope.
 3. Run focused local checks and any explicitly required local validation.
 4. Perform one focused author self-check and inspect the final diff. Do not spawn an internal reviewer or re-review subagent.
-5. Commit/push, open the PR and wait for required CI for the current revision.
+5. Commit/push, open the PR, confirm remote CI was successfully scheduled, then stop polling and hand off under the remote-CI policy below.
 6. Report **READY FOR INDEPENDENT REVIEW** only when the exact-SHA handoff conditions below are met.
 7. Stop the authoring task and tell the owner to launch a separate independent reviewer task/session for the exact PR SHA; the author task must not perform or orchestrate that formal review itself.
-8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, waits for required CI, and requests fresh independent review of the new SHA.
+8. If findings require fixes, the implementation agent fixes them, verifies affected behavior and safeguards with focused local validation, commits/pushes, confirms CI scheduling and hands off without polling. The coordinator verifies terminal required CI before requesting fresh independent review of the new SHA.
 9. After review, follow the existing human approval, separate release/operator and Production verification flow.
 
 ## Author self-check before handoff
@@ -78,7 +78,7 @@ Architecture and implementation authors run relevant checks, inspect their own f
 
 The author task must **not spawn an internal reviewer, independent-review, or re-review subagent**. Do not run a second review pass merely to imitate the formal reviewer. If broader review is warranted, finish the author handoff and ask the owner to launch the separate independent reviewer task/session required by the risk tier.
 
-The self-check never approves the PR, counts as independent review, authorizes merge or replaces a required reviewer. Do not describe it as “approved,” and do not issue **READY FOR FINAL REVIEW** / **CHANGES REQUIRED** from an author task. After push and required CI, stop and report the exact PR/head SHA for the owner's reviewer handoff.
+The self-check never approves the PR, counts as independent review, authorizes merge or replaces a required reviewer. Do not describe it as “approved,” and do not issue **READY FOR FINAL REVIEW** / **CHANGES REQUIRED** from an author task. After push, PR creation and confirmed CI scheduling, stop and report the exact PR/head SHA and CI run reference for the coordinator's handoff.
 
 Avoid duplicating release/operator checks during authoring unless needed to prove correctness; hand off existing evidence and leave deployment-state checks to the separate release task.
 
@@ -97,19 +97,26 @@ Do not require another author self-check or independent review cycle merely beca
 
 - During development, run focused tests relevant to changed areas.
 - The independent reviewer should inspect and reuse sufficient test/CI evidence tied to the exact head SHA rather than rerun a complete suite by default. Run additional checks when coverage is missing, doubtful or affected by the findings; evidence reuse never waives required checks.
-- The implementer owns focused local checks and completion of all required validation. Commit/push and open/update the PR before waiting for remote CI. Passing required CI for the current revision satisfies overlapping suite checks; do not also run the whole suite locally by default. Run additional local/full validation when explicitly required by the approved contract or needed for missing coverage, environment-specific behavior or doubtful evidence. Markdown-only changes use the documentation checks above; existing required CI still applies.
-- After reviewer findings are fixed, run focused local regressions and a targeted internal re-check, commit/push, wait for required CI for the new revision, then request fresh independent re-review. Do not duplicate passing CI locally without a coverage/environment reason.
+- The implementer owns focused local checks and completion of all required validation. Commit/push and open/update the PR, confirm remote CI scheduling, then stop polling. Passing required CI for the current revision satisfies overlapping suite checks; do not also run the whole suite locally by default. Run additional local/full validation when explicitly required by the approved contract or needed for missing coverage, environment-specific behavior or doubtful evidence. Markdown-only changes use the documentation checks above; existing required CI still applies.
+- After reviewer findings are fixed, run focused local regressions and a targeted internal re-check, commit/push, confirm remote CI scheduling for the new revision, then hand off without polling; the coordinator verifies terminal CI and requests fresh independent re-review. Do not duplicate passing CI locally without a coverage/environment reason.
 - Record PR head SHA, base SHA and the tested merge SHA when CI runs a synthetic merge, plus run links/results and any local tested SHA/tree. Verify evidence corresponds to the current head/base; a changed head or base requires refreshed applicable checks or an explicit assessment of evidence validity, never assumed reuse.
 - For Tier 2 and Tier 3, the fresh reviewer must inspect the new SHA, prior findings and affected regressions; approval of an earlier SHA is stale. Reuse unaffected evidence where sufficient, but do not bypass required checks or exact-SHA review.
 
 Avoid repeated expensive full reviews or suite runs without new findings or risk. Failures, later changes or insufficient evidence still require appropriate validation; evidence reuse does not permit handing off failed, incomplete or stale checks.
 
-Path-filtered or reduced docs-only CI is proposed future work, not current policy or an implemented optimization. Any such change needs its own scoped assessment and approval; current required CI remains unchanged.
+### CI selection and remote-CI handoff
+
+CI + Codex Workflow Efficiency v1 selects only two paths in [Verify](.github/workflows/verify.yml): every changed path must be a regular Markdown file under `docs/` (`docs/**/*.md`) for safe docs-only CI. Renames include both old/new paths. `AGENTS.md`, `.github/**`, scripts, configuration, package/runtime files and SQL are excluded. Mixed/unknown paths, classification errors, empty/unresolvable diffs and uncertainty select full CI. Safe docs-only PRs run relative link/anchor, added-content secret/PII pattern and whitespace checks; all other changes retain the existing app/database verification. The always-running `required` aggregate fails unless the classifier and selected path succeed; skipped full jobs are accepted only for safe docs-only PRs. Main pushes retain full app CI. Branch-protection adoption of `required` is a separate owner configuration action; this source change does not change required checks in GitHub settings.
+
+Risk tier and test selection are separate. A Tier-3 Meta/security document can use docs-only CI and still require independent review and existing approval gates. Code, database or security behavior changes still receive appropriate full tests. v1 introduces no UI/API/database routing matrix. Pattern checks are heuristic safeguards, not proof that content contains no sensitive data; author/reviewer secret and PII inspection remains required.
+
+Once implementation, focused/local checks, one author self-check, commit/push and PR creation are complete and remote CI is successfully scheduled, the author must **stop polling**. If CI is still running, return **AUTHOR WORK COMPLETE — REMOTE CI PENDING** with exact head/base SHA and CI run reference/status. Do not repeatedly query GitHub or narrate unchanged CI status. The coordinator verifies the terminal exact-SHA result later, including the base/tested merge SHA where applicable. **READY FOR INDEPENDENT REVIEW** still requires terminal successful required CI; pending handoff is not review readiness or approval. If scheduling is missing/failed, report that blocker without a polling loop. Apply this behavior after fixes too.
 
 ## Implementation handoff
 
-Return branch, exact head SHA, PR number/link, risk tier/rationale, tests/checks completed with results and evidence tied to that SHA, author self-check completed, documentation changes and remaining blockers. Include the approved plan revision and migration filenames when applicable, and identify any unresolved owner decision. Use exactly one implementation status appropriate to the tier:
+Return branch, exact head SHA, PR number/link, risk tier/rationale, tests/checks completed with results and evidence tied to that SHA, author self-check completed, documentation changes and remaining blockers. Include the approved plan revision and migration filenames when applicable, and identify any unresolved owner decision. Use exactly one implementation status appropriate to the tier (or the scheduled-CI pending status below):
 
+- **AUTHOR WORK COMPLETE — REMOTE CI PENDING** — author work and confirmed remote CI scheduling are complete, but terminal successful required CI is pending; include exact head SHA and run reference. The coordinator verifies completion later.
 - **Tier 1: IMPLEMENTATION INCOMPLETE** — approved scope, relevant checks/required CI, author self-check or the open PR is incomplete, or implementation handoff blockers remain.
 - **Tier 1: IMPLEMENTATION COMPLETE** — approved scope, relevant checks/required CI and author self-check are complete for the exact current head SHA, the PR is open and no implementation handoff blockers remain. Independent review is optional unless scope grows or the owner requests it.
 - **Tier 2/3: NOT READY FOR INDEPENDENT REVIEW** — implementation, required checks, author self-check or the open PR is incomplete, evidence is failed/missing/stale, or handoff blockers remain.

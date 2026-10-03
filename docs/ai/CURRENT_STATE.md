@@ -6,6 +6,9 @@ The owner's direct commission records **S4-P1 OWNER APPROVED**, merged [PR #70](
 
 This packet is documentation branch preparation only, not merged/adopted or operator authority. **4A/4B/4C NOT AUTHORIZED**; C2 canonical ID UNKNOWN — NOT YET CREATED in inherited evidence. Permanent Employee `61594989243533` / B2 PASS and frozen B2 history are unchanged. B5 OWNER DECISION REQUIRED; inspector BLOCKED; B1 actual acceptance PENDING; PREFLIGHT VERIFIED NO. No Meta access/mutation, credentials, events or Production operations occurred; no fresh account/deployment verification. Neither CREATED-OBJECT PREFLIGHT COMPLETE nor PREFLIGHT VERIFIED YES may result from 4A. Separate review, adoption and complete exact-action authorization precede execution; merge/release, credentials, Production/H3-06–08/H4/sending holds remain. Earlier S4-P1 unapproved/unmerged notices below are historical.
 
+## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
+
+CI + Codex Workflow Efficiency v1 is implemented on this feature branch: [Verify](../../.github/workflows/verify.yml) selects safe `docs/**/*.md`-only PRs for lightweight documentation checks and everything else for existing full CI, with an always-running `required` aggregate. [Author handoff policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff) stops CI polling after confirmed scheduling; the coordinator verifies terminal exact-SHA CI before independent-review readiness. This is branch implementation, not merged/deployed evidence; GitHub branch-protection settings are unchanged. Risk tiers, independent review and release approval gates remain separate from test selection.
 
 ## H3 Revision 7 Step 4 created-object preparation — 2026-10-03
 
