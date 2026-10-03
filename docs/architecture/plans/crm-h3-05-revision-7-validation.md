@@ -1,5 +1,7 @@
 # Owner summary
 
+> **2026-10-03 Step 3 read-only commission:** following merged Step 2 / PR #65 at `e0f74766f36b5881a11defd38ad2960170cb0458`, the owner authorized only bounded account inspection and documentation. [Step 3 dated precreation evidence](../evidence/crm-h3-r7-step3-preflight-2026-10-03.md) records account BLOCKED on materially inconclusive B2 capacity, with currently knowable B3/human access PASS. Nonexistent-object facts are deferred; unresolved B5/inspector readiness blocks credentials rather than this limited result. No Step 4, credential, event or Production action is authorized. Historical proposal/commission-draft statements below and in Step 2 remain dated evidence.
+
 > **2026-10-03 owner approval / Step 2:** the owner explicitly approved this Revision 7 as merged in PR #64 (`bf295c304e3a4f4361b25b2a852c66ae7091a857`) and commissioned Step 2 preparation only. [Approval scope and protected preparation contract](crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary) supersede the proposal/unapproved status statements below; original design reasoning remains historical. No Meta/operator/Production or merge/release authorization follows.
 
 ## What will change
