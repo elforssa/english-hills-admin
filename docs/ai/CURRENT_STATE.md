@@ -1,5 +1,12 @@
 # Current state
 
+## H3 Revision 7 4A operator packet preparation — 2026-10-03
+
+The owner's direct commission records **S4-P1 OWNER APPROVED**, merged [PR #70](https://github.com/elforssa/english-hills-admin/pull/70) at `478d898ecf1f31d052e48f65e37a9f7caa58809c`. [4A-OP1](../architecture/plans/crm-h3-05-revision-7-4a-operator-packet.md) prepares exactly one future isolated Glory Lot-owned **EH Lifecycle R4 C2** creation/noncredential readback, then STOP. It binds the future write-ahead single-use action `EH-H3-R7-C2-CREATE-001`, durable/exclusive ledger acceptance, complete reconciled inventories, success/failure/ambiguity, bounded read-only reconciliation, owner approval template, checklist and execution output schema. Exact creation flow/use case/settings/submit remain **REQUIRES PRE-SUBMIT NONSECRET BINDING**; actual ledger mechanism, sole human and maximum 60-minute UTC window are unbound. No operational reservation is created.
+
+This packet is documentation branch preparation only, not merged/adopted or operator authority. **4A/4B/4C NOT AUTHORIZED**; C2 canonical ID UNKNOWN — NOT YET CREATED in inherited evidence. Permanent Employee `61594989243533` / B2 PASS and frozen B2 history are unchanged. B5 OWNER DECISION REQUIRED; inspector BLOCKED; B1 actual acceptance PENDING; PREFLIGHT VERIFIED NO. No Meta access/mutation, credentials, events or Production operations occurred; no fresh account/deployment verification. Neither CREATED-OBJECT PREFLIGHT COMPLETE nor PREFLIGHT VERIFIED YES may result from 4A. Separate review, adoption and complete exact-action authorization precede execution; merge/release, credentials, Production/H3-06–08/H4/sending holds remain. Earlier S4-P1 unapproved/unmerged notices below are historical.
+
+
 ## H3 Revision 7 Step 4 created-object preparation — 2026-10-03
 
 From merged PR #69 / main `408bbe033c1def7bde312728a58d77733ace85fd`, [S4-P1 preparation](../architecture/plans/crm-h3-05-revision-7-step-4-created-object-preparation.md) is documentation branch work only. It recommends 4A C2 creation/readback then STOP, followed by separately reviewed exact-target 4B association / 4C dataset grant with intermediate readback. Permanent Employee remains `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE`; B2 PASS and its consumed allowance are unchanged. Dataset task: **REQUIRES POST-C2 NONSECRET READBACK**. Persistent C2 creation requires a distinct durable write-ahead attempt ledger and one submit/no blind retry; no operational ledger/reservation is established here.

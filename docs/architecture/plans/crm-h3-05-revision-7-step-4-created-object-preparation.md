@@ -1,5 +1,8 @@
 # H3 Revision 7 Step 4 — created-object preparation
 
+> **Owner approval / 4A preparation notice — 2026-10-03:** the owner's direct follow-on commission records **S4-P1 OWNER APPROVED and merged** at [PR #70](https://github.com/elforssa/english-hills-admin/pull/70), `478d898ecf1f31d052e48f65e37a9f7caa58809c`, source `ea6c97a06df986edd23926129f8c9ef1a5eb19ca`. Earlier proposed/unapproved/not-merged statements below retain historical preparation context. [4A-OP1](crm-h3-05-revision-7-4a-operator-packet.md) expands Commission A into a future exact-action packet with required pre-submit bindings; it authorizes nothing now. 4A/4B/4C remain NOT AUTHORIZED, C2 uncreated in recorded evidence, PREFLIGHT VERIFIED NO. No Meta access/mutation in this preparation. Original S4-P1 body and B2 history are preserved.
+
+
 Revision: **S4-P1**, 2026-10-03 (Asia/Shanghai). **PREPARATION ONLY — NOT OPERATOR AUTHORIZATION.** Tier 3: persistent provider objects, app/dataset authority, duplicate prevention and a sensitive preflight gate. Documentation base: **`408bbe033c1def7bde312728a58d77733ace85fd`**, normal merge of [PR #69](https://github.com/elforssa/english-hills-admin/pull/69), preserving frozen B2 history. No runtime, SQL, migration, CI or Production configuration change.
 
 ## Authority and sources
