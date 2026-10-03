@@ -1,5 +1,9 @@
 # Owner summary
 
+## Proposed Option C credential amendment — 2026-10-03
+
+Option A is concluded not viable under the approved isolated-recovery requirement. The separately authorized architecture-only [proposed revision 6](crm-h3-05-option-c-amendment.md) defines the bounded owned-app/dedicated-Employee alternative and exact revision-5 statements it would amend. **OPTION C ARCHITECTURE BLOCKED**: only B1’s supported bounded grant contract and B4’s selected independent invalidation path/authority remain architecture blockers. B2/B3 are fail-closed implementation/preflight gates; B5 is an owner custody decision with later implementation binding and no provider evidence requirement. Neither B1 nor B4 is resolved; no final issuing-app/grant/recovery contract or implementation is approved. Revision 5 and its approval below remain historical authority, not authorization to resume issuance. H3-04 stays complete; H3-05–08/H4 remain gated.
+
 ## H3-05 recovery blocker — 2026-10-02
 
 **H3-05: BLOCKED BEFORE ISSUANCE.** The [owner operator authorization](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955112635) and [blocked attempt](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955549306) supersede earlier next-step status below. [Recovery-design revision 1](crm-h3-05-credential-recovery.md) records documented individual-token revocation, its unproven managed-route prerequisites and identity-level alternatives. New-token identity/create-versus-reuse and isolated recovery remain unresolved. No token was generated. Earlier “credential blocker closed” statements mean route availability was established; they do not clear this subsequent recovery blocker. Revision 5's historical approval and H3-04 acceptance remain unchanged. The proposed dedicated-identity amendment is not approved or implemented; do not resume H3-05 or proceed to H3-06–08/H4.
