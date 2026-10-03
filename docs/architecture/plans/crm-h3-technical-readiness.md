@@ -1,5 +1,9 @@
 # Owner summary
 
+## Revision 7 B2 execution status — 2026-10-03
+
+[Revision 7's dated notices](crm-h3-05-revision-7-validation.md) record owner approval at PR #64 and later B2-1/OP-1 approval and execution. [B2 closeout](../evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md): current **B2 PASS**, permanent **EH Lifecycle R4 Employee / `61594989243533` / EMPLOYEE / Glory Lot `1741597822557523`**. One authorized submission succeeded; allowance permanently consumed, no further lifecycle Employee creation authorized. Historical Step 3 remains BLOCKED / B2 INCONCLUSIVE. Full PREFLIGHT VERIFIED: NO. C2, grants, actual B1 authority, custody/inspector, credentials/recovery and Production/H3-06–08/H4/sending remain separately gated. This repository closeout grants no Step 4 or Meta access/mutation authority; prior proposal/status entries below are historical.
+
 ## Proposed Revision 7 validation architecture — 2026-10-03
 
 [Revision 7](crm-h3-05-revision-7-validation.md) is the current proposed credential amendment after merged PR #63; it is not approved or implemented. It selects C2 and exclusive identity-wide invalidation with downtime in the proposal. B1/B4 architecture contracts are defined for owner approval; actual effective authority and recovery remain mandatory later credential-acceptance gates. Meta support/engineering is optional supplemental evidence, never a prerequisite. Synthetic Test Events are rejected as unisolated; credential/dormant acceptance would explicitly leave delivery success unverified until separately authorized H4 use, subject to owner acceptance of that limit. Earlier revision-6 blocker and revision-5 route/rotation language below retain historical context. No H3-05 resumption, H3-06–08, H4, merge/release or operator action is authorized.

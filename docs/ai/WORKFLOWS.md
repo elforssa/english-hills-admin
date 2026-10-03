@@ -1,5 +1,9 @@
 # Operational workflows
 
+## H3 Revision 7 B2 one-action execution closed — 2026-10-03
+
+The [frozen execution closeout](../architecture/evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md) records successful owner-authorized B2-1 / OP-1 execution. **B2 PASS** for permanent EH Lifecycle R4 Employee, canonical ID `61594989243533`, EMPLOYEE, Glory Lot `1741597822557523`. The one-submit allowance is permanently consumed; the OP-1 future checklist below is historical and must not be replayed. No further lifecycle Employee creation or replacement is authorized. Step 3 remains historically BLOCKED / B2 INCONCLUSIVE; full PREFLIGHT VERIFIED: NO. Any created-object / Step 4 stage needs separate authorization under the existing approved architecture. C2, installation/grants, B1 acceptance, B5 custody, safe inspector, credentials/recovery, Production, H3-06–08/H4 and events remain held. This documentation task uses the frozen ledger only and performs no Meta access/mutation; merge/release holds remain.
+
 ## H3 Revision 7 B2-1 future single submission — preparation only, 2026-10-03
 
 After owner-adopted B2-1 / merged PR #67, use the [OP-1 one-action packet](../architecture/plans/crm-h3-05-revision-7-b2-operator-packet.md) for the later separately authorized named-human session. It defines complete inventory, isolated credential-free form, durable write-ahead consumption, one click/no retry, bounded creation-only readback and terminal classification. Proposed maximum 30 minutes; identity/window/approval must be supplied later. Ambiguity preserves objects and requires separately authorized read-only reconciliation, never another Create. Preparation grants no Meta access or execution; B2 remains INCONCLUSIVE and Step 4/credentials/H3-06–08/H4/Production remain held. Earlier proposal descriptions below are historical.
