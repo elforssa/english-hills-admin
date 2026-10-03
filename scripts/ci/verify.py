@@ -92,10 +92,12 @@ def destinations(text):
     for match in re.finditer(r'^ {0,3}\[([^\]]+)\]:\s*(<[^>]+>|\S+)', text, re.M):
         definitions[' '.join(match[1].lower().split())] = match[2].strip('<>')
     # Scan balanced inline destinations (including parentheses in filenames).
-    pattern = re.compile(r'!?\[([^\]\n]+)\](?:\(([^\n]*)|\[([^\]\n]*)\])?')
-    for match in pattern.finditer(text):
-        if match[2] is not None:
-            tail, depth, escaped, end = match[2], 1, False, None
+    pattern = re.compile(r'!?\[([^\]\n]+)\](?:\(|\[([^\]\n]*)\])?')
+    position = 0
+    while (match := pattern.search(text, position)) is not None:
+        position = match.end()
+        if text[match.end() - 1] == '(':
+            tail, depth, escaped, end = text[match.end():].split('\n', 1)[0], 1, False, None
             for i, c in enumerate(tail):
                 if escaped:
                     escaped = False
@@ -110,6 +112,8 @@ def destinations(text):
                         break
             if end is None:
                 raise ValueError('Malformed inline link')
+            # Resume immediately after this destination, not at the line's end.
+            position = match.end() + end + 1
             raw = tail[:end].strip()
             if raw.startswith('<'):
                 close = raw.find('>')
@@ -119,10 +123,10 @@ def destinations(text):
             elif raw:
                 yield raw.split()[0]
         else:
-            label = ' '.join((match[3] or match[1]).lower().split())
+            label = ' '.join((match[2] or match[1]).lower().split())
             if label in definitions:
                 yield definitions[label]
-            elif match[3] is not None:
+            elif match[2] is not None:
                 raise ValueError('Undefined reference link')
     yield from definitions.values()
 
@@ -133,6 +137,7 @@ SECRET_PATTERNS = {
     'JWT': r'\beyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\b',
     'credential URL': r'\b(?:postgres(?:ql)?|https?)://[^\s/:]+:[^\s/@]+@',
     'secret assignment': r'''(?i)\b(?:password|secret|api[_-]?key|access[_-]?token|service[_-]?role[_-]?key)\s*[:=]\s*["']?[A-Za-z0-9+/_.-]{20,}''',
+    'machine-local path': r'(?i)(?<![\w./-])/(?:Users|home)/[^/\s]+|\b[A-Z]:[\\/]Users[\\/]|file://',
     'phone': r'(?<!\w)(?:\+\d[\d ()-]{8,}\d|0[567]\d{8})(?!\w)',
 }
 
@@ -147,17 +152,22 @@ def sensitive_added(text):
 
 def check_links(root, path):
     errors = []
-    for dest in destinations((root / path).read_text()):
-        dest = re.sub(r'\\([() ])', r'\1', dest)
-        url = urlsplit(dest)
-        if url.scheme or url.netloc:
-            continue
-        target = (root / unquote(url.path).lstrip('/') if url.path.startswith('/') else root / path.parent / unquote(url.path)).resolve() if url.path else (root / path).resolve()
-        if not target.is_relative_to(root.resolve()) or not target.exists():
-            errors.append('Missing or outside-repository relative target: ' + dest)
-        elif url.fragment:
-            if target.suffix.lower() != '.md' or unquote(url.fragment) not in anchors(target.read_text()):
-                errors.append('Missing Markdown anchor: ' + dest)
+    for index, dest in enumerate(destinations((root / path).read_text()), 1):
+        # Never interpolate destinations: paths, queries and fragments can hold secrets.
+        context = f'link {index} (destination redacted): '
+        try:
+            dest = re.sub(r'\\([() ])', r'\1', dest)
+            url = urlsplit(dest)
+            if url.scheme or url.netloc:
+                continue
+            target = (root / unquote(url.path).lstrip('/') if url.path.startswith('/') else root / path.parent / unquote(url.path)).resolve() if url.path else (root / path).resolve()
+            if not target.is_relative_to(root.resolve()) or not target.exists():
+                errors.append(context + 'Missing or outside-repository relative target')
+            elif url.fragment:
+                if target.suffix.lower() != '.md' or unquote(url.fragment) not in anchors(target.read_text()):
+                    errors.append(context + 'Missing Markdown anchor')
+        except (OSError, ValueError):
+            errors.append(context + 'Invalid or unreadable link target')
     return errors
 
 
@@ -169,7 +179,10 @@ def check_docs(base, head, root=Path('.')):
         if path.suffix != '.md':
             continue
         if status != 'D':
-            errors.extend(f'{name}: {error}' for error in check_links(root, path))
+            try:
+                errors.extend(f'{name}: {error}' for error in check_links(root, path))
+            except (OSError, ValueError):
+                errors.append(f'{name}: Invalid Markdown link syntax or source (destination redacted)')
         patch = git('diff', '--no-ext-diff', '--no-textconv', '--unified=0', ancestor, head, '--', name).decode()
         added_lines, in_hunk = [], False
         for line in patch.splitlines():

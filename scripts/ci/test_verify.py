@@ -5,6 +5,7 @@ import itertools
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -48,6 +49,47 @@ class VerificationTests(unittest.TestCase):
                 except ValueError:
                     pass
 
+    def test_multiple_inline_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'ok.md').write_text('# First\n# Second\n')
+            (root / 'target(v1).md').write_text('# Heading\n')
+            source = root / 'source.md'
+            fixtures = (
+                ('[first](ok.md) [second](ok.md)', 0),
+                ('[first](ok.md) [broken](missing.md)', 1),
+                ('[broken](missing.md) [second](ok.md)', 1),
+                ('[first](ok.md#first) [second](ok.md#second)', 0),
+                ('[first](ok.md#first) [broken](ok.md#missing)', 1),
+                ('[broken](ok.md#missing) [second](ok.md#second)', 1),
+                ('[one](target(v1).md#heading) [two](target(v1).md)', 0),
+                ('[one](target(v1).md) [broken](missing(v2).md)', 1),
+            )
+            for content, count in fixtures:
+                with self.subTest(content=content):
+                    source.write_text(content)
+                    self.assertEqual(len(verify.check_links(root, Path('source.md'))), count)
+
+    def test_added_machine_local_paths(self):
+        fixtures = (
+            'Local path /Users/name/project/report.md',
+            'Local path /home/name/report.md',
+            '```sh\ncat /home/name/report.md\n```',
+            r'C:\Users\name\report.md',
+            'file:///Users/name/report.md',
+            'file:///home/name/report.md',
+            'file:///C:/Users/name/report.md',
+            'file://localhost/private/report.md',
+            '[local](/Users/name/report.md)',
+            '[local](file:///home/name/report.md)',
+        )
+        for content in fixtures:
+            with self.subTest(content=content):
+                self.assertIn('machine-local path', verify.sensitive_added(content))
+        for content in ('docs/ai/CURRENT_STATE.md', '../architecture/plans/a.md',
+                        'docs/home/name/report.md', 'docs/Users/name/report.md'):
+            self.assertEqual(verify.sensitive_added(content), [])
+
     def test_sensitive_patterns(self):
         for content in ('-----BEGIN PRIVATE KEY-----', 'ghp_' + 'a' * 30,
                         'eyJ' + 'a'*20 + '.' + 'b'*20 + '.' + 'c'*20,
@@ -59,6 +101,7 @@ class VerificationTests(unittest.TestCase):
     def test_actual_git_diffs_and_docs(self):
         with tempfile.TemporaryDirectory() as directory:
             old = Path.cwd()
+            checker = Path(verify.__file__).resolve()
             try:
                 os.chdir(directory)
                 def run(*args):
@@ -121,6 +164,33 @@ class VerificationTests(unittest.TestCase):
                 Path('docs/a.md').write_text('# Fixture\n')
                 removed = commit('docs/a.md')
                 verify.check_docs(bad, removed)
+                # Added paths are checked in prose, code and destinations; removals pass.
+                for content in ('/Users/name/report.md', '```sh\n/home/name/report.md\n```',
+                                r'C:\Users\name\report.md', '[local](file:///Users/name/report.md)'):
+                    Path('docs/a.md').write_text('# Fixture\n' + content + '\n')
+                    local = commit('docs/a.md')
+                    with self.assertRaisesRegex(ValueError, 'machine-local path'):
+                        verify.check_docs(removed, local)
+                    Path('docs/a.md').write_text('# Fixture\n')
+                    cleaned = commit('docs/a.md')
+                    verify.check_docs(local, cleaned)
+                    removed = cleaned
+                # Exercise real CLI diagnostics, including path/query/fragment material.
+                token = 'ghp_' + 'syntheticTokenValue' * 3
+                for destination, closed in ((f'missing-{token}.md?token={token}#{token}', True),
+                                            (f'a.md#{token}', True), (f'missing.md?token={token}', True),
+                                            (f'missing.md%00{token}', True), (f'missing-{token}.md', False)):
+                    Path('docs/a.md').write_text('# Fixture\n[broken](' + destination + (')' if closed else '') + '\n')
+                    failing = commit('docs/a.md')
+                    result = subprocess.run([sys.executable, str(checker), 'docs',
+                                             '--base', removed, '--head', failing],
+                                            capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertNotIn(token, result.stdout + result.stderr)
+                    self.assertIn('link 1 (destination redacted)' if closed else 'Invalid Markdown link syntax', result.stderr)
+                    self.assertIn('docs/a.md', result.stderr)
+                    Path('docs/a.md').write_text('# Fixture\n')
+                    removed = commit('docs/a.md')
                 Path('docs/a.md').write_text('# Fixture  \n')
                 whitespace = commit('docs/a.md')
                 with self.assertRaisesRegex(ValueError, "git diff --check failed"):
