@@ -39,3 +39,7 @@ Receptionist enrollment writes allow Submitted/Under Review/Trial; they cannot i
 ## Production boundary
 
 Production migrations, provider activation, secrets, scheduler and Vercel configuration require explicit approval. Never automatically push linked migrations or mutate production to verify documentation. Deployed migrations are immutable and new migrations must first pass local verification. [AGENTS](../../AGENTS.md) is the execution policy; [CURRENT_STATE](CURRENT_STATE.md) records the limits of deployment evidence.
+
+## Dependency audit gates
+
+Production dependency advisories at moderate or above remain CI-blocking without exceptions. The full dependency gate retains a temporary exact advisory/path/version exception for unpatched build/lint-only braces exposure, with fail-closed metadata, path and compatible-fix checks. See the [dependency audit policy](../security/dependency-audit-policy.md) for the approved graph, retirement triggers and validation commands. This source policy is not merge or release authorization.
