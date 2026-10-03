@@ -1,5 +1,9 @@
 # ADR-004: Meta lifecycle feedback consumes CRM facts
 
+## Revision 7 owner approval recorded — 2026-10-03
+
+The owner explicitly approved Revision 7 at merged PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857`, including C2, B1, exclusive B4 recovery/downtime, B5 and non-event acceptance with delivery unverified until H4. [Approval scope and Step 2 preparation](../plans/crm-h3-05-revision-7-step-2-preparation.md) are the dated source. This supersedes proposal/unapproved status below, not historical findings. No new runtime/deployed behavior or operator authority follows; protected custody selection and safe inspection remain prerequisites.
+
 ## Proposed credential acceptance amendment — Revision 7, 2026-10-03
 
 **PROPOSED; not owner-approved or implemented.** [Revision 7](../plans/crm-h3-05-revision-7-validation.md) changes the evidence model after merged PR #63, whose documentation gaps remain valid. Official general mechanisms, authenticated read-only account inspection and separately approved bounded empirical validation may establish acceptance; Meta support/engineering is optional supplemental evidence, never a prerequisite. B1/B4 design contracts are defined for owner approval, while actual authority and recovery remain fail-closed credential gates.

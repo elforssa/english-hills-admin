@@ -1,5 +1,7 @@
 # Owner summary
 
+> **2026-10-03 owner approval / Step 2:** the owner explicitly approved this Revision 7 as merged in PR #64 (`bf295c304e3a4f4361b25b2a852c66ae7091a857`) and commissioned Step 2 preparation only. [Approval scope and protected preparation contract](crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary) supersede the proposal/unapproved status statements below; original design reasoning remains historical. No Meta/operator/Production or merge/release authorization follows.
+
 ## What will change
 
 **Proposed H3 credential architecture amendment — Revision 7, 2026-10-03 (Asia/Shanghai). Tier 3. Not owner-approved, implemented or operationally verified.** Baseline main: `ffd06e5a669a51a8b2934dbf648d1d2214f40606`, merged [PR #63](https://github.com/elforssa/english-hills-admin/pull/63). Risk is credential authority, provider integration and compromise recovery; the task is documentation only.
