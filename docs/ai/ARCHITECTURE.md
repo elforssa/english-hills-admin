@@ -1,5 +1,9 @@
 # Current architecture
 
+## Proposed H3 credential validation amendment — Revision 7
+
+[Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md) proposes C2: one new lifecycle-only owned app/Employee, inspected effective authority and mandatory exclusive identity-wide revocation rehearsal before credential acceptance. Official mechanisms, read-only account facts and separately authorized empirical recovery evidence can suffice without Meta support. This is not approved or implemented; no deployed architecture changes. [Evidence](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md) preserves PR #63 and distinguishes non-event credential acceptance from actual delivery proof. Existing R4/106, dormant gates and H4 separation remain unchanged; dated direct-route/revision-6 statements below do not authorize issuance.
+
 ## H3-04 immutable contract seed — Production verified 2026-10-02
 
 [PR #57](https://github.com/elforssa/english-hills-admin/pull/57) merged/deployed as `e3928b369c8790151771d7251aee7030289ec84f`; forward migration 106 is verified in Production ledger 001–106. The existing append-only registry contains exactly one approved R4 provider manifest. [Release acceptance](../architecture/evidence/crm-h3-04-production-2026-10-02.md) verifies unchanged schema/functions/owners/ACL/RLS/triggers and dormant independent gates. Manifest active=true cannot initiate delivery: no destination, policy/evidence/boundary/ownership/epoch, token, live gate or active lifecycle cron exists. H3-05–08/H4 remain separately gated. Earlier branch observations below retain their historical limits.

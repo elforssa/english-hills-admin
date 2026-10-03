@@ -1,5 +1,15 @@
 # ADR-004: Meta lifecycle feedback consumes CRM facts
 
+## Proposed credential acceptance amendment — Revision 7, 2026-10-03
+
+**PROPOSED; not owner-approved or implemented.** [Revision 7](../plans/crm-h3-05-revision-7-validation.md) changes the evidence model after merged PR #63, whose documentation gaps remain valid. Official general mechanisms, authenticated read-only account inspection and separately approved bounded empirical validation may establish acceptance; Meta support/engineering is optional supplemental evidence, never a prerequisite. B1/B4 design contracts are defined for owner approval, while actual authority and recovery remain fail-closed credential gates.
+
+Select **C2 in the proposal**, one new lifecycle-only owned app and Employee, to isolate app-level administration/secret incidents from existing intake. Select exclusive System-User-wide invalidation as primary recovery, with explicit owner acceptance of downtime and mandatory initial A-valid → revoke-all → A-invalid → issue/inspect-B rehearsal. Human recovery stays outside EH; no surviving second token, runtime recovery endpoint or unproved human API caller arrangement is assumed. Existing actors/app and all noncredential R4/H3 contracts remain unchanged.
+
+Test-coded synthetic events are not established as measurement-isolated. Select non-event effective-authority plus recovery acceptance; successful CAPI delivery remains NOT VERIFIED until separately authorized H4 genuine eligible use. Owner approval must explicitly accept that evidence limit, C2, downtime and protected custody. If effective authority cannot be inspected or rehearsal fails, credential acceptance fails. No automatic fallback, speculative permission escalation or support-answer gate is introduced.
+
+ARCHITECTURE APPROVED, PREFLIGHT VERIFIED, CREDENTIAL ACCEPTED, DORMANT INTEGRATION ACCEPTED and LIVE ACTIVATED are distinct evidence states, none newly achieved here. [Decision/evidence ledger](../evidence/crm-h3-revision-7-validation-2026-10-03.md). This proposed amendment supersedes earlier credential-route/provider-answer/rotation prescriptions only on owner approval; it does not rewrite their dated evidence or authorize any operation. H3-05 stays stopped; H3-06–08/H4 and merge/release holds remain.
+
 > **Production verified — 2026-10-01:** PR #47 reviewed head `f823b62a3bb06d40b1f572927bfa2af60fd4c857` merged and deployed as `02ffccab1519c0b381196ef9e5f938a908fdd105`; ledger 001–103 and advisory R4 controls are verified dormant. Lifecycle inventory is zero, cron disabled and server live gate absent; existing intake is healthy. [Dated release evidence and limitations](../evidence/crm-r4-advisory-production-2026-10-01.md). Earlier not-merged/not-deployed or two-event baseline statements below are historical and superseded for current deployment state. Provider seed, Meta/credential changes, Production release and H4 remain unauthorized; the separately commissioned H3-02 branch is recorded below.
 
 ## Status
