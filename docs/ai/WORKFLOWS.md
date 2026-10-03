@@ -1,5 +1,9 @@
 # Operational workflows
 
+## H3 Revision 7 B2-1 future single submission — preparation only, 2026-10-03
+
+After owner-adopted B2-1 / merged PR #67, use the [OP-1 one-action packet](../architecture/plans/crm-h3-05-revision-7-b2-operator-packet.md) for the later separately authorized named-human session. It defines complete inventory, isolated credential-free form, durable write-ahead consumption, one click/no retry, bounded creation-only readback and terminal classification. Proposed maximum 30 minutes; identity/window/approval must be supplied later. Ambiguity preserves objects and requires separately authorized read-only reconciliation, never another Create. Preparation grants no Meta access or execution; B2 remains INCONCLUSIVE and Step 4/credentials/H3-06–08/H4/Production remain held. Earlier proposal descriptions below are historical.
+
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
 The owner approved Revision 7 at PR #64; earlier proposal status below is historical. Follow the [Step 2 manifest, rehearsal/deadlines and Step 3 commission draft](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md). This task prepares those contracts only: external custody needs owner selection and safe inspection is blocked. No preflight, takeover, credential operation or activation occurred; each later operator/Production step needs separate authorization.
