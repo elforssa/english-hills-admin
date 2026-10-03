@@ -1,5 +1,9 @@
 # Operational workflows
 
+## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
+
+The owner approved Revision 7 at PR #64; earlier proposal status below is historical. Follow the [Step 2 manifest, rehearsal/deadlines and Step 3 commission draft](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md). This task prepares those contracts only: external custody needs owner selection and safe inspection is blocked. No preflight, takeover, credential operation or activation occurred; each later operator/Production step needs separate authorization.
+
 ## Proposed H3 Revision 7 operator sequence — not execution authority
 
 [Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md#exact-future-execution-sequence) defines separate architecture approval → protected preparation/preflight → explicitly authorized new C2 objects and recovery rehearsal → credential acceptance → separately approved Production storage → later H3-06–08 dormant acceptance → separately approved H4. Recovery is contain → revoke all dedicated-identity tokens → verify old invalid → issue/inspect replacement → separately authorized storage/switch. B1/B4 account behavior is validated at its own gate without waiting for Meta support. No provider event probe is selected; actual sending remains unverified through dormant acceptance. This proposed sequence is not approved or executed and preserves all existing activation holds.

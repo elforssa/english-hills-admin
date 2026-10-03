@@ -1,5 +1,9 @@
 # Current architecture
 
+## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
+
+Revision 7 at PR #64 is owner-approved as recorded in the [Step 2 approval and preparation contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary). Earlier proposal status below is historical. C2/B1/B4/B5 design is unchanged; no runtime, SQL or deployed architecture changed. External custody selection and a reviewed secret-safe inspector remain execution prerequisites; architecture approval grants no operation authority.
+
 ## Proposed H3 credential validation amendment — Revision 7
 
 [Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md) proposes C2: one new lifecycle-only owned app/Employee, inspected effective authority and mandatory exclusive identity-wide revocation rehearsal before credential acceptance. Official mechanisms, read-only account facts and separately authorized empirical recovery evidence can suffice without Meta support. This is not approved or implemented; no deployed architecture changes. [Evidence](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md) preserves PR #63 and distinguishes non-event credential acceptance from actual delivery proof. Existing R4/106, dormant gates and H4 separation remain unchanged; dated direct-route/revision-6 statements below do not authorize issuance.

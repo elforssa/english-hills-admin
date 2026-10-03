@@ -1,5 +1,9 @@
 # Current state
 
+## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
+
+Owner approval of Revision 7 at merged PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857` is recorded from the direct Step 2 commission. [Protected preparation](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md) is documentation-only branch implementation: B5 OWNER DECISION REQUIRED, inspection BLOCKED, rehearsal checklist ready with execution blocked, Step 3 contract drafted. No new account/Production verification or operation occurred. Earlier proposal status below is historical; no credential/dormant/live acceptance state is reached. Merge/release, Step 3/operator work and H3-06–08/H4 remain separately held.
+
 ## H3 Revision 7 proposed after merged PR #63 — 2026-10-03
 
 [PR #63](https://github.com/elforssa/english-hills-admin/pull/63) is verified merged as `ffd06e5a669a51a8b2934dbf648d1d2214f40606`, from head `e990f026f83ea751a0a8adaad69446cfbea1784d`. Its B1/B4 research findings remain valid historical evidence. The owner commissioned [proposed Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md), removing Meta support/engineering as a required dependency. The proposal selects C2 and exclusive identity-wide invalidation with a mandatory initial recovery rehearsal. B1/B4 are architecture contracts defined for owner approval, with actual authority/recovery still future fail-closed acceptance gates. No new acceptance state is reached: architecture, preflight, credential, dormant integration and H4 activation are distinct. [Evidence/decision ledger](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md).

@@ -1,5 +1,9 @@
 # Security and permission boundaries
 
+## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
+
+The owner approved Revision 7 at PR #64; prior proposal status below is historical. The [Step 2 protected contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#b5-custody-and-handling-contract) binds custody readiness, manual secret-bearing UI boundaries and allowlisted non-event evidence. No reviewed vault or inspector is established yet. No deployed permission/secret changed; credential operations and Production storage remain separately authorized Tier-3 work.
+
 ## Proposed H3 Revision 7 credential boundary — not approved or executed
 
 [Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md) defines a new C2 lifecycle-only app/Employee boundary, inspectable effective authority and external MFA-protected human recovery. Credential acceptance requires a separately authorized A/revoke-all/verify-invalid/B rehearsal on the new exclusive identity; existing users/apps remain untouched. No second token is assumed to survive revocation and no runtime recovery API or unproved API caller is selected. Actual custody tool/ACL and secret-safe handling must be bound before credentials. Meta support is optional evidence only. Unbounded/ambiguous authority or failed recovery rejects acceptance; Test Events are not presumed harmless. This proposal changes no deployed permission, secret or gate; owner approval and separate operator authorization remain required.
