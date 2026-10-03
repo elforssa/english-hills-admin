@@ -13,7 +13,7 @@ Other operators excluded: YES
 
 ## State
 
-RESERVED / CONSUMED — NOT YET SUBMITTED
+CONFIRMED SUCCESS
 
 Reservation owner: Maroine El Forssa
 Reservation action ID: H3-B2-20261003-1006Z-01
@@ -31,15 +31,52 @@ Observed during authorized session on 2026-10-03 at approximately 10:18 UTC.
    ID: 61594759444572
    Role: ADMIN
 
-Visible System User count: 2
+Visible System User count before submission: 2
 Pagination/next-page control visible: NO
-Existing EH Lifecycle R4 Employee visible: NO
+Existing EH Lifecycle R4 Employee visible before submission: NO
 Unexplained additional System User visible: NO
 
 ## Submission
 
-NOT SUBMITTED
+SUBMITTED ONCE
+
+One authorized Create system user submission was made during the authorized window.
+
+No retry or second submission occurred.
+
+## Post-submit inventory
+
+Observed during authorized session on 2026-10-03 at approximately 10:23 UTC.
+
+1. Conversions API System User
+   ID: 100089438321765
+   Role: EMPLOYEE
+
+2. EH Lifecycle R4 Employee
+   ID: 61594989243533
+   Role: EMPLOYEE
+
+3. English Hills CRM
+   ID: 61594759444572
+   Role: ADMIN
+
+Visible System User count after submission: 3
+Exactly one intended new System User visible: YES
+Unexpected additional System User visible: NO
+Unexpected assigned assets on new System User: NO
 
 ## Result
 
-PENDING
+CONFIRMED SUCCESS
+
+B2: PASS
+
+Permanent lifecycle Employee canonical ID: 61594989243533
+Label: EH Lifecycle R4 Employee
+Role: EMPLOYEE
+Business: Glory Lot / 1741597822557523
+
+Submission allowance consumed: YES
+Further B2 creation submissions authorized: NO
+
+No C2 creation, app installation, asset assignment, dataset grant, credential generation, token access, token revocation, Step 4 action, Production operation, H3-06–08 or H4 action occurred.
