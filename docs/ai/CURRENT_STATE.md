@@ -1,5 +1,11 @@
 # Current state
 
+## H3 Revision 7 4A execution binding — blocked, 2026-10-03
+
+From merged 4A-OP1 / main `67fa33703354d14d881059f81f8462c61ce063e7`, the owner authorized bounded read-only binding and documentation only. [4A-EB1 evidence](../architecture/evidence/crm-h3-r7-4a-execution-binding-2026-10-03.md) records **4A EXECUTION BINDING BLOCKED**: browser inventory exposed no browser/tab and the in-app browser access attempt failed; no Meta page opened. Access attempt: 15:55:17–15:55:33 UTC; actual inspection not started. Exact creation flow, isolation and safe pre/post routes remain unbound. Distinct future C2 Git write-ahead history and Maroine El Forssa sole-operator model are prepared, conditional on review/owner adoption and verified live exclusivity/persistence; no ledger/reservation or future UTC window is created.
+
+This is branch evidence, not merged/adopted or creation authority. Create was NOT pressed; no Meta mutation, credential, event or Production operation occurred. C2 ID remains unknown in inherited evidence; B2 PASS and frozen history remain unchanged. 4A/4B/4C, credentials, merge/release, H3-06–08/H4 and sending holds remain; PREFLIGHT VERIFIED NO. The earlier 4A-OP1 branch-preparation notice below is historical for its merge status only.
+
 ## H3 Revision 7 4A operator packet preparation — 2026-10-03
 
 The owner's direct commission records **S4-P1 OWNER APPROVED**, merged [PR #70](https://github.com/elforssa/english-hills-admin/pull/70) at `478d898ecf1f31d052e48f65e37a9f7caa58809c`. [4A-OP1](../architecture/plans/crm-h3-05-revision-7-4a-operator-packet.md) prepares exactly one future isolated Glory Lot-owned **EH Lifecycle R4 C2** creation/noncredential readback, then STOP. It binds the future write-ahead single-use action `EH-H3-R7-C2-CREATE-001`, durable/exclusive ledger acceptance, complete reconciled inventories, success/failure/ambiguity, bounded read-only reconciliation, owner approval template, checklist and execution output schema. Exact creation flow/use case/settings/submit remain **REQUIRES PRE-SUBMIT NONSECRET BINDING**; actual ledger mechanism, sole human and maximum 60-minute UTC window are unbound. No operational reservation is created.
