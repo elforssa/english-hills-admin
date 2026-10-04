@@ -158,6 +158,55 @@ This appears provider-coupled to the dataset assignment because:
 
 The final bullet is corroboration only. It does not itself prove provider coupling or retroactively authorize the side effect.
 
+
+
+## Final read-only regression confirmations
+
+After the dataset assignment and side-effect characterization, the owner performed the remaining required read-only confirmations without making any further Meta mutation:
+
+- **EH Lifecycle R4 Employee Installed apps:** none
+- **Protected System User `100089438321765`:** unchanged from the fresh pre-action baseline
+- **Protected System User `61594759444572`:** unchanged from the fresh pre-action baseline
+- **Protected app English-hills / `1069638329182835`:** unchanged from the fresh pre-action baseline
+- **C2 `29771601672426816` Connected assets:** none
+- **Target dataset Partners:** 0, unchanged
+- **Target dataset Connected assets:** only the pre-existing **KAL ad account**, unchanged
+
+No retry, remove, reapply, Manage action, token action, credential access, Production action or event send occurred during these confirmations.
+
+These confirmations complete the remaining same-surface protected-object and target-dataset regression checks required by 4C-OP1, subject to the already documented visibility limits of the safe Meta Business Settings surfaces.
+
+## Focused provider-coupling assessment
+
+The evidence now supports the following narrow assessment for independent review:
+
+1. The operator selected only the **Datasets** asset type.
+2. Only **English Hills pixel** was selected.
+3. Only **Use events dataset — Partial access** was enabled.
+4. **Manage events dataset — Full access** remained off.
+5. Exactly one **Assign assets** confirmation occurred.
+6. Target-dataset-side readback shows the intended lifecycle Employee grant exactly as **Use events dataset — Partial access**.
+7. The lifecycle Employee also gained a separate visible **Pixel / View Pixels** row without any separate Pixel selection or confirmation.
+8. The protected existing Conversions API System User in the same Glory Lot business already exhibits the same paired pattern:
+   - Pixel / View Pixels
+   - Dataset / Use events dataset
+9. No unrelated dataset, app, Page, ad account, Instagram, catalogue, audience or protected-object permission changed.
+10. All remaining post-action protected and dataset-side regression checks passed.
+
+This pattern is consistent with Meta automatically surfacing a coupled Pixel-read permission when the dataset task is granted for this combined Pixel/Dataset object. The evidence does **not** establish a general provider rule beyond this observed object/flow, and no hidden provider behavior is inferred.
+
+### Proposed narrow acceptance amendment
+
+Independent review may accept the following amendment without any new Meta mutation:
+
+> For the specific English Hills combined Pixel/Dataset endpoint `1152399921284927`, assigning **Use events dataset — Partial access** to the lifecycle Employee may cause Meta Business Settings to additionally surface **Pixel → English Hills pixel → View Pixels** as a provider-coupled visible permission. This paired View Pixels row is acceptable only when it appears automatically from the one reviewed dataset assignment, remains limited to the same target endpoint, introduces no management/full-access authority, and all protected/unrelated regression checks remain unchanged.
+
+If accepted, the observed paired Pixel row becomes part of the reviewed expected post-state for this exact 4C action, and no cleanup/removal is required.
+
+If not accepted, the state remains a boundary violation requiring separately reviewed remediation.
+
+No further provider action is required merely to decide this question.
+
 ## Classification under the current approved packet
 
 The reviewed 4C-OP1 intended final lifecycle Employee state was exactly:
@@ -172,6 +221,8 @@ Therefore this closeout must **not** claim **4C VERIFIED DATASET GRANT** under t
 Current classification:
 
 **4C = DATASET GRANT COMMITTED; PROVIDER-COUPLED VIEW PIXELS SIDE EFFECT REQUIRES REVIEW**
+
+The complete post-action regression record now passes apart from the single reviewed question of whether the automatically surfaced View Pixels row is an acceptable provider-coupled effect of the exact dataset grant.
 
 This is treated fail-closed as a **boundary-review state**, not permission to retry, remove, reassign or continue.
 
