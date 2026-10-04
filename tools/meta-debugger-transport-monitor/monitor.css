@@ -1,0 +1,45 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+section {
+  margin: 24px 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+button {
+  padding: 8px 12px;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border: 1px solid currentColor;
+  padding: 12px;
+}
+
+.warning,
+.limitation {
+  font-weight: 600;
+}
