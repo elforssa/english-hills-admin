@@ -1,5 +1,14 @@
 # Current state
 
+## H3 Revision 7 — 4C semantic evidence prepared — 2026-10-04
+
+4B has been operationally completed as **VERIFIED ASSOCIATION** and its independently reviewed closeout is owner-adopted and merged in PR #76 at main `11287d8562d55e09d2598e3cd7b888f689e29d98`. [4C-SE1](../architecture/evidence/crm-h3-r7-4c-semantic-evidence-2026-10-04.md) adds stronger nonsecret evidence addressing PR #74's prior **4C SEMANTICS INSUFFICIENT** finding.
+
+The new evidence directly connects the exact current Meta Business Settings task **Use events dataset — Partial access** to Conversions API dataset access: a current CAPI implementation guide instructs assigning that exact task to the **Conversions API System User**; LiveRamp's Meta CAPI program independently requires the same permission before conversion delivery; Meta's own Business SDK confirms authenticated server-side event posting to the pixel/dataset `/events` path; and Glory Lot's existing protected Conversions API System User uses the same dataset task. The proposed review conclusion is **4C SEMANTICS SUFFICIENT FOR THE ADMINISTRATIVE GRANT LAYER**, while token validity/scopes/effective authority and event delivery remain later B1/credential/H4 gates.
+
+This is Tier-3 documentation/research evidence only. **4C remains BLOCKED pending independent review and owner adoption.** No dataset assignment, Generate/Revoke token, app-secret/credential operation, Production change or event send occurred. Manage events dataset remains excluded. **PREFLIGHT VERIFIED = NO**, **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**, B1 actual credential acceptance PENDING, B5 OWNER DECISION REQUIRED and safe non-event inspector BLOCKED.
+
+
 ## H3 Revision 7 — 4B verified association — 2026-10-04
 
 **4B = VERIFIED ASSOCIATION.** Under reviewed and merged 4B-OP1 / main `9e906c04b0076cac46cb004d3f20f5eec79830c2`, the owner executed exactly one authorized **Assign assets** action during 2026-10-04 02:55–03:55 UTC: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` was assigned C2 `29771601672426816 / EH Lifecycle R4 C2` using the reviewed **Develop app — Partial access** task. Final Meta readback showed one assigned business asset for the lifecycle Employee: C2 with Partial access summarized as Develop app, View insights and Test app; Installed apps remained empty. A brief immediate post-submit "No assets assigned" view was followed by a read-only "Already assigned" indication and then the final committed Assigned assets view; no retry/reapply/remove occurred.
