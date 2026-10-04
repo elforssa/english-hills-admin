@@ -42,11 +42,19 @@ Pushes to `main` continue to use `full` classification; this optimization is a p
 
 ## Conservative tooling allowlist
 
-A path is tooling-eligible only when it is:
+A path is tooling-eligible only when it is one of this exact reviewed inventory:
 
-- a regular `100644` blob under `tools/**`; or
-- exactly `scripts/test-meta-debugger-transport-monitor.mjs`; or
-- a safe Markdown file under `docs/**` accompanying an otherwise tooling-only PR.
+- `tools/meta-debugger-transport-monitor/README.md`
+- `tools/meta-debugger-transport-monitor/manifest.json`
+- `tools/meta-debugger-transport-monitor/rules.json`
+- `tools/meta-debugger-transport-monitor/monitor.html`
+- `tools/meta-debugger-transport-monitor/monitor.css`
+- `tools/meta-debugger-transport-monitor/monitor.js`
+- `tools/meta-debugger-transport-monitor/monitor-core.mjs`
+- `tools/meta-debugger-transport-monitor/monitor-controller.mjs`
+- `scripts/test-meta-debugger-transport-monitor.mjs`
+
+Safe Markdown files under `docs/**` may accompany an otherwise tooling-only PR. Every tooling entry must be a regular `100644` blob where present. Any other file under `tools/**` selects `full`; inventory expansion requires an explicit classifier change and regression coverage.
 
 Everything else selects `full`.
 
@@ -70,7 +78,7 @@ The allowlist is intentionally narrow. New tooling paths must be added deliberat
 
 ## Fail-closed behavior
 
-Classifier uncertainty still selects `full`.
+Classifier uncertainty still selects `full`. In the workflow, a successful classifier with an empty or unknown output also schedules `local-database`; only explicit `docs` or `tooling` output may suppress the database job.
 
 The required aggregate gate accepts `tooling` only when:
 
@@ -91,12 +99,17 @@ Database-sensitive and unknown changes retain the full local-database suite.
 
 `scripts/ci/test_verify.py` adds regression cases for:
 
-- tooling-only files;
+- every explicitly reviewed monitor tooling file;
 - tooling + docs;
-- the monitor test script;
+- the exact monitor test script;
+- unknown/new files under `tools/**` forcing full;
+- database/migration-looking files under `tools/**` forcing full;
+- mixed tooling + runtime/database/package changes forcing full;
 - database test paths forcing full;
-- tooling symlinks forcing full;
+- tooling symlinks, executable blobs and gitlinks forcing full;
+- unsupported statuses and malformed diffs forcing full;
 - runtime-to-tools rename forcing full;
+- successful classification with empty/unknown mode scheduling database fallback;
 - the complete required-gate matrix for `docs`, `tooling` and `full`.
 
 This CI-routing change itself modifies `.github/**` and `scripts/ci/**`, so its own PR must run **full CI once** before merge.
