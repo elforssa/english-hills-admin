@@ -1,8 +1,16 @@
 # Current architecture
 
-## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
+## CI + Codex Workflow Efficiency v2 — tooling-only fast path proposed, 2026-10-04
 
-On the implementation branch, [Verify](../../.github/workflows/verify.yml) uses the dependency-free [CI verifier](../../scripts/ci/verify.py) to select only safe docs-only versus full CI. Uncertainty selects full CI. Existing app/database job steps are unchanged; `required` aggregates explicit job results and fails unless the selected path succeeds. No runtime/database architecture or GitHub branch-protection configuration changes; merge/adoption remain pending. See [policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff).
+PR #90 proposes a conservative third pull-request CI mode in [Verify](../../.github/workflows/verify.yml): `docs`, `tooling`, and `full`. The dependency-free [CI verifier](../../scripts/ci/verify.py) keeps uncertainty fail-closed to `full`.
+
+The `tooling` lane is limited to regular files under `tools/**`, the explicitly allowlisted Meta debugger monitor regression test, and accompanying safe `docs/**/*.md`. It runs docs verification plus the normal app/unit/build/security job and skips only the expensive `local-database` job. Runtime/database/configuration/CI-policy/package/unknown paths remain `full`. Rename detection stays disabled so both old/new paths are evaluated.
+
+This is a **Tier 2 engineering-policy/CI-routing change** because it changes required test selection and can affect merge verification, but it does not modify runtime behavior, Production configuration, provider credentials, database state or release/activation authority. Tier 2 therefore requires exact-head CI plus fresh independent review. The PR itself modifies `.github/**` and `scripts/ci/**`, which are excluded from the tooling allowlist, so it must pass full CI once before merge.
+
+The always-running `required` aggregate remains the branch-protection check: `docs` requires docs success with app/database skipped; `tooling` requires docs + app success with database skipped; `full` requires app + local-database success for pull requests. See [policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff) and the [tooling fast-path plan](../architecture/plans/ci-tooling-fast-path.md).
+
+The earlier v1 docs-vs-full description is superseded if PR #90 is adopted.
 
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
