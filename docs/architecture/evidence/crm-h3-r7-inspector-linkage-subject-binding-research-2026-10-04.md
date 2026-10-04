@@ -35,11 +35,9 @@ This research authorizes no extension implementation/installation, Meta account 
 
 ## Chrome response-stage evidence exists, but it is weaker than input linkage
 
-Current Chrome declarativeNetRequest documentation states that rules with a `responseHeaders` condition are evaluated only **once response headers have been received**.
+Current Chrome declarativeNetRequest documentation states that rules with a `responseHeaders` condition are evaluated only **once response headers have been observed by the browser for that request path**.
 
-Chrome further states that if a request reaches this stage:
-
-> the request has already been sent to the server and the server has received data like the request body.
+Chrome also documents interactions with HTTP cache/service workers. A response-stage match therefore does **not**, by itself, prove a fresh network round trip to Meta for that observation. Cached responses can satisfy browser response handling without establishing fresh provider receipt.
 
 Official Chrome reference:
 
@@ -49,14 +47,15 @@ This creates a potentially useful evidence class:
 
 **REMOTE RESPONSE-HEADER STAGE OBSERVED**
 
-A response-stage DNR match can establish that a matching browser request progressed far enough for response headers to arrive and therefore was sent to the server.
+A response-stage DNR match can establish only that Chrome observed matching response headers in the request flow.
 
-It can be stronger than pre-request Rule 9003, which proves only an endpoint request attempt.
+It is potentially stronger than pre-request Rule 9003, which proves only an endpoint request attempt, but **fresh remote server receipt remains unproved unless response provenance/cache reuse is independently excluded**.
 
 ## Important limit: response-stage evidence still does not prove input linkage
 
 Even a response-stage match cannot, by itself, establish that:
 
+- a fresh network request reached Meta rather than a cached/browser-mediated response path being used;
 - the synthetic marker was actually contained in the evaluated input;
 - Meta associated that exact submitted value with the response;
 - the response body was fully received;
@@ -84,9 +83,10 @@ Example research shape:
 However, this research does **not** define that rule as ready because:
 
 1. current official evidence does not guarantee one specific response header for every `/debug_token` response;
-2. DNR response-stage action/priority interaction with the existing pre-request allow/block rules must be tested before adoption;
-3. a response-stage block would intentionally terminate the response after headers, which changes debugger behavior;
-4. a non-mutating response-stage observation path has not yet been independently demonstrated in this architecture.
+2. response provenance/cache behavior would need an independently reviewed way to distinguish a fresh remote response from cache reuse;
+3. DNR response-stage action/priority interaction with the existing pre-request allow/block rules must be tested before adoption;
+4. a response-stage block would intentionally terminate the response after headers, which changes debugger behavior;
+5. a non-mutating response-stage observation path has not yet been independently demonstrated in this architecture.
 
 Therefore:
 
@@ -94,7 +94,7 @@ Therefore:
 
 No implementation is commissioned by this document.
 
-## No safe supported synthetic input-linkage proof found
+## No safe supported synthetic input-linkage proof established by reviewed evidence
 
 Current reviewed evidence includes:
 
@@ -114,15 +114,15 @@ without one of the following:
 - obtaining a provider correlation value that Meta documents as linking request input to response;
 - or using a real valid token whose returned metadata is specific enough to prove evaluation of that credential.
 
-No such provider correlation field was found in the reviewed current Meta public evidence.
+No such provider correlation field was identified in the reviewed current Meta public evidence.
 
-Therefore the current classification is:
+Therefore the current bounded research classification is:
 
-**SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT FOUND**
+**SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT ESTABLISHED BY REVIEWED EVIDENCE**
 
-This is stronger and clearer than merely “not yet defined.”
+This is a statement about the reviewed evidence set, not an impossibility claim. A safe supported mechanism may exist outside the sources reviewed here.
 
-It means the current synthetic-only architecture cannot honestly prove completed evaluation of a particular fake token.
+Under the currently reviewed evidence, the synthetic-only architecture cannot honestly claim completed evaluation of a particular fake token.
 
 ---
 
@@ -158,7 +158,7 @@ Would require:
 - output field semantics supported by official Meta evidence;
 - exact human/operator privacy controls.
 
-This stage proves the path is safe enough to expose **one disposable credential A** to the first-party debugger under a separately approved operator packet.
+This stage could justify exposing **one disposable credential A** to the first-party debugger only if a later amendment defines and independently verifies **sufficient transport-safety evidence**. Fresh calibration plus zero marker matches alone are not sufficient, because the synthetic value might have been rejected locally and because remote/input linkage remains unresolved.
 
 It does **not** claim real-token semantics have already been empirically verified.
 
@@ -224,9 +224,38 @@ Example Meta-operated guidance:
 
 ## Proposed safe subject-binding model
 
-A future B1 operator packet does not need to persist raw debugger `user_id` if subject provenance is established from the controlled issuance context.
+A future B1 operator packet does not need to persist raw debugger `user_id` if subject provenance is established from the controlled issuance context **and the exact newly issued credential is kept under continuous private-human control through inspection**.
 
-Use four independent observations:
+Use one mandatory continuity gate plus four independent observations:
+
+### S0 — mandatory private-human credential continuity
+
+Subject PASS requires a single bounded private-human chain linking:
+
+`exact issuance action → exact newly issued credential A → direct transfer into the first-party debugger → fresh result`
+
+Requirements:
+
+- the same named human controls the full chain;
+- A is generated once in the expected issuance context;
+- A is not copied into chat, repository, screenshots, Notes, shell history, files, clipboard history/cloud clipboard, or any other persistent store;
+- if a transient clipboard is unavoidable, clipboard history/cloud sync is disabled and the clipboard is cleared immediately after debugger submission;
+- no second token is generated, substituted, selected, or inspected in the same chain;
+- the debugger result must be fresh for that single submission, not a pre-existing/stale result;
+- the human records only safe attestations:
+  - `credential_continuity_preserved = true/false`
+  - `single_issuance_observed = true/false`
+  - `single_debugger_submission_observed = true/false`
+  - `fresh_result_observed = true/false`
+  - `continuity_ambiguity = true/false`
+
+If the human loses sight/control of which credential is being transferred, a stale result cannot be excluded, another credential may have been substituted, or any continuity step is ambiguous:
+
+**CREDENTIAL CONTINUITY = INCONCLUSIVE**
+
+No subject PASS and no Production storage.
+
+Use the following additional observations:
 
 ### S1 — issuance-page subject
 
@@ -281,13 +310,16 @@ Until the canonical mapping is independently supported, absence or mismatch in t
 
 Subject binding may be classified PASS only when:
 
+- **credential continuity = PASS** for the exact newly issued A through fresh debugger result;
 - issuance subject = expected dedicated lifecycle System User;
 - issuance app = C2;
 - debugger type = expected token class;
 - debugger app ID = C2;
 - no contradictory subject evidence exists.
 
-If the issuance context is ambiguous, page identity changes, or debugger metadata contradicts the expected app/token class:
+Issuance context + token type + app ID are not sufficient without credential continuity because different System Users could use the same app and stale/other-token results must be excluded.
+
+If credential continuity is lost/ambiguous, the issuance context is ambiguous, page identity changes, or debugger metadata contradicts the expected app/token class:
 
 **SUBJECT BINDING = FAIL / INCONCLUSIVE**
 
@@ -411,12 +443,13 @@ Current safe public evidence does **not** support:
 
 Classification:
 
-**SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT FOUND**
+**SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT ESTABLISHED BY REVIEWED EVIDENCE**
 
 ## Subject binding
 
 A safe nonpersistent subject-binding design is feasible using:
 
+- **mandatory private-human credential continuity from exact issuance through exact A transfer, debugger submission and fresh result**;
 - exact issuance context;
 - expected System User;
 - expected C2 app;
@@ -444,8 +477,8 @@ Classification:
 
 The cleanest next architecture candidate is a narrow **two-stage inspector bootstrap amendment**:
 
-1. **INSPECTOR TRANSPORT READY** based only on synthetic/noncredential safety evidence;
-2. separately authorize disposable A as the first real credential semantic/bootstrap proof;
+1. **INSPECTOR TRANSPORT READY** only after a later amendment defines sufficient transport-safety evidence; synthetic calibration/zero-marker observations alone are not enough;
+2. separately authorize disposable A as the first real credential semantic/bootstrap proof with mandatory credential continuity;
 3. A never enters Production and never performs business/event actions;
 4. fail closed if required metadata/subject/target evidence is unavailable;
 5. only after A semantic bootstrap succeeds continue to the already adopted revoke-success → B flow.
@@ -468,7 +501,7 @@ It changes gate ordering and therefore requires:
 - **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
 - **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**
 - **REMOTE RESPONSE-STAGE OBSERVATION = RESEARCH CANDIDATE ONLY**
-- **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT FOUND**
+- **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT ESTABLISHED BY REVIEWED EVIDENCE**
 - **OUTPUT FIELD SEMANTICS = SUFFICIENT**
 - **SUBJECT SAFE-BINDING DESIGN = FEASIBLE / NOT ADOPTED**
 - **TARGET SAFE-BINDING DESIGN = FEASIBLE WITH COMPLETENESS/MAPPING GATE / NOT ADOPTED**
