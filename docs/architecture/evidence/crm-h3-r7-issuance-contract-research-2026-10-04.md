@@ -2,6 +2,41 @@
 
 Observed/researched 2026-10-04; **Tier 3, noncredential evidence only**. Supports [R7-BOOT-OP1](../plans/crm-h3-r7-bootstrap-credential-operator-packet.md). **G0 remains BLOCKED; the execution-ready outcome is not achieved.** Continue resolution in the same task/PR. Missing evidence alone requires no architecture amendment.
 
+
+## Current closeout — G0-TEST1 complete; C2 contract proposed
+
+**G0-TEST1 research/execution/readback is COMPLETE. No further test-app interaction or screenshots.** The dated sections below preserve earlier unavailable evidence, deferrals, proposals and review findings; their next-action/blockage labels are historical. This closeout and the packet's [C2-CONFIG1 contract](../plans/crm-h3-r7-bootstrap-credential-operator-packet.md#c2-config1--configuration-only-action-contract) govern the next proposal. **C2-CONFIG1 = PROPOSED / NOT AUTHORIZED**; the full G0 credential gate remains BLOCKED.
+
+Provenance: owner's direct consolidated continuation instruction and PR #91 [persistence correction](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981427568), [post-attachment readback](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981474982), and [corrected-label action approval](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981356401) tied to reviewed preparation head `9c17ae705b9c47badd5a3e7ea59c1ce99568e014`. Received 2026-10-04; exact selection/Save/readback UTC not supplied. Author did not access Meta or inspect new screenshots. The [earlier unresolved-sequence report](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981417550) is retained as history; the owner's subsequent direct-observation correction supersedes its persistence classification. This is owner-observed evidence, not independent network/persistence instrumentation or retroactive expansion of the test approval's exclusions.
+
+Test app: **`1082823877929239 / EH R7 G0 Marketing Test 261004`**, Glory Lot owned. Creation was reported consumed once in the existing [creation record](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981376924); zero use cases/no unexpected assets or consumers were reported in the [isolation baseline](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981394953). Owner directly observed checkbox selection remained local/uncommitted and Save was the first persistent use-case action. One Save attached exactly **Create & manage ads with Marketing API**.
+
+**Transaction classification: `LOCAL_UNCOMMITTED_PROVEN → SAVE FIRST PERSISTENT ACTION`.** Selection and Save allowances were each consumed once. No retry, reselect, remove, delete/recreate or alternate use case occurred. Retain the test app and attached use case; no cleanup mutation or removal promise.
+
+| Current observed test-app state | Bound result |
+| --- | --- |
+| Exact Marketing use case / publication | Attached; app remains unpublished |
+| Marketing API Access Tier | Limited access; Settings says Limited |
+| `ads_management`, `ads_read`, `business_management`, `pages_read_engagement` | Each Ready for testing |
+| Token Tools permission options | Includes selectable `ads_read`, `ads_management`, `business_management`, `pages_read_engagement`, `pages_show_list`; no token generated. This is the test-app Tools surface, **not** the dedicated Employee System User chooser |
+| Business Asset User Profile Access, `catalog_management`, `email`, `pages_manage_ads` | Not active / showing Add in the observed state |
+| Facebook Login for Business | Present; no configuration reported |
+| Webhooks | Configuration surface present; callback/verify-token fields blank, observed fields unsubscribed; no configuration/subscription |
+| Higher Marketing API access | Displayed requirement: publication and Marketing API Access Tier App Review; neither pursued |
+| Other Settings | Marketing API version auto-upgrade enabled; Marketing Messages terms available but not accepted/configured |
+
+Lower-page entries not fully observed remain UNKNOWN. The readback binds displayed current state, not an exhaustive hidden provider delta or removal semantics. Limited is not an authority grant to the Employee; selectable permissions are not selected/approved token scopes. Automatic Login/Webhooks surfaces do not authorize configuring them.
+
+Owner reports **no token generated**, no C2/Employee/dataset/Pixel/ad-account association or credential action, no App Review/verification/publication, API/event, DQA or Vercel action. Token Tools observation is explicitly recorded as supplied evidence; it does not authorize additional test-app tooling or reinterpret the original test contract's token-chooser exclusion.
+
+### Evidence transfer and boundedness decision
+
+The test establishes the observed provider transaction and resulting isolated test-app state. It does **not** establish C2 needs Marketing, identical C2 results, every displayed permission for future A/B, CAPI entitlement, effective System User authority or final B1. No new architecture conflict is demonstrated; the adopted Employee, partial C2/dataset tasks, same-endpoint View Pixels and effective-authority gates remain intact.
+
+There is now enough evidence to **define a proposed configuration-only contract**: one exact Marketing attachment on C2, with conditional one Save, no optional additions and immediate noncredential readback/STOP before A. The earlier first-persistent-action blocker is resolved for the test; account-specific C2 behavior is guarded by positive same-observation confirmation and terminal divergence/ambiguity branches, never assumed identical. Unknown removal semantics is handled by explicit retention acceptance and no rollback, not another experiment. No remaining fact prevents preparing this bounded proposal; independent review and separate owner action approval remain mandatory before C2 access/action. This is not a finding that the complete G0 issuance contract is resolved.
+
+The next handoff is focused Tier-3 independent review of **C2-CONFIG1** at the new exact PR #91 head after successful required CI. Assess transfer limits, automatic surfaces/capabilities, the positive Save gate, allowances, safe System User chooser readback and STOP before Generate. No broad research, test-app revisit, installation investigation or token trial is requested.
+
 ## Provenance and limits
 
 | Source | Version / observation and bounded result |

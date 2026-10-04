@@ -1,5 +1,9 @@
 # Operational workflows
 
+## H3 Revision 7 C2-only configuration — proposed, 2026-10-04
+
+[G0-TEST1 closeout](../architecture/evidence/crm-h3-r7-issuance-contract-research-2026-10-04.md#current-closeout--g0-test1-complete-c2-contract-proposed) ends test-app investigation. [C2-CONFIG1](../architecture/plans/crm-h3-r7-bootstrap-credential-operator-packet.md#c2-config1--configuration-only-action-contract) proposes one exact Marketing use-case attachment to C2, positive local/uncommitted selection proof before at most one Save, immediate noncredential app/System User chooser/regression readback and STOP before A. Divergence/ambiguity means retention/STOP without retry or cleanup. **PROPOSED / NOT AUTHORIZED**: fresh exact-head Tier-3 review and separate explicit owner configuration approval are required. This does not clear G0 or authorize the credential/Production flow; the packet owns the full action/allowance/exclusion contract.
+
 ## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
 
 On the implementation branch, authors finish implementation, local checks and one self-check, commit/push, open the PR and confirm remote CI scheduling, then stop polling. Pending CI is handed off with AUTHOR WORK COMPLETE — REMOTE CI PENDING, exact head SHA and CI run reference/status. The coordinator verifies terminal exact-SHA CI later; independent-review readiness still requires successful required CI. [Selection and handoff details](../../AGENTS.md#ci-selection-and-remote-ci-handoff). Branch-protection adoption and merge/release remain separate owner actions; this policy is not merged/adopted yet.
