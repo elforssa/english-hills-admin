@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -10,12 +10,42 @@ const toolDir = path.join(root, 'tools', 'meta-debugger-transport-monitor');
 const readText = name => readFile(path.join(toolDir, name), 'utf8');
 const readJson = async name => JSON.parse(await readText(name));
 
-const [manifest, rules, monitorSource, coreSource, htmlSource] = await Promise.all([
+const expectedToolFiles = [
+  'README.md',
+  'manifest.json',
+  'monitor-controller.mjs',
+  'monitor-core.mjs',
+  'monitor.css',
+  'monitor.html',
+  'monitor.js',
+  'rules.json',
+];
+
+const toolFiles = (await readdir(toolDir)).sort();
+assert.deepEqual(
+  toolFiles,
+  expectedToolFiles,
+  'extension file inventory must remain closed and reviewable',
+);
+
+const [
+  manifest,
+  rules,
+  monitorSource,
+  controllerSource,
+  coreSource,
+  htmlSource,
+  cssSource,
+  packageJson,
+] = await Promise.all([
   readJson('manifest.json'),
   readJson('rules.json'),
   readText('monitor.js'),
+  readText('monitor-controller.mjs'),
   readText('monitor-core.mjs'),
   readText('monitor.html'),
+  readText('monitor.css'),
+  readFile(path.join(root, 'package.json'), 'utf8').then(JSON.parse),
 ]);
 
 assert.equal(manifest.manifest_version, 3);
@@ -28,6 +58,7 @@ assert.deepEqual(
 for (const forbiddenKey of [
   'host_permissions',
   'optional_host_permissions',
+  'optional_permissions',
   'content_scripts',
   'background',
 ]) {
@@ -88,17 +119,26 @@ assert.equal(rules.length, 3, 'exactly three reviewed rules are allowed');
 const byId = new Map(rules.map(rule => [rule.id, rule]));
 assert.deepEqual([...byId.keys()].sort((a, b) => a - b), [9001, 9002, 9003]);
 
+const calibration = byId.get(9001);
+const markerLeak = byId.get(9002);
+const endpoint = byId.get(9003);
+
+assert.equal(calibration.priority, 100);
+assert.equal(markerLeak.priority, 300);
+assert.equal(endpoint.priority, 200);
+
 for (const rule of rules) {
   assert.deepEqual(
     [...rule.condition.resourceTypes].sort(),
     [...expectedResourceTypes].sort(),
     `rule ${rule.id} must explicitly cover all reviewed ResourceTypes`,
   );
+  assert.equal(
+    rule.condition.isUrlFilterCaseSensitive,
+    true,
+    `rule ${rule.id} URL matching must be explicitly case-sensitive`,
+  );
 }
-
-const calibration = byId.get(9001);
-const markerLeak = byId.get(9002);
-const endpoint = byId.get(9003);
 
 assert.equal(calibration.action.type, 'block');
 assert.equal(calibration.condition.urlFilter, 'EHDNRCAL20261004A9F2B7C4');
@@ -113,7 +153,14 @@ assert.deepEqual(endpoint.condition.initiatorDomains, ['developers.facebook.com'
 assert.deepEqual(endpoint.condition.requestMethods, ['get']);
 
 const endpointRegex = new RegExp(endpoint.condition.regexFilter);
-assert.equal(endpoint.condition.regexFilter.includes('(?:'), false, 'Rule 9003 regex must avoid RE2-unsupported non-capturing groups');
+for (const unsupported of ['(?=', '(?!', '(?<=', '(?<!', '\\1', '\\2', '\\k<']) {
+  assert.equal(
+    endpoint.condition.regexFilter.includes(unsupported),
+    false,
+    `Rule 9003 regex must avoid known unsupported RE2 construct ${unsupported}`,
+  );
+}
+
 for (const url of [
   'https://graph.facebook.com/debug_token',
   'https://graph.facebook.com/debug_token?input_token=synthetic',
@@ -133,25 +180,118 @@ for (const url of [
   'https://graph.facebook.com/v26.0/debug_token_extra',
   'https://graph.facebook.com/v26.0/other/debug_token',
   'https://graph.facebook.com/debug_token/anything',
+  'https://graph.facebook.com/DEBUG_TOKEN',
+  'https://graph.facebook.com/v26.0/DEBUG_TOKEN',
 ]) {
   assert.equal(endpointRegex.test(url), false, `Rule 9003 regex must reject ${url}`);
 }
 
-for (const type of ['main_frame', 'xmlhttprequest', 'websocket', 'other']) {
-  assert.ok(markerLeak.condition.resourceTypes.includes(type));
-  assert.ok(endpoint.condition.resourceTypes.includes(type));
+function domainConditionMatches(host, domain) {
+  const candidate = host.toLowerCase();
+  const expected = domain.toLowerCase();
+  return candidate === expected || candidate.endsWith(`.${expected}`);
 }
 
-for (const redirectedUrl of [
-  'https://redirect.example/path?next=EHDBGTRANSPORT20261004C4D7A9F2',
-  'https://another.example/EHDBGTRANSPORT20261004C4D7A9F2/final',
-]) {
+function staticRuleMatches(rule, {
+  url,
+  resourceType,
+  method = 'get',
+  initiatorHost = 'developers.facebook.com',
+}) {
+  const condition = rule.condition;
+  if (!condition.resourceTypes.includes(resourceType)) return false;
+
+  if (condition.requestMethods && !condition.requestMethods.includes(method.toLowerCase())) {
+    return false;
+  }
+
+  if (
+    condition.initiatorDomains
+    && !condition.initiatorDomains.some(domain => domainConditionMatches(initiatorHost, domain))
+  ) {
+    return false;
+  }
+
+  if (condition.urlFilter) {
+    if (condition.isUrlFilterCaseSensitive) return url.includes(condition.urlFilter);
+    return url.toLowerCase().includes(condition.urlFilter.toLowerCase());
+  }
+
+  if (condition.regexFilter) {
+    const flags = condition.isUrlFilterCaseSensitive ? '' : 'i';
+    return new RegExp(condition.regexFilter, flags).test(url);
+  }
+
+  return false;
+}
+
+for (const type of expectedResourceTypes) {
   assert.equal(
-    redirectedUrl.includes(markerLeak.condition.urlFilter),
+    staticRuleMatches(markerLeak, {
+      url: `https://example.invalid/path?marker=${markerLeak.condition.urlFilter}`,
+      resourceType: type,
+    }),
     true,
-    'redirected marker URL must still match the fixed substring rule',
+    `Rule 9002 must cover resource type ${type}`,
   );
 }
+
+for (const request of [
+  {
+    url: `https://redirect.example/final?${markerLeak.condition.urlFilter}`,
+    resourceType: 'main_frame',
+  },
+  {
+    url: `https://redirect.example/background/${markerLeak.condition.urlFilter}`,
+    resourceType: 'xmlhttprequest',
+  },
+]) {
+  assert.equal(
+    staticRuleMatches(markerLeak, request),
+    true,
+    'redirected marker request must remain covered by Rule 9002',
+  );
+}
+
+assert.equal(
+  staticRuleMatches(endpoint, {
+    url: 'https://graph.facebook.com/v26.0/debug_token?x=1',
+    resourceType: 'xmlhttprequest',
+    method: 'GET',
+    initiatorHost: 'developers.facebook.com',
+  }),
+  true,
+);
+assert.equal(
+  staticRuleMatches(endpoint, {
+    url: 'https://graph.facebook.com/v26.0/DEBUG_TOKEN?x=1',
+    resourceType: 'xmlhttprequest',
+    method: 'GET',
+    initiatorHost: 'developers.facebook.com',
+  }),
+  false,
+  'Rule 9003 endpoint matching must remain case-sensitive',
+);
+assert.equal(
+  staticRuleMatches(endpoint, {
+    url: 'https://graph.facebook.com/debug_token',
+    resourceType: 'xmlhttprequest',
+    method: 'GET',
+    initiatorHost: 'sub.developers.facebook.com',
+  }),
+  true,
+  'Chrome initiatorDomains is a domain condition that includes subdomains; do not model it as exact origin',
+);
+
+const executableSources = new Map();
+for (const filename of toolFiles.filter(name => /\.(?:m?js)$/.test(name))) {
+  executableSources.set(filename, await readText(filename));
+}
+assert.deepEqual(
+  [...executableSources.keys()].sort(),
+  ['monitor-controller.mjs', 'monitor-core.mjs', 'monitor.js'],
+  'all executable extension source files must be explicitly inventoried',
+);
 
 const forbiddenSourcePatterns = [
   ['onRuleMatchedDebug', /onRuleMatchedDebug/],
@@ -169,23 +309,40 @@ const forbiddenSourcePatterns = [
   ['proxy API', /chrome\.proxy/],
 ];
 
-for (const [name, pattern] of forbiddenSourcePatterns) {
-  assert.equal(pattern.test(monitorSource), false, `monitor.js must not use ${name}`);
-  assert.equal(pattern.test(coreSource), false, `monitor-core.mjs must not use ${name}`);
+for (const [filename, source] of executableSources) {
+  for (const [name, pattern] of forbiddenSourcePatterns) {
+    assert.equal(pattern.test(source), false, `${filename} must not use ${name}`);
+  }
 }
 
-assert.equal(
-  /getMatchedRules\s*\(\s*\{\s*minTimeStamp:\s*startTime\s*\}\s*\)/s.test(monitorSource),
-  true,
-  'match query must use only minTimeStamp and omit tabId',
+const getMatchedRulesCall = controllerSource.match(
+  /getMatchedRules\s*\(\s*\{([\s\S]*?)\}\s*\)/,
 );
-assert.equal(/tabId\s*:/.test(monitorSource), false, 'monitor query code must not add a tabId filter');
+assert.ok(getMatchedRulesCall, 'controller must call getMatchedRules with an object');
+const normalizedQueryBody = getMatchedRulesCall[1]
+  .replace(/\s+/g, '')
+  .replace(/,+$/, '');
+assert.equal(
+  normalizedQueryBody,
+  'minTimeStamp:snapshot.startTime',
+  'match query object must contain only minTimeStamp and omit tabId or other filters',
+);
+assert.equal(/tabId\s*:/.test(controllerSource), false, 'controller query code must not add a tabId filter');
 
 assert.equal(/https?:\/\//.test(htmlSource), false, 'monitor page must not load remote content');
 assert.equal(/<script[^>]+src="monitor\.js"/.test(htmlSource), true);
+assert.equal(/url\s*\(/i.test(cssSource), false, 'monitor CSS must not load remote or local URL resources');
+
+assert.equal(
+  packageJson.scripts['test:inspector-monitor'],
+  'node scripts/test-meta-debugger-transport-monitor.mjs',
+);
+assert.match(packageJson.scripts.test, /npm run test:inspector-monitor/);
 
 const coreUrl = pathToFileURL(path.join(toolDir, 'monitor-core.mjs')).href;
+const controllerUrl = pathToFileURL(path.join(toolDir, 'monitor-controller.mjs')).href;
 const core = await import(coreUrl);
+const { createMonitorController } = await import(controllerUrl);
 
 const start = 1_000_000;
 const now = start + 10_000;
@@ -199,6 +356,28 @@ assert.deepEqual(
   core.validateObservationWindow(undefined, now),
   { ok: false, reason: 'invalid_observation_window' },
 );
+
+assert.deepEqual(
+  core.extractMatchedRules({
+    rulesMatchedInfo: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 }],
+  }),
+  {
+    ok: true,
+    matches: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 }],
+  },
+);
+for (const malformed of [
+  [],
+  null,
+  {},
+  { rulesMatchedInfo: null },
+  { rulesMatchedInfo: {} },
+]) {
+  assert.deepEqual(
+    core.extractMatchedRules(malformed),
+    { ok: false, reason: 'malformed_match_response' },
+  );
+}
 
 const projected = core.projectMatchedRules([
   {
@@ -242,6 +421,19 @@ assert.equal(
     start,
     now,
     querySucceeded: true,
+    matches: [
+      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+      { rule: { ruleId: 9002 }, tabId: 1, timeStamp: start + 2 },
+    ],
+  }).state,
+  'fail',
+  'fresh Rule 9002 must override calibration PASS',
+);
+assert.equal(
+  core.assessCalibration({
+    start,
+    now,
+    querySucceeded: true,
     matches: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start - 1 }],
   }).state,
   'fail',
@@ -266,6 +458,16 @@ assert.equal(
     matches: [],
   }).state,
   'pass',
+);
+assert.equal(
+  core.assessIdleBaseline({
+    start,
+    now,
+    querySucceeded: true,
+    matches: [{ rule: { ruleId: 9002 }, tabId: -1, timeStamp: start + 1 }],
+  }).state,
+  'fail',
+  'fresh Rule 9002 must override idle PASS',
 );
 assert.equal(
   core.assessIdleBaseline({
@@ -309,6 +511,15 @@ assert.equal(endpointObserved.markerLeakCount, 0);
 assert.equal(endpointObserved.endpointRequestCount, 1);
 assert.match(endpointObserved.limitation, /does not prove request completion/i);
 
+const malformedAssessment = core.assessSyntheticSubmission({
+  start,
+  now,
+  querySucceeded: true,
+  matches: null,
+});
+assert.equal(malformedAssessment.state, 'inconclusive');
+assert.equal(malformedAssessment.reason, 'malformed_match_response');
+
 const expiredAssessment = core.assessSyntheticSubmission({
   start,
   now: start + core.MAX_OBSERVATION_MS + 1,
@@ -317,5 +528,166 @@ const expiredAssessment = core.assessSyntheticSubmission({
 });
 assert.equal(expiredAssessment.state, 'inconclusive');
 assert.equal(expiredAssessment.reason, 'observation_window_expired');
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function makeController({
+  initialNow = start,
+  getMatchedRules,
+} = {}) {
+  let currentNow = initialNow;
+  const rendered = [];
+  const controller = createMonitorController({
+    getMatchedRules,
+    now: () => currentNow,
+    render: value => rendered.push(value),
+  });
+  return {
+    controller,
+    rendered,
+    setNow(value) {
+      currentNow = value;
+    },
+  };
+}
+
+async function runEnvelopeCase(kind, rulesMatchedInfo) {
+  const harness = makeController({
+    getMatchedRules: async () => ({ rulesMatchedInfo }),
+  });
+  harness.controller.start(kind);
+  return harness.controller.query(kind);
+}
+
+assert.equal(
+  (await runEnvelopeCase('calibration', [
+    { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+  ])).state,
+  'pass',
+  'actual Chrome RulesMatchedDetails envelope must produce calibration PASS',
+);
+assert.equal(
+  (await runEnvelopeCase('idle', [
+    { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 },
+  ])).state,
+  'inconclusive',
+  'actual Chrome envelope must preserve idle Rule 9003 INCONCLUSIVE',
+);
+assert.equal(
+  (await runEnvelopeCase('assessment', [
+    { rule: { ruleId: 9002 }, tabId: 2, timeStamp: start + 1 },
+  ])).state,
+  'fail',
+  'actual Chrome envelope must preserve Rule 9002 FAIL',
+);
+const pageEndpointObserved = await runEnvelopeCase('assessment', [
+  { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 },
+]);
+assert.equal(pageEndpointObserved.state, 'pass');
+assert.match(pageEndpointObserved.limitation, /does not prove request completion/i);
+
+for (const malformed of [[], {}, { rulesMatchedInfo: null }]) {
+  const harness = makeController({
+    getMatchedRules: async () => malformed,
+  });
+  harness.controller.start('assessment');
+  const result = await harness.controller.query('assessment');
+  assert.equal(result.state, 'inconclusive');
+  assert.equal(result.reason, 'malformed_match_response');
+}
+
+{
+  const pending = deferred();
+  const harness = makeController({
+    getMatchedRules: () => pending.promise,
+  });
+  harness.controller.start('calibration');
+  const queryPromise = harness.controller.query('calibration');
+  harness.setNow(start + core.MAX_OBSERVATION_MS + 1);
+  pending.resolve({
+    rulesMatchedInfo: [
+      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+    ],
+  });
+  const result = await queryPromise;
+  assert.equal(result.state, 'inconclusive');
+  assert.equal(result.reason, 'observation_window_expired');
+}
+
+{
+  const pending = deferred();
+  const harness = makeController({
+    getMatchedRules: () => pending.promise,
+  });
+  harness.controller.start('idle');
+  const queryPromise = harness.controller.query('idle');
+  harness.controller.reset();
+  assert.deepEqual(harness.rendered.at(-1), { state: 'reset' });
+  pending.resolve({ rulesMatchedInfo: [] });
+  const result = await queryPromise;
+  assert.equal(result.state, 'inconclusive');
+  assert.equal(result.reason, 'observation_superseded');
+  assert.deepEqual(
+    harness.rendered.at(-1),
+    { state: 'reset' },
+    'a stale pending query must not overwrite Reset',
+  );
+}
+
+{
+  const pending = deferred();
+  const harness = makeController({
+    getMatchedRules: () => pending.promise,
+  });
+  harness.controller.start('calibration');
+  const oldQuery = harness.controller.query('calibration');
+  harness.controller.start('calibration');
+  pending.resolve({
+    rulesMatchedInfo: [
+      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+    ],
+  });
+  const oldResult = await oldQuery;
+  assert.equal(oldResult.state, 'inconclusive');
+  assert.equal(oldResult.reason, 'observation_superseded');
+}
+
+{
+  const first = deferred();
+  const second = deferred();
+  let call = 0;
+  const harness = makeController({
+    getMatchedRules: () => (++call === 1 ? first.promise : second.promise),
+  });
+  harness.controller.start('assessment');
+  const firstQuery = harness.controller.query('assessment');
+  const secondQuery = harness.controller.query('assessment');
+
+  first.resolve({
+    rulesMatchedInfo: [
+      { rule: { ruleId: 9002 }, tabId: 1, timeStamp: start + 1 },
+    ],
+  });
+  const firstResult = await firstQuery;
+  assert.equal(firstResult.state, 'inconclusive');
+  assert.equal(firstResult.reason, 'observation_superseded');
+
+  second.resolve({
+    rulesMatchedInfo: [
+      { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 2 },
+    ],
+  });
+  const secondResult = await secondQuery;
+  assert.equal(secondResult.state, 'pass');
+  assert.equal(harness.rendered.at(-1).state, 'pass');
+}
 
 process.stdout.write('meta debugger transport monitor tests passed\n');
