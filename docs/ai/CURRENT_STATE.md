@@ -6,13 +6,14 @@ PR #85 is owner-adopted and merged at main `88b9dea9945a3315597214d35123a593ac71
 
 A new [remote-evaluation research record](../architecture/evidence/crm-h3-r7-inspector-remote-evaluation-research-2026-10-04.md) uses current official Meta and Chrome evidence. Meta's official `facebook/agentic-tools` repository now provides a `debug-access-token` skill and vetted `debug_token_probe.py`, confirming both the human Access Token Debugger as a first-party inspection option and the supported remote Graph `/debug_token` endpoint. The same Meta source directly supports diagnostic fields including `is_valid`, token type, `app_id`, application, issuance/expiry/data-access expiry, scopes and granular-scope names.
 
-The research defines a conditional remote-evaluation sentinel: add lower-priority **Rule 9003** that allows only a direct GET from `developers.facebook.com` to Meta's documented `graph.facebook.com/.../debug_token` endpoint. Existing higher-priority Rule 9002 still blocks any URL containing the synthetic token marker. A clean idle baseline plus zero Rule 9002 matches plus a fresh submission-triggered Rule 9003 match can serve as a candidate supported nonsecret remote-evaluation signal for that tested flow. If Rule 9003 does not appear, the result remains INCONCLUSIVE; the design does not assume the human debugger uses the public Graph endpoint.
+The research defines a conditional **remote-endpoint request observer**: add lower-priority **Rule 9003** that allows only a direct GET from `developers.facebook.com` to the exactly anchored HTTPS `graph.facebook.com/.../debug_token` endpoint. Existing Rule 9002 must have strictly higher developer priority so a marker-bearing URL is blocked even when it also targets `/debug_token`. A clean idle baseline plus zero Rule 9002 matches plus a fresh Rule 9003 match can establish only that the browser flow **attempted** a request to Meta's documented endpoint. It does not prove network completion, Meta processing, response completion or that the submitted synthetic input was evaluated. Therefore **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**, while **SUPPORTED REMOTE-EVALUATION SIGNAL = UNRESOLVED / NOT YET DEFINED**.
 
 Meta's official agentic-tools script itself is **not** adopted as the EH inspector because it uses GET query-string token transport, requires the app secret and relies on throwaway-shell environment-variable handling, all of which differ from the current owner-adopted contract.
 
 Current inspector evidence state:
 - **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
-- **SUPPORTED REMOTE-EVALUATION SIGNAL = CANDIDATE DEFINED, NOT VERIFIED**
+- **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**
+- **SUPPORTED REMOTE-EVALUATION SIGNAL = UNRESOLVED / NOT YET DEFINED**
 - **OUTPUT FIELD SEMANTICS = SUFFICIENT**
 - **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PARTIAL — SUBJECT/TARGET SAFE BINDING PENDING**
 - **safe non-event inspector = BLOCKED**
