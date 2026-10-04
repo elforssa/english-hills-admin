@@ -171,6 +171,7 @@ class VerificationTests(unittest.TestCase):
                 self.assertEqual(verify.classify(docs, monitor_test), 'tooling')
 
                 run('reset', '--hard', docs)
+                Path('scripts').mkdir(exist_ok=True)
                 Path('scripts/test-crm-batch2.sql').write_text('select 1;\n')
                 db_test = commit('scripts/test-crm-batch2.sql')
                 self.assertEqual(verify.classify(docs, db_test), 'full')
