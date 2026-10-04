@@ -79,10 +79,16 @@ All must pass:
    - role remains EMPLOYEE.
    - no unexpected role/admin elevation.
 
-3. **Relationship baseline**
-   - Assigned assets does not already contain C2.
-   - Installed apps is recorded separately.
-   - no unexplained existing C2 relationship.
+3. **Complete relationship / assignment baseline**
+   - For EH Lifecycle R4 Employee, read the complete safely visible **Assigned assets** inventory before mutation across every asset type: record each typed asset canonical ID/label, task/permission label and direct/inherited source where Meta exposes it.
+   - Clear filters and traverse all pages/lazy-loaded rows; record visible totals/counts and final-page/no-next evidence where the UI provides them.
+   - Record **Installed apps** separately with the same completeness discipline; do not equate it with Assigned assets.
+   - C2 must not already appear in Assigned assets or Installed apps, and there must be no unexplained existing C2 relationship.
+   - For protected System User `100089438321765`, capture the complete safely visible assigned-asset/relationship inventory, including typed IDs, task/permission labels and direct/inherited source where shown.
+   - For protected System User `61594759444572`, capture the same complete safely visible assigned-asset/relationship inventory.
+   - For protected app `1069638329182835`, capture the complete safely visible Business Apps assignment/connected-asset/configuration metadata needed to compare the same surfaces after 4B.
+   - Preserve source surface, visible counts/totals, filter state and completeness limits for every baseline.
+   - Missing, denied, filtered, incomplete or conflicting evidence is **INCONCLUSIVE**: STOP before mutation rather than treating absence or continued object presence as proof of unchanged authority.
    - if C2 already appears assigned or any prior 4B action is uncertain, STOP and reconcile; do not reapply.
 
 4. **Exact control drift**
@@ -105,10 +111,13 @@ All must pass:
    - one named human operator only.
    - no concurrent second Meta session or agent/operator performing 4B.
    - exact UTC start/end must be owner-authorized immediately before execution.
-   - maximum window: **60 minutes**.
-   - no automatic extension.
+   - record the actual execution start before fresh baseline collection.
+   - maximum window: **60 minutes**; the effective deadline is the earlier of the approved UTC end or actual start + 60 minutes.
+   - before clicking **Assign assets**, confirm enough time remains to complete the mandatory post-action readback safely. If not, STOP before confirmation.
+   - no automatic extension, replacement session or continuation beyond the effective deadline.
+   - expiry after a possible **Assign assets** confirmation is an **AMBIGUOUS RESULT**: preserve state, do not continue/reapply/remove, and require separately reviewed reconciliation.
 
-If any gate fails, STOP before Assign assets.
+If any gate fails, evidence is incomplete/conflicting, or insufficient safe readback time remains, STOP before Assign assets.
 
 ## One deliberate confirmation
 
@@ -169,14 +178,40 @@ Using safe nonsecret Business Apps/C2 metadata only:
 - no unexpected connected assets;
 - no protected-object coupling.
 
-### Protected regression
+### Complete protected regression and assignment comparison
 
-Within safe observable views confirm:
+Revisit the **same exact safe surfaces used for the fresh baseline** and compare before versus after.
 
-- English-hills / `1069638329182835` remains present and unmodified by operator action;
-- System User `100089438321765` remains present;
-- System User `61594759444572` remains present;
-- no unrelated assignment was created.
+For EH Lifecycle R4 Employee:
+
+- enumerate the complete safely visible Assigned assets inventory across every asset type, with typed canonical IDs/labels, task/permission labels and direct/inherited source where shown;
+- record Installed apps separately;
+- clear filters, traverse all pages/lazy rows, and reconcile visible totals/counts and final-page/no-next evidence where available;
+- the only authorized assignment delta is C2 `29771601672426816` with **Develop app — Partial access**.
+
+For protected System User `100089438321765`:
+
+- compare the complete safely visible assigned-asset/relationship inventory to the fresh pre-action baseline;
+- record typed asset IDs, task/permission labels and direct/inherited source where shown;
+- no operator-caused assignment/configuration delta is permitted.
+
+For protected System User `61594759444572`:
+
+- perform the same complete before/after comparison;
+- no operator-caused assignment/configuration delta is permitted.
+
+For protected app English-hills / `1069638329182835`:
+
+- compare the same safely visible Business Apps assignment/connected-asset/configuration surfaces used before 4B;
+- no operator-caused change or new integration coupling is permitted.
+
+Completeness rules:
+
+- object names merely remaining present do **not** prove permissions/assignments are unchanged;
+- hidden/denied reads never prove absence;
+- filtered, paginated or lazy-loaded views must be completed and reconciled;
+- any missing, denied, incomplete or conflicting required before/after evidence makes the result **INCONCLUSIVE** and requires STOP;
+- any demonstrated unauthorized assignment/configuration delta is a **CONFIRMED BOUNDARY VIOLATION**.
 
 No secret/token inventory is required or allowed.
 
@@ -189,10 +224,17 @@ May be claimed only when:
 - one Assign assets confirmation occurred;
 - C2 `29771601672426816` is attributable to Employee `61594989243533`;
 - exactly Develop app — Partial access is shown;
-- no unrelated/protected asset/task was added;
-- Installed apps is recorded separately;
-- protected regression checks pass;
-- no token/credential/dataset operation occurred.
+- the complete post-action Employee Assigned assets inventory has been reconciled against the complete fresh baseline, with the C2/Develop app relationship as the only authorized delta;
+- Installed apps is recorded and reconciled separately;
+- complete safely visible before/after assignment/task/inheritance comparisons for protected System Users `100089438321765` and `61594759444572` pass;
+- the protected app `1069638329182835` passes the same-surface before/after assignment/connected-asset/configuration comparison;
+- filters/pages/lazy rows/counts have been reconciled sufficiently to support completeness;
+- no required evidence is missing, denied, incomplete or conflicting;
+- no unrelated/protected asset/task was added or changed;
+- no token/credential/dataset operation occurred;
+- the complete readback finished within the effective execution deadline.
+
+If any required completeness or regression fact cannot be established safely, classify **INCONCLUSIVE** rather than VERIFIED ASSOCIATION.
 
 Then **STOP before 4C**.
 
@@ -206,7 +248,7 @@ If any required gate fails before confirmation:
 
 ### 4B AMBIGUOUS RESULT
 
-If the UI times out, confirmation result is unclear, or readback conflicts:
+If the UI times out, confirmation result is unclear, the effective deadline expires after a possible submission, or required readback is incomplete/denied/conflicting:
 
 - do not reapply;
 - do not remove;
@@ -287,16 +329,18 @@ That future action authorization must state:
 - exact UTC end;
 - maximum duration 60 minutes;
 - other operators/agents/concurrent Meta sessions excluded;
-- fresh pre-action checks required;
+- fresh **complete** pre-action Employee/protected-object assignment/task/inheritance inventories with pagination/filter/count reconciliation;
 - exactly one Assign assets confirmation;
-- complete post-action readback;
+- complete same-surface post-action readback and before/after regression comparison;
+- submission-boundary confirmation that sufficient safe readback time remains;
+- deadline expiry after possible submission treated as ambiguity with no continuation/retry;
 - STOP before 4C.
 
 The execution clock must not start during documentation review. The exact window is intentionally unfilled here so review/adoption cannot consume the operational window.
 
 ## Prepared owner authorization template
 
-> I authorize 4B-only execution under reviewed and merged 4B-OP1 at [exact commit]. Sole operator: [name]. Authorized UTC window: [start]–[end], maximum 60 minutes. Bind Glory Lot `1741597822557523`, Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE`, and C2 `29771601672426816 / EH Lifecycle R4 C2`. After fresh required pre-action baselines pass, select only C2 under Assigned assets → Assign assets → Apps, enable only **Develop app — Partial access**, and click **Assign assets** exactly once. Perform complete post-action Assigned assets, separate Installed apps, C2 and protected-object readback, then STOP. No retry/reapply/remove on ambiguity. 4C/dataset assignment, Generate token, credentials, app secrets, Production, H3-06–08, H4 and lifecycle sending are not authorized.
+> I authorize 4B-only execution under reviewed and merged 4B-OP1 at [exact commit]. Sole operator: [name]. Authorized UTC window: [start]–[end], maximum 60 minutes. Bind Glory Lot `1741597822557523`, Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE`, and C2 `29771601672426816 / EH Lifecycle R4 C2`. Record actual start before fresh baseline collection. Capture complete safely visible Employee/protected-object assignment/task/inheritance baselines with typed IDs/tasks/direct-or-inherited source where shown and reconcile filters/pages/lazy rows/counts. If evidence is incomplete, denied or conflicting, STOP. Before confirmation, verify enough time remains for complete readback. Then select only C2 under Assigned assets → Assign assets → Apps, enable only **Develop app — Partial access**, and click **Assign assets** exactly once. Perform complete same-surface post-action Assigned assets, separate Installed apps, C2 and protected-object before/after regression readback, and accept only the C2/Develop app relationship as the authorized delta. Deadline expiry after possible submission is ambiguity with no continuation/retry. Then STOP before 4C. No retry/reapply/remove on ambiguity. 4C/dataset assignment, Generate token, credentials, app secrets, Production, H3-06–08, H4 and lifecycle sending are not authorized.
 
 ## Prepared result
 
