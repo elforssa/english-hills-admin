@@ -1,5 +1,11 @@
 # Security and permission boundaries
 
+## Proposed S1 credential security boundary — 2026-10-05
+
+[S1 permanent invariants](../architecture/plans/crm-meta-lifecycle-credential-simplification.md#permanent-security-invariants) retain dedicated C2/Employee/dataset, least privilege across app capability/access tier/asset grants/token scopes/effective authority, no DQA, human-only handling and Vercel Production-only sensitive custody. The proposed change replaces disposable A/B and transport-monitor assurance with one bounded final-token validation through Meta-supported diagnostics, plus safe revocation/replacement. No token value enters AI, source, logs, screenshots or intermediate persistent storage; runtime resolves only the approved server secret reference.
+
+This is a **proposed Tier-3 policy amendment**, not a changed deployed permission or approval to issue/store credentials. After exact-head review, owner adoption and merge, S1 controls credential-policy conflicts with historical R7 text below; prior evidence stays historical. Gate B still requires focused review and explicit credential/Production authority; Gate C separately requires final live review/owner approval. Until adoption all operational holds remain. Read S1 for normal rotation; the old bootstrap is not an additional contract after adoption.
+
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
 The owner approved Revision 7 at PR #64; prior proposal status below is historical. The [Step 2 protected contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#b5-custody-and-handling-contract) binds custody readiness, manual secret-bearing UI boundaries and allowlisted non-event evidence. No reviewed vault or inspector is established yet. No deployed permission/secret changed; credential operations and Production storage remain separately authorized Tier-3 work.

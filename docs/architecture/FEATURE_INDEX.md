@@ -1,5 +1,7 @@
 # Feature index
 
+> **Credential policy proposal, 2026-10-05:** start with [S1](plans/crm-meta-lifecycle-credential-simplification.md) for the proposed simplified identity/privilege/custody/validation/rotation contract. Pending review and owner adoption; no credential or activation operation authorized. On adoption it supersedes R7 credential procedures referenced below, while preserving their evidence and R4 delivery safeguards. [CURRENT_STATE](../ai/CURRENT_STATE.md) distinguishes current source/deployment from proposals.
+
 > **H3 Revision 7 4A packet preparation — 2026-10-03:** S4-P1 owner-approved and merged at PR #70 / `478d898ecf1f31d052e48f65e37a9f7caa58809c`, per direct owner commission. [4A-OP1](plans/crm-h3-05-revision-7-4a-operator-packet.md) prepares one isolated C2 create/readback then STOP, write-ahead ledger contract, owner template/checklist/output and reconciliation. Exact creation choices and actual ledger/operator/window remain unbound; 4A/4B/4C NOT AUTHORIZED. Documentation branch work only; no Meta access/mutation or new preflight acceptance. Earlier S4-P1 status below is historical.
 
 

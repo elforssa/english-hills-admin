@@ -1,5 +1,7 @@
 # H3 Revision 7 — safe non-event inspector synthetic assessment packet
 
+> **Historical credential procedure after S1 adoption:** [S1](crm-meta-lifecycle-credential-simplification.md) proposes superseding this document's R7 credential/bootstrap/inspector/recovery ceremonies and per-action gates. S1 is not adopted yet; existing operational holds remain. Once independently reviewed, owner-adopted and merged, S1 is the sole credential-process contract where these texts conflict. Historical evidence/approval scope and unrelated R4/dormant/live safeguards below remain intact; do not replay old actions.
+
 ## Status
 
 **Tier 3 — preparation for a synthetic/noncredential human-only assessment.**

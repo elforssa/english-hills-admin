@@ -1,5 +1,13 @@
 # Current state
 
+## Simplified Meta credential architecture — proposed 2026-10-05
+
+[S1 architecture](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) proposes one dedicated final token → bounded validation → direct Vercel Production sensitive storage, with separate dormant acceptance and live activation. **Tier 3; proposed, not independently reviewed, owner-adopted, implemented or executed.** The owner commissioned architecture only. No Meta/credential/Vercel/Production/event action occurred in this task. Existing operational holds remain until adoption and separate owner operational approval; S1 does not assert credential readiness.
+
+GitHub readback confirms [PR #89](https://github.com/elforssa/english-hills-admin/pull/89) merged at main `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5` from head `d11c77aebd1b3c791e5760e9731695f6918fac53`. Its monitor is source implementation only, not verified browser operation. The earlier unmerged-monitor notices below are historical. [PR #91](https://github.com/elforssa/english-hills-admin/pull/91), observed head `a51bb2aad273e96b6d71970593add9abfad0ced4`, remains open and untouched: its owner-observed C2 configuration stopped at confirmation, without attachment or token issuance. Its investigation supports the own-app/System User route but leaves the exact token scope recipe unresolved; see S1's pinned evidence links and limits.
+
+Dedicated app `29771601672426816`, Employee `61594989243533`, dataset `1152399921284927` and secret reference `CRM_META_LIFECYCLE_TOKEN_EH_R4` are retained. DQA remains excluded. [Dated Vercel preflight](../architecture/evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) records the token/live-gate keys absent; this task did not refresh Production state. S1 would retire R7 A/B/bootstrap/transport and per-screen gates on adoption, preserving historical evidence. Recommendation: revise #91 into the concise S1 runbook after adoption, preserving its investigation; do not merge its old executable contract. Credential ready, dormant integration accepted and lifecycle live remain separate states.
+
 ## H3 Revision 7 — transport monitor first-review corrections applied — 2026-10-04
 
 PR #89 first exact-code review at head `ab99be3084d7b02858887b7db7e9f5c122d87633` found implementation defects in Chrome response-envelope handling, async observation invalidation, Rule 9002 precedence and CI assertions, plus case-sensitivity/RE2/test-coverage qualifications. Those findings are corrected on the same branch.
