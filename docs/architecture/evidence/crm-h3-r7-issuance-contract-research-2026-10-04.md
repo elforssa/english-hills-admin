@@ -11,7 +11,7 @@ Provenance: owner's direct consolidated continuation instruction and PR #91 [per
 
 Test app: **`1082823877929239 / EH R7 G0 Marketing Test 261004`**, Glory Lot owned. Creation was reported consumed once in the existing [creation record](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981376924); zero use cases/no unexpected assets or consumers were reported in the [isolation baseline](https://github.com/elforssa/english-hills-admin/pull/91#issuecomment-5981394953). Owner directly observed checkbox selection remained local/uncommitted and Save was the first persistent use-case action. One Save attached exactly **Create & manage ads with Marketing API**.
 
-**Transaction classification: `LOCAL_UNCOMMITTED_PROVEN → SAVE FIRST PERSISTENT ACTION`.** Selection and Save allowances were each consumed once. No retry, reselect, remove, delete/recreate or alternate use case occurred. Retain the test app and attached use case; no cleanup mutation or removal promise.
+**Transaction classification: `LOCAL_UNCOMMITTED_PROVEN → SAVE FIRST PERSISTENT ACTION`.** Selection and Save allowances were each consumed once. No retry, reselect, remove, delete/recreate, alternate use case or compensating mutation occurred. Retain the test app and attached use case; no cleanup mutation or removal promise.
 
 | Current observed test-app state | Bound result |
 | --- | --- |
@@ -19,6 +19,7 @@ Test app: **`1082823877929239 / EH R7 G0 Marketing Test 261004`**, Glory Lot own
 | Marketing API Access Tier | Limited access; Settings says Limited |
 | `ads_management`, `ads_read`, `business_management`, `pages_read_engagement` | Each Ready for testing |
 | Token Tools permission options | Includes selectable `ads_read`, `ads_management`, `business_management`, `pages_read_engagement`, `pages_show_list`; no token generated. This is the test-app Tools surface, **not** the dedicated Employee System User chooser |
+| Sandbox-ad-account tooling | App shows development access; no sandbox/ad-account setup or association performed |
 | Business Asset User Profile Access, `catalog_management`, `email`, `pages_manage_ads` | Not active / showing Add in the observed state |
 | Facebook Login for Business | Present; no configuration reported |
 | Webhooks | Configuration surface present; callback/verify-token fields blank, observed fields unsubscribed; no configuration/subscription |
@@ -27,7 +28,7 @@ Test app: **`1082823877929239 / EH R7 G0 Marketing Test 261004`**, Glory Lot own
 
 Lower-page entries not fully observed remain UNKNOWN. The readback binds displayed current state, not an exhaustive hidden provider delta or removal semantics. Limited is not an authority grant to the Employee; selectable permissions are not selected/approved token scopes. Automatic Login/Webhooks surfaces do not authorize configuring them.
 
-Owner reports **no token generated**, no C2/Employee/dataset/Pixel/ad-account association or credential action, no App Review/verification/publication, API/event, DQA or Vercel action. Token Tools observation is explicitly recorded as supplied evidence; it does not authorize additional test-app tooling or reinterpret the original test contract's token-chooser exclusion.
+Owner reports **no token generated**, no C2/Employee/dataset/Pixel/ad-account association or credential action, no App Review/verification/publication/access-tier upgrade, Marketing Messages acceptance, other configuration, API/event, DQA or Vercel action beyond the one reported use-case attachment. Token Tools observation is explicitly recorded as supplied evidence; it does not authorize additional test-app tooling or reinterpret the original test contract's token-chooser exclusion.
 
 ### Evidence transfer and boundedness decision
 
