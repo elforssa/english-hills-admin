@@ -233,7 +233,7 @@ The accepted amendment remains intentionally narrow:
 - protected and unrelated regression unchanged;
 - no general claim that Meta universally couples these permissions.
 
-**Owner adoption of this narrow amendment remains pending.** Until that owner adoption occurs, the repository classification stays review-pending rather than VERIFIED.
+**Owner adoption completed after independent review and merge of PR #79.** The owner explicitly adopted the narrow provider-coupling amendment for this exact English Hills endpoint and accepted the reviewed classification **4C = VERIFIED DATASET GRANT**.
 
 ## Classification under the current approved packet
 
@@ -244,15 +244,13 @@ The reviewed 4C-OP1 intended final lifecycle Employee state was exactly:
 
 The observed additional Pixel / View Pixels row is a persistent visible authority delta outside that exact expected state.
 
-Therefore this closeout must **not** claim **4C VERIFIED DATASET GRANT** under the current packet.
+The independent review accepted the automatically surfaced View Pixels row as a narrowly scoped provider-coupled effect for this exact endpoint, and the owner adopted that amendment.
 
-Current classification:
+Final classification:
 
-**4C = DATASET GRANT COMMITTED; PROVIDER-COUPLED VIEW PIXELS SIDE EFFECT REQUIRES REVIEW**
+**4C = VERIFIED DATASET GRANT**
 
-The complete post-action regression record now passes apart from the single reviewed question of whether the automatically surfaced View Pixels row is an acceptable provider-coupled effect of the exact dataset grant.
-
-This is treated fail-closed as a **boundary-review state**, not permission to retry, remove, reassign or continue.
+No further Meta mutation was required. The complete post-action regression record passes under the adopted narrow amendment.
 
 ## Stop / preservation rule
 
@@ -272,30 +270,21 @@ Do not:
 
 Any remediation or acceptance of the coupled Pixel task requires separately reviewed architecture/evidence and owner authorization.
 
-## Review question
+## Adopted provider-coupling amendment
 
-Independent review must determine whether the automatically visible **Pixel / View Pixels** row is an unavoidable and acceptable provider-coupled representation/effect of the same dataset endpoint grant for CAPI, such that a narrow amendment may accept it as part of the intended created-object state.
+Independent review concluded **PROVIDER-COUPLED VIEW PIXELS ACCEPTABLE**, and the owner adopted the following narrow amendment:
 
-Relevant evidence for that review includes:
+> For the specific English Hills combined Pixel/Dataset endpoint `1152399921284927`, assigning **Use events dataset — Partial access** to the lifecycle Employee may cause Meta Business Settings to additionally surface **Pixel → English Hills pixel → View Pixels** as a provider-coupled visible permission. This paired View Pixels row is acceptable only when it appears automatically from the one reviewed dataset assignment, remains limited to the same target endpoint, introduces no management/full-access authority, and all protected/unrelated regression checks remain unchanged.
 
-- no Pixel asset was selected by the operator;
-- exactly one dataset assignment was submitted;
-- target dataset-side readback confirms the exact intended **Use events dataset** grant;
-- the protected existing Conversions API System User already exhibits the same paired permissions:
-  - English Hills pixel / View Pixels
-  - English Hills dataset / Use events dataset
-
-If accepted, the architecture must explicitly bind the paired visible effect before 4C can be reclassified as verified.
-
-If not accepted, the state remains a boundary violation requiring separately reviewed remediation.
+This amendment does not generalize to other datasets, routes or permissions.
 
 ## Remaining state
 
-Until that review/adoption:
+After owner adoption:
 
 - **4A = VERIFIED C2 CREATION**
 - **4B = VERIFIED ASSOCIATION**
-- **4C = NOT VERIFIED — PROVIDER-COUPLED SIDE EFFECT UNDER REVIEW**
+- **4C = VERIFIED DATASET GRANT**
 - **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**
 - **PREFLIGHT VERIFIED = NO**
 - **B1 actual credential acceptance = PENDING**
