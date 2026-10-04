@@ -1,5 +1,23 @@
 # Current state
 
+## H3 Revision 7 — B5 READY / safe inspector transport-monitor design prepared — 2026-10-04
+
+PR #84 is owner-adopted and merged at main `13853983dadee2a0fde93388f976887df628acbc`. The adopted state is now **B5 = READY** with the exact Vercel conditional-storage binding already recorded. No Vercel write is authorized merely by that readiness classification.
+
+The safe non-event inspector remains **BLOCKED** on two independent gates:
+
+1. **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
+2. **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PENDING**
+
+A new documentation-only [request-transport monitor design](../architecture/plans/crm-h3-05-r7-inspector-transport-monitor-design.md) proposes a tiny temporary Chrome Manifest V3 extension using only `declarativeNetRequest` + `declarativeNetRequestFeedback`. Chrome's declarative rule engine would block/count any request URL containing one fixed synthetic marker without using webRequest, HAR, devtools, cookies, headers, body inspection, content scripts, host permissions or persistent storage. The result surface uses only `getMatchedRules()`, whose documented result contains matched rule identity, tab ID and timestamp rather than request URL/body/headers.
+
+The proposed transport test has a calibration rule and a separate token-shaped synthetic marker rule. A match on the debugger marker is fail-closed. A calibrated no-match plus demonstrated synthetic remote evaluation is only **TRANSPORT CANDIDATE PASS** for the tested Chrome/debugger flow; it is not a universal Meta guarantee.
+
+Meta-operated Postman documentation and official Meta Node/Java Business SDK sources continue to show the supported `debug_token` API route using `input_token` in a URL query parameter, so that API/SDK route remains **NOT APPROVED**. Public Meta documentation supports only part of the debugger output model (token type, permissions, app_id); full valid-token output binding remains **PARTIAL / BLOCKED**. No real A may be generated merely to discover field labels under this proposal.
+
+Current holds: **B1 actual credential acceptance = PENDING**, **PREFLIGHT VERIFIED = NO**; no browser extension implementation/installation, Meta account action, A/B generation, real token inspection, Revoke tokens, Vercel secret write, H3-06–08, H4, Test Events or lifecycle send is authorized.
+
+
 ## H3 Revision 7 — Vercel B5 preflight PASS / inspector synthetic packet prepared — 2026-10-04
 
 PR #83 is owner-adopted and merged at main `6c62828d7b1edd53db2880ba3823dd25d8823d6f`. The active architecture is now Vercel-only lifecycle credential custody: `CRM_META_LIFECYCLE_TOKEN_EH_R4` will later be stored only as a Vercel Production Secret after B passes safe non-event/B1 acceptance, with no external recovery-vault copy and no SAME-A post-revoke proof.
