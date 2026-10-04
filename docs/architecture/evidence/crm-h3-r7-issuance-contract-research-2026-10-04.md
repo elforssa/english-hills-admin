@@ -183,6 +183,8 @@ Keep five layers distinct: **use-case/app capabilities → Marketing API Access 
 
 ## Proposed isolated test-app experiment — G0-TEST1, NOT AUTHORIZED
 
+**Current status: DEFERRED.** The historical first-party direct-CAPI playbook reassessment below supersedes this experiment as the next evidence gate. Preserve the design and its reviewed fail-closed selection/Save branches; do not execute it or seek owner action approval for it now. Current direct-CAPI route verification takes priority. Resuming this design would require new evidence justifying its value and separate exact-SHA review/action authorization.
+
 **Narrowed purpose after the owner-observed official mapping:** investigate checkbox persistence and Save/confirmation semantics, actual access tier/status, displayed review/verification/publication prerequisites and unexpected bundled state. Published required/optional mapping is already recorded below and does not need experimental discovery. Any displayed catalog is read only to compare actual app state with that publication; this experiment cannot determine lifecycle necessity or the A/B scope subset.
 
 **Tier 3 — provider-object/configuration experiment.** This is a design for separate exact-SHA review and explicit owner execution authorization, not an operational commission. It creates no app, ledger, reservation or session now. The experiment cannot promise a sandbox or guaranteed deletion. “Disposable” means no intended consumer/credential and no transfer into lifecycle; default disposition is **retained, unconnected research object** until separately authorized cleanup.
@@ -231,9 +233,11 @@ Close app/configuration surfaces after safe evidence. Do not open/clear secrets,
 
 Test-app evidence is **not automatically transferable to C2**. Bind app ownership/setup/current UI/date/access differences and assess which observed controls/effects are comparable. It cannot prove C2 entitlement, force-free token issuance, required CAPI A/B subset or absence of inherited effective authority; it never inspects token scopes. A clean experiment may inform a newly exact C2 mutation contract in this same PR, with its own separate approval. Remaining reviewer B1/B2 uncertainty, final credential B1, lifetime/subject/target semantics and issuance selections stay fail-closed. Do not claim experiment success alone makes the credential packet execution-ready.
 
-No architecture conflict is discovered by missing documentation. A tested/provider-required authority expansion would require architecture resolution then; no preemptive rewrite is proposed now. **Recommendation only: G0-TEST1 is the next separate Tier-3 review/owner-authorization gate; neither test-app creation/selection/Save nor C2 mutation is authorized.**
+No architecture conflict is discovered by missing documentation. A tested/provider-required authority expansion would require architecture resolution then; no preemptive rewrite is proposed now. **Historical recommendation, superseded by the direct-CAPI route reassessment below: G0-TEST1 was proposed as the next separate Tier-3 review/owner-authorization gate. It is now DEFERRED; neither test-app creation/selection/Save nor C2 mutation is authorized.**
 
 ## Owner-observed official permission mapping — latest G0 reassessment
+
+This mapping assessment remains source evidence. Its next-gate recommendation is superseded by the subsequent historical-playbook/current-route reassessment below; G0-TEST1 is now DEFERRED.
 
 Provenance: owner-supplied first-party page text, received in the PR #91 work item on 2026-10-04, from Meta's [Use Case Permission Mapping](https://developers.facebook.com/documentation/development/create-an-app/use-cases-permission-mapping), section **Use Case Permission Mapping**. Exact observation UTC and page revision were not supplied. **No independent automated retrieval is claimed**; this author did not access Meta. Earlier automated 429/source limitations remain historical evidence, not a claim that this supplied page was fetched successfully.
 
@@ -264,6 +268,61 @@ The authoritative repository [C01/C02/C06/C09 register](crm-h3-05-option-c-2026-
 
 ### Revised next gate and authorization boundary
 
+Historical mapping checkpoint; the subsequent playbook reassessment supersedes this next-gate recommendation.
+
 **Option 1 is not reached:** C2 mutation cannot yet be fully bound. **Option 2 remains a proposed isolated evidence gate, with narrowed purpose:** G0-TEST1 may investigate persistence/control semantics and actual account state under separate exact-SHA Tier-3 review and explicit owner execution approval. Published mapping discovery is removed from its purpose. It cannot resolve direct-CAPI necessity or authorize C2 merely by showing a catalog. First-party noncredential clarification of the direct-CAPI setup question remains needed in this same G0 work item; no support message is authorized here. **Option 3 is not established:** no evidence yet proves a genuine architecture conflict.
 
 All experiment allowances, one-total-persistent-configuration-action bound, decision table, STOP branches, evidence-transfer limitations and retained/unconnected policy above remain intact. No qualifying positive local-selection proof is currently established. No Meta access, test app creation, checkbox selection, Save, C2/use-case/product/access/grant mutation, credential operation, API/event call or Vercel action occurred or is authorized by this update. G0 remains BLOCKED; the consolidated bootstrap packet is preparation only.
+
+## Historical direct-CAPI playbook — current-route verification takes priority
+
+**Determination: STILL INCONCLUSIVE. G0-TEST1 = DEFERRED.** Highest-value next evidence objective: **resolve the mismatch between the historical official own-app CAPI route and today's observed C2 token wizard**. A disposable Marketing app can investigate Marketing controls, but cannot establish that those controls are necessary for the adopted lifecycle route. Do not execute or seek owner action approval for that experiment now. Its existing design, previous review finding and fail-closed correction remain intact; no historical evidence is deleted.
+
+### Source provenance and bounded meaning
+
+Owner supplied page-3 facts from Facebook's official historical **Conversions API: Direct Integration Playbook for Developers**, received in this PR #91 work item on 2026-10-04. This record uses **owner-supplied historical first-party text**; the author did not receive/view the complete playbook or independently retrieve it. Publication/version/date, source URL and file reference were not supplied and are not invented. This is not evidence of current 2026 platform behavior.
+
+| Page-3 fact supplied by owner | What it supports / does not support |
+| --- | --- |
+| Token through Events Manager or, for a business with its own app/System User, Business Manager; neither option needed App Review or permission requests | Historical support for two direct-CAPI credential routes. No-permission-request wording does **not** establish empty token scopes, present-day entitlement or current review/access prerequisites |
+| Business Settings → assign Pixel to System User → select assigned System User → Generate Token | The historical own-app instructions do not include attaching a general Marketing API use case. Strong evidence against presuming such a use case inherently necessary for direct CAPI; not current bare-C2 sufficiency, exact grant/task/scope or Employee eligibility proof |
+| Events Manager historically auto-created a Conversions API App and Conversions API System User | Describes the historical managed route, not a requirement that today's supported route use Meta-generated identities or authority to create them |
+| Server delivery uses Pixel `/events` endpoint with the generated access token | Historical direct delivery mechanism. No event call, token test or delivery proof is commissioned |
+
+Together with [C01's June 28, 2026 own-app/System User guidance as read on October 3](crm-h3-05-option-c-2026-10-03.md#fresh-official-documentation), this strengthens the case for investigating the direct route first. The playbook does not establish current app use cases/products, OAuth/System User permission names, dataset task semantics, Employee/Admin requirements, Business Verification/App Review/access tier or actual own-app issuance behavior. Absence of a Marketing step in historical instructions is not proof the current platform has none.
+
+### Current public retrieval and five unresolved facts
+
+This author attempted current public retrieval on 2026-10-04 of [current CAPI Get Started](https://developers.facebook.com/documentation/ads-commerce/conversions-api/get-started) and the [older Get Started URL](https://developers.facebook.com/docs/marketing-api/conversions-api/get-started/); both returned **HTTP 429**. Two batched first-party-domain searches for own-app/use-case CAPI documentation returned no results. No page contents or current account facts were extracted; empty search results are not evidence that a route was removed. Earlier authenticated October 2/3 repository observations remain dated evidence, not fresh UI confirmation.
+
+| Requested determination | Current evidence / unresolved part |
+| --- | --- |
+| 1. Today's Events Manager labels/options | Historical October 2 [dataset Settings observation](crm-h3-direct-capi-credential-2026-10-02.md#authenticated-dataset-evidence) recorded **Conversions API**, **Set up direct integration** and **Generate access token**. The manual route had that current UI label then. Today's labels/visibility are not newly observed; no setup control may be used to obtain them |
+| 2. Current own-app/System User route | C01's June 2026 documentation read on October 3 supports an own-app route. Fresh wording equivalent to **Via Your Own App**, and applicability to the exact existing dedicated C2/Employee, remain to be established without issuance |
+| 3. Required app capability | Neither historical playbook nor published Marketing mapping proves a Marketing card required. Current product/use-case requirements for this exact direct route remain UNKNOWN |
+| 4. Dataset assignment alone | Adopted Use events dataset partial and coupled View Pixels partial are established administrative tasks. Whether those plus existing C2 assignment provide current credential entitlement remains UNKNOWN; no equivalence with the managed CAPI identity is inferred |
+| 5. Cause of C2 zero permissions | Observed C2 has no use cases and its wizard exposes zero permissions. Causality remains UNKNOWN for each candidate: zero use cases; app type/configuration; missing CAPI-specific configuration; asset/task issue; superseding platform behavior. Correlation is not a diagnosis; no repair or trial escalation is authorized |
+
+No current evidence establishes mandatory Meta-generated identities or unrelated effective authority. Therefore no architecture conflict is discovered. Conversely, the historical route cannot yet clear G0 or justify the exact A/B issuance contract.
+
+### One bounded owner read-only observation — G0-READ1
+
+**Requested evidence only; no provider mutation or credential action.** One owner observation of the existing Events Manager **Glory Lot / `1741597822557523` → English Hills pixel / intended endpoint `1152399921284927`**. Do not use navigation row `1568116421343147` as an endpoint substitute. Before reading details, corroborate the actual dataset identity/ownership through existing nonsecret metadata; if the exact target cannot be established safely, STOP and record TARGET INCONCLUSIVE. No other dataset/app/System User is inspected or changed.
+
+1. From the already authenticated Events Manager, view only the existing dataset overview and **Settings** tab if clearly ordinary read-only navigation. Do not start a setup wizard, connection flow or permission dialog. If reaching Settings requires a potentially mutating control or new identity/configuration, STOP before it.
+2. Read only currently visible nonsecret **Conversions API** section labels/options/help text. Record whether **Set up manually**, **Set up direct integration** or equivalent wording is displayed and whether **Generate access token** is visible/enabled/disabled. **Never click Generate access token**, even if apparently disabled. Missing labels remain NOT VISIBLE, not proof of unsupported delivery.
+3. Record already-visible references to **Via Your Own App** or equivalent own-app/System User instructions and any explicit use-case/product, asset/task, identity or review/verification/tier prerequisites. An already-present clearly informational first-party documentation link may be read only if it requires no setup action or private/credential surface. Record its canonical official URL/title and bounded nonsecret semantics; no query-bearing/private URLs or arbitrary page dump. No speculative setup, expandable action or uncertain navigation is used to reveal more detail. If the information is not safely exposed, record NOT VISIBLE / UNKNOWN and STOP.
+4. Close the observation without executing any control. Stop before **Set up**, **Start**, **Continue**, **Manage**, **Connect**, **Generate**, testing or any action that could begin setup, create a managed app/System User, change DQA/integration/configuration, issue/reveal a credential or send an event. Do not toggle direct-only/DQA choices, click Marketing cards, visit credential tools, mutate C2/grants/assets/datasets or create a test app. Unexpected private/credential output: stop and close without copying it.
+
+Worksheet: owner/operator reference; actual observation start/end UTC if known (otherwise UNKNOWN); target/owner match PASS/INCONCLUSIVE; section visibility; exact nonsecret labels; generation control VISIBLE-ENABLED / VISIBLE-DISABLED / NOT VISIBLE / UNKNOWN; own-app route wording PRESENT / NOT VISIBLE / UNKNOWN; canonical first-party documentation reference or NONE; explicit requirement categories/names or UNKNOWN; fixed cause categories above SUPPORTED / NOT ESTABLISHED with source reference (no guess); STOP reason; **mutation/credential/event actions = NONE**. Return text only, no screenshot, token/fragment/hash, app secret, raw request/response, cookie/session value, private contact, raw credential-derived IDs or whole-page text. This observation need not resolve hidden requirements: no richer access is authorized merely to complete the worksheet.
+
+### Decision after returned evidence
+
+| Required determination | Evidence threshold / next disposition |
+| --- | --- |
+| **DIRECT OWN-APP ROUTE CURRENTLY SUPPORTED** | Current first-party evidence must establish applicability to existing dedicated C2/Employee without a broad Marketing use case; generic own-app wording alone is insufficient. Define remaining exact supported setup, identical A/B selectable/forced/returned subset, lifecycle entitlement, lifetime/class/subject/target/effective-authority semantics. Keep G0-TEST1 deferred or retire its future purpose explicitly; no credential issuance follows automatically |
+| **MARKETING/OTHER APP CAPABILITY REQUIRED** | Current first-party evidence must name the exact required capability and tie it to this direct lifecycle route. Bind account-specific effects/prerequisites and reassess candidate suitability and whether the retained G0-TEST1 adds necessary evidence. Neither generic Marketing mapping nor the zero-permission wizard alone meets this threshold; no attachment or test action is authorized |
+| **CURRENT ROUTE REQUIRES META-GENERATED CAPI IDENTITY** | Evidence must establish requirement, not merely an offered/recommended alternative or historical automatic creation. Flag a potential genuine architecture decision against adopted C2/Employee identity and isolated recovery; do not create/use a managed identity or silently switch routes |
+| **STILL INCONCLUSIVE** | Missing/inaccessible/ambiguous current facts or labels alone: return the bounded G0-READ1 evidence and remaining questions in this same PR; G0 blocked, no trial issuance or setup/mutation experiment |
+
+**Current result: STILL INCONCLUSIVE; request only G0-READ1.** G0-TEST1 is preserved but DEFERRED and not proposed for owner action approval now. No new preparation PR, architecture reopening, authenticated Meta access by author, provider mutation, credential action, API/event call or Vercel operation occurred. All bootstrap and H3-06–08/H4 execution holds remain.
