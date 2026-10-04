@@ -1,5 +1,21 @@
 # Current state
 
+## H3 Revision 7 — B5 vault comparison prepared — 2026-10-04
+
+PR #81 is owner-adopted and merged at main `611a934fb92ce39fc84409db2c1507b06fa83a46`. The adopted architecture remains vendor-neutral: **Vercel Production Secret is the later runtime store**, while a separate human-only recovery vault exists only for A/B custody and SAME-A recovery evidence.
+
+A current official-documentation [B5 vault comparison](../architecture/evidence/crm-h3-r7-b5-vault-comparison-2026-10-04.md) now evaluates 1Password, Bitwarden/Bitwarden Secrets Manager and Google Cloud Secret Manager without accessing or configuring any provider.
+
+Current research classification:
+- **1Password = CONDITIONAL / FIRST SIMPLICITY CANDIDATE** — lowest likely owner overhead; previous item versions and MFA are documented, but stable nonsecret SAME-A reference, plan-level audit coverage and destruction/history behavior still need synthetic qualification. Proposed test model uses separate S1/S2 items rather than overwriting one item.
+- **Bitwarden = CONDITIONAL / SECOND SIMPLICITY CANDIDATE** — stable secret IDs are documented and separate S1/S2 secrets can avoid overwrite; human-only exact-ID retrieval, audit-plan coverage and deletion/history behavior still require qualification.
+- **Google Cloud Secret Manager = TECHNICALLY SUFFICIENT CANDIDATE / HIGHER OVERHEAD** — official docs establish immutable numbered versions, exact-version retrieval, IAM, Data Access audit logging and permanent version destruction; it remains a fallback candidate, not selected.
+
+Recommended qualification order is 1Password first, then Bitwarden, then Google Cloud if the simpler choices cannot satisfy B5 without weakening SAME-A/audit/destruction requirements.
+
+No vault is selected. **B5 = OWNER DECISION REQUIRED**, **vault vendor = OPEN / UNSELECTED**, **safe non-event inspector = BLOCKED**, **PREFLIGHT VERIFIED = NO**, **B1 actual credential acceptance = PENDING**. No Vercel, vault, Meta, credential, revoke, Production or event action is authorized by this comparison.
+
+
 ## H3 Revision 7 — B5 custody / safe inspector preparation — 2026-10-04
 
 PR preparation follows merged owner-adopted created-object state at main `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
