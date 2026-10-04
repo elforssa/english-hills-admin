@@ -113,6 +113,7 @@ assert.deepEqual(endpoint.condition.initiatorDomains, ['developers.facebook.com'
 assert.deepEqual(endpoint.condition.requestMethods, ['get']);
 
 const endpointRegex = new RegExp(endpoint.condition.regexFilter);
+assert.equal(endpoint.condition.regexFilter.includes('(?:'), false, 'Rule 9003 regex must avoid RE2-unsupported non-capturing groups');
 for (const url of [
   'https://graph.facebook.com/debug_token',
   'https://graph.facebook.com/debug_token?input_token=synthetic',
