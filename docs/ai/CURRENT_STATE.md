@@ -1,5 +1,16 @@
 # Current state
 
+## H3 Revision 7 — 4C dataset grant committed with provider-coupled Pixel side effect — 2026-10-04
+
+Owner-authorized 4C executed once under merged 4C-OP1 / main `ae3d7fffb31aa3e296c05ddac1ddc535d31e13e0`: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` was assigned target dataset endpoint `1152399921284927 / English Hills pixel` with **Use events dataset — Partial access**. Target-dataset-side readback confirms the lifecycle Employee now appears alongside protected Conversions API System User `100089438321765`, both with **Use events dataset**.
+
+The same one-click assignment also caused Meta to show a separate **Pixel → English Hills pixel → View Pixels** row on the lifecycle Employee, despite the operator selecting only the Datasets category and exact dataset task. No Pixel asset was selected, no second confirmation occurred, and **Manage events dataset** remained off. The existing protected Conversions API System User already exhibits the same paired Pixel/View Pixels + Dataset/Use events dataset pattern, which is corroboration only.
+
+[4C execution closeout](../architecture/evidence/crm-h3-r7-4c-execution-closeout-2026-10-04.md) still does **not** claim 4C VERIFIED DATASET GRANT yet because owner adoption of the narrow coupling amendment is pending. Independent review concluded **PROVIDER-COUPLED VIEW PIXELS ACCEPTABLE** and found the evidence sufficient to support **4C = VERIFIED DATASET GRANT** with no further Meta mutation after owner adoption. Final read-only regression confirmations record: lifecycle Employee Installed apps none; both protected System Users unchanged; protected app unchanged; C2 Connected assets none; target dataset Partners 0 and Connected assets still only the pre-existing KAL ad account. All final confirmations were supplied before the clock check at **2026-10-04 04:31:05 UTC**, proving completion inside the authorized window ending 05:00 UTC. Preserve current provider state; no removal/reapply/retry/cleanup, token generation, credential operation, Production action or event send is authorized.
+
+Until separate review/adoption resolves whether the paired Pixel/View Pixels row is an acceptable unavoidable provider-coupled effect of the same endpoint grant: **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**, **PREFLIGHT VERIFIED = NO**, B1 actual credential acceptance PENDING, B5 OWNER DECISION REQUIRED and safe non-event inspector BLOCKED.
+
+
 ## H3 Revision 7 — 4C-only operator packet prepared — 2026-10-04
 
 PR #77 / 4C-SE1 is owner-adopted and merged at main `487c40bf49dbc1d740a98db90586bd5eb9968c4f`. Independent review concluded **4C SEMANTICS SUFFICIENT** at the dataset asset-task layer: **Use events dataset — Partial access** is accepted as the least-privilege administrative dataset task for the future 4C grant, without treating EH's Employee + C2 route as equivalent to Meta's managed Conversions API System User route. App installation, credential issuance/scopes/effective authority and delivery remain later gates; **Manage events dataset — Full access** remains prohibited.
