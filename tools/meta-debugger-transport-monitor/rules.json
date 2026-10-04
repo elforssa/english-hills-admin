@@ -23,7 +23,8 @@
         "webtransport",
         "webbundle",
         "other"
-      ]
+      ],
+      "isUrlFilterCaseSensitive": true
     }
   },
   {
@@ -50,7 +51,8 @@
         "webtransport",
         "webbundle",
         "other"
-      ]
+      ],
+      "isUrlFilterCaseSensitive": true
     }
   },
   {
@@ -83,7 +85,8 @@
         "webtransport",
         "webbundle",
         "other"
-      ]
+      ],
+      "isUrlFilterCaseSensitive": true
     }
   }
 ]
