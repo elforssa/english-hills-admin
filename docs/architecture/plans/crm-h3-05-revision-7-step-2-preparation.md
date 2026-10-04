@@ -1,5 +1,7 @@
 # H3 Revision 7 Step 2 — protected operator preparation
 
+> **Historical credential procedure after S1 adoption:** [S1](crm-meta-lifecycle-credential-simplification.md) proposes superseding this document's R7 credential/bootstrap/inspector/recovery ceremonies and per-action gates. S1 is not adopted yet; existing operational holds remain. Once independently reviewed, owner-adopted and merged, S1 is the sole credential-process contract where these texts conflict. Historical evidence/approval scope and unrelated R4/dormant/live safeguards below remain intact; do not replay old actions.
+
 > **2026-10-03 proposed B2-only addendum:** [B2-1](crm-h3-05-revision-7-b2-amendment.md) proposes a distinct credential-free one-submit authorization for the permanent **EH Lifecycle R4 Employee** after inconclusive Step 3. On owner approval only, it confirms this preparation's Employee label and supersedes its B2-before-creation requirement for that single action; it excludes every app/grant/credential action. The original preparation below remains historical. B5/inspector prerequisites for credentials remain unchanged; no create action is authorized here.
 
 Date: 2026-10-03. Tier 3: credential handling, effective authority and recovery gates, despite a documentation-only implementation. Base: `bf295c304e3a4f4361b25b2a852c66ae7091a857` (merged [PR #64](https://github.com/elforssa/english-hills-admin/pull/64)). Approved design: [Revision 7](crm-h3-05-revision-7-validation.md). This contract supplements its Step 2; it does not change C2/B1/B4/B5 or authorize Step 3.

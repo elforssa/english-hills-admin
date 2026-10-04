@@ -1,5 +1,7 @@
 # Owner summary
 
+> **Historical credential procedure after S1 adoption:** [S1](crm-meta-lifecycle-credential-simplification.md) proposes superseding this document's R7 credential/bootstrap/inspector/recovery ceremonies and per-action gates. S1 is not adopted yet; existing operational holds remain. Once independently reviewed, owner-adopted and merged, S1 is the sole credential-process contract where these texts conflict. Historical evidence/approval scope and unrelated R4/dormant/live safeguards below remain intact; do not replay old actions.
+
 ## Revision 7 B2 execution status — 2026-10-03
 
 [Revision 7's dated notices](crm-h3-05-revision-7-validation.md) record owner approval at PR #64 and later B2-1/OP-1 approval and execution. [B2 closeout](../evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md): current **B2 PASS**, permanent **EH Lifecycle R4 Employee / `61594989243533` / EMPLOYEE / Glory Lot `1741597822557523`**. One authorized submission succeeded; allowance permanently consumed, no further lifecycle Employee creation authorized. Historical Step 3 remains BLOCKED / B2 INCONCLUSIVE. Full PREFLIGHT VERIFIED: NO. C2, grants, actual B1 authority, custody/inspector, credentials/recovery and Production/H3-06–08/H4/sending remain separately gated. This repository closeout grants no Step 4 or Meta access/mutation authority; prior proposal/status entries below are historical.

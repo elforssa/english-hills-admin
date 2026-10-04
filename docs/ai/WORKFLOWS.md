@@ -1,5 +1,11 @@
 # Operational workflows
 
+## Proposed simplified credential workflow — 2026-10-05
+
+Use [S1 operator flow and recovery](../architecture/plans/crm-meta-lifecycle-credential-simplification.md#operator-flow) as the proposed replacement for the historical R7 workflow below: supported configuration → one final credential → one validation → direct Vercel Production sensitive storage → metadata-only closeout. Gate A is architecture adoption; Gate B is focused credential/custody review and owner operational approval; Gate C is separate live activation review/owner approval. Read-only observations and ordinary setup within scope need no per-screen review or GitHub log.
+
+**Not adopted or executable yet.** On adoption S1 supersedes the old A/B, transport rehearsal and per-action credential gates. Nonsecret setup may span sessions; only the secret-bearing transfer interval must remain private and continuous. H3-06/07/08 can form one explicitly approved dormant acceptance outcome with independent verification; credential-only approval does not include them. H4 prospective cohort/source boundaries, live gate, scheduler and all events remain separate. Recommendation: revise #91 to this runbook after adoption, retaining its evidence. No additional preparation PR per missing UI fact.
+
 ## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
 
 On the implementation branch, authors finish implementation, local checks and one self-check, commit/push, open the PR and confirm remote CI scheduling, then stop polling. Pending CI is handed off with AUTHOR WORK COMPLETE — REMOTE CI PENDING, exact head SHA and CI run reference/status. The coordinator verifies terminal exact-SHA CI later; independent-review readiness still requires successful required CI. [Selection and handoff details](../../AGENTS.md#ci-selection-and-remote-ci-handoff). Branch-protection adoption and merge/release remain separate owner actions; this policy is not merged/adopted yet.

@@ -1,5 +1,11 @@
 # Current architecture
 
+## Proposed S1 credential architecture — 2026-10-05
+
+[ADR-004's S1 amendment](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md#proposed-amendment--simplified-credential-security-s1-2026-10-05) and the [S1 plan](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) propose replacing R7 bootstrap/transport ceremonies with one dedicated final token, one validation and direct Vercel Production custody. Existing server-only secret resolution, independent live gates, auth-error holds and R4 source/replay boundaries already exist; no runtime, schema or deployed behavior changes in this PR. The adapter's credential error handling is per delivery, not automatic global shutdown.
+
+This intentionally conflicts with the adopted R7 bootstrap policy and is **pending independent architecture review and owner adoption**. On adoption S1 is the sole credential-policy authority over the historical R7 sections below. Monitor implementation remains in source but is no longer a required credential tool. No provider or release authority is conferred.
+
 ## CI + Codex Workflow Efficiency v2 — tooling-only fast path proposed, 2026-10-04
 
 PR #90 proposes a conservative third pull-request CI mode in [Verify](../../.github/workflows/verify.yml): `docs`, `tooling`, and `full`. The dependency-free [CI verifier](../../scripts/ci/verify.py) keeps uncertainty fail-closed to `full`.
