@@ -46,12 +46,15 @@ The only remaining preferred candidate is the authenticated **human Access Token
 
 The following facts remain unproved for the authenticated human debugger:
 
-1. submitted input does not enter the address-bar URL;
+1. submitted input does not enter the visible address-bar URL;
 2. submitted input does not create a credential-bearing browser-history URL;
-3. redirects do not propagate input;
-4. the human session can authenticate the tool independently of the future lifecycle System User credential;
-5. tool/session failure can be distinguished from evaluated-token invalidity;
-6. the later real-token result can be reduced to the approved strict nonsecret evidence allowlist without screenshots/raw responses.
+3. visible redirects do not propagate input;
+4. **background request transport and transient redirects do not place submitted input in a request URL**;
+5. the human session can authenticate the tool independently of the future lifecycle System User credential;
+6. tool/session failure can be distinguished from evaluated-token invalidity;
+7. the later real-token result can be reduced to the approved strict nonsecret evidence allowlist without screenshots/raw responses.
+
+The synthetic human procedure below can evaluate items 1–3 and 5–6 only. It **cannot prove item 4** because network/request capture is deliberately prohibited on the authenticated Meta session. Item 4 therefore remains a separate transport-evidence gate that must be satisfied before inspector READY.
 
 Therefore:
 
@@ -165,7 +168,7 @@ If an additional app access token/secret is required, stop. That is a new creden
 
 ## Synthetic assessment outcomes
 
-### PASS — transport/session candidate
+### PASS — visible URL/history + session observations only
 
 All of these must hold:
 
@@ -173,25 +176,30 @@ All of these must hold:
 - one synthetic submission only;
 - synthetic marker absent from address bar after submission;
 - synthetic marker absent from browser-history URLs;
-- no redirect exposes the marker;
+- no **visible** redirect exposes the marker;
 - no devtools/HAR/request capture required;
 - human Meta session remains healthy;
 - no lifecycle token/app secret is required to authenticate the inspector;
 - tool processed the synthetic input sufficiently to distinguish tool health from login/tool failure.
 
-A PASS establishes:
+A PASS establishes only:
 
-**HUMAN DEBUGGER TRANSPORT/SESSION SAFETY = PASS**
+**HUMAN DEBUGGER VISIBLE-URL/HISTORY + SESSION OBSERVATIONS = PASS**
 
-It does **not** by itself establish:
+It does **not** establish request-transport safety and does **not** establish:
 
 **safe non-event inspector = READY**
 
-because the valid-token field/output handling still needs to be bound to the approved allowlist before real A is issued.
+Two separate gates remain before READY:
+
+1. **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE** — evidence must establish that the debugger does not put submitted credential material into a request URL or transient redirect URL. Visible address-bar/history checks are insufficient for this.
+2. **ALLOWLISTED VALID-TOKEN OUTPUT BINDING** — the current debugger's valid-token output fields must be safely mapped to the approved nonsecret evidence allowlist.
+
+Passing either gate alone cannot clear the other.
 
 ### FAIL
 
-Any URL/history exposure, additional credential requirement, forced capture/export or clear tool/auth failure is FAIL.
+Any visible URL/history exposure, additional credential requirement, forced capture/export or clear tool/auth failure is FAIL for the synthetic observation procedure. Absence of visible exposure is not proof of background request-transport safety.
 
 Result:
 
@@ -243,7 +251,12 @@ Never record:
 - personal profile/contact data;
 - customer/event payload.
 
-Before real A, a later reviewed packet must bind the current human debugger's visible valid-token fields to this allowlist or otherwise establish a safe fixed extraction method.
+Before real A, a later reviewed packet must both:
+
+- bind the current human debugger's visible valid-token fields to this allowlist or otherwise establish a safe fixed extraction method; and
+- independently satisfy the separate supported request-transport/transient-redirect evidence gate.
+
+Valid-token output-field binding alone cannot make the inspector READY.
 
 ## Explicitly rejected alternatives
 
@@ -263,11 +276,15 @@ Do not use:
 
 If the human synthetic assessment passes, prepare a narrow evidence closeout that:
 
-1. records the sanitized transport/session results;
-2. binds the current UI's valid-token output fields to the existing allowlist using only safe nonsecret evidence;
-3. determines whether the human debugger can be classified **READY** before A issuance.
+1. records only the sanitized **visible URL/history and session** observations;
+2. leaves background request-transport/transient-redirect safety explicitly **UNPROVED** unless separate supported evidence already establishes it;
+3. identifies a separately reviewed method/source capable of establishing request-transport safety without exposing authenticated-session secrets or broadly capturing unrelated traffic;
+4. binds the current UI's valid-token output fields to the existing allowlist using only safe nonsecret evidence;
+5. classifies the human debugger **READY** only if both the request-transport gate and the output-binding gate independently pass.
 
-If that second binding cannot be established without using a real token prematurely, keep the inspector BLOCKED and propose a different inspection mechanism rather than weakening the contract.
+Do **not** casually enable developer tools, HAR capture, broad proxy logging or browser/network diagnostics on the authenticated Meta session merely to satisfy the transport gate. Any capture-based proposal requires its own narrowly scoped safety review proving that it cannot collect cookies, auth headers, session tokens or unrelated credential material.
+
+If either gate cannot be established safely before real A, keep the inspector BLOCKED and propose a different inspection mechanism rather than weakening the contract.
 
 ## Current holds
 
