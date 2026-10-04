@@ -2,6 +2,17 @@
 
 Date: 2026-10-04.
 
+**Risk tier: Tier 2 — normal substantial engineering-policy/CI-routing change.**
+
+Rationale: this changes which verification jobs are required for a class of pull requests and therefore affects merge confidence. It does not change runtime application behavior, database schema/state, Production configuration, external-provider operations, credentials, schedulers or activation authority. Tier 2 requires successful exact-head CI and a fresh independent review before merge.
+
+Authoritative references:
+
+- [CI policy](../../../AGENTS.md#ci-selection-and-remote-ci-handoff)
+- [current architecture](../../ai/ARCHITECTURE.md#ci--codex-workflow-efficiency-v2--tooling-only-fast-path-proposed--2026-10-04)
+- [Verify workflow](../../../.github/workflows/verify.yml)
+- [classifier/gate](../../../scripts/ci/verify.py)
+
 ## Purpose
 
 Reduce unnecessary GitHub Actions time for changes that cannot affect the application database contract, while preserving fail-closed CI routing.
@@ -89,3 +100,10 @@ Database-sensitive and unknown changes retain the full local-database suite.
 - the complete required-gate matrix for `docs`, `tooling` and `full`.
 
 This CI-routing change itself modifies `.github/**` and `scripts/ci/**`, so its own PR must run **full CI once** before merge.
+
+
+## Adoption boundary
+
+This document and PR #90 change CI routing only. They do not alter GitHub branch-protection settings, runtime code, database behavior, Production state, provider configuration, credentials, or release/activation authority.
+
+The `required` aggregate remains the single required check assumed by repository governance. If the branch-protection configuration differs from that assumption, the repository policy must be reconciled separately rather than inferred from this source change.
