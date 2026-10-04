@@ -38,6 +38,10 @@ There is now enough evidence to **define a proposed configuration-only contract*
 
 The next handoff is focused Tier-3 independent review of **C2-CONFIG1** at the new exact PR #91 head after successful required CI. Assess transfer limits, automatic surfaces/capabilities, the positive Save gate, allowances, safe System User chooser readback and STOP before Generate. No broad research, test-app revisit, installation investigation or token trial is requested.
 
+## C2-CONFIG1 exclusivity finding correction
+
+Owner continuation reports the separate focused Tier-3 reviewer returned **CHANGES REQUIRED** at exact head `7210fc2d75946e665e7fd6c4fcf0520939443ced`, with one blocking finding: the baseline did not explicitly verify absence of concurrent human/automation/process configuration activity. This is owner-supplied review evidence, not an author verdict. The corrected [C2-CONFIG1 contract](../plans/crm-h3-r7-bootstrap-credential-operator-packet.md#c2-config1--configuration-only-action-contract) now binds PASS/PASS/OFF/PASS exclusivity evidence before selection and continuous exclusivity through Save, app/chooser readback and terminal STOP. Uncertainty immediately means **EXCLUSIVITY UNCERTAIN — RETAIN / STOP**, no further interaction/Save/retry/reselect/removal or compensating mutation; retain any prior persistent action. Approval prerequisites, baseline, steps, evidence fields and terminal acceptance are synchronized. Other reviewed behavior is unchanged. No Meta access, C2 execution or credentials occurred; exact-head CI and separate findings-driven re-review remain required.
+
 ## Provenance and limits
 
 | Source | Version / observation and bounded result |
