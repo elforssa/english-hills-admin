@@ -1,5 +1,22 @@
 # Current state
 
+## H3 Revision 7 — monitor merged; consolidated operator preparation blocked — 2026-10-04
+
+[PR #89](https://github.com/elforssa/english-hills-admin/pull/89) is **merged/adopted implementation** at main `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`, from exact independently reviewed head `d11c77aebd1b3c791e5760e9731695f6918fac53`. The owner's direct packet-preparation commission records **READY FOR FINAL REVIEW**, owner approval and merge. GitHub readback confirms the head/merge and successful [Verify run 37199023612](https://github.com/elforssa/english-hills-admin/actions/runs/37199023612): classifier, app, local-database and required succeeded. Its base was `58139254e843fa731877cf5c4f541512d1d32224`; app/database tested synthetic merge `3c19a33c14f9826b9e9dfda1df64f4198abf8d9e`. The eight monitor files at merged main equal the reviewed head. This is source adoption, not operational Chrome/Meta verification or installation authority.
+
+The new [consolidated two-stage operator packet R7-BOOT-OP1](../architecture/plans/crm-h3-r7-bootstrap-credential-operator-packet.md) prepares T1–T8 → conditional A → bootstrap/containment or revoke-success → B/final B1 → conditional same-session Vercel storage → metadata-only verification → cleanup/STOP. **Preparation/proposed; not execution-approved.** The adopted evidence establishes administrative app/dataset/Pixel tasks but does not establish the exact A/B OAuth issuance selection. **G0: packet execution approval BLOCKED until that exact contract is evidenced, incorporated and independently reviewed.** Proposed ambiguous-A containment is an explicit packet decision for review and later owner execution approval. The older synthetic-only packet remains a historical/narrower predecessor.
+
+Current state:
+
+- **B5 = READY**; two-stage bootstrap architecture = **DEFINED**.
+- **transport monitor implementation = MERGED / ADOPTED** at the exact PR #89 binding above.
+- **monitor installation = NOT AUTHORIZED**; **synthetic operation = NOT AUTHORIZED**.
+- **INSPECTOR TRANSPORT READY = NOT YET ACHIEVED**; **A BOOTSTRAP VERIFIED = NO**.
+- **safe non-event inspector = BLOCKED operationally**; **B1 actual credential acceptance = PENDING**; **PREFLIGHT VERIFIED = NO**.
+- Packet requires exact-SHA independent review and owner adoption; a separate explicit owner execution approval is still required before any session after blockers are resolved.
+
+No extension installation/operation, Meta access, A/B issuance/inspection/revoke, Vercel operation, H3-06–08/H4, Test Events or lifecycle sending occurred in this preparation. Earlier dated monitor-review and architecture-proposal sections below retain historical findings; their unmerged/review-pending labels are superseded for current monitor status by this entry.
+
 ## H3 Revision 7 — transport monitor first-review corrections applied — 2026-10-04
 
 PR #89 first exact-code review at head `ab99be3084d7b02858887b7db7e9f5c122d87633` found implementation defects in Chrome response-envelope handling, async observation invalidation, Rule 9002 precedence and CI assertions, plus case-sensitivity/RE2/test-coverage qualifications. Those findings are corrected on the same branch.
@@ -17,7 +34,7 @@ The corrected implementation now:
 - closes and scans the executable-file inventory;
 - adds actual Chrome response-envelope controller tests and delayed/reset/restart/overlap regressions.
 
-PR #89 remains implemented on its review branch, **not merged/adopted**. The previous failed CI run is historical and does not count as acceptance. Fresh CI and a fresh exact-code independent Tier-3 re-review are required on the corrected head.
+At this first-review checkpoint PR #89 was implemented on its review branch, **not merged/adopted**. The previous failed CI run did not count as acceptance; fresh CI and exact-code independent Tier-3 re-review were required. The later exact-head acceptance/merge is recorded above without changing those historical findings.
 
 Operational state is unchanged: extension installation/testing, Meta access, A/B generation, inspection, revoke, Vercel mutation, H3-06–08, H4, Test Events and lifecycle sending remain unauthorized.
 
@@ -49,7 +66,7 @@ Dedicated tests are in `scripts/test-meta-debugger-transport-monitor.mjs` and ar
 
 No extension has been installed or run. No synthetic browser request, Meta access, credential generation/inspection, revoke, Vercel mutation or event action occurred.
 
-Current states:
+States at this implementation-review checkpoint (superseded by the dated merge entry above):
 - **B5 = READY**
 - **TWO-STAGE INSPECTOR BOOTSTRAP ARCHITECTURE = DEFINED**
 - **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT MERGED OR ADOPTED / EXACT-CODE INDEPENDENT RE-REVIEW REQUIRED**
@@ -67,7 +84,7 @@ PR #90 is **merged/adopted on main** at `58139254e843fa731877cf5c4f541512d1d3222
 
 Runtime/database/configuration/CI-policy/package/unknown paths remain `full`; classifier uncertainty remains fail-closed to `full`. A successful classifier with empty/unknown mode now also schedules the database fallback. Renames evaluate both old/new paths. Non-regular Git modes and unsupported statuses force `full`.
 
-PR #90 itself changed `.github/**` and `scripts/ci/**`, so it was **not eligible for its own fast path**; full CI and exact-head independent review were its Tier-2 pre-merge requirements. GitHub branch-protection settings are unchanged by this source change. Earlier proposed-status labels in the linked architecture describe the pre-adoption state; PR #90's CI routing/policy is now adopted, while PR #89's monitor implementation remains on its review branch.
+PR #90 itself changed `.github/**` and `scripts/ci/**`, so it was **not eligible for its own fast path**; full CI and exact-head independent review were its Tier-2 pre-merge requirements. GitHub branch-protection settings are unchanged by this source change. Earlier proposed-status labels in the linked architecture describe the pre-adoption state; PR #90's CI routing/policy is now adopted. PR #89's later monitor merge is recorded above.
 
 [Plan](../architecture/plans/ci-tooling-fast-path.md) · [Architecture](ARCHITECTURE.md#ci--codex-workflow-efficiency-v2--tooling-only-fast-path-proposed-2026-10-04) · [Policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff)
 

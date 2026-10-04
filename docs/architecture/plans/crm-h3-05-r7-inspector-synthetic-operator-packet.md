@@ -1,5 +1,7 @@
 # H3 Revision 7 — safe non-event inspector synthetic assessment packet
 
+> **Historical, narrower predecessor — 2026-10-04:** retain the dated findings below as evidence. The adopted two-stage bootstrap architecture and exact PR #89 monitor implementation now feed the [consolidated credential operator packet](crm-h3-r7-bootstrap-credential-operator-packet.md). This older packet is not the new executable contract: its marker, evidence allowlist and gate ordering must not be carried forward in place of the adopted amendments. The consolidated packet is preparation only and currently blocked on an unbound exact issuance scope contract; neither document authorizes a session or credential operation.
+
 ## Status
 
 **Tier 3 — preparation for a synthetic/noncredential human-only assessment.**
