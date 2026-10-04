@@ -13,12 +13,12 @@ Ledger file: docs/operations/h3-c2-attempt-ledger.md
 
 ## State
 
-SUBMITTED ONCE — C2 VISIBLE / POST-STATE VERIFICATION PENDING
+CONFIRMED SUCCESS — 4A VERIFIED C2 CREATION
 
 Submission allowance consumed: YES
 Submission attempted: YES — exactly one owner-authorized Create app submission
 Canonical C2 app ID: 29771601672426816
-4A result: PROVIDER CREATION OBSERVED — POST-STATE VERIFICATION PENDING
+4A result: VERIFIED C2 CREATION
 
 ## Authorization status
 
@@ -108,6 +108,53 @@ Immediate owner-supplied My Apps result:
 
 The creation click consumed the already-reserved allowance permanently. Post-state Business Apps and System Users comparison are still required before confirmed 4A success.
 
+## Final post-state verification
+
+Final owner-supplied/owner-confirmed read-only post-state during the approved execution window:
+
+My Apps:
+- EH Lifecycle R4 C2 / 29771601672426816: PRESENT
+- Business: Glory Lot
+- protected English-hills / 1069638329182835: PRESENT separately
+- no second C2 or unexplained additional app observed
+
+Glory Lot Business Apps:
+- EH Lifecycle R4 C2 / 29771601672426816: PRESENT
+- owner: Glory Lot
+- protected English-hills / 1069638329182835: PRESENT
+- no unexpected third app observed
+- C2 Connected assets: NONE
+- no Connect assets / Assign / Remove / Manage mutation performed
+
+System Users:
+- 100089438321765 / Conversions API System User: PRESENT
+- 61594759444572 / English Hills CRM: PRESENT
+- 61594989243533 / EH Lifecycle R4 Employee: PRESENT with Employee access
+- EH Lifecycle R4 Employee Assigned assets: NONE
+- EH Lifecycle R4 Employee Installed apps: NONE
+- no automatic C2 installation/association observed
+- no token generation, revoke, asset assignment or System User mutation performed
+
+4A verification conclusion:
+- canonical C2 identity established: 29771601672426816
+- exact label confirmed: EH Lifecycle R4 C2
+- Glory Lot ownership confirmed
+- no unexpected connected assets
+- no automatic Employee association/installed app
+- no dataset grant
+- no credential/token/app-secret access
+- protected existing app and System Users remain intact within the observed safe surfaces
+- exactly one authorized Create app submission occurred
+- no retry occurred
+
+Execution close time recorded from current session: 2026-10-04 02:03:25 UTC.
+
+Result: 4A = VERIFIED C2 CREATION.
+
+This closes 4A only. It does NOT establish 4B association semantics, 4C dataset task semantics, CAPI capability, credential acceptance, PREFLIGHT VERIFIED, CREATED-OBJECT PREFLIGHT COMPLETE, H3-06–08, H4 or lifecycle sending authority.
+
+STOP after 4A. Any next provider mutation requires a separate reviewed/authorized stage.
+
 ## Protected boundaries
 
 Never modify:
@@ -192,12 +239,20 @@ No 4B, 4C, credential, app-secret, Production, H3-06–08, H4 or lifecycle-send 
 
 ## Current outcome
 
-One authorized provider submission completed and the new C2 is visible in My Apps. Post-state verification remains pending.
+4A completed successfully and post-state verification passed.
 
-State: SUBMITTED ONCE — C2 VISIBLE / POST-STATE VERIFICATION PENDING
+State: CONFIRMED SUCCESS — 4A VERIFIED C2 CREATION
 Consumed: YES
 Submitted: YES — ONCE
 Meta mutation: C2 APP CREATED
 C2 canonical ID: 29771601672426816
+Connected assets: NONE
+EH Lifecycle R4 Employee installed apps: NONE
+EH Lifecycle R4 Employee assigned assets: NONE
+4B: NOT EXECUTED
+4C: NOT EXECUTED
+PREFLIGHT VERIFIED: NO
+CREATED-OBJECT PREFLIGHT COMPLETE: NOT CLAIMED
+STOP: REQUIRED BEFORE ANY NEXT PROVIDER MUTATION
 PREFLIGHT VERIFIED: NO
 CREATED-OBJECT PREFLIGHT COMPLETE: NOT CLAIMED
