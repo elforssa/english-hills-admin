@@ -24,14 +24,17 @@ Canonical C2 app ID: UNKNOWN — NOT YET CREATED
 
 4A-OP1: MERGED
 4A-EB2: OWNER ADOPTED AND MERGED
-Exact 4A action authorization: NOT YET GRANTED
-Approved UTC start: NOT YET GRANTED
-Approved UTC end: NOT YET GRANTED
-Exclusive execution ownership: NOT YET ACTIVATED
-Exclusive ledger writer: NOT YET ACTIVATED
-Other operators excluded for execution window: NOT YET ACTIVATED
+Exact 4A action authorization: GRANTED BY OWNER — direct approval in conversation
+Approved UTC start: 2026-10-04 01:45 UTC
+Approved UTC end: 2026-10-04 02:45 UTC
+Named sole human Meta operator: Maroine El Forssa
+Exclusive execution ownership: ACTIVE FOR APPROVED WINDOW
+Exclusive ledger writer: Maroine El Forssa — ACTIVE FOR APPROVED WINDOW
+Other humans/Codex tasks/agents/automations/second Meta sessions excluded from C2 creation: YES — OWNER CONFIRMED
+One Create app submission maximum: AUTHORIZED SUBJECT TO ALL PRE-SUBMIT GATES
+Create allowance currently consumed: NO
 
-No Meta execution may begin while any required action-authorization field remains ungranted.
+This authorization does not itself consume the create allowance. The allowance remains UNUSED until fresh inventories, isolation checks and write-ahead reservation complete. No Meta submit may occur before durable reservation readback.
 
 ## Prior-history reconciliation
 
@@ -129,9 +132,18 @@ Prohibited without separate review:
 
 Unexpected credential exposure requires immediate STOP and owner handling.
 
+## Execution session authorization
+
+Owner-authorized 4A action window: 2026-10-04 01:45–02:45 UTC.
+Sole operator/writer: Maroine El Forssa.
+All other humans, Codex tasks, agents, automations and second Meta sessions are excluded from C2 creation during the window.
+Pre-submit read-only inventories and bound-flow verification are authorized.
+Exactly one Create app submission is authorized only after every pre-submit gate passes and a RESERVED / CONSUMED — NOT YET SUBMITTED record is durably pushed and read back.
+No 4B, 4C, credential, app-secret, Production, H3-06–08, H4 or lifecycle-send action is authorized.
+
 ## Current outcome
 
-Ledger initialized only.
+Execution authorization activated; pre-submit gates pending.
 
 State: UNUSED
 Consumed: NO
