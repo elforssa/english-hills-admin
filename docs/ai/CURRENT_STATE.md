@@ -1,5 +1,18 @@
 # Current state
 
+## H3 Revision 7 — Vercel B5 preflight PASS / inspector synthetic packet prepared — 2026-10-04
+
+PR #83 is owner-adopted and merged at main `6c62828d7b1edd53db2880ba3823dd25d8823d6f`. The active architecture is now Vercel-only lifecycle credential custody: `CRM_META_LIFECYCLE_TOKEN_EH_R4` will later be stored only as a Vercel Production Secret after B passes safe non-event/B1 acceptance, with no external recovery-vault copy and no SAME-A post-revoke proof.
+
+A read-only/nonsecret [Vercel B5 preflight](../architecture/evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) completed by **2026-10-04 05:32:29 UTC**. Exact Vercel binding is `English Hills' projects / team_egUbt9wN23I40I1K71zxfYGj` → `english-hills-admin / prj_hC0MvqsXYmERXhZWGEfOOma8D6E3`. The authenticated human principal is a confirmed team OWNER with MFA enabled. Read-only environment metadata with decryption disabled confirms Vercel sensitive/secret Production-only capability, target `CRM_META_LIFECYCLE_TOKEN_EH_R4` absent, `CRM_META_LIFECYCLE_LIVE_ENABLED` absent and no target Preview/Development copy. Runtime code is server-only, validates the `CRM_META_LIFECYCLE_TOKEN_...` reference pattern and resolves the exact environment reference dynamically while retaining independent live gates. **B5 NONSECRET VERCEL PREFLIGHT = PASS**. No Vercel mutation or decrypted value read occurred.
+
+The exact future conditional B-storage contract is now prepared: team/project above, key `CRM_META_LIFECYCLE_TOKEN_EH_R4`, UI Secret/API `sensitive`, Production only, no upsert on an unexpected conflict, same-private-session direct insertion only after B acceptance, no intermediate persistent copy/export/readback, metadata-only post-store verification, and no activation/H3-06–08/H4 bundled into storage. Proposed **B5 = READY** still requires exact-head independent review and owner adoption of this readiness evidence/contract.
+
+A separate [synthetic Meta Access Token Debugger assessment packet](../architecture/plans/crm-h3-05-r7-inspector-synthetic-operator-packet.md) is prepared. The public human debugger URL could not be safely characterized from an authenticated session by available tooling; Meta's public `debug_token` reference returned HTTP 429. Meta's official Node Business SDK at commit `0d245ec888c1af38d68994fd7f2e24cd38abc82f` constructs a GET `debug_token` request with `input_token` and `access_token` in the query string, so that API/SDK route is explicitly **NOT APPROVED** under the no-token-in-URL contract. The human Access Token Debugger remains the preferred candidate, but **safe non-event inspector = BLOCKED** pending the reviewed synthetic human transport/session assessment and later allowlisted-output binding.
+
+Current holds: **B1 actual credential acceptance = PENDING**, **PREFLIGHT VERIFIED = NO**; no A/B generation, real token inspection, Revoke tokens, Vercel secret write, H3-06–08, H4, Test Events or lifecycle send is authorized by this preparation.
+
+
 ## H3 Revision 7 — Vercel-only custody amendment proposed — 2026-10-04
 
 The owner rejected a separate paid/high-overhead recovery-vault path and commissioned a simpler Vercel-only custody amendment. PR #82 / vault-comparison research is closed unmerged and has no architecture authority.
