@@ -1,5 +1,32 @@
 # Current state
 
+## H3 Revision 7 — two-stage inspector bootstrap amendment proposed — 2026-10-04
+
+PR #87 is owner-adopted and merged at main `96dbbdb4a8d8f51a88077baae7168da425377c29`.
+
+A new [two-stage inspector bootstrap amendment](../architecture/plans/crm-h3-05-r7-two-stage-inspector-bootstrap-amendment.md) is proposed to resolve the remaining circularity between synthetic transport proof and first real credential inspection without weakening the credential-secrecy contract.
+
+The proposal makes **INSPECTOR TRANSPORT READY session-bound**, not a permanent global state. A future exact operator run would rerun the reviewed synthetic transport procedure immediately before any disposable A issuance in the same uninterrupted private human session. Stage-I transport PASS would require the reviewed three-rule DNR monitor, fresh calibration, clean Rule 9003 idle baseline, zero Rule 9002 URL-leak matches, a fresh Rule 9003 submission-associated endpoint-request observation, clean visible URL/history checks, healthy human debugger session and no unexpected credential boundary. It explicitly accepts that synthetic input linkage and completed evaluation remain unproved; the architecture treats the bounded evidence as sufficient only to expose one disposable A under residual-risk controls.
+
+The proposal then makes disposable A the first empirical credential-specific bootstrap proof. A must be generated once from the exact dedicated lifecycle System User and C2 app, remain under mandatory private-human credential continuity `exact issuance → exact A transfer → debugger submission → fresh result`, never enter Production/Vercel and never perform /events, Test Events or business actions. A bootstrap PASS requires validity, expected token class/app, coherent lifetime, exact approved scopes, subject PASS, target PASS and coherent broader B1 authority inventory.
+
+Subject PASS now requires mandatory credential continuity plus expected issuance subject/app and debugger token class/app. Raw debugger `user_id` is never persisted; optional local corroboration is allowed only if canonical mapping is separately supported. Target PASS uses local-only comparison against a pre-approved business-asset inventory; raw unknown target IDs remain on the provider/human surface, and missing/incomplete/unmapped detail is INCONCLUSIVE.
+
+If A issuance occurred but bootstrap fails/inconclusive, the future operator packet would need a pre-reviewed conditional one-time identity-wide Revoke tokens containment branch and then STOP with no B. If A bootstrap succeeds, the already adopted revoke-success → B sequence continues. B must independently pass final B1 under a separate continuity chain before same-session conditional Vercel Production storage.
+
+This branch is architecture/documentation only. No monitor implementation/installation, synthetic browser operation, Meta access, A/B generation, real-token inspection, revoke, Vercel mutation, H3-06–08, H4, Test Events or lifecycle sending is authorized.
+
+Current inherited state remains:
+- **B5 = READY**
+- **TWO-STAGE INSPECTOR BOOTSTRAP ARCHITECTURE = PROPOSED / NOT ADOPTED**
+- **transport monitor implementation = NOT IMPLEMENTED**
+- **INSPECTOR TRANSPORT READY = NOT YET ACHIEVED**
+- **A BOOTSTRAP VERIFIED = NO**
+- **safe non-event inspector = BLOCKED**
+- **B1 actual credential acceptance = PENDING**
+- **PREFLIGHT VERIFIED = NO**
+
+
 ## H3 Revision 7 — inspector linkage + subject/target binding research prepared — 2026-10-04
 
 PR #86 is owner-adopted and merged at main `b88c8e9abdb4c90dca7204d04f148d8f2f579854`.
