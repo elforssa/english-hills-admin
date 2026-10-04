@@ -1,0 +1,364 @@
+# H3 Revision 7 — inspector remote-evaluation research, 2026-10-04
+
+## Status
+
+**Tier 3 — documentation/research only.**
+
+Baseline main at research start:
+
+`88b9dea9945a3315597214d35123a593ac710051`
+
+Current adopted state:
+
+- **B5 = READY**
+- **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
+- **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PENDING / PARTIAL**
+- **safe non-event inspector = BLOCKED**
+- **B1 actual credential acceptance = PENDING**
+- **PREFLIGHT VERIFIED = NO**
+
+This research authorizes no extension implementation/installation, Meta account action, synthetic browser test, A/B generation, real-token inspection, app-secret access, Revoke tokens, Vercel write, H3-06–08, H4, Test Events or lifecycle sending.
+
+## Research question
+
+Can the human Meta Access Token Debugger obtain a **supported nonsecret remote-evaluation signal** without relying on:
+
+- a visible invalid-input message;
+- HAR/devtools/proxy capture;
+- request-detail APIs;
+- a real lifecycle token;
+- or a new app-secret handling path?
+
+The already adopted transport-monitor design can safely detect a synthetic marker in request URLs, but a zero marker match is INCONCLUSIVE unless remote evaluation is independently established.
+
+## New authoritative Meta evidence
+
+### Official Meta agentic-tools debug-access-token skill
+
+Meta's official GitHub organization publishes:
+
+- repository: `facebook/agentic-tools`
+- reviewed source commit: `fb896e4106e43ce033830a8ee478c64285f47d2c`
+- skill: `plugins/devtools/skills/debug-access-token/SKILL.md`
+- bundled script: `plugins/devtools/skills/debug-access-token/scripts/debug_token_probe.py`
+
+Source links:
+
+- <https://github.com/facebook/agentic-tools/blob/fb896e4106e43ce033830a8ee478c64285f47d2c/plugins/devtools/skills/debug-access-token/SKILL.md>
+- <https://github.com/facebook/agentic-tools/blob/fb896e4106e43ce033830a8ee478c64285f47d2c/plugins/devtools/skills/debug-access-token/scripts/debug_token_probe.py>
+
+The official skill explicitly offers two developer-run options:
+
+1. Meta's human **Access Token Debugger** at:
+   <https://developers.facebook.com/tools/debug/accesstoken/>
+2. the public Graph **`debug_token`** API via Meta's bundled script.
+
+The skill explicitly instructs that raw access tokens/app secrets must not enter an agent/AI context.
+
+### Official Meta output-field model
+
+The same official skill tells developers to return only redacted metadata and names the supported diagnostic fields:
+
+- `is_valid`
+- `type`
+- `app_id`
+- `application`
+- `issued_at`
+- `expires_at`
+- `data_access_expires_at`
+- `scopes`
+- `granular_scopes`
+- error code/subcode/message
+
+It explicitly recommends redacting `user_id` and profile/target IDs.
+
+The bundled script's allowlist independently confirms:
+
+- `is_valid`
+- `type`
+- `app_id`
+- `application`
+- `issued_at`
+- `expires_at`
+- `data_access_expires_at`
+- `scopes`
+- `error`
+
+and reads `granular_scopes`, retaining only scope names while dropping target IDs.
+
+This materially strengthens the existing output-field evidence.
+
+### Official Meta remote endpoint
+
+The bundled Meta script defines:
+
+`https://graph.facebook.com/debug_token`
+
+and calls that remote endpoint to evaluate the token.
+
+The current Meta-operated Postman WhatsApp/Facebook material likewise documents token debugging through GET `/debug_token?input_token=...`.
+
+Existing official Meta Node/Java Business SDK evidence also constructs the `debug_token` request using query parameters.
+
+Therefore:
+
+**Graph `/debug_token` = supported remote token-evaluation endpoint**
+
+and separately:
+
+**direct API/SDK query-string use remains NOT APPROVED for English Hills**, because the adopted contract prohibits credential material in request URLs.
+
+The official bundled Meta script does not change that English Hills design decision: it still builds the request query string from the input token plus app access token.
+
+## Remote-evaluation signal candidate
+
+The adopted Chrome monitor can be extended with a third declarative rule that detects only a direct browser request to Meta's documented Graph `/debug_token` endpoint.
+
+This avoids guessing from a visible error message.
+
+### Rule 9003 — supported remote-evaluation endpoint sentinel
+
+Proposed rule:
+
+- ID: `9003`
+- developer priority: lower than Rule 9002
+- action: **allow**
+- request domain: `graph.facebook.com`
+- initiator domain: `developers.facebook.com`
+- request method: `GET`
+- regex/path match:
+  - versioned `/vN.N/debug_token`
+  - or unversioned `/debug_token`
+- same explicit full ResourceType set used by Rules 9001/9002
+
+The exact regex must be independently reviewed and statically tested before implementation.
+
+### Priority requirement
+
+Existing Rule 9002 synthetic-marker URL block must have a strictly higher developer priority than Rule 9003.
+
+Reason:
+
+- if a debugger request URL contains the synthetic token marker, Rule 9002 must win and block it;
+- Rule 9003 must never allow a marker-bearing request through merely because the request also targets the remote debug endpoint;
+- if the request URL does **not** contain the marker but does target the documented remote endpoint, Rule 9003 may allow the request and record that endpoint rule match.
+
+Chrome documentation establishes that developer-defined rule priority is evaluated before action precedence inside one extension.
+
+### Why `allow` rather than `block`
+
+A block-only endpoint sentinel would prove that the browser **attempted** the remote request but would prevent the remote endpoint from evaluating it.
+
+A lower-priority `allow` sentinel permits the documented remote request only when the higher-priority marker leak rule did not fire.
+
+This gives the intended three-state behavior:
+
+#### URL LEAK / FAIL
+
+Fresh Rule 9002 match.
+
+Meaning:
+
+- the synthetic marker appeared in a browser request URL;
+- the higher-priority block prevented the marker-bearing request;
+- debugger route fails the English Hills no-token-in-URL contract.
+
+#### DIRECT SUPPORTED REMOTE ENDPOINT OBSERVED
+
+Conditions:
+
+- fresh Rule 9001 calibration PASS;
+- fresh idle baseline shows no Rule 9003 match before submission;
+- one synthetic debugger submission;
+- fresh Rule 9002 count = 0;
+- fresh Rule 9003 match after submission;
+- Rule 9003 query succeeds inside the bounded window;
+- debugger UI produces a response consistent with completion of that submission rather than a page/session failure.
+
+Meaning:
+
+- the debugger-triggered browser flow directly invoked Meta's documented Graph `/debug_token` remote endpoint;
+- the exact synthetic marker was not present in the request URL as observed by the higher-priority marker rule;
+- the remote endpoint request was allowed rather than blocked.
+
+This is a candidate **SUPPORTED REMOTE-EVALUATION SIGNAL** for the tested human-debugger flow.
+
+#### NO REMOTE ENDPOINT MATCH
+
+Fresh Rule 9002 count = 0 and fresh Rule 9003 count = 0.
+
+Meaning:
+
+- no marker URL leak was observed;
+- but the human debugger may use:
+  - a Meta internal endpoint;
+  - a server-side backend hop invisible to browser DNR;
+  - a locally rejected input path;
+  - or another unbound route.
+
+Result:
+
+**INCONCLUSIVE — REMOTE EVALUATION UNPROVED**
+
+Do not treat this as transport PASS.
+
+## Required idle baseline
+
+Before submitting the synthetic marker:
+
+1. complete fresh Rule 9001 calibration;
+2. bind a new idle-baseline timestamp;
+3. perform no debugger submission for a short fixed interval;
+4. query `getMatchedRules()` across all tabs/unassociated requests;
+5. require **zero fresh Rule 9003 matches**.
+
+If Rule 9003 matches during idle baseline, the endpoint sentinel is not submission-specific enough for this session and the later Rule 9003 match cannot be used as remote-evaluation proof.
+
+Result:
+
+**INCONCLUSIVE**
+
+## Limits of Rule 9003
+
+Rule 9003 is intentionally conditional.
+
+It does **not** assume the human Access Token Debugger uses the public Graph endpoint.
+
+It only provides positive evidence if the current debugger actually produces that direct browser request.
+
+If Meta's debugger uses a different/internal route, the result remains INCONCLUSIVE.
+
+The rule also does not establish universal future behavior. Evidence must bind:
+
+- Chrome version;
+- extension commit/hash;
+- exact Rule 9001/9002/9003 definitions and priorities;
+- debugger page/origin;
+- observation timestamps;
+- fresh idle baseline result;
+- Rule 9002/9003 fresh counts;
+- debugger session/result classification;
+- observation UTC.
+
+Material UI/tool changes require revalidation.
+
+## Chrome privacy boundary
+
+Current Chrome documentation states that:
+
+- `declarativeNetRequest` can block/allow based on request URLs without request interception/content viewing;
+- the plain `declarativeNetRequest` permission provides implicit access to block and allow actions without requesting full host access;
+- `initiatorDomains`, `requestDomains`, `requestMethods`, `regexFilter` and explicit `resourceTypes` are supported rule conditions;
+- `declarativeNetRequestFeedback` enables `getMatchedRules()` **and** `onRuleMatchedDebug`.
+
+Therefore the previously adopted code-review constraint remains mandatory:
+
+- no `onRuleMatchedDebug`;
+- no request-detail event object;
+- no webRequest;
+- no headers/body/cookies;
+- no logging/persistence/network calls;
+- strict projection of matched rule ID/tab ID/timestamp/query status only.
+
+## Output-binding research result
+
+The official Meta `facebook/agentic-tools` skill materially closes the field-semantics gap.
+
+### Supported diagnostic field semantics — sufficient
+
+Official Meta source directly supports these later inspector-output classes:
+
+- explicit validity;
+- token type;
+- app ID/application;
+- issuance;
+- expiry;
+- data-access expiry;
+- scopes;
+- granular scope names;
+- sanitized error code/subcode/message.
+
+Classification:
+
+**OUTPUT FIELD SEMANTICS = SUFFICIENT**
+
+### Safe subject/target binding — still pending
+
+The same official Meta skill deliberately redacts:
+
+- `user_id`;
+- granular-scope target IDs/profile IDs.
+
+English Hills B1 still needs nonsecret confidence that:
+
+- the token belongs to the expected dedicated lifecycle subject; and
+- no unexpected granular targets expand authority beyond the adopted lifecycle endpoint.
+
+Therefore the remaining output problem is narrower than before.
+
+Current classification:
+
+**ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PARTIAL — SUBJECT/TARGET SAFE BINDING PENDING**
+
+A later reviewed design may use local comparison without recording raw personal IDs, for example:
+
+- compare debugger subject locally against the already-known expected dedicated System User and record only `subject_matches_expected = true/false`;
+- compare granular target IDs locally against an approved set of already-known nonpersonal business asset IDs and emit only allowlisted matches/unexpected-target count.
+
+This research does not authorize or implement such comparison logic.
+
+## Meta bundled script — useful evidence, not adopted execution path
+
+Meta's official `debug_token_probe.py` is strong evidence for:
+
+- the supported remote endpoint;
+- expected diagnostic fields;
+- safe redacted output principles.
+
+It is **not adopted as the English Hills inspector implementation** because:
+
+1. it builds the input token and app access token into a GET query string;
+2. it requires access to the C2 app secret;
+3. it uses environment variables for secret handling in a throwaway shell.
+
+Those are new/different credential-handling boundaries from the current owner-adopted human-debugger architecture.
+
+Using that script later would require a separate explicit architecture amendment and owner approval.
+
+## Research conclusion
+
+A useful nonsecret remote-evaluation signal now exists **conditionally**:
+
+> a fresh, submission-specific Rule 9003 match for the documented Meta Graph `/debug_token` endpoint, with a clean idle baseline and zero higher-priority Rule 9002 marker leak matches.
+
+This signal is supported by:
+
+- current Meta official evidence that `/debug_token` is the remote token-inspection endpoint; and
+- Chrome DNR's supported ability to match/allow that exact endpoint without request-detail interception.
+
+It can make implementing the transport monitor worthwhile.
+
+However:
+
+- if Rule 9003 never appears, the debugger remains INCONCLUSIVE;
+- output subject/target safe binding is still pending;
+- safe inspector remains BLOCKED.
+
+## Proposed next step
+
+Prepare a narrow amendment to the already-adopted monitor design adding Rule 9003 and its idle-baseline/priority/result contract.
+
+Only after exact-head independent review and owner adoption should implementation of the three-rule monitor be commissioned.
+
+No implementation is authorized by this research.
+
+## Current state
+
+- **B5 = READY**
+- **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
+- **SUPPORTED REMOTE-EVALUATION SIGNAL = CANDIDATE DEFINED, NOT VERIFIED**
+- **OUTPUT FIELD SEMANTICS = SUFFICIENT**
+- **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PARTIAL — SUBJECT/TARGET SAFE BINDING PENDING**
+- **safe non-event inspector = BLOCKED**
+- **B1 actual credential acceptance = PENDING**
+- **PREFLIGHT VERIFIED = NO**
