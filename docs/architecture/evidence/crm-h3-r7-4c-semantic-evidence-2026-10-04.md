@@ -15,7 +15,7 @@ Inherited from completed owner-authorized 4A/4B execution:
 - target dataset: **English Hills pixel / `1152399921284927`**
 - candidate 4C task: **Use events dataset — Partial access**
 - full-access alternative **Manage events dataset** remains excluded as broader than required
-- 4B execution closeout is recorded on branch `docs/h3-r7-4b-execution-closeout`, head `b8ca297d82ddf8e729c74037aae3ef73335fca70`
+- 4B execution closeout was independently reviewed at head `6c3837d33b1c08f59c889550f1f533eca2e25a9c` and owner-adopted/merged in PR #76 at main `11287d8562d55e09d2598e3cd7b888f689e29d98`
 - 4C remains unexecuted
 
 The prior independent review of PR #74 concluded **4C SEMANTICS INSUFFICIENT** because the Meta UI description itself says only:
