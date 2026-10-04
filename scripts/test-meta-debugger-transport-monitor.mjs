@@ -359,11 +359,11 @@ assert.deepEqual(
 
 assert.deepEqual(
   core.extractMatchedRules({
-    rulesMatchedInfo: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 }],
+    rulesMatchedInfo: [{ rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 }],
   }),
   {
     ok: true,
-    matches: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 }],
+    matches: [{ rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 }],
   },
 );
 for (const malformed of [
@@ -394,7 +394,7 @@ const projected = core.projectMatchedRules([
     tabId: 7,
     timeStamp: start - 1,
   },
-], start);
+], start, now).matches;
 
 assert.deepEqual(projected, [
   {
@@ -412,7 +412,7 @@ assert.equal(
     start,
     now,
     querySucceeded: true,
-    matches: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 }],
+    matches: [{ rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 }],
   }).state,
   'pass',
 );
@@ -422,8 +422,8 @@ assert.equal(
     now,
     querySucceeded: true,
     matches: [
-      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
-      { rule: { ruleId: 9002 }, tabId: 1, timeStamp: start + 2 },
+      { rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
+      { rule: { ruleId: 9002, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 2 },
     ],
   }).state,
   'fail',
@@ -434,7 +434,7 @@ assert.equal(
     start,
     now,
     querySucceeded: true,
-    matches: [{ rule: { ruleId: 9001 }, tabId: 1, timeStamp: start - 1 }],
+    matches: [{ rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start - 1 }],
   }).state,
   'fail',
   'stale calibration must not satisfy a fresh window',
@@ -464,7 +464,7 @@ assert.equal(
     start,
     now,
     querySucceeded: true,
-    matches: [{ rule: { ruleId: 9002 }, tabId: -1, timeStamp: start + 1 }],
+    matches: [{ rule: { ruleId: 9002, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 1 }],
   }).state,
   'fail',
   'fresh Rule 9002 must override idle PASS',
@@ -474,7 +474,7 @@ assert.equal(
     start,
     now,
     querySucceeded: true,
-    matches: [{ rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 }],
+    matches: [{ rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 1 }],
   }).state,
   'inconclusive',
 );
@@ -484,8 +484,8 @@ const leak = core.assessSyntheticSubmission({
   now,
   querySucceeded: true,
   matches: [
-    { rule: { ruleId: 9002 }, tabId: 2, timeStamp: start + 1 },
-    { rule: { ruleId: 9003 }, tabId: 2, timeStamp: start + 2 },
+    { rule: { ruleId: 9002, rulesetId: 'eh_inspector_transport_rules' }, tabId: 2, timeStamp: start + 1 },
+    { rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: 2, timeStamp: start + 2 },
   ],
 });
 assert.equal(leak.state, 'fail');
@@ -504,7 +504,7 @@ const endpointObserved = core.assessSyntheticSubmission({
   start,
   now,
   querySucceeded: true,
-  matches: [{ rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 }],
+  matches: [{ rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 1 }],
 });
 assert.equal(endpointObserved.state, 'pass');
 assert.equal(endpointObserved.markerLeakCount, 0);
@@ -524,7 +524,7 @@ const expiredAssessment = core.assessSyntheticSubmission({
   start,
   now: start + core.MAX_OBSERVATION_MS + 1,
   querySucceeded: true,
-  matches: [{ rule: { ruleId: 9003 }, tabId: 1, timeStamp: start + 1 }],
+  matches: [{ rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 }],
 });
 assert.equal(expiredAssessment.state, 'inconclusive');
 assert.equal(expiredAssessment.reason, 'observation_window_expired');
@@ -559,37 +559,147 @@ function makeController({
   };
 }
 
-async function runEnvelopeCase(kind, rulesMatchedInfo) {
+async function runEnvelopeCase(kind, rulesMatchedInfo, checkedAt = start + 10) {
   const harness = makeController({
     getMatchedRules: async () => ({ rulesMatchedInfo }),
   });
   harness.controller.start(kind);
+  harness.setNow(checkedAt);
   return harness.controller.query(kind);
+}
+
+const assessors = {
+  calibration: core.assessCalibration,
+  idle: core.assessIdleBaseline,
+  assessment: core.assessSyntheticSubmission,
+};
+function match(ruleId, timeStamp = start + 1) {
+  return { rule: { ruleId, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp };
+}
+
+assert.deepEqual(
+  core.projectMatchedRules([match(9003)], start),
+  { ok: false, reason: 'invalid_observation_window' },
+  'projection requires the actual check time',
+);
+
+const malformedEntries = [
+  null,
+  [],
+  'not a match object',
+  {},
+  { tabId: -1, timeStamp: start + 1 },
+  { ...match(9002), rule: null },
+  { ...match(9002), rule: [] },
+  ...['9002', 9002.5, NaN, Infinity, 0, -1].map(ruleId => match(ruleId)),
+  { ...match(9002), rule: { ruleId: 9002 } },
+  { ...match(9002), rule: { ruleId: 9002, rulesetId: 42 } },
+  { ...match(9002), rule: { ruleId: 9002, rulesetId: '' } },
+  ...[undefined, null, '1000001', NaN, Infinity, 0, -1].map(timeStamp => ({ ...match(9002), timeStamp })),
+  ...[undefined, null, '-1', -2, 1.5, NaN, Infinity].map(tabId => ({ ...match(9002), tabId })),
+  // Even malformed stale records must invalidate the array before stale filtering.
+  { ...match(9002, start - 1), tabId: null },
+];
+for (const malformedEntry of malformedEntries) {
+  assert.deepEqual(
+    core.extractMatchedRules({ rulesMatchedInfo: [malformedEntry] }),
+    { ok: false, reason: 'malformed_match_response' },
+  );
+  for (const [kind, assess] of Object.entries(assessors)) {
+    const matches = [malformedEntry];
+    const unit = assess({ start, now, querySucceeded: true, matches });
+    const controller = await runEnvelopeCase(kind, matches);
+    for (const result of [unit, controller]) {
+      assert.equal(result.state, 'inconclusive', `${kind} must reject a malformed entry`);
+      assert.equal(result.reason, 'malformed_match_response');
+    }
+    assert.deepEqual(unit.matches, []);
+  }
+}
+for (const matches of [
+  [match(9003), { ...match(9002), timeStamp: String(start + 2) }],
+  [match(9002), { ...match(9003), timeStamp: String(start + 2) }],
+]) {
+  const unit = core.assessSyntheticSubmission({ start, now, querySucceeded: true, matches });
+  const controller = await runEnvelopeCase('assessment', matches);
+  for (const result of [unit, controller]) {
+    assert.equal(result.state, 'inconclusive', 'partially malformed evidence must yield neither PASS nor FAIL');
+    assert.equal(result.reason, 'malformed_match_response');
+    assert.equal(JSON.stringify(result).includes('timeStamp'), false, 'untrusted entries must not escape');
+  }
+}
+
+for (const matches of [
+  [match(9003, start + 11)],
+  [match(9002, start + 11)],
+  [match(9003, start + 120_000)],
+  [match(9002, start + core.MAX_OBSERVATION_MS + 1)],
+  [match(9003), match(9002, start + 11)],
+  [match(9002), match(9003, start + 11)],
+]) {
+  for (const [kind, assess] of Object.entries(assessors)) {
+    const unit = assess({ start, now: start + 10, querySucceeded: true, matches });
+    const controller = await runEnvelopeCase(kind, matches);
+    for (const result of [unit, controller]) {
+      assert.equal(result.state, 'inconclusive', `${kind} must reject inconsistent timestamps`);
+      assert.equal(result.reason, 'match_timestamp_out_of_window');
+      assert.deepEqual(result.matches, []);
+    }
+  }
+}
+
+for (const checkedAt of [start, start + 10, start + core.MAX_OBSERVATION_MS]) {
+  for (const timeStamp of [start, checkedAt]) {
+    for (const [kind, ruleId, expected] of [
+      ['calibration', 9001, 'pass'],
+      ['idle', 9003, 'inconclusive'],
+      ['assessment', 9003, 'pass'],
+      ['assessment', 9002, 'fail'],
+    ]) {
+      const matches = [match(ruleId, timeStamp)];
+      assert.equal(assessors[kind]({ start, now: checkedAt, querySucceeded: true, matches }).state, expected);
+      assert.equal((await runEnvelopeCase(kind, matches, checkedAt)).state, expected);
+    }
+  }
+}
+for (const [kind, expected, reason] of [
+  ['calibration', 'fail', 'fresh_calibration_match_missing'],
+  ['idle', 'pass', 'clean_endpoint_idle_baseline'],
+  ['assessment', 'inconclusive', 'endpoint_request_observation_missing'],
+]) {
+  const matches = [match(9001, start - 1), match(9002, start - 1), match(9003, start - 1)];
+  const unit = assessors[kind]({ start, now, querySucceeded: true, matches });
+  const controller = await runEnvelopeCase(kind, matches);
+  for (const result of [unit, controller]) {
+    assert.equal(result.state, expected);
+    assert.equal(result.reason, reason);
+    assert.deepEqual(result.matches, []);
+  }
 }
 
 assert.equal(
   (await runEnvelopeCase('calibration', [
-    { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+    { rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
   ])).state,
   'pass',
   'actual Chrome RulesMatchedDetails envelope must produce calibration PASS',
 );
 assert.equal(
   (await runEnvelopeCase('idle', [
-    { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 },
+    { rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 1 },
   ])).state,
   'inconclusive',
   'actual Chrome envelope must preserve idle Rule 9003 INCONCLUSIVE',
 );
 assert.equal(
   (await runEnvelopeCase('assessment', [
-    { rule: { ruleId: 9002 }, tabId: 2, timeStamp: start + 1 },
+    { rule: { ruleId: 9002, rulesetId: 'eh_inspector_transport_rules' }, tabId: 2, timeStamp: start + 1 },
   ])).state,
   'fail',
   'actual Chrome envelope must preserve Rule 9002 FAIL',
 );
 const pageEndpointObserved = await runEnvelopeCase('assessment', [
-  { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 1 },
+  { rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 1 },
 ]);
 assert.equal(pageEndpointObserved.state, 'pass');
 assert.match(pageEndpointObserved.limitation, /does not prove request completion/i);
@@ -614,7 +724,7 @@ for (const malformed of [[], {}, { rulesMatchedInfo: null }]) {
   harness.setNow(start + core.MAX_OBSERVATION_MS + 1);
   pending.resolve({
     rulesMatchedInfo: [
-      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+      { rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
     ],
   });
   const result = await queryPromise;
@@ -650,9 +760,10 @@ for (const malformed of [[], {}, { rulesMatchedInfo: null }]) {
   harness.controller.start('calibration');
   const oldQuery = harness.controller.query('calibration');
   harness.controller.start('calibration');
+  harness.setNow(start + 1);
   pending.resolve({
     rulesMatchedInfo: [
-      { rule: { ruleId: 9001 }, tabId: 1, timeStamp: start + 1 },
+      { rule: { ruleId: 9001, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
     ],
   });
   const oldResult = await oldQuery;
@@ -671,18 +782,20 @@ for (const malformed of [[], {}, { rulesMatchedInfo: null }]) {
   const firstQuery = harness.controller.query('assessment');
   const secondQuery = harness.controller.query('assessment');
 
+  harness.setNow(start + 1);
   first.resolve({
     rulesMatchedInfo: [
-      { rule: { ruleId: 9002 }, tabId: 1, timeStamp: start + 1 },
+      { rule: { ruleId: 9002, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
     ],
   });
   const firstResult = await firstQuery;
   assert.equal(firstResult.state, 'inconclusive');
   assert.equal(firstResult.reason, 'observation_superseded');
 
+  harness.setNow(start + 2);
   second.resolve({
     rulesMatchedInfo: [
-      { rule: { ruleId: 9003 }, tabId: -1, timeStamp: start + 2 },
+      { rule: { ruleId: 9003, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 2 },
     ],
   });
   const secondResult = await secondQuery;
@@ -704,7 +817,7 @@ for (const [oldKind, newerKind, oldRuleId, newerRuleId] of [
           if (queries.length === 1) return pending.promise;
           return Promise.resolve({
             rulesMatchedInfo: newerRuleId === null ? [] : [
-              { rule: { ruleId: newerRuleId }, tabId: -1, timeStamp: start + 11 },
+              { rule: { ruleId: newerRuleId, rulesetId: 'eh_inspector_transport_rules' }, tabId: -1, timeStamp: start + 11 },
             ],
           });
         },
@@ -721,6 +834,7 @@ for (const [oldKind, newerKind, oldRuleId, newerRuleId] of [
         harness.rendered.push({ state: 'started', kind: newerKind, startedAt: started.startTime });
       }
       if (newerOperation !== 'start') {
+        harness.setNow(start + 11);
         const newerResult = await harness.controller.query(newerKind);
         assert.equal(newerResult.kind, newerKind);
         assert.equal(newerResult.state, newerOperation === 'missing-start-query' ? 'inconclusive' : 'pass');
@@ -742,7 +856,7 @@ for (const [oldKind, newerKind, oldRuleId, newerRuleId] of [
       } else {
         pending.resolve({
           rulesMatchedInfo: oldRuleId === null ? [] : [
-            { rule: { ruleId: oldRuleId }, tabId: 1, timeStamp: start + 1 },
+            { rule: { ruleId: oldRuleId, rulesetId: 'eh_inspector_transport_rules' }, tabId: 1, timeStamp: start + 1 },
           ],
         });
       }

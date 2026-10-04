@@ -10,6 +10,20 @@ function finiteTimestamp(value) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+function validMatchEntries(matches) {
+  if (!Array.isArray(matches)) return false;
+  // Validate the entire Chrome MatchedRuleInfo array before discarding stale records.
+  for (const entry of matches) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+      || !entry.rule || typeof entry.rule !== 'object' || Array.isArray(entry.rule)
+      || !Number.isInteger(entry.rule.ruleId) || entry.rule.ruleId < 1
+      || typeof entry.rule.rulesetId !== 'string' || entry.rule.rulesetId.length === 0
+      || !finiteTimestamp(entry.timeStamp)
+      || !Number.isInteger(entry.tabId) || entry.tabId < -1) return false;
+  }
+  return true;
+}
+
 export function validateObservationWindow(start, now = Date.now()) {
   if (!finiteTimestamp(start) || !finiteTimestamp(now) || start > now) {
     return { ok: false, reason: 'invalid_observation_window' };
@@ -24,28 +38,31 @@ export function extractMatchedRules(details) {
   if (!details || typeof details !== 'object' || Array.isArray(details)) {
     return { ok: false, reason: 'malformed_match_response' };
   }
-  if (!Array.isArray(details.rulesMatchedInfo)) {
+  if (!validMatchEntries(details.rulesMatchedInfo)) {
     return { ok: false, reason: 'malformed_match_response' };
   }
   return { ok: true, matches: details.rulesMatchedInfo };
 }
 
-export function projectMatchedRules(matches, start) {
-  if (!Array.isArray(matches) || !finiteTimestamp(start)) return [];
-  return matches
-    .filter((entry) => {
-      const timeStamp = entry?.timeStamp;
-      const ruleId = entry?.rule?.ruleId;
-      return finiteTimestamp(timeStamp)
-        && timeStamp >= start
-        && Number.isInteger(ruleId);
-    })
+export function projectMatchedRules(matches, start, now) {
+  if (!finiteTimestamp(now)) return { ok: false, reason: 'invalid_observation_window' };
+  const window = validateObservationWindow(start, now);
+  if (!window.ok) return window;
+  if (!validMatchEntries(matches)) {
+    return { ok: false, reason: 'malformed_match_response' };
+  }
+  if (matches.some(entry => entry.timeStamp > now || entry.timeStamp - start > MAX_OBSERVATION_MS)) {
+    return { ok: false, reason: 'match_timestamp_out_of_window' };
+  }
+  const projected = matches
+    .filter(entry => entry.timeStamp >= start)
     .map((entry) => ({
       ruleId: entry.rule.ruleId,
-      rulesetId: typeof entry.rule.rulesetId === 'string' ? entry.rule.rulesetId : null,
-      tabId: Number.isInteger(entry.tabId) ? entry.tabId : null,
+      rulesetId: entry.rule.rulesetId,
+      tabId: entry.tabId,
       timeStamp: entry.timeStamp,
     }));
+  return { ok: true, matches: projected };
 }
 
 function baseAssessment({ start, now, querySucceeded, matches }) {
@@ -54,10 +71,11 @@ function baseAssessment({ start, now, querySucceeded, matches }) {
   if (querySucceeded !== true) {
     return { state: 'inconclusive', reason: 'match_query_error', matches: [] };
   }
-  if (!Array.isArray(matches)) {
-    return { state: 'inconclusive', reason: 'malformed_match_response', matches: [] };
+  const projected = projectMatchedRules(matches, start, now);
+  if (!projected.ok) {
+    return { state: 'inconclusive', reason: projected.reason, matches: [] };
   }
-  return { state: 'ready', matches: projectMatchedRules(matches, start) };
+  return { state: 'ready', matches: projected.matches };
 }
 
 function countRule(matches, ruleId) {
