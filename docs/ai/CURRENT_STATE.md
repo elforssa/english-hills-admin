@@ -6,17 +6,17 @@ PR #86 is owner-adopted and merged at main `b88c8e9abdb4c90dca7204d04f148d8f2f57
 
 New [linkage/subject-target research](../architecture/evidence/crm-h3-r7-inspector-linkage-subject-binding-research-2026-10-04.md) reaches two key conclusions:
 
-1. Chrome DNR response-header conditions can potentially prove that a matching request reached the response-header stage; Chrome documents that by then the request has already been sent and the server has received the request data. This is stronger than a pre-request endpoint observation but still does **not** prove that Meta evaluated the exact submitted synthetic value. No safe supported synthetic input-linkage proof was found. **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT FOUND**.
-2. B1 subject/target evidence can be designed without persisting raw `user_id` or granular target IDs. Subject binding can use exact issuance-context provenance + expected System User + expected C2 app + debugger token type/app ID, with optional local-only `user_id` corroboration if canonical mapping is later supported. Target binding can use local-only comparison against the pre-approved business-asset inventory and emit only booleans/counts; missing/unmapped target detail remains INCONCLUSIVE.
+1. Chrome DNR response-header conditions can potentially establish **response headers observed**, but HTTP cache/service-worker behavior means that observation alone does not prove a fresh network round trip or fresh provider receipt. It still does **not** prove that Meta evaluated the exact submitted synthetic value. The bounded research conclusion is now **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT ESTABLISHED BY REVIEWED EVIDENCE**; this is not an impossibility claim.
+2. B1 subject/target evidence can be designed without persisting raw `user_id` or granular target IDs, but subject PASS additionally requires mandatory **private-human credential continuity** from exact issuance → exact A transfer → debugger submission → fresh result. Issuance context + token class + app ID alone cannot distinguish another same-app System User or exclude a stale/other-token result. Target binding can use local-only comparison against the pre-approved business-asset inventory and emit only booleans/counts; missing/unmapped target detail remains INCONCLUSIVE.
 
-The research recommends, but does not adopt, a two-stage bootstrap: **INSPECTOR TRANSPORT READY** from synthetic safety evidence first, then a separately authorized disposable A as the first real semantic/input-linkage proof. A would never enter Production or perform events/business actions and would fail closed if required metadata/subject/target evidence is unavailable.
+The research recommends, but does not adopt, a two-stage bootstrap: **INSPECTOR TRANSPORT READY** only after a later amendment defines sufficient transport-safety evidence; calibration plus zero marker matches alone are not sufficient. Then a separately authorized disposable A could become the first real semantic/input-linkage proof under the mandatory continuity gate. A would never enter Production or perform events/business actions and would fail closed if required metadata/subject/target evidence is unavailable.
 
 Current state:
 - **B5 = READY**
 - **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
 - **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**
 - **REMOTE RESPONSE-STAGE OBSERVATION = RESEARCH CANDIDATE ONLY**
-- **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT FOUND**
+- **SUPPORTED REMOTE-EVALUATION / SYNTHETIC INPUT-LINKAGE SIGNAL = NOT ESTABLISHED BY REVIEWED EVIDENCE**
 - **OUTPUT FIELD SEMANTICS = SUFFICIENT**
 - **SUBJECT SAFE-BINDING DESIGN = FEASIBLE / NOT ADOPTED**
 - **TARGET SAFE-BINDING DESIGN = FEASIBLE WITH COMPLETENESS/MAPPING GATE / NOT ADOPTED**
