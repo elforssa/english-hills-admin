@@ -1,5 +1,18 @@
 # Current state
 
+## H3 Revision 7 — 4C verified dataset grant — owner-adopted, 2026-10-04
+
+Owner adoption is complete for the reviewed narrow provider-coupling amendment merged through PR #79. Final created-object stage facts are now:
+
+- **4A = VERIFIED C2 CREATION**
+- **4B = VERIFIED ASSOCIATION**
+- **4C = VERIFIED DATASET GRANT**
+
+Exact 4C binding: lifecycle Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` has target dataset endpoint `1152399921284927 / English Hills pixel` with **Use events dataset — Partial access**. Meta also surfaced **Pixel → English Hills pixel → View Pixels — Partial access** from the same one reviewed dataset assignment; independent review concluded **PROVIDER-COUPLED VIEW PIXELS ACCEPTABLE**, and the owner adopted that narrow effect for this exact endpoint only. No Pixel asset was separately selected, no second confirmation occurred, no Manage events dataset permission was granted, and protected/unrelated regressions remained unchanged.
+
+No further Meta mutation is required for 4C. **CREATED-OBJECT PREFLIGHT COMPLETE remains unclaimed**, because the reporting-rule checkpoint is still separate from this factual 4C classification. **PREFLIGHT VERIFIED remains NO**. B1 actual credential acceptance remains PENDING, B5 remains OWNER DECISION REQUIRED, and the safe non-event inspector remains BLOCKED. Generate/Revoke token, token inspection, credentials A/B, Production configuration, H3-06–08, H4, Test Events and lifecycle sending remain unauthorized.
+
+
 ## H3 Revision 7 — 4C dataset grant committed with provider-coupled Pixel side effect — 2026-10-04
 
 Owner-authorized 4C executed once under merged 4C-OP1 / main `ae3d7fffb31aa3e296c05ddac1ddc535d31e13e0`: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` was assigned target dataset endpoint `1152399921284927 / English Hills pixel` with **Use events dataset — Partial access**. Target-dataset-side readback confirms the lifecycle Employee now appears alongside protected Conversions API System User `100089438321765`, both with **Use events dataset**.
