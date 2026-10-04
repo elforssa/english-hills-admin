@@ -27,6 +27,7 @@ Owner action authorization bound:
 | Authorized UTC window | **2026-10-04 04:00–05:00 UTC** |
 | Actual execution start | **2026-10-04 04:00:42 UTC** |
 | Side-effect characterization / stop | **2026-10-04 04:12:33 UTC** |
+| Final regression-confirmation completion | **No later than 2026-10-04 04:31:05 UTC**; owner confirmations were supplied before the clock read at that time |
 | Effective deadline | **2026-10-04 05:00 UTC** |
 | Persistent 4C confirmations | **Exactly one Assign assets confirmation reported** |
 | Retry/reapply/remove | **None** |
@@ -174,6 +175,8 @@ After the dataset assignment and side-effect characterization, the owner perform
 
 No retry, remove, reapply, Manage action, token action, credential access, Production action or event send occurred during these confirmations.
 
+The confirmations were complete before the clock was checked at **2026-10-04 04:31:05 UTC**, establishing a conservative completion upper bound of **04:31:05 UTC**, which is inside the authorized 04:00–05:00 UTC execution window. The exact final-confirmation second is not inferred.
+
 These confirmations complete the remaining same-surface protected-object and target-dataset regression checks required by 4C-OP1, subject to the already documented visibility limits of the safe Meta Business Settings surfaces.
 
 ## Focused provider-coupling assessment
@@ -206,6 +209,31 @@ If accepted, the observed paired Pixel row becomes part of the reviewed expected
 If not accepted, the state remains a boundary violation requiring separately reviewed remediation.
 
 No further provider action is required merely to decide this question.
+
+
+
+## Independent review disposition
+
+Independent Tier-3 review of this closeout concluded:
+
+- **PROVIDER-COUPLED VIEW PIXELS ACCEPTABLE**
+- the evidence supports **4C = VERIFIED DATASET GRANT** with no further Meta mutation, once:
+  1. the owner adopts the narrow provider-coupling amendment; and
+  2. final readback completion within the authorized window is confirmed.
+
+The timestamp condition is now satisfied by the conservative upper-bound evidence above: all final confirmations were supplied before **04:31:05 UTC**, earlier than the **05:00 UTC** deadline.
+
+The accepted amendment remains intentionally narrow:
+
+- same English Hills endpoint only;
+- automatic appearance from the single reviewed dataset assignment;
+- Partial access / View Pixels only;
+- no dataset-management/full-access authority;
+- no unrelated asset/task/power;
+- protected and unrelated regression unchanged;
+- no general claim that Meta universally couples these permissions.
+
+**Owner adoption of this narrow amendment remains pending.** Until that owner adoption occurs, the repository classification stays review-pending rather than VERIFIED.
 
 ## Classification under the current approved packet
 
