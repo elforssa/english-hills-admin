@@ -67,7 +67,7 @@ jobs:
       - run: npm run audit:policy
   local-database:
     needs: classify
-    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || needs.classify.outputs.mode == 'full')
+    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
     env:
       DISABLE_EXTERNAL_EMAIL: 'true'
