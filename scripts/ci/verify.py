@@ -45,13 +45,21 @@ def safe_doc_path(path):
             and path.endswith('.md'))
 
 
+TOOLING_ALLOWLIST = frozenset({
+    'tools/meta-debugger-transport-monitor/README.md',
+    'tools/meta-debugger-transport-monitor/manifest.json',
+    'tools/meta-debugger-transport-monitor/rules.json',
+    'tools/meta-debugger-transport-monitor/monitor.html',
+    'tools/meta-debugger-transport-monitor/monitor.css',
+    'tools/meta-debugger-transport-monitor/monitor.js',
+    'tools/meta-debugger-transport-monitor/monitor-core.mjs',
+    'tools/meta-debugger-transport-monitor/monitor-controller.mjs',
+    'scripts/test-meta-debugger-transport-monitor.mjs',
+})
+
+
 def safe_tooling_path(path):
-    if not safe_repo_path(path):
-        return False
-    parts = PurePosixPath(path).parts
-    if len(parts) >= 2 and parts[0] == 'tools':
-        return True
-    return path == 'scripts/test-meta-debugger-transport-monitor.mjs'
+    return safe_repo_path(path) and path in TOOLING_ALLOWLIST
 
 
 def regular_blob_at(ref, path, expected):
