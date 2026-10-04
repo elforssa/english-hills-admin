@@ -1,5 +1,20 @@
 # Current state
 
+## H3 Revision 7 — Vercel-only custody amendment proposed — 2026-10-04
+
+The owner rejected a separate paid/high-overhead recovery-vault path and commissioned a simpler Vercel-only custody amendment. PR #82 / vault-comparison research is closed unmerged and has no architecture authority.
+
+[Proposed Vercel-only custody amendment](../architecture/plans/crm-h3-05-revision-7-vercel-only-custody-amendment.md) keeps the completed provider-object state unchanged: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
+
+The proposed change is explicit: **Vercel Production Secret becomes the only persistent lifecycle-token store**. No external 1Password/Bitwarden/Google Cloud recovery copy is required. Planned runtime secret remains `CRM_META_LIFECYCLE_TOKEN_EH_R4`, Production-only/server-only/Secret type, with no Preview/Development copy or readback/export workflow.
+
+This proposal deliberately weakens the previous recovery evidence model. Instead of retaining A and proving exact SAME A becomes invalid after identity-wide revocation, the future rehearsal would be: **issue A → safe non-event accept A → Revoke tokens once on the dedicated lifecycle Employee → require explicit successful Meta control-plane confirmation → issue B → safe non-event accept B**. The owner must explicitly accept reliance on provider revocation confirmation rather than empirical SAME-A `is_valid=false` evidence, plus expected revoke-before-reissue downtime and non-retrievable Vercel Secret behavior.
+
+The safe non-event inspector is **still required** for A/B pre-acceptance and remains **BLOCKED**. B1 actual credential acceptance remains **PENDING**. To avoid leaving accepted B stranded in a transient human session, the future exact credential/recovery operator packet must contain a narrowly scoped **conditional Vercel Production-storage authorization before B issuance**. If B passes inspection, the same private human session stores that exact B into the bound Production Secret; if B fails/inconclusive, nothing is stored and no replacement is automatically issued. H3-06–08/live activation/H4 remain separately gated.
+
+This is proposal/preparation only. Until exact-head independent review and owner adoption, merged PR #81 remains current: **B5 = OWNER DECISION REQUIRED**, **PREFLIGHT VERIFIED = NO**. No Vercel/Meta/credential/revoke/Production/event action is authorized.
+
+
 ## H3 Revision 7 — B5 custody / safe inspector preparation — 2026-10-04
 
 PR preparation follows merged owner-adopted created-object state at main `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
