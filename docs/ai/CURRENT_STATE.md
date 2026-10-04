@@ -1,5 +1,14 @@
 # Current state
 
+## H3 Revision 7 — 4C-only operator packet prepared — 2026-10-04
+
+PR #77 / 4C-SE1 is owner-adopted and merged at main `487c40bf49dbc1d740a98db90586bd5eb9968c4f`. Independent review concluded **4C SEMANTICS SUFFICIENT** at the dataset asset-task layer: **Use events dataset — Partial access** is accepted as the least-privilege administrative dataset task for the future 4C grant, without treating EH's Employee + C2 route as equivalent to Meta's managed Conversions API System User route. App installation, credential issuance/scopes/effective authority and delivery remain later gates; **Manage events dataset — Full access** remains prohibited.
+
+[4C-OP1](../architecture/plans/crm-h3-05-revision-7-4c-operator-packet.md) prepares one future dataset assignment only: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` → dataset endpoint `1152399921284927 / English Hills pixel` with exactly **Use events dataset — Partial access**, one deliberate Assign assets confirmation, complete fresh pre-action baselines and complete final same-surface noncredential regression readback, then STOP before every credential operation. C2 `29771601672426816` / the verified 4B relationship must remain unchanged.
+
+This is Tier-3 documentation preparation only. No 4C mutation is authorized until exact-head independent review, owner adoption/merge and separate owner action authorization bind the sole operator and a maximum-60-minute UTC window. **PREFLIGHT VERIFIED = NO**, **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**, B1 actual credential acceptance remains PENDING, B5 OWNER DECISION REQUIRED and the safe non-event inspector remains BLOCKED.
+
+
 ## H3 Revision 7 — 4C semantic evidence prepared — 2026-10-04
 
 4B has been operationally completed as **VERIFIED ASSOCIATION** and its independently reviewed closeout is owner-adopted and merged in PR #76 at main `11287d8562d55e09d2598e3cd7b888f689e29d98`. [4C-SE1](../architecture/evidence/crm-h3-r7-4c-semantic-evidence-2026-10-04.md) adds stronger nonsecret evidence addressing PR #74's prior **4C SEMANTICS INSUFFICIENT** finding.
