@@ -1,5 +1,16 @@
 # Current state
 
+## H3 Revision 7 — B5 custody / safe inspector preparation — 2026-10-04
+
+PR preparation follows merged owner-adopted created-object state at main `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
+
+A new documentation-only [B5 / inspector preparation](../architecture/plans/crm-h3-05-revision-7-b5-inspector-preparation.md) recommends **Google Cloud Secret Manager** as the B5 external vault candidate because the existing B5 contract requires exact immutable-version custody and SAME-A retrieval. Proposed container: a dedicated **EH Lifecycle Credential Vault** Google Cloud project, with `Maroine EL Forssa` as sole read/write custodian, no backup, no EH/runtime/CI/agent access, numbered immutable A/B versions, Secret Manager Data Access audit logging, private human Mac handling, synthetic-only version/retrieval/audit rehearsal, and destruction of invalid A within 24 hours only after independent acceptance evidence is secured.
+
+The safe non-event inspector remains **BLOCKED**. The preferred first candidate is Meta's human Access Token Debugger, but only after a separately reviewed synthetic-only handling/transport/authority assessment proves no token-in-URL/history/capture behavior and independent inspector health. No `debug_token` query-string shortcut, Graph Explorer assumption, custom utility, credential, app secret, Meta event or Production action is authorized.
+
+This is a proposal only. Until exact-head review and explicit owner adoption: **B5 = OWNER DECISION REQUIRED**, **safe non-event inspector = BLOCKED**, **PREFLIGHT VERIFIED = NO**, **B1 actual credential acceptance = PENDING**. No Google Cloud setup or Meta access is authorized by this preparation.
+
+
 ## H3 Revision 7 — 4C verified dataset grant — owner-adopted, 2026-10-04
 
 Owner adoption is complete for the reviewed narrow provider-coupling amendment merged through PR #79. Final created-object stage facts are now:
