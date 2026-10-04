@@ -2,7 +2,7 @@
 
 ## H3 Revision 7 — 4C semantic evidence prepared — 2026-10-04
 
-4B has been operationally completed as **VERIFIED ASSOCIATION** and is recorded in the stacked 4B closeout branch/PR #76. [4C-SE1](../architecture/evidence/crm-h3-r7-4c-semantic-evidence-2026-10-04.md) adds stronger nonsecret evidence addressing PR #74's prior **4C SEMANTICS INSUFFICIENT** finding.
+4B has been operationally completed as **VERIFIED ASSOCIATION** and its independently reviewed closeout is owner-adopted and merged in PR #76 at main `11287d8562d55e09d2598e3cd7b888f689e29d98`. [4C-SE1](../architecture/evidence/crm-h3-r7-4c-semantic-evidence-2026-10-04.md) adds stronger nonsecret evidence addressing PR #74's prior **4C SEMANTICS INSUFFICIENT** finding.
 
 The new evidence directly connects the exact current Meta Business Settings task **Use events dataset — Partial access** to Conversions API dataset access: a current CAPI implementation guide instructs assigning that exact task to the **Conversions API System User**; LiveRamp's Meta CAPI program independently requires the same permission before conversion delivery; Meta's own Business SDK confirms authenticated server-side event posting to the pixel/dataset `/events` path; and Glory Lot's existing protected Conversions API System User uses the same dataset task. The proposed review conclusion is **4C SEMANTICS SUFFICIENT FOR THE ADMINISTRATIVE GRANT LAYER**, while token validity/scopes/effective authority and event delivery remain later B1/credential/H4 gates.
 
