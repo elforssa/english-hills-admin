@@ -29,25 +29,67 @@ def changes(base, head):
     return ancestor, entries
 
 
-def safe_path(path):
+def safe_repo_path(path):
     parts = PurePosixPath(path).parts
-    return (len(parts) >= 2 and parts[0] == 'docs' and path.endswith('.md')
+    return (bool(parts)
             and all(p not in ('', '.', '..') for p in path.split('/'))
+            and not path.startswith('/')
             and not any(ord(c) < 32 for c in path))
+
+
+def safe_doc_path(path):
+    parts = PurePosixPath(path).parts
+    return (safe_repo_path(path)
+            and len(parts) >= 2
+            and parts[0] == 'docs'
+            and path.endswith('.md'))
+
+
+TOOLING_ALLOWLIST = frozenset({
+    'tools/meta-debugger-transport-monitor/README.md',
+    'tools/meta-debugger-transport-monitor/manifest.json',
+    'tools/meta-debugger-transport-monitor/rules.json',
+    'tools/meta-debugger-transport-monitor/monitor.html',
+    'tools/meta-debugger-transport-monitor/monitor.css',
+    'tools/meta-debugger-transport-monitor/monitor.js',
+    'tools/meta-debugger-transport-monitor/monitor-core.mjs',
+    'tools/meta-debugger-transport-monitor/monitor-controller.mjs',
+    'scripts/test-meta-debugger-transport-monitor.mjs',
+})
+
+
+def safe_tooling_path(path):
+    return safe_repo_path(path) and path in TOOLING_ALLOWLIST
+
+
+def regular_blob_at(ref, path, expected):
+    entry = git('ls-tree', ref, '--', path).decode().strip()
+    return bool(entry) == expected and (not entry or entry.startswith('100644 blob '))
 
 
 def classify(base, head):
     try:
         ancestor, entries = changes(base, head)
+        docs_only = True
+        tooling_only = True
         for status, path in entries:
-            if status not in ('A', 'M', 'D') or not safe_path(path):
+            if status not in ('A', 'M', 'D'):
+                return 'full'
+            is_doc = safe_doc_path(path)
+            is_tooling = safe_tooling_path(path)
+            docs_only = docs_only and is_doc
+            tooling_only = tooling_only and (is_doc or is_tooling)
+            if not (is_doc or is_tooling):
                 return 'full'
             for ref in (ancestor, head):
-                entry = git('ls-tree', ref, '--', path).decode().strip()
                 expected = not (status == 'A' and ref == ancestor or status == 'D' and ref == head)
-                if bool(entry) != expected or entry and not entry.startswith('100644 blob '):
+                if not regular_blob_at(ref, path, expected):
                     return 'full'
-        return 'docs'
+        if docs_only:
+            return 'docs'
+        if tooling_only:
+            return 'tooling'
+        return 'full'
     except (ValueError, UnicodeError, subprocess.CalledProcessError, OSError):
         print('Classification uncertain; selecting full CI', file=sys.stderr)
         return 'full'
@@ -58,6 +100,8 @@ def gate(event, mode, classifier, docs, app, database):
         return False
     if event == 'pull_request' and mode == 'docs':
         return docs == 'success' and app == database == 'skipped'
+    if event == 'pull_request' and mode == 'tooling':
+        return docs == app == 'success' and database == 'skipped'
     if mode != 'full' or docs != 'skipped':
         return False
     return app == 'success' and database == ('success' if event == 'pull_request' else 'skipped')

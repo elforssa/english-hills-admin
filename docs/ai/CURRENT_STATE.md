@@ -1,5 +1,16 @@
 # Current state
 
+## CI tooling-only fast path proposed — 2026-10-04
+
+PR #90 proposes **CI + Codex Workflow Efficiency v2**, a **Tier 2** CI-routing/policy change. Pull requests are classified as `docs`, `tooling`, or `full`. The new `tooling` path is deliberately narrow: exactly the eight reviewed files under `tools/meta-debugger-transport-monitor/`, the exact `scripts/test-meta-debugger-transport-monitor.mjs`, and accompanying safe `docs/**/*.md`. Any other `tools/**` file is `full`. It requires documentation checks plus the normal app/unit/build/security job and skips only `local-database`.
+
+Runtime/database/configuration/CI-policy/package/unknown paths remain `full`; classifier uncertainty remains fail-closed to `full`. A successful classifier with empty/unknown mode now also schedules the database fallback. Renames evaluate both old/new paths. Non-regular Git modes and unsupported statuses force `full`.
+
+PR #90 itself changes `.github/**` and `scripts/ci/**`, so it is intentionally **not eligible for its own fast path** and must pass full CI once before merge. Exact-head independent review remains mandatory under Tier 2. GitHub branch-protection settings are unchanged by this source change.
+
+[Plan](../architecture/plans/ci-tooling-fast-path.md) · [Architecture](ARCHITECTURE.md#ci--codex-workflow-efficiency-v2--tooling-only-fast-path-proposed--2026-10-04) · [Policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff)
+
+
 ## H3 Revision 7 — two-stage inspector bootstrap amendment proposed — 2026-10-04
 
 PR #87 is owner-adopted and merged at main `96dbbdb4a8d8f51a88077baae7168da425377c29`.
