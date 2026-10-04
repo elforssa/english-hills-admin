@@ -60,7 +60,7 @@
       "type": "allow"
     },
     "condition": {
-      "regexFilter": "^https://graph\\.facebook\\.com/(?:v[0-9]{1,3}\\.[0-9]+/)?debug_token(?:\\?.*)?$",
+      "regexFilter": "^https://graph\\.facebook\\.com/(v[0-9]{1,3}\\.[0-9]+/)?debug_token(\\?.*)?$",
       "initiatorDomains": [
         "developers.facebook.com"
       ],
