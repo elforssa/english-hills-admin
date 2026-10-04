@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "EH Meta Debugger Transport Monitor",
+  "version": "0.1.0",
+  "description": "Synthetic-only URL-match monitor for the reviewed English Hills Meta debugger transport assessment.",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "eh_inspector_transport_rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "options_page": "monitor.html"
+}
