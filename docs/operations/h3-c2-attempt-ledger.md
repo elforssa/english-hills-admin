@@ -13,12 +13,12 @@ Ledger file: docs/operations/h3-c2-attempt-ledger.md
 
 ## State
 
-UNUSED
+RESERVED / CONSUMED — NOT YET SUBMITTED
 
-Submission allowance consumed: NO
+Submission allowance consumed: YES
 Submission attempted: NO
 Canonical C2 app ID: UNKNOWN — NOT YET CREATED
-4A result: NOT EXECUTED
+4A result: RESERVED — PROVIDER SUBMIT NOT YET PERFORMED
 
 ## Authorization status
 
@@ -32,9 +32,9 @@ Exclusive execution ownership: ACTIVE FOR APPROVED WINDOW
 Exclusive ledger writer: Maroine El Forssa — ACTIVE FOR APPROVED WINDOW
 Other humans/Codex tasks/agents/automations/second Meta sessions excluded from C2 creation: YES — OWNER CONFIRMED
 One Create app submission maximum: AUTHORIZED SUBJECT TO ALL PRE-SUBMIT GATES
-Create allowance currently consumed: NO
+Create allowance currently consumed: YES — write-ahead reservation recorded before provider submit
 
-This authorization does not itself consume the create allowance. The allowance remains UNUSED until fresh inventories, isolation checks and write-ahead reservation complete. No Meta submit may occur before durable reservation readback.
+The create allowance is now consumed. No retry, reset, alternate app, alternate label or second creation submission is permitted. Provider submit remains prohibited until this exact reservation commit and retained parent history are read back successfully from the remote.
 
 ## Prior-history reconciliation
 
@@ -132,6 +132,38 @@ Prohibited without separate review:
 
 Unexpected credential exposure requires immediate STOP and owner handling.
 
+## Fresh pre-submit baseline
+
+Owner-attested My Apps inventory during the approved execution window:
+- EH Lifecycle R4 C2: ABSENT
+- protected existing English-hills app: PRESENT
+- unexplained/new apps: NONE OBSERVED
+
+Owner-supplied Glory Lot Business Apps screenshot during the approved execution window:
+- visible business apps: exactly one
+- English-hills / 1069638329182835: PRESENT
+- owner: Glory Lot
+- EH Lifecycle R4 C2: ABSENT
+- unexplained/new business app: NONE OBSERVED
+- no Add/Remove/Assign/Connect/Manage mutation performed
+
+Owner-confirmed System Users baseline during the approved execution window:
+- 100089438321765 / Conversions API System User / EMPLOYEE: PRESENT
+- 61594759444572 / English Hills CRM / ADMIN: PRESENT
+- 61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE: PRESENT
+- expected protected/current identities and roles: CONFIRMED UNCHANGED
+- no System User mutation, token generation or asset assignment performed
+
+Prior-attempt reconciliation at reservation time:
+- remote C2 ledger history contained initialization commit 471228fa68598be47555c9adbd40212a0cf23d78 and authorization-window commit b565cca4b7644fb5c70c736a71ba5b72b40da938 only
+- owner has not reported an off-ledger C2 creation attempt
+- C2 remains absent from the fresh My Apps and Business Apps inventories
+
+Reservation consequence:
+- action EH-H3-R7-C2-CREATE-001 is now consumed before any provider submit
+- submission attempted: NO
+- any stop, ambiguity or later possible submit does not automatically restore this allowance
+
 ## Execution session authorization
 
 Owner-authorized 4A action window: 2026-10-04 01:45–02:45 UTC.
@@ -143,10 +175,10 @@ No 4B, 4C, credential, app-secret, Production, H3-06–08, H4 or lifecycle-send 
 
 ## Current outcome
 
-Execution authorization activated; pre-submit gates pending.
+Fresh pre-submit inventories passed and the one-create allowance is reserved/consumed before provider submit.
 
-State: UNUSED
-Consumed: NO
+State: RESERVED / CONSUMED — NOT YET SUBMITTED
+Consumed: YES
 Submitted: NO
 Meta mutation: NONE
 C2 canonical ID: UNKNOWN
