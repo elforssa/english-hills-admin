@@ -1,5 +1,25 @@
 # Current state
 
+## H3 Revision 7 — B5 READY / safe inspector transport-monitor design prepared — 2026-10-04
+
+PR #84 is owner-adopted and merged at main `13853983dadee2a0fde93388f976887df628acbc`. The adopted state is now **B5 = READY** with the exact Vercel conditional-storage binding already recorded. No Vercel write is authorized merely by that readiness classification.
+
+The safe non-event inspector remains **BLOCKED** on two independent gates:
+
+1. **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
+2. **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PENDING**
+
+A new documentation-only [request-transport monitor design](../architecture/plans/crm-h3-05-r7-inspector-transport-monitor-design.md) proposes a tiny temporary Chrome Manifest V3 extension using only `declarativeNetRequest` + `declarativeNetRequestFeedback`. Both synthetic block rules must explicitly include the full supported Chrome ResourceType set, including `main_frame`, so top-level navigation, background requests and redirected request URLs are covered. Fresh observation timestamps are bound before calibration/submission, `getMatchedRules()` is queried without a tab filter within 60 seconds, stale calibration matches do not count, unassociated/tab `-1` matches are included, and query errors are **INCONCLUSIVE**, never treated as zero matches.
+
+Chrome documents that `declarativeNetRequestFeedback` enables both `getMatchedRules()` and the more revealing `onRuleMatchedDebug`, so secrecy depends on the exact reviewed code—not the permission list alone. The design now requires static tests proving there is no `onRuleMatchedDebug`, request-detail logging, persistence, network/fetch code or broader browser permission.
+
+The transport monitor is only a safe URL-match detector. A debugger-marker match is fail-closed. A calibrated zero-match result is now classified **NO MARKER URL MATCH OBSERVED — REMOTE EVALUATION UNPROVED** and remains **INCONCLUSIVE** unless a separate supported nonsecret signal proves the synthetic submission reached the remote evaluation path. A visible invalid-input message is explicitly insufficient. The design does not yet define or approve such a remote-evaluation signal.
+
+Meta-operated Postman documentation and official Meta Node/Java Business SDK sources continue to show the supported `debug_token` API route using `input_token` in a URL query parameter, so that API/SDK route remains **NOT APPROVED**. Public Meta documentation supports only part of the debugger output model (token type, permissions, app_id); full valid-token output binding remains **PARTIAL / BLOCKED**. No real A may be generated merely to discover field labels under this proposal.
+
+Current holds: **B1 actual credential acceptance = PENDING**, **PREFLIGHT VERIFIED = NO**; no browser extension implementation/installation, Meta account action, A/B generation, real token inspection, Revoke tokens, Vercel secret write, H3-06–08, H4, Test Events or lifecycle send is authorized.
+
+
 ## H3 Revision 7 — Vercel B5 preflight PASS / inspector synthetic packet prepared — 2026-10-04
 
 PR #83 is owner-adopted and merged at main `6c62828d7b1edd53db2880ba3823dd25d8823d6f`. The active architecture is now Vercel-only lifecycle credential custody: `CRM_META_LIFECYCLE_TOKEN_EH_R4` will later be stored only as a Vercel Production Secret after B passes safe non-event/B1 acceptance, with no external recovery-vault copy and no SAME-A post-revoke proof.
