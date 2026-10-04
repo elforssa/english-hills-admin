@@ -19,7 +19,7 @@ The manifest requests only:
 
 It deliberately has no host permissions, content scripts, background worker, storage, cookies, tabs/activeTab, debugger, proxy, native messaging or page-injection capability.
 
-The code uses only `getMatchedRules()`. It must never use `onRuleMatchedDebug`, which can expose request details.
+The code uses only `getMatchedRules()`. It reads Chrome's `RulesMatchedDetails.rulesMatchedInfo` envelope and treats malformed responses as **INCONCLUSIVE**. It must never use `onRuleMatchedDebug`, which can expose request details.
 
 No request URLs, headers, bodies, cookies or session material are persisted or displayed.
 
@@ -27,7 +27,7 @@ No request URLs, headers, bodies, cookies or session material are persisted or d
 
 - **9001** — fixed synthetic calibration marker, block.
 - **9002** — fixed synthetic debugger marker, block, priority 300.
-- **9003** — exact Meta Graph `/debug_token` endpoint request observer, allow, priority 200.
+- **9003** — exact Meta Graph `/debug_token` endpoint request observer, allow, priority 200, explicitly case-sensitive.
 
 Rule 9002 strictly outranks Rule 9003.
 
@@ -37,7 +37,7 @@ A Rule 9003 match means only that a matching browser request attempt was observe
 
 ## Observation windows
 
-The monitor page keeps observation-start timestamps only in page memory.
+The monitor page keeps observation identities/start timestamps only in page memory. Pending queries are invalidated by Reset, a restarted window, or a newer overlapping query and cannot overwrite the newer state. Completion time is re-read after the Chrome promise resolves before the 60-second window is assessed.
 
 - calibration window;
 - Rule 9003 idle-baseline window;
