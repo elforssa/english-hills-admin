@@ -1,5 +1,28 @@
 # Current state
 
+## H3 Revision 7 — inspector remote-evaluation research prepared — 2026-10-04
+
+PR #85 is owner-adopted and merged at main `88b9dea9945a3315597214d35123a593ac710051`. The adopted Chrome transport-monitor design remains documentation-only; no extension implementation/installation or Meta testing has occurred.
+
+A new [remote-evaluation research record](../architecture/evidence/crm-h3-r7-inspector-remote-evaluation-research-2026-10-04.md) uses current official Meta and Chrome evidence. Meta's official `facebook/agentic-tools` repository now provides a `debug-access-token` skill and vetted `debug_token_probe.py`, confirming both the human Access Token Debugger as a first-party inspection option and the supported remote Graph `/debug_token` endpoint. The same Meta source directly supports diagnostic fields including `is_valid`, token type, `app_id`, application, issuance/expiry/data-access expiry, scopes and granular-scope names.
+
+The research defines a conditional remote-evaluation sentinel: add lower-priority **Rule 9003** that allows only a direct GET from `developers.facebook.com` to Meta's documented `graph.facebook.com/.../debug_token` endpoint. Existing higher-priority Rule 9002 still blocks any URL containing the synthetic token marker. A clean idle baseline plus zero Rule 9002 matches plus a fresh submission-triggered Rule 9003 match can serve as a candidate supported nonsecret remote-evaluation signal for that tested flow. If Rule 9003 does not appear, the result remains INCONCLUSIVE; the design does not assume the human debugger uses the public Graph endpoint.
+
+Meta's official agentic-tools script itself is **not** adopted as the EH inspector because it uses GET query-string token transport, requires the app secret and relies on throwaway-shell environment-variable handling, all of which differ from the current owner-adopted contract.
+
+Current inspector evidence state:
+- **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
+- **SUPPORTED REMOTE-EVALUATION SIGNAL = CANDIDATE DEFINED, NOT VERIFIED**
+- **OUTPUT FIELD SEMANTICS = SUFFICIENT**
+- **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PARTIAL — SUBJECT/TARGET SAFE BINDING PENDING**
+- **safe non-event inspector = BLOCKED**
+- **B1 actual credential acceptance = PENDING**
+- **PREFLIGHT VERIFIED = NO**
+- **B5 = READY**
+
+No implementation, provider action or credential operation is authorized by this research.
+
+
 ## H3 Revision 7 — B5 READY / safe inspector transport-monitor design prepared — 2026-10-04
 
 PR #84 is owner-adopted and merged at main `13853983dadee2a0fde93388f976887df628acbc`. The adopted state is now **B5 = READY** with the exact Vercel conditional-storage binding already recorded. No Vercel write is authorized merely by that readiness classification.
