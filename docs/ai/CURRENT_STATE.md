@@ -1,5 +1,26 @@
 # Current state
 
+## H3 Revision 7 — transport monitor first-review corrections applied — 2026-10-04
+
+PR #89 first exact-code review at head `ab99be3084d7b02858887b7db7e9f5c122d87633` found implementation defects in Chrome response-envelope handling, async observation invalidation, Rule 9002 precedence and CI assertions, plus case-sensitivity/RE2/test-coverage qualifications. Those findings are corrected on the same branch.
+
+The corrected implementation now:
+- extracts only `RulesMatchedDetails.rulesMatchedInfo`; malformed envelopes are INCONCLUSIVE;
+- rechecks completion time after async Chrome calls;
+- invalidates stale pending queries after Reset, restarted windows or newer overlapping queries without letting them overwrite the newer UI state;
+- makes any fresh Rule 9002 match immediate FAIL in calibration, idle or assessment;
+- explicitly sets case-sensitive URL matching;
+- enforces exact numeric priorities 9001=100, 9002=300, 9003=200;
+- treats `initiatorDomains` as a domain condition rather than exact-origin proof;
+- replaces the incorrect noncapturing-group RE2 claim with guards against known unsupported lookaround/backreference constructs;
+- forbids `optional_permissions`;
+- closes and scans the executable-file inventory;
+- adds actual Chrome response-envelope controller tests and delayed/reset/restart/overlap regressions.
+
+The previous failed CI run is historical and does not count as acceptance. Fresh CI and a fresh exact-code independent Tier-3 re-review are required on the corrected head.
+
+Operational state is unchanged: extension installation/testing, Meta access, A/B generation, inspection, revoke, Vercel mutation, H3-06–08, H4, Test Events and lifecycle sending remain unauthorized.
+
 ## H3 Revision 7 — transport monitor implemented for exact-code review — 2026-10-04
 
 PR #88 is owner-adopted and merged at main `9f3ced1a8e184f2bc5c2afd0dc4d607eda71748d`. The adopted two-stage inspector bootstrap architecture is now **DEFINED**.
