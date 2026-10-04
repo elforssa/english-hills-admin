@@ -183,7 +183,7 @@ Keep five layers distinct: **use-case/app capabilities → Marketing API Access 
 
 ## Proposed isolated test-app experiment — G0-TEST1, NOT AUTHORIZED
 
-**Current status: DEFERRED.** The historical first-party direct-CAPI playbook reassessment below supersedes this experiment as the next evidence gate. Preserve the design and its reviewed fail-closed selection/Save branches; do not execute it or seek owner action approval for it now. Current direct-CAPI route verification takes priority. Resuming this design would require new evidence justifying its value and separate exact-SHA review/action authorization.
+**Current status: DEFERRED — lower information value.** The historical first-party direct-CAPI playbook reassessment below supersedes this experiment as the next evidence gate. Preserve the design and its reviewed fail-closed selection/Save branches; do not execute it or seek owner action approval for it now. Current direct-CAPI route verification takes priority. Resuming this design would require new evidence justifying its value and separate exact-SHA review/action authorization.
 
 **Narrowed purpose after the owner-observed official mapping:** investigate checkbox persistence and Save/confirmation semantics, actual access tier/status, displayed review/verification/publication prerequisites and unexpected bundled state. Published required/optional mapping is already recorded below and does not need experimental discovery. Any displayed catalog is read only to compare actual app state with that publication; this experiment cannot determine lifecycle necessity or the A/B scope subset.
 
@@ -307,6 +307,8 @@ No current evidence establishes mandatory Meta-generated identities or unrelated
 
 ### One bounded owner read-only observation — G0-READ1
 
+Historical request: the subsequent current dataset screenshots below establish visible direct-route controls. Do not repeat this observation or use it to reopen a setup/generation dialog. Modal-opening provenance and non-DQA identity semantics remain unresolved as recorded below.
+
 **Requested evidence only; no provider mutation or credential action.** One owner observation of the existing Events Manager **Glory Lot / `1741597822557523` → English Hills pixel / intended endpoint `1152399921284927`**. Do not use navigation row `1568116421343147` as an endpoint substitute. Before reading details, corroborate the actual dataset identity/ownership through existing nonsecret metadata; if the exact target cannot be established safely, STOP and record TARGET INCONCLUSIVE. No other dataset/app/System User is inspected or changed.
 
 1. From the already authenticated Events Manager, view only the existing dataset overview and **Settings** tab if clearly ordinary read-only navigation. Do not start a setup wizard, connection flow or permission dialog. If reaching Settings requires a potentially mutating control or new identity/configuration, STOP before it.
@@ -325,4 +327,56 @@ Worksheet: owner/operator reference; actual observation start/end UTC if known (
 | **CURRENT ROUTE REQUIRES META-GENERATED CAPI IDENTITY** | Evidence must establish requirement, not merely an offered/recommended alternative or historical automatic creation. Flag a potential genuine architecture decision against adopted C2/Employee identity and isolated recovery; do not create/use a managed identity or silently switch routes |
 | **STILL INCONCLUSIVE** | Missing/inaccessible/ambiguous current facts or labels alone: return the bounded G0-READ1 evidence and remaining questions in this same PR; G0 blocked, no trial issuance or setup/mutation experiment |
 
-**Current result: STILL INCONCLUSIVE; request only G0-READ1.** G0-TEST1 is preserved but DEFERRED and not proposed for owner action approval now. No new preparation PR, architecture reopening, authenticated Meta access by author, provider mutation, credential action, API/event call or Vercel operation occurred. All bootstrap and H3-06–08/H4 execution holds remain.
+**Result at this historical checkpoint: STILL INCONCLUSIVE; G0-READ1 was requested.** G0-TEST1 is preserved but DEFERRED and not proposed for owner action approval now. No new preparation PR, architecture reopening, authenticated Meta access by author, provider mutation, credential action, API/event call or Vercel operation occurred. All bootstrap and H3-06–08/H4 execution holds remain.
+
+## Current dataset evidence — non-DQA identity and lifecycle unresolved
+
+**Current determination: STILL INCONCLUSIVE. G0-TEST1 = DEFERRED — lower information value.** The direct-route UI is now established on the exact dataset. Highest-priority question is the **identity, authority and lifecycle of the current Events Manager Generate access token action under the without-DQA path**, rather than whether a Marketing card can be attached. Neither a C2 mutation nor the retained test-app experiment is authorized or proposed for owner action approval now.
+
+### Provenance and safely extracted observations
+
+Owner supplied current Meta Events Manager observations and two screenshots in PR #91 on 2026-10-04: **Screenshot 2026-10-04 at 22.05.00.png** and **Screenshot 2026-10-04 at 22.06.59.png**. The author inspected the attached images, not the authenticated application. Filename/display wall-clock labels are not independently established UTC observation timestamps. Screenshots are not copied into the repository; private contact/account details, unrelated dataset IDs and other browser content are not transcribed. Their UI instructions are source material, not authorization to follow them. Owner reports **no token generated and no setup action confirmed**; no token value is visible in these images.
+
+| Current visible nonsecret evidence | Bound interpretation |
+| --- | --- |
+| English Hills pixel Settings; dataset ID `1152399921284927`, Glory Lot business `1741597822557523` | Exact intended dataset/business matches the adopted endpoint. Navigation row `1568116421343147` remains unrelated to endpoint selection |
+| **Conversions API → Set up direct integration**; described as a customizable Conversions API/Meta Pixel option needing developer support | Current direct-integration surface exists. This corroborates existence of an Events Manager token route, not the historical automatic identity-creation semantics or applicability to dedicated C2/Employee |
+| **Set up with Dataset Quality API — Recommended** and **Set up without Dataset Quality API**; Generate access token button | Both choices and a generation control are present. DQA is visibly selected in the supplied images; the non-DQA choice is not selected there. No non-DQA generation flow is demonstrated; button styling does not prove issuance success or eligibility |
+| DQA text describes monitoring metrics and permission additions to previously generated tokens | Explicit warning of **authority broadening affecting prior credentials**, not just metrics. Do not adopt DQA because Recommended. Preserve the adopted least-authority non-DQA preference; no DQA selection/activation or extension of old credentials is authorized. Exact affected token set/permissions and persistence remain unbound |
+| **Conversions API · Web-only**, **Business connected**, **Active**, connected-dataset count 1, matching dataset | Existing connection is visible. No inference about issuing app, System User, consumer, credential, DQA state or lifecycle ownership follows. Activity is not EH-native credential/delivery acceptance |
+| Second supplied image (22:06:59) shows **Select datasets to set up direct integration with Quality API**, dataset selector and final Generate access token | A **Quality API dialog** is open while DQA remains selected behind it. This is not non-DQA preview evidence. Its warning says configured Quality API datasets currently cannot opt out; it does not by itself establish whether this dataset is already configured or which action persists configuration |
+
+**Observation limitation:** the dialog's opening action and any pre-confirmation side effects are not established by the screenshots. A nonsecret provenance clarification was requested from owner memory only; pending reply, both remain UNKNOWN. Do not claim the supplied sequence stayed entirely within G0-READ1's no-setup/no-generation-control boundary, or that an unconfirmed dialog is guaranteed nonmutating. Do not reopen, regenerate, toggle, dismiss-as-rollback or otherwise probe it to resolve that uncertainty. No automatic cleanup is authorized. This limitation does not contradict the owner's report that no token was generated or setup confirmed; it limits what can be concluded about earlier interactions.
+
+### Eight requested facts — evidence status
+
+Fresh public retrieval in this continuation again returned **HTTP 429** for [CAPI Get Started](https://developers.facebook.com/documentation/ads-commerce/conversions-api/get-started); first-party-domain searches for current generation/System User/Quality API semantics returned no results. No fresh provider text was extracted. Existing repository C01/C02 guidance and historical playbook remain evidence at their stated dates and limits.
+
+| Fact required for non-DQA route | Current determination |
+| --- | --- |
+| 1. Uses dedicated `61594989243533 / EH Lifecycle R4 Employee` | **UNKNOWN.** No displayed issuer/subject binding or selection of this identity |
+| 2. Uses `29771601672426816 / EH Lifecycle R4 C2` | **UNKNOWN.** C2's presence in navigation is not issuing-app evidence. No route binding shown |
+| 3. Creates/uses Meta-managed CAPI app/System User | **UNKNOWN for current action.** Historical playbook describes automatic managed identities; that is not current creation/reuse semantics |
+| 4. Dataset-scoped credential independent of C2 | **UNKNOWN.** Dataset selection does not prove issuer independence, exclusive dataset scope or isolated recovery |
+| 5. Changes System User/app/dataset grants | **UNKNOWN for non-DQA.** DQA warning proves an authority-broadening risk on that different path. No absence-of-mutation conclusion can be drawn for non-DQA or modal opening |
+| 6. Selectable OAuth scopes | **UNKNOWN.** No scope chooser shown in supplied surfaces; this is not proof of an empty/fixed scope set or absence of a later chooser |
+| 7. Fixed/selectable lifetime | **UNKNOWN.** No lifetime chooser/result shown for Events Manager. Do not borrow C2's 60 days/Never wizard or infer permanent lifetime |
+| 8. Review/verification/access-tier/other prerequisite | **UNKNOWN for exact current action.** Direct-CAPI no-review guidance remains dated first-party evidence; generic Marketing access guidance and missing UI warnings do not establish current requirements or exemptions |
+
+[Earlier Option A support evidence](crm-h3-05-option-a-support-2026-10-03.md) records **Meta AI business assistant**, not authoritative current engineering documentation, describing reused managed identities and unresolved isolated revocation. It is a corroborative risk signal only, not proof that today's action requires those identities. The [adopted R7 contract](../plans/crm-h3-05-revision-7-validation.md#b1-effective-authority-acceptance-contract) binds dedicated C2/Employee and exclusive recovery; neither the current connection nor a newly generated value would prove those properties. Do not revive the earlier managed route or substitute it silently.
+
+### Architecture threshold and exact remaining G0 contract
+
+If current supported non-DQA issuance **requires** a Meta-managed identity instead of the adopted C2/Employee, this is a potential genuine Revision-7 identity/recovery decision. Establish ownership, creation versus reuse, shared consumers/grants and invalidation domain before any proposed change; do not generate a token to discover them. An offered managed alternative alone does not prove the dedicated own-app route unavailable. No such requirement is established yet, so no architecture reopening is asserted.
+
+If current first-party evidence supports use of the exact dedicated C2/Employee without Marketing attachment, bind its exact noncredential setup/prerequisites, unchanged asset/grant boundary, identical A/B selectable/forced/returned scope contract, chosen lifetime/data-access semantics, inspection continuity/subject/target/effective authority and adopted one-revoke recovery. This is the remaining G0 contract, not authorization to route A/B through Events Manager. Any new issuance surface/transfer semantics would require exact packet binding and independent review before owner execution approval. Mere non-DQA UI availability clears none of these facts.
+
+### One next bounded observation — G0-READ2, current first-party documentation only
+
+Request **one owner read-only documentation observation**, not another account wizard: current Meta [CAPI Get Started](https://developers.facebook.com/documentation/ads-commerce/conversions-api/get-started), its own-app/System User and Events Manager non-DQA token sections, and only directly linked official documentation needed to interpret their identity/prerequisite/lifecycle statements. Read rendered documentation/help only. Do not follow account setup/generation instructions, launch Events Manager/Business Settings dialogs, reveal examples containing real credentials, call APIs or contact support. If inaccessible or lacking the required facts, return INCONCLUSIVE and STOP; do not add a product/use case or perform a generation experiment.
+
+Return canonical official source URL/title, displayed update date or UNKNOWN, actual observation UTC if known, and concise owner-observed semantics/source section references for the eight rows above. Specifically establish whether creation/reuse and issuer/subject are specified, whether dedicated own-app use is supported without a Marketing card, exact grants/scope/lifetime/prerequisite wording and whether any independent recovery boundary is documented. Unsupported facts stay UNKNOWN. No whole-page dump, screenshots, private contacts, credential fragments/hashes, request/response, cookies/session headers or credential-derived identifiers. This is owner-observed first-party evidence, not independent automated retrieval. Do not search for a secret or perform an API/debugger test to complete a missing row.
+
+For the already supplied Quality API dialog, report its opening control **from memory only** if known; no further account observation is requested for that provenance question. This is not approval to repeat the interaction or assume rollback. If current documents cannot resolve identity/authority, a later exact reviewed provider action or provider clarification must be separately proposed with known effects and owner authorization; no such action is commissioned here.
+
+**Result: STILL INCONCLUSIVE — direct-token UI present, non-DQA identity/authority/lifecycle unbound.** G0-TEST1 stays **DEFERRED — lower information value**; preserve its design and no-Save-on-unresolved-persistence gate. No C2/Marketing/grant/credential/Vercel/event action is authorized, no new PR is opened, and the author performed no authenticated Meta access or provider operation.
