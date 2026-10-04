@@ -110,28 +110,30 @@ and separately:
 
 The official bundled Meta script does not change that English Hills design decision: it still builds the request query string from the input token plus app access token.
 
-## Remote-evaluation signal candidate
+## Remote-endpoint request observation candidate
 
-The adopted Chrome monitor can be extended with a third declarative rule that detects only a direct browser request to Meta's documented Graph `/debug_token` endpoint.
+The adopted Chrome monitor can be extended with a third declarative rule that detects only a direct browser request attempt to Meta's documented Graph `/debug_token` endpoint.
 
-This avoids guessing from a visible error message.
+This avoids guessing from a visible error message, but it does **not** by itself prove network completion, Meta processing, response completion, or that the submitted synthetic value was evaluated.
 
-### Rule 9003 — supported remote-evaluation endpoint sentinel
+### Rule 9003 — supported remote-endpoint request sentinel
 
 Proposed rule:
 
 - ID: `9003`
 - developer priority: lower than Rule 9002
 - action: **allow**
-- request domain: `graph.facebook.com`
-- initiator domain: `developers.facebook.com`
+- request domain condition: `graph.facebook.com`
+- initiator domain condition: `developers.facebook.com`
 - request method: `GET`
-- regex/path match:
-  - versioned `/vN.N/debug_token`
-  - or unversioned `/debug_token`
+- **regexFilter must independently anchor all of the following**:
+  - scheme exactly `https://`
+  - host exactly `graph.facebook.com` — no subdomain acceptance
+  - path exactly either versioned `/vN.N/debug_token` or unversioned `/debug_token`
+  - only the query-string suffix may follow the complete path
 - same explicit full ResourceType set used by Rules 9001/9002
 
-The exact regex must be independently reviewed and statically tested before implementation.
+This exact-host regex constraint is mandatory because Chrome domain conditions may also match subdomains. The exact regex must be independently reviewed and statically tested before implementation.
 
 ### Priority requirement
 
@@ -149,9 +151,11 @@ Chrome documentation establishes that developer-defined rule priority is evaluat
 
 A block-only endpoint sentinel would prove that the browser **attempted** the remote request but would prevent the remote endpoint from evaluating it.
 
-A lower-priority `allow` sentinel permits the documented remote request only when the higher-priority marker leak rule did not fire.
+A lower-priority `allow` sentinel permits the documented remote endpoint request attempt only when the higher-priority marker leak rule did not fire.
 
-This gives the intended three-state behavior:
+Rule 9002 must have a **strictly higher numeric developer priority** than Rule 9003. Equal priority is prohibited because Chrome's action precedence can allow an `allow` action to outrank a `block` action at equal priority.
+
+This gives the intended three-state observation behavior:
 
 #### URL LEAK / FAIL
 
@@ -163,7 +167,7 @@ Meaning:
 - the higher-priority block prevented the marker-bearing request;
 - debugger route fails the English Hills no-token-in-URL contract.
 
-#### DIRECT SUPPORTED REMOTE ENDPOINT OBSERVED
+#### DIRECT SUPPORTED REMOTE ENDPOINT REQUEST OBSERVED
 
 Conditions:
 
@@ -173,15 +177,27 @@ Conditions:
 - fresh Rule 9002 count = 0;
 - fresh Rule 9003 match after submission;
 - Rule 9003 query succeeds inside the bounded window;
-- debugger UI produces a response consistent with completion of that submission rather than a page/session failure.
+- debugger UI remains healthy enough to associate the observation window with that one submission; any displayed response is only session/context evidence, not proof of remote completion.
 
 Meaning:
 
-- the debugger-triggered browser flow directly invoked Meta's documented Graph `/debug_token` remote endpoint;
+- the debugger-triggered browser flow **attempted** a direct request to Meta's documented Graph `/debug_token` endpoint;
 - the exact synthetic marker was not present in the request URL as observed by the higher-priority marker rule;
-- the remote endpoint request was allowed rather than blocked.
+- the endpoint request attempt was allowed rather than blocked.
 
-This is a candidate **SUPPORTED REMOTE-EVALUATION SIGNAL** for the tested human-debugger flow.
+This establishes only:
+
+**SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE**
+
+It does **not** establish that:
+
+- the network request completed;
+- Meta received or processed the request;
+- a response completed;
+- the observed UI response came from that request;
+- or the submitted synthetic value was included in and evaluated by Meta.
+
+Therefore Rule 9003 alone is **not** a supported remote-evaluation signal.
 
 #### NO REMOTE ENDPOINT MATCH
 
@@ -212,7 +228,7 @@ Before submitting the synthetic marker:
 4. query `getMatchedRules()` across all tabs/unassociated requests;
 5. require **zero fresh Rule 9003 matches**.
 
-If Rule 9003 matches during idle baseline, the endpoint sentinel is not submission-specific enough for this session and the later Rule 9003 match cannot be used as remote-evaluation proof.
+If Rule 9003 matches during idle baseline, the endpoint sentinel is not submission-specific enough for this session and the later Rule 9003 match cannot be used even as submission-specific endpoint-request evidence.
 
 Result:
 
@@ -224,9 +240,9 @@ Rule 9003 is intentionally conditional.
 
 It does **not** assume the human Access Token Debugger uses the public Graph endpoint.
 
-It only provides positive evidence if the current debugger actually produces that direct browser request.
+It only provides positive evidence that the current debugger flow produced a matching direct browser request attempt.
 
-If Meta's debugger uses a different/internal route, the result remains INCONCLUSIVE.
+It does not observe network completion or response-body processing. If Meta's debugger uses a different/internal route, a server-side backend hop, or an invisible transport path, the result remains INCONCLUSIVE.
 
 The rule also does not establish universal future behavior. Evidence must bind:
 
@@ -327,18 +343,25 @@ Using that script later would require a separate explicit architecture amendment
 
 ## Research conclusion
 
-A useful nonsecret remote-evaluation signal now exists **conditionally**:
+A useful nonsecret **remote-endpoint request observation** now exists conditionally:
 
-> a fresh, submission-specific Rule 9003 match for the documented Meta Graph `/debug_token` endpoint, with a clean idle baseline and zero higher-priority Rule 9002 marker leak matches.
+> a fresh, submission-specific Rule 9003 match for the exactly anchored Meta Graph `/debug_token` endpoint, with a clean idle baseline and zero higher-priority Rule 9002 marker leak matches.
 
-This signal is supported by:
+This observation is supported by:
 
-- current Meta official evidence that `/debug_token` is the remote token-inspection endpoint; and
-- Chrome DNR's supported ability to match/allow that exact endpoint without request-detail interception.
+- current Meta official evidence that `/debug_token` is a supported remote token-inspection endpoint; and
+- Chrome DNR's supported ability to match/allow that exact request attempt without request-detail interception.
 
-It can make implementing the transport monitor worthwhile.
+It does **not** prove remote evaluation. No current evidence in this research safely links the submitted synthetic input to completed Meta evaluation.
 
-However:
+Therefore the state is deliberately split:
+
+- **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**
+- **SUPPORTED REMOTE-EVALUATION SIGNAL = UNRESOLVED / NOT YET DEFINED**
+
+Implementing Rule 9003 may still be worthwhile as a narrowly scoped observation tool, but it cannot close the remote-evaluation requirement by itself.
+
+Also:
 
 - if Rule 9003 never appears, the debugger remains INCONCLUSIVE;
 - output subject/target safe binding is still pending;
@@ -346,9 +369,11 @@ However:
 
 ## Proposed next step
 
-Prepare a narrow amendment to the already-adopted monitor design adding Rule 9003 and its idle-baseline/priority/result contract.
+Prepare a narrow amendment to the already-adopted monitor design adding Rule 9003 only as a **remote-endpoint request observer**, with its exact-host HTTPS regex, idle-baseline, strict-priority and bounded-result contract.
 
-Only after exact-head independent review and owner adoption should implementation of the three-rule monitor be commissioned.
+That amendment must not claim remote evaluation from a Rule 9003 match.
+
+Only after exact-head independent review and owner adoption should implementation of the three-rule monitor be commissioned. A separate supported method would still be required to prove completed remote evaluation/input linkage before inspector READY.
 
 No implementation is authorized by this research.
 
@@ -356,7 +381,8 @@ No implementation is authorized by this research.
 
 - **B5 = READY**
 - **SUPPORTED REQUEST-TRANSPORT / TRANSIENT-REDIRECT EVIDENCE = PENDING**
-- **SUPPORTED REMOTE-EVALUATION SIGNAL = CANDIDATE DEFINED, NOT VERIFIED**
+- **SUPPORTED REMOTE-ENDPOINT REQUEST OBSERVATION = CANDIDATE DEFINED, NOT VERIFIED**
+- **SUPPORTED REMOTE-EVALUATION SIGNAL = UNRESOLVED / NOT YET DEFINED**
 - **OUTPUT FIELD SEMANTICS = SUFFICIENT**
 - **ALLOWLISTED VALID-TOKEN OUTPUT BINDING = PARTIAL — SUBJECT/TARGET SAFE BINDING PENDING**
 - **safe non-event inspector = BLOCKED**
