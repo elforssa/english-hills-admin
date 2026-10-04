@@ -12,9 +12,13 @@ This packet follows the owner-adopted and merged created-object state:
 
 Current main at preparation start: `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`.
 
-This packet authorizes **no Google Cloud mutation, Meta access, credential generation, token inspection, app-secret access, revocation, Production mutation, H3-06–08, H4, Test Events or lifecycle sending**.
+This packet authorizes **no Vercel mutation, vault setup, Meta access, credential generation, token inspection, app-secret access, revocation, Production mutation, H3-06–08, H4, Test Events or lifecycle sending**.
 
-Its purpose is to turn the existing [B5 custody and handling contract](crm-h3-05-revision-7-step-2-preparation.md#b5-custody-and-handling-contract) and [safe non-event inspection contract](crm-h3-05-revision-7-step-2-preparation.md#safe-non-event-inspection-contract) into one reviewable owner decision and a later synthetic-only validation sequence.
+Its purpose is to turn the existing [B5 custody and handling contract](crm-h3-05-revision-7-step-2-preparation.md#b5-custody-and-handling-contract) and [safe non-event inspection contract](crm-h3-05-revision-7-step-2-preparation.md#safe-non-event-inspection-contract) into a simpler reviewable design:
+
+1. **Vercel Production Secret is the runtime store** for the accepted live Meta credential.
+2. A separate **human-only recovery vault** preserves exact A/B custody and SAME-A recovery evidence.
+3. The recovery-vault vendor remains **unselected** until a focused qualification comparison proves the simplest acceptable option.
 
 ## Existing gate state
 
@@ -29,106 +33,170 @@ Before this packet:
 
 Created-object verification does not itself authorize credentials.
 
-## B5 recommended vault candidate
+## Runtime-versus-recovery separation
 
-### Recommended product
+### Runtime store
 
-**Google Cloud Secret Manager**, inside a dedicated Google Cloud project used only for English Hills lifecycle credential custody.
+The accepted live credential will later be stored in **Vercel Production** under the already planned protected Production secret reference.
 
-This recommendation is based on the B5 contract's need for exact immutable-version custody rather than general password storage.
+Vercel is the application/runtime custody layer only.
 
-Current official Google Cloud documentation states:
+The normal runtime path is:
 
-- secret version payloads are immutable;
-- secret versions are ordered/numbered and can be addressed by exact version ID;
-- an exact version can be accessed directly instead of relying on `latest`;
-- access can be scoped through Secret Manager IAM roles at secret/resource level;
-- Secret Manager provides Admin Activity and Data Access audit-log surfaces.
+`accepted Meta credential B → Vercel Production Secret → EH CRM lifecycle sender`
 
-References:
+The CRM must not fetch lifecycle credentials from a separate recovery vault during normal operation.
 
-- <https://docs.cloud.google.com/secret-manager/docs/overview>
-- <https://docs.cloud.google.com/secret-manager/docs/add-secret-version>
-- <https://docs.cloud.google.com/secret-manager/docs/access-secret-version>
-- <https://docs.cloud.google.com/secret-manager/docs/access-control>
-- <https://docs.cloud.google.com/secret-manager/docs/audit-logging>
-- <https://docs.cloud.google.com/secret-manager/docs/rotation-recommendations>
+No receptionist, teacher, student, browser client, Preview deployment or Development environment receives the credential.
 
-This is a **recommended owner choice**, not an already selected product.
+### Recovery custody
 
-### Proposed dedicated container
+B5 requires a **separate human-only recovery vault** because the approved recovery contract requires preserving exact historical A so the custodian can:
 
-Owner-facing display name:
+1. bind A to an immutable/nonambiguous reference;
+2. revoke A under the later approved recovery rehearsal;
+3. retrieve the exact SAME A;
+4. verify that SAME A is explicitly invalid;
+5. only then permit issuance/acceptance of B.
 
-**EH Lifecycle Credential Vault**
+The recovery vault is therefore not a CRM dependency. It is an owner/custodian safety mechanism used only for issuance, rotation, recovery and evidence.
 
-Provider implementation:
+### Why Vercel alone is not accepted for B5
 
-- one dedicated Google Cloud project with no EH runtime, Vercel, Supabase, GitHub Actions, agent, CI or service-account credential access;
-- exact globally unique Google Cloud project ID is chosen only during a later separately authorized setup;
-- no other English Hills application workloads should be placed in this project.
+Vercel Production remains the correct runtime store, but **Vercel alone is not accepted as the complete B5 recovery store under the current recovery contract** unless a later vendor-capability review proves all B5 requirements, including exact historical SAME-A retrieval after replacement/revocation.
 
-Proposed secret resources inside that project:
+The current architecture must not weaken SAME-A verification merely to avoid a second custody tool.
 
-1. `eh-meta-lifecycle-custody-rehearsal`
-   - synthetic values only;
-   - validates handling, versioning, exact-version retrieval and audit evidence before any real token exists.
+The B5 comparison should therefore choose the simplest external human-only vault that satisfies the existing contract rather than introducing a cloud service by default.
 
-2. `eh-meta-lifecycle-token`
-   - real lifecycle credential custody only after B5 is independently accepted READY and later credential issuance is separately authorized;
-   - A and B are separate immutable numbered versions of this same secret;
-   - repository evidence uses logical labels A/B plus the provider's nonsecret immutable version resource reference.
+## B5 vault qualification requirements
 
-No secret value, fragment, hash, URL, screenshot or copy of a token belongs in repository evidence.
+The vault vendor is **OPEN / UNSELECTED**.
 
-## Proposed human custody and ACL
+A candidate may be a password manager, secrets manager or other protected human custody product only if it passes every requirement below.
+
+### Required capabilities
+
+1. **Exact A/B identity**
+   - A and B must be distinguishable by stable nonsecret version/item references.
+   - Repository evidence must not rely on a token fragment, hash, URL or the word `latest`.
+
+2. **SAME-A retrieval**
+   - after B is created or after ordinary item updates, the custodian must still be able to retrieve the exact stored A needed for the approved post-revoke validity check;
+   - retrieval must be deterministic rather than relying on memory or manually comparing token text.
+
+3. **Protected human custody**
+   - encrypted storage and transport;
+   - MFA on the human account;
+   - restricted ACL to the named custodian;
+   - no EH runtime, Vercel runtime identity, Supabase, GitHub Actions, CI, agent or browser automation access.
+
+4. **History / retention**
+   - A remains available while revoke evidence is pending or inconclusive;
+   - an accidental update must not silently overwrite the only recoverable copy of A;
+   - retention/destruction behavior must be explicit and testable.
+
+5. **Auditability**
+   - sufficient nonsecret evidence exists to show access/version/update/destruction activity or an equivalent custody history;
+   - audit administration must not itself expose secret values.
+
+6. **Private manual handling**
+   - human-only insertion/retrieval;
+   - no mandatory command-line, environment-variable, plaintext export or agent-visible handling path.
+
+7. **Synthetic rehearsal**
+   - distinct synthetic S1/S2 values can be stored;
+   - exact S1 can later be retrieved after S2 exists;
+   - access/history/audit behavior can be demonstrated without exposing values in repository evidence;
+   - retention/destruction semantics can be rehearsed before real credentials.
+
+8. **Reasonable owner overhead**
+   - among products that satisfy the security contract, prefer the simplest setup and daily ownership burden.
+
+### Candidate comparison to commission
+
+The next documentation/research task should compare a small set of simple candidates, for example:
+
+- **1Password**
+- **Bitwarden / Bitwarden Secrets Manager**
+- **Google Cloud Secret Manager**
+
+These names are candidates only. This packet does not select, install, subscribe to or configure any of them.
+
+The comparison must use current authoritative product documentation and, where necessary, synthetic-only validation. It must explicitly determine:
+
+- whether exact prior-version retrieval is supported;
+- what stable nonsecret version/item identifier can bind SAME A;
+- whether historical A remains retrievable after later versions/updates;
+- audit/access-history coverage;
+- MFA/ACL controls;
+- deletion/destruction semantics;
+- whether a sole-custodian configuration is practical;
+- whether the product requires infrastructure/runtime integration that B5 does not need;
+- total operational overhead for the owner.
+
+### Selection rule
+
+Choose the **simplest** product that fully satisfies all B5 requirements.
+
+Do not choose Google Cloud merely because it has strong versioning.
+Do not choose a password manager merely because it is convenient.
+Do not weaken SAME-A or audit requirements to force a simpler product to pass.
+
+If two products both satisfy B5, prefer the one with lower ongoing owner overhead and less unrelated infrastructure.
+
+## Proposed custodian policy
 
 Proposed sole read/write custodian:
 
 **Maroine EL Forssa**
 
-No backup custodian is proposed in this revision. Adding one later requires an explicit owner amendment and ACL review.
+No backup custodian is proposed in this revision.
 
-Required account posture before B5 can become READY:
+The owner must explicitly accept that sole custody creates a recovery limitation: loss, lockout or unavailability of the custodian's vault account could delay rotation/recovery until account access is restored.
 
-- Google account used for custody has MFA / 2-Step Verification enabled;
-- only the named custodian has permissions that permit reading or adding versions to the lifecycle secret;
-- no EH runtime identity, service account, CI identity, GitHub integration or agent receives Secret Accessor permissions;
-- project/secret IAM is reviewed for inherited principals before synthetic validation;
-- Secret Manager Data Access audit logging is enabled for the dedicated project so secret reads are auditable;
-- audit/log administrators must not receive secret payload access merely to inspect logs.
+Adding a backup later requires an explicit owner amendment and ACL review.
 
-The exact least-privilege IAM binding must be captured during the later setup/readiness packet. This proposal does not grant roles.
+## Nonsecret evidence/reference contract
 
-## Nonsecret version-reference format
+Whatever vault is selected, repository/operator evidence may record only the minimum nonsecret reference needed to bind a logical credential to an exact custody object/version.
 
-Repository and operator evidence may record only a nonsecret resource reference in this shape:
+Acceptable shape is product-dependent, for example:
 
-`projects/<project-number>/secrets/<secret-name>/versions/<version-number>`
+- logical credential label: `A` or `B`
+- vault product
+- vault/container/item identifier
+- immutable version/history identifier if the product exposes one
+- issuance UTC
+- app ID / subject ID
+- token expiry / data-access metadata
+- state: stored / active / revoked / invalid / destroyed
 
-Examples must use placeholders or synthetic resources until real issuance.
+Never record:
 
-For the eventual real credential:
+- token value
+- token fragment
+- token hash
+- secret-bearing URL
+- app secret
+- screenshot containing a secret
+- raw provider response
+- clipboard contents
 
-- logical A binds one exact immutable version reference;
-- logical B binds a different exact immutable version reference;
-- `latest` is never sufficient evidence for A/B identity;
-- SAME A post-revoke inspection must be tied to A's unchanged exact version reference.
+If a candidate cannot provide a nonambiguous SAME-A reference without using the secret itself, it does not satisfy B5.
 
-Secret metadata may record app ID, subject ID, issuance/expiry/data-access metadata and status separately from the value.
+## Retention and destruction policy
 
-## Retention and destruction proposal
-
-Adopt the existing B5 retention rule:
+The existing B5 policy remains:
 
 - retain A in restricted encrypted custody until explicit invalidity is independently accepted;
-- failed/inconclusive revocation retains A as possibly valid;
-- after accepted A-invalid evidence is secured, destroy A's Secret Manager version within **24 hours**;
-- preserve the nonsecret version reference, destroyed-state evidence and destruction attestation;
-- B remains retained under the active credential lifecycle policy;
-- do not delete the whole secret merely to remove A.
+- failed/inconclusive revoke retains A as possibly valid;
+- after accepted A-invalid evidence is secured, destroy/remove A from ordinary retrievable custody within **24 hours** if the selected product can do so without invalidating the evidence model;
+- preserve the nonsecret custody reference and destruction/retention attestation;
+- if the product necessarily retains encrypted historical versions, document that behavior and obtain explicit owner acceptance rather than falsely claiming physical destruction;
+- B remains under active lifecycle retention/rotation rules.
 
-Because destroyed Secret Manager versions are not retrievable, destruction happens only after the SAME A verification evidence is complete and independently accepted.
+The vendor comparison must therefore classify each candidate's deletion/history behavior before owner selection.
 
 ## Private workstation/session contract
 
@@ -137,63 +205,79 @@ All real credential handling remains human-only.
 Proposed handling workstation:
 
 - owner's private Mac workstation;
-- private browser session used only for the approved operation;
+- private browser/app session used only for the approved operation;
 - screen sharing/recording off;
 - agent/computer-use automation off before any credential-bearing screen;
-- browser sync for sensitive form content disabled;
+- browser/app sync behavior for sensitive fields understood and accepted;
 - clipboard history/cloud clipboard disabled;
-- extensions capable of capturing fields/requests disabled;
-- no screenshots, HAR capture, developer-tools request recording, diagnostic upload or browser export;
-- no plaintext file, Notes document, terminal, shell history, `.env`, chat, repository, database or ordinary clipboard persistence.
+- extensions/tools capable of capturing fields/requests disabled;
+- no screenshots, HAR capture, developer-tools request recording or diagnostic upload;
+- no plaintext file, Notes document, terminal, shell history, `.env`, chat, repository or database copy.
 
-If transient local clipboard use is unavoidable, it is cleared immediately and never synced. Direct protected insertion is preferred.
+If transient clipboard use is unavoidable, it is cleared immediately and never synced. Direct protected insertion is preferred.
 
-## Synthetic B5 readiness rehearsal
+## B5 synthetic readiness rehearsal
 
-B5 may become READY only after a separately authorized **synthetic-only** setup and validation.
+After a vault candidate is owner-selected and separately authorized, B5 may become READY only after a **synthetic-only** setup and validation.
 
 No Meta token, app secret or real credential is involved.
 
-Required synthetic rehearsal:
+Required rehearsal:
 
-1. Create/reconcile the dedicated project and exact IAM/audit configuration.
-2. Create `eh-meta-lifecycle-custody-rehearsal`.
-3. Human privately adds synthetic version S1.
-4. Human privately adds distinct synthetic version S2.
-5. Record only their nonsecret numbered version references.
-6. Retrieve exact S1 by immutable version reference, not `latest`.
+1. Configure/reconcile the chosen human-only vault/container and ACL.
+2. Confirm MFA and sole-custodian effective access.
+3. Add synthetic credential S1.
+4. Add distinct synthetic credential S2 in the product's intended A/B version/item model.
+5. Record only nonsecret references.
+6. Retrieve exact S1 after S2 exists.
 7. Retrieve exact S2 separately.
-8. Confirm audit evidence for version creation/access without exposing values.
-9. Confirm no EH runtime/service-account/CI/agent principal can access the secret.
-10. Exercise the chosen destroy/retention behavior using synthetic material and confirm the nonsecret destroyed-state record.
+8. Confirm audit/history evidence without exposing values.
+9. Confirm no EH runtime/CI/agent principal can access the vault.
+10. Exercise the selected retention/destruction behavior using synthetic material.
 11. Record pass/fail, UTC, product/tool revision and nonsecret references only.
 
-Synthetic value contents are not needed in evidence.
-
-B5 remains NOT READY if any ACL inheritance, audit gap, version ambiguity, value leakage, browser capture, agent access or same-version retrieval problem remains.
+B5 remains NOT READY if there is ACL ambiguity, history/version ambiguity, inability to retrieve SAME S1, value leakage, agent/runtime access, audit uncertainty or unacceptable retention behavior.
 
 ## Proposed B5 READY acceptance
 
-After synthetic validation and independent review, B5 may be classified:
+After vendor selection, synthetic validation and independent review, B5 may be classified:
 
 **B5 = READY**
 
 only when all of these are true:
 
-- owner has formally selected Google Cloud Secret Manager and the dedicated project/container model;
-- Maroine EL Forssa is the sole approved read/write custodian;
+- owner formally selected a qualifying vault product;
+- Maroine EL Forssa is the sole approved read/write custodian, unless an explicit reviewed amendment names a backup;
 - MFA is confirmed;
-- exact IAM/inherited-access inventory is accepted;
+- effective ACL/inherited access inventory is accepted;
 - no EH runtime/CI/agent access exists;
-- immutable numbered version semantics are demonstrated synthetically;
-- SAME-version retrieval is demonstrated;
-- Data Access audit evidence is demonstrated;
+- exact A/B identity semantics are demonstrated synthetically;
+- SAME-version/item retrieval is demonstrated;
+- audit/history behavior is demonstrated;
 - retention/destruction behavior is bound;
 - private human handling contract is accepted and rehearsed;
 - exact nonsecret reference format is recorded;
 - independent review returns READY.
 
-Selecting the product alone does not make B5 READY.
+Product selection alone does not make B5 READY.
+
+## Vercel Production custody contract
+
+The accepted B credential later goes to **Vercel Production Secret** under a separate Production authorization.
+
+That later runtime action must preserve these boundaries:
+
+- Production only;
+- server-side only;
+- no Preview/Development copy;
+- no client exposure;
+- no receptionist/user visibility;
+- no runtime call to the recovery vault;
+- no secret export into repository/chat/logs;
+- no `vercel env pull` or equivalent secret-export workflow for this credential;
+- deployment/configuration happens only after credential acceptance and separate Production approval.
+
+The recovery-vault copy and Vercel Production copy serve different purposes and must not be conflated.
 
 ## Safe non-event inspector — focused next assessment
 
@@ -205,19 +289,19 @@ This packet does not approve a real token inspector.
 
 ### Preferred candidate
 
-The first candidate for focused assessment is Meta's human **Access Token Debugger**, used in a private authenticated human Meta session.
+The first candidate remains Meta's human **Access Token Debugger**, used in a private authenticated human Meta session.
 
 Meta's public `debug_token` documentation URL remains the canonical reference candidate:
 
 <https://developers.facebook.com/docs/graph-api/reference/debug_token/>
 
-A public fetch during this preparation could not retrieve the page because Meta returned HTTP 429. Therefore no new transport/caller semantics are claimed from that page.
+No unsupported transport/caller semantics are inferred from this proposal.
 
 The human debugger is preferred over immediately building a custom utility only if a synthetic-only assessment can prove all existing safety requirements.
 
 ### Synthetic-only inspector assessment contract
 
-After B5 selection/readiness preparation, but still before real A:
+After B5 vendor selection/preparation, but still before real A:
 
 1. Use a private human Meta session with MFA.
 2. Do not issue or expose any lifecycle token.
@@ -259,17 +343,19 @@ Even after both become READY, real credentials remain a later separate Tier-3 op
 
 Required future order remains:
 
-1. B5 READY.
-2. Safe non-event inspector READY.
-3. Exact credential/recovery operator packet independently reviewed and owner-authorized.
-4. Human issues A exactly once into protected custody.
-5. Inspect SAME A non-event; accept B1 actual credential metadata/effective-authority record only if complete.
-6. Execute the separately authorized exclusive identity-wide revoke-all once.
-7. Verify SAME A explicitly invalid under the existing bounded observation/lifetime/clock contract.
-8. Only after successful A-invalid proof, human issues B exactly once.
-9. Inspect B non-event and complete B1 acceptance.
-10. Later separate Production approval may store/reference accepted B and prepare H3-06–08.
-11. H4 genuine eligible delivery remains a separate activation stage.
+1. Select and validate the simplest qualifying B5 recovery vault.
+2. B5 READY.
+3. Safe non-event inspector READY.
+4. Exact credential/recovery operator packet independently reviewed and owner-authorized.
+5. Human issues A exactly once into protected recovery custody.
+6. Inspect SAME A non-event; accept B1 actual credential metadata/effective-authority record only if complete.
+7. Execute the separately authorized exclusive identity-wide revoke-all once.
+8. Verify SAME A explicitly invalid under the existing bounded observation/lifetime/clock contract.
+9. Only after successful A-invalid proof, human issues B exactly once.
+10. Inspect B non-event and complete B1 acceptance.
+11. Later separate Production approval stores accepted B as the Vercel Production Secret.
+12. H3-06–08 remain separately gated.
+13. H4 genuine eligible delivery remains a separate activation stage.
 
 No step in this proposal authorizes that sequence.
 
@@ -277,9 +363,9 @@ No step in this proposal authorizes that sequence.
 
 The smallest next owner decision is:
 
-> Select **Google Cloud Secret Manager** as the external B5 custody product, using a dedicated **EH Lifecycle Credential Vault** Google Cloud project; approve **Maroine EL Forssa as sole read/write custodian with no backup**; approve the immutable numbered-version A/B model, private Mac handling contract, synthetic rehearsal requirement, Data Access audit requirement, and the proposed rule to destroy invalid A within 24 hours after independent acceptance evidence is secured. Commission preparation of a synthetic-only B5 setup/operator packet and a separate synthetic-only Meta Access Token Debugger assessment. This decision authorizes documentation/preparation only, not Google Cloud setup, Meta access, token generation, token inspection, app-secret access, revoke, Production mutation or provider events.
+> Approve the vendor-neutral B5 architecture: **Vercel Production Secret is the runtime store**, while a separate **human-only recovery vault** is used solely for A/B custody and SAME-A verification. Keep the recovery-vault vendor unselected. Approve Maroine EL Forssa as sole proposed read/write custodian with no backup at this stage, accept the associated account-loss/unavailability limitation, retain the existing private-Mac handling and retention rules, and commission a short comparison of the simplest qualifying vault candidates plus the synthetic-only Meta Access Token Debugger assessment. This decision authorizes documentation/research only, not Vercel configuration, vault setup, Meta access, token generation, token inspection, app-secret access, revoke, Production mutation or provider events.
 
-Until exact-head review and explicit owner adoption of that decision:
+Until exact-head review and explicit owner adoption:
 
 - **B5 = OWNER DECISION REQUIRED**
 - **safe non-event inspector = BLOCKED**
