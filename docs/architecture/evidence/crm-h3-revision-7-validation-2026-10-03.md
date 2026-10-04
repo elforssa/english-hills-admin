@@ -1,5 +1,7 @@
 # H3 Revision 7 — evidence and decision ledger, 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 > **Later approval/preparation record, 2026-10-03:** the owner's direct Step 2 commission approves Revision 7 at merged PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857`. [Exact approval scope and Step 2 preparation](../plans/crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary) record the change in architecture status and remaining custody/inspection prerequisites. Original drafting observations below remain historical and unchanged; no account/credential/Production evidence is added.
 
 **Architecture/documentation only; proposed, not owner-approved or operationally verified.** [Revision 7](../plans/crm-h3-05-revision-7-validation.md) is Tier 3 because it changes credential-acceptance and recovery governance. Baseline `ffd06e5a669a51a8b2934dbf648d1d2214f40606`. No new authenticated Meta/account inspection or Production verification occurred.

@@ -11,3 +11,5 @@ Read [current state](../../ai/CURRENT_STATE.md) before interpreting implementati
 Change significant decisions here and synchronize the relevant [context documents](../../../AGENTS.md). Never turn an approved future design into a claim about deployed permissions.
 
 ADR-004 also records **final owner approval of revision 4** on 2026-09-30 after PR #40: Option B, occurrence/singleton semantics, Qualified initial target and chronological-attempt ordering; see the [approved plan](../plans/crm-meta-funnel-revision-4.md). D2–D7 remain unchanged. Implementation is NOT completed, deployment is NOT authorized and H3/H4 remain blocked; Production retains the dormant two-event implementation.
+
+ADR-004 also records the [adopted S1 credential amendment](ADR-004-meta-lifecycle-feedback.md#adopted-amendment--simplified-credential-security-s1-2026-10-05), PR #93 / `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`: one final credential, bounded validation and Vercel-only custody. Conflicting R7 bootstrap/transport procedure is historical. The [Gate-B runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md) awaits focused review/operational approval; no runtime or Production change.

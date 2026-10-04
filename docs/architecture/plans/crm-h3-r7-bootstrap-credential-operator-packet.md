@@ -1,5 +1,7 @@
 # H3 Revision 7 — consolidated two-stage credential operator packet
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 Revision **R7-BOOT-OP1**, prepared 2026-10-04. **Tier 3 — PREPARATION ONLY; EXECUTION BLOCKED.** Base main: `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`.
 
 This packet authorizes no operation. The owner commissioned documentation, validation and a PR only. Independent review of the exact packet SHA, owner adoption, and a **separate explicit owner execution approval before the private human session** are required. Merge is not execution approval. The missing issuance contract below prevents execution approval of this revision, including starting its synthetic phase. No blank may be completed by guessing during a credential session.

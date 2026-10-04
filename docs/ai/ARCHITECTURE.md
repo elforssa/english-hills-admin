@@ -1,5 +1,11 @@
 # Current architecture
 
+## Adopted S1 credential architecture — 2026-10-05
+
+[ADR-004's S1 amendment](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md#adopted-amendment--simplified-credential-security-s1-2026-10-05) and [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) are adopted through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. S1 replaces R7 bootstrap/transport ceremonies with supported configuration, one final dedicated System User token, one validation and direct Vercel Production sensitive custody. [Gate-B runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) is the sole active credential workflow; focused review and explicit operational approval remain required.
+
+All conflicting R7 credential procedures below are **HISTORICAL — SUPERSEDED BY S1**; original findings and approval scopes remain evidence. Monitor source/tests remain without being a credential prerequisite. Existing server-only secret resolution, independent live gates, per-delivery auth-error holds and R4 source/replay boundaries are unchanged. No runtime, schema or deployed behavior change is claimed; credential readiness, dormant acceptance and live activation remain distinct. This #91 revision excludes H3-06/07/08 and all live operations.
+
 ## CI + Codex Workflow Efficiency v2 — tooling-only fast path proposed, 2026-10-04
 
 PR #90 proposes a conservative third pull-request CI mode in [Verify](../../.github/workflows/verify.yml): `docs`, `tooling`, and `full`. The dependency-free [CI verifier](../../scripts/ci/verify.py) keeps uncertainty fail-closed to `full`.
@@ -14,9 +20,13 @@ The earlier v1 docs-vs-full description is superseded if PR #90 is adopted.
 
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 Revision 7 at PR #64 is owner-approved as recorded in the [Step 2 approval and preparation contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary). Earlier proposal status below is historical. C2/B1/B4/B5 design is unchanged; no runtime, SQL or deployed architecture changed. External custody selection and a reviewed secret-safe inspector remain execution prerequisites; architecture approval grants no operation authority.
 
 ## Proposed H3 credential validation amendment — Revision 7
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 [Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md) proposes C2: one new lifecycle-only owned app/Employee, inspected effective authority and mandatory exclusive identity-wide revocation rehearsal before credential acceptance. Official mechanisms, read-only account facts and separately authorized empirical recovery evidence can suffice without Meta support. This is not approved or implemented; no deployed architecture changes. [Evidence](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md) preserves PR #63 and distinguishes non-event credential acceptance from actual delivery proof. Existing R4/106, dormant gates and H4 separation remain unchanged; dated direct-route/revision-6 statements below do not authorize issuance.
 

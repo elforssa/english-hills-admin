@@ -1,5 +1,7 @@
 # H3 Revision 7 Step 4 — created-object preparation
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 > **Owner approval / 4A preparation notice — 2026-10-03:** the owner's direct follow-on commission records **S4-P1 OWNER APPROVED and merged** at [PR #70](https://github.com/elforssa/english-hills-admin/pull/70), `478d898ecf1f31d052e48f65e37a9f7caa58809c`, source `ea6c97a06df986edd23926129f8c9ef1a5eb19ca`. Earlier proposed/unapproved/not-merged statements below retain historical preparation context. [4A-OP1](crm-h3-05-revision-7-4a-operator-packet.md) expands Commission A into a future exact-action packet with required pre-submit bindings; it authorizes nothing now. 4A/4B/4C remain NOT AUTHORIZED, C2 uncreated in recorded evidence, PREFLIGHT VERIFIED NO. No Meta access/mutation in this preparation. Original S4-P1 body and B2 history are preserved.
 
 
