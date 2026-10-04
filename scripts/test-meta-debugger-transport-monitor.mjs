@@ -690,4 +690,72 @@ for (const malformed of [[], {}, { rulesMatchedInfo: null }]) {
   assert.equal(harness.rendered.at(-1).state, 'pass');
 }
 
+for (const [oldKind, newerKind, oldRuleId, newerRuleId] of [
+  ['calibration', 'idle', 9001, null],
+  ['idle', 'assessment', null, 9003],
+]) {
+  for (const newerOperation of ['start', 'start-and-query', 'query', 'missing-start-query']) {
+    for (const completion of ['resolve', 'reject']) {
+      const pending = deferred();
+      const queries = [];
+      const harness = makeController({
+        getMatchedRules: query => {
+          queries.push(query);
+          if (queries.length === 1) return pending.promise;
+          return Promise.resolve({
+            rulesMatchedInfo: newerRuleId === null ? [] : [
+              { rule: { ruleId: newerRuleId }, tabId: -1, timeStamp: start + 11 },
+            ],
+          });
+        },
+      });
+      // A later query of an already-started different kind must also supersede.
+      if (newerOperation === 'query') harness.controller.start(newerKind);
+      harness.controller.start(oldKind);
+      const oldQuery = harness.controller.query(oldKind);
+      harness.setNow(start + 10);
+
+      if (newerOperation === 'start' || newerOperation === 'start-and-query') {
+        const started = harness.controller.start(newerKind);
+        // Reproduce monitor.js rendering immediately after controller.start().
+        harness.rendered.push({ state: 'started', kind: newerKind, startedAt: started.startTime });
+      }
+      if (newerOperation !== 'start') {
+        const newerResult = await harness.controller.query(newerKind);
+        assert.equal(newerResult.kind, newerKind);
+        assert.equal(newerResult.state, newerOperation === 'missing-start-query' ? 'inconclusive' : 'pass');
+        if (newerOperation === 'missing-start-query') {
+          assert.equal(newerResult.reason, 'observation_start_missing');
+        } else {
+          assert.equal(newerResult.startedAt, newerOperation === 'query' ? start : start + 10);
+        }
+      }
+      const newerRenders = [...harness.rendered];
+      assert.equal(newerRenders.at(-1).kind, newerKind);
+      assert.deepEqual(queries[0], { minTimeStamp: start });
+      if (queries.length > 1) {
+        assert.deepEqual(queries[1], { minTimeStamp: newerOperation === 'query' ? start : start + 10 });
+      }
+
+      if (completion === 'reject') {
+        pending.reject(new Error('synthetic query failure'));
+      } else {
+        pending.resolve({
+          rulesMatchedInfo: oldRuleId === null ? [] : [
+            { rule: { ruleId: oldRuleId }, tabId: 1, timeStamp: start + 1 },
+          ],
+        });
+      }
+      const oldResult = await oldQuery;
+      assert.equal(oldResult.state, 'inconclusive');
+      assert.equal(oldResult.reason, 'observation_superseded');
+      assert.deepEqual(
+        harness.rendered,
+        newerRenders,
+        `${oldKind} ${completion} must not render over newer ${newerKind} ${newerOperation}`,
+      );
+    }
+  }
+}
+
 process.stdout.write('meta debugger transport monitor tests passed\n');

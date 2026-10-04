@@ -22,6 +22,7 @@ export function createMonitorController({
 
   let nextObservationId = 1;
   let resetGeneration = 0;
+  let operationGeneration = 0;
   const observations = {
     calibration: null,
     idle: null,
@@ -31,6 +32,7 @@ export function createMonitorController({
   function snapshotIsCurrent(kind, snapshot) {
     const current = observations[kind];
     return resetGeneration === snapshot.resetGeneration
+      && operationGeneration === snapshot.operationGeneration
       && current !== null
       && current.id === snapshot.id
       && current.startTime === snapshot.startTime
@@ -40,6 +42,7 @@ export function createMonitorController({
   function start(kind) {
     if (!Object.hasOwn(ASSESSORS, kind)) throw new TypeError('unknown observation kind');
     const startTime = now();
+    operationGeneration += 1;
     observations[kind] = {
       id: nextObservationId++,
       startTime,
@@ -50,6 +53,7 @@ export function createMonitorController({
 
   function reset() {
     resetGeneration += 1;
+    operationGeneration += 1;
     observations.calibration = null;
     observations.idle = null;
     observations.assessment = null;
@@ -58,6 +62,8 @@ export function createMonitorController({
 
   async function query(kind) {
     if (!Object.hasOwn(ASSESSORS, kind)) throw new TypeError('unknown observation kind');
+    // All observation kinds share one result panel, including missing-start results.
+    operationGeneration += 1;
 
     const current = observations[kind];
     if (!current || !Number.isFinite(current.startTime)) {
@@ -72,6 +78,7 @@ export function createMonitorController({
       startTime: current.startTime,
       queryId: current.queryId,
       resetGeneration,
+      operationGeneration,
     };
 
     let details;

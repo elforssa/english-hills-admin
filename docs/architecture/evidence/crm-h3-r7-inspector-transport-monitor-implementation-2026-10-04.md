@@ -26,15 +26,16 @@ The extension lives only under:
 
 It is not imported by the Next.js application and is not part of the Vercel/Supabase runtime.
 
-Files:
+Closed extension inventory (eight files):
 
-- `manifest.json`
-- `rules.json`
-- `monitor.html`
-- `monitor.css`
-- `monitor.js`
-- `monitor-core.mjs`
 - `README.md`
+- `manifest.json`
+- `monitor-controller.mjs`
+- `monitor-core.mjs`
+- `monitor.css`
+- `monitor.html`
+- `monitor.js`
+- `rules.json`
 
 Dedicated tests:
 
@@ -111,122 +112,9 @@ All three rules explicitly enumerate the reviewed 15 Chrome ResourceTypes:
   - complete `/debug_token` path;
   - optional query suffix only.
 
-Implemented regex:
+Implemented regex (JSON-escaped `regexFilter` string as stored in `rules.json`):
 
-`^https://graph\.facebook\.com/(v[0-9]{1,3}\.[0-9]+/)?debug_token(\?.*)?# H3 Revision 7 — inspector transport monitor implementation, 2026-10-04
-
-## Status
-
-**Tier 3 — implemented for code review only. NOT installed or operated.**
-
-Architecture base:
-
-`9f3ced1a8e184f2bc5c2afd0dc4d607eda71748d`
-
-Implementation code checkpoint before this evidence record:
-
-`d8328564a7c82601f2891350bf7baa17607059c3`
-
-Owner-adopted architecture:
-
-[Two-stage inspector bootstrap amendment](../plans/crm-h3-05-r7-two-stage-inspector-bootstrap-amendment.md)
-
-This implementation does not authorize installation, synthetic browser testing, Meta access, A/B generation, real-token inspection, Revoke tokens, Vercel mutation, H3-06–08, H4, Test Events or lifecycle sending.
-
-## Non-runtime location
-
-The extension lives only under:
-
-`tools/meta-debugger-transport-monitor/`
-
-It is not imported by the Next.js application and is not part of the Vercel/Supabase runtime.
-
-Files:
-
-- `manifest.json`
-- `rules.json`
-- `monitor.html`
-- `monitor.css`
-- `monitor.js`
-- `monitor-core.mjs`
-- `README.md`
-
-Dedicated tests:
-
-`scripts/test-meta-debugger-transport-monitor.mjs`
-
-Package command:
-
-`npm run test:inspector-monitor`
-
-The command is also appended to the normal `npm test` chain so non-doc CI cannot silently skip these controls.
-
-## Manifest boundary
-
-Requested permissions are exactly:
-
-- `declarativeNetRequest`
-- `declarativeNetRequestFeedback`
-
-The manifest defines no:
-
-- host permissions;
-- optional host permissions;
-- content scripts;
-- background worker.
-
-The extension uses an options page rather than a transient popup so observation timestamps can remain in page memory without storage permission.
-
-## Rule implementation
-
-All three rules explicitly enumerate the reviewed 15 Chrome ResourceTypes:
-
-- `main_frame`
-- `sub_frame`
-- `stylesheet`
-- `script`
-- `image`
-- `font`
-- `object`
-- `xmlhttprequest`
-- `ping`
-- `csp_report`
-- `media`
-- `websocket`
-- `webtransport`
-- `webbundle`
-- `other`
-
-### Rule 9001
-
-- priority 100;
-- action `block`;
-- fixed calibration marker only:
-  - `EHDNRCAL20261004A9F2B7C4`.
-
-### Rule 9002
-
-- priority 300;
-- action `block`;
-- fixed debugger synthetic marker only:
-  - `EHDBGTRANSPORT20261004C4D7A9F2`.
-
-### Rule 9003
-
-- priority 200;
-- action `allow`;
-- Rule 9002 therefore strictly outranks Rule 9003;
-- initiator domain condition:
-  - `developers.facebook.com`;
-- GET only;
-- exact URL regex:
-  - exact `https://`;
-  - exact `graph.facebook.com`;
-  - optional version segment;
-  - complete `/debug_token` path;
-  - optional query suffix only.
-
-
+`^https://graph\\.facebook\\.com/(v[0-9]{1,3}\\.[0-9]+/)?debug_token(\\?.*)?$`
 
 Rule 9003 sets `isUrlFilterCaseSensitive=true`. All three reviewed rules now set that property explicitly. The initiator uses Chrome's `initiatorDomains` domain condition; it must not be described as an exact-origin restriction because Chrome domain matching includes subdomains.
 
@@ -248,12 +136,13 @@ No `tabId` filter is supplied.
 
 The page integration validates Chrome's actual `RulesMatchedDetails` envelope and extracts only `rulesMatchedInfo`. A malformed/missing envelope is **INCONCLUSIVE**, never empty-match evidence.
 
-Observation state uses in-memory identity/query generations. After the async Chrome call returns, the implementation revalidates:
+Observation state uses in-memory per-observation identity/query generations plus a controller-wide operation generation. After the async Chrome call returns, the implementation revalidates:
+
 - the observation identity is still current;
-- Reset/restart/newer overlapping query did not supersede it;
+- no later start, query (including a missing-start query), or Reset superseded it, regardless of observation kind;
 - completion time remains inside the 60-second window.
 
-A superseded query returns INCONCLUSIVE internally and does not overwrite the newer/reset UI state.
+A superseded query returns **INCONCLUSIVE / `observation_superseded`** without rendering, whether the Chrome promise resolves or rejects. It cannot overwrite a newer started/result/reset UI state. Per-observation start timestamps remain unchanged by cross-kind queries.
 
 The pure projection retains only:
 
@@ -371,11 +260,13 @@ Unit and controller/API-integration cases verify:
 - injected request-detail fields are stripped from projected output;
 - Reset during a pending query cannot be overwritten by the stale result;
 - restarted observation windows invalidate older pending queries;
-- newer overlapping queries supersede older pending queries.
+- newer overlapping queries supersede older pending queries;
+- pending calibration → newer idle start/query and pending idle → newer assessment start/query preserve the latest render when the old promise resolves or rejects;
+- a cross-kind start alone, query of an already-started window, or missing-start query also supersedes pending work. Controller tests reproduce the started-state render from `monitor.js`; no extension operation is performed.
 
 ## Validation boundary
 
-At this evidence-writing point, implementation files and tests have been committed but the branch PR/CI exact-head verification has not yet been created.
+PR #89 is open on `feat/h3-r7-inspector-transport-monitor`. Independent re-review of head `ab949f1bfe72dc1f1c9b2b85db44c161391e9bc5` returned **CHANGES REQUIRED**. The corrections below remain branch implementation only; fresh CI and independent review of the new exact head are required. Prior-head CI/review evidence does not establish acceptance of this revision.
 
 Operational Chrome behavior is **not verified**.
 
@@ -391,9 +282,9 @@ No credential exists from this implementation.
 
 ## Required next gate
 
-1. open implementation PR;
-2. run repository CI including `test:inspector-monitor`;
-3. exact-code independent Tier-3 review;
+1. push the finding corrections to existing PR #89;
+2. require fresh successful repository CI including `test:inspector-monitor` for the new exact head;
+3. fresh exact-head independent Tier-3 re-review;
 4. owner merge/release approval for the reviewed implementation;
 5. only after that, prepare the exact human operator packet;
 6. separate review + owner execution approval before installation/testing/provider actions.
@@ -402,7 +293,7 @@ No credential exists from this implementation.
 
 - **B5 = READY**
 - **TWO-STAGE INSPECTOR BOOTSTRAP ARCHITECTURE = DEFINED**
-- **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT REVIEWED**
+- **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT MERGED OR ADOPTED / EXACT-HEAD INDEPENDENT RE-REVIEW REQUIRED**
 - **transport monitor installation = NOT AUTHORIZED**
 - **synthetic transport operation = NOT AUTHORIZED**
 - **INSPECTOR TRANSPORT READY = NOT YET ACHIEVED**
@@ -425,3 +316,14 @@ The first independent implementation review at PR #89 head `ab99be3084d7b0285888
 7. closes the executable-file inventory and expands controller/API lifecycle tests.
 
 The earlier CI failure is historical and does not count as acceptance. The corrected exact head must pass fresh CI and fresh independent review.
+
+## Exact-head re-review correction delta
+
+The independent re-review of PR #89 head `ab949f1bfe72dc1f1c9b2b85db44c161391e9bc5` returned **CHANGES REQUIRED** for cross-kind pending-query supersession and malformed/stale implementation evidence. This correction:
+
+1. adds a controller-wide operation generation so every later valid-kind start/query/Reset supersedes older pending queries across all observation kinds, preserving existing Reset/restart/same-kind guards and per-observation timestamps;
+2. adds cross-kind resolution/rejection regressions for newer started and completed results, already-started queries and missing-start results;
+3. removes the accidental duplicated opening, restores the exact JSON-escaped Rule 9003 regex, and records all eight extension files;
+4. corrects stale PR/validation gate claims while retaining historical review findings.
+
+The owner directly authorized only these finding corrections, local validation and a normal commit/push to PR #89. Merge, installation, browser operation, Meta/credential/revoke/Vercel actions, Test Events and lifecycle operations remain held. No architecture, permission, rule, runtime or Production boundary changes are introduced.
