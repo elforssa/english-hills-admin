@@ -2,9 +2,9 @@
 
 ## CI tooling-only fast path proposed — 2026-10-04
 
-PR #90 proposes **CI + Codex Workflow Efficiency v2**, a **Tier 2** CI-routing/policy change. Pull requests are classified as `docs`, `tooling`, or `full`. The new `tooling` path is deliberately narrow: regular files under `tools/**`, the explicitly allowlisted `scripts/test-meta-debugger-transport-monitor.mjs`, and accompanying safe `docs/**/*.md`. It requires documentation checks plus the normal app/unit/build/security job and skips only `local-database`.
+PR #90 proposes **CI + Codex Workflow Efficiency v2**, a **Tier 2** CI-routing/policy change. Pull requests are classified as `docs`, `tooling`, or `full`. The new `tooling` path is deliberately narrow: exactly the eight reviewed files under `tools/meta-debugger-transport-monitor/`, the exact `scripts/test-meta-debugger-transport-monitor.mjs`, and accompanying safe `docs/**/*.md`. Any other `tools/**` file is `full`. It requires documentation checks plus the normal app/unit/build/security job and skips only `local-database`.
 
-Runtime/database/configuration/CI-policy/package/unknown paths remain `full`; classifier uncertainty remains fail-closed to `full`. Renames evaluate both old/new paths. Non-regular Git modes and unsupported statuses force `full`.
+Runtime/database/configuration/CI-policy/package/unknown paths remain `full`; classifier uncertainty remains fail-closed to `full`. A successful classifier with empty/unknown mode now also schedules the database fallback. Renames evaluate both old/new paths. Non-regular Git modes and unsupported statuses force `full`.
 
 PR #90 itself changes `.github/**` and `scripts/ci/**`, so it is intentionally **not eligible for its own fast path** and must pass full CI once before merge. Exact-head independent review remains mandatory under Tier 2. GitHub branch-protection settings are unchanged by this source change.
 
