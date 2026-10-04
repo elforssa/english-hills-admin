@@ -132,6 +132,24 @@ Synthetic calibration marker:
 Condition:
 
 - `urlFilter`: exact marker above
+- `resourceTypes`: explicit full supported request-type set:
+  - `main_frame`
+  - `sub_frame`
+  - `stylesheet`
+  - `script`
+  - `image`
+  - `font`
+  - `object`
+  - `xmlhttprequest`
+  - `ping`
+  - `csp_report`
+  - `media`
+  - `websocket`
+  - `webtransport`
+  - `webbundle`
+  - `other`
+
+This explicit list is required because Chrome otherwise excludes `main_frame` when no resource-type condition is supplied. It intentionally covers top-level navigation, subframes, background/fetch-style requests, WebSocket/WebTransport and other request classes.
 
 Action:
 
@@ -150,6 +168,24 @@ Synthetic debugger marker:
 Condition:
 
 - `urlFilter`: exact marker above
+- `resourceTypes`: explicit full supported request-type set:
+  - `main_frame`
+  - `sub_frame`
+  - `stylesheet`
+  - `script`
+  - `image`
+  - `font`
+  - `object`
+  - `xmlhttprequest`
+  - `ping`
+  - `csp_report`
+  - `media`
+  - `websocket`
+  - `webtransport`
+  - `webbundle`
+  - `other`
+
+This explicit list is required because Chrome otherwise excludes `main_frame` when no resource-type condition is supplied. It intentionally covers top-level navigation, subframes, background/fetch-style requests, WebSocket/WebTransport and other request classes.
 
 Action:
 
@@ -157,34 +193,47 @@ Action:
 
 Purpose:
 
-- detect and fail closed if the debugger ever attempts any browser request URL containing the synthetic token-shaped marker.
+- detect and fail closed if the debugger ever attempts any browser request URL containing the synthetic token-shaped marker, including a top-level navigation, background request or newly followed redirect request.
 
 The marker is ASCII alphanumeric only so ordinary URL percent encoding does not change the marker characters.
 
 ### Result surface
 
-The extension popup may call:
+Use a persistent internal extension monitor page rather than a transient popup so the observation-start timestamp can remain in page memory without `storage` permission.
 
-`chrome.declarativeNetRequest.getMatchedRules({ minTimeStamp: ... })`
+The monitor page may call:
 
-and display only:
+`chrome.declarativeNetRequest.getMatchedRules({ minTimeStamp: observationStart })`
+
+with **no `tabId` filter**, so the query covers matches across all tabs and unassociated/no-active-tab requests that Chrome still retains.
+
+It may display only:
 
 - Rule 9001 matched: YES/NO
 - Rule 9002 matched: YES/NO
 - match timestamp(s)
 - tab ID(s)
+- query status: SUCCESS / ERROR
 
-It must not use `onRuleMatchedDebug`, because that debugging event exposes request details including URL.
+The monitor must bind a fresh `observationStart = Date.now()` **before** each calibration or debugger submission. Matches older than that timestamp never count. This prevents stale matches from satisfying calibration.
 
-It must not display or persist URLs.
+The match query must run promptly after each test and no later than **60 seconds** after the relevant request attempt. Chrome documents that matches not associated with an active document may stop being returned after five minutes, so the operator contract must never use a delayed query as evidence.
 
-No data is sent anywhere.
+A `getMatchedRules()` rejection, exception, malformed result or lost observation-start state is **INCONCLUSIVE**. It must never be converted to “zero matches.”
 
-No telemetry.
+The `declarativeNetRequestFeedback` permission is broader than this intended result surface: Chrome documents that it enables both `getMatchedRules()` and `onRuleMatchedDebug`. Therefore secrecy depends on the **reviewed extension code**, not the permission list alone.
 
-No local storage.
+The reviewed implementation must:
 
-No console logging of request details.
+- contain no reference/listener registration for `onRuleMatchedDebug`;
+- contain no code path that receives `MatchedRuleInfoDebug.request`;
+- not display or persist URLs;
+- make no network/fetch/XHR calls;
+- use no storage;
+- emit no telemetry;
+- perform no console logging of request details.
+
+Static tests must fail if `onRuleMatchedDebug`, request-detail logging, persistence or network calls are introduced.
 
 ## Synthetic transport assessment
 
@@ -198,10 +247,16 @@ This is not a Meta credential.
 
 ### Calibration
 
-1. Open a harmless test URL containing `EHDNRCAL20261004A9F2B7C4`.
-2. Chrome should block the request.
-3. Extension popup must report Rule 9001 matched.
-4. If calibration does not match, stop. No Meta assessment.
+1. In the extension monitor page, start a **fresh calibration observation window** and bind `calibrationStart = Date.now()`.
+2. Open a harmless **top-level navigation** URL containing `EHDNRCAL20261004A9F2B7C4`.
+3. Chrome should block the request under Rule 9001 with explicit `main_frame` coverage.
+4. Within 60 seconds, query `getMatchedRules({ minTimeStamp: calibrationStart })` with no `tabId` filter.
+5. PASS calibration only if a fresh Rule 9001 match timestamp is at or after `calibrationStart`.
+6. A stale Rule 9001 match from an earlier run cannot satisfy calibration.
+7. Any query error/lost start time/ambiguous result is INCONCLUSIVE and stops before Meta.
+8. If fresh calibration does not match, stop. No Meta assessment.
+
+The future implementation tests must separately exercise Rule 9001 and Rule 9002 against `main_frame`, representative background request types and redirected marker requests.
 
 ### Meta synthetic test
 
@@ -210,10 +265,15 @@ In the authenticated human Access Token Debugger session:
 1. keep screen sharing/recording off;
 2. browser sync for form/history content off;
 3. no devtools/HAR/proxy;
-4. extension installed and calibrated;
-5. submit the synthetic token-shaped marker exactly once;
-6. record only the debugger's sanitized health classification;
-7. immediately check extension popup for Rule 9002.
+4. extension installed and freshly calibrated;
+5. in the extension monitor page, bind a fresh `assessmentStart = Date.now()` **before** submission;
+6. submit the synthetic token-shaped marker exactly once;
+7. record only the debugger's sanitized health classification;
+8. within 60 seconds, query `getMatchedRules({ minTimeStamp: assessmentStart })` with **no `tabId` filter**;
+9. include fresh Rule 9002 matches from any tab ID, including `-1`/unassociated requests;
+10. any query error, lost/invalid observation window or ambiguous result is **INCONCLUSIVE**, never “zero matches.”
+
+The extension monitor does not establish that the debugger performed a remote evaluation. A visible invalid-input message is not remote-evaluation proof.
 
 ### Transport result
 
@@ -233,46 +293,64 @@ Result:
 
 No retry/workaround in the same session.
 
-**TRANSPORT CANDIDATE PASS**
+**NO MARKER URL MATCH OBSERVED — REMOTE EVALUATION UNPROVED**
 
-Rule 9001 calibration matched, Rule 9002 did not match, and the debugger demonstrably evaluated the synthetic token-shaped input rather than rejecting it locally before any remote evaluation.
+Fresh Rule 9001 calibration matched and the fresh all-tabs Rule 9002 query completed successfully with zero Rule 9002 matches.
 
 Meaning:
 
-- for the tested browser/tool flow, Chrome did not observe the exact synthetic marker in any request URL it evaluated;
-- followed redirect request URLs containing the marker would also have matched the block rule;
+- for the bounded observation window, Chrome returned no retained DNR match showing the exact synthetic marker in a request URL;
+- explicit resource-type coverage included `main_frame` and background request classes;
+- a followed redirect request URL containing the marker would be evaluated as a new request against the same rule;
 - no headers/body/cookies were captured.
 
-Limit:
+This result is **not TRANSPORT PASS by itself**.
 
-This is empirical evidence for the tested current human debugger flow, browser version and synthetic token-shaped path. It does not establish a universal Meta API guarantee or prove behavior for a materially different debugger build.
+A displayed debugger error/invalid-input message cannot prove the synthetic value reached a remote evaluation path. Therefore, unless a **separate supported nonsecret remote-evaluation signal** has already been independently reviewed and satisfied for the same current debugger flow, the assessment result is:
 
-The evidence must therefore bind:
+**INCONCLUSIVE — REMOTE EVALUATION UNPROVED**
+
+Only when all of the following are independently true may the result be upgraded to **TRANSPORT CANDIDATE PASS**:
+
+1. fresh calibration PASS;
+2. successful fresh all-tabs match query with Rule 9002 count = 0;
+3. separate reviewed evidence proves the synthetic submission reached the debugger's remote evaluation path rather than being rejected locally;
+4. that remote-evaluation evidence itself does not expose request URLs, cookies, auth headers, session credentials, request bodies or other sensitive Meta-session material.
+
+This design does **not** yet define or approve such a remote-evaluation signal. Until one is separately established, zero Rule 9002 matches remain INCONCLUSIVE.
+
+Any future transport evidence must bind:
 
 - Chrome version;
 - extension commit/hash;
+- complete explicit resource-type rule list;
 - extension ruleset IDs;
 - debugger page/origin;
+- calibration and assessment observation-start timestamps;
 - observation UTC;
-- calibration PASS;
-- debugger synthetic evaluation result;
-- Rule 9002 match count = 0.
+- fresh calibration result;
+- match-query success;
+- all-tabs/unassociated-request coverage;
+- Rule 9002 match count;
+- separately reviewed remote-evaluation evidence reference, if any.
 
 If the debugger UI/tool materially changes before real A issuance, rerun the synthetic transport assessment under a separately authorized same-version/freshness rule.
 
 ## Why this is safer than HAR/devtools/proxy capture
 
-The proposed extension does not inspect network traffic.
+The proposed extension does not need to intercept network traffic.
 
 It installs declarative URL block rules that Chrome evaluates internally.
 
-The extension's allowed result API, `getMatchedRules()`, exposes rule identity, tab ID and timestamp—not request headers, bodies, cookies or request URLs.
+Chrome's `getMatchedRules()` result schema exposes matched rule identity, tab ID and timestamp rather than request headers, bodies, cookies or request URLs. However, `declarativeNetRequestFeedback` also enables the more revealing `onRuleMatchedDebug` API. The privacy boundary therefore depends on the exact reviewed implementation **not using** that debug event or any other request-detail API.
 
-Therefore it can answer the narrow question:
+Under that reviewed-code constraint, the monitor can answer the narrow question:
 
-> Did any Chrome-evaluated request URL contain this exact synthetic marker?
+> Did Chrome report a match for the exact synthetic marker during the fresh bounded observation window?
 
-without collecting the authenticated Meta session's secrets.
+without intentionally collecting authenticated Meta-session request details.
+
+A zero-match answer still does not prove remote evaluation and remains INCONCLUSIVE unless the separate remote-evaluation gate is satisfied.
 
 ## Remaining output-binding gate
 
@@ -330,19 +408,28 @@ No Vercel write is authorized by this record.
 
 ## Proposed next implementation step
 
-If this design receives exact-head independent review and owner adoption:
+Implementation is useful only as a **safe URL-match detector**; it cannot by itself close the transport gate when remote evaluation is unproved.
+
+If this corrected design receives exact-head independent review and owner adoption:
 
 1. implement the tiny unpacked Chrome Manifest V3 transport-monitor extension in a dedicated non-runtime tools directory;
 2. include unit/static tests that verify:
-   - only the two DNR permissions exist;
-   - no host permissions/content scripts/webRequest/cookies/tabs/storage/debugger/proxy permissions exist;
+   - only `declarativeNetRequest` and `declarativeNetRequestFeedback` permissions exist;
+   - no host permissions/content scripts/webRequest/cookies/tabs/activeTab/storage/debugger/proxy permissions exist;
    - exactly two block rules exist;
+   - **both rules explicitly contain the full supported ResourceType set including `main_frame`**;
+   - representative main-frame, background and redirected synthetic marker requests match the expected rule;
    - exact marker strings are fixed synthetic values;
-   - popup reads only `getMatchedRules()` and never request details;
-   - no network/fetch/logging/storage code exists;
+   - monitor-page queries bind a fresh start timestamp, omit `tabId`, run within the bounded window and treat errors as INCONCLUSIVE;
+   - stale calibration matches cannot satisfy a fresh calibration;
+   - unassociated/tab `-1` matches are not discarded;
+   - the result projection reads only `getMatchedRules()`;
+   - no `onRuleMatchedDebug` listener/reference exists;
+   - no network/fetch/XHR, request-detail logging, telemetry or persistence code exists;
 3. independently review exact extension code;
-4. owner-authorize one synthetic calibration + Meta debugger transport assessment;
-5. keep all real credentials prohibited.
+4. **before operational synthetic testing, separately resolve or explicitly retain as unresolved the remote-evaluation evidence gate**;
+5. only then owner-authorize one synthetic calibration + Meta debugger assessment, understanding that absent remote-evaluation proof a zero-match outcome is INCONCLUSIVE;
+6. keep all real credentials prohibited.
 
 ## Current holds
 
