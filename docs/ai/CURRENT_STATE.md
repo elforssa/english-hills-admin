@@ -1,5 +1,20 @@
 # Current state
 
+## H3 Revision 7 — B5 custody / safe inspector preparation — 2026-10-04
+
+PR preparation follows merged owner-adopted created-object state at main `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
+
+The documentation-only [B5 / inspector preparation](../architecture/plans/crm-h3-05-revision-7-b5-inspector-preparation.md) is now **vendor-neutral**. **Vercel Production Secret is the runtime store** for the eventually accepted live Meta credential. A separate **human-only recovery vault** is required only for A/B custody, exact SAME-A retrieval and recovery evidence; the CRM does not call that vault during normal operation.
+
+The recovery-vault vendor remains **OPEN / UNSELECTED**. The next research step compares the simplest qualifying options (for example 1Password, Bitwarden/Bitwarden Secrets Manager and Google Cloud Secret Manager) against the existing B5 contract: exact A/B identity, deterministic SAME-A retrieval, MFA/restricted human ACL, history/retention, auditability, private handling, synthetic rehearsal and reasonable owner overhead. Product convenience cannot weaken SAME-A verification; stronger cloud infrastructure is not required if a simpler human vault passes every requirement.
+
+Proposed custodian remains `Maroine EL Forssa` as sole read/write custodian with no backup at this stage, explicitly preserving the associated account-loss/unavailability limitation. Real credential handling remains private-human-only on the owner's Mac. The accepted B credential goes to Vercel Production only after later credential acceptance and separate Production authorization.
+
+The safe non-event inspector remains **BLOCKED**. The preferred first candidate is Meta's human Access Token Debugger, but only after a separately reviewed synthetic-only handling/transport/authority assessment proves no token-in-URL/history/capture behavior and independent inspector health. No `debug_token` query-string shortcut, Graph Explorer assumption, speculative custom utility, credential, app secret, Meta event or Production action is authorized.
+
+This is a proposal only. Until exact-head review and explicit owner adoption: **B5 = OWNER DECISION REQUIRED**, **safe non-event inspector = BLOCKED**, **PREFLIGHT VERIFIED = NO**, **B1 actual credential acceptance = PENDING**. No Vercel configuration, vault setup or Meta access is authorized by this preparation.
+
+
 ## H3 Revision 7 — 4C verified dataset grant — owner-adopted, 2026-10-04
 
 Owner adoption is complete for the reviewed narrow provider-coupling amendment merged through PR #79. Final created-object stage facts are now:
