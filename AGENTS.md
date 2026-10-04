@@ -33,6 +33,19 @@ Every substantial PR asks:
 
 Follow links rather than duplicate rules. Do not update docs mechanically when nothing changed.
 
+## Outcome-based batching
+
+Organize substantial work around one coherent outcome with explicit acceptance criteria. Measure progress by completed outcomes/capabilities, not PR count. Keep directly related missing evidence, reviewer findings, implementation corrections and validation corrections in the same work item/branch/PR when they serve that outcome and can be resolved within existing authorization and approved architecture. Do not split work merely because an intermediate artifact is independently reviewable, or combine unrelated outcomes merely to enlarge a batch.
+
+Use this decision model:
+
+1. **Missing fact; safe and already authorized to investigate:** remain in the same work item/PR, gather evidence and continue toward the existing outcome. Missing evidence alone does not reopen architecture.
+2. **Missing fact; investigation requires new permission, credential exposure, Production mutation, unsafe observation or another action outside current authority:** STOP and obtain the required authorization before that action. Continue the same work item afterward when approved architecture and outcome are unchanged.
+3. **New evidence requires a genuine change to approved design, security boundary, product invariant, scope or risk:** reopen architecture / obtain the required owner decision before proceeding with that change.
+4. **New work serves a separate business/engineering outcome:** create a separate batch/work item.
+
+Outcome-based batching never bypasses Tier-2/Tier-3 independent review, exact-SHA review/re-review, security gates, credential/Production authorization, release/operator approval or FAIL/INCONCLUSIVE stop conditions. Same-work-item continuity does not authorize crossing those gates. This policy is prospective; do not rewrite historical plans/evidence to retroactively apply it.
+
 ## Risk-based lifecycle
 
 Record the risk tier and rationale in the task/PR. Use the highest applicable tier and reassess when scope grows; a small diff does not lower sensitive work's tier. Markdown-only is a validation scope, not an automatic Tier 1 classification. Ordinary wording/link corrections may be Tier 1; changes to engineering policy, security guidance, approval gates or release instructions must be assessed by their consequences and use Tier 2 or Tier 3 when applicable.
