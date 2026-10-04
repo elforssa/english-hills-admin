@@ -15,17 +15,40 @@ import verify
 class VerificationTests(unittest.TestCase):
     def test_allowlist(self):
         for path in ('docs/a.md', 'docs/ai/plans/a.md'):
-            self.assertTrue(verify.safe_path(path))
+            self.assertTrue(verify.safe_doc_path(path))
         for path in ('AGENTS.md', '.github/workflows/verify.yml', 'scripts/a.md', 'package.json',
                      'docs/a.sql', 'src/a.md', 'docs/a.MD', 'docs/../AGENTS.md', '/docs/a.md', 'docs//a.md'):
-            self.assertFalse(verify.safe_path(path), path)
+            self.assertFalse(verify.safe_doc_path(path), path)
+
+        for path in (
+            'tools/meta-debugger-transport-monitor/manifest.json',
+            'tools/x/readme.txt',
+            'scripts/test-meta-debugger-transport-monitor.mjs',
+        ):
+            self.assertTrue(verify.safe_tooling_path(path), path)
+        for path in (
+            'scripts/ci/verify.py',
+            'scripts/test-crm-batch2.sql',
+            'src/tool.js',
+            'supabase/migrations/107.sql',
+            '.github/workflows/verify.yml',
+            'package.json',
+            'package-lock.json',
+            'tools/../src/a.js',
+            '/tools/a.js',
+            'tools//a.js',
+        ):
+            self.assertFalse(verify.safe_tooling_path(path), path)
 
     def test_gate_matrix(self):
         states = ('success', 'skipped', 'failure', 'cancelled', '')
-        for event, mode in itertools.product(('pull_request', 'push'), ('docs', 'full', '')):
+        for event, mode in itertools.product(('pull_request', 'push'), ('docs', 'tooling', 'full', '')):
             for classifier, docs, app, database in itertools.product(states, repeat=4):
                 expected = classifier == 'success' and (
-                    event == 'pull_request' and mode == 'docs' and docs == 'success' and app == database == 'skipped'
+                    event == 'pull_request' and mode == 'docs'
+                    and docs == 'success' and app == database == 'skipped'
+                    or event == 'pull_request' and mode == 'tooling'
+                    and docs == app == 'success' and database == 'skipped'
                     or mode == 'full' and docs == 'skipped' and app == 'success'
                     and database == ('success' if event == 'pull_request' else 'skipped'))
                 self.assertEqual(verify.gate(event, mode, classifier, docs, app, database), expected)
@@ -129,6 +152,28 @@ class VerificationTests(unittest.TestCase):
                 Path('AGENTS.md').write_text('# Changed\n')
                 mixed = commit('AGENTS.md')
                 self.assertEqual(verify.classify(base, mixed), 'full')
+
+                run('reset', '--hard', docs)
+                Path('tools').mkdir()
+                Path('tools/fixture').mkdir()
+                Path('tools/fixture/tool.js').write_text('export const fixture = true;\n')
+                tooling = commit('tools/fixture/tool.js')
+                self.assertEqual(verify.classify(docs, tooling), 'tooling')
+
+                Path('docs/tooling.md').write_text('# Tooling\n')
+                tooling_with_docs = commit('docs/tooling.md')
+                self.assertEqual(verify.classify(docs, tooling_with_docs), 'tooling')
+
+                run('reset', '--hard', docs)
+                Path('scripts').mkdir(exist_ok=True)
+                Path('scripts/test-meta-debugger-transport-monitor.mjs').write_text('process.exit(0);\n')
+                monitor_test = commit('scripts/test-meta-debugger-transport-monitor.mjs')
+                self.assertEqual(verify.classify(docs, monitor_test), 'tooling')
+
+                run('reset', '--hard', docs)
+                Path('scripts/test-crm-batch2.sql').write_text('select 1;\n')
+                db_test = commit('scripts/test-crm-batch2.sql')
+                self.assertEqual(verify.classify(docs, db_test), 'full')
                 run('reset', '--hard', docs)
                 Path('unknown.config').write_text('fixture\n')
                 unknown = commit('unknown.config')
