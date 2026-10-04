@@ -13,12 +13,12 @@ Ledger file: docs/operations/h3-c2-attempt-ledger.md
 
 ## State
 
-RESERVED / CONSUMED — NOT YET SUBMITTED
+SUBMITTED ONCE — C2 VISIBLE / POST-STATE VERIFICATION PENDING
 
 Submission allowance consumed: YES
-Submission attempted: NO
-Canonical C2 app ID: UNKNOWN — NOT YET CREATED
-4A result: RESERVED — PROVIDER SUBMIT NOT YET PERFORMED
+Submission attempted: YES — exactly one owner-authorized Create app submission
+Canonical C2 app ID: 29771601672426816
+4A result: PROVIDER CREATION OBSERVED — POST-STATE VERIFICATION PENDING
 
 ## Authorization status
 
@@ -90,6 +90,23 @@ No provider submit may occur before the durable reservation commit has been push
 - Any possible submission keeps the allowance consumed.
 - Ambiguity requires separately authorized read-only reconciliation and never permits retry.
 - A new branch, file, session or action ID must not reset this allowance.
+
+## Provider submission and immediate result
+
+Owner performed the one authorized Create app submission during the approved execution window after the reservation commit was remotely read back.
+
+Immediate owner-supplied My Apps result:
+- EH Lifecycle R4 C2: PRESENT
+- canonical App ID: 29771601672426816
+- Business: Glory Lot
+- administrator access shown for the owner
+- protected English-hills / 1069638329182835: still PRESENT as a separate app
+- My Apps total shown: 2
+- no second C2 app observed
+- no retry or second Create submission reported
+- no credential, token, app-secret, grant, Employee association or dataset action performed
+
+The creation click consumed the already-reserved allowance permanently. Post-state Business Apps and System Users comparison are still required before confirmed 4A success.
 
 ## Protected boundaries
 
@@ -175,12 +192,12 @@ No 4B, 4C, credential, app-secret, Production, H3-06–08, H4 or lifecycle-send 
 
 ## Current outcome
 
-Fresh pre-submit inventories passed and the one-create allowance is reserved/consumed before provider submit.
+One authorized provider submission completed and the new C2 is visible in My Apps. Post-state verification remains pending.
 
-State: RESERVED / CONSUMED — NOT YET SUBMITTED
+State: SUBMITTED ONCE — C2 VISIBLE / POST-STATE VERIFICATION PENDING
 Consumed: YES
-Submitted: NO
-Meta mutation: NONE
-C2 canonical ID: UNKNOWN
+Submitted: YES — ONCE
+Meta mutation: C2 APP CREATED
+C2 canonical ID: 29771601672426816
 PREFLIGHT VERIFIED: NO
 CREATED-OBJECT PREFLIGHT COMPLETE: NOT CLAIMED
