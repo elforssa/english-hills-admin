@@ -1,5 +1,46 @@
 # Current state
 
+## H3 Revision 7 — transport monitor implemented for exact-code review — 2026-10-04
+
+PR #88 is owner-adopted and merged at main `9f3ced1a8e184f2bc5c2afd0dc4d607eda71748d`. The adopted two-stage inspector bootstrap architecture is now **DEFINED**.
+
+The three-rule synthetic transport monitor has been implemented on branch `feat/h3-r7-inspector-transport-monitor` under `tools/meta-debugger-transport-monitor/`. The implementation checkpoint before evidence documentation is `d8328564a7c82601f2891350bf7baa17607059c3`.
+
+Implemented controls include:
+- Manifest V3;
+- only `declarativeNetRequest` + `declarativeNetRequestFeedback`;
+- no host permissions/content scripts/background worker;
+- Rule 9001 fixed calibration block;
+- Rule 9002 fixed synthetic marker block at priority 300;
+- Rule 9003 exact Meta Graph `/debug_token` endpoint-request allow observation at priority 200;
+- explicit full 15-ResourceType coverage on all rules;
+- exact HTTPS + exact `graph.facebook.com` + complete versioned/unversioned `/debug_token` regex;
+- in-memory-only observation starts;
+- all-tabs/unassociated `getMatchedRules({minTimeStamp})` queries;
+- 60-second maximum windows;
+- stale/query-error/invalid-window fail-closed semantics;
+- strict result projection to rule/ruleset/tab/timestamp only;
+- explicit Rule 9003 limitation: endpoint request attempt only, never completed evaluation proof.
+
+Dedicated tests are in `scripts/test-meta-debugger-transport-monitor.mjs` and are wired into the normal `npm test` chain through `npm run test:inspector-monitor`. They enforce permission, rule, priority, regex, ResourceType, stale-window, query-error, tab -1 retention, strict-projection and forbidden request-detail/network/persistence constraints.
+
+[Implementation evidence](../architecture/evidence/crm-h3-r7-inspector-transport-monitor-implementation-2026-10-04.md).
+
+No extension has been installed or run. No synthetic browser request, Meta access, credential generation/inspection, revoke, Vercel mutation or event action occurred.
+
+Current states:
+- **B5 = READY**
+- **TWO-STAGE INSPECTOR BOOTSTRAP ARCHITECTURE = DEFINED**
+- **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT REVIEWED**
+- **transport monitor installation = NOT AUTHORIZED**
+- **synthetic transport operation = NOT AUTHORIZED**
+- **INSPECTOR TRANSPORT READY = NOT YET ACHIEVED**
+- **A BOOTSTRAP VERIFIED = NO**
+- **safe non-event inspector = BLOCKED operationally**
+- **B1 actual credential acceptance = PENDING**
+- **PREFLIGHT VERIFIED = NO**
+
+
 ## H3 Revision 7 — two-stage inspector bootstrap amendment proposed — 2026-10-04
 
 PR #87 is owner-adopted and merged at main `96dbbdb4a8d8f51a88077baae7168da425377c29`.
