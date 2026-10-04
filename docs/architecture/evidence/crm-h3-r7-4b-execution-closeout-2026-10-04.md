@@ -1,5 +1,7 @@
 # H3 Revision 7 — 4B execution closeout, 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 ## Scope and authority
 
 **Tier 3 — documentation-only execution closeout.** This artifact records the owner-authorized 4B-only Meta association execution performed under reviewed and merged [4B-OP1](../plans/crm-h3-05-revision-7-4b-operator-packet.md), adopted on main **`9e906c04b0076cac46cb004d3f20f5eec79830c2`**. It authorizes no further Meta action.

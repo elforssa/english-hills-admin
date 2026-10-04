@@ -1,5 +1,7 @@
 # Owner summary
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures. [S1](crm-meta-lifecycle-credential-simplification.md) was adopted through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. The [sole active Gate-B runbook](crm-h3-s1-gate-b-credential-runbook.md) replaces R7 bootstrap/inspector/rehearsal/per-action requirements. Original evidence and approval scope remain; unrelated R4/dormant/live safeguards are unchanged.
+
 ## Revision 7 B2 execution status — 2026-10-03
 
 [Revision 7's dated notices](crm-h3-05-revision-7-validation.md) record owner approval at PR #64 and later B2-1/OP-1 approval and execution. [B2 closeout](../evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md): current **B2 PASS**, permanent **EH Lifecycle R4 Employee / `61594989243533` / EMPLOYEE / Glory Lot `1741597822557523`**. One authorized submission succeeded; allowance permanently consumed, no further lifecycle Employee creation authorized. Historical Step 3 remains BLOCKED / B2 INCONCLUSIVE. Full PREFLIGHT VERIFIED: NO. C2, grants, actual B1 authority, custody/inspector, credentials/recovery and Production/H3-06–08/H4/sending remain separately gated. This repository closeout grants no Step 4 or Meta access/mutation authority; prior proposal/status entries below are historical.

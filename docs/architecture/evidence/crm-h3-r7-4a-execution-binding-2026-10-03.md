@@ -1,5 +1,7 @@
 # H3 Revision 7 — 4A execution binding, 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 Revision: **4A-EB2**, updated 2026-10-04 (Asia/Shanghai). Result: **4A EXECUTION BINDING READY FOR REVIEW**. Tier 3: persistent provider creation governance, single-use history and sensitive isolation boundaries; documentation-only scope. Exact main/base: **`67fa33703354d14d881059f81f8462c61ce063e7`**, fetched as `origin/main` before branch creation. This is branch evidence/preparation, not adoption, action authorization, merge, deployment or Production verification.
 
 ## Authority and inspection provenance

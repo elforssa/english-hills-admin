@@ -1,5 +1,7 @@
 # H3 Revision 7 — 4B/4C control binding, 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
+
 Revision: **4BC-EB1**. Tier 3: persistent Meta business-asset authority and future credential prerequisites; documentation-only binding evidence. Base: main **`8d4e6d72b8d8c37b0d19c76f3ecddfa24baa0419`**. This artifact authorizes no Meta mutation.
 
 ## Result
