@@ -208,11 +208,12 @@ Proposed handling workstation:
 - private browser/app session used only for the approved operation;
 - screen sharing/recording off;
 - agent/computer-use automation off before any credential-bearing screen;
-- browser/app sync behavior for sensitive fields understood and accepted;
+- browser sync for credential-bearing form/content is **disabled** during real credential handling; this prohibition is separate from a selected vault product's own reviewed encrypted synchronization of vault items;
 - clipboard history/cloud clipboard disabled;
 - extensions/tools capable of capturing fields/requests disabled;
 - no screenshots, HAR capture, developer-tools request recording or diagnostic upload;
-- no plaintext file, Notes document, terminal, shell history, `.env`, chat, repository or database copy.
+- no plaintext file, Notes document, terminal, shell history, `.env`, chat, repository or database copy;
+- no vault/browser export or download of real credential material, no plaintext backup/archive, and no credential-bearing file written to Downloads or another local/cloud-synced folder.
 
 If transient clipboard use is unavoidable, it is cleared immediately and never synced. Direct protected insertion is preferred.
 
