@@ -1,5 +1,14 @@
 # Current state
 
+## H3 Revision 7 — 4B-only operator packet prepared — 2026-10-04
+
+PR #74 / 4BC-EB1 is owner-adopted and merged at main `6ae006fc0f9322ecc3a843cf8f52e37e0c2ccb91`. Independent review concluded **4C SEMANTICS INSUFFICIENT**, so the next executable provider stage is **4B only**.
+
+[4B-OP1](../architecture/plans/crm-h3-05-revision-7-4b-operator-packet.md) prepares one future association of Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` to C2 `29771601672426816 / EH Lifecycle R4 C2` through Assigned assets → Assign assets → Apps with exactly **Develop app — Partial access**, followed by complete Assigned assets / separate Installed apps / C2 / protected-object readback and STOP before 4C. Manage app, every dataset task, Generate token, credentials, Production and event sending remain excluded.
+
+This is Tier-3 documentation preparation only. The exact execution clock is intentionally not started during review; after independent review and owner adoption, a separate owner action authorization must bind the sole human operator and an exact maximum-60-minute UTC window immediately before execution. **PREFLIGHT VERIFIED = NO**, **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**, 4C remains blocked pending stronger nonsecret semantic evidence, B1 actual acceptance remains PENDING, B5 OWNER DECISION REQUIRED and the safe non-event inspector remains BLOCKED.
+
+
 ## H3 Revision 7 — 4A complete; 4B/4C controls bound for review — 2026-10-04
 
 **4A = VERIFIED C2 CREATION.** The single authorized creation produced **EH Lifecycle R4 C2 / `29771601672426816`**, owned by Glory Lot `1741597822557523`. The distinct C2 operator ledger on `ops/h3-r7-c2-attempt-ledger` closes at `fd6ffe070e09161615b5dcf836b5bf33c75c89fa` with exactly one Create submission, no retry, no connected assets, no lifecycle-Employee assigned assets or installed apps, and no credential/dataset action. The protected English-hills app `1069638329182835` and protected System Users remained present in the safe post-state views. This supersedes the earlier 4A-preparation/current-state entry below without rewriting its historical evidence.
