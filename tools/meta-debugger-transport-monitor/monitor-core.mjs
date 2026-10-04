@@ -20,6 +20,16 @@ export function validateObservationWindow(start, now = Date.now()) {
   return { ok: true };
 }
 
+export function extractMatchedRules(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return { ok: false, reason: 'malformed_match_response' };
+  }
+  if (!Array.isArray(details.rulesMatchedInfo)) {
+    return { ok: false, reason: 'malformed_match_response' };
+  }
+  return { ok: true, matches: details.rulesMatchedInfo };
+}
+
 export function projectMatchedRules(matches, start) {
   if (!Array.isArray(matches) || !finiteTimestamp(start)) return [];
   return matches
@@ -44,6 +54,9 @@ function baseAssessment({ start, now, querySucceeded, matches }) {
   if (querySucceeded !== true) {
     return { state: 'inconclusive', reason: 'match_query_error', matches: [] };
   }
+  if (!Array.isArray(matches)) {
+    return { state: 'inconclusive', reason: 'malformed_match_response', matches: [] };
+  }
   return { state: 'ready', matches: projectMatchedRules(matches, start) };
 }
 
@@ -51,20 +64,46 @@ function countRule(matches, ruleId) {
   return matches.filter((entry) => entry.ruleId === ruleId).length;
 }
 
+function markerLeakFailure(matches) {
+  const markerLeakCount = countRule(matches, RULE_IDS.markerLeak);
+  if (markerLeakCount < 1) return null;
+  return {
+    state: 'fail',
+    reason: 'synthetic_marker_observed_in_request_url',
+    markerLeakCount,
+    matches,
+  };
+}
+
 export function assessCalibration(input) {
   const base = baseAssessment(input);
   if (base.state !== 'ready') return base;
+
+  const markerFailure = markerLeakFailure(base.matches);
+  if (markerFailure) return markerFailure;
+
   const count = countRule(base.matches, RULE_IDS.calibration);
-  if (count < 1) return { state: 'fail', reason: 'fresh_calibration_match_missing', matches: base.matches };
+  if (count < 1) {
+    return { state: 'fail', reason: 'fresh_calibration_match_missing', matches: base.matches };
+  }
   return { state: 'pass', reason: 'fresh_calibration_match_observed', count, matches: base.matches };
 }
 
 export function assessIdleBaseline(input) {
   const base = baseAssessment(input);
   if (base.state !== 'ready') return base;
+
+  const markerFailure = markerLeakFailure(base.matches);
+  if (markerFailure) return markerFailure;
+
   const count = countRule(base.matches, RULE_IDS.endpointRequest);
   if (count > 0) {
-    return { state: 'inconclusive', reason: 'endpoint_request_seen_during_idle_baseline', count, matches: base.matches };
+    return {
+      state: 'inconclusive',
+      reason: 'endpoint_request_seen_during_idle_baseline',
+      count,
+      matches: base.matches,
+    };
   }
   return { state: 'pass', reason: 'clean_endpoint_idle_baseline', count: 0, matches: base.matches };
 }
@@ -73,16 +112,13 @@ export function assessSyntheticSubmission(input) {
   const base = baseAssessment(input);
   if (base.state !== 'ready') return base;
 
-  const markerLeakCount = countRule(base.matches, RULE_IDS.markerLeak);
+  const markerFailure = markerLeakFailure(base.matches);
   const endpointRequestCount = countRule(base.matches, RULE_IDS.endpointRequest);
 
-  if (markerLeakCount > 0) {
+  if (markerFailure) {
     return {
-      state: 'fail',
-      reason: 'synthetic_marker_observed_in_request_url',
-      markerLeakCount,
+      ...markerFailure,
       endpointRequestCount,
-      matches: base.matches,
     };
   }
 
