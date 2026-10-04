@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>EH Meta Debugger Transport Monitor</title>
+  <link rel="stylesheet" href="monitor.css">
+</head>
+<body>
+  <main>
+    <h1>EH Meta Debugger Transport Monitor</h1>
+    <p class="warning">
+      Synthetic-only implementation. Do not install or operate this extension until the separately reviewed operator packet is explicitly approved.
+    </p>
+
+    <section>
+      <h2>Fixed synthetic markers</h2>
+      <dl>
+        <dt>Calibration marker</dt>
+        <dd><code>EHDNRCAL20261004A9F2B7C4</code></dd>
+        <dt>Debugger marker</dt>
+        <dd><code>EHDBGTRANSPORT20261004C4D7A9F2</code></dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Calibration window</h2>
+      <p>Start the window before the separately approved top-level calibration navigation. Check within 60 seconds.</p>
+      <div class="actions">
+        <button id="start-calibration" type="button">Start calibration window</button>
+        <button id="check-calibration" type="button">Check calibration</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Endpoint idle baseline</h2>
+      <p>Start a fresh idle window before any debugger submission. A fresh Rule 9003 match makes the baseline inconclusive.</p>
+      <div class="actions">
+        <button id="start-idle" type="button">Start idle window</button>
+        <button id="check-idle" type="button">Check idle baseline</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Synthetic submission window</h2>
+      <p>
+        Start immediately before the separately approved single synthetic submission. Rule 9002 is a URL-leak failure. Rule 9003 is only an endpoint-request-attempt observation.
+      </p>
+      <div class="actions">
+        <button id="start-assessment" type="button">Start assessment window</button>
+        <button id="check-assessment" type="button">Check assessment</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Result</h2>
+      <pre id="result">{"state":"idle"}</pre>
+      <button id="reset" type="button">Reset in-memory windows</button>
+    </section>
+
+    <p class="limitation">
+      A Rule 9003 match does not prove request completion, Meta processing, exact input linkage, response completion, or completed token evaluation.
+    </p>
+  </main>
+  <script type="module" src="monitor.js"></script>
+</body>
+</html>
