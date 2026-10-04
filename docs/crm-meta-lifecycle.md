@@ -1,6 +1,6 @@
 # Phase 10 — CRM lifecycle outbox (mock-only)
 
-> **Credential setup/rotation proposal — 2026-10-05:** [S1](architecture/plans/crm-meta-lifecycle-credential-simplification.md) consolidates the proposed final-token validation, Vercel custody and recovery flow. It is not adopted or executed. Once adopted it supersedes R7 bootstrap/transport requirements; credential readiness still authorizes no destination writes, H3-06/07/08 acceptance, H4 cohort, scheduler, live gate or events. Existing R4 event/privacy/replay rules remain unchanged.
+> **Credential setup/rotation — S1 adopted 2026-10-05:** [S1](architecture/plans/crm-meta-lifecycle-credential-simplification.md) merged through PR #93. Use the [sole active credential-only Gate-B runbook](architecture/plans/crm-h3-s1-gate-b-credential-runbook.md), pending focused review and operational approval. Conflicting R7 bootstrap/transport requirements are historical. Credential not ready; lifecycle not live; no H3-06/07/08, H4, scheduler, live gate or event authority. R4 event/privacy/replay rules remain.
 
 > Revision-4 implementation note (branch only, 2026-09-30): migrations 101 `crm_meta_funnel_r4_schema_controls` and 102 `crm_meta_funnel_r4_runtime_safety` extend the existing outbox to the approved five-event prospective model. They add no provider contract or release configuration and perform no activation. The branch is not merged or deployed; the Production note below remains authoritative until separately verified after an approved release.
 

@@ -1,6 +1,6 @@
 # Owner summary
 
-> **Historical credential procedure after S1 adoption:** [S1](crm-meta-lifecycle-credential-simplification.md) proposes superseding this document's R7 credential/bootstrap/inspector/recovery ceremonies and per-action gates. S1 is not adopted yet; existing operational holds remain. Once independently reviewed, owner-adopted and merged, S1 is the sole credential-process contract where these texts conflict. Historical evidence/approval scope and unrelated R4/dormant/live safeguards below remain intact; do not replay old actions.
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures. [S1](crm-meta-lifecycle-credential-simplification.md) was adopted through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. The [sole active Gate-B runbook](crm-h3-s1-gate-b-credential-runbook.md) replaces R7 bootstrap/inspector/rehearsal/per-action requirements. Original evidence and approval scope remain; unrelated R4/dormant/live safeguards are unchanged.
 
 ## Revision 7 B2 execution status — 2026-10-03
 

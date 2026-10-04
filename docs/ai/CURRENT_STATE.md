@@ -1,14 +1,16 @@
 # Current state
 
-## Simplified Meta credential architecture — proposed 2026-10-05
+## S1 credential architecture adopted — 2026-10-05
 
-[S1 architecture](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) proposes one dedicated final token → bounded validation → direct Vercel Production sensitive storage, with separate dormant acceptance and live activation. **Tier 3; proposed, not independently reviewed, owner-adopted, implemented or executed.** The owner commissioned architecture only. No Meta/credential/Vercel/Production/event action occurred in this task. Existing operational holds remain until adoption and separate owner operational approval; S1 does not assert credential readiness.
+S1 is owner-approved and merged through [PR #93](https://github.com/elforssa/english-hills-admin/pull/93), source head `27274492b3a2f6dab1cbb86ae239c056bee1421d`, main merge `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. The owner's direct continuation commission records adoption and directs existing [PR #91](https://github.com/elforssa/english-hills-admin/pull/91) to implement the [S1 Gate-B credential-only runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md). That runbook is prepared for focused independent review and separate owner operational approval; no operation is authorized by this documentation task.
 
-GitHub readback confirms [PR #89](https://github.com/elforssa/english-hills-admin/pull/89) merged at main `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5` from head `d11c77aebd1b3c791e5760e9731695f6918fac53`. Its monitor is source implementation only, not verified browser operation. The earlier unmerged-monitor notices below are historical. [PR #91](https://github.com/elforssa/english-hills-admin/pull/91), observed head `a51bb2aad273e96b6d71970593add9abfad0ced4`, remains open and untouched: its owner-observed C2 configuration stopped at confirmation, without attachment or token issuance. Its investigation supports the own-app/System User route but leaves the exact token scope recipe unresolved; see S1's pinned evidence links and limits.
+**Architecture adopted; credential not yet ready; lifecycle not live.** Exact minimum token scopes remain unresolved before generation. Retain C2 `29771601672426816`, Employee `61594989243533`, dataset `1152399921284927`, `CRM_META_LIFECYCLE_TOKEN_EH_R4`, no DQA and dormant delivery. The [historical issuance investigation](../architecture/evidence/crm-h3-r7-issuance-contract-research-2026-10-04.md) records the own-app/System User route, C2 originally showing no token permissions, and latest C2 Marketing confirmation reached without Add to app or token generation. These are dated owner observations, not refreshed Meta state. [Vercel preflight](../architecture/evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) records historical key absence, not a new Production inspection.
 
-Dedicated app `29771601672426816`, Employee `61594989243533`, dataset `1152399921284927` and secret reference `CRM_META_LIFECYCLE_TOKEN_EH_R4` are retained. DQA remains excluded. [Dated Vercel preflight](../architecture/evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) records the token/live-gate keys absent; this task did not refresh Production state. S1 would retire R7 A/B/bootstrap/transport and per-screen gates on adoption, preserving historical evidence. Recommendation: revise #91 into the concise S1 runbook after adoption, preserving its investigation; do not merge its old executable contract. Credential ready, dormant integration accepted and lifecycle live remain separate states.
+R7 A/B, bootstrap/transport, per-click and repeated-screen gates are **HISTORICAL — SUPERSEDED BY S1** wherever credential procedure conflicts. All R7 sections below preserve dated evidence and original approval scope, not current execution instructions. Monitor source was merged through PR #89 at `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`; it is not an S1 credential prerequisite. This #91 conversion changes documentation only: no runtime/migration, Meta access/mutation, token, Vercel/Production action or event. H3-06/07/08 are excluded; all release/live activation holds remain.
 
 ## H3 Revision 7 — transport monitor first-review corrections applied — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 PR #89 first exact-code review at head `ab99be3084d7b02858887b7db7e9f5c122d87633` found implementation defects in Chrome response-envelope handling, async observation invalidation, Rule 9002 precedence and CI assertions, plus case-sensitivity/RE2/test-coverage qualifications. Those findings are corrected on the same branch.
 
@@ -30,6 +32,8 @@ PR #89 remains implemented on its review branch, **not merged/adopted**. The pre
 Operational state is unchanged: extension installation/testing, Meta access, A/B generation, inspection, revoke, Vercel mutation, H3-06–08, H4, Test Events and lifecycle sending remain unauthorized.
 
 ## H3 Revision 7 — transport monitor implemented for exact-code review — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 PR #88 is owner-adopted and merged at main `9f3ced1a8e184f2bc5c2afd0dc4d607eda71748d`. The adopted two-stage inspector bootstrap architecture is now **DEFINED**.
 
@@ -82,6 +86,8 @@ PR #90 itself changed `.github/**` and `scripts/ci/**`, so it was **not eligible
 
 ## H3 Revision 7 — two-stage inspector bootstrap amendment proposed — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #87 is owner-adopted and merged at main `96dbbdb4a8d8f51a88077baae7168da425377c29`.
 
 A new [two-stage inspector bootstrap amendment](../architecture/plans/crm-h3-05-r7-two-stage-inspector-bootstrap-amendment.md) is proposed to resolve the remaining circularity between synthetic transport proof and first real credential inspection without weakening the credential-secrecy contract.
@@ -108,6 +114,8 @@ Current inherited state remains:
 
 
 ## H3 Revision 7 — inspector linkage + subject/target binding research prepared — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 PR #86 is owner-adopted and merged at main `b88c8e9abdb4c90dca7204d04f148d8f2f579854`.
 
@@ -137,6 +145,8 @@ No implementation, provider access or credential operation is authorized by this
 
 ## H3 Revision 7 — inspector remote-evaluation research prepared — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #85 is owner-adopted and merged at main `88b9dea9945a3315597214d35123a593ac710051`. The adopted Chrome transport-monitor design remains documentation-only; no extension implementation/installation or Meta testing has occurred.
 
 A new [remote-evaluation research record](../architecture/evidence/crm-h3-r7-inspector-remote-evaluation-research-2026-10-04.md) uses current official Meta and Chrome evidence. Meta's official `facebook/agentic-tools` repository now provides a `debug-access-token` skill and vetted `debug_token_probe.py`, confirming both the human Access Token Debugger as a first-party inspection option and the supported remote Graph `/debug_token` endpoint. The same Meta source directly supports diagnostic fields including `is_valid`, token type, `app_id`, application, issuance/expiry/data-access expiry, scopes and granular-scope names.
@@ -161,6 +171,8 @@ No implementation, provider action or credential operation is authorized by this
 
 ## H3 Revision 7 — B5 READY / safe inspector transport-monitor design prepared — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #84 is owner-adopted and merged at main `13853983dadee2a0fde93388f976887df628acbc`. The adopted state is now **B5 = READY** with the exact Vercel conditional-storage binding already recorded. No Vercel write is authorized merely by that readiness classification.
 
 The safe non-event inspector remains **BLOCKED** on two independent gates:
@@ -181,6 +193,8 @@ Current holds: **B1 actual credential acceptance = PENDING**, **PREFLIGHT VERIFI
 
 ## H3 Revision 7 — Vercel B5 preflight PASS / inspector synthetic packet prepared — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #83 is owner-adopted and merged at main `6c62828d7b1edd53db2880ba3823dd25d8823d6f`. The active architecture is now Vercel-only lifecycle credential custody: `CRM_META_LIFECYCLE_TOKEN_EH_R4` will later be stored only as a Vercel Production Secret after B passes safe non-event/B1 acceptance, with no external recovery-vault copy and no SAME-A post-revoke proof.
 
 A read-only/nonsecret [Vercel B5 preflight](../architecture/evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) completed by **2026-10-04 05:32:29 UTC**. Exact Vercel binding is `English Hills' projects / team_egUbt9wN23I40I1K71zxfYGj` → `english-hills-admin / prj_hC0MvqsXYmERXhZWGEfOOma8D6E3`. The authenticated human principal is a confirmed team OWNER with MFA enabled. Read-only environment metadata with decryption disabled confirms Vercel sensitive/secret Production-only capability, target `CRM_META_LIFECYCLE_TOKEN_EH_R4` absent, `CRM_META_LIFECYCLE_LIVE_ENABLED` absent and no target Preview/Development copy. Runtime code is server-only, validates the `CRM_META_LIFECYCLE_TOKEN_...` reference pattern and resolves the exact environment reference dynamically while retaining independent live gates. **B5 NONSECRET VERCEL PREFLIGHT = PASS**. No Vercel mutation or decrypted value read occurred.
@@ -193,6 +207,8 @@ Current holds: **B1 actual credential acceptance = PENDING**, **PREFLIGHT VERIFI
 
 
 ## H3 Revision 7 — Vercel-only custody amendment proposed — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 The owner rejected a separate paid/high-overhead recovery-vault path and commissioned a simpler Vercel-only custody amendment. PR #82 / vault-comparison research is closed unmerged and has no architecture authority.
 
@@ -209,6 +225,8 @@ This is proposal/preparation only. Until exact-head independent review and owner
 
 ## H3 Revision 7 — B5 custody / safe inspector preparation — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR preparation follows merged owner-adopted created-object state at main `1e32ac77d5234f39e4c6b6511e79cd5efff827a8`: **4A = VERIFIED C2 CREATION**, **4B = VERIFIED ASSOCIATION**, **4C = VERIFIED DATASET GRANT**.
 
 The documentation-only [B5 / inspector preparation](../architecture/plans/crm-h3-05-revision-7-b5-inspector-preparation.md) is now **vendor-neutral**. **Vercel Production Secret is the runtime store** for the eventually accepted live Meta credential. A separate **human-only recovery vault** is required only for A/B custody, exact SAME-A retrieval and recovery evidence; the CRM does not call that vault during normal operation.
@@ -224,6 +242,8 @@ This is a proposal only. Until exact-head review and explicit owner adoption: **
 
 ## H3 Revision 7 — 4C verified dataset grant — owner-adopted, 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 Owner adoption is complete for the reviewed narrow provider-coupling amendment merged through PR #79. Final created-object stage facts are now:
 
 - **4A = VERIFIED C2 CREATION**
@@ -237,6 +257,8 @@ No further Meta mutation is required for 4C. **CREATED-OBJECT PREFLIGHT COMPLETE
 
 ## H3 Revision 7 — 4C dataset grant committed with provider-coupled Pixel side effect — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 Owner-authorized 4C executed once under merged 4C-OP1 / main `ae3d7fffb31aa3e296c05ddac1ddc535d31e13e0`: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` was assigned target dataset endpoint `1152399921284927 / English Hills pixel` with **Use events dataset — Partial access**. Target-dataset-side readback confirms the lifecycle Employee now appears alongside protected Conversions API System User `100089438321765`, both with **Use events dataset**.
 
 The same one-click assignment also caused Meta to show a separate **Pixel → English Hills pixel → View Pixels** row on the lifecycle Employee, despite the operator selecting only the Datasets category and exact dataset task. No Pixel asset was selected, no second confirmation occurred, and **Manage events dataset** remained off. The existing protected Conversions API System User already exhibits the same paired Pixel/View Pixels + Dataset/Use events dataset pattern, which is corroboration only.
@@ -248,6 +270,8 @@ Until separate review/adoption resolves whether the paired Pixel/View Pixels row
 
 ## H3 Revision 7 — 4C-only operator packet prepared — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #77 / 4C-SE1 is owner-adopted and merged at main `487c40bf49dbc1d740a98db90586bd5eb9968c4f`. Independent review concluded **4C SEMANTICS SUFFICIENT** at the dataset asset-task layer: **Use events dataset — Partial access** is accepted as the least-privilege administrative dataset task for the future 4C grant, without treating EH's Employee + C2 route as equivalent to Meta's managed Conversions API System User route. App installation, credential issuance/scopes/effective authority and delivery remain later gates; **Manage events dataset — Full access** remains prohibited.
 
 [4C-OP1](../architecture/plans/crm-h3-05-revision-7-4c-operator-packet.md) prepares one future dataset assignment only: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` → dataset endpoint `1152399921284927 / English Hills pixel` with exactly **Use events dataset — Partial access**, one deliberate Assign assets confirmation, complete fresh pre-action baselines and complete final same-surface noncredential regression readback, then STOP before every credential operation. C2 `29771601672426816` / the verified 4B relationship must remain unchanged.
@@ -256,6 +280,8 @@ This is Tier-3 documentation preparation only. No 4C mutation is authorized unti
 
 
 ## H3 Revision 7 — 4C semantic evidence prepared — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 4B has been operationally completed as **VERIFIED ASSOCIATION** and its independently reviewed closeout is owner-adopted and merged in PR #76 at main `11287d8562d55e09d2598e3cd7b888f689e29d98`. [4C-SE1](../architecture/evidence/crm-h3-r7-4c-semantic-evidence-2026-10-04.md) adds stronger nonsecret evidence addressing PR #74's prior **4C SEMANTICS INSUFFICIENT** finding.
 
@@ -266,6 +292,8 @@ This is Tier-3 documentation/research evidence only. **4C remains BLOCKED pendin
 
 ## H3 Revision 7 — 4B verified association — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 **4B = VERIFIED ASSOCIATION.** Under reviewed and merged 4B-OP1 / main `9e906c04b0076cac46cb004d3f20f5eec79830c2`, the owner executed exactly one authorized **Assign assets** action during 2026-10-04 02:55–03:55 UTC: Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` was assigned C2 `29771601672426816 / EH Lifecycle R4 C2` using the reviewed **Develop app — Partial access** task. Final Meta readback showed one assigned business asset for the lifecycle Employee: C2 with Partial access summarized as Develop app, View insights and Test app; Installed apps remained empty. A brief immediate post-submit "No assets assigned" view was followed by a read-only "Already assigned" indication and then the final committed Assigned assets view; no retry/reapply/remove occurred.
 
 [4B execution closeout](../architecture/evidence/crm-h3-r7-4b-execution-closeout-2026-10-04.md) records the fresh protected baselines and owner-confirmed same-surface post-action regression: Conversions API System User `100089438321765` unchanged, English Hills CRM `61594759444572` unchanged, protected app English-hills `1069638329182835` unchanged, and C2 Connected assets still none. No dataset assignment, Generate/Revoke token, app-secret/credential action, Production operation or event send occurred.
@@ -275,6 +303,8 @@ This is Tier-3 documentation/research evidence only. **4C remains BLOCKED pendin
 
 ## H3 Revision 7 — 4B-only operator packet prepared — 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 PR #74 / 4BC-EB1 is owner-adopted and merged at main `6ae006fc0f9322ecc3a843cf8f52e37e0c2ccb91`. Independent review concluded **4C SEMANTICS INSUFFICIENT**, so the next executable provider stage is **4B only**.
 
 [4B-OP1](../architecture/plans/crm-h3-05-revision-7-4b-operator-packet.md) prepares one future association of Employee `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE` to C2 `29771601672426816 / EH Lifecycle R4 C2` through Assigned assets → Assign assets → Apps with exactly **Develop app — Partial access**, followed by complete Assigned assets / separate Installed apps / C2 / protected-object readback and STOP before 4C. Manage app, every dataset task, Generate token, credentials, Production and event sending remain excluded.
@@ -283,6 +313,8 @@ This is Tier-3 documentation preparation only. The exact execution clock is inte
 
 
 ## H3 Revision 7 — 4A complete; 4B/4C controls bound for review — 2026-10-04
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 **4A = VERIFIED C2 CREATION.** The single authorized creation produced **EH Lifecycle R4 C2 / `29771601672426816`**, owned by Glory Lot `1741597822557523`. The distinct C2 operator ledger on `ops/h3-r7-c2-attempt-ledger` closes at `fd6ffe070e09161615b5dcf836b5bf33c75c89fa` with exactly one Create submission, no retry, no connected assets, no lifecycle-Employee assigned assets or installed apps, and no credential/dataset action. The protected English-hills app `1069638329182835` and protected System Users remained present in the safe post-state views. This supersedes the earlier 4A-preparation/current-state entry below without rewriting its historical evidence.
 
@@ -295,11 +327,15 @@ No 4B/4C mutation occurred during discovery; Assign assets was not clicked, no t
 
 ## H3 Revision 7 4A execution binding — ready for binding review, updated 2026-10-04
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 From merged 4A-OP1 / main `67fa33703354d14d881059f81f8462c61ce063e7`, [4A-EB2 evidence](../architecture/evidence/crm-h3-r7-4a-execution-binding-2026-10-03.md) records **4A EXECUTION BINDING READY FOR REVIEW** from the owner's manual authenticated inspection supplied 2026-10-04: My Apps → Create App, **Create an app without a use case**, Glory Lot / Unverified business, no requirements, Overview with no use cases and final green **Create app** control. Meta describes a bare App ID without added permissions/features/products. The unchanged prefilled contact value is excluded. Safe My Apps/Business Apps/System User metadata readbacks are bound; dashboard metadata is allowed only without secrets/tokens. Manual exact UTC start/end were not supplied. The prior failed author browser attempt remains historical; this update performs no Meta access.
 
 This is branch preparation, not merged/adopted, terminal-CI review readiness or execution authority. Create was NOT pressed and no app/mutation occurred, as attested by the owner. No later CAPI/dataset/credential authority is established; 4B/4C control semantics remain deferred. The distinct future C2 Git write-ahead history and Maroine El Forssa sole-operator model remain prepared, requiring owner confirmation/exclusivity, exact UTC window, live history/reservation and fresh inventories. No operational ledger/reservation is created. B2 PASS/frozen history and 4A/4B/4C, credentials, merge/release, Production, H3-06–08/H4 and sending holds remain; PREFLIGHT VERIFIED NO. Earlier 4A-OP1 branch-merge notices below are historical.
 
 ## H3 Revision 7 4A operator packet preparation — 2026-10-03
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 The owner's direct commission records **S4-P1 OWNER APPROVED**, merged [PR #70](https://github.com/elforssa/english-hills-admin/pull/70) at `478d898ecf1f31d052e48f65e37a9f7caa58809c`. [4A-OP1](../architecture/plans/crm-h3-05-revision-7-4a-operator-packet.md) prepares exactly one future isolated Glory Lot-owned **EH Lifecycle R4 C2** creation/noncredential readback, then STOP. It binds the future write-ahead single-use action `EH-H3-R7-C2-CREATE-001`, durable/exclusive ledger acceptance, complete reconciled inventories, success/failure/ambiguity, bounded read-only reconciliation, owner approval template, checklist and execution output schema. Exact creation flow/use case/settings/submit remain **REQUIRES PRE-SUBMIT NONSECRET BINDING**; actual ledger mechanism, sole human and maximum 60-minute UTC window are unbound. No operational reservation is created.
 
@@ -311,11 +347,15 @@ CI + Codex Workflow Efficiency v1 is implemented on this feature branch: [Verify
 
 ## H3 Revision 7 Step 4 created-object preparation — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 From merged PR #69 / main `408bbe033c1def7bde312728a58d77733ace85fd`, [S4-P1 preparation](../architecture/plans/crm-h3-05-revision-7-step-4-created-object-preparation.md) is documentation branch work only. It recommends 4A C2 creation/readback then STOP, followed by separately reviewed exact-target 4B association / 4C dataset grant with intermediate readback. Permanent Employee remains `61594989243533 / EH Lifecycle R4 Employee / EMPLOYEE`; B2 PASS and its consumed allowance are unchanged. Dataset task: **REQUIRES POST-C2 NONSECRET READBACK**. Persistent C2 creation requires a distinct durable write-ahead attempt ledger and one submit/no blind retry; no operational ledger/reservation is established here.
 
 The final preflight contract is ambiguous about unresolved B5/inspector readiness. S4-P1 proposes the factual **CREATED-OBJECT PREFLIGHT COMPLETE** checkpoint only after complete later setup/readback and separate review/owner adoption; **PREFLIGHT VERIFIED remains NO**, with no new accepted state claimed now. B5 OWNER DECISION REQUIRED; inspector BLOCKED; B1 actual credential acceptance pending. Owner authorization templates are prepared, not approved; no Meta access/mutation or credential/event/Production action occurred. This preparation is not merged/deployed or execution authority; historical Step 3/B2 records are unchanged. Merge/release and Step 4 execution, credentials, H3-06–08/H4/sending remain held.
 
 ## H3 Revision 7 B2 execution closeout — 2026-10-03
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 **Current B2 = PASS:** verified creation of the actual intended permanent Employee under owner-approved B2-1 / OP-1. [Dated closeout evidence](../architecture/evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md) records the owner's execution handoff and frozen operator history at `b650ce14bf1b0f182803ee3641c828d3f9278871` on `ops/h3-b2-attempt-ledger`, following main `9f0b9398c65499d4f3587107aa7e25cb046d0f16` / merged OP-1 PR #68. Permanent nonsecret identity: **EH Lifecycle R4 Employee**, canonical ID **`61594989243533`**, role **EMPLOYEE**, business **Glory Lot / `1741597822557523`**. Action `H3-B2-20261003-1006Z-01` is CONFIRMED SUCCESS: one submission, no retry, exactly one intended new identity, protected users still present and no assets assigned to the new user. The single creation allowance is permanently consumed; no further lifecycle Employee creation is authorized.
 
@@ -323,9 +363,13 @@ B2 PASS means only that Meta accepted creation of this actual permanent intended
 
 ## H3 Revision 7 B2-1 adopted; operator packet prepared — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 The owner's direct preparation commission records [B2-1](../architecture/plans/crm-h3-05-revision-7-b2-amendment.md) OWNER APPROVED and merged at PR #67 / `76c89b7462e48a6dc3cbb936f2b7edd6f07b7059` (source head `c34eb1ef6c8adb6d20571d56a9fd8918692814da`). Earlier proposed/unapproved entries are historical. [OP-1](../architecture/plans/crm-h3-05-revision-7-b2-operator-packet.md) is documentation branch preparation only: one future permanent Employee submission, proposed maximum 30-minute window, durable consumed-attempt ledger, complete inventories, explicit success/denial/ambiguity and separately authorized read-only reconciliation. Human operator, actual window and exact-action approval are not yet supplied. B2 remains INCONCLUSIVE; no Create authority, Meta access/mutation, credential, support, event or Production operation occurred. No deployment/provider success is claimed. This PR's merge/release, future execution, Step 4, credentials and H3-06–08/H4 remain held.
 
 ## H3 Revision 7 B2-only architecture proposal — 2026-10-03
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 From merged Step 3 main `78153eb2504f4eb33b3d2d35a1b8efa209940930`, the owner commissions documentation only. [Proposed B2-1](../architecture/plans/crm-h3-05-revision-7-b2-amendment.md) permits, only after separate review/owner adoption and exact-action operator authorization, one creation submission for the actual permanent EH Lifecycle R4 Employee. Verified creation would resolve B2 PASS; explicit capacity/eligibility denial fails B2 or the exact affected gate; ambiguous submit remains INCONCLUSIVE — POSSIBLE CREATED OBJECT, with separately authorized read-only reconciliation and no retry. C2-independent completion is not established; a discovered app prerequisite stops for a separate sequence decision.
 
@@ -333,15 +377,21 @@ B2 remains INCONCLUSIVE and the historical Step 3 account result remains BLOCKED
 
 ## H3 Revision 7 Step 3 read-only precreation preflight — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 Against merged Step 2 main `e0f74766f36b5881a11defd38ad2960170cb0458` / PR #65, the owner separately authorized one bounded read-only Meta session. [Dated evidence](../architecture/evidence/crm-h3-r7-step3-preflight-2026-10-03.md) records **READ-ONLY PRECREATION PREFLIGHT BLOCKED**: B2 capacity INCONCLUSIVE (one existing Employee, existing custom app Limited access, no proven remaining quota/managed-user exemption). Currently knowable B3 and current human management access PASS; B5 OWNER DECISION REQUIRED and inspection BLOCKED remain credential prerequisites, not causes of the limited account blocker. Future C2/Employee/grant/token/recovery facts are DEFERRED — POST-CREATION OUTPUT. No full PREFLIGHT VERIFIED or credential acceptance is claimed.
 
 The Meta session ended at 07:33:14 UTC within its 60-minute bound. No Meta mutation, credential operation, support contact, event or Production operation occurred. This is documentation branch evidence, not merged/deployed closeout. Step 4, H3-06–08/H4 and merge/release remain held. Historical entries below retain their original authorization/evidence limits.
 
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 Owner approval of Revision 7 at merged PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857` is recorded from the direct Step 2 commission. [Protected preparation](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md) is documentation-only branch implementation: B5 OWNER DECISION REQUIRED, inspection BLOCKED, rehearsal checklist ready with execution blocked, Step 3 contract drafted. No new account/Production verification or operation occurred. Earlier proposal status below is historical; no credential/dormant/live acceptance state is reached. Merge/release, Step 3/operator work and H3-06–08/H4 remain separately held.
 
 ## H3 Revision 7 proposed after merged PR #63 — 2026-10-03
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 [PR #63](https://github.com/elforssa/english-hills-admin/pull/63) is verified merged as `ffd06e5a669a51a8b2934dbf648d1d2214f40606`, from head `e990f026f83ea751a0a8adaad69446cfbea1784d`. Its B1/B4 research findings remain valid historical evidence. The owner commissioned [proposed Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md), removing Meta support/engineering as a required dependency. The proposal selects C2 and exclusive identity-wide invalidation with a mandatory initial recovery rehearsal. B1/B4 are architecture contracts defined for owner approval, with actual authority/recovery still future fail-closed acceptance gates. No new acceptance state is reached: architecture, preflight, credential, dormant integration and H4 activation are distinct. [Evidence/decision ledger](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md).
 

@@ -2,7 +2,7 @@
 
 ## What will change
 
-**Revision S1 — PROPOSED, 2026-10-05 (Asia/Shanghai). Tier 3: credential/security/provider-operation policy.** Replace the Revision-7 bootstrap with one final dedicated System User token, one bounded validation and direct Vercel Production Secret storage. Remove disposable A/B issuance, synthetic transport testing and per-screen review ceremonies. Keep a small set of controls that protect identity, authority, secrecy, recovery and activation.
+**Revision S1 — ADOPTED, recorded 2026-10-05 (Asia/Shanghai). Tier 3: credential/security/provider-operation policy.** Replace the Revision-7 bootstrap with one final dedicated System User token, one bounded validation and direct Vercel Production Secret storage. Remove disposable A/B issuance, synthetic transport testing and per-screen review ceremonies. Keep a small set of controls that protect identity, authority, secrecy, recovery and activation.
 
 ## What staff/users will be able to do
 
@@ -10,7 +10,7 @@ After architecture adoption and separate operational approval, the human operato
 
 ## What remains restricted
 
-This architecture task authorizes no Meta access, credential operation, Vercel change, database mutation, merge, deployment or event. Credential readiness does not authorize H3-06/07/08, H4, Test Events or live delivery. Independent review and owner adoption are still pending.
+This architecture task authorizes no Meta access, credential operation, Vercel change, database mutation, merge, deployment or event. Credential readiness does not authorize H3-06/07/08, H4, Test Events or live delivery. S1 architecture is owner-approved and merged; Gate B contract review and operational approval remain pending.
 
 ## UI impact
 
@@ -30,7 +30,7 @@ Accept provider diagnostic/control-plane trust and removal of an initial empiric
 
 ## Status, evidence and precedence
 
-Baseline main: `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`. This is one architecture outcome, not a series of research/preparation PRs. The owner's 2026-10-04 commission authorizes this proposal and PR only. **Architecture approval: PENDING; approved revision/commit, owner/date and review evidence: not yet recorded.** Record those exact bindings on adoption before implementation. No approval is inferred from the commission.
+Baseline main: `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`. This is one architecture outcome, not a series of research/preparation PRs. The owner's 2026-10-04 commission authorizes this proposal and PR only. **Architecture approval: ADOPTED through [PR #93](https://github.com/elforssa/english-hills-admin/pull/93), source head `27274492b3a2f6dab1cbb86ae239c056bee1421d`, main merge `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`.** Approval evidence is the owner's direct 2026-10-05 continuation commission stating S1 was owner-approved and merged and directing this #91 disposition; GitHub readback confirms the merged state/head/merge (merged 2026-10-05 Asia/Shanghai). The commission does not supply the separate architecture reviewer verdict or review record; no new review claim is inferred. This records adoption, not credential execution, release or Production verification.
 
 | Evidence read | What it establishes / limit |
 | --- | --- |
@@ -43,7 +43,7 @@ Baseline main: `3e80697fc57f1f17bf1a23e46d3fb42311c01dc5`. This is one architect
 
 PR #91 records current first-party own-app + own-System-User CAPI support, without inherent App Review or separate permission requests for that route. It also records C2 originally having no use case/permission-bearing capability and a disabled token chooser. The latest C2 observation reached the confirmation modal for **Create & manage ads with Marketing API**, without Add to app or token generation. The test app's attachment succeeded but proves neither C2 entitlement nor a required final scope set. DQA evidence describes additional durable authority/configuration and a current opt-out limitation; DQA stays excluded. These are attributed repository observations; this task does not access Meta or independently refresh provider documentation.
 
-**Precedence on adoption:** S1 replaces all R7 credential bootstrap, inspector, recovery-rehearsal and per-action gate requirements, including their inherited G0/operator packets, only within this dedicated lifecycle credential scope. Historical facts, approvals and findings remain intact. Vercel custody and R4 product/delivery safeguards remain. Until exact-head independent review, owner adoption and merge, S1 is proposed and the existing operational holds remain; there are not two executable contracts. After adoption, conflicting R7 procedure is historical and must not be replayed. Monitor source/tests remain untouched; their presence is not a credential prerequisite.
+**Adopted precedence:** S1 replaces all R7 credential bootstrap, inspector, recovery-rehearsal and per-action gate requirements, including their inherited G0/operator packets, only within this dedicated lifecycle credential scope. Historical facts, approvals and findings remain intact. Vercel custody and R4 product/delivery safeguards remain. S1 is adopted; conflicting R7 procedure is **HISTORICAL — SUPERSEDED BY S1** and must not be replayed. The [S1 Gate-B credential runbook](crm-h3-s1-gate-b-credential-runbook.md) is the sole active credential workflow, pending its focused review and explicit owner operational approval. Existing delivery holds remain. Monitor source/tests remain untouched; their presence is not a credential prerequisite.
 
 ## Permanent security invariants
 
@@ -123,7 +123,7 @@ Gate C requires the actual prospective source/cohort and original Meta-lead prov
 
 ## Superseded controls
 
-On adoption, the following cease to be mandatory credential requirements; none is retained under another name:
+Under adopted S1, the following cease to be mandatory credential requirements; none is retained under another name:
 
 - Disposable credential A, A bootstrap validation, revoke-A-before-B as initial identity-wide rehearsal, and a second final B issued solely for bootstrap.
 - Synthetic T1–T8 transport ceremony, INSPECTOR TRANSPORT READY, Chrome transport monitor, synthetic debugger markers and proving URL/request transport before real-token inspection.
@@ -134,14 +134,14 @@ On adoption, the following cease to be mandatory credential requirements; none i
 
 The remaining stop on **ambiguous high-impact mutation** addresses duplicate grants/revocation and uncontrolled credentials, not a return to per-click bookkeeping. Supported state reconciliation within the approved scope suffices. A/B testing could return only for a concrete documented platform necessity and a newly approved material design change, never solely because R7 prescribed it.
 
-## Owner decisions required
+## Adoption and remaining authority
 
-**Adoption decision, blocking implementation:** A — adopt S1's single-token/provider-trust model, Vercel-only recovery and three gates (recommended); B — retain R7's extra empirical bootstrap/transport assurance and operational cost. The commission requests A's design, but is not final adoption. Record exact reviewed commit, owner/date and acceptance of the stated residual risks on adoption. No other product decision is currently established as blocking this architecture; exact scopes/lifetime/current provider facts are Gate B execution prerequisites, not invented answers.
+The owner adopted option A: S1's single-token/provider-trust model, Vercel-only recovery and three gates, through PR #93 as recorded above. The former adoption decision is closed; exact scopes/lifetime/current provider facts remain Gate B execution prerequisites. PR #91 implements the credential-only runbook disposition under the owner's 2026-10-05 commission. It does not include dormant acceptance or any operational action. Focused Gate B independent review and explicit owner operational approval remain required before execution.
 
 ## IMPLEMENTATION CONTRACT
 
 - **Prerequisites:** exact-SHA successful required CI, separate independent architecture review, recorded owner adoption/revision, then separate implementation/operator task. This author stops after PR/CI scheduling; no formal review or execution is delegated by it.
-- **PR #91 disposition: revise #91 after S1 adoption.** Rebase onto adopted main and replace its active bootstrap packet with one concise S1 credential/dormant runbook. Preserve the full issuance investigation and historical packet (move the latter to a clearly historical record if needed); add an explicit supersession banner and links. Keep prior findings/approvals with their original scope. Do not close it in a way that strands its evidence, merge the old executable packet, or keep two active contracts. This task neither modifies nor merges #91.
+- **PR #91 disposition: revise #91 after S1 adoption.** Rebase onto adopted main and replace its active bootstrap packet with one concise S1 credential-only runbook. H3-06/07/08 are excluded from this #91 revision. Preserve the full issuance investigation and historical packet (move the latter to a clearly historical record if needed); add an explicit supersession banner and links. Keep prior findings/approvals with their original scope. Do not close it in a way that strands its evidence, merge the old executable packet, or keep two active contracts. The S1 architecture task did not modify #91; the separately commissioned #91 continuation now implements this disposition without merging or executing it.
 - **Manifest:** new S1 plan and ADR-004 amendment; current-state/security/workflow/architecture/index/runbook navigation plus scoped historical-plan notices. Later #91 runbook/evidence only for the unchanged model; existing monitor code/tests and immutable migrations remain. No new credential database, recovery service, extension, custom inspector, app or System User.
 - **Acceptance:** current supported capability/scopes/lifetime manifest resolved in the same work item; focused Gate B review/owner approval before issuance; one accepted final token; every validation fact PASS; exact Vercel sensitive Production-only metadata PASS; safe cleanup and nonsecret closeout; all delivery gates remain closed. Any included dormant outcome additionally meets H3-06/07/08 acceptance. Actual delivery remains unverified until Gate C.
 - **Verification:** documentation link/source/secret/PII checks and `git diff --check`; one author self-check. Documentation-only CI applies to this PR; no app/database/browser tests for wording-only changes. Future runtime changes require scoped local/synthetic tests and normal required CI; provider/Production verification belongs to the approved operator task, never secret-bearing browser automation.

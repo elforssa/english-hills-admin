@@ -1,10 +1,10 @@
 # Operational workflows
 
-## Proposed simplified credential workflow — 2026-10-05
+## Adopted S1 credential workflow — 2026-10-05
 
-Use [S1 operator flow and recovery](../architecture/plans/crm-meta-lifecycle-credential-simplification.md#operator-flow) as the proposed replacement for the historical R7 workflow below: supported configuration → one final credential → one validation → direct Vercel Production sensitive storage → metadata-only closeout. Gate A is architecture adoption; Gate B is focused credential/custody review and owner operational approval; Gate C is separate live activation review/owner approval. Read-only observations and ordinary setup within scope need no per-screen review or GitHub log.
+Use the [S1 Gate-B credential runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md): supported configuration → minimum authority manifest → one final token → one bounded validation → direct Vercel Production sensitive storage → metadata verification → CREDENTIAL READY → STOP. S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Gate B still requires focused independent review and explicit owner operational approval before execution; this documentation task performs none.
 
-**Not adopted or executable yet.** On adoption S1 supersedes the old A/B, transport rehearsal and per-action credential gates. Nonsecret setup may span sessions; only the secret-bearing transfer interval must remain private and continuous. H3-06/07/08 can form one explicitly approved dormant acceptance outcome with independent verification; credential-only approval does not include them. H4 prospective cohort/source boundaries, live gate, scheduler and all events remain separate. Recommendation: revise #91 to this runbook after adoption, retaining its evidence. No additional preparation PR per missing UI fact.
+Nonsecret setup may span sessions; only the actual secret interval is continuous/private. Ordinary supported configuration/readbacks need no per-screen review, per-click log or fixed window. Exact minimum token scopes remain to be established before generation. **Architecture adopted; credential not yet ready; lifecycle not live.** #91 excludes H3-06/07/08 dormant acceptance, H4, server live gate, scheduler, Test Events and real events. Separate dormant/live authority remains mandatory. All R7 credential procedures below are **HISTORICAL — SUPERSEDED BY S1**; dated observations and original findings/approvals remain intact.
 
 ## CI + Codex Workflow Efficiency v1 — branch implementation, 2026-10-03
 
@@ -12,21 +12,31 @@ On the implementation branch, authors finish implementation, local checks and on
 
 ## H3 Revision 7 Step 4 staged preparation — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 [S4-P1](../architecture/plans/crm-h3-05-revision-7-step-4-created-object-preparation.md) prepares two future commissions with three checkpoints: 4A create/read one permanent C2 then STOP; after actual control evidence is separately reviewed and bound, 4B associate only C2 to Employee `61594989243533`, read back, then 4C grant only endpoint `1152399921284927` under its exact approved task and complete all readbacks. If task evidence needs 4B first, stop after 4B for another authorization. One-submit C2 creation requires a distinct write-ahead ledger; never replay consumed OP-1 or create/replace the Employee. Dataset task REQUIRES POST-C2 NONSECRET READBACK. Proposed factual checkpoint CREATED-OBJECT PREFLIGHT COMPLETE requires separate review/owner adoption; PREFLIGHT VERIFIED remains NO. Preparation authorizes no Meta access/execution or credential A. B5 OWNER DECISION REQUIRED, inspector BLOCKED, and merge/release/credential/Production/H3-06–08/H4 holds remain.
 
 ## H3 Revision 7 B2 one-action execution closed — 2026-10-03
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 The [frozen execution closeout](../architecture/evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md) records successful owner-authorized B2-1 / OP-1 execution. **B2 PASS** for permanent EH Lifecycle R4 Employee, canonical ID `61594989243533`, EMPLOYEE, Glory Lot `1741597822557523`. The one-submit allowance is permanently consumed; the OP-1 future checklist below is historical and must not be replayed. No further lifecycle Employee creation or replacement is authorized. Step 3 remains historically BLOCKED / B2 INCONCLUSIVE; full PREFLIGHT VERIFIED: NO. Any created-object / Step 4 stage needs separate authorization under the existing approved architecture. C2, installation/grants, B1 acceptance, B5 custody, safe inspector, credentials/recovery, Production, H3-06–08/H4 and events remain held. This documentation task uses the frozen ledger only and performs no Meta access/mutation; merge/release holds remain.
 
 ## H3 Revision 7 B2-1 future single submission — preparation only, 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 After owner-adopted B2-1 / merged PR #67, use the [OP-1 one-action packet](../architecture/plans/crm-h3-05-revision-7-b2-operator-packet.md) for the later separately authorized named-human session. It defines complete inventory, isolated credential-free form, durable write-ahead consumption, one click/no retry, bounded creation-only readback and terminal classification. Proposed maximum 30 minutes; identity/window/approval must be supplied later. Ambiguity preserves objects and requires separately authorized read-only reconciliation, never another Create. Preparation grants no Meta access or execution; B2 remains INCONCLUSIVE and Step 4/credentials/H3-06–08/H4/Production remain held. Earlier proposal descriptions below are historical.
 
 ## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
 
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
+
 The owner approved Revision 7 at PR #64; earlier proposal status below is historical. Follow the [Step 2 manifest, rehearsal/deadlines and Step 3 commission draft](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md). This task prepares those contracts only: external custody needs owner selection and safe inspection is blocked. No preflight, takeover, credential operation or activation occurred; each later operator/Production step needs separate authorization.
 
 ## Proposed H3 Revision 7 operator sequence — not execution authority
+
+> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
 
 [Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md#exact-future-execution-sequence) defines separate architecture approval → protected preparation/preflight → explicitly authorized new C2 objects and recovery rehearsal → credential acceptance → separately approved Production storage → later H3-06–08 dormant acceptance → separately approved H4. Recovery is contain → revoke all dedicated-identity tokens → verify old invalid → issue/inspect replacement → separately authorized storage/switch. B1/B4 account behavior is validated at its own gate without waiting for Meta support. No provider event probe is selected; actual sending remains unverified through dormant acceptance. This proposed sequence is not approved or executed and preserves all existing activation holds.
 
