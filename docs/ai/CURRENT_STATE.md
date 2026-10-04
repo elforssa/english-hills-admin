@@ -1,5 +1,16 @@
 # Current state
 
+## H3 Revision 7 — 4A complete; 4B/4C controls bound for review — 2026-10-04
+
+**4A = VERIFIED C2 CREATION.** The single authorized creation produced **EH Lifecycle R4 C2 / `29771601672426816`**, owned by Glory Lot `1741597822557523`. The distinct C2 operator ledger on `ops/h3-r7-c2-attempt-ledger` closes at `fd6ffe070e09161615b5dcf836b5bf33c75c89fa` with exactly one Create submission, no retry, no connected assets, no lifecycle-Employee assigned assets or installed apps, and no credential/dataset action. The protected English-hills app `1069638329182835` and protected System Users remained present in the safe post-state views. This supersedes the earlier 4A-preparation/current-state entry below without rewriting its historical evidence.
+
+[4BC-EB1](../architecture/evidence/crm-h3-r7-4b-4c-control-binding-2026-10-04.md) records owner-observed current Meta control discovery performed read-only after 4A. **4B binding is READY FOR INDEPENDENT REVIEW:** Employee `61594989243533` → C2 `29771601672426816` through Assigned assets → Assign assets → Apps, proposed least-privilege task **Develop app — Partial access**. Installed apps remains a separate empty view; **Generate token** is a credential action and is not a 4B discovery/association mechanism.
+
+**4C target/task is bound for review but execution remains held:** target **English Hills pixel / `1152399921284927`**, proposed least-privilege task **Use events dataset — Partial access**; **Manage events dataset — Full access** is excluded. The current UI description does not explicitly state event upload/send authority, so independent review must decide whether the evidence satisfies S4-P1's administrative upload-entitlement requirement. Safe default is 4B-only next commission and STOP if that semantic gate is not closed.
+
+No 4B/4C mutation occurred during discovery; Assign assets was not clicked, no task was saved, Generate token was not clicked, and no token/app-secret/Production/event operation occurred. **PREFLIGHT VERIFIED = NO** and **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED**. B5 remains OWNER DECISION REQUIRED; safe non-event inspector remains BLOCKED; B1 actual credential acceptance remains PENDING. H3-06–08/H4 and lifecycle sending remain held.
+
+
 ## H3 Revision 7 4A execution binding — ready for binding review, updated 2026-10-04
 
 From merged 4A-OP1 / main `67fa33703354d14d881059f81f8462c61ce063e7`, [4A-EB2 evidence](../architecture/evidence/crm-h3-r7-4a-execution-binding-2026-10-03.md) records **4A EXECUTION BINDING READY FOR REVIEW** from the owner's manual authenticated inspection supplied 2026-10-04: My Apps → Create App, **Create an app without a use case**, Glory Lot / Unverified business, no requirements, Overview with no use cases and final green **Create app** control. Meta describes a bare App ID without added permissions/features/products. The unchanged prefilled contact value is excluded. Safe My Apps/Business Apps/System User metadata readbacks are bound; dashboard metadata is allowed only without secrets/tokens. Manual exact UTC start/end were not supplied. The prior failed author browser attempt remains historical; this update performs no Meta access.
