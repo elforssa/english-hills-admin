@@ -17,7 +17,7 @@ The corrected implementation now:
 - closes and scans the executable-file inventory;
 - adds actual Chrome response-envelope controller tests and delayed/reset/restart/overlap regressions.
 
-The previous failed CI run is historical and does not count as acceptance. Fresh CI and a fresh exact-code independent Tier-3 re-review are required on the corrected head.
+PR #89 remains implemented on its review branch, **not merged/adopted**. The previous failed CI run is historical and does not count as acceptance. Fresh CI and a fresh exact-code independent Tier-3 re-review are required on the corrected head.
 
 Operational state is unchanged: extension installation/testing, Meta access, A/B generation, inspection, revoke, Vercel mutation, H3-06–08, H4, Test Events and lifecycle sending remain unauthorized.
 
@@ -52,7 +52,7 @@ No extension has been installed or run. No synthetic browser request, Meta acces
 Current states:
 - **B5 = READY**
 - **TWO-STAGE INSPECTOR BOOTSTRAP ARCHITECTURE = DEFINED**
-- **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT REVIEWED**
+- **transport monitor implementation = IMPLEMENTED ON REVIEW BRANCH / NOT MERGED OR ADOPTED / EXACT-CODE INDEPENDENT RE-REVIEW REQUIRED**
 - **transport monitor installation = NOT AUTHORIZED**
 - **synthetic transport operation = NOT AUTHORIZED**
 - **INSPECTOR TRANSPORT READY = NOT YET ACHIEVED**
@@ -60,6 +60,16 @@ Current states:
 - **safe non-event inspector = BLOCKED operationally**
 - **B1 actual credential acceptance = PENDING**
 - **PREFLIGHT VERIFIED = NO**
+
+## CI tooling-only fast path merged/adopted on main — 2026-10-04
+
+PR #90 is **merged/adopted on main** at `58139254e843fa731877cf5c4f541512d1d32224`, implementing **CI + Codex Workflow Efficiency v2**, a **Tier 2** CI-routing/policy change. Pull requests are classified as `docs`, `tooling`, or `full`. The new `tooling` path is deliberately narrow: exactly the eight reviewed files under `tools/meta-debugger-transport-monitor/`, the exact `scripts/test-meta-debugger-transport-monitor.mjs`, and accompanying safe `docs/**/*.md`. Any other `tools/**` file is `full`. It requires documentation checks plus the normal app/unit/build/security job and skips only `local-database`.
+
+Runtime/database/configuration/CI-policy/package/unknown paths remain `full`; classifier uncertainty remains fail-closed to `full`. A successful classifier with empty/unknown mode now also schedules the database fallback. Renames evaluate both old/new paths. Non-regular Git modes and unsupported statuses force `full`.
+
+PR #90 itself changed `.github/**` and `scripts/ci/**`, so it was **not eligible for its own fast path**; full CI and exact-head independent review were its Tier-2 pre-merge requirements. GitHub branch-protection settings are unchanged by this source change. Earlier proposed-status labels in the linked architecture describe the pre-adoption state; PR #90's CI routing/policy is now adopted, while PR #89's monitor implementation remains on its review branch.
+
+[Plan](../architecture/plans/ci-tooling-fast-path.md) · [Architecture](ARCHITECTURE.md#ci--codex-workflow-efficiency-v2--tooling-only-fast-path-proposed-2026-10-04) · [Policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff)
 
 
 ## H3 Revision 7 — two-stage inspector bootstrap amendment proposed — 2026-10-04

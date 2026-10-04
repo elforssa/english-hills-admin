@@ -23,7 +23,7 @@ jobs:
         run: python3 scripts/ci/verify.py classify --base "$BASE" --head "$HEAD"
   docs:
     needs: classify
-    if: needs.classify.result == 'success' && needs.classify.outputs.mode == 'docs'
+    if: needs.classify.result == 'success' && (needs.classify.outputs.mode == 'docs' || needs.classify.outputs.mode == 'tooling')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
       - run: npm run audit:policy
   local-database:
     needs: classify
-    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || needs.classify.outputs.mode != 'docs')
+    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
     env:
       DISABLE_EXTERNAL_EMAIL: 'true'

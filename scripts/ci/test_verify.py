@@ -15,17 +15,53 @@ import verify
 class VerificationTests(unittest.TestCase):
     def test_allowlist(self):
         for path in ('docs/a.md', 'docs/ai/plans/a.md'):
-            self.assertTrue(verify.safe_path(path))
+            self.assertTrue(verify.safe_doc_path(path))
         for path in ('AGENTS.md', '.github/workflows/verify.yml', 'scripts/a.md', 'package.json',
                      'docs/a.sql', 'src/a.md', 'docs/a.MD', 'docs/../AGENTS.md', '/docs/a.md', 'docs//a.md'):
-            self.assertFalse(verify.safe_path(path), path)
+            self.assertFalse(verify.safe_doc_path(path), path)
+
+        reviewed_monitor_files = (
+            'tools/meta-debugger-transport-monitor/README.md',
+            'tools/meta-debugger-transport-monitor/manifest.json',
+            'tools/meta-debugger-transport-monitor/rules.json',
+            'tools/meta-debugger-transport-monitor/monitor.html',
+            'tools/meta-debugger-transport-monitor/monitor.css',
+            'tools/meta-debugger-transport-monitor/monitor.js',
+            'tools/meta-debugger-transport-monitor/monitor-core.mjs',
+            'tools/meta-debugger-transport-monitor/monitor-controller.mjs',
+            'scripts/test-meta-debugger-transport-monitor.mjs',
+        )
+        self.assertEqual(set(reviewed_monitor_files), set(verify.TOOLING_ALLOWLIST))
+        for path in reviewed_monitor_files:
+            self.assertTrue(verify.safe_tooling_path(path), path)
+        for path in (
+            'tools/meta-debugger-transport-monitor/new-helper.mjs',
+            'tools/database/test-crm.sql',
+            'tools/migrations/107.sql',
+            'tools/unknown-tool/config.json',
+            'tools/x/readme.txt',
+            'scripts/ci/verify.py',
+            'scripts/test-crm-batch2.sql',
+            'src/tool.js',
+            'supabase/migrations/107.sql',
+            '.github/workflows/verify.yml',
+            'package.json',
+            'package-lock.json',
+            'tools/../src/a.js',
+            '/tools/a.js',
+            'tools//a.js',
+        ):
+            self.assertFalse(verify.safe_tooling_path(path), path)
 
     def test_gate_matrix(self):
         states = ('success', 'skipped', 'failure', 'cancelled', '')
-        for event, mode in itertools.product(('pull_request', 'push'), ('docs', 'full', '')):
+        for event, mode in itertools.product(('pull_request', 'push'), ('docs', 'tooling', 'full', '')):
             for classifier, docs, app, database in itertools.product(states, repeat=4):
                 expected = classifier == 'success' and (
-                    event == 'pull_request' and mode == 'docs' and docs == 'success' and app == database == 'skipped'
+                    event == 'pull_request' and mode == 'docs'
+                    and docs == 'success' and app == database == 'skipped'
+                    or event == 'pull_request' and mode == 'tooling'
+                    and docs == app == 'success' and database == 'skipped'
                     or mode == 'full' and docs == 'skipped' and app == 'success'
                     and database == ('success' if event == 'pull_request' else 'skipped'))
                 self.assertEqual(verify.gate(event, mode, classifier, docs, app, database), expected)
@@ -129,6 +165,77 @@ class VerificationTests(unittest.TestCase):
                 Path('AGENTS.md').write_text('# Changed\n')
                 mixed = commit('AGENTS.md')
                 self.assertEqual(verify.classify(base, mixed), 'full')
+
+                run('reset', '--hard', docs)
+                monitor_dir = Path('tools/meta-debugger-transport-monitor')
+                monitor_dir.mkdir(parents=True, exist_ok=True)
+                Path(monitor_dir / 'manifest.json').write_text('{}\n')
+                tooling = commit('tools/meta-debugger-transport-monitor/manifest.json')
+                self.assertEqual(verify.classify(docs, tooling), 'tooling')
+
+                Path('docs/tooling.md').write_text('# Tooling\n')
+                tooling_with_docs = commit('docs/tooling.md')
+                self.assertEqual(verify.classify(docs, tooling_with_docs), 'tooling')
+
+                run('reset', '--hard', docs)
+                Path('scripts').mkdir(exist_ok=True)
+                Path('scripts/test-meta-debugger-transport-monitor.mjs').write_text('process.exit(0);\n')
+                monitor_test = commit('scripts/test-meta-debugger-transport-monitor.mjs')
+                self.assertEqual(verify.classify(docs, monitor_test), 'tooling')
+
+                for tool_path in (
+                    'tools/database/test-crm.sql',
+                    'tools/migrations/107.sql',
+                    'tools/unknown-tool/config.json',
+                    'tools/meta-debugger-transport-monitor/new-helper.mjs',
+                ):
+                    run('reset', '--hard', docs)
+                    candidate = Path(tool_path)
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    candidate.write_text('fixture\n')
+                    tool_unknown = commit(tool_path)
+                    self.assertEqual(verify.classify(docs, tool_unknown), 'full', tool_path)
+
+                for mixed_path in (
+                    'src/runtime.js',
+                    'supabase/migrations/107.sql',
+                    'package.json',
+                ):
+                    run('reset', '--hard', docs)
+                    monitor_dir = Path('tools/meta-debugger-transport-monitor')
+                    monitor_dir.mkdir(parents=True, exist_ok=True)
+                    Path(monitor_dir / 'manifest.json').write_text('{}\n')
+                    mixed_candidate = Path(mixed_path)
+                    mixed_candidate.parent.mkdir(parents=True, exist_ok=True)
+                    mixed_candidate.write_text('fixture\n')
+                    mixed_change = commit(
+                        'tools/meta-debugger-transport-monitor/manifest.json',
+                        mixed_path,
+                    )
+                    self.assertEqual(verify.classify(docs, mixed_change), 'full', mixed_path)
+
+                run('reset', '--hard', docs)
+                Path('scripts').mkdir(exist_ok=True)
+                Path('scripts/test-crm-batch2.sql').write_text('select 1;\n')
+                db_test = commit('scripts/test-crm-batch2.sql')
+                self.assertEqual(verify.classify(docs, db_test), 'full')
+
+                run('reset', '--hard', docs)
+                monitor_dir = Path('tools/meta-debugger-transport-monitor')
+                monitor_dir.mkdir(parents=True, exist_ok=True)
+                Path(monitor_dir / 'manifest.json').symlink_to('../../AGENTS.md')
+                tooling_symlink = commit('tools/meta-debugger-transport-monitor/manifest.json')
+                self.assertEqual(verify.classify(docs, tooling_symlink), 'full')
+
+                run('reset', '--hard', docs)
+                Path('src').mkdir(exist_ok=True)
+                Path('src/runtime.js').write_text('export const runtime = true;\n')
+                runtime = commit('src/runtime.js')
+                monitor_dir = Path('tools/meta-debugger-transport-monitor')
+                monitor_dir.mkdir(parents=True, exist_ok=True)
+                run('mv', 'src/runtime.js', 'tools/meta-debugger-transport-monitor/monitor.js')
+                runtime_to_tool = commit('tools/meta-debugger-transport-monitor/monitor.js')
+                self.assertEqual(verify.classify(runtime, runtime_to_tool), 'full')
                 run('reset', '--hard', docs)
                 Path('unknown.config').write_text('fixture\n')
                 unknown = commit('unknown.config')
@@ -197,6 +304,36 @@ class VerificationTests(unittest.TestCase):
                     verify.check_docs(removed, whitespace)
             finally:
                 os.chdir(old)
+
+    def test_workflow_unknown_mode_runs_database(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/verify.yml').read_text()
+        expected = (
+            "if: always() && github.event_name == 'pull_request' && "
+            "(needs.classify.result != 'success' || "
+            "(needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'tooling'))"
+        )
+        self.assertIn(expected, workflow)
+        self.assertNotIn(
+            "needs.classify.result != 'success' || needs.classify.outputs.mode == 'full'",
+            workflow,
+        )
+
+    def test_classifier_edge_cases_fail_closed(self):
+        allowed = 'tools/meta-debugger-transport-monitor/manifest.json'
+        with patch.object(verify, 'changes', return_value=('a'*40, [('R100', allowed)])):
+            self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
+        with patch.object(verify, 'changes', return_value=('a'*40, [('T', allowed)])):
+            self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
+        for tree_entry in (
+            b'100755 blob deadbeef\t' + allowed.encode() + b'\n',
+            b'160000 commit deadbeef\t' + allowed.encode() + b'\n',
+        ):
+            with patch.object(verify, 'git', return_value=tree_entry):
+                self.assertFalse(verify.regular_blob_at('a'*40, allowed, True))
+        with patch.object(verify, 'changes', side_effect=ValueError('Malformed diff')):
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
 
     def test_classifier_errors_close_to_full(self):
         with patch.object(verify, 'changes', side_effect=ValueError('Uncertainty')):
