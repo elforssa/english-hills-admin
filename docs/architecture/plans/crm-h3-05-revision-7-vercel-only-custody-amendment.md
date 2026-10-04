@@ -191,10 +191,12 @@ Required sequence:
 7. Require an explicit successful Meta control-plane confirmation tied to the exact Employee.
 8. Perform nonsecret readback confirming the dedicated Employee/object relationships remain present and protected existing objects remain unchanged.
 9. Do **not** try to reuse, retrieve or inspect A after revocation.
-10. Only after explicit successful revoke confirmation may human issue B once.
-11. Inspect B non-event and complete B1 credential acceptance.
-12. Under a later separate Production authorization, insert accepted B directly into `CRM_META_LIFECYCLE_TOKEN_EH_R4` as a Vercel Production Secret.
-13. H3-06–08 and H4 remain separately gated.
+10. **Before B issuance, the exact operator packet must already contain owner-approved conditional authority to store an accepted B into Vercel Production**. That authority is dormant unless B passes the safe non-event/B1 acceptance checks and must bind the exact Vercel team/project, variable, Secret type and Production-only scope.
+11. Only after explicit successful revoke confirmation and confirmation that the conditional Vercel storage authority is still valid may the human issue B once.
+12. In the **same private human session**, inspect B non-event and complete B1 credential acceptance.
+13. If and only if B passes acceptance, immediately insert that same B into `CRM_META_LIFECYCLE_TOKEN_EH_R4` as the pre-authorized Vercel Production Secret before ending the private session. Do not leave an accepted B waiting for a later storage approval.
+14. If B inspection fails or is inconclusive, do not store B in Vercel and do not automatically issue another credential; stop fail-closed for a new reviewed decision.
+15. H3-06–08, live-gate changes, deployment activation and H4 remain separately gated and are **not** authorized by the conditional storage authority.
 
 ### Recovery result categories
 
@@ -283,20 +285,27 @@ Required B1 evidence still includes the approved allowlisted nonsecret metadata 
 
 Successful CAPI delivery remains **NOT VERIFIED** until separate H4 ordinary eligible use.
 
-## Vercel Production insertion is still separate
+## Vercel Production insertion is conditionally pre-authorized before B issuance
 
-This amendment selects Vercel Secret as the custody mechanism but does not authorize any Production mutation.
+This amendment selects Vercel Secret as the custody mechanism but does not itself authorize any Production mutation.
 
-Future B insertion must have separate owner authorization and must bind:
+For the future credential/recovery execution, however, **the Production-storage authorization must be granted before B is generated**, rather than obtained afterward. This prevents an accepted, non-retrievable replacement credential from being stranded between approval stages.
+
+The future operator packet must therefore include one narrowly scoped **conditional Production-storage authorization** that becomes executable only after B passes the safe non-event/B1 acceptance checks. That conditional authority must bind:
 
 - exact Vercel team/project;
 - exact variable `CRM_META_LIFECYCLE_TOKEN_EH_R4`;
 - type **Secret**;
 - environment **Production only**;
 - no Preview/Development value;
-- one deliberate create/update;
+- one deliberate create/update in the same private human session as B issuance/inspection;
+- direct insertion of the exact accepted B, with no intermediate persistent copy;
 - deployment/readiness readback without token reveal;
-- no live gate/H4 activation bundled into the storage step.
+- no live gate, destination enablement, scheduler activation, H3-06–08 execution or H4 activation bundled into the storage step.
+
+If B fails inspection or the storage result is ambiguous, the conditional authority does not permit a fresh token issuance, retry loop or activation. Stop fail-closed.
+
+This remains a separation of **capability** rather than a time gap: credential acceptance and conditional storage may occur in one bounded private session, while application activation and delivery remain later separately authorized stages.
 
 ## What this proposal supersedes if adopted
 
@@ -345,5 +354,5 @@ If independently reviewed and owner-adopted:
    - nonsecret Vercel B5 preflight; and
    - synthetic-only Meta Access Token Debugger assessment;
 3. independently review those results;
-4. only after **B5 READY + safe inspector READY**, prepare the exact A → revoke-success → B credential/recovery operator packet;
-5. keep Production insertion and H3-06–08/H4 separately authorized.
+4. only after **B5 READY + safe inspector READY**, prepare the exact A → revoke-success → B credential/recovery operator packet, including the narrowly scoped conditional Vercel Production-storage authority **before B issuance**;
+5. keep H3-06–08, live activation and H4 separately authorized after credential custody succeeds.
