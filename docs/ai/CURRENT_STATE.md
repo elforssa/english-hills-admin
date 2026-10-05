@@ -40,6 +40,10 @@ Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED /
 | PR #92 outcome batching | Main merge `c9662b242f5f8894e7247349dea42972b714b4f5` | [Adopted execution policy](../../AGENTS.md#outcome-based-batching); Outcome 2 not implemented by this cleanup. |
 | PR #93 S1 architecture | Source `27274492b3a2f6dab1cbb86ae239c056bee1421d`; merge `284c2fe32014f8f3011ac6677ddfe99b0a16ca22` | Credential-process supersession only; R4/H3/H4 safeguards unchanged. |
 
+## Outcome-2 CI source implementation
+
+The Outcome-2 branch implements the [revision-3 four-lane CI contract](../architecture/plans/ci-tooling-fast-path.md): docs, exact AGENTS policy, isolated monitor tooling and fail-closed full. All PRs gain changed-Markdown checks; app/database behavior is unchanged. This is source implementation pending full remote CI, separate Tier-2 review and merge; the PR #90 adoption row above remains historical merged evidence. No deployment, branch-protection or provider configuration change is established. Vercel filtering remains NEEDS VERIFICATION.
+
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.

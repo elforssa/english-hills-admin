@@ -1,50 +1,21 @@
-# CI tooling-only fast path
+# CI routing contract
 
-Date: 2026-10-04.
+Revision 3 — Outcome 2, 2026-10-05. **Tier 2: engineering workflow / CI-routing policy.**
 
-**Completed adoption record:** PR #90 merged as `58139254e843fa731877cf5c4f541512d1d32224`. The proposal/release language below preserves original scope; current policy is [AGENTS](../../../AGENTS.md#ci-selection-and-remote-ci-handoff).
+Owner authorization: the 2026-10-05 Outcome-2 request approves implementing the conservative four-lane model and template consolidation together on current main `aa1c74f3152958afc50f348265a0688a55242dd7`. This revision records that scope; no separate architecture decision is outstanding. Source implementation is in this Outcome-2 branch; merge/adoption and terminal full CI remain pending. This is not release approval.
 
-**Risk tier: Tier 2 — normal substantial engineering-policy/CI-routing change.**
+[AGENTS](../../../AGENTS.md#ci-selection-and-remote-ci-handoff) owns lifecycle policy. This document owns the compact routing contract, implemented by [Verify](../../../.github/workflows/verify.yml), [classifier/gate](../../../scripts/ci/verify.py) and [regressions](../../../scripts/ci/test_verify.py). Risk tier determines review/approval, never CI workload: a Tier-3 security document can use docs checks, while a Tier-1 source edit still selects full.
 
-Rationale: this changes which verification jobs are required for a class of pull requests and therefore affects merge confidence. It does not change runtime application behavior, database schema/state, Production configuration, external-provider operations, credentials, schedulers or activation authority. Tier 2 requires successful exact-head CI and a fresh independent review before merge.
+## Lanes and exact eligibility
 
-Authoritative references:
+| Lane | Eligible regular paths | Purpose |
+| --- | --- | --- |
+| `docs` | `docs/**/*.md`, including Markdown directly under `docs/` | Links, anchors, whitespace and added secret/PII heuristics without app dependencies. AI templates use this lane too. |
+| `policy` | Exactly `AGENTS.md`, optionally with safe docs | Equivalent repository policy checks without starting the app or Supabase. No generic root-Markdown exemption. |
+| `tooling` | Exact inventory below, optionally with safe docs | Isolated monitor behavior and manifest/static checks without app installation. |
+| `full` | Everything else, including policy + tooling | Unknown or mixed dependency boundaries retain app + database coverage for PRs. |
 
-- [CI policy](../../../AGENTS.md#ci-selection-and-remote-ci-handoff)
-- [current architecture](../../../AGENTS.md#ci-selection-and-remote-ci-handoff)
-- [Verify workflow](../../../.github/workflows/verify.yml)
-- [classifier/gate](../../../scripts/ci/verify.py)
-
-## Purpose
-
-Reduce unnecessary GitHub Actions time for changes that cannot affect the application database contract, while preserving fail-closed CI routing.
-
-The previous classifier had only two modes:
-
-- `docs`
-- `full`
-
-Any non-documentation change therefore ran the full local Supabase matrix. This made isolated non-runtime tooling changes pay for repeated database resets, migration upgrades, concurrency suites and browser/database acceptance even when no runtime/database-sensitive path changed.
-
-## New mode
-
-The classifier adds:
-
-`tooling`
-
-For pull requests, the required paths become:
-
-| Mode | Docs checks | App/unit/build/security | Local database |
-| --- | --- | --- | --- |
-| `docs` | required | skipped | skipped |
-| `tooling` | required | required | skipped |
-| `full` | skipped | required | required |
-
-Pushes to `main` continue to use `full` classification; this optimization is a pull-request fast path only.
-
-## Conservative tooling allowlist
-
-A path is tooling-eligible only when it is one of this exact reviewed inventory:
+The tooling allowlist is exactly:
 
 - `tools/meta-debugger-transport-monitor/README.md`
 - `tools/meta-debugger-transport-monitor/manifest.json`
@@ -56,69 +27,48 @@ A path is tooling-eligible only when it is one of this exact reviewed inventory:
 - `tools/meta-debugger-transport-monitor/monitor-controller.mjs`
 - `scripts/test-meta-debugger-transport-monitor.mjs`
 
-Safe Markdown files under `docs/**` may accompany an otherwise tooling-only PR. Every tooling entry must be a regular `100644` blob where present. Any other file under `tools/**` selects `full`; inventory expansion requires an explicit classifier change and regression coverage.
+Dependency evidence: the extension imports only its own modules and uses browser APIs. The regression script uses Node built-ins, imports the monitor modules, reads its closed inventory and reads `package.json` to assert the test command. It checks manifest permissions, rules, static safety and synthetic controller behavior. It needs no installed package, Next.js build, application server, database or provider access. Package changes themselves remain full; `npm test` already runs this same monitor regression in the full app job.
 
-Everything else selects `full`.
-
-In particular, these remain full CI:
-
-- `src/**`
-- `supabase/**`
-- migrations
-- `.github/**`
-- `scripts/ci/**`
-- database/CRM test SQL
-- `package.json`
-- `package-lock.json`
-- root configuration
-- unknown paths
-- symlinks/non-regular Git modes
-- unsupported status types
-- runtime-to-tooling renames, because both old and new paths are evaluated with rename detection disabled.
-
-The allowlist is intentionally narrow. New tooling paths must be added deliberately with regression coverage rather than being implicitly trusted.
+New files even inside that tool directory remain full. Adding eligibility requires inspecting imports/assets/test dependencies, documenting the boundary, updating the exact inventory and positive/negative regressions, and independent Tier-2 review with full CI for the classifier/workflow change. Filename similarity is insufficient.
 
 ## Fail-closed behavior
 
-Classifier uncertainty still selects `full`. In the workflow, a successful classifier with an empty or unknown output also schedules `local-database`; only explicit `docs` or `tooling` output may suppress the database job.
+Exact 40-character commit SHAs are validated as commits. Classification compares merge-base to head with rename detection disabled, so both old and new names count. Only A/M/D statuses and regular `100644` blobs at every present endpoint qualify. Deletions are checked at the merge-base. Invalid paths, executable files, symlinks, gitlinks, unsupported statuses, empty/malformed/unresolvable diffs and classifier uncertainty select full.
 
-The required aggregate gate accepts `tooling` only when:
+All runtime, schema, migrations, SQL/RPC/RLS, database/CRM tests, auth, finance, enrollment/conversion, provider delivery, scheduler, package/lock, root configuration, `.github/**`, `scripts/ci/**` and unknown paths remain full. No broad app lane is introduced. Safe docs can accompany policy/tooling; policy + tooling or any full path selects full.
 
-- classifier succeeds;
-- docs verification succeeds;
-- app verification succeeds;
-- local-database is skipped.
+Failed classification or empty/unknown output schedules app and PR database validation as a fallback, but cannot pass the aggregate. The classifier job runs classifier, gate, documentation-checker and policy/template consistency regressions for every lane. Those tests check policy anchors, template links and workflow wiring; they cannot prove natural-language policy correctness or replace independent review.
 
-A tooling PR cannot satisfy the required gate if app checks fail or if database routing unexpectedly runs/fails.
+## Required gate matrix
 
-## Expected benefit
+`classify` must succeed in every accepted row. The always-running `required` aggregate accepts only these exact job results:
 
-Non-runtime tooling PRs no longer start Supabase or execute the repeated local migration/concurrency matrix. They still run the existing application/unit/build/security path.
+| Event / mode | Docs | Tooling | App | Local database |
+| --- | --- | --- | --- | --- |
+| PR / docs | success | skipped | skipped | skipped |
+| PR / policy | success | skipped | skipped | skipped |
+| PR / tooling | success | success | skipped | skipped |
+| PR / full | success | skipped | success | success |
+| main push / full | skipped | skipped | success | skipped |
 
-Database-sensitive and unknown changes retain the full local-database suite.
+Missing/unknown event or mode, failed classifier, failed/cancelled jobs, incorrectly skipped expected jobs and unexpected executed jobs fail the gate. Tool checks in full run through the existing `npm test` app step, avoiding duplication.
 
-## Validation
+The docs job checks changed Markdown anywhere in every PR, including full/mixed PRs, plus diff whitespace. It uses Python/Git only; no app installation. This adds one small checkout/job but avoids duplicating documentation steps within expensive jobs and closes the prior mixed-PR coverage gap. Heuristics do not prove absence of secrets/PII; author/reviewer inspection remains mandatory.
 
-`scripts/ci/test_verify.py` adds regression cases for:
+Main pushes retain the existing full app checks and no database job. Optimizing them would need a separately established push-range/deployment protection contract (including missing before-SHA fallback); PR routing is the scope here. No push/deployment confidence is inferred from PR workload reduction.
 
-- every explicitly reviewed monitor tooling file;
-- tooling + docs;
-- the exact monitor test script;
-- unknown/new files under `tools/**` forcing full;
-- database/migration-looking files under `tools/**` forcing full;
-- mixed tooling + runtime/database/package changes forcing full;
-- database test paths forcing full;
-- tooling symlinks, executable blobs and gitlinks forcing full;
-- unsupported statuses and malformed diffs forcing full;
-- runtime-to-tools rename forcing full;
-- successful classification with empty/unknown mode scheduling database fallback;
-- the complete required-gate matrix for `docs`, `tooling` and `full`.
+## Provider and protection limits
 
-This CI-routing change itself modifies `.github/**` and `scripts/ci/**`, so its own PR must run **full CI once** before merge.
+The repository assumes `required` is the single branch-protection aggregate. Live branch-protection adoption is not established by source and is not changed here. A separately required legacy app/database check could prevent fast-path merges; reconcile configuration with owner authorization rather than silently bypassing it.
 
+**Vercel build filtering: NEEDS VERIFICATION.** Repository inspection found no tracked `vercel.json`, `.vercelignore`, or ignored-build-step configuration establishing safe docs/policy deployment filtering. GitHub lane selection does not suppress Vercel builds. Build-rate-limit reports do not justify changing provider settings or assuming Preview/Production filtering. No Vercel/provider investigation or mutation is part of this outcome.
 
-## Adoption boundary
+## IMPLEMENTATION CONTRACT
 
-This document and PR #90 change CI routing only. They do not alter GitHub branch-protection settings, runtime code, database behavior, Production state, provider configuration, credentials, or release/activation authority.
+One coherent PR changes only classifier/workflow/regressions, this contract, lifecycle references/templates and implementation-state evidence. Acceptance: docs stay light; AGENTS-only and AGENTS + docs use policy; isolated inventory uses tooling; unknown/mixed/runtime/data paths stay full; the exact gate matrix is covered; review/release/security gates are unchanged. Test routing positives/negatives, actual Git diffs, mode/status failures, full-PR docs coverage, policy consistency and the dedicated monitor suite locally.
 
-The `required` aggregate remains the single required check assumed by repository governance. If the branch-protection configuration differs from that assumption, the repository policy must be reconciled separately rather than inferred from this source change.
+This PR changes `.github/**` and `scripts/ci/**` and therefore must itself select **full** and pass docs, app, local-database and required CI before independent review. Full application/database validation runs remotely; do not duplicate complete suites locally without a coverage reason. After focused author self-check, push/open PR, confirm scheduling and hand off exact head/base and run reference; stop polling. The coordinator verifies terminal exact-SHA CI and the synthetic merge/base evidence before launching the separate reviewer. Merge/release remains held for independent review and owner approval. No runtime/product/database/provider/Production mutation is authorized.
+
+## Historical adoption
+
+The original docs/full model and PR #90's revision-2 docs/tooling/full model are historical predecessors, preserved in Git history. PR #90 merged as `58139254e843fa731877cf5c4f541512d1d32224`; its tooling lane ran docs + the entire app job and skipped database. Outcome 2 replaces that routing contract when merged; earlier v1/v2 proposal wording is not current instruction. It does not rewrite their historical validation or approval evidence.

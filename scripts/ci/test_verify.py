@@ -55,16 +55,18 @@ class VerificationTests(unittest.TestCase):
 
     def test_gate_matrix(self):
         states = ('success', 'skipped', 'failure', 'cancelled', '')
-        for event, mode in itertools.product(('pull_request', 'push'), ('docs', 'tooling', 'full', '')):
-            for classifier, docs, app, database in itertools.product(states, repeat=4):
-                expected = classifier == 'success' and (
-                    event == 'pull_request' and mode == 'docs'
-                    and docs == 'success' and app == database == 'skipped'
-                    or event == 'pull_request' and mode == 'tooling'
-                    and docs == app == 'success' and database == 'skipped'
-                    or mode == 'full' and docs == 'skipped' and app == 'success'
-                    and database == ('success' if event == 'pull_request' else 'skipped'))
-                self.assertEqual(verify.gate(event, mode, classifier, docs, app, database), expected)
+        accepted = {
+            ('pull_request', 'docs'): ('success', 'skipped', 'skipped', 'skipped'),
+            ('pull_request', 'policy'): ('success', 'skipped', 'skipped', 'skipped'),
+            ('pull_request', 'tooling'): ('success', 'success', 'skipped', 'skipped'),
+            ('pull_request', 'full'): ('success', 'skipped', 'success', 'success'),
+            ('push', 'full'): ('skipped', 'skipped', 'success', 'skipped'),
+        }
+        for event, mode in itertools.product(('pull_request', 'push', 'unknown', ''),
+                                             ('docs', 'policy', 'tooling', 'full', 'unknown', '')):
+            for classifier, *jobs in itertools.product(states, repeat=5):
+                expected = classifier == 'success' and tuple(jobs) == accepted.get((event, mode))
+                self.assertEqual(verify.gate(event, mode, classifier, *jobs), expected)
 
     def test_links_and_anchors(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -164,7 +166,8 @@ class VerificationTests(unittest.TestCase):
                 verify.check_docs(base, docs)
                 Path('AGENTS.md').write_text('# Changed\n')
                 mixed = commit('AGENTS.md')
-                self.assertEqual(verify.classify(base, mixed), 'full')
+                self.assertEqual(verify.classify(docs, mixed), 'policy')
+                self.assertEqual(verify.classify(base, mixed), 'policy')
 
                 run('reset', '--hard', docs)
                 monitor_dir = Path('tools/meta-debugger-transport-monitor')
@@ -250,7 +253,7 @@ class VerificationTests(unittest.TestCase):
                 run('reset', '--hard', docs)
                 run('mv', 'AGENTS.md', 'docs/root.md')
                 renamed = commit('docs/root.md')
-                self.assertEqual(verify.classify(docs, renamed), 'full')
+                self.assertEqual(verify.classify(docs, renamed), 'policy')
                 run('reset', '--hard', docs)
                 Path('docs/a.md').unlink()
                 deleted = commit('docs/a.md')
@@ -311,13 +314,86 @@ class VerificationTests(unittest.TestCase):
         expected = (
             "if: always() && github.event_name == 'pull_request' && "
             "(needs.classify.result != 'success' || "
-            "(needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'tooling'))"
+            "(needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))"
         )
         self.assertIn(expected, workflow)
         self.assertNotIn(
             "needs.classify.result != 'success' || needs.classify.outputs.mode == 'full'",
             workflow,
         )
+
+    def test_all_lane_paths_and_modes(self):
+        self.assertEqual(verify.POLICY_ALLOWLIST, {'AGENTS.md'})
+        groups = {
+            'docs': ['docs/a.md', 'docs/ai/templates/task.md'],
+            'policy': ['AGENTS.md'],
+            'tooling': sorted(verify.TOOLING_ALLOWLIST),
+            'full': ['README.md', 'AGENT.md', 'src/a.js', 'supabase/migrations/107.sql',
+                     'scripts/test-crm.sql', 'package.json', 'package-lock.json',
+                     'scripts/ci/verify.py', '.github/workflows/verify.yml', 'next.config.js',
+                     'unknown', 'tools/other.js', 'tools/meta-debugger-transport-monitor/new.js',
+                     'docs/../a.md', 'docs//a.md', '/docs/a.md'],
+        }
+        for lane, paths in groups.items():
+            for path, status in itertools.product(paths, ('A', 'M', 'D')):
+                with self.subTest(path=path, status=status):
+                    with patch.object(verify, 'changes', return_value=('a'*40, [(status, path)])), patch.object(verify, 'regular_blob_at', return_value=True):
+                        self.assertEqual(verify.classify('a'*40, 'b'*40), lane)
+        for lane in ('docs', 'policy', 'tooling'):
+            path = groups[lane][0]
+            for mode in ('100755 blob', '120000 blob', '160000 commit', '040000 tree'):
+                with patch.object(verify, 'changes', return_value=('a'*40, [('M', path)])), patch.object(verify, 'git', return_value=(mode + ' deadbeef\t' + path + '\n').encode()):
+                    self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
+            for status in ('R100', 'C100', 'T', 'U', 'X', ''):
+                with patch.object(verify, 'changes', return_value=('a'*40, [(status, path)])):
+                    self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
+        for first, second in itertools.product(groups, repeat=2):
+            paths = [('M', groups[first][0]), ('M', groups[second][0])]
+            expected = first if first == second else second if first == 'docs' else first if second == 'docs' else 'full'
+            with patch.object(verify, 'changes', return_value=('a'*40, paths)), patch.object(verify, 'regular_blob_at', return_value=True):
+                self.assertEqual(verify.classify('a'*40, 'b'*40), expected)
+
+    def test_mixed_sensitive_paths(self):
+        for eligible, sensitive in itertools.product(
+                ('docs/a.md', 'AGENTS.md', *verify.TOOLING_ALLOWLIST),
+                ('src/a.js', 'supabase/migrations/107.sql', 'scripts/test-crm.sql',
+                 'package.json', 'package-lock.json', '.github/workflows/verify.yml',
+                 'scripts/ci/test_verify.py')):
+            for entries in ([('M', eligible), ('M', sensitive)], [('D', sensitive), ('A', eligible)]):
+                with patch.object(verify, 'changes', return_value=('a'*40, entries)), patch.object(verify, 'regular_blob_at', return_value=True):
+                    self.assertEqual(verify.classify('a'*40, 'b'*40), 'full')
+
+    def test_exact_shas_and_malformed_diff(self):
+        for ref in ('main', 'HEAD', 'a'*39, 'a'*41, 'G'*40, ''):
+            with self.assertRaises(ValueError):
+                verify.changes(ref, 'b'*40)
+        for raw in (b'', b'M\0docs/a.md', b'M\0', b'\xff\0docs/a.md\0'):
+            with patch.object(verify, 'git', side_effect=[b'', b'', b'a'*40 + b'\n', raw]):
+                with self.assertRaises((ValueError, UnicodeError)):
+                    verify.changes('a'*40, 'b'*40)
+
+    def test_policy_and_workflow_contract(self):
+        root = Path(__file__).resolve().parents[2]
+        agents = (root / 'AGENTS.md').read_text()
+        for anchor in ('risk-based-lifecycle', 'independent-review', 'implementation-handoff',
+                       'ci-selection-and-remote-ci-handoff', 'outcome-based-batching'):
+            self.assertIn(anchor, verify.anchors(agents))
+        for name in ('ARCHITECTURE_TASK', 'IMPLEMENTATION_TASK', 'REVIEW_TASK', 'PRODUCTION_ROLLOUT'):
+            path = Path('docs/ai/templates') / (name + '.md')
+            self.assertEqual(verify.check_links(root, path), [])
+            self.assertIn('../../../AGENTS.md', (root / path).read_text())
+            self.assertNotIn('proposed v2', (root / path).read_text())
+        workflow = (root / '.github/workflows/verify.yml').read_text()
+        self.assertIn('needs: [classify, docs, tooling, app, local-database]', workflow)
+        self.assertIn('TOOLING: ${{ needs.tooling.result }}', workflow)
+        docs_job = workflow.split('  docs:\n')[1].split('  tooling:\n')[0]
+        self.assertIn("if: always() && github.event_name == 'pull_request'", docs_job)
+        tooling_job = workflow.split('  tooling:\n')[1].split('  app:\n')[0]
+        self.assertIn('node scripts/test-meta-debugger-transport-monitor.mjs', tooling_job)
+        self.assertNotIn('npm ci', tooling_job)
+        self.assertNotIn('cache: npm', tooling_job)
+        app_job = workflow.split('  app:\n')[1].split('  local-database:\n')[0]
+        self.assertIn("if: always() && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))", app_job)
 
     def test_classifier_edge_cases_fail_closed(self):
         allowed = 'tools/meta-debugger-transport-monitor/manifest.json'
