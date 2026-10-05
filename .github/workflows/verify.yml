@@ -23,7 +23,7 @@ jobs:
         run: python3 scripts/ci/verify.py classify --base "$BASE" --head "$HEAD"
   docs:
     needs: classify
-    if: needs.classify.result == 'success' && (needs.classify.outputs.mode == 'docs' || needs.classify.outputs.mode == 'tooling')
+    if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +35,20 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/ci/verify.py docs --base "$BASE" --head "$HEAD"
+  tooling:
+    needs: classify
+    if: needs.classify.result == 'success' && needs.classify.outputs.mode == 'tooling'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Monitor behavior, manifest, inventory and static safety checks
+        run: node scripts/test-meta-debugger-transport-monitor.mjs
   app:
     needs: classify
-    if: always() && (needs.classify.result != 'success' || needs.classify.outputs.mode != 'docs')
+    if: always() && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
@@ -67,7 +78,7 @@ jobs:
       - run: npm run audit:policy
   local-database:
     needs: classify
-    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'tooling'))
+    if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
     env:
       DISABLE_EXTERNAL_EMAIL: 'true'
@@ -185,7 +196,7 @@ jobs:
         run: python3 scripts/test-crm-r4-advisory-concurrency.py
   required:
     if: always()
-    needs: [classify, docs, app, local-database]
+    needs: [classify, docs, tooling, app, local-database]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -195,6 +206,7 @@ jobs:
           MODE: ${{ needs.classify.outputs.mode }}
           CLASSIFIER: ${{ needs.classify.result }}
           DOCS: ${{ needs.docs.result }}
+          TOOLING: ${{ needs.tooling.result }}
           APP: ${{ needs.app.result }}
           DATABASE: ${{ needs.local-database.result }}
         run: python3 scripts/ci/verify.py gate

@@ -1,4 +1,4 @@
-"""Small, dependency-free docs CI selector, checker and required gate."""
+"""Small, dependency-free CI selector, checker and required gate."""
 import argparse
 import html
 import os
@@ -45,6 +45,9 @@ def safe_doc_path(path):
             and path.endswith('.md'))
 
 
+POLICY_ALLOWLIST = frozenset({'AGENTS.md'})
+
+
 TOOLING_ALLOWLIST = frozenset({
     'tools/meta-debugger-transport-monitor/README.md',
     'tools/meta-debugger-transport-monitor/manifest.json',
@@ -70,41 +73,41 @@ def regular_blob_at(ref, path, expected):
 def classify(base, head):
     try:
         ancestor, entries = changes(base, head)
-        docs_only = True
-        tooling_only = True
+        lanes = set()
         for status, path in entries:
             if status not in ('A', 'M', 'D'):
                 return 'full'
             is_doc = safe_doc_path(path)
             is_tooling = safe_tooling_path(path)
-            docs_only = docs_only and is_doc
-            tooling_only = tooling_only and (is_doc or is_tooling)
-            if not (is_doc or is_tooling):
+            is_policy = safe_repo_path(path) and path in POLICY_ALLOWLIST
+            if not (is_doc or is_tooling or is_policy):
                 return 'full'
+            lanes.add('docs' if is_doc else 'policy' if is_policy else 'tooling')
             for ref in (ancestor, head):
                 expected = not (status == 'A' and ref == ancestor or status == 'D' and ref == head)
                 if not regular_blob_at(ref, path, expected):
                     return 'full'
-        if docs_only:
+        if lanes == {'docs'}:
             return 'docs'
-        if tooling_only:
-            return 'tooling'
-        return 'full'
+        lanes.discard('docs')
+        return next(iter(lanes)) if len(lanes) == 1 else 'full'
     except (ValueError, UnicodeError, subprocess.CalledProcessError, OSError):
         print('Classification uncertain; selecting full CI', file=sys.stderr)
         return 'full'
 
 
-def gate(event, mode, classifier, docs, app, database):
+def gate(event, mode, classifier, docs, tooling, app, database):
     if classifier != 'success':
         return False
-    if event == 'pull_request' and mode == 'docs':
-        return docs == 'success' and app == database == 'skipped'
-    if event == 'pull_request' and mode == 'tooling':
-        return docs == app == 'success' and database == 'skipped'
-    if mode != 'full' or docs != 'skipped':
-        return False
-    return app == 'success' and database == ('success' if event == 'pull_request' else 'skipped')
+    # Exact tuples reject skipped expected jobs AND unexpectedly executed jobs.
+    matrix = {
+        ('pull_request', 'docs'): ('success', 'skipped', 'skipped', 'skipped'),
+        ('pull_request', 'policy'): ('success', 'skipped', 'skipped', 'skipped'),
+        ('pull_request', 'tooling'): ('success', 'success', 'skipped', 'skipped'),
+        ('pull_request', 'full'): ('success', 'skipped', 'success', 'success'),
+        ('push', 'full'): ('skipped', 'skipped', 'success', 'skipped'),
+    }
+    return (docs, tooling, app, database) == matrix.get((event, mode))
 
 
 def prose(text):
@@ -259,7 +262,7 @@ def main():
     elif args.command == 'docs':
         check_docs(args.base, args.head)
         print('Documentation verification passed')
-    elif not gate(*(os.environ.get(k, '') for k in ('EVENT', 'MODE', 'CLASSIFIER', 'DOCS', 'APP', 'DATABASE'))):
+    elif not gate(*(os.environ.get(k, '') for k in ('EVENT', 'MODE', 'CLASSIFIER', 'DOCS', 'TOOLING', 'APP', 'DATABASE'))):
         raise ValueError('Selected verification path did not succeed')
 
 
