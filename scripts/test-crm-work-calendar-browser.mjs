@@ -34,10 +34,10 @@ async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local synthetic baseline');
- for(const role of ['director','receptionist']) {
-  const email=`${run}-${role}@example.invalid`;
+ for(const role of ['director','receptionist','receptionist']) {
+  const email=`${run}-${role}-${users.length}@example.invalid`;
   const response=await fetch(base+'/auth/v1/admin/users',{method:'POST',headers:{apikey:env.SUPABASE_SERVICE_ROLE_KEY,Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password,email_confirm:true})});
-  assert.equal(response.status,200);const user=await response.json();users.push({id:user.id,email,role});sql(`update public.profiles set role=${quote(role)},full_name=${quote('O3 synthetic '+role)} where id='${user.id}'`);
+  assert.equal(response.status,200);const user=await response.json();users.push({id:user.id,email,role});sql(`update public.profiles set role=${quote(role)},full_name=${quote('Équipe accueil')} where id='${user.id}'`);
  }
  actor=users[1].id;const hours=Object.fromEntries([1,2,3,4,5,6,7].map(i=>[i,[['09:00','20:00']]]));rpc('create_followup_policy',{weekly_hours:hours},users[0].id);
  const lead=intake('Parent · '+'NomLong'.repeat(18)),taskless=intake('Sans prochaine action'),closed=intake('Rendez-vous clos');
@@ -56,9 +56,24 @@ try {
   sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${lead}','center_visit',${expr},'${actor}','manual',${quote(run+':'+bucket)})`);
  for(let i=0;i<114;i++)legacyIds.push(sql(`insert into public.placement_tests(student_name,date_test,heure,status,notes,examinateur) values(${quote('Legacy appointment '+i)},${i<3?quote(day):`(${quote(day)}::date+2)`},${i===0?'null':i===1?quote('invalid'):quote('11:00')},${quote(i===2?'Passé':'Planifié')},'PRIVATE EXCLUDED NOTE','Examiner label') returning id`));
  const legacy=legacyIds[0],completed=legacyIds[2];
+ const visitLead=intake('UX scheduled visit');
+ const visit=sql(`update public.crm_tasks set task_type='center_visit',due_at=(${quote(day)}::date+time '10:35') at time zone 'Africa/Casablanca',
+ scheduled_end_at=(${quote(day)}::date+time '11:05') at time zone 'Africa/Casablanca',assigned_to='${actor}' where lead_id='${visitLead}' and status='open' returning id`);
+ const visitTask=detail(visitLead).next_task;
+ const {scheduledLabel}=await import('../src/lib/crm/presentation.mjs');
+ const expected=scheduledLabel(visitTask);
+ const staffRows=JSON.parse(sql(`begin;set local request.jwt.claim.sub='${actor}';select public.crm_list_staff();commit;`)).rows;
+ const labels=users.map(u=>staffRows.find(p=>p.id===u.id).display_label);
+ assert.equal(new Set(labels).size,users.length);
  const external=[],errors=[],requests=[],eventPayloads=[],workPayloads=[];
  for(const engine of [chromium,webkit]) {
   browser=await engine.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+  // Controlled browser tzdata disagreement: operational reads must still use PG.
+  await ctx.addInitScript(()=>{
+   const Original=Intl.DateTimeFormat;
+   Intl.DateTimeFormat=function(locale,options){return new Original(locale,options?.timeZone==='Africa/Casablanca'?{...options,timeZone:'Etc/GMT+8'}:options);};
+   Intl.DateTimeFormat.prototype=Original.prototype;Intl.DateTimeFormat.supportedLocalesOf=Original.supportedLocalesOf.bind(Original);
+  });
   await ctx.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>{external.push(new URL(route.request().url()).hostname);return route.abort();});
   page=await ctx.newPage();page.setDefaultTimeout(60000);page.on('pageerror',e=>{errors.push(e.message);console.error('BROWSER_ERROR',phase,e.message);});
   page.on('request',r=>{if(r.url().includes('/rest/v1/'))requests.push({path:new URL(r.url()).pathname,url:r.url(),args:r.postDataJSON()});});
@@ -70,6 +85,23 @@ try {
    pending.then(()=>payloadReads.delete(pending),error=>{errors.push(error.message);payloadReads.delete(pending);});
   });
   await page.clock.install();await login(users[1]);phase=engine.name()+' Tasks';await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
+  for(const label of ['Responsable de la tâche','Responsable du prospect']) {
+   for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel(label).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
+  }
+  await page.goto(app+'/crm/leads');await page.getByLabel('Responsable',{exact:true}).waitFor();
+  for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel('Responsable',{exact:true}).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
+  // Same center visit in Calendar, Tasks and drawer; browser ICU is wrong.
+  const browserTime=await page.evaluate(stamp=>new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Casablanca',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(stamp)),visitTask.due_at);
+  assert.notEqual(browserTime,visitTask.local_time.slice(0,5),'forced browser/server disagreement established');
+  await page.goto(app+'/placement-tests?view=calendar&date='+day+'&kind=center_visit');
+  await page.locator(`[data-event-key="center_visit:${visit}"]`).getByText('10:35',{exact:false}).waitFor();
+  await page.locator(`[data-event-key="center_visit:${visit}"]`).getByText('jusqu’à 11:05',{exact:true}).waitFor();
+  await page.goto(app+'/crm/today?bucket=tomorrow');await page.locator(`[data-task-id="${visit}"]`).getByText(expected,{exact:true}).waitFor();
+  await page.locator(`[data-task-id="${visit}"]`).getByRole('button',{name:'Voir le prospect'}).click();
+  await dialog().getByText('Historique',{exact:true}).waitFor();
+  await dialog().getByText(expected,{exact:true}).waitFor();await closeDrawer();
+  console.log('PASS identical server Casablanca display under deliberately divergent browser tzdata; shared distinguishable staff labels');
+  await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   assert.equal(await page.getByLabel('Responsable de la tâche').inputValue(),'me');assert.equal(await page.getByTestId('work-row').count(),25,'bounded task page, multiple tasks of same lead');
   const first=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:'Suivantes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
@@ -85,7 +117,7 @@ try {
   const remembered=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:/^Demain/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByRole('button',{name:/^En retard/}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,remembered);
-  await page.getByRole('link',{name:/À surveiller/}).click();await page.getByTestId('opportunity-row').filter({hasText:'Sans prochaine action'}).waitFor();
+  await page.getByRole('link',{name:/À traiter/}).click();await page.getByTestId('opportunity-row').filter({hasText:'Sans prochaine action'}).waitFor();
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   // Exact chosen task, including stale rejection and explicit renewed confirmation.
   const reassigned=engine===chromium?taskIds[1]:taskIds[2];
@@ -143,8 +175,8 @@ try {
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));
- for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
- for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
+ for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
+ for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
  console.log('PASS actual fixed RPC response shapes; no technical/score/notes/provider payload or browser Meta activity');
 } catch(error) {
  console.error(phase,error.message);

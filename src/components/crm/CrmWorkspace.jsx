@@ -20,8 +20,7 @@ export default function CrmWorkspace({
     params = useSearchParams();
   const selected = UUID.test(params.get('lead') || '') ? params.get('lead') : null;
   const contact = UUID.test(params.get('contact') || '') ? params.get('contact') : null;
-  const originFocus = useRef(null), headingRef = useRef(null), navigationLead = useRef(selected);
-  useEffect(() => { navigationLead.current = selected; }, [selected]);
+  const originFocus = useRef(null), headingRef = useRef(null);
   const [initialAction, setInitialAction] = useState(null), [initialTask, setInitialTask] = useState(null);
   useEffect(() => { if (!selected) { setInitialAction(null); setInitialTask(null); } }, [selected]);
   const [smallScreen, setSmallScreen] = useState(false);
@@ -35,15 +34,15 @@ export default function CrmWorkspace({
   const filterKey = JSON.stringify([filters, layout, contact]);
   useEffect(() => { setCursors([null]); cursorFilter.current = filterKey; }, [filterKey]);
   function setFilter(key, value) {
-    const next = new URLSearchParams(params.toString());
-    // Preserve a drawer navigation already requested while search is debouncing.
-    if (navigationLead.current) next.set('lead',navigationLead.current); else next.delete('lead');
+    const next = new URLSearchParams(window.location.search);
+    // Native history commits synchronously and Next observes useSearchParams.
+    // A debounced callback composes with every edit/navigation already committed.
     if (value) next.set(key, value); else next.delete(key);
     if (key === 'source' && value) { try { next.set('channel', JSON.parse(value).kind); } catch { /* Server rejects invalid facets. */ } }
     if (key === 'channel') next.delete('source');
-    if (key !== 'lead') { next.delete('stage'); setCursors([null]); }
+    if (key !== 'lead') setCursors([null]);
     if (key === 'stage' && value) next.set(key, value);
-    router.replace(`${pathname}?${next}`, {scroll:false});
+    window.history.replaceState(null, '', `${pathname}?${next}`);
   }
   const parseFacet = value => { try { return value ? JSON.parse(value) : null; } catch { return {kind:'invalid',value:'invalid'}; } };
   const source = parseFacet(filters.source), program = parseFacet(filters.program);
@@ -56,12 +55,9 @@ export default function CrmWorkspace({
     return () => window.removeEventListener('crm:refresh', reset);
   }, []);
   function selectLead(id) {
-    navigationLead.current = id;
-    const next = new URLSearchParams(params.toString());
+    const next = new URLSearchParams(window.location.search);
     if (id) { originFocus.current = document.activeElement; next.set('lead', id); } else { next.delete('lead'); setInitialAction(null); setInitialTask(null); }
-    router.push(`${pathname}${next.size ? '?' + next : ''}`, {
-      scroll: false
-    });
+    window.history.pushState(null, '', `${pathname}${next.size ? '?' + next : ''}`);
   }
   function openLead(id) { setInitialAction(null); setInitialTask(null); selectLead(id); }
   function routeAction(id, name, task = null) { setInitialAction(name); setInitialTask(task); selectLead(id); }
@@ -73,7 +69,7 @@ export default function CrmWorkspace({
   {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-slate-500">{matchedCount ?? '—'} prospects correspondants</p><div className="flex gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}>Tableau</Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}>Liste</Button></div></div>
     <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} />
-    {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(params.toString()); next.delete('contact'); router.replace(`${pathname}?${next}`, {scroll:false}); }}>Tous les contacts</Button></p>}
+    {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
     {filters.view === 'closed' ? <p className="text-xs text-slate-500">Les clôtures sont affichées en Liste. Choisissez une autre vue pour accéder au Tableau.</p> : layout === 'board' && <p className="text-xs text-slate-500">Le Tableau montre les opportunités ouvertes et converties. <Button variant="link" className="px-1" onClick={() => setFilter('view','closed')}>Clôturés : {closedCount}</Button> · Inclus dans le total ; visibles en Liste.</p>}
     <div role="status" className="sr-only">Les vues sont actualisées après chaque action ; les prospects qui ne correspondent plus aux filtres quittent la vue.</div>
     {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} args={args} onOpen={openLead} onAction={routeAction} /> : <><OpportunitiesList query={opportunities} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><div className="flex gap-2"><Button variant="outline" disabled={cursors.length === 1} onClick={() => setCursors(x => x.slice(0,-1))}>Précédents</Button><Button variant="outline" disabled={!opportunityPage?.has_more} onClick={() => setCursors(x => [...x,opportunityPage.next_cursor])}>Suivants</Button></div></>}

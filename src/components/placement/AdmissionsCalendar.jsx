@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
-import { UUID } from '@/lib/crm/presentation.mjs';
+import { UUID, scheduledLabel } from '@/lib/crm/presentation.mjs';
 import { agendaDateLabel, calendarDate, casablancaToday, shiftCalendarDate } from '@/lib/crm/calendar.mjs';
 import { LifecycleBadge, ReadState } from '@/components/crm/CrmShared';
 import LeadDetailSheet from '@/components/crm/LeadDetailSheet';
@@ -43,7 +43,7 @@ export default function AdmissionsCalendar() {
       const lane=rows.filter(row=>row.local_date===date&&(!row.local_time)===unspecified);
       if(!lane.length)return null;
       return <div key={String(unspecified)}>{unspecified&&<h3 className="px-4 pt-3 text-xs font-semibold text-slate-500">Heure non précisée</h3>}{lane.map(event=><button key={`${event.kind}:${event.id}`} data-testid="calendar-event" data-event-key={`${event.kind}:${event.id}`} className="flex w-full min-w-0 flex-wrap items-start gap-x-4 gap-y-2 border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50 focus-visible:outline-blue-600" onClick={()=>event.lead_id ? change('lead',event.lead_id,true) : setEditing(event.id)}>
-        <span className="w-24 shrink-0 text-sm font-medium tabular-nums text-blue-800">{event.local_time ? event.local_time.slice(0,5) : 'À préciser'}{event.ends_at&&<span className="block text-xs text-slate-500">jusqu’à {new Intl.DateTimeFormat('fr-FR',{timeZone:'Africa/Casablanca',hour:'2-digit',minute:'2-digit'}).format(new Date(event.ends_at))}</span>}</span>
+        <span className="w-24 shrink-0 text-sm font-medium tabular-nums text-blue-800">{event.local_time ? event.local_time.slice(0,5) : 'À préciser'}{event.ends_at&&<span className="block text-xs text-slate-500">jusqu’à {event.end_local_date===event.local_date ? event.end_local_time?.slice(0,5) || 'Horaire à confirmer' : scheduledLabel({local_date:event.end_local_date,local_time:event.end_local_time})}</span>}</span>
         <span className="min-w-0 flex-1 basis-44"><span className="block break-words text-sm font-semibold">{event.display_name || 'Apprenant à préciser'}</span><span className="block text-xs text-slate-500">{event.kind==='placement' ? 'Test de niveau' : 'Visite au centre'}{event.placement_status ? ` · ${event.placement_status}` : ''}</span>{event.examiner_label&&<span className="block break-words text-xs text-slate-500">Examinateur indiqué : {event.examiner_label}</span>}{event.kind==='center_visit'&&<span className="block text-xs text-slate-500">Responsable de la tâche : {event.assignee_name || 'Non attribué'}</span>}</span>{event.stage&&<LifecycleBadge status={event.stage}/>}
       </button>)}</div>;
     })}</section>) : null}</ReadState></div>

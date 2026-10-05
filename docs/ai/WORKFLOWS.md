@@ -64,3 +64,7 @@ Batch 1 permits receptionist to create zero-charge commitments and receipts for 
 ## Approved future workflows
 
 **Not fully implemented:** [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) still leaves the dedicated walk-in enrollment redesign as separate work. Opportunities, the contextual CRM drawer, Tasks / My Work and Admissions Calendar are Production verified under completed Outcome 3; a walk-in ready to enroll should still not require a fake Meta lead.
+
+## Post-Outcome-3 correction source
+
+The [authorized UX corrections](../architecture/evidence/receptionist-production-ux-corrections-2026-10-05.md) preserve rapid Programme/Search and other filter edits in the URL, use the same distinguishable operational staff labels in Opportunities and Tasks, and label the broader attention link “À traiter · prospects nécessitant un suivi”. Scheduled Tasks/drawer times use server-projected Casablanca civil values. This is source work pending separate CI/review/release; Production remains on migration 108.

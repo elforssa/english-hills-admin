@@ -84,6 +84,19 @@ const operationalDateFormatter = new Intl.DateTimeFormat('fr-MA', {
 export function dateLabel(value) {
   return value ? operationalDateFormatter.format(new Date(value)) : 'À planifier';
 }
+// Only database-projected civil values may label operational scheduled times.
+// No browser tzdata fallback: a missing projection is visibly unconfirmed.
+export function scheduledLabel(value) {
+  const day = value?.local_date;
+  if (!/^\d{4}-\d\d-\d\d$/.test(day || '')) return 'Horaire à confirmer';
+  const [year, month, date] = day.split('-');
+  const label = `${date}/${month}/${year}`;
+  return /^\d\d:\d\d/.test(value?.local_time || '')
+    ? `${label} · ${value.local_time.slice(0,5)}` : `${label} · Heure non précisée`;
+}
+export function staffLabel(person) {
+  return person?.display_label || person?.name || 'Responsable sélectionné';
+}
 export function phoneLinks(contact) {
   const valid = value => /^\+[1-9]\d{7,14}$/.test(value || '') ? value : null;
   const phone = valid(contact?.phone_e164),

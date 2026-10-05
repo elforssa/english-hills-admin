@@ -53,7 +53,7 @@ begin
  perform pg_temp.denied('select public.crm_get_work_queue(p_cursor=>''{"v":1}'')');
  perform pg_temp.ok((select count(distinct task_type)=8 from public.crm_tasks where status='open'),'eight task types in fixture');
  -- Exact fixed shape, no technical attribution, notes, scores or finance.
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','scheduled_end_at','task_type','version'],'fixed task projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version'],'fixed task projection');
  perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0->'lead')k)=array['contact_name','id','learner_name','owner_id','owner_name','program','status','version'],'fixed lead projection');
  r:=public.crm_get_admissions_calendar(day,day+7);i:=0;
  loop
@@ -68,7 +68,7 @@ begin
  select n+count(*) into n from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.task_type='center_visit' and t.status='open' and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=day::timestamp at time zone 'Africa/Casablanca' and t.due_at<(day+7)::timestamp at time zone 'Africa/Casablanca';
  perform pg_temp.ok(cardinality(keys)=n,'exact sources, no preparation/result/callback appointments');
  r:=public.crm_get_admissions_calendar(day,day+7,p_kind=>'placement',p_include_completed=>true);
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','display_name','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at'],'fixed event projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at'],'fixed event projection');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'placement_status'<>'Planifié'),'completed toggle');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->'starts_at'='null'::jsonb and x->'local_time'='null'::jsonb),'truthful unspecified lane');
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(r->'rows')x where x->'ends_at'<>'null'::jsonb),'no invented placement duration');

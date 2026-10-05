@@ -14,6 +14,7 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const roles=['director','admin','receptionist','teacher','parent','student','pending'];const users=[],clients={};const nil='00000000-0000-0000-0000-000000000001';let checks=0;
 const root=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const cases=[
+ ['crm_list_staff',{},'operations'],['crm_list_open_tasks',{},'operations'],
  ['crm_get_work_queue',{},'operations'],['crm_get_admissions_calendar',{p_start:'2026-10-05',p_end:'2026-10-12'},'operations'],
  ['crm_get_opportunities',{},'operations'],['crm_get_opportunity_filter_options',{p_kind:'source'},'operations'],['crm_get_operational_acquisition_summary',{p_lead:nil},'operations'],['crm_get_timeline',{p_lead:nil},'operations'],
  ['crm_get_today',{},'operations'],['crm_search_leads',{p_query:'phase12 synthetic'},'operations'],['crm_list_intake_review',{},'operations'],['crm_get_workspace_detail',{p_lead:nil},'operations'],['crm_list_placements',{p_lead:nil},'operations'],['crm_get_enrollment_context',{p_lead:nil},'operations'],
