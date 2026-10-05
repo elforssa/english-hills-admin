@@ -3,13 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { entities, auth, integrations } from '@/lib/entities';
+import { entities, integrations } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import { useQueryClient } from '@tanstack/react-query';
-import StorageImage from '@/components/StorageImage';
-import { ArrowLeft, Edit, FileText, Plus, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
+import PageFrame from '@/components/operational/PageFrame';
+import PageHeader from '@/components/operational/PageHeader';
+import ReadState from '@/components/operational/ReadState';
+import { Button } from '@/components/ui/button';
+import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
+import { ArrowLeft, Edit, FileText, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
@@ -29,7 +33,7 @@ export default function StudentDetailPage() {
 }
 
 function StudentDetail() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const canManage = hasCapability(role, 'canManageStudents');
   const params = useParams();
   const id = params?.id;
@@ -49,6 +53,8 @@ function StudentDetail() {
   const [premiumGroups, setPremiumGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [loadedScope, setLoadedScope] = useState(null);
+  const scope = `${user?.id}:${role}:${id}`;
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -70,6 +76,8 @@ function StudentDetail() {
     ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult, enrollmentRows, groupRows]) => {
       if (!active) return;
       if (chargeResult.error) throw chargeResult.error;
+      if (!Array.isArray(chargeResult.data)) throw new Error('Unavailable balance read');
+      setLoadedScope(scope);
       setStudent(s[0]);
       setEnrollments(enrollmentRows);
       setGroups(groupRows);
@@ -85,7 +93,7 @@ function StudentDetail() {
     }).catch(() => { if (active) setLoadError(true); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [id, reload]);
+  }, [id, reload, scope]);
 
   const handleDelete = async () => {
     if (!confirm('Archiver cet apprenant ? Son historique sera conservé.')) return;
@@ -110,53 +118,28 @@ function StudentDetail() {
     } catch (error) { toast.error(error.message); }
   };
 
-  if (loading) return <div className="p-8 text-muted-foreground">Chargement...</div>;
-  if (loadError) return <div className="p-8" role="alert">Impossible de charger la fiche complète. <button className="text-primary underline" onClick={() => setReload((value) => value + 1)}>Réessayer</button></div>;
-  if (!student) return <div className="p-8 text-muted-foreground"><p>Apprenant introuvable ou archivé.</p><button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="inline-flex min-h-10 items-center text-primary underline">Retour</button></div>;
+  const sameScope = loadedScope === scope;
+  if ((loading || loadError) && !sameScope) return <PageFrame width="detail"><PageHeader title="Fiche apprenant"/><ReadState state={loading ? 'loading' : 'error'} message={loadError ? 'Impossible de charger la fiche complète.' : undefined} onRetry={loadError ? () => setReload(value=>value+1) : undefined}/></PageFrame>;
+  if (!student || !sameScope) return <PageFrame width="detail"><PageHeader title="Fiche apprenant"/><ReadState state="unavailable" message="Apprenant introuvable ou archivé."/><Button variant="link" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}>Retour</Button></PageFrame>;
 
-  const totalPaye = payments.reduce((sum, payment) => sum + (payment.voided_at ? 0 : Number(payment.montant_paye || 0)), 0);
   const paymentSummary = studentPaymentSummary(charges);
   const present = attendance.filter(a => a.status === 'Présent').length;
   const presenceRate = attendance.length ? Math.round((present / attendance.length) * 100) : null;
 
   const Section = ({ title, children }) => (
-    <div className="bg-card border border-border rounded-lg overflow-hidden mb-5">
-      <div className="px-5 py-3 border-b border-border bg-muted/30">
-        <h3 className="font-semibold text-sm text-foreground">{title}</h3>
+    <div className="bg-card border border-border rounded-lg overflow-hidden mb-6">
+      <div className="px-4 py-3 border-b border-border bg-muted/30">
+        <h3 className="font-semibold text-base leading-6 text-foreground">{title}</h3>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-4">{children}</div>
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-5xl p-4 lg:p-8">
-      <div className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <button aria-label="Retour" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))} className="flex items-center gap-2 rounded-lg border border-border p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
-          <ArrowLeft size={15} />
-        </button>
-        <div className="w-12 h-12 rounded-full overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
-          {student.photo_url
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <StorageImage src={student.photo_url} alt="" className="w-full h-full object-cover" />
-            : <span className="text-lg font-bold text-muted-foreground">{student.full_name?.[0] || '?'}</span>}
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary">Fiche apprenant</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">{student.full_name}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[student.status]}`}>{student.status}</span>
-            {student.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-amber-100 text-amber-800"><Crown size={12} /> Premium</span>}
-          </div>
-        </div>
-        <Link href={`/students/${id}/edit`} className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted">
-          <Edit size={14} /> Modifier
-        </Link>
-        {hasCapability(role, 'canArchiveStudents') && <button onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-md hover:bg-red-50">
-          <Trash2 size={14} /> Archiver
-        </button>}
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 mb-5">
+    <PageFrame width="detail" className="break-words">
+      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span>{student.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-900"><Crown size={12}/>Premium</span>}</div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
+      <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Niveau', value: student.niveau_cefr || '—' },
           { label: 'Taux de présence', value: presenceRate !== null ? `${presenceRate}%` : '—' },
@@ -164,7 +147,7 @@ function StudentDetail() {
         ].map(({ label, value }) => (
           <div key={label} className="bg-card border border-border rounded-lg p-4">
             <p className="text-xs text-muted-foreground mb-1">{label}</p>
-            <p className="text-xl font-bold text-foreground">{value}</p>
+            <p className="text-xl font-semibold tabular-nums text-foreground">{value}</p>
           </div>
         ))}
       </div>
@@ -187,8 +170,8 @@ function StudentDetail() {
                 <div className="flex items-center gap-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[charge.settlement_status] || PAYMENT_STATUS_COLORS['En attente']}`}>{charge.settlement_status}</span>
                   <span className="font-semibold">{money(charge.balance)} MAD restants</span>
-                  {canManage && Number(charge.balance) > 0 && <Link href={`/receipts/new?student_id=${student.id}&charge_id=${charge.id}`} className="text-xs font-semibold text-primary hover:underline">Encaisser</Link>}
-                  {role === 'director' && <Link href={`/finance/charges/${charge.id}/edit`} className="text-xs font-semibold text-rose-700 hover:underline">Corriger l’engagement</Link>}
+                  {canManage && Number(charge.balance) > 0 && <Link data-touch-target href={`/receipts/new?student_id=${student.id}&charge_id=${charge.id}`} className="text-xs font-semibold text-primary hover:underline">Encaisser</Link>}
+                  {role === 'director' && <Link data-touch-target href={`/finance/charges/${charge.id}/edit`} className="text-xs font-semibold text-rose-700 hover:underline">Corriger l’engagement</Link>}
                 </div>
               </div>
             ))}
@@ -197,13 +180,13 @@ function StudentDetail() {
       </Section>
 
       <Section title="Informations personnelles">
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           {[
             ['Date de naissance', student.date_naissance],
             ['Téléphone', student.telephone],
             ['Email', student.email],
             ['Catégorie', student.age_category],
-            ['Session', student.session_type],
+            ['Programme du dossier', programmeLabel(student.session_type)],
             ['Comment connu le centre', student.referral_source || '—'],
           ].map(([label, val]) => (
             <div key={label}>
@@ -212,7 +195,7 @@ function StudentDetail() {
             </div>
           ))}
           {student.notes && (
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <p className="text-xs text-muted-foreground">Notes</p>
               <p className="font-medium">{student.notes}</p>
             </div>
@@ -221,14 +204,15 @@ function StudentDetail() {
       </Section>
 
       <Section title="Inscriptions et groupes">
+        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception prépare les pré-inscriptions. La confirmation suit le parcours autorisé ; contactez la direction pour les opérations restreintes.</p>}
         {role === 'receptionist' && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: new Date().toISOString().slice(0, 10) })}>Nouvelle pré-inscription</button>}
         {student.groupe_id && <p className="mb-3 text-sm">Groupe du dossier : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
-        {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription de session enregistrée. <Link href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
+        {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. <Link data-touch-target href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
           <div className="space-y-3">{enrollments.map(enrollment => (
             <div key={enrollment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
-              <div><p className="font-semibold">{enrollment.session_type || student.session_type || 'Session'} · {enrollment.school_year || 'Année non renseignée'}</p>
+              <div><p className="font-semibold">{programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.school_year || 'Année non renseignée'}</p>
                 <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
-                <p className="text-xs">{enrollment.status === 'Confirmed' ? 'Inscrit — groupe à affecter' : enrollment.status}</p>
+                <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}</p>
               </div>
               <button disabled={!canManage} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
               {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
@@ -261,7 +245,7 @@ function StudentDetail() {
                 {premiumMemberships.find((item) => item.active) && ` · ${premiumGroups.find((group) => group.id === premiumMemberships.find((item) => item.active)?.premium_group_id)?.name || 'Atelier affecté'}`}
               </p>
             </div>
-            <Link href="/premium-sessions" className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90">Gérer les séances</Link>
+            <Link data-touch-target href="/premium-sessions" className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90">Gérer les séances</Link>
           </div>
           {premiumSessions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Aucune heure Premium planifiée.</p>
@@ -297,8 +281,9 @@ function StudentDetail() {
       </Section>
 
       <Section title={`Paiements (${payments.length})`}>
+        <p className="mb-3 text-xs text-muted-foreground">Le restant historique est le solde après ce paiement, à la date du reçu. Pour corriger ou annuler un reçu, contactez la direction.</p>
         <div className="flex justify-end mb-3">
-          <Link href={`/receipts/new?student_id=${student.id}&student_name=${encodeURIComponent(student.full_name)}`} className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted" style={{ color: 'var(--brand)' }}>
+          <Link data-touch-target href={`/receipts/new?student_id=${student.id}&student_name=${encodeURIComponent(student.full_name)}`} className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted" style={{ color: 'var(--brand)' }}>
             <FileText size={12} /> Nouveau reçu
           </Link>
         </div>
@@ -307,9 +292,9 @@ function StudentDetail() {
             <p className="text-sm text-muted-foreground">Aucun paiement enregistré.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div role="region" tabIndex={0} aria-label="Tableau, défilement horizontal" className="max-w-full overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="pb-2">Reçu</th><th className="pb-2">Date</th><th className="pb-2">Total</th><th className="pb-2">Payé</th><th className="pb-2">Restant historique</th><th className="pb-2">Statut</th>
+              <th scope="col" className="pb-2">Reçu</th><th scope="col" className="pb-2">Date</th><th scope="col" className="pb-2">Total</th><th scope="col" className="pb-2">Payé</th><th scope="col" className="pb-2">Restant historique</th><th scope="col" className="pb-2">Statut</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
               {payments.map(p => {
@@ -317,7 +302,7 @@ function StudentDetail() {
                 const status = receiptStatus(p);
                 return (
                 <tr key={p.id}>
-                  <td className="py-2"><ContextLink href={`/receipts/${p.id}/print`} className="inline-flex min-h-10 items-center text-primary font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.receipt_number || `#${p.id.slice(-8).toUpperCase()}`}</ContextLink></td>
+                  <td className="py-2"><ContextLink href={`/receipts/${p.id}/print`} className="inline-flex min-h-11 items-center text-primary font-medium hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.receipt_number || `#${p.id.slice(-8).toUpperCase()}`}</ContextLink></td>
                   <td className="py-2">{p.date || '—'}</td>
                   <td className="py-2">
                     {money(amounts.net)} MAD
@@ -328,7 +313,7 @@ function StudentDetail() {
                 </tr>
               );})}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Section>
 
@@ -336,9 +321,9 @@ function StudentDetail() {
         {assessments.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucune évaluation.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div role="region" tabIndex={0} aria-label="Tableau, défilement horizontal" className="max-w-full overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground border-b border-border">
-              <th className="pb-2">Terme</th><th className="pb-2">Oral</th><th className="pb-2">Écrit</th><th className="pb-2">Devoirs</th><th className="pb-2">Finale</th>
+              <th scope="col" className="pb-2">Terme</th><th scope="col" className="pb-2">Oral</th><th scope="col" className="pb-2">Écrit</th><th scope="col" className="pb-2">Devoirs</th><th scope="col" className="pb-2">Finale</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
               {assessments.map(a => (
@@ -351,9 +336,10 @@ function StudentDetail() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Section>
-    </div>
+      </ReadState>
+    </PageFrame>
   );
 }

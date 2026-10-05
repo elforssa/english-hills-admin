@@ -136,6 +136,7 @@ function NavItem({ item, onNavigate }) {
                 <Link
                   key={child.href}
                   href={child.href}
+                  aria-current={isActive ? "page" : undefined}
                   onClick={onNavigate}
                   className={`flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
                     isActive
@@ -159,6 +160,7 @@ function NavItem({ item, onNavigate }) {
   return (
     <Link
       href={item.href}
+      aria-current={isActive ? "page" : undefined}
       onClick={onNavigate}
       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
         isActive
@@ -240,6 +242,8 @@ export default function Sidebar() {
 
   useEffect(() => {
     if (!mobileOpen) return undefined;
+    const main = document.getElementById('main-content');
+    if (main) main.inert = true;
     closeRef.current?.focus();
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -255,7 +259,7 @@ export default function Sidebar() {
       }
     };
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('keydown', onKeyDown); if (main) main.inert = false; };
   }, [mobileOpen, closeMobile]);
 
   const userRole  = role || '';
@@ -263,7 +267,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <button
+      <div className="lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4"><button
         ref={triggerRef}
         onClick={() => setMobileOpen(true)}
         aria-label="Ouvrir le menu"
@@ -271,17 +275,17 @@ export default function Sidebar() {
         aria-controls="mobile-sidebar"
         aria-hidden={mobileOpen}
         tabIndex={mobileOpen ? -1 : 0}
-        className="lg:hidden fixed top-4 left-4 z-40 p-2 rounded-lg text-white shadow-lg"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
         style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         <Menu size={20} />
-      </button>
+      </button></div>
 
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="fixed inset-0 bg-black/50" aria-hidden="true" onClick={closeMobile} />
-          <div id="mobile-sidebar" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Menu de navigation" className="relative flex flex-col w-56 min-h-screen z-50" style={{ backgroundColor: 'var(--brand-sidebar)' }}>
-            <button ref={closeRef} onClick={closeMobile} aria-label="Fermer le menu" className="absolute top-4 right-4 text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <div id="mobile-sidebar" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Menu de navigation" className="operational operational-sidebar relative flex flex-col w-60 min-h-screen z-50" style={{ backgroundColor: 'var(--brand-sidebar)' }}>
+            <button ref={closeRef} onClick={closeMobile} aria-label="Fermer le menu" className="absolute top-2 right-2 inline-flex h-11 w-11 items-center justify-center text-white/80 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
               <X size={18} />
             </button>
             <SidebarContent
@@ -295,7 +299,7 @@ export default function Sidebar() {
       )}
 
       <div
-        className="hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0"
+        className="operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0"
         style={{ backgroundColor: 'var(--brand-sidebar)' }}
       >
         <SidebarContent

@@ -1,8 +1,9 @@
 'use client';
 
-import { cloneElement, useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import FormField from '@/components/operational/FormField';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import { STATUS, TASKS, OUTCOMES, LOST, NOT_QUALIFIED, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel } from '@/lib/crm/presentation.mjs';
@@ -30,16 +31,8 @@ const nextTypes = {
   center_visit: 'Visite au centre',
   enrollment_followup: 'Suivi de pré-inscription'
 };
-export function Field({
-  label,
-  children
-}) {
-  const id = useId();
-  return <div className="space-y-1.5 text-sm font-medium text-slate-700"><label className="block" htmlFor={id}>{label}</label>{cloneElement(children, {
-      id
-    })}</div>;
-}
-const inputClass = 'min-h-11 w-full rounded-md border bg-white px-3 py-2 text-sm font-normal';
+export const Field = FormField;
+const inputClass = 'operational-control font-normal';
 export default function CrmActionDialog({
   action,
   lead,
@@ -271,7 +264,7 @@ export default function CrmActionDialog({
   }
   return <Dialog open onOpenChange={open => {
     if (!open && !busy) onClose();
-  }}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); (returnFocus.current?.isConnected ? returnFocus.current : returnFocusRef?.current)?.focus(); }} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg" onInteractOutside={e => {
+  }}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); (returnFocus.current?.isConnected ? returnFocus.current : returnFocusRef?.current)?.focus(); }} className="operational max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[640px]" onInteractOutside={e => {
       if (busy) e.preventDefault();
     }} onEscapeKeyDown={e => {
       if (busy) e.preventDefault();
@@ -288,9 +281,9 @@ export default function CrmActionDialog({
               Recommandation: 'Recommandation',
               Autre: 'Autre'
             })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details></>}
-  {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}{conversation && <>{select('decision', 'Quelle suite donner ?', { callback: 'Rappeler plus tard', ...(lead.status !== 'QUALIFIED' ? { qualify: 'Avancer dans le projet' } : {}), lost: 'Pas intéressé', not_qualified: 'Non adapté' })}{values.decision === 'not_qualified' && select('unsuitableReason', 'Motif', NOT_QUALIFIED)}</>}</>}
-  {action === 'conversation' && select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}
-  {action === 'whatsapp' && <>{links.whatsapp && <a className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
+  {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}{conversation && <>{select('decision', 'Quelle suite donner ?', { callback: 'Rappeler plus tard', ...(lead.status !== 'QUALIFIED' ? { qualify: 'Avancer dans le projet' } : {}), lost: 'Pas intéressé', not_qualified: 'Non adapté' })}{values.decision === 'not_qualified' && select('unsuitableReason', 'Motif', NOT_QUALIFIED)}</>}</>}
+  {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>}</>}
+  {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
               whatsapp_sent: 'Message envoyé',
               meaningful_whatsapp_conversation: 'Conversation réelle avec le parent'
             })}</>}

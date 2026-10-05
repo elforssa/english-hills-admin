@@ -2,11 +2,11 @@
 // status badges. Import and use instead of per-page inline maps.
 
 export const PAYMENT_STATUS_COLORS = {
-  'Soldé':         'bg-emerald-50 text-emerald-700',
-  'Acompte versé': 'bg-amber-50   text-amber-700',
-  'En attente':    'bg-blue-50    text-blue-700',
-  'En retard':     'bg-red-50     text-red-700',
-  'Aucun engagement': 'bg-slate-100 text-slate-600',
+  'Soldé': 'bg-emerald-50 text-emerald-800',
+  'Acompte versé': 'bg-amber-50 text-amber-900',
+  'En attente': 'bg-blue-50 text-blue-800',
+  'En retard': 'bg-red-50 text-red-800',
+  'Aucun engagement': 'bg-slate-100 text-slate-700',
 };
 
 export const ENROLLMENT_STATUS_COLORS = {
@@ -26,11 +26,11 @@ export const ATTENDANCE_STATUS_COLORS = {
 };
 
 export const STUDENT_STATUS_COLORS = {
-  'Enrolled':  'bg-green-100  text-green-700',
-  'Trial':     'bg-blue-100   text-blue-700',
-  'Prospect':  'bg-yellow-100 text-yellow-700',
-  'Inactive':  'bg-gray-100   text-gray-500',
-  'Alumni':    'bg-purple-100 text-purple-700',
+  Enrolled: 'bg-emerald-50 text-emerald-800',
+  Trial: 'bg-blue-50 text-blue-800',
+  Prospect: 'bg-amber-50 text-amber-900',
+  Inactive: 'bg-slate-100 text-slate-700',
+  Alumni: 'bg-slate-100 text-slate-700',
 };
 
 export const SESSION_TYPE_COLORS = {
@@ -73,7 +73,7 @@ export const PAYROLL_STATUS_COLORS = {
 
 export const CRM_STATUS_COLORS = {
   NEW: 'bg-blue-50 text-blue-800', CONTACTING: 'bg-amber-50 text-amber-900',
-  ENGAGED: 'bg-teal-50 text-teal-800', QUALIFIED: 'bg-emerald-50 text-emerald-800',
-  LOST: 'bg-slate-100 text-slate-600', NOT_QUALIFIED: 'bg-stone-100 text-stone-700',
-  CONVERTED: 'bg-green-50 text-green-800',
+  ENGAGED: 'bg-blue-50 text-blue-800', QUALIFIED: 'bg-emerald-50 text-emerald-800',
+  LOST: 'bg-slate-100 text-slate-700', NOT_QUALIFIED: 'bg-slate-100 text-slate-700',
+  CONVERTED: 'bg-emerald-50 text-emerald-800',
 };

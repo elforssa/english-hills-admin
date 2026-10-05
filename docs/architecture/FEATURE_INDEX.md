@@ -44,3 +44,7 @@ Related routes: [timetable](../../src/app/(admin)/timetable), [learning assessme
 [Next outcomes](../ai/CURRENT_STATE.md#next-meaningful-outcomes) identify dormant lifecycle acceptance, prospective activation, receptionist UX and live Insights. [Online learning](../ai/ARCHITECTURE.md#architecture-gaps) is MISSING ARCHITECTURE, with no room/video-provider/access/breakout contract or authoritative migration yet. The [multi-source assessment](evidence/crm-multi-source-readiness-2026-10-01.md) identifies onboarding/incremental-activation/website-adapter gaps without redesigning them here.
 
 Use the [active contract index](plans/README.md), [ADRs](decisions/README.md) and [historical index](history/README.md). The old Meta announcement stack is preserved in the [index snapshot](history/feature-index-before-outcome-1.md). Engineering workflow remains in [AGENTS](../../AGENTS.md).
+
+## UI Foundation source outcome
+
+[Owner-approved UIF-r1](plans/english-hills-ui-foundation.md) and [ADR-005](decisions/ADR-005-operational-ui-foundation.md) are implemented on the feature branch across Opportunities/drawer, Tasks and Students, with bounded Dashboard/Placement read-state corrections. [Evidence](evidence/english-hills-ui-foundation-implementation-2026-10-06.md) and [usage guidance](../ui/operational-foundation.md) describe source state. No UIF Production release is claimed; the deployed #102/109 prerequisites remain separate evidence.

@@ -1,7 +1,8 @@
 'use client';
 
+import ReadState from '@/components/operational/ReadState';
 import { useAuth } from '@/context/AuthContext';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AdmissionsCalendar from '@/components/placement/AdmissionsCalendar';
 import { entities } from '@/lib/entities';
@@ -19,26 +20,35 @@ const STATUS_COLORS = {
 };
 
 function PlacementTestsList() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const scope = `${user?.id}:${role}`;
+  const loadGeneration = useRef(0);
+  const [attemptedScope, setAttemptedScope] = useState(null);
+  const [loadedScope, setLoadedScope] = useState(null);
   const [tests, setTests] = useState([]);
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [modal, setModal] = useState(null);
 
-  const load = () => Promise.all([
+  const load = useCallback(() => {
+    const generation = ++loadGeneration.current;
+    setAttemptedScope(scope);
+    setLoading(true); setLoadError(false);
+    return Promise.all([
     entities.PlacementTest.listAll('-date_test'),
     entities.Group.listAll('name'),
     entities.Student.listAll('full_name'),
   ])
-    .then(([t, g, s]) => { setTests(t); setGroups(g); setStudents(s); })
-    .catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('[placement-tests] load failed:', err);
-    })
-    .finally(() => setLoading(false));
-
-  useEffect(() => { load(); }, []);
+    .then(([t, g, s]) => { if (generation !== loadGeneration.current) return; if (![t,g,s].every(Array.isArray)) throw new Error('Unavailable list'); setTests(t); setGroups(g); setStudents(s); setLoaded(true); setLoadedScope(scope); })
+    .catch(() => { if (generation === loadGeneration.current) setLoadError(true); })
+    .finally(() => { if (generation === loadGeneration.current) setLoading(false); });
+  }, [scope]);
+  const cancelLoad = useCallback(() => { ++loadGeneration.current; }, []);
+  useEffect(() => { load(); return cancelLoad; }, [load, cancelLoad]);
+  const sameScope = loadedScope === scope;
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce test ?')) return;
@@ -50,12 +60,13 @@ function PlacementTestsList() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Tests de niveau</h1>
-        <Button onClick={() => setModal({})} className="self-start sm:self-auto">
+        <Button disabled={loading || loadError || !sameScope} onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Planifier un test
         </Button>
       </div>
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
+        <ReadState state={attemptedScope !== scope ? 'loading' : loading ? sameScope ? 'refreshing' : 'loading' : loadError ? sameScope ? 'stale' : 'error' : !sameScope ? 'loading' : tests.length ? 'ready' : 'empty'} message={!loading && !loadError && sameScope && !tests.length ? 'Aucun test de niveau enregistré. Planifiez un test pour un apprenant existant.' : undefined} onRetry={loadError ? load : undefined}>
+        {sameScope && loaded && tests.length > 0 && (
           <>
             <div className="sm:hidden divide-y divide-border">
               {tests.map(t => (
@@ -113,6 +124,7 @@ function PlacementTestsList() {
             </div>
           </>
         )}
+        </ReadState>
       </div>
       {modal !== null && <PlacementTestModal test={modal.id ? modal : null} groups={groups} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>

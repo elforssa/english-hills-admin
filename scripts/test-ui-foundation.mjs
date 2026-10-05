@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join, basename } from 'node:path';
+import { tmpdir } from 'node:os';
+import { build } from 'esbuild';
+import { renderToStaticMarkup } from 'react-dom/server';
+import React from 'react';
+import { createRequire } from 'node:module';
+import { financeReadResult, failedRead } from '../src/lib/ui/readResults.mjs';
+import { queryReadState, inquirySummary, answerValue, programmeLabel, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel } from '../src/lib/ui/presentation.mjs';
+const keys=['encaisse','restant','total','count'];
+assert.deepEqual(financeReadResult({data:Object.fromEntries(keys.map(k=>[k,0]))},keys),{state:'ready',data:{encaisse:0,restant:0,total:0,count:0}});
+assert.equal(financeReadResult({error:{message:'denied'},data:{total_encaisse:0}},['total_encaisse']).reason,'rpc-error');
+for(const response of [null,{}, {data:null}]) assert.equal(financeReadResult(response,keys).reason,'missing');
+for(const data of [{},[],0,{encaisse:0,restant:null,total:0,count:0},{encaisse:'',restant:0,total:0,count:0},{encaisse:'bad',restant:0,total:0,count:0},{encaisse:Infinity,restant:0,total:0,count:0}]) assert.equal(financeReadResult({data},keys).reason,'malformed');
+assert.deepEqual(failedRead({data:{total_encaisse:0}}),{state:'stale',reason:'rejected',data:{total_encaisse:0}});
+assert.equal(failedRead({state:'loading'}).state,'error');
+assert.equal(failedRead({scope:'current-period',state:'ready',data:{total_encaisse:0}}).scope,'current-period','refresh failure preserves scope for the next retry');
+for(const [query,options,state] of [[{isPending:true},{},'loading'],[{data:[],isFetching:true},{},'refreshing'],[{data:[],isError:true},{},'stale'],[{isError:true},{},'error'],[{data:[]},{empty:true},'empty'],[{data:[]},{empty:true,filtered:true},'filtered-empty'],[{data:null},{},'unavailable'],[{data:0},{},'ready']]) assert.equal(queryReadState(query,options),state);
+assert.equal(programmeLabel('Yearly'),'Programme annuel');assert.equal(programmeLabel(null),'Programme à préciser');
+assert.equal(displayLabel(DOSSIER_LABELS,'Enrolled'),'Inscrit (dossier)');assert.equal(displayLabel(ENROLLMENT_LABELS,'Confirmed'),'Inscrit — groupe à affecter');assert.equal(displayLabel(DOSSIER_LABELS,'unknown'),'Non précisé');
+const answers=[{label:'Autre',value:'reste accessible'},{label:'Tranche d’âge',display_value:'13–17'},{label:'Déplacement au centre',value:true},{label:'Programme souhaité',value:['Annuel','Adultes']}];
+assert.deepEqual(inquirySummary({answers}).map(a=>answerValue(a)),['13–17','Oui','Annuel · Adultes']);assert.equal(answers.length,4,'summary never mutates full answers');
+// Render real presentation components, including zero/empty and field associations.
+const compiled=await build({entryPoints:['src/components/operational/ReadState.jsx','src/components/operational/FormField.jsx','src/components/operational/PageFrame.jsx'],bundle:true,write:false,format:'cjs',jsx:'automatic',platform:'node',outdir:join(tmpdir(),'ui-foundation-test'),external:['react'],alias:{'@':process.cwd()+'/src'}});
+const components=[], require=createRequire(import.meta.url);
+for(const output of compiled.outputFiles){const module={exports:{}};new Function('require','module','exports',output.text)(require,module,module.exports);components.push([basename(output.path),module.exports.default]);}
+const ReadState=components.find(([name])=>name==='ReadState.js')[1], FormField=components.find(([name])=>name==='FormField.js')[1];
+let html=renderToStaticMarkup(React.createElement(ReadState,{state:'ready'},React.createElement('span',null,0)));assert(html.includes('>0<'));
+html=renderToStaticMarkup(React.createElement(ReadState,{state:'error',onRetry:()=>{}},React.createElement('span',null,'false-empty')));assert(html.includes('role="alert"'));assert(html.includes('Réessayer'));assert(!html.includes('false-empty'));
+html=renderToStaticMarkup(React.createElement(ReadState,{state:'stale'},React.createElement('span',null,'retained')));assert(html.includes('retained'));assert(html.includes('dernières informations'));
+html=renderToStaticMarkup(React.createElement(FormField,{label:'Date',help:'Casablanca',error:'Requis'},React.createElement('input',{id:'date'})));assert(html.includes('for="date"'));assert(html.includes('aria-describedby="date-help date-error"'));assert(html.includes('aria-invalid="true"'));
+const css=readFileSync('src/app/globals.css','utf8');assert(css.includes('--accent: 216 30% 95%'));assert(css.includes('--destructive: 352 77% 42%'));
+console.log('PASS UIF read truth, valid zero, malformed/error rejection, stale data, domain vocabulary, bounded summary and accessible field/state rendering');

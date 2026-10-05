@@ -58,6 +58,10 @@ The [dated release evidence](../architecture/evidence/receptionist-production-ux
 
 **Meta lifecycle remains DORMANT:** release verification recorded inactive lifecycle cron, zero activation epochs, zero external deliveries and zero external delivery attempts. These observations do not authorize activation or complete separate dormant integration acceptance. Scheduling, authorization, commands, finance and enrollment semantics remain unchanged.
 
+## UI Foundation source implementation — 2026-10-06
+
+**IMPLEMENTED ON FEATURE BRANCH; NOT MERGED OR DEPLOYED.** Owner-approved [UIF-r1](../architecture/plans/english-hills-ui-foundation.md) / [ADR-005](../architecture/decisions/ADR-005-operational-ui-foundation.md) is implemented on `codex/ui-foundation-implementation`, based on verified main `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`. Shared operational primitives serve Opportunities/drawer, Tasks/My Work and Students list/detail. Dashboard finance and Placement list reads have bounded truthful error/loading/retry presentation with unchanged read arguments and domain behavior. [Implementation evidence](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md) owns local acceptance and handoff evidence; CI/review/release are separate. No migration, new RPC, permission or Production mutation. The deployed #102/109 baseline above remains the latest cited Production record.
+
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.
