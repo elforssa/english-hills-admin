@@ -5,9 +5,9 @@ begin;
 
 do $$
 begin
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 108
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102','103','104','105','106','107','108')) <> 8 then
-  raise exception 'Expected direct migration 100 through 108';
+ if (select max(version::integer) from supabase_migrations.schema_migrations) <> 109
+  or (select count(*) from supabase_migrations.schema_migrations where version in ('101','102','103','104','105','106','107','108','109')) <> 9 then
+  raise exception 'Expected direct migration 100 through 109';
  end if;
  if (select count(*) from public.crm_external_deliveries where provider_event_id like 'upgrade100:%') <> 2 then
   raise exception 'Migration-100 delivery identities were changed or duplicated';

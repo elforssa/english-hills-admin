@@ -53,3 +53,57 @@ Final local results and exact head/base/PR/CI scheduling references are recorded
 **One focused author self-check completed:** inspected the final scoped diff, scheduled-time uses, response keys, stored-role guards/private helper ACLs, allowed read-body manifest and unchanged deployed migrations/predicates; reused stateful hash and role/browser evidence. Visual inspection confirmed the drawer's scheduled action and controls remain usable. No internal reviewer/subagent or formal independent review was performed.
 
 The build/browser runtime source blobs were recorded before commit and are verified against the exact PR head in the handoff. Local logs and synthetic screenshots remain temporary local evidence, not customer exports or repository attachments. No finding remains intentionally unresolved; historical activity/acquisition formatting remains outside the requested scheduled-time correction.
+
+
+## CI migration-ceiling correction — 2026-10-05
+
+PR #102 remains on the same implementation branch. [Verify run 37310266569](https://github.com/elforssa/english-hills-admin/actions/runs/37310266569) passed classify, docs and app; local-database stopped at Synthetic 097 to current because its current-ledger assertion still expected 108. The owner authorized correcting current-ceiling assertions, sweeping the required scripts, and executing the complete remaining local-database chain before one corrective push. This is test/evidence maintenance within the existing Tier-2 outcome; the O3-r2 contract and owner authorization remain unchanged.
+
+| Corrected script | Stale assumption corrected |
+| --- | --- |
+| [Batch-2 current upgrade](../../../scripts/test-crm-batch2-upgrade-current.sql) | Maximum version 108 → 109; explicit 098–108 list/count 11 → 098–109 list/count 12; both diagnostic messages updated. |
+| [R4 migration-100 current upgrade](../../../scripts/test-crm-r4-upgrade-100-current.sql) | Maximum version 108 → 109; explicit 101–108 list/count 8 → 101–109 list/count 9; diagnostic range updated. |
+| [R4 migration-102 current upgrade](../../../scripts/test-crm-r4-upgrade-102-current.sql) | Maximum version and expected-version diagnostic 108 → 109. |
+| [H3 migration-103 current upgrade](../../../scripts/test-crm-h3-upgrade-103-current.sql) | Maximum version and “upgraded to current” label 108 → 109. |
+
+### Comprehensive sweep classification
+
+Searched all `scripts` and `.github` files for `108`, `max(version`, expected/current-108 wording, migration-ledger references and explicit ranges ending in 108. The four scripts above contained all stale current ceilings: four maximum-version assertions and two explicit list/count assertions. No other stale current ceiling was found.
+
+| Remaining match family | Classification and reason |
+| --- | --- |
+| 097, 100, 102 and 103 setup maximum-version checks | Intentional historical baselines before applying the repository migrations. |
+| Reconciliation repair maximum 105 | Intentional fresh 001→105 replay and stateful 104→105 fixture. |
+| H3-04 count/maximum `106\|106` | Intentional exact provider seed at migration 106. |
+| Opportunities maximum 106; Work/Calendar maximum 107 and migration-108 references | Intentional 106→107 / 107→108 stateful tests and migration-specific source assertions. |
+| Receptionist UX maximum/baseline 108 and workflow reset `--version 108` | Intentional 108→109 stateful test; script and workflow preserved byte-for-byte. |
+| Entries 108 in the two corrected explicit lists | Required intermediate migration in the expanded ranges ending in 109. |
+| Release-health min/max/count query | Diagnostic inventory, with no asserted current ceiling. |
+| Other individual historical ledger-presence checks and pre-055 fixture | Migration-specific coverage, not a current-version assertion. |
+| `1086266294126723` in R4 fixtures; unrelated date/limit expressions | Synthetic form identifier or non-migration expression, not a ceiling. |
+
+No migration, runtime code, historical O3 Batch-2 evidence, deployed migration filename or workflow was changed by this correction. Production remains unchanged; merge/release hold and separate independent-review requirements remain in effect.
+
+### Corrected-chain validation
+
+Executed the exact 13 remaining run blocks from `.github/workflows/verify.yml`, starting at Synthetic 097 to current and ending with the forced sharing-stop race matrix, sequentially on local synthetic Supabase (CLI 2.116.0, PostgreSQL 17.6), with external email disabled. No required later step was skipped.
+
+| CI step | Local result |
+| --- | --- |
+| Synthetic 097 to current upgrade | PASS |
+| Stateful 100 to revision-4 upgrade | PASS |
+| Closed 102 to advisory 103 upgrade | PASS |
+| Stateful 103 to H3-02 compatibility upgrade | PASS |
+| H3-04 exact provider seed fresh, stateful upgrade, security and dormancy acceptance | PASS |
+| Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance | PASS |
+| Rollback-only migration regression | PASS |
+| Advisory D2 scope, safety and retention acceptance | PASS |
+| H3-02 strict exported-second acceptance in both D2 modes | PASS |
+| Lifecycle concurrency and CRM role matrix | PASS |
+| Synthetic database and API role suites | PASS |
+| CRM revision-4 isolated concurrency | PASS |
+| Advisory R4 forced sharing-stop race matrix | PASS |
+
+The synthetic/API step includes a fresh production build, Batch-3A/4A role/security checks, large-data reports/export, receptionist browser, lifecycle browser, the complete Opportunities/phase-4/5/6 browser sequence, and Work/Calendar in Chromium and WebKit. The final race suites remove fixtures via a local reset through 109. Local step logs are `/tmp/hills-102-ci-step-1.log` through `/tmp/hills-102-ci-step-13.log`, with the command/result manifest in `/tmp/hills-102-ci-results.json`.
+
+Validation ran on parent `6a7aa492599c5dff3af79824bbb2b4a090617d2d` plus exactly the four SQL corrections above; this evidence is the only additional changed file. The corrective commit/PR handoff identifies the resulting exact HEAD. A targeted author re-check confirmed only current ceilings/range counts and matching diagnostics changed; intentional baseline fixtures, migration 109, runtime and workflow remain unchanged. Changed-Markdown links/anchors, added secret/PII heuristics and whitespace are checked before the single push. No independent review was performed; fresh full remote CI scheduling is followed by an author stop.
