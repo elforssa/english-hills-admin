@@ -137,6 +137,6 @@ This document does not design SaaS/multi-tenancy or management agents.
 | [FEATURE_INDEX](../architecture/FEATURE_INDEX.md) | Navigation and state mapping, not another specification. |
 | [Historical index](../architecture/history/README.md), [completed plans](../architecture/plans/completed), [evidence](../architecture/evidence) | Preserved reasoning, release/implementation evidence and superseded procedures; dated evidence supports current claims but is not an instruction to replay operations. |
 
-## Scheduled operational display correction source
+## Adopted scheduled operational display contract
 
-The [post-Outcome-3 correction](../architecture/evidence/receptionist-production-ux-corrections-2026-10-05.md) adds civil date/time fields derived in PostgreSQL for scheduled CRM reads; browser displays consume those values directly. Raw UTC instants remain the ordering/write/concurrency identity. Migration 109 is not deployed; existing scheduling/authorization architecture remains unchanged.
+The deployed post-Outcome-3 migration 109 establishes server/database Casablanca civil date/time fields as the adopted scheduled operational display contract. Scheduled CRM reads project these values in PostgreSQL; browser displays consume them directly without independently reinterpreting the appointment through browser timezone data. Raw UTC instants remain the ordering/write/concurrency identity. Scheduling and authorization semantics remain unchanged. [CURRENT_STATE](CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout) owns current release status and links the dated compatibility evidence; completed O3-r2 remains the 107–108 architecture record.

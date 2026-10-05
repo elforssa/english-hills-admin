@@ -2,7 +2,7 @@
 
 ## Status
 
-**PROPOSED — owner acceptance pending**, 2026-10-05. Contract revision [UIF-r1](../plans/english-hills-ui-foundation.md). No implementation, merge, deployment or release approval is recorded by this ADR.
+**PROPOSED — owner approval pending**, 2026-10-05. Contract revision [UIF-r1](../plans/english-hills-ui-foundation.md). No UIF implementation, merge, deployment or release approval is recorded by this ADR; architecture merge must not imply implementation approval.
 
 ## Context
 
@@ -12,7 +12,7 @@ The completed source UI proposal and receptionist QA found reusable primitives a
 
 Retain Tailwind, shadcn/Radix, Lucide and Recharts. Use shared semantic tokens and small controlled presentation components, with domain-owned queries, commands, permission gates and labels. Establish the foundation through Opportunities + lead drawer, Tasks / My Work, and Students list/detail as one implementation outcome. Do not build universal entity tables, form engines or dashboard builders, or mandate conversion of every existing page.
 
-The four binding presentation invariants are authoritative server/database Casablanca scheduled-time display, composable URL/filter/navigation state, stable safe operational staff labels, and truthful distinct read states. The [plan](../plans/english-hills-ui-foundation.md#four-interaction-invariants) specifies their behavior and acceptance tests. PR #102's four corrections are adopted on main at merge commit `3c462f7fce87261ff92c565fecf8ab652262bb81`; migration 109 and the matching Production frontend were subsequently verified compatible. UIF implementation must still branch from then-current main only after owner acceptance of UIF-r1.
+The four binding presentation invariants are authoritative server/database Casablanca scheduled-time display, composable URL/filter/navigation state, stable safe operational staff labels, and truthful distinct read states. The [plan](../plans/english-hills-ui-foundation.md#four-interaction-invariants) specifies their behavior and acceptance tests. PR #102's four corrections are adopted on main at merge commit `3c462f7fce87261ff92c565fecf8ab652262bb81`; migration 109 and the matching Production frontend were subsequently verified compatible, as recorded by [CURRENT_STATE](../../ai/CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout) and the [bounded release closeout](../evidence/receptionist-production-ux-corrections-2026-10-05.md#production-closeout--2026-10-05). UIF implementation must still branch from then-current main only after owner acceptance of UIF-r1.
 
 ## Consequences and boundaries
 
