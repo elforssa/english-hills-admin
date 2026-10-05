@@ -69,6 +69,7 @@ jobs:
       - run: npm run test:crm-intake
       - run: npm run test:crm-lifecycle
       - run: npm run test:navigation
+      - run: npm run test:crm-opportunities
       - run: npx playwright install --with-deps chromium
       - run: npm run test:middleware
       - run: npm run lint
@@ -98,7 +99,7 @@ jobs:
         with:
           version: 2.116.0
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: supabase start
       - name: Configure local-only app credentials
         run: |
@@ -107,6 +108,12 @@ jobs:
           rm /tmp/hills-supabase-status.env
           test "$(wc -l < .env.local)" -eq 3
           grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
+      - name: Opportunities stateful 106 upgrade and bounded read acceptance
+        run: |
+          supabase db reset --local --version 106 --no-seed
+          O3_UPGRADE_PORT=54322 node scripts/test-crm-opportunities-upgrade.mjs
+          supabase db reset --local --no-seed
+          npm run test:crm-opportunities-local
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -173,11 +180,15 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v d2_requirement=advisory -f scripts/test-crm-r4-provider-time.sql
       - name: Lifecycle concurrency and CRM role matrix
         run: |
+          python3 scripts/test-crm-phase4-concurrency.py
+          python3 scripts/test-crm-phase5-concurrency.py
+          python3 scripts/test-crm-phase6-concurrency.py
           python3 scripts/test-crm-phase10-concurrency.py
           node scripts/test-crm-phase12-security.mjs
       - name: Synthetic database and API role suites
         run: |
-          npm run dev -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &
+          npm run build
+          npm run start -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 90); do
@@ -190,6 +201,7 @@ jobs:
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
           npm run test:crm-lifecycle-browser
+          npm run test:crm-opportunities-browser
       - name: CRM revision-4 isolated concurrency
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
       - name: Advisory R4 forced sharing-stop race matrix

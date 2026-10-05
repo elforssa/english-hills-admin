@@ -17,8 +17,8 @@ const OPERATIONS = [...ADMIN, 'receptionist'];
 const STAFF = ['admin', 'director', 'teacher'];
 
 const NAV = [
+  { href: '/crm/leads', label: 'Opportunités', icon: Users, roles: OPERATIONS },
   { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar, roles: OPERATIONS },
-  { href: '/crm/leads', label: 'Prospects', icon: Users, roles: OPERATIONS },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },

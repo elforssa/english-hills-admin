@@ -100,7 +100,7 @@ try {
     if (!(await page.getByRole('button', { name: 'Se connecter', exact: true }).isEnabled())) continue;
     await page.getByRole('button', { name: 'Se connecter', exact: true }).click();
     try {
-      await page.waitForURL(app + '/crm/today', { timeout: 12000 });
+      await page.waitForURL(app + '/crm/leads', { timeout: 12000 });
       signedIn = true;
     } catch (error) {
       const loginError = await page.locator('.text-red-700').first().textContent().catch(() => null);
@@ -340,7 +340,7 @@ try {
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
     assert.equal(new URL(blocked.headers().location, app).pathname, '/crm/today');
-    await page.goto(app + path); await page.waitForURL(app + '/crm/today');
+    await page.goto(app + path); await page.waitForURL(app + '/crm/leads');
     await page.waitForLoadState('networkidle');
     assert(!pageRequests.slice(requestsBeforeRedirect).some(requestPath => forbiddenPageData.test(requestPath)),
       `Restricted data preloaded before redirect from ${path}`);

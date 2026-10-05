@@ -1,11 +1,12 @@
 // Local Auth + real UI + RPC regression. Synthetic fixtures are removed in finally.
-// No Git subprocesses, production connections, external requests or real data copies.
+// No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
-const head=readFileSync('.git/HEAD','utf8').trim();assert.ok(head.startsWith('ref: refs/heads/codex/'));
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
@@ -29,7 +30,7 @@ async function done(){await dialog().getByRole('button',{name:'Terminé',exact:t
 async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
 async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
-async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
+async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean policy baseline required');
  for(const role of ['director','receptionist','admin']){
@@ -60,9 +61,9 @@ try {
  // A legitimate admin center update is the trigger, never a CRM Converted button.
  sql(`begin;set local request.jwt.claim.sub='${users[2].id}';set local role authenticated;update public.enrollments set status='Confirmed' where id='${linked.enrollment.id}';commit;`);
  await open(lead);assert.equal(detail(lead).status,'CONVERTED');await page.getByRole('dialog').getByText('Converti',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Appel',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:"Commencer l'inscription",exact:true}).count(),0);await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).waitFor();await screenshot({path:'/private/tmp/hills-phase6-converted-drawer.png',fullPage:false});
- await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).click();await page.waitForURL('**/students/'+linked.enrollment.student_id);await page.getByRole('heading',{name:'Adam inscription CRM',exact:true}).waitFor();
+ await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).click();await page.waitForURL(url=>url.pathname==='/students/'+linked.enrollment.student_id);await page.getByRole('heading',{name:'Adam inscription CRM',exact:true}).waitFor();
  await page.goto(app+'/crm/today');await page.getByRole('heading',{name:'Aujourd’hui',exact:true}).waitFor();await expect(page.getByTestId('lead-row')).toHaveCount(0);
- await page.goto(app+'/crm/leads');await page.getByLabel('Statut',{exact:true}).selectOption('CONVERTED');await page.getByTestId('lead-row').filter({hasText:'Sara inscription CRM'}).waitFor();await screenshot({path:'/private/tmp/hills-phase6-converted.png',fullPage:false});
+ await page.goto(app+'/crm/leads?layout=list');await page.getByLabel('Statut',{exact:true}).selectOption('CONVERTED');await page.getByTestId('opportunity-row').filter({hasText:'Sara inscription CRM'}).waitFor();await screenshot({path:'/private/tmp/hills-phase6-converted.png',fullPage:false});
  await page.setViewportSize({width:390,height:844});await open(lead);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot({path:'/private/tmp/hills-phase6-mobile.png',fullPage:false});await page.setViewportSize({width:1440,height:1000});
  console.log('PASS trusted admin confirmation, converted search, sales actions/queue removed, safe student navigation and mobile');
  // Family candidates share a telephone; explicit selection is mandatory.
@@ -88,6 +89,7 @@ try {
  assert.deepEqual(pageErrors,[]);await directorContext.close();
  console.log('PASS downgrade preserves conversion and director-visible review indication; no browser errors');
 } catch(error) {
+ console.error(error.message);
  if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4500));await screenshot({path:'/private/tmp/hills-phase6-failure.png',fullPage:true});}throw error;
 } finally {
  if(browser)await browser.close();
@@ -97,6 +99,6 @@ try {
  with removed_placements as(delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
  alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
- delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});delete from auth.users where id in(${ids});delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
+ delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
  console.log('PASS synthetic browser fixtures removed; history guards restored');
 }

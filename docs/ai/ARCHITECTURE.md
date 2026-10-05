@@ -83,6 +83,10 @@ Director has school management plus CRM technical configuration, revenue/reporti
 
 **Enrollment/group → teaching schedule → attendance and learning evidence.** Academic relationships govern teacher access and student/group consistency. Attendance, assessments and portfolios describe teaching activity; Premium sessions add workshops, membership, attendance and homework. They do not imply video-room, breakout or remote-access architecture. See [WORKFLOWS](WORKFLOWS.md) for operational journeys.
 
+## Opportunities source architecture
+
+The [O3-r2 Batch-1 implementation](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) extends the existing CRM workspace, drawer, command dialogs, placement and enrollment components. Four additive authenticated read RPCs provide bounded Board/List membership and counts, cursor facets, a fixed first/latest acquisition projection and cursor operational history. Existing semantic commands own every stage transition; drag only proposes a dialog. Conversion still follows trusted enrollment. Reads retain existing authorization helpers and explicit compact projections, without new RLS, write semantics or indexes. See CURRENT_STATE for the unmerged/undeployed source boundary and the Production ledger.
+
 ## Acquisition and integrations
 
 Meta signed webhook and independently enabled bounded reconciliation enqueue the same `crm_ingestion_jobs` identity. Reconciliation discovers IDs; the shared worker retrieves and normalizes them with immutable mappings. Leases, idempotency and guarded finalization fence overlapping workers. The database-owned activation watermark and rolling lookback are not historical backfill or a durable pagination cursor. Exact ownership conflicts stop discovery while independent intake continues. [ADR-002](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).

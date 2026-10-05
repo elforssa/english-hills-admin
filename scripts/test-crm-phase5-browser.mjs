@@ -1,11 +1,12 @@
 // Local Auth + real UI + RPC regression. Synthetic fixtures are removed in finally.
-// No Git subprocesses, production connections, external requests or real data copies.
+// No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, expect } from '@playwright/test';
-const head=readFileSync('.git/HEAD','utf8').trim();assert.ok(head.startsWith('ref: refs/heads/codex/'));
+import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
@@ -29,7 +30,7 @@ async function done(){await dialog().getByRole('button',{name:'Terminé',exact:t
 async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
 async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
-async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
+async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean policy baseline required');
  for(const role of ['director','receptionist','admin']){
@@ -86,6 +87,7 @@ try {
  await normalRow.getByRole('button',{name:/Test du/}).click();await dialog().getByLabel('Notes',{exact:true}).fill('Précision du résultat');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);assert.equal(emails.length,1,'ordinary result edit does not resend email');
  await adminContext.close();assert.deepEqual(pageErrors,[]);console.log('PASS mobile, linked delete hidden for admin, and existing non-CRM result email behavior (intercepted, never sent)');
 } catch(error) {
+ console.error(error.message);
  if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4000));await screenshot({path:'/private/tmp/hills-phase5-failure.png',fullPage:true});}
  throw error;
 } finally {
@@ -98,6 +100,6 @@ try {
  alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
  ${normalTests.length ? `delete from public.placement_tests where id in(${normalTests.map(quote).join(',')});` : ''}
  ${normalStudents.length ? `delete from public.students where id in(${normalStudents.map(quote).join(',')});` : ''}
- delete from auth.users where id in(${ids});delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
+ alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
  console.log('PASS synthetic browser fixtures removed; history guards restored');
 }

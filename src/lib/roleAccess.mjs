@@ -1,7 +1,7 @@
 // Presentation and route policy. SQL and handlers independently authorize actions.
 // Roles always come from the stored profile, never request or user metadata.
 export const ROLE_HOME = {
-  director: '/dashboard', admin: '/dashboard', receptionist: '/crm/today',
+  director: '/dashboard', admin: '/dashboard', receptionist: '/crm/leads',
   teacher: '/teacher-portal', parent: '/parent-portal', student: '/student-portal',
 };
 

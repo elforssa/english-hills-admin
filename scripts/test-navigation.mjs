@@ -47,7 +47,7 @@ for (const path of ['/finance', '/students/import', '/students/00000000-0000-000
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
   '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',
   '/students/%2fetc', '/groups/not-a-uuid', '//example.com', '/\\example.com']) {
-  assert.equal(loginDestination('receptionist', path), '/crm/today');
+  assert.equal(loginDestination('receptionist', path), '/crm/leads');
 }
 for (const role of ['director', 'admin', 'receptionist']) {
   for (const capability of ['canManageStudents','canManageGroups','canManageFinanceOperations','canManageTeacherOperations'])
@@ -69,3 +69,6 @@ assert.equal(hasCapability('director', 'canCorrectFinance'), true);
 assert.equal(hasCapability('admin', 'canCorrectFinance'), false);
 assert.equal(hasCapability('director', 'unknown'), false);
 console.log('PASS receptionist login destinations and exact operational route boundaries');
+
+assert.equal(safeReturnTo('/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001'), '/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001');
+assert.equal(safeReturnTo('/crm/leads/anything'), '/students');
