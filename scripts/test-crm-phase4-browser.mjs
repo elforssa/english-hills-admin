@@ -137,7 +137,8 @@ try {
  alter table public.crm_submissions disable trigger crm_submission_immutable;
  update public.crm_submissions set form_answers='[{"key":"age","label":"Âge déclaré","value":8,"value_type":"number","label_source":"synthetic"},{"key":"days","label":"Jours souhaités","value":["Mercredi","Samedi"],"value_type":"array","label_source":"synthetic"},{"key":"ready","label":"Disponible","value":true,"value_type":"boolean","label_source":"synthetic"},{"key":"campaign_id","label":"Campagne","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"leadgen_id","label":"Référence","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"financial_balance","label":"Solde","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"}]' where lead_id='${lead}';
  alter table public.crm_submissions enable trigger crm_submission_immutable;commit;`);
- await page.goto(app+'/crm/today');await page.getByTestId('lead-row').first().waitFor();assert.match(await page.getByTestId('lead-row').first().innerText(),/Urgence synthétique/);await page.getByText('Prochaine action manquante',{exact:true}).waitFor();await page.getByText('Contact à relancer',{exact:true}).waitFor();await page.screenshot({path:join(tmpdir(), 'hills-phase4-today.png'),fullPage:true});await page.getByTestId('lead-row').first().getByRole('button',{name:'Voir',exact:true}).click();await page.waitForURL(url=>url.searchParams.get('lead')===overdue);
+ await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByTestId('work-row').first().waitFor();assert.match(await page.getByTestId('work-row').first().innerText(),/Urgence synthétique/);await page.screenshot({path:join(tmpdir(), 'hills-phase4-today.png'),fullPage:true});await page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect',exact:true}).click();await page.waitForURL(url=>url.searchParams.get('lead')===overdue);
+ await page.goto(app+'/crm/leads?view=attention&layout=list');await page.getByTestId('opportunity-row').filter({hasText:'Sans action synthétique'}).waitFor();await page.getByTestId('opportunity-row').filter({hasText:'Relance synthétique'}).waitFor();
  await open(lead);await page.screenshot({path:join(tmpdir(), 'hills-phase4-detail.png'),fullPage:false});await page.getByText('Réponses aux formulaires',{exact:true}).click();await page.getByText('Mercredi · Samedi',{exact:true}).waitFor();await page.getByText('Oui',{exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE-SENTINEL|campaign_id/);
  console.log('PASS Today overdue ordering, missing/stale indicators, Today drawer and safe scalar/array/boolean form answers');
  // Search + mobile screenshot; no technical fields leak in UI or read responses.
@@ -148,12 +149,13 @@ try {
  // A mutation from page 2 resets the live Today queue, without snapshot infrastructure.
  await page.setViewportSize({width:1440,height:1000});
  for(let i=0;i<28;i++)intake('File accueil '+i);
- await page.goto(app+'/crm/today');const pager=page.getByRole('navigation',{name:'Pagination'}).first();
- await pager.getByRole('button',{name:'Suivant',exact:true}).click();await pager.getByText(/^26–/).waitFor();
- await page.getByTestId('lead-row').first().getByRole('button',{name:'Voir',exact:true}).click();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
+ sql("update public.crm_tasks set due_at=now()-interval '2 minutes' where lead_id in (select id from public.crm_leads where contact_id in(select id from public.crm_contacts where display_name like 'File accueil %'))");
+ await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByTestId('work-row').first().waitFor();const firstTask=await page.getByTestId('work-row').first().getAttribute('data-task-id');
+ await page.getByRole('button',{name:'Suivantes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,firstTask);
+ await page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect',exact:true}).click();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Note',exact:true}).click();await dialog().getByLabel('Note',{exact:true}).fill('Mise à jour depuis la deuxième page');await save();await done();
- await page.getByRole('button',{name:'Close',exact:true}).click();await pager.getByText(/^1–25/).waitFor();
- assert.equal(await page.getByTestId('lead-row').count(),25);
+ await page.getByRole('button',{name:'Close',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,firstTask);
+ assert.equal(await page.getByTestId('work-row').count(),25);
  console.log('PASS live queue reset to page 1 after a mutation; bounded unique cards');
  await context.close();
  // Each role uses real local Auth; direct routes and read RPCs independently gated.

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
@@ -17,8 +17,15 @@ const OPERATIONS = [...ADMIN, 'receptionist'];
 const STAFF = ['admin', 'director', 'teacher'];
 
 const NAV = [
-  { href: '/crm/leads', label: 'Opportunités', icon: Users, roles: OPERATIONS },
-  { href: '/crm/today', label: 'Aujourd’hui', icon: Calendar, roles: OPERATIONS },
+  { label: 'CRM', icon: Users, roles: OPERATIONS, children: [
+    { href: '/crm/leads', label: 'Opportunités', roles: OPERATIONS },
+    { href: '/crm/today', label: 'Tâches', roles: OPERATIONS },
+  ] },
+  { label: 'Admissions', icon: ClipboardList, roles: OPERATIONS, children: [
+    { href: '/placement-tests', label: 'Tests de niveau', roles: OPERATIONS },
+    { href: '/placement-tests?view=calendar', label: 'Calendrier', roles: OPERATIONS },
+    { href: '/enrollments', label: 'Inscriptions', roles: OPERATIONS },
+  ] },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
@@ -39,7 +46,6 @@ const NAV = [
       { href: '/attendance', label: 'Présences', roles: [...OPERATIONS, 'teacher'] },
       { href: '/timetable', label: 'Emploi du temps', roles: [...OPERATIONS, 'teacher'] },
       { href: '/premium-sessions', label: 'Heures Premium', roles: [...OPERATIONS, 'teacher'] },
-      { href: '/placement-tests', label: 'Tests de niveau', roles: OPERATIONS },
       { href: '/assessments', label: 'Notes & bulletins', roles: [...OPERATIONS, 'teacher'] },
     ],
   },
@@ -49,12 +55,6 @@ const NAV = [
       { href: '/finance', label: 'Tableau de bord finance', roles: ADMIN },
       { href: '/receipts/new', label: 'Nouveau reçu', roles: OPERATIONS },
       { href: '/receipts', label: 'Tous les reçus', roles: OPERATIONS },
-    ],
-  },
-  {
-    label: 'Inscriptions', icon: ClipboardList, roles: OPERATIONS,
-    children: [
-      { href: '/enrollments', label: 'Pré-inscriptions', roles: OPERATIONS },
     ],
   },
   {
@@ -100,15 +100,25 @@ const NAV = [
 
 function NavItem({ item, onNavigate }) {
   const pathname = usePathname();
+  const params = useSearchParams();
+  const active = href => {
+    const [path,query] = href.split('?');
+    if (pathname !== path) return false;
+    if (path === '/placement-tests') return (params.get('view') === 'calendar') === (new URLSearchParams(query).get('view') === 'calendar');
+    return true;
+  };
   const [open, setOpen] = useState(() =>
-    item.children?.some((c) => pathname?.startsWith(c.href))
+    item.children?.some((c) => pathname?.startsWith(c.href.split('?')[0]))
   );
+
+  useEffect(() => { if (item.children?.some(c => pathname === c.href.split('?')[0])) setOpen(true); }, [pathname, item.children]);
 
   if (item.children) {
     const Icon = item.icon;
     return (
       <div>
         <button
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className="flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150"
         >
@@ -121,7 +131,7 @@ function NavItem({ item, onNavigate }) {
         {open && (
           <div className="ml-6 mt-1 space-y-0.5 border-l border-white/10 pl-3">
             {item.children.map((child) => {
-              const isActive = pathname === child.href;
+              const isActive = active(child.href);
               return (
                 <Link
                   key={child.href}
@@ -145,7 +155,7 @@ function NavItem({ item, onNavigate }) {
   }
 
   const Icon = item.icon;
-  const isActive = pathname === item.href;
+  const isActive = active(item.href);
   return (
     <Link
       href={item.href}
@@ -164,7 +174,7 @@ function NavItem({ item, onNavigate }) {
 
 function SidebarContent({ onNavigate, userRole, userEmail, onLogout }) {
   const canSee = (item) => (!item.roles || item.roles.includes(userRole)) &&
-    (userRole !== 'receptionist' || !item.href || receptionistCanAccess(item.href));
+    (userRole !== 'receptionist' || !item.href || receptionistCanAccess(item.href.split('?')[0]));
   const filteredNav = NAV
     .filter(canSee)
     .map((item) => (item.children ? { ...item,

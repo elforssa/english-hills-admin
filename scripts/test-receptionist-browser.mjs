@@ -116,16 +116,16 @@ try {
   const profileResponse = await page.request.get(`${base}/rest/v1/profiles?select=id,role&id=eq.${user}`, { headers: authHeaders });
   assert.equal(profileResponse.status(), 200);
   assert.deepEqual(await profileResponse.json(), [{ id: user, role: 'receptionist' }]);
-  for (const button of await page.locator('nav button').all()) await button.click();
+  for (const button of await page.locator('nav button').all()) { if (await button.getAttribute('aria-expanded') !== 'true') await button.click(); }
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
-  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/premium-sessions','/assessments','/placement-tests','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
+  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/premium-sessions','/assessments','/placement-tests','/placement-tests?view=calendar','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
   for (const path of ['/finance','/reports','/payroll','/teachers/new','/integrations','/settings/users']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS stored receptionist role, real login, forged metadata ignored and permitted sidebar');
 
   // O3-r2 changes the default home, while saved Today links remain usable.
   await page.goto(app + '/crm/today');
   await page.waitForURL(app + '/crm/today');
-  await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Tâches · Mon travail', exact: true }).waitFor();
   await page.goto(app + '/crm/leads');
   await page.waitForURL(app + '/crm/leads');
   await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();

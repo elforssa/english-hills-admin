@@ -48,13 +48,13 @@ The Outcome-2 branch implements the [revision-3 four-lane CI contract](../archit
 
 **Outcome 3 Batch 1 — Opportunities Operating Workspace: MERGED / DEPLOYED / PRODUCTION VERIFIED**, including migration 107. [Dated closeout](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05) records O3-r2, PR #97, reviewed HEAD, successful CI, exact deployed merge, READY Vercel deployment, ledger normalization and bounded receptionist/privacy acceptance. Lifecycle dormancy was preserved; this rollout does not advance S1/H3/H4 or activate delivery.
 
-**Outcome 3 overall is NOT complete. Batch 2 — Tasks / My Work and Admissions Calendar — remains PLANNED / NOT IMPLEMENTED.** The [O3-r2 plan](../architecture/plans/outcome-3-receptionist-workspace.md) stays active. The wider dedicated walk-in redesign remains incomplete.
+**Outcome 3 overall is NOT complete. Batch 2 — Tasks / My Work and Admissions Calendar — has source implementation on the authorized feature branch, with focused local acceptance passed after the owner-authorized forward legacy-time read correction in migration 108. Fresh remote CI and separate exact-SHA independent review remain pending; release is held.** The [O3-r2 plan](../architecture/plans/outcome-3-receptionist-workspace.md) stays active. The wider dedicated walk-in redesign remains incomplete.
 
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.
 2. Separately define/bind and approve **prospective live lifecycle activation**, H4/Gate C. Credential readiness alone does not satisfy it.
-3. Separately authorize **Outcome-3 Batch 2 Tasks / My Work and Admissions Calendar**, and the remaining walk-in outcome; retain ADR-003 and the existing enrollment/finance engines.
+3. Finish **Outcome-3 Batch 2 Tasks / My Work and Admissions Calendar** validation/review/release under the [implementation evidence](../architecture/evidence/outcome-3-batch-2-implementation-2026-10-05.md); the owner authorized O3-r2 Batch 2 on 2026-10-05. The remaining walk-in outcome stays separate; retain ADR-003 and existing enrollment/finance engines.
 4. Complete **live Meta Insights sync** under a separate provider contract/activation outcome; reporting is already implemented.
 
 Online learning requires architecture before implementation; it is not designed here. The [multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md) also records Director onboarding, incremental activation and website-adapter gaps. These are identified dependencies, not new commissions.

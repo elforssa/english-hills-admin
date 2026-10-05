@@ -97,8 +97,9 @@ try {
  await page.goto(`http://localhost:3101/crm/leads?lead=${lead}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
  await expect(page.getByRole('dialog')).toContainText('Adam navigateur site');await expect(page.getByRole('dialog')).toContainText('Site web');
  const content=await page.locator('body').innerText();for(const hidden of ['browser-observed','browser-click','existing-browser-fbc','existing-browser-fbp'])assert(!content.includes(hidden));
+ await page.goto('http://localhost:3101/crm/leads?view=attention&layout=list');
+ await expect(page.locator('[data-testid="opportunity-row"]').filter({hasText:'Business contact'}).first()).toContainText('Apprenant à préciser');
  await page.goto('http://localhost:3101/crm/today');
- await expect(page.locator('[data-testid="lead-row"]').filter({hasText:'Business contact'}).first()).toContainText('Apprenant à préciser');
  const review=page.locator('[data-testid="intake-review-item"]').filter({hasText:'Sara navigateur site'});
  await review.locator('summary').click();
  await review.getByLabel('Décision pour la demande').selectOption({label:'Nouveau prospect pour Sara navigateur site'});
@@ -109,15 +110,18 @@ try {
  assert.equal(sql(`select count(*) from crm_submissions s join crm_leads l on l.id=s.lead_id where s.form_mapping_id='${optionalMapping}' and s.core_fields->>'contact_name'='Sara navigateur site' and l.learner_name is null`),'1');
  assert.equal(sql(`select count(*) from crm_leads l where l.learner_name is null and l.contact_id=(select contact_id from crm_leads where id='${lead}')`),'1');
  assert.equal(sql(`select count(*) from crm_leads where learner_name='Adam navigateur site'`),'1');
- await page.goto('http://localhost:3101/crm/leads');
- await page.getByPlaceholder('Nom du parent, apprenant ou téléphone…').fill('Business contact');
- await expect(page.locator('[data-testid="lead-row"]').filter({hasText:'Business contact'}).first()).toContainText('Apprenant à préciser');
+ await page.goto('http://localhost:3101/crm/leads?layout=list');
+ await page.getByLabel('Rechercher un prospect').fill('Business contact');
+ await expect(page.locator('[data-testid="opportunity-row"]').filter({hasText:'Business contact'}).first()).toContainText('Apprenant à préciser');
  assert.equal(sql(centerQuery),centerBefore);
  await page.screenshot({path:join(tmpdir(), 'hills-phase9-website-drawer.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.screenshot({path:join(tmpdir(), 'hills-phase9-website-mobile.png'),fullPage:true});
  assert.deepEqual(errors,[]);
  console.log('PASS browser website ingestion, unnamed lead and saved answers, conservative review/resolution, Today/Prospects, protected attribution, no center side effects');
+} catch(error) {
+ console.error(error.message);
+ throw error;
 } finally {
  if(browser)await browser.close();
  if(fixtureServer)await new Promise(resolve=>fixtureServer.close(resolve));
@@ -134,5 +138,12 @@ try {
  alter table crm_followup_policies disable trigger crm_policy_immutable;delete from crm_followup_policies where created_by='${director.id}';alter table crm_followup_policies enable trigger crm_policy_immutable;
  alter table crm_command_requests disable trigger crm_requests_immutable;delete from crm_command_requests where actor_scope in(${users.map(u=>q(u.id)).join(',')});alter table crm_command_requests enable trigger crm_requests_immutable;
  alter table crm_form_mappings disable trigger crm_mapping_immutable;delete from crm_form_mappings where connection_id='${connection}';alter table crm_form_mappings enable trigger crm_mapping_immutable;delete from crm_integration_connections where id='${connection}';commit;`);}
- for(const user of users)sql(`delete from auth.users where id='${user.id}';delete from rate_limits where user_id='${user.id}';delete from activity_log where actor_id='${user.id}' or target_id='${user.id}'`);
+ if(users.length){const ids=users.map(u=>q(u.id)).join(',');sql(`begin;
+ alter table public.profiles disable trigger role_security_guard;
+ delete from auth.users where id in(${ids});
+ update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');
+ alter table public.profiles enable trigger role_security_guard;
+ delete from public.rate_limits where user_id in(${ids});delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});commit;`);}
+ assert.equal(sql("select tgenabled from pg_trigger where tgrelid='public.profiles'::regclass and tgname='role_security_guard'"),'O');
+ console.log('PASS synthetic website/browser fixtures removed; history and director guards restored');
 }

@@ -67,7 +67,7 @@ try {
  const todayDate=sql("select to_char(now() at time zone 'Africa/Casablanca','YYYY-MM-DD')");
  await dialog().getByLabel('Date *',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('23:59');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('button',{name:'Voir le test',exact:true}).waitFor();
  assert.equal(detail(lead).next_placement.id,pid);assert.equal(detail(lead).next_placement.heure,'23:59');
- await page.goto(app+'/crm/today');await page.getByText('Test de niveau · Parent : Sara test CRM',{exact:true}).waitFor();assert.equal(await page.getByTestId('lead-row').count(),0,'scheduled appointment is not missing-next-action');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
+ await page.goto(app+'/placement-tests?view=calendar&date='+todayDate);await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).waitFor();assert.equal(await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).count(),1,'scheduled appointment appears once');await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Aucune tâche dans cette échéance.',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),0,'scheduled appointment is not a fake task');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
  console.log('PASS same-row reschedule and one appointment in Agenda, without a fake task or missing-action warning');
  await page.goto(app+'/placement-tests');const row=page.getByRole('row').filter({hasText:'Adam test CRM'});await row.getByText('Prospect CRM',{exact:true}).waitFor();await row.getByRole('button',{name:/Test du/}).click();
  await dialog().getByLabel('Statut',{exact:true}).selectOption('Résultat saisi');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();
@@ -76,7 +76,7 @@ try {
  assert.equal(before,counts());assert.equal(detail(lead).status,'QUALIFIED');assert.equal(detail(lead).open_tasks.length,1);assert.equal(detail(lead).next_task.task_type,'post_test_followup');
  await open(lead);await page.getByText('Niveau recommandé : A2',{exact:true}).first().waitFor();await screenshot({path:join(tmpdir(), 'hills-phase5-result.png'),fullPage:false});
  sql(`update public.crm_tasks set due_at=now()-interval '1 minute' where lead_id='${lead}' and task_type='post_test_followup'`);
- await page.goto(app+'/crm/today');await page.getByText('Résultat du test disponible',{exact:true}).waitFor();assert.equal(await page.getByTestId('lead-row').count(),1);await screenshot({path:join(tmpdir(), 'hills-phase5-followup.png'),fullPage:true});
+ await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Rappeler le parent · Résultat disponible',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),1);await screenshot({path:join(tmpdir(), 'hills-phase5-followup.png'),fullPage:true});
  assert.doesNotMatch(await page.locator('body').innerText(),/placement_test_id|crm_lead_id|source_key|post_test_followup/);
  console.log('PASS existing placement page edits, explicit result, one followup, qualified lifecycle and humanized Today');
  await page.setViewportSize({width:390,height:844});await open(lead);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot({path:join(tmpdir(), 'hills-phase5-mobile.png'),fullPage:false});await context.close();
