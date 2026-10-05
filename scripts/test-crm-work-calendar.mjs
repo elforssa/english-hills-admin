@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calendarDate, shiftCalendarDate } from '../src/lib/crm/calendar.mjs';
-import { TASKS, CALL_TASKS } from '../src/lib/crm/presentation.mjs';
+import { TASKS, CALL_TASKS, scheduledLabel, staffLabel } from '../src/lib/crm/presentation.mjs';
 assert.equal(Object.keys(TASKS).length,8);
 assert.deepEqual(CALL_TASKS,['first_contact','contact_attempt','callback']);
 assert.equal(calendarDate('2026-02-30'),null);
@@ -20,3 +20,10 @@ const queue=readFileSync('src/components/crm/WorkQueue.jsx','utf8');
 assert(queue.includes("ownerArgs(assignee,'assignee')")&&queue.includes("ownerArgs(owner,'owner')"));
 assert(queue.includes('/crm/leads?view=attention&layout=list'));
 console.log('PASS civil-date presentation, task vocabulary, additive-read and bounded-route guards');
+
+// Stable civil labels under host timezone/locale changes; never reinterpret UTC.
+assert.equal(scheduledLabel({local_date:'2026-10-07',local_time:'10:35:00',due_at:'2026-10-07T09:35Z'}),'07/10/2026 · 10:35');
+assert.equal(scheduledLabel({local_date:'2026-10-07',local_time:null}),'07/10/2026 · Heure non précisée');
+assert.equal(scheduledLabel({due_at:'2026-10-07T09:35Z'}),'Horaire à confirmer');
+assert.equal(staffLabel({name:'Équipe accueil',display_label:'Équipe accueil · Accueil · Réf. ABC123'}),'Équipe accueil · Accueil · Réf. ABC123');
+console.log('PASS PostgreSQL civil-only labels, missing projection explicit, shared staff display rule');

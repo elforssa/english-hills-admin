@@ -42,7 +42,7 @@ select jsonb_agg(to_jsonb(x)) from (select kind,min(ms) filter(where n=0) first_
 select pg_temp.ok((select max(ms)<2000 from timings),'no read >2s');
 select pg_temp.ok((select max(p95)<=500 from (select percentile_cont(.95) within group(order by ms) p95 from timings where n>0 group by kind)x),'warm p95 <=500ms');
 set local statement_timeout='45s';`;
- source+=readFileSync('scripts/test-crm-work-calendar.sql','utf8');
+ source+=readFileSync('scripts/test-crm-work-calendar.sql','utf8').replace('rollback;',()=>readFileSync('scripts/test-crm-receptionist-ux.sql','utf8')+'\nrollback;');
 }
 try {const output=sql(source);writeFileSync(join(directory,plans?'plans.log':'acceptance.log'),output);console.log(output.trim());}
 catch(error){writeFileSync(join(directory,plans?'plans.log':'acceptance.log'),`${error.stdout || ''}\n${error.stderr || ''}`);throw error;}

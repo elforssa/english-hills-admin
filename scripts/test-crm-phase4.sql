@@ -70,7 +70,7 @@ do $$ declare result jsonb; l uuid:=(select id from queue_fixture where kind='ne
  perform pg_temp.ok(jsonb_array_length(public.crm_get_history(l,1,0)->'rows')=1,'bounded timeline');
  perform pg_temp.ok(jsonb_array_length(public.crm_get_form_answers(l,1,0)->'rows')=1,'bounded forms');
  perform pg_temp.ok(not (public.crm_get_workspace_detail(l)::text ~ '(campaign_id|adset_id|fbclid|raw_payload|payload_hash|source_key)'),'detail no technical attribution');
- perform pg_temp.ok((select bool_and((x-array['id','name','role'])='{}'::jsonb) from jsonb_array_elements(public.crm_list_staff()->'rows') x),'staff only id name role');
+ perform pg_temp.ok((select bool_and((x-array['id','name','role','display_label'])='{}'::jsonb) from jsonb_array_elements(public.crm_list_staff()->'rows') x),'staff only id name role and authorized display label');
  perform pg_temp.ok((select bool_and(x->>'role' in ('receptionist','admin','director')) from jsonb_array_elements(public.crm_list_staff()->'rows')x),'eligible staff only');
  perform pg_temp.denied('select public.crm_get_today(101,0,0)');
  perform pg_temp.denied('select public.crm_search_leads('''',null,null,25,-1)');

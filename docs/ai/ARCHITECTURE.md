@@ -136,3 +136,7 @@ This document does not design SaaS/multi-tenancy or management agents.
 | [Active contracts/runbooks](../architecture/plans/README.md) | Current implementation/operator contracts; approval never inferred from their presence. |
 | [FEATURE_INDEX](../architecture/FEATURE_INDEX.md) | Navigation and state mapping, not another specification. |
 | [Historical index](../architecture/history/README.md), [completed plans](../architecture/plans/completed), [evidence](../architecture/evidence) | Preserved reasoning, release/implementation evidence and superseded procedures; dated evidence supports current claims but is not an instruction to replay operations. |
+
+## Scheduled operational display correction source
+
+The [post-Outcome-3 correction](../architecture/evidence/receptionist-production-ux-corrections-2026-10-05.md) adds civil date/time fields derived in PostgreSQL for scheduled CRM reads; browser displays consume those values directly. Raw UTC instants remain the ordering/write/concurrency identity. Migration 109 is not deployed; existing scheduling/authorization architecture remains unchanged.

@@ -121,6 +121,11 @@ jobs:
           node scripts/test-crm-work-calendar-upgrade.mjs
           supabase db reset --local --no-seed
           npm run test:crm-work-calendar-local
+      - name: Receptionist UX stateful 108 upgrade
+        run: |
+          supabase db reset --local --version 108 --no-seed
+          node scripts/test-crm-receptionist-ux-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed

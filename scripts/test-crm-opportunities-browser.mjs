@@ -67,6 +67,30 @@ try {
   await page.getByRole('button',{name:'Clôturés',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),2);assert(await page.getByRole('button',{name:'Tableau',exact:true}).isDisabled());
   await page.getByRole('button',{name:'Tous les prospects',exact:true}).click();await page.getByRole('button',{name:'Tableau',exact:true}).click();await page.getByTestId('opportunity-card').first().waitFor();
   const search=page.getByRole('textbox',{name:'Rechercher un prospect'});await search.pressSequentially('O3 parent 31',{delay:25});await page.waitForURL(url=>url.searchParams.get('q')==='O3 parent 31');await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 31'}).waitFor();assert.equal(await search.inputValue(),'O3 parent 31');await search.fill('');await page.waitForURL(url=>!url.searchParams.has('q'));await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 3'}).first().waitFor();
+  phase='rapid programme/search composition';
+  sql(`update public.crm_leads set program_interest_text='Programme Anglais annuel',owner_id='${users[0].id}' where id='${leads[0]}';`);
+  const facet=JSON.stringify({kind:'interest',value:'Programme Anglais annuel'});
+  const contactId=detail(leads[0]).contact_id;
+  sql(`update public.crm_contacts set display_name='TEST CRM' where id='${contactId}'`);
+  const starting=new URLSearchParams({view:'closed',layout:'list',stage:'LOST',owner:users[0].id,channel:'manual',source:JSON.stringify({kind:'manual',value:'Manuel · Téléphone'}),contact:contactId});
+  for(const reverse of [false,true]) {
+   await page.goto(app+'/crm/leads?'+starting);await page.getByTestId('opportunity-row').first().waitFor();await page.waitForLoadState('networkidle');
+   const search=page.getByLabel('Rechercher un prospect'),programme=page.getByLabel('Programme',{exact:true});
+   const response=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_opportunities')&&r.ok()&&r.request().postDataJSON()?.p_query==='TEST CRM'&&r.request().postDataJSON()?.p_program==='Programme Anglais annuel');
+   if(reverse) {await search.fill('TEST CRM');await programme.selectOption(facet);}
+   else {await programme.selectOption(facet);await search.fill('TEST CRM');}
+   const payload=(await response).request().postDataJSON();
+   await page.getByTestId('opportunity-row').first().getByRole('button').first().click();
+   const url=new URL(page.url());
+   for(const [key,value] of starting)assert.equal(url.searchParams.get(key),value,'retained '+key);
+   assert.equal(url.searchParams.get('program'),facet);assert.equal(url.searchParams.get('q'),'TEST CRM');assert.equal(url.searchParams.get('lead'),leads[0]);
+   assert.equal(payload.p_view,'closed');assert.equal(payload.p_program_kind,'interest');assert.equal(payload.p_program,'Programme Anglais annuel');assert.equal(payload.p_stage,'LOST');assert.equal(payload.p_contact,contactId);assert.equal(payload.p_source_label,'Manuel · Téléphone');assert.equal(payload.p_owner_mode,'staff');assert.equal(payload.p_owner,users[0].id);assert.equal(payload.p_channel,'manual');assert.equal(payload.p_layout,'list');
+   await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();await closeDrawer();
+   assert.equal(await programme.inputValue(),facet);assert.equal(await search.inputValue(),'TEST CRM');
+  }
+  sql(`update public.crm_contacts set display_name='O3 parent 0' where id='${contactId}';update public.crm_leads set owner_id=null,program_interest_text=null where id='${leads[0]}'`);
+  await page.goto(app+'/crm/leads');await page.getByTestId('opportunity-card').first().waitFor();
+  console.log('PASS programme → immediate search and reverse; actual URL/RPC preserve filters, stage/contact and drawer');
   // Keyboard opening, contextual acquisition response, Back and focus return.
   phase='keyboard drawer';const button=page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first();await button.focus();await page.keyboard.press('Enter');await page.getByRole('dialog').getByText('Acquisition',{exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('lead'),leads[3]);
   await page.getByRole('dialog').getByText('Première demande',{exact:true}).waitFor();

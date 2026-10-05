@@ -49,6 +49,11 @@ The Outcome-2 branch implements the [revision-3 four-lane CI contract](../archit
 **Outcome 3 — Receptionist CRM / Admissions Operating Workspace: COMPLETED / MERGED / DEPLOYED / PRODUCTION VERIFIED.** Batch 1 Opportunities is verified through migration 107 and [its dated closeout](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05). Batch 2 Tasks / My Work and Admissions Calendar is verified through migration 108 and [its dated closeout](../architecture/evidence/outcome-3-batch-2-implementation-2026-10-05.md#production-closeout--2026-10-05). The completed [O3-r2 contract](../architecture/plans/completed/outcome-3-receptionist-workspace.md) remains the design record.
 
 The final Batch-2 rollout preserved stored-role boundaries, bounded reads, task/owner separation, truthful legacy-time handling, trusted enrollment-driven conversion and dormant Meta lifecycle gates. The dedicated walk-in enrollment redesign was explicitly excluded from Outcome 3 and remains separate planned work.
+
+## Post-Outcome-3 correction source
+
+The authorized [receptionist UX correction source](../architecture/evidence/receptionist-production-ux-corrections-2026-10-05.md) adds PostgreSQL civil scheduled-time displays, concurrent filter composition, safe staff label disambiguation and accurate attention wording. Forward migration 109 is source-only; separate CI/review/release remain pending. The Production ledger remains 001–108 and the completed O3-r2 architecture is unchanged.
+
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.
