@@ -21,6 +21,6 @@ Read [master architecture](../../ai/ARCHITECTURE.md) and [current evidence](../.
 - [Superseded credential plans](historical/README.md) are outside active authority; never replay consumed object-creation allowances or Rev7 credential ceremonies.
 - [Historical index](../history/README.md) preserves the previous authority-document chronology and links evidence.
 
-## Proposed receptionist workspace
+## Completed receptionist workspace
 
-[Outcome 3 — Receptionist CRM / Admissions Operating Workspace](outcome-3-receptionist-workspace.md), revision O3-r2, is the single proposed product/architecture contract. It awaits independent review and human owner approval; no implementation or Production operation is authorized.
+[Outcome 3 — Receptionist CRM / Admissions Operating Workspace](completed/outcome-3-receptionist-workspace.md), revision O3-r2, is completed and Production verified through migrations 107–108. The completed record preserves its interaction/read-model boundaries; it is not authority to replay implementation or release operations. The dedicated walk-in redesign remains a separate future outcome.

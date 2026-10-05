@@ -2,9 +2,9 @@
 
 ## Scope and authority
 
-Owner-authorized implementation of [O3-r2](../plans/outcome-3-receptionist-workspace.md), Batch 2: Tasks / My Work and Admissions Calendar. Baseline main `2bb4b80504ffbec7f0902fe13b8a938475094bf5`; branch `codex/outcome-3-batch-2-work-calendar`. **Tier 2**: substantial operational reads/presentation with unchanged permissions and write semantics. Production ledger is recorded through 107 in the [Batch-1 closeout](outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05). Forward migration: [108](../../../supabase/migrations/108_crm_work_queue_admissions_calendar.sql). No Production inspection or mutation is authorized or performed.
+Owner-authorized implementation of [O3-r2](../plans/completed/outcome-3-receptionist-workspace.md), Batch 2: Tasks / My Work and Admissions Calendar. Baseline main `2bb4b80504ffbec7f0902fe13b8a938475094bf5`; branch `codex/outcome-3-batch-2-work-calendar`. **Tier 2**: substantial operational reads/presentation with unchanged permissions and write semantics. Production ledger is recorded through 107 in the [Batch-1 closeout](outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05). Forward migration: [108](../../../supabase/migrations/108_crm_work_queue_admissions_calendar.sql). No Production inspection or mutation is authorized or performed.
 
-**Author corrections locally complete; fresh remote CI scheduling and exact-SHA handoff follow. Merge/release remains on hold.** The authorized forward correction below resolves the original blocker. No independent-review verdict is issued by this author task; [PR #99](https://github.com/elforssa/english-hills-admin/pull/99) and its handoff record exact head/base/tree and the new CI run.
+**Author implementation/correction history is preserved below. Current release state is recorded in the Production closeout section.** The authorized forward correction below resolves the original blocker. No independent-review verdict is issued by this author task; [PR #99](https://github.com/elforssa/english-hills-admin/pull/99) and its handoff record exact head/base/tree and the new CI run.
 
 ## Implementation
 
@@ -98,6 +98,24 @@ Two added test-fixture defects were corrected without changing the migration or 
 
 Focused author self-check from the initial implementation remains recorded above; this correction received a targeted check of the exact helper expression, parser NULL semantics, unchanged 107, future-booking/cursor regressions and the stateful grant/RLS/write safeguards. No formal independent-review verdict is issued. All affected local checks now pass. Final local ledger is 108; lead/task/policy/Auth counts are zero, with no disabled guards. The old deterministic failing SHA is not rerun; push this corrected revision to the same PR and confirm fresh full CI scheduling, then stop polling. Terminal required CI and the actual tested merge SHA must be verified by the coordinator before separate exact-SHA independent review.
 
-## Handoff holds
+## Handoff closeout
 
-Required full CI, separate exact-SHA independent review and explicit owner merge/release approval remain required. No merge, Production migration, Vercel configuration, credentials, scheduler or Meta activation is authorized. Source implementation, merge, deployment and Production verification remain separate states.
+The original implementation holds were satisfied for PR #99: exact-SHA required CI passed, independent review returned READY FOR FINAL REVIEW, the owner approved merge and separately approved the bounded Production rollout. Production verification is recorded below. No Meta activation, credential change or broader Production authority follows from this closeout.
+
+
+## Production closeout — 2026-10-05
+
+**State: MERGED / DEPLOYED / PRODUCTION VERIFIED.** Independent exact-SHA review reported no blocking or important findings and returned `READY FOR FINAL REVIEW`.
+
+- PR #99 reviewed HEAD: `557f125253a4b7cc97956a756970a7e30511afd8`; base: `2bb4b80504ffbec7f0902fe13b8a938475094bf5`; CI-tested merge: `aecd320e536cf33a218a850dc826d1d1a1561115`.
+- Verify run `37298828084`: classify, docs, app, local-database and required succeeded.
+- Owner-approved merge: `c286457b4026ebddce813f8d6fc0a19d046a243b`.
+- Vercel Production deployment `dpl_6pfuqAH8PuZsSWwBq91kDVoxQHfZ` reached READY with exact Git source `c286457b4026ebddce813f8d6fc0a19d046a243b`.
+- Migration 108 `crm_work_queue_admissions_calendar` was applied once. The Supabase migration API initially recorded generated version `20261005112510`; under the bounded release authority only that migration-history version metadata was normalized to `108`, without rerunning migration SQL. Final ledger ends 105 → 106 → 107 → 108.
+- Production catalog verification confirmed both new public reads are stable SECURITY DEFINER RPCs with fixed search paths, authenticated execution only, and no PUBLIC/anon/service-role execution. `work_boundaries`, `calendar_time` and the redefined `opportunity_ids` helper remain non-executable to authenticated users.
+- A receptionist-authority bounded probe returned Work Queue timezone `Africa/Casablanca`, the four exact count buckets (overdue/today/tomorrow/upcoming), and the fixed task/lead projection. Admissions Calendar returned the bounded fixed event projection, half-open requested date-range metadata and boolean continuation state.
+- The safe parser returns NULL for missing/malformed legacy times, preserves canonical valid time `15:20`, and the deployed `opportunity_ids` definition uses that parser. Forbidden-role Work Queue access and receptionist technical-attribution access were denied by stored-role checks.
+- Intake primary cron remained active at five-minute cadence. Lifecycle cron remained inactive; activation epochs, external deliveries and delivery attempts were all zero. `CRM_META_LIFECYCLE_LIVE_ENABLED` remained absent; credential presence was unchanged and no provider delivery was activated.
+- Vercel reported no Production runtime errors in the bounded post-release window. The two Production route probes returned HTTP 200 application/login HTML; acceptance did not impersonate a real staff browser session or mutate customer records.
+
+This bounded release verifies the Outcome-3 Batch-2 source/database contract and deployment state. It does not establish broader placement/enrollment/finance feature acceptance, provider delivery, or the separately excluded dedicated walk-in redesign.
