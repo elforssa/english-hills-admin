@@ -209,7 +209,9 @@ assert.equal(scheduledBody.reconciled, 2); assert.equal(scheduledBody.processed,
 assert(!JSON.stringify(scheduledBody).includes(schedulerToken));
 
 assert.equal(isDirectorLifecyclePath('/crm/integrations/lifecycle'), true);
-for (const role of ['admin','receptionist','teacher','parent','student']) assert.equal(loginDestination(role, '/crm/integrations/lifecycle'), role === 'receptionist' ? '/crm/today' : ({ admin: '/dashboard', teacher: '/teacher-portal', parent: '/parent-portal', student: '/student-portal' })[role]);
+// O3-r2 changes only the receptionist fallback; lifecycle access stays director-only.
+assert.equal(loginDestination('director', '/crm/integrations/lifecycle'), '/crm/integrations/lifecycle');
+for (const role of ['admin','receptionist','teacher','parent','student']) assert.equal(loginDestination(role, '/crm/integrations/lifecycle'), role === 'receptionist' ? '/crm/leads' : ({ admin: '/dashboard', teacher: '/teacher-portal', parent: '/parent-portal', student: '/student-portal' })[role]);
 
 const migration98 = readFileSync(new URL('../supabase/migrations/098_crm_lifecycle_evidence_and_delivery.sql', import.meta.url), 'utf8');
 const migration99 = readFileSync(new URL('../supabase/migrations/099_crm_lifecycle_delivery_runtime.sql', import.meta.url), 'utf8');

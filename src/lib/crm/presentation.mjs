@@ -78,14 +78,11 @@ export const EVENTS = {
 export const ACTIVE = ['NEW', 'CONTACTING', 'ENGAGED', 'QUALIFIED'];
 export const CALL_TASKS = ['first_contact', 'contact_attempt', 'callback'];
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const operationalDateFormatter = new Intl.DateTimeFormat('fr-MA', {
+  timeZone:'Africa/Casablanca',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'
+});
 export function dateLabel(value) {
-  return value ? new Intl.DateTimeFormat('fr-MA', {
-    timeZone: 'Africa/Casablanca',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(value)) : 'À planifier';
+  return value ? operationalDateFormatter.format(new Date(value)) : 'À planifier';
 }
 export function phoneLinks(contact) {
   const valid = value => /^\+[1-9]\d{7,14}$/.test(value || '') ? value : null;
@@ -152,4 +149,20 @@ export function activityBody(body) {
   if (body === 'Attempt recorded') return 'Appel enregistré.';
   if (body?.startsWith('Lead closed: ')) return 'Suivi arrêté à la clôture du prospect.';
   return body;
+}
+
+export const BOARD_STAGES = [...ACTIVE, 'CONVERTED'];
+export const OPPORTUNITY_VIEWS = {
+  all: 'Tous les prospects', mine: 'Mes prospects', new_today: 'Nouveaux aujourd’hui',
+  attention: 'À traiter', follow_up_today: 'Suivi aujourd’hui', placement: 'Tests de niveau',
+  qualified: 'Qualifiés', no_response: 'Sans réponse', closed: 'Clôturés'
+};
+// Presentation routing only. The server command owns evidence and resulting stage.
+export function opportunityAction(from, to) {
+  if (from === to) return null;
+  if (from === 'NEW' && to === 'CONTACTING') return 'call';
+  if (['NEW', 'CONTACTING'].includes(from) && to === 'ENGAGED') return 'conversation';
+  if (['NEW', 'CONTACTING', 'ENGAGED'].includes(from) && to === 'QUALIFIED') return 'qualify';
+  if (from === 'QUALIFIED' && to === 'CONVERTED') return 'enrollment';
+  return 'unsupported';
 }

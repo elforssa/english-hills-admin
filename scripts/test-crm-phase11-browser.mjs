@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -24,13 +26,13 @@ try {
   await page.goto('http://localhost:3101/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(u=>!u.pathname.startsWith('/login'));
   await page.goto('http://localhost:3101/crm/analytics');
   if(user.role!=='director'){
-   await page.waitForURL(u=>u.pathname===(user.role==='admin'?'/dashboard':'/crm/today'));assert.equal(analyticsQueries,0);await expect(page.getByTestId('marketing-analytics')).toHaveCount(0);await expect(page.getByRole('link',{name:'Analyse marketing'})).toHaveCount(0);
+   await page.waitForURL(u=>u.pathname===(user.role==='admin'?'/dashboard':'/crm/leads'));assert.equal(analyticsQueries,0);await expect(page.getByTestId('marketing-analytics')).toHaveCount(0);await expect(page.getByRole('link',{name:'Analyse marketing'})).toHaveCount(0);
    const denied=await page.request.post('http://localhost:3101/api/internal/crm/insights/process',{headers:{Origin:'http://localhost:3101'},data:{connection,request:randomUUID()}});assert.equal(denied.status(),403);
   }else{
    await expect(page.getByTestId('marketing-analytics')).toBeVisible();await page.getByLabel('Acquisitions du',{exact:true}).fill('2026-01-01');await page.getByLabel('Acquisitions au',{exact:true}).fill('2026-01-02');await page.getByRole('button',{name:'Anglais annuel',exact:true}).waitFor();await expect(page.locator('tbody')).toContainText(/1[.\s]200/);await expect(page.locator('tbody')).toContainText('—');
-   await page.screenshot({path:'/private/tmp/hills-phase11-analytics-desktop.png',fullPage:true});
+   await page.screenshot({path:join(tmpdir(), 'hills-phase11-analytics-desktop.png'),fullPage:true});
    await page.getByRole('button',{name:'Anglais annuel',exact:true}).click();await page.getByRole('button',{name:'Parents Casablanca',exact:true}).click();await expect(page.locator('tbody')).toContainText('Parler avec confiance');
-   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'/private/tmp/hills-phase11-analytics-mobile.png',fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+   await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(tmpdir(), 'hills-phase11-analytics-mobile.png'),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
    await page.getByLabel('Regrouper par').selectOption('adset');await page.getByRole('button',{name:'Parents Casablanca',exact:true}).click();await expect(page.locator('tbody')).toContainText('Parler avec confiance');
    await page.getByRole('button',{name:'Parler avec confiance',exact:true}).click();await expect(page.locator('tbody tr')).toHaveCount(1);await expect(page.locator('tbody')).toContainText(/1[.\s]200/);
    sql(`insert into crm_meta_sync_runs(connection_id,request_key,date_from,date_to,config_snapshot,status,error_code) values('${connection}',gen_random_uuid(),'2026-01-01','2026-01-02','{}','partial','provider_unavailable')`);

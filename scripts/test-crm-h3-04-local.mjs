@@ -65,7 +65,7 @@ function insert(patch) {
     (select to_jsonb(c) from crm_lifecycle_provider_contracts c where id=${q(expected.id)}) || ${q(JSON.stringify(patch))}::jsonb)`;
 }
 console.log('H3-04: fresh local 001→106');
-cli(['db','reset','--local','--no-seed']);
+cli(['db','reset','--local','--version','106','--no-seed']);
 assert.equal(sql('select count(*),max(version::integer) from supabase_migrations.schema_migrations'), '106|106');
 readback(); dormant();
 for (const role of ['anon', 'authenticated', 'service_role']) {
@@ -116,7 +116,8 @@ sql(`insert into crm_lifecycle_provider_contracts(id,contract_key,revision,api_v
 values('96000000-0000-0000-0000-000000000012','h3_historical_fixture',1,'v99.0','Qualified','Converted','system_generated',604800,172800,'events_received',true,'["https://example.invalid/synthetic"]',current_date,now());`);
 const before = inventory(), beforeCatalog = catalog(), beforeCron = cron();
 const beforeAuth = sql("select jsonb_agg(to_jsonb(u) order by id) from auth.users u");
-cli(['migration','up','--local']);
+// Test the immutable 106 seed in isolation; later migrations have their own upgrade acceptance.
+sql(migration);
 const after = inventory(); readback();
 after.crm_lifecycle_provider_contracts = after.crm_lifecycle_provider_contracts.filter(c=>c.id!==expected.id);
 assert.deepEqual(after, before);
@@ -126,4 +127,4 @@ assert.equal(sql('select count(*) from crm_lifecycle_provider_contracts'),'2');
 assert.deepEqual(digests(), beforeDigests);
 console.log('PASS stateful 105→106: exactly one additive row; every public row, Auth fixture, schema/security/function body and cron unchanged');
 cli(['db','reset','--local','--no-seed']); readback(); dormant();
-console.log(`PASS H3-04 complete; migration SHA-256 ${createHash('sha256').update(migration).digest('hex')}; local database clean 001→106`);
+console.log(`PASS H3-04 complete; migration SHA-256 ${createHash('sha256').update(migration).digest('hex')}; local database clean at current migration ledger`);

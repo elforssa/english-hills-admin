@@ -2,7 +2,7 @@
 \ir test-crm-h3-04-manifest.sql
 begin;
 do $$begin
- if (select max(version::integer) from supabase_migrations.schema_migrations)<>106 then raise exception 'Expected migration106';end if;
+ if (select max(version::integer) from supabase_migrations.schema_migrations)<>107 then raise exception 'Expected migration107';end if;
  if exists(select 1 from public.crm_lifecycle_eligibility_policies where d2_requirement<>'required') then raise exception 'Historical policy reclassified';end if;
  if (select jsonb_agg(to_jsonb(p)-array['d2_requirement','sharing_refused_values','prohibited_field_key','prohibited_values','safety_decision_reference'] order by id) from public.crm_lifecycle_eligibility_policies p)
  is distinct from (select data from public.r4_upgrade_snapshot where k='policies') then raise exception 'Historical policy changed';end if;

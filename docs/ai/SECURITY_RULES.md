@@ -29,6 +29,8 @@ Sources: [middleware](../../src/middleware.js), [ProtectedRoute](../../src/compo
 
 Receptionist enrollment writes allow Submitted/Under Review/Trial; they cannot independently confirm an enrollment. Assignment of an already Confirmed/Validated enrollment is narrowly permitted. Batch 1 routes new charges/payments through the existing financial engine and confines teacher reads to a fixed operational projection. PR #32 deployed the shared operational Students list, gated CSV import/export and programme inline edits, and the enrollment-aware group filter in 097. The existing narrow RPCs remain the write authority. Production restrictions were owner-verified on 2026-09-29.
 
+The [pending O3-r2 Batch-1 reads](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) reuse operational role checks. Acquisition uses a fixed server-side first/latest summary; the broad detail and director-only attribution reads retain their existing behavior. Flagged conversion-review fixtures verify the acquisition response itself excludes the flag and technical attribution. No existing grant, RLS policy or write authority changes.
+
 ## Sensitive data and privileged code
 
 - Financial and payroll-sensitive data require explicit authorization. [043](../../supabase/migrations/043_teacher_sensitive_data_isolation.sql) isolates full teacher/compensation rows to admin/director; non-HR consumers use a fixed teacher directory projection. [Payroll API](../../src/app/api/admin/payroll/route.js) checks stored admin/director role before privileged computation/write; [065](../../supabase/migrations/065_payroll_direct_write_guard.sql) blocks client payroll writes.

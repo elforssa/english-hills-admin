@@ -1,5 +1,7 @@
 // Focused keyboard/empty-state smoke; synthetic Auth only, no CRM fixtures.
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -47,7 +49,7 @@ try {
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(add).toBeVisible(); const b = await add.boundingBox();
       assert(b.width >= 32 && b.height >= 32, 'primary mobile action has usable target');
-      await page.screenshot({ path: '/private/tmp/hills-phase12-receptionist-empty-mobile.png', fullPage: true });
+      await page.screenshot({ path: join(tmpdir(), 'hills-phase12-receptionist-empty-mobile.png'), fullPage: true });
     } else {
       await page.goto('http://localhost:3101/crm/analytics');
       await expect(page.getByTestId('marketing-analytics')).toBeVisible();
@@ -60,10 +62,10 @@ try {
       await expect(page.getByTestId('marketing-analytics').getByRole('alert')).toContainText('366 jours');
       await date.fill(new Date().toISOString().slice(0, 7) + '-01');
       await expect(page.getByText('Aucune acquisition ni dépense pour cette sélection.', { exact: true })).toBeVisible();
-      await page.screenshot({ path: '/private/tmp/hills-phase12-analytics-empty-desktop.png', fullPage: true });
+      await page.screenshot({ path: join(tmpdir(), 'hills-phase12-analytics-empty-desktop.png'), fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(page.getByLabel('Regrouper par')).toBeVisible();
-      await page.screenshot({ path: '/private/tmp/hills-phase12-analytics-empty-mobile.png', fullPage: true });
+      await page.screenshot({ path: join(tmpdir(), 'hills-phase12-analytics-empty-mobile.png'), fullPage: true });
     }
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
     await context.close();

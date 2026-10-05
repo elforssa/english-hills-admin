@@ -263,8 +263,8 @@ do $$ declare l uuid:=pg_temp.qualified(); r jsonb; d jsonb; e uuid; s uuid; b u
  r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
  perform pg_temp.actor(1);
  perform pg_temp.denied(format('select public.create_charge_payment(%L)',d-'enrollment_id'||jsonb_build_object('idempotency_key',gen_random_uuid())));
- -- Receipt-only helper cannot broaden receptionist/other role access.
- for i in 3..7 loop
+ -- Migration 096 explicitly permits receptionist receipt candidates; other roles stay denied.
+ for i in 4..7 loop
   perform pg_temp.actor(i);execute 'set local role authenticated';
   perform pg_temp.denied(format('select public.receipt_enrollment_candidates(%L)',s),'42501');execute 'reset role';
  end loop;

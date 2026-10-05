@@ -90,7 +90,7 @@ do $$ declare result jsonb; l uuid:=(select id from queue_fixture where kind='ne
  perform set_config('request.jwt.claim.sub','',true);
  perform pg_temp.denied('select public.crm_get_today()','42501');
 end $$;
-select pg_temp.ok(crm_security.operational_answers('[{"key":"age","label":"Âge","value":8},{"key":"days","label":"Jours","value":["mercredi","samedi"]},{"key":"ready","label":"Disponible","value":true},{"key":"campaign_id","label":"Campagne","value":"secret"},{"key":"fbclid","value":"secret"},{"key":"answer","value":{"raw_payload":"secret"}}]')='[{"key":"age","label":"Âge","value":8},{"key":"days","label":"Jours","value":["mercredi","samedi"]},{"key":"ready","label":"Disponible","value":true}]','safe answer values and excluded technical/object fields');
+select pg_temp.ok(crm_security.operational_answers('[{"key":"age","label":"Âge","value":8},{"key":"days","label":"Jours","value":["mercredi","samedi"]},{"key":"ready","label":"Disponible","value":true},{"key":"campaign_id","label":"Campagne","value":"secret"},{"key":"fbclid","value":"secret"},{"key":"answer","value":{"raw_payload":"secret"}}]')='[{"key":"age","label":"Âge","value":8,"display_value":null},{"key":"days","label":"Jours","value":["mercredi","samedi"],"display_value":null},{"key":"ready","label":"Disponible","value":true,"display_value":null}]','safe answer values and excluded technical/object fields');
 select pg_temp.actor(3);
 do $$ declare k text; answer jsonb; l uuid; newer uuid; older uuid; r jsonb; r2 jsonb; d jsonb; req uuid; task uuid; before_count integer; decision text; fn regprocedure:='public.crm_record_conversation_decision(uuid,jsonb)'::regprocedure; begin
  foreach k in array array['metaCampaignName','METACAMPAIGNNAME','customFinancialAmount','PasswordHash','campaign_id','Campaign-ID','CAMPAIGN ID','ad','ad_id','adset_id','account_id','page_id','form_id','leadgen_id','meta_lead_id','external_submission_id','external_id','provider.id','fbclid','fbc','fbp','utm_source','raw_payload','financial_balance','balance_due','charge_total','receipt_number','payment_amount','revenue_total','roas','spend','cpl','cpql','cac'] loop
@@ -101,7 +101,7 @@ do $$ declare k text; answer jsonb; l uuid; newer uuid; older uuid; r jsonb; r2 
  end loop;
  foreach k in array array['child_age','english_level','preferred_days','main_difficulty','school','start_date'] loop
   answer:=jsonb_build_array(jsonb_build_object('key',k,'label','Question','value',jsonb_build_array('Lundi','Mercredi')));
-  perform pg_temp.ok(crm_security.operational_answers(answer)=answer,'ordinary multichoice '||k);
+  perform pg_temp.ok(crm_security.operational_answers(answer)=jsonb_build_array(answer->0 || '{"display_value":null}'::jsonb),'ordinary multichoice '||k);
  end loop;
  older:=pg_temp.intake(); newer:=pg_temp.intake();
  update public.crm_leads set created_at=now()-interval '3 days' where id=older;

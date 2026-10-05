@@ -23,7 +23,7 @@ export function useCrmRead(name, args = {}, enabled = true) {
     staleTime: 15000,
     retry: 1,
     refetchOnWindowFocus: true,
-    refetchInterval: name === 'crm_get_today' ? 60000 : false
+    refetchInterval: ['crm_get_today','crm_get_opportunities'].includes(name) ? 60000 : false
   });
 }
 export function useCrmRefresh() {

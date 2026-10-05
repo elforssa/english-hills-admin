@@ -15,7 +15,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 head = (ROOT / '.git/HEAD').read_text().strip()
-assert head.startswith('ref: refs/heads/codex/') or head == 'ref: refs/heads/codex-migration'
+assert head.startswith('ref: refs/heads/codex/') or head == 'ref: refs/heads/codex-migration' or (os.environ.get('CI') == 'true' and os.environ.get('GITHUB_EVENT_NAME') == 'pull_request' and os.environ.get('GITHUB_HEAD_REF') not in (None, '', 'main', 'master'))
 ARGS = ['psql', '-X', '-qAt', '-h', '127.0.0.1', '-p', '54322', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1']
 ENV = {**os.environ, 'PGPASSWORD': 'postgres'}
 actor = str(uuid.uuid4())
@@ -191,5 +191,8 @@ removed_leads as(delete from public.crm_leads where contact_id in(select id from
 select count(*) from removed_leads;
 delete from public.crm_contacts where created_by='{actor}';delete from public.crm_command_requests where actor_scope='{actor}';delete from public.crm_followup_policies where created_by='{actor}';
 alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
-delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});delete from auth.users where id='{actor}';commit;""")
+delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});alter table public.profiles disable trigger role_security_guard;
+delete from auth.users where id='{actor}';
+update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');
+alter table public.profiles enable trigger role_security_guard;commit;""")
         print('PASS synthetic concurrency fixtures removed; guards restored',flush=True)

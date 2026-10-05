@@ -44,11 +44,15 @@ Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED /
 
 The Outcome-2 branch implements the [revision-3 four-lane CI contract](../architecture/plans/ci-tooling-fast-path.md): docs, exact AGENTS policy, isolated monitor tooling and fail-closed full. All PRs gain changed-Markdown checks; app/database behavior is unchanged. This is source implementation pending full remote CI, separate Tier-2 review and merge; the PR #90 adoption row above remains historical merged evidence. No deployment, branch-protection or provider configuration change is established. Vercel filtering remains NEEDS VERIFICATION.
 
+## Outcome-3 Batch-1 source implementation
+
+The owner authorized [O3-r2](../architecture/plans/outcome-3-receptionist-workspace.md) after architecture merge `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e`. The Batch-1 branch implements Opportunities, the contextual drawer and additive bounded reads in migration 107. [Implementation evidence](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) records local validation and scope. This is source implementation pending exact-SHA required CI, separate independent review and release approval; it is not merged, deployed or Production verified. The verified Production ledger remains 001–106. Tasks/My Work and Admissions Calendar remain Batch 2.
+
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.
 2. Separately define/bind and approve **prospective live lifecycle activation**, H4/Gate C. Credential readiness alone does not satisfy it.
-3. Complete the **receptionist Today/detail/walk-in experience** after the owner's separate CRM workflow/design for Outcome 3; retain ADR-003 and the existing enrollment/finance engines.
+3. Complete review/release of **Outcome-3 Batch-1 Opportunities**, then separately authorize Batch 2 Tasks/Admissions Calendar and the remaining walk-in outcome; retain ADR-003 and the existing enrollment/finance engines.
 4. Complete **live Meta Insights sync** under a separate provider contract/activation outcome; reporting is already implemented.
 
 Online learning requires architecture before implementation; it is not designed here. The [multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md) also records Director onboarding, incremental activation and website-adapter gaps. These are identified dependencies, not new commissions.

@@ -149,13 +149,15 @@ do $$ declare l uuid:=pg_temp.qualified();r jsonb;s uuid;e uuid;b uuid;receipt u
  perform pg_temp.ok(public.crm_reconcile_receipt_revenue(receipt)->>'status'='review_frozen_attribution','no automatic reassignment to unrelated enrollment');
  perform pg_temp.ok(pg_temp.revenue(l)=1000,'frozen ledger survives inconsistent source edit for review');
  update receipts set enrollment_id=e where id=receipt;update charges set enrollment_id=e where id=c;
- update crm_leads set merged_into_lead_id=(select id from crm_leads where id<>l limit 1) where id=l;
- perform pg_temp.ok(public.crm_reconcile_receipt_revenue(receipt)->>'status'='review_crm_identity','merged opportunity requires review without rewriting evidence');
- update crm_leads set merged_into_lead_id=null where id=l;
  -- Event/charge inconsistency is reviewable, not a second attribution.
  insert into financial_events(event_type,receipt_id,actor_id) values('payment_voided',receipt,auth.uid()) returning id into event;
  perform pg_temp.flush_revenue();
  perform pg_temp.ok(not exists(select 1 from crm_revenue_entries where financial_event_id=event),'mismatched event charge not attributed');
+ update crm_leads set merged_into_lead_id=(select id from crm_leads where id<>l limit 1) where id=l;
+ perform pg_temp.ok(public.crm_reconcile_receipt_revenue(receipt)->>'status'='review_crm_identity','merged opportunity requires review without rewriting evidence');
+ perform pg_temp.denied(format('update crm_leads set merged_into_lead_id=null where id=%L',l),'42501');
+ -- Keep this terminal fixture merged.
+
 end $$;
 
 -- Confirmation is independent of money.

@@ -1,5 +1,7 @@
 // Browser helper + real local CORS endpoint; no external landing page is created.
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -111,9 +113,9 @@ try {
  await page.getByPlaceholder('Nom du parent, apprenant ou téléphone…').fill('Business contact');
  await expect(page.locator('[data-testid="lead-row"]').filter({hasText:'Business contact'}).first()).toContainText('Apprenant à préciser');
  assert.equal(sql(centerQuery),centerBefore);
- await page.screenshot({path:'/private/tmp/hills-phase9-website-drawer.png',fullPage:true});
+ await page.screenshot({path:join(tmpdir(), 'hills-phase9-website-drawer.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- await page.screenshot({path:'/private/tmp/hills-phase9-website-mobile.png',fullPage:true});
+ await page.screenshot({path:join(tmpdir(), 'hills-phase9-website-mobile.png'),fullPage:true});
  assert.deepEqual(errors,[]);
  console.log('PASS browser website ingestion, unnamed lead and saved answers, conservative review/resolution, Today/Prospects, protected attribution, no center side effects');
 } finally {

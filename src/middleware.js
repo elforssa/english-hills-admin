@@ -130,7 +130,7 @@ export async function middleware(request) {
     if (receptionistCanAccess(pathname) &&
       (pathname !== '/settings' || !request.nextUrl.search)) return response;
     const url = request.nextUrl.clone();
-    url.pathname = '/crm/today';
+    url.pathname = '/crm/leads';
     url.search = '';
     return redirect(url);
   }
