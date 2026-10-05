@@ -1,5 +1,7 @@
 // Local browser integration. All provider I/O is blocked; fixtures are synthetic.
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes, createHmac } from 'node:crypto';
@@ -47,8 +49,8 @@ try {
  assert.equal(sql("select count(*) from crm_ingestion_jobs where external_key='777777777:2'"),'0');
  const review=page.getByRole('region',{name:'Demandes à vérifier'});await review.waitFor();await review.locator('summary').click();
  await expect(review).toContainText('Lundi, Mardi');await expect(review).toContainText('Oui, c\'est proche de chez moi');await expect(review).toContainText('12');assert(!(await page.locator('body').innerText()).includes('987654321987654321'));
- await page.screenshot({path:'/private/tmp/hills-phase8-review.png',fullPage:true});
- await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/private/tmp/hills-phase8-review-mobile.png',fullPage:true});
+ await page.screenshot({path:join(tmpdir(), 'hills-phase8-review.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:join(tmpdir(), 'hills-phase8-review-mobile.png'),fullPage:true});
  if(learnerPolicy==='required') await review.getByLabel('Apprenant de la demande',{exact:true}).fill('Adam demande Meta');
  else { await expect(review.getByLabel('Apprenant (facultatif) de la demande',{exact:true})).toHaveValue('');await expect(review.getByRole('button',{name:'Confirmer la décision'})).toBeEnabled(); }
  await review.getByRole('button',{name:'Confirmer la décision'}).click();await expect(review).toHaveCount(0);
@@ -58,7 +60,7 @@ try {
  assert.equal(sql('select jsonb_build_array((select count(*) from students),(select count(*) from enrollments),(select count(*) from placement_tests),(select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events))'),centerBefore);
  assert.deepEqual(errors,[]);console.log('PASS receptionist intake review, safe typed answers, explicit resolution, normal lead drawer, mobile and no center side effects');
 } catch(error) {
- if(page) await page.screenshot({path:'/private/tmp/crm-phase8-failure.png',fullPage:true}).catch(()=>{});
+ if(page) await page.screenshot({path:join(tmpdir(), 'crm-phase8-failure.png'),fullPage:true}).catch(()=>{});
  throw error;
 } finally {
  if(browser)await browser.close();

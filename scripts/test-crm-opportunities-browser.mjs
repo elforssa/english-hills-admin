@@ -1,6 +1,8 @@
 // Local Auth + real UI + RPC regression. Synthetic fixtures are removed in finally.
 // No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -82,7 +84,7 @@ try {
    await page.getByRole('button',{name:'Qualifiés',exact:true}).click();
    await page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first().click();
    await page.getByRole('dialog').getByText('Acquisition',{exact:true}).waitFor();await page.waitForFunction(()=>{const box=document.querySelector('[role=dialog]')?.getBoundingClientRect();return box&&box.x>=-1&&box.right<=innerWidth+1;});const box=await page.getByRole('dialog').boundingBox();assert(box.x>=-1 && box.x+box.width<=viewport.width+1,JSON.stringify({viewport,box}));
-   await page.waitForLoadState('networkidle');await page.screenshot({path:`/private/tmp/o3-${engine.name()}-${viewport.width}.png`,fullPage:false});
+   await page.waitForLoadState('networkidle');await page.screenshot({path:join(tmpdir(), `o3-${engine.name()}-${viewport.width}.png`),fullPage:false});
   }
   phase='200% viewport';await closeDrawer();await page.goto(app+'/crm/leads?layout=list');await page.waitForLoadState('networkidle');await page.setViewportSize({width:720,height:450});await page.waitForLoadState('networkidle');await page.getByRole('heading',{name:'Pipeline admissions'}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'200% equivalent CSS viewport');
   assert.deepEqual(failures,[]);await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} Board/List/Views, cursor bounds, keyboard/Back, acquisition endpoint, responsive/reduced motion`);
@@ -101,7 +103,7 @@ try {
  assert.deepEqual(external,[],'no browser external provider requests');console.log('PASS no browser Meta or broad technical detail requests');
 } catch(error) {
  console.error(error.message);
- if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4000));await page.screenshot({path:'/private/tmp/hills-phase4-failure.png',fullPage:true});}
+ if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4000));await page.screenshot({path:join(tmpdir(), 'hills-phase4-failure.png'),fullPage:true});}
  throw error;
 } finally {
  if(browser)await browser.close();

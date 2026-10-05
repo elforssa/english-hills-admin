@@ -1,6 +1,8 @@
 // Local Auth + real UI + RPC regression. Synthetic fixtures are removed in finally.
 // No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -93,12 +95,12 @@ try {
  }
  console.log('PASS ENGAGED and QUALIFIED fifth failures retain lifecycle until explicit unreachable closure');
  // Decide before saving: the conversation and business outcome are one RPC.
- const spoke=intake('Conversation synthétique');await open(spoke);await page.getByRole('button',{name:'Appel',exact:true}).click();await dialog().getByLabel('Résultat de l’appel').selectOption('spoke_with_contact');await dialog().getByLabel('Note',{exact:true}).fill('Conversation et rappel convenu');await fillTask();await page.screenshot({path:'/private/tmp/hills-phase4-call.png',fullPage:false});await save();assert.equal(detail(spoke).status,'ENGAGED');assert.equal(detail(spoke).open_tasks.length,1);await done();
+ const spoke=intake('Conversation synthétique');await open(spoke);await page.getByRole('button',{name:'Appel',exact:true}).click();await dialog().getByLabel('Résultat de l’appel').selectOption('spoke_with_contact');await dialog().getByLabel('Note',{exact:true}).fill('Conversation et rappel convenu');await fillTask();await page.screenshot({path:join(tmpdir(), 'hills-phase4-call.png'),fullPage:false});await save();assert.equal(detail(spoke).status,'ENGAGED');assert.equal(detail(spoke).open_tasks.length,1);await done();
  for (const decision of ['qualify','lost','not_qualified']) {
   const id=intake('Décision '+decision);await open(id);await page.getByRole('button',{name:'Appel',exact:true}).click();
   await dialog().getByLabel('Résultat de l’appel').selectOption('spoke_with_contact');await dialog().getByLabel('Quelle suite donner ?').selectOption(decision);
   await dialog().getByLabel('Note',{exact:true}).fill('Le parent confirme sa décision');
-  if(decision==='qualify'){await fillTask();await page.screenshot({path:'/private/tmp/hills-phase4-qualification.png',fullPage:false});}
+  if(decision==='qualify'){await fillTask();await page.screenshot({path:join(tmpdir(), 'hills-phase4-qualification.png'),fullPage:false});}
   else assert.equal(await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).count(),0,'closure requires no dummy task');
   if(decision==='qualify') {
    const attempts=[];let drop=true;
@@ -116,7 +118,7 @@ try {
  assert.equal(sql(`select assigned_to from crm_tasks where id='${assignedTask.id}'`),priorAssignee,'lead owner reassignment preserves existing task assignee, including unassigned');
  await page.getByRole('button',{name:'Réattribuer l’action',exact:true}).first().click();await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await save();await done();assert.equal(sql(`select assigned_to from crm_tasks where id='${assignedTask.id}'`),users[0].id);assert.equal(detail(spoke).owner_id,users[2].id,'explicit task reassignment preserves owner');
  // Candidate suggestions explicitly disclose creation and never merge.
- await page.goto(app+'/crm/leads');await page.getByRole('button',{name:'Ajouter un prospect',exact:true}).click();await page.screenshot({path:'/private/tmp/hills-phase4-manual.png',fullPage:false});await dialog().getByLabel('Nom du contact',{exact:true}).fill('Autre contact synthétique');await dialog().getByLabel('Nom de l’apprenant',{exact:true}).fill('Autre enfant');await dialog().getByLabel('Téléphone',{exact:true}).fill('00212612345678');await save();await dialog().getByText(/Le nouveau prospect est déjà créé/).waitFor();await dialog().getByRole('button',{name:'Continuer avec le nouveau prospect'}).click();
+ await page.goto(app+'/crm/leads');await page.getByRole('button',{name:'Ajouter un prospect',exact:true}).click();await page.screenshot({path:join(tmpdir(), 'hills-phase4-manual.png'),fullPage:false});await dialog().getByLabel('Nom du contact',{exact:true}).fill('Autre contact synthétique');await dialog().getByLabel('Nom de l’apprenant',{exact:true}).fill('Autre enfant');await dialog().getByLabel('Téléphone',{exact:true}).fill('00212612345678');await save();await dialog().getByText(/Le nouveau prospect est déjà créé/).waitFor();await dialog().getByRole('button',{name:'Continuer avec le nouveau prospect'}).click();
  // Observational queue exceptions and safe flexible answers are real rendered data.
  const overdue=intake('Urgence synthétique'),stale=intake('Relance synthétique'),taskless=intake('Sans action synthétique');
  sql(`begin;set local request.jwt.claim.sub='${actor}';update public.crm_tasks set due_at=now()-interval '7 days' where lead_id='${overdue}';
@@ -125,12 +127,12 @@ try {
  alter table public.crm_submissions disable trigger crm_submission_immutable;
  update public.crm_submissions set form_answers='[{"key":"age","label":"Âge déclaré","value":8,"value_type":"number","label_source":"synthetic"},{"key":"days","label":"Jours souhaités","value":["Mercredi","Samedi"],"value_type":"array","label_source":"synthetic"},{"key":"ready","label":"Disponible","value":true,"value_type":"boolean","label_source":"synthetic"},{"key":"campaign_id","label":"Campagne","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"leadgen_id","label":"Référence","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"financial_balance","label":"Solde","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"}]' where lead_id='${lead}';
  alter table public.crm_submissions enable trigger crm_submission_immutable;commit;`);
- await page.goto(app+'/crm/today');await page.getByTestId('lead-row').first().waitFor();assert.match(await page.getByTestId('lead-row').first().innerText(),/Urgence synthétique/);await page.getByText('Prochaine action manquante',{exact:true}).waitFor();await page.getByText('Contact à relancer',{exact:true}).waitFor();await page.screenshot({path:'/private/tmp/hills-phase4-today.png',fullPage:true});await page.getByTestId('lead-row').first().getByRole('button',{name:'Voir',exact:true}).click();await page.waitForURL(url=>url.searchParams.get('lead')===overdue);
- await open(lead);await page.screenshot({path:'/private/tmp/hills-phase4-detail.png',fullPage:false});await page.getByText('Réponses aux formulaires',{exact:true}).click();await page.getByText('Mercredi · Samedi',{exact:true}).waitFor();await page.getByText('Oui',{exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE-SENTINEL|campaign_id/);
+ await page.goto(app+'/crm/today');await page.getByTestId('lead-row').first().waitFor();assert.match(await page.getByTestId('lead-row').first().innerText(),/Urgence synthétique/);await page.getByText('Prochaine action manquante',{exact:true}).waitFor();await page.getByText('Contact à relancer',{exact:true}).waitFor();await page.screenshot({path:join(tmpdir(), 'hills-phase4-today.png'),fullPage:true});await page.getByTestId('lead-row').first().getByRole('button',{name:'Voir',exact:true}).click();await page.waitForURL(url=>url.searchParams.get('lead')===overdue);
+ await open(lead);await page.screenshot({path:join(tmpdir(), 'hills-phase4-detail.png'),fullPage:false});await page.getByText('Réponses aux formulaires',{exact:true}).click();await page.getByText('Mercredi · Samedi',{exact:true}).waitFor();await page.getByText('Oui',{exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE-SENTINEL|campaign_id/);
  console.log('PASS Today overdue ordering, missing/stale indicators, Today drawer and safe scalar/array/boolean form answers');
  // Search + mobile screenshot; no technical fields leak in UI or read responses.
  await page.goto(app+'/crm/leads?layout=board');await page.getByLabel('Rechercher un prospect').fill('0612345678');await page.getByTestId('opportunity-card').first().waitFor();assert.ok(await page.getByTestId('opportunity-card').count()>0);
- await page.screenshot({path:'/private/tmp/hills-phase4-desktop.png',fullPage:true});await page.setViewportSize({width:390,height:844});await page.getByTestId('opportunity-card').first().getByRole('button').first().click();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.getByRole('dialog').evaluate(async el=>{await Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{})));});const box=await page.getByRole('dialog').boundingBox();assert.ok(box.x>=-1 && box.x+box.width<=391 && box.width>=380,'mobile drawer fits viewport');await page.screenshot({path:'/private/tmp/hills-phase4-mobile.png',fullPage:false});
+ await page.screenshot({path:join(tmpdir(), 'hills-phase4-desktop.png'),fullPage:true});await page.setViewportSize({width:390,height:844});await page.getByTestId('opportunity-card').first().getByRole('button').first().click();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));await page.getByRole('dialog').evaluate(async el=>{await Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{})));});const box=await page.getByRole('dialog').boundingBox();assert.ok(box.x>=-1 && box.x+box.width<=391 && box.width>=380,'mobile drawer fits viewport');await page.screenshot({path:join(tmpdir(), 'hills-phase4-mobile.png'),fullPage:false});
  const body=await page.locator('body').innerText();assert.doesNotMatch(body,/campaign_id|adset_id|ad_id|fbclid|raw_payload|payload_hash|source_key/);
  console.log('PASS compound qualification, successful call, safe reassignment, honest candidate handling, search, URL/mobile and no technical UI fields');
  // A mutation from page 2 resets the live Today queue, without snapshot infrastructure.
@@ -153,7 +155,7 @@ try {
  assert.deepEqual(pageErrors,[]);console.log('PASS real director/admin access and teacher/parent/student/pending route denial; no browser errors');
 } catch(error) {
  console.error(error.message);
- if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4000));await page.screenshot({path:'/private/tmp/hills-phase4-failure.png',fullPage:true});}
+ if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4000));await page.screenshot({path:join(tmpdir(), 'hills-phase4-failure.png'),fullPage:true});}
  throw error;
 } finally {
  if(browser)await browser.close();
