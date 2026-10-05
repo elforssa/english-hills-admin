@@ -109,7 +109,7 @@ try {
     }
   }
   assert(signedIn, 'Login did not complete after three page loads');
-  await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();
   assert.equal(sql(`select role from public.profiles where id='${user}'`), 'receptionist');
   assert(authHeader, 'Authenticated receptionist requests were not observed');
   const authHeaders = { apikey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY, Authorization: authHeader };
@@ -121,6 +121,15 @@ try {
   for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/premium-sessions','/assessments','/placement-tests','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
   for (const path of ['/finance','/reports','/payroll','/teachers/new','/integrations','/settings/users']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS stored receptionist role, real login, forged metadata ignored and permitted sidebar');
+
+  // O3-r2 changes the default home, while saved Today links remain usable.
+  await page.goto(app + '/crm/today');
+  await page.waitForURL(app + '/crm/today');
+  await page.getByRole('heading', { name: 'Aujourd’hui', exact: true }).waitFor();
+  await page.goto(app + '/crm/leads');
+  await page.waitForURL(app + '/crm/leads');
+  await page.getByRole('heading', { name: 'Pipeline admissions', exact: true }).waitFor();
+  console.log('PASS Opportunities landing and direct Today task access');
 
   await page.goto(app + '/placement-tests');
   await page.getByRole('button', { name: 'Planifier un test' }).click();
