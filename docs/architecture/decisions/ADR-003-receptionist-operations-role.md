@@ -37,11 +37,11 @@ Planned elements: new prospects, overdue actions, callbacks today, expected cent
 
 Remove call-launch buttons; keep phone number and copy, and keep WhatsApp. Retain dedicated recording of phone-call outcomes because failed-call policy depends on phone attempts. Place form answers near the top and make next action prominent. Internal note remains context-only. Represent a center visit as a task, not merely QUALIFIED status. History must be re-expandable.
 
-### Proposed Outcome-3 presentation amendment — O3-r1, 2026-10-05
+### Proposed Outcome-3 presentation amendment — O3-r2, 2026-10-05
 
 **PROPOSED; not yet owner-approved or implemented.** The [single Outcome-3 contract](../plans/outcome-3-receptionist-workspace.md) defines the remaining operating workspace. Its approval record must be completed before implementation; existing Batch 1 permission approval is unchanged.
 
-Upon owner acceptance of O3-r1, Opportunities (Board/List over the same CRM leads) becomes the default CRM workspace, and Today becomes Tasks/My Work over the existing task engine. Reuse the right-side `LeadDetailSheet`; prioritize contact/learner, quick actions, stage/owner and next action, then placement/enrollment, acquisition, important form answers and timeline. No generic pipeline or second task/detail system is introduced.
+Upon owner acceptance of O3-r2, Opportunities (Board/List over the same CRM leads) becomes the default CRM workspace, and Today becomes Tasks/My Work over the existing task engine. Reuse the right-side `LeadDetailSheet`; prioritize contact/learner, quick actions, stage/owner and next action, then placement/enrollment, acquisition, important form answers and timeline. No generic pipeline or second task/detail system is introduced.
 
 This proposal explicitly replaces the earlier presentation instruction “Remove call-launch buttons” with a visible Call panel offering phone/copy/device handler plus separate explicit outcome recording. Current `CrmWorkspace` already has device call links, which conflicts with that earlier wording. Launching/copying never records an attempt; only the existing guarded outcome command does. WhatsApp launch likewise proves no message was sent. No backend attempt, outreach, status, enrollment, finance or permission semantics change. Until approval, this is a proposed reconciliation, not a retroactive claim that the old direction was implemented.
 

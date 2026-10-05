@@ -23,4 +23,4 @@ Read [master architecture](../../ai/ARCHITECTURE.md) and [current evidence](../.
 
 ## Proposed receptionist workspace
 
-[Outcome 3 — Receptionist CRM / Admissions Operating Workspace](outcome-3-receptionist-workspace.md), revision O3-r1, is the single proposed product/architecture contract. It awaits independent review and human owner approval; no implementation or Production operation is authorized.
+[Outcome 3 — Receptionist CRM / Admissions Operating Workspace](outcome-3-receptionist-workspace.md), revision O3-r2, is the single proposed product/architecture contract. It awaits independent review and human owner approval; no implementation or Production operation is authorized.
