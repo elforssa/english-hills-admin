@@ -16,7 +16,7 @@ Implementation code checkpoint before this evidence record:
 
 Owner-adopted architecture:
 
-[Two-stage inspector bootstrap amendment](../plans/crm-h3-05-r7-two-stage-inspector-bootstrap-amendment.md)
+[Two-stage inspector bootstrap amendment](../plans/historical/crm-h3-05-r7-two-stage-inspector-bootstrap-amendment.md)
 
 This implementation does not authorize installation, synthetic browser testing, Meta access, A/B generation, real-token inspection, Revoke tokens, Vercel mutation, H3-06–08, H4, Test Events or lifecycle sending.
 

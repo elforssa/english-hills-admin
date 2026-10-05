@@ -1,5 +1,7 @@
 # Phase 11 — Meta Insights and director marketing analysis
 
+> **Evidence boundary:** dated baseline/rollout statements below are historical, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) and [active contracts](architecture/plans/README.md).
+
 Code baseline: `4b25c93592f3b9944b73977819bbe13cb046b8f4`, feature branch `codex/director-receipt-deletion`. Local migrations 089 (storage/synchronization) and 090 (reporting). Production remains last confirmed 001–076; this phase does not deploy anything.
 
 ## Provider verification and activation boundary

@@ -1,110 +1,130 @@
-# Current architecture
+# English Hills platform architecture
 
-## Adopted S1 credential architecture — 2026-10-05
+## Purpose
 
-[ADR-004's S1 amendment](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md#adopted-amendment--simplified-credential-security-s1-2026-10-05) and [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) are adopted through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. S1 replaces R7 bootstrap/transport ceremonies with supported configuration, one final dedicated System User token, one validation and direct Vercel Production sensitive custody. [Gate-B runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) is the sole active credential workflow; focused review and explicit operational approval remain required.
+English Hills is a production school-management application for inquiry follow-up, admissions, teaching operations and financial records. Staff work in a shared administrative application; teachers, parents and students have restricted portals. The external marketing website can submit inquiries or public registrations through separate interfaces. CRM acquisition and marketing feedback support the school workflow; they do not own enrollment or financial truth.
 
-All conflicting R7 credential procedures below are **HISTORICAL — SUPERSEDED BY S1**; original findings and approval scopes remain evidence. Monitor source/tests remain without being a credential prerequisite. Existing server-only secret resolution, independent live gates, per-delivery auth-error holds and R4 source/replay boundaries are unchanged. No runtime, schema or deployed behavior change is claimed; credential readiness, dormant acceptance and live activation remain distinct. This #91 revision excludes H3-06/07/08 and all live operations.
+This is the **master technical entry point**. [CURRENT_STATE](CURRENT_STATE.md) owns implementation/deployment/activation evidence; [FEATURE_INDEX](../architecture/FEATURE_INDEX.md) maps capabilities to code and contracts. Plans are not proof of implementation, and merged code is not proof of live operation.
 
-## CI + Codex Workflow Efficiency v2 — tooling-only fast path proposed, 2026-10-04
+## State vocabulary
 
-PR #90 proposes a conservative third pull-request CI mode in [Verify](../../.github/workflows/verify.yml): `docs`, `tooling`, and `full`. The dependency-free [CI verifier](../../scripts/ci/verify.py) keeps uncertainty fail-closed to `full`.
+| State | Meaning |
+| --- | --- |
+| LIVE | Operational use is supported by dated Production evidence; the evidence's scope and date still matter. |
+| IMPLEMENTED / DORMANT | Code/database capability exists but delivery or activation is intentionally closed. |
+| IMPLEMENTED — NEEDS VERIFICATION | Repository implementation exists; feature-specific Production acceptance is not established. |
+| PARTIALLY IMPLEMENTED | Some of the intended capability exists; named work remains. |
+| PLANNED | Direction or contract exists, without completed implementation evidence. |
+| MISSING ARCHITECTURE | An established need has no durable design yet. |
+| HISTORICAL | Preserved reasoning, observations or superseded procedure; not current execution authority. |
 
-The `tooling` lane is limited to an explicit reviewed inventory: `README.md`, `manifest.json`, `rules.json`, `monitor.html`, `monitor.css`, `monitor.js`, `monitor-core.mjs`, and `monitor-controller.mjs` under `tools/meta-debugger-transport-monitor/`, plus the exact `scripts/test-meta-debugger-transport-monitor.mjs` regression test and accompanying safe `docs/**/*.md`. Any other tooling path selects `full`. It runs docs verification plus the normal app/unit/build/security job and skips only the expensive `local-database` job. Runtime/database/configuration/CI-policy/package/unknown paths remain `full`. Rename detection stays disabled so both old/new paths are evaluated. Unknown or missing successful classifier output also schedules `local-database`; only explicit `docs` or `tooling` may suppress it.
+Deployment is a separate dimension: record the source revision, migration ledger and observed gates independently. Credential readiness, dormant integration acceptance, successful provider delivery and optimization eligibility are distinct claims.
 
-This is a **Tier 2 engineering-policy/CI-routing change** because it changes required test selection and can affect merge verification, but it does not modify runtime behavior, Production configuration, provider credentials, database state or release/activation authority. Tier 2 therefore requires exact-head CI plus fresh independent review. The PR itself modifies `.github/**` and `scripts/ci/**`, which are excluded from the tooling allowlist, so it must pass full CI once before merge.
-
-The always-running `required` aggregate remains the branch-protection check: `docs` requires docs success with app/database skipped; `tooling` requires docs + app success with database skipped; `full` requires app + local-database success for pull requests. See [policy](../../AGENTS.md#ci-selection-and-remote-ci-handoff) and the [tooling fast-path plan](../architecture/plans/ci-tooling-fast-path.md).
-
-The earlier v1 docs-vs-full description is superseded if PR #90 is adopted.
-
-## H3 Revision 7 owner approval and Step 2 preparation — 2026-10-03
-
-> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
-
-Revision 7 at PR #64 is owner-approved as recorded in the [Step 2 approval and preparation contract](../architecture/plans/crm-h3-05-revision-7-step-2-preparation.md#approval-and-evidence-boundary). Earlier proposal status below is historical. C2/B1/B4/B5 design is unchanged; no runtime, SQL or deployed architecture changed. External custody selection and a reviewed secret-safe inspector remain execution prerequisites; architecture approval grants no operation authority.
-
-## Proposed H3 credential validation amendment — Revision 7
-
-> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures; original evidence and approval scope retained.
-
-[Revision 7](../architecture/plans/crm-h3-05-revision-7-validation.md) proposes C2: one new lifecycle-only owned app/Employee, inspected effective authority and mandatory exclusive identity-wide revocation rehearsal before credential acceptance. Official mechanisms, read-only account facts and separately authorized empirical recovery evidence can suffice without Meta support. This is not approved or implemented; no deployed architecture changes. [Evidence](../architecture/evidence/crm-h3-revision-7-validation-2026-10-03.md) preserves PR #63 and distinguishes non-event credential acceptance from actual delivery proof. Existing R4/106, dormant gates and H4 separation remain unchanged; dated direct-route/revision-6 statements below do not authorize issuance.
-
-## H3-04 immutable contract seed — Production verified 2026-10-02
-
-[PR #57](https://github.com/elforssa/english-hills-admin/pull/57) merged/deployed as `e3928b369c8790151771d7251aee7030289ec84f`; forward migration 106 is verified in Production ledger 001–106. The existing append-only registry contains exactly one approved R4 provider manifest. [Release acceptance](../architecture/evidence/crm-h3-04-production-2026-10-02.md) verifies unchanged schema/functions/owners/ACL/RLS/triggers and dormant independent gates. Manifest active=true cannot initiate delivery: no destination, policy/evidence/boundary/ownership/epoch, token, live gate or active lifecycle cron exists. H3-05–08/H4 remain separately gated. Earlier branch observations below retain their historical limits.
-
-H3-05 Entitlement and dedicated secret is the next gated step; it has not been executed or authorized by this closeout. It requires its own artifact-bound operator approval and fresh preflight under revision 5.
-
-## H3-04 immutable contract seed — branch implementation 2026-10-02
-
-Forward migration 106 inserts one owner-approved R4 contract into the existing append-only provider registry; schema, ACL/RLS, trigger/security attributes, functions and independent send gates are unchanged. [Manifest and acceptance evidence](../architecture/evidence/crm-h3-04-implementation-2026-10-02.md). No destination/source/policy/boundary/ownership/epoch or live gate is created. Branch implementation is not deployment; [current state](CURRENT_STATE.md) records inherited H3-03 verification through 105.
-
-
-> **Production verified — 2026-10-01:** PR #47 reviewed head `f823b62a3bb06d40b1f572927bfa2af60fd4c857` merged and deployed as `02ffccab1519c0b381196ef9e5f938a908fdd105`; ledger 001–103 and advisory R4 controls are verified dormant. Lifecycle inventory is zero, cron disabled and server live gate absent; existing intake is healthy. [Dated release evidence and limitations](../architecture/evidence/crm-r4-advisory-production-2026-10-01.md). Earlier not-merged/not-deployed or two-event baseline statements below are historical and superseded for current deployment state. Provider seed, Meta/credential changes, Production release and H4 remain unauthorized; the separately commissioned H3-02 branch is recorded below.
-
-> Finally owner-approved 2026-10-01 (PR #46, architecture head `c404815`): [R4 advisory D2 amendment](../architecture/plans/completed/crm-meta-funnel-r4-d2-advisory.md) changes custom proof from mandatory to recommended while preserving platform/legal/privacy, source/identity, prospective cutoff, producer ownership, five-event and no-uncertain-replay safeguards. Any mandatory-D2 text below describes the deployed baseline until reviewed forward implementation; actual withdrawals/stops remain enforceable even without a grant. The approved opportunity/contact/pending stop scopes and exact lock/retention contract are part of this architecture. Migration 103 and compatible runtime/UI are implemented on `codex/r4-advisory-d2`, pending exact-head CI and independent review; see the [implementation record](../architecture/evidence/crm-r4-advisory-implementation-2026-10-01.md). This branch is not merged or deployed; deployment is NOT authorized; H3/H4 are NOT approved and remain blocked. [Final approval record](../architecture/plans/completed/crm-meta-funnel-r4-d2-advisory.md#final-owner-architecture-approval-2026-10-01).
-
-Read [CURRENT_STATE](CURRENT_STATE.md) for the main baseline versus documented deployment. Decisions and rationale are indexed in [ADRs](../architecture/decisions/README.md).
-
-## H3-02 branch compatibility correction — 2026-10-02
-
-[Approved H3 revision 5](../architecture/plans/crm-h3-technical-readiness.md) is implemented on `codex/crm-h3-02-compatibility` by the live adapter and forward migration 104: transient multipart token authentication and strict original-source/activity exported seconds. Existing pure-hold callers revalidate get, prepare, committed begin, claim and retry with unchanged ACLs and sharing-stop lock hierarchy. Prepared payloads also revalidate in the adapter. [Evidence](../architecture/evidence/crm-h3-02-implementation-2026-10-02.md). This branch is not merged/deployed; Production remains verified dormant through 103. No activation data or credentials are introduced.
-
-## Application and database
-
-Next.js 15 App Router serves the admin workspace, role portals, public enrollment and API handlers. [Admin layout](../../src/app/(admin)/layout.jsx) wraps pages in ProtectedRoute; [middleware](../../src/middleware.js) refreshes sessions and gates page routes. Handlers authenticate independently. Stored `profiles.role` joins Auth through `profiles.id = auth.users.id`; authorization continues into RPCs/RLS.
-
-[entities.js](../../src/lib/entities.js) provides ordinary entity CRUD and [queries.js](../../src/lib/queries.js) TanStack Query caching. CRM uses [dedicated RPC hooks](../../src/lib/crm/queries.js) and guarded SQL commands/read models. Browser/session server clients live in [supabase.js](../../src/lib/supabase.js); privileged [supabase-admin.js](../../src/lib/supabase-admin.js) is server-only. PostgreSQL transactions, constraints, triggers and cumulative migrations own cross-entity integrity. Storage uses an asset registry and authorized signing/finalization endpoints (045–046), not public dossier URLs.
-
-## Acquisition and scheduling
+## System overview
 
 ```mermaid
 flowchart TD
-  W[External website inquiry] --> P[Public CRM intake API]
-  P --> Q[Durable crm_ingestion_jobs]
-  M[Meta] --> H[Signed webhook when enabled]
-  M --> R[Bounded reconciliation discovery]
-  H --> Q
-  R --> Q
-  Q --> N[Shared worker: retrieve Meta / normalize website and Meta]
-  N --> S[Immutable submission + mapping version]
-  S --> C[CRM contact / lead / tasks or intake review]
-  PG[Supabase pg_cron + pg_net primary] --> E[Protected /api/cron/crm-intake]
-  GH[GitHub Actions backup] --> E
-  E --> R
-  E --> N
+  U[Staff and role portals in browser] --> N[Next.js App Router on Vercel]
+  W[External marketing website] --> N
+  N --> A[Supabase Auth and stored profiles]
+  N --> D[Postgres: RPCs, RLS, constraints and audit history]
+  N --> S[Supabase Storage: asset registry and authorized URLs]
+  C[Supabase pg_cron + pg_net / GitHub backup] --> J[Protected Next.js scheduler endpoints]
+  J --> Q[Leased intake and lifecycle workers]
+  Q <--> D
+  Q <--> M[Meta Graph: inbound; gated outbound]
+  N --> E[Resend email]
+  M --> H[Signed inbound webhook]
+  H --> D
 ```
 
-The primary trigger exists in migration 095; Production activation was independently verified in owner-supplied evidence on 2026-09-29 (see CURRENT_STATE). Both triggers invoke the same bounded endpoint, use the dedicated scheduler bearer, and rely on database leases plus unique event identities. Reconciliation discovers IDs only; the shared worker retrieves and normalizes them. Independent webhook/reconciliation switches allow polling while webhook access is unavailable. [ADR-002](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md) and [scheduler runbook](../crm-intake-scheduler.md) contain limits and activation details.
+Next.js 15 / React 19 renders the application. TanStack Query caches browser reads; Tailwind/shadcn supplies UI primitives. [Ordinary entity access](../../src/lib/entities.js) uses Supabase under RLS; [CRM hooks](../../src/lib/crm/queries.js) use dedicated guarded RPCs. Cross-entity transactions, role checks, constraints and triggers live in cumulative PostgreSQL migrations. This is one application/database architecture, not separate CRM and school systems.
 
-Website acceptance means durable receipt, not immediate lead resolution. Exact-origin checks, validation, rate limiting and optional CAPTCHA precede queueing. Immutable mapping versions normalize core fields and flexible answers; uncertain matching becomes review. [Website contract](../crm-website-inquiries.md).
+## Domain map
 
-The source model supports multiple Meta form IDs per Page connection and multiple website form keys per configured origin; immutable mapping versions are independent of campaign/ad attribution. Director configuration RPCs exist, but no inbound connection/mapping onboarding UI was found. Current lifecycle source boundaries are per mapping, while destination/epoch controls are shared; uninterrupted addition of another live source needs separate platform assessment. See the [source-backed multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md). Website immediate CAPI Lead and website lifecycle matching are owner-directed later adapter work, not current runtime capability or an H3 prerequisite.
+| Domain | Responsibility and boundary |
+| --- | --- |
+| Acquisition | Meta/website submissions, immutable mappings, durable queue, attribution and ambiguous-match review. Receipt of an inquiry is not enrollment. |
+| CRM | Contacts, learner/program opportunities, commercial status, tasks, activities, Today and placement follow-up. |
+| Admissions/enrollment | Public pre-registration, student matching, program/year/level/group selection and explicit enrollment evidence. |
+| Academics | Students, teachers, groups, timetable, attendance, assessments, portfolios, certificates and Premium workshops/homework. |
+| Finance | Charges, installments/payments, receipt snapshots, balances, audited corrections and payroll. Conversion and collected revenue remain distinct. |
+| Reporting | School reports and finance aggregates; director CRM cohort/revenue/marketing analysis, with unavailable spend kept explicit. |
+| Integrations | Independent inbound Meta, website intake, dormant lifecycle feedback, unfinished live Insights sync and email delivery. |
+| Portals | Teacher operational views and linked parent/student access; not an online classroom platform. |
 
-## CRM and school operations
+## Core entities
 
-```mermaid
-flowchart LR
-  C[Contact] --> L[Lead / commercial opportunity]
-  L --> T[Placement test + milestone history]
-  L --> E[Explicit linked enrollment]
-  E --> S[Student dossier]
-  E --> G[Compatible group / academic session]
-  E --> V[Confirmed or Validated: trusted conversion]
-  E --> A[Charge agreement]
-  A --> P[Payment / receipt]
-  P --> F[Financial events + signed CRM revenue ledger]
-  L --> I[Immutable first-touch attribution]
-  I --> F
-```
+| Entity | Meaning / ownership |
+| --- | --- |
+| Contact | CRM adult/contact identity; may represent multiple learners. A shared phone does not establish a single learner. |
+| Lead / opportunity | Commercial inquiry for a learner/program context, with its own status, tasks and activity history. It is not the student dossier. |
+| Learner / student | School learner record, matched or explicitly created through trusted enrollment/operational flows. Siblings remain separate. |
+| Enrollment | Learner's admission into a program and school year, with status, level and optional compatible group. Trusted confirmation drives CRM conversion. |
+| Group | Teaching cohort with session/program, level, teacher and schedule relationships. Membership must agree with enrollment. |
+| Academic session | Program/session type (for example Yearly or Adults) scopes levels/groups; school year scopes enrollment. A Premium workshop session is a scheduled teaching event, not an online room. |
+| Charge / payment / receipt | Agreement, actual collection and immutable payment snapshot respectively. Balance is derived from the financial engine; later payments do not rewrite old receipts. |
+| Attribution | Original acquisition source snapshot, distinct from latest touch and current provider names. First touch is immutable. |
+| Lifecycle outbox / destination | Durable intent and bounded attempts derived from committed CRM facts; destination/configuration, provider contract and activation evidence independently control delivery. |
 
-Placement booking/results drive tasks and activities, not automatic enrollment/payment. Enrollment commands review existing learner candidates; enrollment/student/group triggers preserve membership consistency (070–074, 083–084). Groups, levels, timetables, attendance and Premium sessions share academic relationships; [071](../../supabase/migrations/071_teacher_academic_relationships.sql) governs teacher academic access.
+Full schemas remain in [migrations](../../supabase/migrations); durable business rules are in [PRODUCT_RULES](PRODUCT_RULES.md).
 
-Payments use the existing charge/receipt engine and explicit CRM enrollment identity. Revenue attribution follows linked receipts and immutable first touch (085); director analytics combines operational cohorts and available spend snapshots (089–090). Insights remains fixture-only. Deployed migrations 098–100 extend lifecycle feedback with explicit eligibility evidence, prospective activation epochs, lead-ID-only live payload enforcement, retention cleanup, director-only diagnostics and an independent `crm-lifecycle-primary` scheduler. Production verification on 2026-09-30 found that scheduler inactive, with zero provider contracts, policies/evidence, open activation epochs, live deliveries or enabled lifecycle destinations. No provider credentials/configuration or form changes were made. The live path therefore remains dormant and fail closed pending H3/H4; deployment is not evidence of live Meta activation.
+## Role model
 
-Teacher operational identity is projected through [teacher-directory.js](../../src/lib/teacher-directory.js). Full teacher rows contain HR/compensation and are isolated from non-HR consumers (043); payroll writes use an authenticated admin/director API and database guard (065). Batch 1 added the fixed receptionist operational teacher projection in 096, with Production activation reported by the owner. PR #32 and 097 completed the shared Students UI and enrollment-aware group filter; Batch 1 Production verification was owner-confirmed on 2026-09-29. [Security rules](SECURITY_RULES.md).
+Director has school management plus CRM technical configuration, revenue/reporting and privileged corrections. Admin has broad school operations with narrower CRM technical rights. Receptionist has bounded operational admissions, students, groups, attendance, receipts and safe teacher access, without management analytics, integrations or teacher compensation. Teachers use linked academic relationships; parents/students use linked family/self records. Pending or unknown roles have no operational access.
 
-## Reconciliation ownership conflicts — Production verified, 2026-10-02
+[SECURITY_RULES](SECURITY_RULES.md#current-roles) defines exact boundaries. Sidebar visibility is not authorization: [middleware](../../src/middleware.js), page guards, independently authenticated API handlers and database RPC/RLS enforcement must agree. Stored profile roles, not editable client metadata, are authoritative.
 
-Forward [migration 105](../../supabase/migrations/105_crm_meta_reconciliation_business_conflicts.sql) and the narrow server/worker path implement the accepted [ADR-002 amendment](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md#accepted-amendment--bounded-ownership-conflicts-2026-10-02). Exact `PT409`/message/RPC tuples separate lease loss from disabled/inactive configuration. Ownership loss ends the pass without further fetch/enqueue/finish/reclaim; shared intake still proceeds. Existing lease fencing, locks, claim exclusivity, watermark and cadence remain. [Evidence](../architecture/evidence/crm-meta-reconciliation-stale-lease-implementation-2026-10-02.md). PR #55 merged/deployed as `77c4446e03eda99b2a7ad989b395128576c6fa8e`; exact ledger 001–105 and scheduled intake are Production verified. [Release acceptance and limitations](../architecture/evidence/crm-meta-reconciliation-stale-lease-production-2026-10-02.md). Lifecycle stays dormant; H3-03 requires its separate operator recheck.
+## Core workflows
+
+**Inquiry → opportunity → placement → enrollment → student/group → conversion.** Acquisition queues a submission, then resolves contact/opportunity or requests review. Placement records real booking/results and follow-up; it is not compulsory invented evidence for every admission. A qualified opportunity can explicitly start enrollment after learner-candidate review. Submitted/Trial initiation is not conversion. Confirmed/Validated linked enrollment is conversion evidence; confirmed enrollment may await a group, while compatible assignment yields Validated. Historical conversion survives later contradiction with a review flag.
+
+**Charge → payment/receipt → balance/revenue.** Authorized commands create an agreement and record actual collection. Zero payment can create a charge but no receipt or payment-driven enrollment. Actual linked payment/void events drive collected CRM revenue; quotations, charges and commercial status do not. Preserve retry identity and append-only financial history.
+
+**Enrollment/group → teaching schedule → attendance and learning evidence.** Academic relationships govern teacher access and student/group consistency. Attendance, assessments and portfolios describe teaching activity; Premium sessions add workshops, membership, attendance and homework. They do not imply video-room, breakout or remote-access architecture. See [WORKFLOWS](WORKFLOWS.md) for operational journeys.
+
+## Acquisition and integrations
+
+Meta signed webhook and independently enabled bounded reconciliation enqueue the same `crm_ingestion_jobs` identity. Reconciliation discovers IDs; the shared worker retrieves and normalizes them with immutable mappings. Leases, idempotency and guarded finalization fence overlapping workers. The database-owned activation watermark and rolling lookback are not historical backfill or a durable pagination cursor. Exact ownership conflicts stop discovery while independent intake continues. [ADR-002](../architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
+
+Website `/api/public/crm-inquiry` validates origin, bounded input, rate limits and optional CAPTCHA before durable acceptance. Resolution is asynchronous. `/api/public/inscription` is a distinct public student/enrollment registration flow. Multiple forms/mappings are supported; campaign attribution is separate from source configuration. Director source onboarding UX and safe incremental lifecycle source activation remain gaps identified in the [multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md).
+
+Lifecycle feedback consumes committed CRM facts asynchronously through the existing outbox. The R4 model supports Intake, Not qualified, Lost, Qualified and Converted with genuine occurrence semantics, strict original timestamps, prospective source/cohort and producer ownership, privacy/stops, frozen payloads, bounded leases and no uncertain replay. Live matching is original Meta lead ID only plus approved nonpersonal CRM constants; child, financial and arbitrary form data are excluded. Independent database, destination, server and scheduler gates remain mandatory. [ADR-004](../architecture/decisions/ADR-004-meta-lifecycle-feedback.md) owns decisions; [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) and its [sole credential runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) own credential procedure. Current activation facts belong in CURRENT_STATE.
+
+Meta Insights has reporting/snapshot architecture and fixture processing, but no completed live sync. Website acquisition CAPI Lead and website lifecycle matching are planned separate adapter work, not capabilities of the current original-Meta-lead-ID contract. [Insights contract](../crm-meta-insights.md).
+
+[Email](../../src/lib/email.js) uses server-side Resend via authenticated routes and receipt workflows; local development disables external email. WhatsApp links/activity recording are not proof of an automated WhatsApp provider integration. Provider readiness must be established separately from UI availability.
+
+## Infrastructure and security
+
+[Session clients](../../src/lib/supabase.js) and the [server-only privileged client](../../src/lib/supabase-admin.js) have different authority. Secrets resolve transiently on the server, never from database payloads or browser bundles. SECURITY DEFINER RPCs require explicit actor/role validation, fixed search paths and restricted grants. Storage access uses the asset registry and authorized signing/finalization rather than public dossier URLs.
+
+Supabase pg_cron/pg_net is the primary intake trigger, with a GitHub Actions backup to the same bounded endpoint. Lifecycle uses an independent scheduler and independent gates. Main deploys through Vercel; source merge, database migration application, configuration and Production acceptance are separate evidence states. Deployed migrations are immutable. Local testing uses synthetic data and local Supabase. [AGENTS](../../AGENTS.md) alone owns execution, CI, review and release policy, including the adopted docs/tooling/full lanes and outcome batching.
+
+## Capability and dependency map
+
+The [current capability register](CURRENT_STATE.md#capability-register) distinguishes live inbound intake, implemented school operations, dormant outbound infrastructure and planned work. The [feature index](../architecture/FEATURE_INDEX.md) is the route/module/migration map. The next meaningful outcomes are separately authorized dormant lifecycle integration acceptance (H3-06/07/08), prospective lifecycle activation (H4/Gate C), receptionist Today/detail/walk-in design and implementation, and completing live Insights. Credentials alone do not complete any of those outcomes.
+
+## Architecture gaps
+
+- **Online learning — MISSING ARCHITECTURE:** no durable room/video-provider/access/breakout/online-session design. Existing academic and portal records do not fill this gap.
+- **Receptionist UX — PARTIALLY IMPLEMENTED / PLANNED:** Batch 1 permissions are complete; [ADR-003](../architecture/decisions/ADR-003-receptionist-operations-role.md) governs the remaining Today/detail/walk-in direction. The owner will supply the CRM workflow/design before Outcome 3.
+- **Meta Insights — PARTIALLY IMPLEMENTED:** reporting exists; live provider sync remains unfinished.
+- **Multi-source acquisition follow-through:** Director onboarding, incremental lifecycle activation and website matching need the bounded follow-up work identified above.
+
+This document does not design SaaS/multi-tenancy or management agents.
+
+## Navigation and document ownership
+
+| Document | Authority |
+| --- | --- |
+| [AGENTS](../../AGENTS.md) | Engineering execution, CI, review and release policy. |
+| [ARCHITECTURE](ARCHITECTURE.md) | Current platform structure; master technical entry point. |
+| [CURRENT_STATE](CURRENT_STATE.md) | Current implementation, deployment and activation evidence with limits. |
+| [PRODUCT_RULES](PRODUCT_RULES.md) | Durable business invariants. |
+| [SECURITY_RULES](SECURITY_RULES.md) | Durable authorization, privacy and secret boundaries. |
+| [WORKFLOWS](WORKFLOWS.md) | Current operational/user journeys. |
+| [ADRs](../architecture/decisions/README.md) | Durable decisions, rationale and explicitly scoped amendments. |
+| [Active contracts/runbooks](../architecture/plans/README.md) | Current implementation/operator contracts; approval never inferred from their presence. |
+| [FEATURE_INDEX](../architecture/FEATURE_INDEX.md) | Navigation and state mapping, not another specification. |
+| [Historical index](../architecture/history/README.md), [completed plans](../architecture/plans/completed), [evidence](../architecture/evidence) | Preserved reasoning, release/implementation evidence and superseded procedures; dated evidence supports current claims but is not an instruction to replay operations. |

@@ -1,5 +1,7 @@
 # Phase 14 CRM intake scheduler
 
+> **Evidence boundary:** dated baseline/rollout statements below are historical, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) and [active contracts](architecture/plans/README.md).
+
 ## Trigger architecture
 
 `GET https://admin.english-hills.com/api/cron/crm-intake` remains the only scheduled intake path. It authenticates `Authorization: Bearer <CRM_INTAKE_SCHEDULER_TOKEN>`, performs one bounded reconciliation pass, then claims at most three ingestion jobs (or two after discovery). Its JSON response contains fixed operational counts only and never contains lead fields, provider payloads, tokens, or other PII.

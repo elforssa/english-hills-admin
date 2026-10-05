@@ -1,33 +1,14 @@
-# Owner summary
+# H3 technical and dormant-acceptance contract
 
-> **HISTORICAL — SUPERSEDED BY S1** for conflicting credential procedures. [S1](crm-meta-lifecycle-credential-simplification.md) was adopted through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. The [sole active Gate-B runbook](crm-h3-s1-gate-b-credential-runbook.md) replaces R7 bootstrap/inspector/rehearsal/per-action requirements. Original evidence and approval scope remain; unrelated R4/dormant/live safeguards are unchanged.
+## Current authority and reading boundary
 
-## Revision 7 B2 execution status — 2026-10-03
+Current authority is the provider manifest, multipart transport, strict timestamp rules and remaining H3-06/07/08 dormant-acceptance contract. H3-02/03/04 implementation/release and initial S1 Gate B are complete as recorded in CURRENT_STATE. All older credential-route, rotation, inspector and revocation prescriptions are superseded by S1. H4 remains a separate prospective activation outcome.
 
-[Revision 7's dated notices](crm-h3-05-revision-7-validation.md) record owner approval at PR #64 and later B2-1/OP-1 approval and execution. [B2 closeout](../evidence/crm-h3-r7-b2-execution-closeout-2026-10-03.md): current **B2 PASS**, permanent **EH Lifecycle R4 Employee / `61594989243533` / EMPLOYEE / Glory Lot `1741597822557523`**. One authorized submission succeeded; allowance permanently consumed, no further lifecycle Employee creation authorized. Historical Step 3 remains BLOCKED / B2 INCONCLUSIVE. Full PREFLIGHT VERIFIED: NO. C2, grants, actual B1 authority, custody/inspector, credentials/recovery and Production/H3-06–08/H4/sending remain separately gated. This repository closeout grants no Step 4 or Meta access/mutation authority; prior proposal/status entries below are historical.
+[CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation/deployment/activation evidence. [S1](crm-meta-lifecycle-credential-simplification.md) and its [sole Gate-B runbook](crm-h3-s1-gate-b-credential-runbook.md) own credentials. This navigation cleanup changes no product, security or release contract.
 
-## Proposed Revision 7 validation architecture — 2026-10-03
+## Preserved contract and dated rationale
 
-[Revision 7](crm-h3-05-revision-7-validation.md) is the current proposed credential amendment after merged PR #63; it is not approved or implemented. It selects C2 and exclusive identity-wide invalidation with downtime in the proposal. B1/B4 architecture contracts are defined for owner approval; actual effective authority and recovery remain mandatory later credential-acceptance gates. Meta support/engineering is optional supplemental evidence, never a prerequisite. Synthetic Test Events are rejected as unisolated; credential/dormant acceptance would explicitly leave delivery success unverified until separately authorized H4 use, subject to owner acceptance of that limit. Earlier revision-6 blocker and revision-5 route/rotation language below retain historical context. No H3-05 resumption, H3-06–08, H4, merge/release or operator action is authorized.
-
-## Proposed Option C credential amendment — 2026-10-03
-
-Option A is concluded not viable under the approved isolated-recovery requirement. The separately authorized architecture-only [proposed revision 6](crm-h3-05-option-c-amendment.md) defines the bounded owned-app/dedicated-Employee alternative and exact revision-5 statements it would amend. **OPTION C ARCHITECTURE BLOCKED**: only B1’s supported bounded grant contract and B4’s selected independent invalidation path/authority remain architecture blockers. B2/B3 are fail-closed implementation/preflight gates; B5 is an owner custody decision with later implementation binding and no provider evidence requirement. Neither B1 nor B4 is resolved; no final issuing-app/grant/recovery contract or implementation is approved. Revision 5 and its approval below remain historical authority, not authorization to resume issuance. H3-04 stays complete; H3-05–08/H4 remain gated.
-
-## H3-05 recovery blocker — 2026-10-02
-
-**H3-05: BLOCKED BEFORE ISSUANCE.** The [owner operator authorization](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955112635) and [blocked attempt](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5955549306) supersede earlier next-step status below. [Recovery-design revision 1](crm-h3-05-credential-recovery.md) records documented individual-token revocation, its unproven managed-route prerequisites and identity-level alternatives. New-token identity/create-versus-reuse and isolated recovery remain unresolved. No token was generated. Earlier “credential blocker closed” statements mean route availability was established; they do not clear this subsequent recovery blocker. Revision 5's historical approval and H3-04 acceptance remain unchanged. The proposed dedicated-identity amendment is not approved or implemented; do not resume H3-05 or proceed to H3-06–08/H4.
-
-## H3-04 release acceptance — 2026-10-02
-
-**H3-04: PRODUCTION VERIFIED.** [PR #57 exact-head independent review](https://github.com/elforssa/english-hills-admin/pull/57#issuecomment-5951476000) and [owner release approval](https://github.com/elforssa/english-hills-admin/pull/57#issuecomment-5951495827) bound reviewed head `142caca2c6f0158b60c6d260cc35735e3505ec68`. Merge/deployed source `e3928b369c8790151771d7251aee7030289ec84f` is READY; explicit-target migration 106 completed, with exact ledger 001–106 and exactly one approved contract. [Dated release evidence](../evidence/crm-h3-04-production-2026-10-02.md) binds full manifest/catalog/dormancy/health checks and limitations. Revision 5 and its historical findings remain unchanged. H3-05–08/H4 are separately gated; this overall plan remains active and is not moved to completed.
-
-H3-05 Entitlement and dedicated secret is the next gated step; it has not been executed or authorized by this closeout. It requires its own artifact-bound operator approval and fresh preflight under revision 5.
-
-## H3-04 separately commissioned seed implementation — 2026-10-02
-
-[Owner authorization on PR #51](https://github.com/elforssa/english-hills-admin/pull/51#issuecomment-5950202458), created `2026-10-02T10:19:01Z`, binds H3-04 only and the exact revision-5 manifest. [H3-03 VERIFIED COMPLETE](https://github.com/elforssa/english-hills-admin/pull/53#issuecomment-5950165952) clears its prerequisite at main `616ee7d37945ed79dc217ac9aef4e3b51b5dea45`, ledger 001–105. Branch `codex/h3-04-provider-contract-seed` allocates migration 106 and UUID `7cf9833e-4f77-4335-b1ec-c047d9353f54`, final verification date `2026-10-02`, active=true under the approved manifest. [Implementation evidence](../evidence/crm-h3-04-implementation-2026-10-02.md). This additive dated record does not change revision 5 or rewrite earlier research states. Not merged/deployed/Production verified; seed release and H3-05–08/H4 remain separately gated.
-
+The following original design/approval/implementation text is retained for its detailed contract and rationale within the scope above. **All dated status, branch/ledger observations and past commissioning statements are historical, not current readiness or renewed authority.** Superseded credential instructions are not executable. The [pre-cleanup announcement chronology](../history/crm-h3-technical-readiness-before-outcome-1.md) preserves the removed announcement chronology as well.
 
 ## What will change
 
@@ -65,7 +46,7 @@ Approval selects the multipart/strict-second design and its documented equality 
 
 ## H3-02 compatibility implementation — 2026-10-02
 
-On branch `codex/crm-h3-02-compatibility`, the separately commissioned Tier-3 implementation applies [approved H3 revision 5](../plans/crm-h3-technical-readiness.md) to the live adapter and forward [migration 104](../../../supabase/migrations/104_crm_lifecycle_strict_exported_seconds.sql). Live requests use transient multipart `data` (the one-event array) and `access_token`; the frozen envelope stays token-free. Original Meta generation and activity time must export to strictly increasing integer seconds, including prepared-payload revalidation. Equal/earlier seconds remain held without a fabricated time or attempt; existing chronological predecessor, deadline, epoch and retention behavior remains. D2/privacy, matching, ownership, event scope and uncertainty policy are unchanged. [Implementation evidence](../evidence/crm-h3-02-implementation-2026-10-02.md).
+On branch `codex/crm-h3-02-compatibility`, the separately commissioned Tier-3 implementation applies [approved H3 revision 5](crm-h3-technical-readiness.md) to the live adapter and forward [migration 104](../../../supabase/migrations/104_crm_lifecycle_strict_exported_seconds.sql). Live requests use transient multipart `data` (the one-event array) and `access_token`; the frozen envelope stays token-free. Original Meta generation and activity time must export to strictly increasing integer seconds, including prepared-payload revalidation. Equal/earlier seconds remain held without a fabricated time or attempt; existing chronological predecessor, deadline, epoch and retention behavior remains. D2/privacy, matching, ownership, event scope and uncertainty policy are unchanged. [Implementation evidence](../evidence/crm-h3-02-implementation-2026-10-02.md).
 
 This is branch implementation, **not merged, deployed, Production verified or release approved**. The last recorded Production ledger is 001–103 dormant. No provider contract seed, credential, destination/source/cohort configuration, live gate, cron activation or provider event is part of H3-02. H3-03–08 and H4 remain separately gated.
 
@@ -204,6 +185,8 @@ Consequence accepted with the revision-5 strict-second design: an equal-second I
 Future synthetic acceptance: exact equality, subsecond equality after flooring, +1 second, -1 second, missing generation, future event, 604800-second age/8-second margin, same-second Intake with later stage, prepared-payload path, direct SQL prepare/begin and director retry. Assert zero HTTP/attempt boundary for invalid time, unchanged IDs/timestamps/deadlines, existing predecessor holds and no D2/stop/unknown bypass. No provider POST is needed for these tests.
 
 ## Credential provisioning, storage and rotation design
+
+**HISTORICAL — SUPERSEDED BY S1.** This original section is retained as reasoning only; use the S1 runbook linked above.
 
 Selected route: **Events Manager → dataset `1152399921284927` → Settings → Conversions API → Set up direct integration → without Dataset Quality API → new access token**, under owner business `1741597822557523`. [Revision-5 evidence](../evidence/crm-h3-direct-capi-credential-2026-10-02.md) directly binds this route to CRM lifecycle use. Do not use custom app `1069638329182835` / actor `61594759444572` issuance or infer ads scopes. Their observed lifetime, installed grants and proof switch do not transfer to this route.
 

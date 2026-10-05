@@ -4,7 +4,7 @@
 
 ## Scope and authority
 
-**Tier 3 — documentation-only execution closeout.** This artifact records the owner-authorized 4B-only Meta association execution performed under reviewed and merged [4B-OP1](../plans/crm-h3-05-revision-7-4b-operator-packet.md), adopted on main **`9e906c04b0076cac46cb004d3f20f5eec79830c2`**. It authorizes no further Meta action.
+**Tier 3 — documentation-only execution closeout.** This artifact records the owner-authorized 4B-only Meta association execution performed under reviewed and merged [4B-OP1](../plans/historical/crm-h3-05-revision-7-4b-operator-packet.md), adopted on main **`9e906c04b0076cac46cb004d3f20f5eec79830c2`**. It authorizes no further Meta action.
 
 Owner action authorization bound:
 

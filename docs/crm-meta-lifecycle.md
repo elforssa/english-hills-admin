@@ -1,5 +1,7 @@
 # Phase 10 — CRM lifecycle outbox (mock-only)
 
+> **Evidence boundary:** dated baseline/rollout statements below are historical, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) and [active contracts](architecture/plans/README.md). This Phase-10 document describes the original mock path; current dormant R4 live-path semantics and safeguards are in [ADR-004](architecture/decisions/ADR-004-meta-lifecycle-feedback.md). It is not a current credential/activation runbook.
+
 > **Credential setup/rotation — S1 adopted 2026-10-05:** [S1](architecture/plans/crm-meta-lifecycle-credential-simplification.md) merged through PR #93. Use the [sole active credential-only Gate-B runbook](architecture/plans/crm-h3-s1-gate-b-credential-runbook.md), pending focused review and operational approval. Conflicting R7 bootstrap/transport requirements are historical. Credential not ready; lifecycle not live; no H3-06/07/08, H4, scheduler, live gate or event authority. R4 event/privacy/replay rules remain.
 
 > Revision-4 implementation note (branch only, 2026-09-30): migrations 101 `crm_meta_funnel_r4_schema_controls` and 102 `crm_meta_funnel_r4_runtime_safety` extend the existing outbox to the approved five-event prospective model. They add no provider contract or release configuration and perform no activation. The branch is not merged or deployed; the Production note below remains authoritative until separately verified after an approved release.
