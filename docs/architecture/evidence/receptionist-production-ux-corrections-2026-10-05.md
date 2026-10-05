@@ -107,3 +107,26 @@ Executed the exact 13 remaining run blocks from `.github/workflows/verify.yml`, 
 The synthetic/API step includes a fresh production build, Batch-3A/4A role/security checks, large-data reports/export, receptionist browser, lifecycle browser, the complete Opportunities/phase-4/5/6 browser sequence, and Work/Calendar in Chromium and WebKit. The final race suites remove fixtures via a local reset through 109. Local step logs are `/tmp/hills-102-ci-step-1.log` through `/tmp/hills-102-ci-step-13.log`, with the command/result manifest in `/tmp/hills-102-ci-results.json`.
 
 Validation ran on parent `6a7aa492599c5dff3af79824bbb2b4a090617d2d` plus exactly the four SQL corrections above; this evidence is the only additional changed file. The corrective commit/PR handoff identifies the resulting exact HEAD. A targeted author re-check confirmed only current ceilings/range counts and matching diagnostics changed; intentional baseline fixtures, migration 109, runtime and workflow remain unchanged. Changed-Markdown links/anchors, added secret/PII heuristics and whitespace are checked before the single push. No independent review was performed; fresh full remote CI scheduling is followed by an author stop.
+
+## Production closeout — 2026-10-05
+
+**MERGED / DEPLOYED / PRODUCTION-COMPATIBLE.** This append-only closeout records authoritative release evidence supplied by the owner during PR #103's documentation correction. It is not a new Production inspection or operation by the documentation author. The source-only, pending-review and release-hold statements above describe the earlier authoring/CI chronology; this later closeout supersedes them for current release status without rewriting that history.
+
+| Release fact | Recorded evidence |
+| --- | --- |
+| Correction PR / final reviewed head | [PR #102](https://github.com/elforssa/english-hills-admin/pull/102), `8f12f674f1c1fd910b8410b4bbb2d4d3b3917e3c` |
+| Merge / Production source | Main `3c462f7fce87261ff92c565fecf8ab652262bb81` |
+| Production deployment | Vercel `dpl_ADReczUnoX6hVYnh1KNJVeqqjz6X`, **READY**; Production aliases include `admin.english-hills.com` |
+| Migration / ledger | `109_crm_operational_scheduled_display.sql` deployed; Production migration ledger normalized through **109** |
+| Compatibility | All four corrections merged/deployed with matching frontend/read projections: server Casablanca civil scheduled display, composable filter/navigation state, safe staff labels and truthful Attention wording |
+
+### Bounded Production verification
+
+- One real center-visit sample returned consistent Casablanca civil time through Work Queue, Admissions Calendar and the drawer next-task projection. No customer identity or appointment details are reproduced here.
+- The staff selector projection remained bounded; sampled display labels were unique. This is bounded sampling, not an exhaustive identity audit.
+- `scheduled_civil` and `staff_reference` remained private helpers; Work Queue and Admissions Calendar RPC access remained as intended.
+- Lifecycle cron remained inactive; activation epochs = **0**, external deliveries = **0**, external delivery attempts = **0**. Meta lifecycle remains dormant; no provider activation is implied.
+- No recent Vercel runtime errors were found in release verification. This is a bounded observation, not a guarantee of future error-free operation.
+- Public route probes reached the application/login successfully. **No fresh authenticated receptionist browser walkthrough was performed during release verification.** Earlier local synthetic browser evidence above remains separate.
+
+Scheduling, authorization, business commands, finance and enrollment semantics remain unchanged. Outcome 3 itself was completed through migrations 107–108; deployed migration 109 is a later compatible post-O3 correction. Its original dated acceptance and the authoring/CI chronology above remain intact. [CURRENT_STATE](../../ai/CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout) is the current authority; this closeout satisfies UIF-r1's #102 adoption/compatibility prerequisite, but does not approve UIF-r1 implementation or any later release.

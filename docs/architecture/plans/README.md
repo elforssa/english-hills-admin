@@ -4,6 +4,7 @@ Read [master architecture](../../ai/ARCHITECTURE.md) and [current evidence](../.
 
 | Contract | Current authority / limit |
 | --- | --- |
+| [English Hills UI Foundation](english-hills-ui-foundation.md) | UIF-r1 proposed for owner review; shared presentation and three pilots, with bounded read-state fixes. The PR #102 baseline is adopted on main and Production-compatible; implementation remains blocked on owner approval of UIF-r1. No Foundation implementation or deployment claimed. |
 | [R4 lifecycle model](crm-meta-funnel-revision-4.md) | Five-event product/identity/order/prospective ownership contract, as amended by completed advisory-D2 and sharing-stop contracts. Implemented dormant; do not replay its implementation commission. |
 | [H3 technical readiness](crm-h3-technical-readiness.md) | Provider manifest, transport/timestamp and H3-06/07/08 dormant-acceptance contract. Credential sections from older revisions are historical; S1 replaces them. |
 | [S1 credential architecture](crm-meta-lifecycle-credential-simplification.md) | Sole current credential architecture and recovery/custody boundary. |
