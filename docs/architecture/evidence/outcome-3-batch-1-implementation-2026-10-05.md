@@ -22,13 +22,13 @@ Production acceptance established:
 - Vercel reported no recent Production runtime errors during acceptance.
 - Lifecycle cron remains disabled; activation epochs, external lifecycle deliveries and external lifecycle attempts each remain `0`. `CRM_META_LIFECYCLE_LIVE_ENABLED` remains absent. The lifecycle credential remains present, but this rollout did not activate lifecycle delivery. No secret values are recorded.
 
-**Outcome 3 overall is NOT complete. Batch 2 is PLANNED / NOT IMPLEMENTED:** Tasks / My Work and Admissions Calendar. The [O3-r2 plan](../plans/outcome-3-receptionist-workspace.md) remains active; the wider dedicated walk-in redesign remains incomplete. This closeout changes no product architecture, permissions, finance/enrollment/conversion semantics, Meta lifecycle architecture, S1/H3/H4 state or Batch 2 scope.
+**Outcome 3 overall is NOT complete. Batch 2 is PLANNED / NOT IMPLEMENTED:** Tasks / My Work and Admissions Calendar. The [O3-r2 plan](../plans/completed/outcome-3-receptionist-workspace.md) remains active; the wider dedicated walk-in redesign remains incomplete. This closeout changes no product architecture, permissions, finance/enrollment/conversion semantics, Meta lifecycle architecture, S1/H3/H4 state or Batch 2 scope.
 
 ## Authority and state
 
 Historical implementation-stage record; superseded only for release state by the Production closeout above.
 
-Approved contract: [O3-r2](../plans/outcome-3-receptionist-workspace.md), owner implementation instruction naming architecture merge/base `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e`. Branch: `codex/outcome-3-batch-1-opportunities`. This evidence describes local synthetic implementation, pending required remote CI, separate exact-SHA independent review and release approval. No merge, Production migration, Vercel configuration, credential or provider operation is authorized or established.
+Approved contract: [O3-r2](../plans/completed/outcome-3-receptionist-workspace.md), owner implementation instruction naming architecture merge/base `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e`. Branch: `codex/outcome-3-batch-1-opportunities`. This evidence describes local synthetic implementation, pending required remote CI, separate exact-SHA independent review and release approval. No merge, Production migration, Vercel configuration, credential or provider operation is authorized or established.
 
 **Tier 2:** substantial operational presentation and additive bounded reads using existing authority. No permissions/RLS, existing write semantics, enrollment/conversion authority, finance or provider boundary changes. The catalog/data comparison below verifies that boundary. Batch 2 Tasks/My Work and Admissions Calendar, task/calendar RPCs and all explicit O3-r2 exclusions remain outside this PR.
 

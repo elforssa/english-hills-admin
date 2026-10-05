@@ -39,7 +39,7 @@ Remove call-launch buttons; keep phone number and copy, and keep WhatsApp. Retai
 
 ### Approved Outcome-3 presentation amendment — O3-r2, 2026-10-05
 
-**OWNER-APPROVED O3-r2, 2026-10-05; Batch 1 implementation authorized, release held.** The [single Outcome-3 contract](../plans/outcome-3-receptionist-workspace.md) defines the remaining operating workspace. Its exact owner approval is recorded in the contract; existing Batch 1 permission approval is unchanged.
+**OWNER-APPROVED O3-r2, 2026-10-05; Batch 1 implementation authorized, release held.** The [single Outcome-3 contract](../plans/completed/outcome-3-receptionist-workspace.md) defines the remaining operating workspace. Its exact owner approval is recorded in the contract; existing Batch 1 permission approval is unchanged.
 
 Under owner-approved O3-r2, Opportunities (Board/List over the same CRM leads) becomes the default CRM workspace, and Today becomes Tasks/My Work over the existing task engine. Reuse the right-side `LeadDetailSheet`; prioritize contact/learner, quick actions, stage/owner and next action, then placement/enrollment, acquisition, important form answers and timeline. No generic pipeline or second task/detail system is introduced.
 
