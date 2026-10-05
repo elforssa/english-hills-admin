@@ -20,3 +20,7 @@ Read [master architecture](../../ai/ARCHITECTURE.md) and [current evidence](../.
 - [CI tooling fast-path record](ci-tooling-fast-path.md) records adopted PR #90; current engineering policy is only in [AGENTS](../../../AGENTS.md). No Outcome-2 policy changes are made here.
 - [Superseded credential plans](historical/README.md) are outside active authority; never replay consumed object-creation allowances or Rev7 credential ceremonies.
 - [Historical index](../history/README.md) preserves the previous authority-document chronology and links evidence.
+
+## Proposed receptionist workspace
+
+[Outcome 3 — Receptionist CRM / Admissions Operating Workspace](outcome-3-receptionist-workspace.md), revision O3-r2, is the single proposed product/architecture contract. It awaits independent review and human owner approval; no implementation or Production operation is authorized.
