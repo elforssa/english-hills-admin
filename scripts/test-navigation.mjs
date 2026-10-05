@@ -28,6 +28,9 @@ console.log('Navigation URL regressions passed');
 
 // Role-aware login defaults cannot reopen an unauthorized receptionist page.
 const { ROLE_HOME, loginDestination, receptionistCanAccess, hasCapability } = await import('../src/lib/roleAccess.mjs');
+assert.deepEqual(ROLE_HOME, {director:'/dashboard',admin:'/dashboard',receptionist:'/crm/leads',teacher:'/teacher-portal',parent:'/parent-portal',student:'/student-portal'});
+assert.equal(loginDestination('receptionist', `/crm/today?lead=${studentId}`), `/crm/today?lead=${studentId}`);
+assert.equal(safeReturnTo(`/crm/today?lead=${studentId}`), `/crm/today?lead=${studentId}`);
 for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestination(role), home);
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
 for (const path of ['/crm/today', '/crm/leads', '/students', '/students-directory', '/students/new',
@@ -46,7 +49,8 @@ for (const path of ['/finance', '/students/import', '/students/00000000-0000-000
   '/teachers/new', '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
   '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',
-  '/students/%2fetc', '/groups/not-a-uuid', '//example.com', '/\\example.com']) {
+  '/students/%2fetc', '/groups/not-a-uuid', '/crm/today/anything', '/crm/leads/anything',
+  'https://example.invalid/crm/today', 'javascript:alert(1)', '//example.com', '/\\example.com']) {
   assert.equal(loginDestination('receptionist', path), '/crm/leads');
 }
 for (const role of ['director', 'admin', 'receptionist']) {

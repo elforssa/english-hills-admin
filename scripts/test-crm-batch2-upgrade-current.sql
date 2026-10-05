@@ -7,11 +7,11 @@ begin;
 do $$
 declare delivery_count integer;
 begin
-  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 106 then
-    raise exception 'Expected migration 106 after CRM Meta funnel revision-4 upgrade';
+  if (select max(version::integer) from supabase_migrations.schema_migrations) <> 107 then
+    raise exception 'Expected migration 107 after upgrade to current';
   end if;
-  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100','101','102','103','104','105','106')) <> 9 then
-    raise exception 'Migrations 098 through 106 were not all recorded';
+  if (select count(*) from supabase_migrations.schema_migrations where version in ('098','099','100','101','102','103','104','105','106','107')) <> 10 then
+    raise exception 'Migrations 098 through 107 were not all recorded';
   end if;
   if to_regclass('public.crm_lifecycle_eligibility_evidence') is null then
     raise exception 'Batch 2 lifecycle evidence table is missing';

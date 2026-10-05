@@ -339,7 +339,7 @@ try {
     const requestsBeforeRedirect = pageRequests.length;
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
-    assert.equal(new URL(blocked.headers().location, app).pathname, '/crm/today');
+    assert.equal(new URL(blocked.headers().location, app).pathname, '/crm/leads');
     await page.goto(app + path); await page.waitForURL(app + '/crm/leads');
     await page.waitForLoadState('networkidle');
     assert(!pageRequests.slice(requestsBeforeRedirect).some(requestPath => forbiddenPageData.test(requestPath)),

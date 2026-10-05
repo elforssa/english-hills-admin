@@ -24,7 +24,7 @@ try {
   await page.goto('http://localhost:3101/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(u=>!u.pathname.startsWith('/login'));
   await page.goto('http://localhost:3101/crm/analytics');
   if(user.role!=='director'){
-   await page.waitForURL(u=>u.pathname===(user.role==='admin'?'/dashboard':'/crm/today'));assert.equal(analyticsQueries,0);await expect(page.getByTestId('marketing-analytics')).toHaveCount(0);await expect(page.getByRole('link',{name:'Analyse marketing'})).toHaveCount(0);
+   await page.waitForURL(u=>u.pathname===(user.role==='admin'?'/dashboard':'/crm/leads'));assert.equal(analyticsQueries,0);await expect(page.getByTestId('marketing-analytics')).toHaveCount(0);await expect(page.getByRole('link',{name:'Analyse marketing'})).toHaveCount(0);
    const denied=await page.request.post('http://localhost:3101/api/internal/crm/insights/process',{headers:{Origin:'http://localhost:3101'},data:{connection,request:randomUUID()}});assert.equal(denied.status(),403);
   }else{
    await expect(page.getByTestId('marketing-analytics')).toBeVisible();await page.getByLabel('Acquisitions du',{exact:true}).fill('2026-01-01');await page.getByLabel('Acquisitions au',{exact:true}).fill('2026-01-02');await page.getByRole('button',{name:'Anglais annuel',exact:true}).waitFor();await expect(page.locator('tbody')).toContainText(/1[.\s]200/);await expect(page.locator('tbody')).toContainText('—');
