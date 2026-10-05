@@ -1,6 +1,7 @@
 -- A14–A19. The harness supplies the rollback-only synthetic fixture.
 do $$ declare r jsonb; b jsonb; c jsonb; v text; n bigint; bounds record;
  seen uuid[]:=array[]::uuid[]; ids uuid[]; keys text[]:=array[]::text[]; page_keys text[]; i integer;
+ appointment uuid; scheduling_day date; future_found boolean:=false;
  day date:=(now() at time zone 'Africa/Casablanca')::date; stamp timestamptz;
 begin
  perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000003',true);
@@ -96,11 +97,41 @@ begin
   perform pg_temp.ok(not has_function_privilege(v,'public.crm_get_admissions_calendar(date,date,text,boolean,jsonb,integer)','EXECUTE'),'forbidden execute calendar '||v);
  end loop;
  perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.work_boundaries(timestamptz)','EXECUTE') and not has_function_privilege('authenticated','crm_security.calendar_time(text)','EXECUTE'),'helpers private');
+ -- Legacy text must never establish a guessed midnight or crash membership.
+ perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000003',true);
+ perform pg_temp.ok(exists(select 1 from public.placement_tests where crm_lead_id is null and heure='invalid')
+  and exists(select 1 from public.placement_tests where crm_lead_id is null and heure is null),'unrelated malformed and missing legacy rows actually present');
+ b:=public.crm_get_opportunities(p_view=>'attention',p_contact=>(select contact_id from public.crm_leads where id=(select f.lead from fixture f where f.i=4)),p_layout=>'list');
+ perform pg_temp.ok(exists(select 1 from jsonb_array_elements(b->'pages'->'list'->'rows')x where x->>'id'=(select f.lead::text from fixture f where f.i=4)),'unrelated malformed legacy time cannot crash public Opportunities');
+ perform pg_temp.ok(not exists(select 1 from unnest(array[null,'','invalid','25:61','24:00'])x where crm_security.calendar_time(x) is not null),'missing and malformed never guessed as midnight');
+ perform pg_temp.ok(crm_security.calendar_time('00:00')='00:00'::time and crm_security.calendar_time(' 10:30:15.123456 ')='10:30:15.123456'::time,'known midnight and canonical valid time preserved');
+ -- Public Calendar projection uses the same parser across Casablanca transitions.
+ for scheduling_day in select unnest(array['2026-02-15'::date,'2026-03-22'::date]) loop
+  insert into public.placement_tests(student_name,date_test,heure,status)
+  select 'Safe-time regression',scheduling_day,x,'Planifié' from unnest(array[null,'','invalid','25:61','10:30'])x;
+  r:=public.crm_get_admissions_calendar(scheduling_day,scheduling_day+1,p_kind=>'placement');
+  perform pg_temp.ok((select count(*) from jsonb_array_elements(r->'rows')x where x->>'display_name'='Safe-time regression' and x->'local_time'='null'::jsonb and x->'starts_at'='null'::jsonb)=4,'each unknown time remains truthful Calendar Time unspecified');
+  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'display_name'='Safe-time regression' and (x->>'local_time')::time='10:30'::time
+   and (x->>'starts_at')::timestamptz=(scheduling_day+'10:30'::time) at time zone 'Africa/Casablanca'
+   and (x->>'starts_at')::timestamptz=case scheduling_day when '2026-02-15'::date then '2026-02-15 10:30+00'::timestamptz else '2026-03-22 09:30+00'::timestamptz end),'valid Casablanca appointment unchanged across offsets');
+ end loop;
  -- Cross-surface regression remains mandatory after the new-read assertions.
  raise notice 'PASS new work/calendar read assertions; required Needs Attention regression follows';
  perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000003',true);
  b:=public.crm_get_opportunities(p_view=>'attention',p_contact=>(select contact_id from public.crm_leads where id=(select f.lead from fixture f where f.i=4)),p_layout=>'list');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(b->'pages'->'list'->'rows')x where x->>'id'=(select f.lead::text from fixture f where f.i=4) and x->'next_task'='null'::jsonb and (x->>'failed_attempts')::int=5),'taskless exhausted prospect attention retained');
+ -- A real, known future placement still suppresses the taskless condition.
+ insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id)
+ select 'Known future regression',day+1,'13:15','Planifié',f.lead from fixture f where f.i=4 returning id into appointment;
+ b:=public.crm_get_opportunities(p_view=>'attention',p_contact=>(select contact_id from public.crm_leads where id=(select f.lead from fixture f where f.i=4)),p_layout=>'list');
+ perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(b->'pages'->'list'->'rows')x where x->>'id'=(select f.lead::text from fixture f where f.i=4)),'valid future planned placement still suppresses taskless Needs Attention');
+ r:=public.crm_get_admissions_calendar(day+1,day+2,p_kind=>'placement');
+ loop
+  future_found:=future_found or exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'id'=appointment::text and (x->>'starts_at')::timestamptz=((day+1)+'13:15'::time) at time zone 'Africa/Casablanca');
+  exit when not (r->>'has_more')::boolean;
+  r:=public.crm_get_admissions_calendar(day+1,day+2,p_kind=>'placement',p_cursor=>r->'next_cursor');
+ end loop;
+ perform pg_temp.ok(future_found,'future placement uses Casablanca scheduling across bounded Calendar pages');
 end $$;
 \echo PASS A14-A19 work/calendar buckets, filters, cursors, roles and fixed projections
 rollback;

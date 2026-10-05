@@ -1,4 +1,5 @@
--- O3-r2 Batch 2: additive bounded reads. No writes, RLS or existing grants change.
+-- O3-r2 Batch 2: bounded reads and authorized legacy-time read correction.
+-- No writes, RLS or existing grants change.
 begin;
 
 -- Independent local midnights: Casablanca days need not contain 24 hours.
@@ -78,6 +79,54 @@ create function crm_security.calendar_time(value text) returns time
 language sql immutable set search_path=pg_catalog,pg_temp as $$
  select case when btrim(value) ~ '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,6})?)?$'
  then btrim(value)::time end
+$$;
+
+-- Forward compatibility correction: retain the 107 predicates and existing ACL.
+-- An unknown legacy time cannot establish a known future appointment.
+create or replace function crm_security.opportunity_ids(v text,q text,contact uuid,owner_mode text,owner uuid,
+ channel text,source text,program_kind text,program text,as_of timestamptz)
+returns table(id uuid,status text,created_at timestamptz)
+language plpgsql stable set search_path=pg_catalog,pg_temp set plan_cache_mode=force_custom_plan as $$
+begin return query
+ select l.id,l.status,l.created_at from public.crm_leads l
+ join public.crm_contacts c on c.id=l.contact_id
+ join public.crm_submissions s on s.id=l.first_submission_id
+ where l.merged_into_lead_id is null
+ and ($3 is null or l.contact_id=$3)
+ and ($4='all' or $4='me' and l.owner_id=auth.uid()
+   or $4='unassigned' and l.owner_id is null or $4='staff' and l.owner_id=$5)
+ and ($6 is null or s.channel=$6) and ($7 is null or s.source_label=$7)
+ and ($8='all' or $8='session' and nullif(l.session_type,'')=$9
+   or $8='interest' and nullif(l.session_type,'') is null and nullif(l.program_interest_text,'')=$9
+   or $8='unspecified' and nullif(l.session_type,'') is null and nullif(l.program_interest_text,'') is null)
+ and ($2='' or strpos(lower(c.display_name),lower($2))>0 or strpos(lower(coalesce(l.learner_name,'')),lower($2))>0
+   or (crm_security.normalize_phone($2) is not null and (c.phone_e164=crm_security.normalize_phone($2) or c.whatsapp_e164=crm_security.normalize_phone($2)))
+   or (length(regexp_replace($2,'[^0-9]','','g'))>=3 and strpos(coalesce(c.phone_e164,c.phone_raw,''),regexp_replace($2,'[^0-9]','','g'))>0))
+ and case $1
+ when 'all' then true
+ when 'mine' then l.owner_id=auth.uid()
+ when 'new_today' then l.created_at>=(($10 at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca'
+   and l.created_at<((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'
+ when 'qualified' then l.status='QUALIFIED'
+ when 'closed' then l.status in ('LOST','NOT_QUALIFIED')
+ when 'no_response' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and crm_security.failed_count(l)>0
+ when 'follow_up_today' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and exists(
+   select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open'
+   and t.due_at>=(($10 at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca'
+   and t.due_at<((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca')
+ when 'placement' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and
+   (exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')
+    or exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type in ('confirm_placement_test','post_test_followup')))
+ when 'attention' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and (
+   exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.due_at<$10)
+   or l.status='NEW' and exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type='first_contact')
+   or (select t.due_at from public.crm_tasks t where t.lead_id=l.id and t.status='open' order by t.due_at,t.id limit 1)
+      <((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'
+   or not exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')
+      and not exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié' and (p.date_test+crm_security.calendar_time(p.heure)) at time zone 'Africa/Casablanca'>=$10)
+   or l.status='CONTACTING' and coalesce(l.last_attempt_at,l.created_at)<$10-make_interval(mins=>(select p.stale_contacting_minutes from public.crm_followup_policies p where p.id=l.followup_policy_id)))
+ else false end;
+end
 $$;
 
 create function public.crm_get_admissions_calendar(p_start date,p_end date,

@@ -22,12 +22,17 @@ const catalog=`select md5(jsonb_build_object(
  'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relforcerowsecurity,relacl::text) order by relname) from pg_class where relnamespace='public'::regnamespace and relkind='r'),
  'policies',(select jsonb_agg(to_jsonb(p) order by schemaname,tablename,policyname) from pg_policies p),
  'triggers',(select jsonb_agg(jsonb_build_array(c.relname,t.tgname,t.tgenabled,pg_get_triggerdef(t.oid)) order by c.relname,t.tgname) from pg_trigger t join pg_class c on c.oid=t.tgrelid where c.relnamespace='public'::regnamespace),
- 'functions',(select jsonb_agg(jsonb_build_array(p.oid::regprocedure::text,p.prosrc,p.prosecdef,p.provolatile,p.proconfig,p.proacl::text) order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','crm_security','role_security') and p.proname not in ('work_boundaries','calendar_time','crm_get_work_queue','crm_get_admissions_calendar'))
+ 'functions',(select jsonb_agg(jsonb_build_array(p.oid::regprocedure::text,case when n.nspname='crm_security' and p.proname='opportunity_ids' then null else p.prosrc end,p.prosecdef,p.provolatile,p.proconfig,p.proacl::text) order by p.oid::regprocedure::text) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','crm_security','role_security') and p.proname not in ('work_boundaries','calendar_time','crm_get_work_queue','crm_get_admissions_calendar'))
 )::text);`;
-const before=data(),beforeCatalog=sql(catalog).trim();
+// Normalize only the authorized helper body in the catalog hash; its signature,
+// ACL, security mode, volatility and configuration still participate unchanged.
+const helperSource=()=>sql("select prosrc from pg_proc where oid='crm_security.opportunity_ids(text,text,uuid,text,uuid,text,text,text,text,timestamptz)'::regprocedure").trim();
+const before=data(),beforeCatalog=sql(catalog).trim(),beforeHelper=helperSource();
+assert.equal(beforeHelper.split('p.heure::time').length-1,1,'107 contains exactly one unsafe membership cast');
 for(const table of ['crm_tasks','crm_activities','enrollments','receipts','crm_revenue_entries','crm_lifecycle_eligibility_policies','crm_external_deliveries'])assert(Number(before[table].split('|')[0])>0,`${table} must be nonempty`);
 sql(readFileSync('supabase/migrations/108_crm_work_queue_admissions_calendar.sql','utf8'));
 assert.deepEqual(data(),before);assert.equal(sql(catalog).trim(),beforeCatalog);
-const result={passed:true,baseline:107,migration:108,tables:tables.length,unchangedData:true,unchangedExistingFunctionsGrantsPoliciesTriggers:true,rows:Object.fromEntries(Object.entries(before).map(([table,value])=>[table,Number(value.split('|')[0])]))};
+assert.equal(helperSource(),beforeHelper.replace('p.heure::time','crm_security.calendar_time(p.heure)'), 'only the authorized safe-parser expression changes');
+const result={passed:true,baseline:107,migration:108,tables:tables.length,unchangedData:true,unchangedOtherFunctionBodiesAndAllGrantsPoliciesTriggers:true,opportunityIdsOnlySafeParserExpression:true,rows:Object.fromEntries(Object.entries(before).map(([table,value])=>[table,Number(value.split('|')[0])]))};
 writeFileSync(join(tmpdir(),'hills-o3-work-upgrade-result.json'),JSON.stringify(result,null,2));
-console.log(`PASS stateful 107→108: ${tables.length} table hashes and existing functions/grants/RLS/triggers unchanged; nonempty finance/enrollment/lifecycle facts`);
+console.log(`PASS stateful 107→108: ${tables.length} table hashes and other function bodies and all grants/RLS/triggers unchanged; opportunity_ids only safe-parser expression changed; nonempty finance/enrollment/lifecycle facts`);

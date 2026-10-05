@@ -48,7 +48,7 @@ The Outcome-2 branch implements the [revision-3 four-lane CI contract](../archit
 
 **Outcome 3 Batch 1 — Opportunities Operating Workspace: MERGED / DEPLOYED / PRODUCTION VERIFIED**, including migration 107. [Dated closeout](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05) records O3-r2, PR #97, reviewed HEAD, successful CI, exact deployed merge, READY Vercel deployment, ledger normalization and bounded receptionist/privacy acceptance. Lifecycle dormancy was preserved; this rollout does not advance S1/H3/H4 or activate delivery.
 
-**Outcome 3 overall is NOT complete. Batch 2 — Tasks / My Work and Admissions Calendar — has source implementation on the authorized feature branch, with local validation incomplete and release held.** The [O3-r2 plan](../architecture/plans/outcome-3-receptionist-workspace.md) stays active. The wider dedicated walk-in redesign remains incomplete.
+**Outcome 3 overall is NOT complete. Batch 2 — Tasks / My Work and Admissions Calendar — has source implementation on the authorized feature branch, with focused local acceptance passed after the owner-authorized forward legacy-time read correction in migration 108. Fresh remote CI and separate exact-SHA independent review remain pending; release is held.** The [O3-r2 plan](../architecture/plans/outcome-3-receptionist-workspace.md) stays active. The wider dedicated walk-in redesign remains incomplete.
 
 ## Next meaningful outcomes
 
