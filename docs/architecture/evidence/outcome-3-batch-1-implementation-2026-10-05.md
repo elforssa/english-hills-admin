@@ -1,6 +1,32 @@
 # Outcome 3 Batch 1 implementation evidence — 2026-10-05
 
+## Production closeout — 2026-10-05
+
+**Outcome 3 Batch 1 — Opportunities Operating Workspace: MERGED / DEPLOYED / PRODUCTION VERIFIED**, including migration 107. This factual closeout records the owner-supplied release/acceptance evidence; no new Production inspection or mutation was performed by the documentation task. Earlier implementation and correction sections below remain dated historical evidence, including their then-current holds.
+
+| Release fact | Evidence |
+| --- | --- |
+| Architecture | O3-r2; architecture merge `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e` |
+| Implementation | [PR #97](https://github.com/elforssa/english-hills-admin/pull/97); reviewed HEAD `e7ff247969a2c018f560e733a55435f10b1ab1cd`; merge / exact Production source `9846f2e3031d5c643729bd307fc13b26fcd1eef5` |
+| Required CI | [Verify 37280934825](https://github.com/elforssa/english-hills-admin/actions/runs/37280934825) — successful |
+| Vercel Production | `dpl_AZrDjX1at7973ojKjzS8wysMToan` — READY; exact source above |
+| Production migration | `107 — crm_opportunities_workspace_reads`; final ledger ends `105 → 106 → 107` |
+
+Migration SQL was applied once. The Supabase migration API initially recorded generated version `20261005083555`. A separately owner-approved bounded ledger normalization changed **only migration-history version metadata**, `20261005083555 → 107`; migration SQL was **not rerun**. Migration 107 is deployed and immutable.
+
+Production acceptance established:
+
+- The new Opportunities RPCs exist with their intended authenticated execution grants; private O3 helper functions remain non-executable to authenticated users.
+- All nine Opportunities Views returned valid bounded responses under receptionist authority.
+- Operational acquisition summary returns only first/latest `channel`, `source_label` and `occurred_at`; it does not expose `conversion_review_required`. Receptionist remains denied from director-only technical-attribution reads.
+- Vercel reported no recent Production runtime errors during acceptance.
+- Lifecycle cron remains disabled; activation epochs, external lifecycle deliveries and external lifecycle attempts each remain `0`. `CRM_META_LIFECYCLE_LIVE_ENABLED` remains absent. The lifecycle credential remains present, but this rollout did not activate lifecycle delivery. No secret values are recorded.
+
+**Outcome 3 overall is NOT complete. Batch 2 is PLANNED / NOT IMPLEMENTED:** Tasks / My Work and Admissions Calendar. The [O3-r2 plan](../plans/outcome-3-receptionist-workspace.md) remains active; the wider dedicated walk-in redesign remains incomplete. This closeout changes no product architecture, permissions, finance/enrollment/conversion semantics, Meta lifecycle architecture, S1/H3/H4 state or Batch 2 scope.
+
 ## Authority and state
+
+Historical implementation-stage record; superseded only for release state by the Production closeout above.
 
 Approved contract: [O3-r2](../plans/outcome-3-receptionist-workspace.md), owner implementation instruction naming architecture merge/base `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e`. Branch: `codex/outcome-3-batch-1-opportunities`. This evidence describes local synthetic implementation, pending required remote CI, separate exact-SHA independent review and release approval. No merge, Production migration, Vercel configuration, credential or provider operation is authorized or established.
 

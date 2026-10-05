@@ -85,7 +85,7 @@ Director has school management plus CRM technical configuration, revenue/reporti
 
 ## Opportunities source architecture
 
-The [O3-r2 Batch-1 implementation](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) extends the existing CRM workspace, drawer, command dialogs, placement and enrollment components. Four additive authenticated read RPCs provide bounded Board/List membership and counts, cursor facets, a fixed first/latest acquisition projection and cursor operational history. Existing semantic commands own every stage transition; drag only proposes a dialog. Conversion still follows trusted enrollment. Reads retain existing authorization helpers and explicit compact projections, without new RLS, write semantics or indexes. See CURRENT_STATE for the unmerged/undeployed source boundary and the Production ledger.
+The [O3-r2 Batch-1 implementation](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) extends the existing CRM workspace, drawer, command dialogs, placement and enrollment components. Four additive authenticated read RPCs provide bounded Board/List membership and counts, cursor facets, a fixed first/latest acquisition projection and cursor operational history. Existing semantic commands own every stage transition; drag only proposes a dialog. Conversion still follows trusted enrollment. Reads retain existing authorization helpers and explicit compact projections, without new RLS, write semantics or indexes. See [CURRENT_STATE](CURRENT_STATE.md#outcome-3-batch-1-production-closeout) for Batch-1 merged/deployed/Production-verified evidence including migration 107, and the remaining planned Batch 2.
 
 ## Acquisition and integrations
 

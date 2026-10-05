@@ -1,6 +1,6 @@
 # Current state
 
-Evidence register as of **2026-10-05 (Asia/Shanghai)**. Repository baseline: main `c9662b242f5f8894e7247349dea42972b714b4f5`. This register reconciles repository implementation with dated owner/release evidence; it is not a new Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
+Evidence register as of **2026-10-05 (Asia/Shanghai)**. Repository baseline: main `9846f2e3031d5c643729bd307fc13b26fcd1eef5`. This register reconciles repository implementation with dated owner/release evidence; it is not a new Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
 
 ## Capability register
 
@@ -26,7 +26,7 @@ Evidence register as of **2026-10-05 (Asia/Shanghai)**. Repository baseline: mai
 
 ## Deployment and credential evidence boundaries
 
-The latest recorded database ledger is **001–106**, verified 2026-10-02 with H3-04 source merge `e3928b369c8790151771d7251aee7030289ec84f`. Those migrations are deployed and immutable. Later documentation/tooling merges do not establish a newer verified runtime deployment or database state. Check current main and deployment evidence before allocating any future migration.
+The latest recorded database ledger is **001–107**, per owner-supplied Outcome-3 Batch-1 Production acceptance on 2026-10-05. Exact Production source is `9846f2e3031d5c643729bd307fc13b26fcd1eef5`; deployment and the metadata-only ledger normalization are recorded in the [Batch-1 closeout](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05). Those migrations are deployed and immutable. Check current main and deployment evidence before allocating any future migration.
 
 Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED / LIFECYCLE DELIVERY REMAINS DISABLED**. Accepted identities, scope/lifetime, capability and metadata-only Vercel verification are recorded once in the [nonsecret Gate-B closeout](../architecture/evidence/crm-h3-s1-gate-b-closeout-2026-10-05.md). [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) is the sole credential architecture and the [Gate-B runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) the sole procedure. Earlier token/key absence and uncreated-C2 statements are historical observations, not current blockers.
 
@@ -44,15 +44,17 @@ Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED /
 
 The Outcome-2 branch implements the [revision-3 four-lane CI contract](../architecture/plans/ci-tooling-fast-path.md): docs, exact AGENTS policy, isolated monitor tooling and fail-closed full. All PRs gain changed-Markdown checks; app/database behavior is unchanged. This is source implementation pending full remote CI, separate Tier-2 review and merge; the PR #90 adoption row above remains historical merged evidence. No deployment, branch-protection or provider configuration change is established. Vercel filtering remains NEEDS VERIFICATION.
 
-## Outcome-3 Batch-1 source implementation
+## Outcome-3 Batch-1 Production closeout
 
-The owner authorized [O3-r2](../architecture/plans/outcome-3-receptionist-workspace.md) after architecture merge `656ae21c3652ebcd2e3b8005c38cdf26b240fe2e`. The Batch-1 branch implements Opportunities, the contextual drawer and additive bounded reads in migration 107. [Implementation evidence](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md) records local validation and scope. This is source implementation pending exact-SHA required CI, separate independent review and release approval; it is not merged, deployed or Production verified. The verified Production ledger remains 001–106. Tasks/My Work and Admissions Calendar remain Batch 2.
+**Outcome 3 Batch 1 — Opportunities Operating Workspace: MERGED / DEPLOYED / PRODUCTION VERIFIED**, including migration 107. [Dated closeout](../architecture/evidence/outcome-3-batch-1-implementation-2026-10-05.md#production-closeout--2026-10-05) records O3-r2, PR #97, reviewed HEAD, successful CI, exact deployed merge, READY Vercel deployment, ledger normalization and bounded receptionist/privacy acceptance. Lifecycle dormancy was preserved; this rollout does not advance S1/H3/H4 or activate delivery.
+
+**Outcome 3 overall is NOT complete. Batch 2 — Tasks / My Work and Admissions Calendar — remains PLANNED / NOT IMPLEMENTED.** The [O3-r2 plan](../architecture/plans/outcome-3-receptionist-workspace.md) stays active. The wider dedicated walk-in redesign remains incomplete.
 
 ## Next meaningful outcomes
 
 1. Separately authorize and complete **dormant lifecycle integration acceptance**, H3-06/07/08, using the existing reviewed contracts and independent verification role.
 2. Separately define/bind and approve **prospective live lifecycle activation**, H4/Gate C. Credential readiness alone does not satisfy it.
-3. Complete review/release of **Outcome-3 Batch-1 Opportunities**, then separately authorize Batch 2 Tasks/Admissions Calendar and the remaining walk-in outcome; retain ADR-003 and the existing enrollment/finance engines.
+3. Separately authorize **Outcome-3 Batch 2 Tasks / My Work and Admissions Calendar**, and the remaining walk-in outcome; retain ADR-003 and the existing enrollment/finance engines.
 4. Complete **live Meta Insights sync** under a separate provider contract/activation outcome; reporting is already implemented.
 
 Online learning requires architecture before implementation; it is not designed here. The [multi-source assessment](../architecture/evidence/crm-multi-source-readiness-2026-10-01.md) also records Director onboarding, incremental activation and website-adapter gaps. These are identified dependencies, not new commissions.
