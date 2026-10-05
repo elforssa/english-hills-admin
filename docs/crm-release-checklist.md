@@ -1,5 +1,7 @@
 # CRM release acceptance record
 
+> **Evidence boundary:** dated baseline/rollout statements below are historical, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) and [active contracts](architecture/plans/README.md).
+
 > Historical Phase 12 evidence/procedure, not a current deployment inventory. See [CURRENT_STATE](ai/CURRENT_STATE.md) for the reviewed main baseline and later release evidence. Preserve these original assertions in their historical context.
 
 This is a manual sign-off form, not approval to deploy. Evidence: [Phase 12 validation](crm-phase12-validation.md). Procedures: [rollout](crm-production-rollout.md), [operations and activation](crm-operations-runbook.md). Reviewer/date/release commit and incident links must be recorded privately without customer data or secrets.

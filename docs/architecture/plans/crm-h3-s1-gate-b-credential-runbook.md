@@ -31,7 +31,7 @@ Do not automatically publish, request App Review, perform Business Verification,
 
 ## Resolve authority before generation
 
-**Exact minimum token scopes: NOT YET ESTABLISHED.** Resolve the minimum supported permission set for this own-business CAPI lifecycle route from accessible current first-party Meta guidance, actual System User chooser, C2 capability, Employee assignments and dataset entitlement. Do not guess, choose every offered permission or issue a token experimentally. Marketing examples and app permission availability alone do not establish this recipe. If safe resolution fails, report that single concrete scope blocker.
+For the completed initial run, [accepted scope metadata](../evidence/crm-h3-s1-gate-b-closeout-2026-10-05.md) records requested `ads_management` and provider-default `public_profile`. For any separately authorized replacement, resolve the minimum supported permission set for this own-business CAPI lifecycle route from accessible current first-party Meta guidance, actual System User chooser, C2 capability, Employee assignments and dataset entitlement. Do not guess, choose every offered permission or issue a token experimentally. Marketing examples and app permission availability alone do not establish this recipe. If safe resolution fails, report that single concrete scope blocker.
 
 Record one small nonsecret authority manifest:
 
@@ -87,4 +87,6 @@ Prefer supported targeted revoke. If only identity-wide revoke is available, con
 
 ## Evidence and present state
 
-**Architecture adopted; credential not yet ready; lifecycle not live.** No new provider/Production observation is claimed. [Issuance investigation](../evidence/crm-h3-r7-issuance-contract-research-2026-10-04.md) preserves the own-app/System User route, C2's original no-permissions chooser, observed Marketing configuration flow and unresolved exact scope recipe. [4B](../evidence/crm-h3-r7-4b-execution-closeout-2026-10-04.md), [4C](../evidence/crm-h3-r7-4c-execution-closeout-2026-10-04.md) and [Vercel preflight](../evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) preserve dated identity/grant/custody evidence. The [full Rev7 packet](crm-h3-r7-bootstrap-credential-operator-packet.md) remains **HISTORICAL — SUPERSEDED BY S1**; its approvals/findings retain their original scope and are not executable policy.
+Initial owner Gate-B execution is complete: [nonsecret closeout and PR #91 approval/merge provenance](../evidence/crm-h3-s1-gate-b-closeout-2026-10-05.md). [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns present readiness and activation state. This runbook remains the sole credential procedure for separately authorized recovery/replacement; completed setup must not be replayed blindly.
+
+The [issuance investigation](../evidence/crm-h3-r7-issuance-contract-research-2026-10-04.md), [4B](../evidence/crm-h3-r7-4b-execution-closeout-2026-10-04.md), [4C](../evidence/crm-h3-r7-4c-execution-closeout-2026-10-04.md) and [Vercel preflight](../evidence/crm-h3-r7-vercel-b5-preflight-2026-10-04.md) retain dated observations. Earlier empty chooser, missing capability/key and unresolved initial scope statements are historical. The [Rev7 packet](historical/crm-h3-r7-bootstrap-credential-operator-packet.md) is superseded; original findings/approvals remain preserved, not executable policy.

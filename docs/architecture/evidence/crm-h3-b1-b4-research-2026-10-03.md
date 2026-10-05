@@ -6,7 +6,7 @@
 
 The owner's attached request commissions only B1/B4 closure or a precise account of missing evidence, plus a documentation PR. It does not approve Option C implementation or a new support message. Baseline: current main `2d7bb604b765729eb838b63544d0cb15f3d61e5e`. GitHub independently confirms [PR #61](https://github.com/elforssa/english-hills-admin/pull/61) merged with reviewed head `89200b6e2fa8e616f802221289a907f1dd44dcc1` and that merge SHA. No deployment status was reverified.
 
-This supplements [revision 6 draft 2](../plans/crm-h3-05-option-c-amendment.md) and the [earlier evidence register](crm-h3-05-option-c-2026-10-03.md), preserving their historical findings and approvals. It is not a new executable grant/recovery contract or an approved revision 6. Sources below were rendered and read in the authenticated browser on 2026-10-03, Asia/Shanghai. No per-page capture timestamp is claimed.
+This supplements [revision 6 draft 2](../plans/historical/crm-h3-05-option-c-amendment.md) and the [earlier evidence register](crm-h3-05-option-c-2026-10-03.md), preserving their historical findings and approvals. It is not a new executable grant/recovery contract or an approved revision 6. Sources below were rendered and read in the authenticated browser on 2026-10-03, Asia/Shanghai. No per-page capture timestamp is claimed.
 
 ## Fresh official source checks
 

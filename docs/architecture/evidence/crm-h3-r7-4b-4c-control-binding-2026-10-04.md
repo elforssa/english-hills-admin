@@ -13,7 +13,7 @@ Revision: **4BC-EB1**. Tier 3: persistent Meta business-asset authority and futu
 - **CREATED-OBJECT PREFLIGHT COMPLETE = NOT CLAIMED.**
 - No 4B/4C mutation, credential, token, app-secret access, Production change or lifecycle event occurred during this discovery.
 
-Authoritative parent: [S4-P1](../plans/crm-h3-05-revision-7-step-4-created-object-preparation.md). The parent explicitly allows 4A to return nonsecret installation/dataset-control evidence after verified creation, with separate reviewed authorization required before 4B/4C mutation.
+Authoritative parent: [S4-P1](../plans/historical/crm-h3-05-revision-7-step-4-created-object-preparation.md). The parent explicitly allows 4A to return nonsecret installation/dataset-control evidence after verified creation, with separate reviewed authorization required before 4B/4C mutation.
 
 ## Current exact objects
 

@@ -4,7 +4,7 @@
 
 ## Scope and authority
 
-**Tier 3 — documentation-only execution closeout.** This artifact records the owner-authorized 4C-only Meta dataset assignment performed under reviewed and merged [4C-OP1](../plans/crm-h3-05-revision-7-4c-operator-packet.md), adopted on main **`ae3d7fffb31aa3e296c05ddac1ddc535d31e13e0`**.
+**Tier 3 — documentation-only execution closeout.** This artifact records the owner-authorized 4C-only Meta dataset assignment performed under reviewed and merged [4C-OP1](../plans/historical/crm-h3-05-revision-7-4c-operator-packet.md), adopted on main **`ae3d7fffb31aa3e296c05ddac1ddc535d31e13e0`**.
 
 This closeout authorizes no further Meta mutation, remediation, credential action or event send.
 

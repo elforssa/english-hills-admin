@@ -2,7 +2,7 @@
 
 > **HISTORICAL — SUPERSEDED BY S1.** S1 was owner-adopted and merged through PR #93 / main `284c2fe32014f8f3011ac6677ddfe99b0a16ca22`. Use the [sole active S1 Gate-B credential runbook](../plans/crm-h3-s1-gate-b-credential-runbook.md). Conflicting credential/bootstrap/inspector/rehearsal/per-action instructions below are retired, not execution requirements. Preserve original dated observations, findings and approval scope; unrelated R4 delivery safeguards remain. No historical approval authorizes current credential execution or activation.
 
-Date: 2026-10-03. Tier 3: provider account eligibility and credential/recovery safety evidence, despite documentation-only changes. Exact main/base: `e0f74766f36b5881a11defd38ad2960170cb0458`, merged [Step 2 PR #65](https://github.com/elforssa/english-hills-admin/pull/65). Architecture: owner-approved [Revision 7](../plans/crm-h3-05-revision-7-validation.md), approved at PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857`; [Step 2 preparation](../plans/crm-h3-05-revision-7-step-2-preparation.md) is inherited without amendment.
+Date: 2026-10-03. Tier 3: provider account eligibility and credential/recovery safety evidence, despite documentation-only changes. Exact main/base: `e0f74766f36b5881a11defd38ad2960170cb0458`, merged [Step 2 PR #65](https://github.com/elforssa/english-hills-admin/pull/65). Architecture: owner-approved [Revision 7](../plans/historical/crm-h3-05-revision-7-validation.md), approved at PR #64 / `bf295c304e3a4f4361b25b2a852c66ae7091a857`; [Step 2 preparation](../plans/historical/crm-h3-05-revision-7-step-2-preparation.md) is inherited without amendment.
 
 ## Authorization and session provenance
 

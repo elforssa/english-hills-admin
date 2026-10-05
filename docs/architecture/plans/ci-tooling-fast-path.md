@@ -2,6 +2,8 @@
 
 Date: 2026-10-04.
 
+**Completed adoption record:** PR #90 merged as `58139254e843fa731877cf5c4f541512d1d32224`. The proposal/release language below preserves original scope; current policy is [AGENTS](../../../AGENTS.md#ci-selection-and-remote-ci-handoff).
+
 **Risk tier: Tier 2 — normal substantial engineering-policy/CI-routing change.**
 
 Rationale: this changes which verification jobs are required for a class of pull requests and therefore affects merge confidence. It does not change runtime application behavior, database schema/state, Production configuration, external-provider operations, credentials, schedulers or activation authority. Tier 2 requires successful exact-head CI and a fresh independent review before merge.
@@ -9,7 +11,7 @@ Rationale: this changes which verification jobs are required for a class of pull
 Authoritative references:
 
 - [CI policy](../../../AGENTS.md#ci-selection-and-remote-ci-handoff)
-- [current architecture](../../ai/ARCHITECTURE.md#ci--codex-workflow-efficiency-v2--tooling-only-fast-path-proposed--2026-10-04)
+- [current architecture](../../../AGENTS.md#ci-selection-and-remote-ci-handoff)
 - [Verify workflow](../../../.github/workflows/verify.yml)
 - [classifier/gate](../../../scripts/ci/verify.py)
 
