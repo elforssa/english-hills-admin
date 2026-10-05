@@ -16,13 +16,14 @@ import PlacementTestModal from '@/components/placement/PlacementTestModal';
 export default function LeadDetailSheet({
   leadId,
   initialAction,
+  initialTask,
   onClose,
   onRestoreFocus
 }) {
   const moreRef = useRef(null);
   const [enrolling, setEnrolling] = useState(false);
   const [placement, setPlacement] = useState(undefined);
-  const [action, setAction] = useState(initialAction && !['enrollment','unsupported'].includes(initialAction) ? {name:initialAction,task:null} : null),
+  const [action, setAction] = useState(initialAction && !['enrollment','unsupported'].includes(initialAction) ? {name:initialAction,task:initialTask || null} : null),
     [historyCursors, setHistoryCursors] = useState([null]),
     [formOffset, setFormOffset] = useState(0),
     [taskOffset, setTaskOffset] = useState(0),
@@ -81,7 +82,7 @@ export default function LeadDetailSheet({
   <details onToggle={e => setFormsOpen(e.currentTarget.open)}><summary className="cursor-pointer border-t py-4 text-sm font-semibold">Réponses aux formulaires</summary>{formsOpen && <ReadState query={forms} empty="Aucune réponse enregistrée.">{forms.data?.rows?.length ? forms.data.rows.map(sub => <section key={sub.id} className="mb-4 rounded-lg bg-slate-50 p-4"><p className="text-sm font-medium">{sub.source_label || 'Demande'}</p><p className="mb-3 text-xs text-slate-400">{dateLabel(sub.occurred_at)}</p><dl className="space-y-3">{sub.answers.map((answer, i) => <div key={i}><dt className="text-xs text-slate-500">{answer.label || answer.key}</dt><dd className="mt-1 break-words text-sm">{Array.isArray(answer.display_value ?? answer.value) ? (answer.display_value ?? answer.value).map(v => typeof v === 'boolean' ? v ? 'Oui' : 'Non' : String(v ?? '—')).join(' · ') : typeof (answer.display_value ?? answer.value) === 'boolean' ? (answer.display_value ?? answer.value) ? 'Oui' : 'Non' : String(answer.display_value ?? answer.value ?? '—')}</dd></div>)}</dl>{!sub.answers.length && <p className="text-sm text-slate-500">Aucune réponse complémentaire.</p>}</section>) : null}</ReadState>}<Pager offset={formOffset} total={forms.data?.total || 0} size={5} onChange={setFormOffset} /></details>  <section><h3 className="mb-4 font-semibold">Historique</h3><ReadState query={history} empty="Aucun échange enregistré.">{history.data?.rows?.length ? <ol className="space-y-4 border-l border-slate-200 pl-5">{history.data.rows.map(item => <li key={item.id}><p className="text-xs text-slate-400">{dateLabel(item.occurred_at)}{item.actor_name && <span className="ml-2" title={item.actor_name}>{/synthe|receptionist|director|admin|system|service_role/i.test(item.actor_name) ? 'Équipe' : item.actor_name}</span>}</p><p className="mt-1 text-sm font-medium">{EVENTS[item.event_type] || 'Activité enregistrée'}{item.outcome && !item.event_type.startsWith('call_') ? ` · ${OUTCOMES[item.outcome] || LOST[item.outcome] || NOT_QUALIFIED[item.outcome] || 'Mise à jour'}` : ''}</p>{item.body && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">{activityBody(item.body)}</p>}</li>)}</ol> : null}</ReadState><div className="mt-4 flex gap-2"><Button variant="outline" disabled={historyCursors.length === 1} onClick={() => setHistoryCursors(x => x.slice(0,-1))}>Plus récents</Button><Button variant="outline" disabled={!history.data?.has_more} onClick={() => setHistoryCursors(x => [...x,history.data.next_cursor])}>Charger les plus anciens</Button></div></section>
 
  </div>}</ReadState>
- {action && lead && <CrmActionDialog key={`${action.name}:${action.task?.id || ''}`} action={action.name} lead={lead} task={lead.open_tasks?.find(t => t.id === action.task?.id) || action.task} onClose={() => setAction(null)} returnFocusRef={moreRef} />}
+ {action && lead && <CrmActionDialog key={`${action.name}:${action.task?.id || ''}`} action={action.name} lead={lead} task={action.task} onClose={() => setAction(null)} returnFocusRef={moreRef} />}
  {placement !== undefined && lead && <PlacementTestModal key={placement?.id || 'booking'} test={placement} crmLead={lead} onSave={() => setPlacement(undefined)} onClose={() => setPlacement(undefined)} />}
  {enrolling && lead && <CrmEnrollmentDialog lead={lead} onClose={() => setEnrolling(false)} />}
  </SheetContent></Sheet>;

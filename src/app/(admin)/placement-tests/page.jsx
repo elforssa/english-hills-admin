@@ -1,7 +1,9 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import AdmissionsCalendar from '@/components/placement/AdmissionsCalendar';
 import { entities } from '@/lib/entities';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,7 +18,7 @@ const STATUS_COLORS = {
   'Affecté': 'bg-green-100 text-green-700',
 };
 
-export default function PlacementTests() {
+function PlacementTestsList() {
   const { role } = useAuth();
   const [tests, setTests] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -115,4 +117,12 @@ export default function PlacementTests() {
       {modal !== null && <PlacementTestModal test={modal.id ? modal : null} groups={groups} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
+}
+
+function PlacementMode() {
+  const params=useSearchParams();
+  return params.get('view')==='calendar' ? <AdmissionsCalendar/> : <PlacementTestsList/>;
+}
+export default function PlacementTests() {
+  return <Suspense fallback={<p className="p-8">Chargement…</p>}><PlacementMode/></Suspense>;
 }

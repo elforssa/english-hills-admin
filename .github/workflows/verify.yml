@@ -70,6 +70,7 @@ jobs:
       - run: npm run test:crm-lifecycle
       - run: npm run test:navigation
       - run: npm run test:crm-opportunities
+      - run: npm run test:crm-work-calendar
       - run: npx playwright install --with-deps chromium
       - run: npm run test:middleware
       - run: npm run lint
@@ -114,6 +115,12 @@ jobs:
           O3_UPGRADE_PORT=54322 node scripts/test-crm-opportunities-upgrade.mjs
           supabase db reset --local --no-seed
           npm run test:crm-opportunities-local
+      - name: Work and Calendar stateful 107 upgrade and bounded read acceptance
+        run: |
+          supabase db reset --local --version 107 --no-seed
+          node scripts/test-crm-work-calendar-upgrade.mjs
+          supabase db reset --local --no-seed
+          npm run test:crm-work-calendar-local
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -202,6 +209,7 @@ jobs:
           node scripts/test-receptionist-browser.mjs
           npm run test:crm-lifecycle-browser
           npm run test:crm-opportunities-browser
+          npm run test:crm-work-calendar-browser
       - name: CRM revision-4 isolated concurrency
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
       - name: Advisory R4 forced sharing-stop race matrix

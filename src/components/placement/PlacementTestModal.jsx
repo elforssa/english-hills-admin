@@ -43,7 +43,7 @@ async function notifyPlacementResult({ before, after, students }) {
   return true;
 }
 
-export default function PlacementTestModal({ test, groups = [], students = [], crmLead, onSave, onClose }) {
+export default function PlacementTestModal({ test, groups = [], students = [], optionControls, crmLead, onSave, onClose }) {
   const { role } = useAuth();
   const booking = !!crmLead && !test?.id;
   const linked = booking || !!test?.is_crm || !!test?.crm_lead_id;
@@ -53,8 +53,11 @@ export default function PlacementTestModal({ test, groups = [], students = [], c
   const [expected, setExpected] = useState({ lead: crmLead?.version, task: crmLead?.confirm_placement_task, updated: test?.updated_at });
   const [form, setForm] = useState({ student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '', ...(linked ? { niveau_recommande: '', student_name: crmLead?.learner_name || test?.student_name || '' } : {}), ...test });
   const [saving, setSaving] = useState(false);
+  const [chosenStudent, setChosenStudent] = useState(null);
+  const [chosenGroup, setChosenGroup] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const selectedStudent = students.find(student => student.id === form.student_id);
+  const selectedStudent = students.find(student => student.id === form.student_id)
+    || (chosenStudent?.id === form.student_id ? chosenStudent : null);
   const availableLevels = selectedStudent
     ? getLevelsForSession(selectedStudent.session_type || 'Yearly', form.niveau_recommande)
     : ALL_LEVELS;
@@ -66,6 +69,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], c
 
   const handleStudentChange = (id) => {
     const s = students.find(s => s.id === id);
+    setChosenStudent(s || null);
     set('student_id', id);
     set('student_name', s?.full_name || '');
     if (s?.niveau_cefr) set('niveau_recommande', s.niveau_cefr);
@@ -106,7 +110,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], c
         notified = role !== 'receptionist' && await notifyPlacementResult({
           before: test || null,
           after: saved,
-          students,
+          students: selectedStudent ? [selectedStudent] : students,
         });
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -141,11 +145,13 @@ export default function PlacementTestModal({ test, groups = [], students = [], c
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <fieldset disabled={saving} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {optionControls && <div className="sm:col-span-2">{optionControls}</div>}
             <div className="sm:col-span-2">
             {linked ? <p className="font-medium">{form.student_name}<span className="ml-2 text-xs font-normal text-muted-foreground">Prospect CRM</span></p> : <>
             <label className={labelClass}>Apprenant *</label>
             <select className={inputClass} value={form.student_id || ''} onChange={e => handleStudentChange(e.target.value)}>
               <option value="">— Choisir un apprenant ou saisir manuellement —</option>
+              {form.student_id && !students.some(s => s.id === form.student_id) && <option value={form.student_id}>{form.student_name || 'Apprenant sélectionné'}</option>}
               {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
             {!form.student_id && (
@@ -169,9 +175,11 @@ export default function PlacementTestModal({ test, groups = [], students = [], c
             </>}{!linked && <div className="sm:col-span-2"><label className={labelClass}>Groupe affecté</label>
               <select className={inputClass} value={form.groupe_affecte_id || ''} onChange={e => {
                 const group = groups.find(item => item.id === e.target.value);
+                setChosenGroup(group || null);
                 setForm(f => ({ ...f, groupe_affecte_id: e.target.value, niveau_recommande: group?.niveau || f.niveau_recommande }));
               }}>
                 <option value="">— Choisir —</option>
+                {form.groupe_affecte_id && !availableGroups.some(g => g.id === form.groupe_affecte_id) && <option value={form.groupe_affecte_id}>{chosenGroup?.name || 'Groupe sélectionné'}</option>}
                 {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
               </select>
             </div>
