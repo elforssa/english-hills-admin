@@ -63,7 +63,8 @@ try {
  assert.equal(sql(`select count(*) from public.placement_tests where crm_lead_id='${lead}'`),'1');await screenshot({path:join(tmpdir(), 'hills-phase5-scheduled.png'),fullPage:false});
  console.log('PASS qualified booking, exact network replay/double-click, no fake A1, no student/enrollment/finance writes');
  await page.getByRole('button',{name:'Reprogrammer',exact:true}).click();
- const todayDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Casablanca',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ // Match the server's Casablanca Today view with an explicit HTML date format.
+ const todayDate=sql("select to_char(now() at time zone 'Africa/Casablanca','YYYY-MM-DD')");
  await dialog().getByLabel('Date *',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('23:59');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('button',{name:'Voir le test',exact:true}).waitFor();
  assert.equal(detail(lead).next_placement.id,pid);assert.equal(detail(lead).next_placement.heure,'23:59');
  await page.goto(app+'/crm/today');await page.getByText('Test de niveau · Parent : Sara test CRM',{exact:true}).waitFor();assert.equal(await page.getByTestId('lead-row').count(),0,'scheduled appointment is not missing-next-action');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
