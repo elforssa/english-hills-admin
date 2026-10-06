@@ -203,3 +203,23 @@ The working tree was preserved through a temporary stash (including migration 11
 The earlier blocked/reproduction and pre-rebase validation records above remain historical and unmodified. Tier 3 remains applicable to UIF-r1a/migration 110. The author handoff supplies the new exact committed head and CI run reference; a scheduled run is not successful required CI or independent-review readiness. Mandatory separate exact-SHA independent review and explicit human release/operator approval remain outstanding. Recorded Production remains at migration 109; no fresh Production inspection or operation is claimed.
 
 Rebased local source/test/dependency/migration tree SHA-256: `e14c626e44f6bbfe53d1bbea3b413505b14d492be2827a936d235623aea0aebd` (manifest `/tmp/uifr1a-rebased-tested-tree.json`, excludes documentation). Local rebase logs: `/tmp/uifr1a-rebase-{install,prod-audit,policy-audit,build,staff-browser,students-browser,corrections-browser}.log`. The targeted author rebase check confirms unchanged UIF/read/migration content, preservation of both test chains, exact patched dependency resolutions and accurate evidence. No second internal review or independent-review verdict was issued.
+
+
+## Production closeout — 2026-10-06
+
+The owner explicitly approved the separate Tier-3 Production rollout after PR #104's exact-SHA independent review returned READY FOR FINAL REVIEW. Final reviewed PR head `3d8d5782a21d022ccf2a3a85e7eb1fb7721d8a42` merged as `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8`. Vercel Production deployment `dpl_H9LkTg4jaEU4jV7tHBqi4AxsFJoV` is READY for that merge and serves `admin.english-hills.com`.
+
+The exact repository SQL from `110_crm_operational_row_staff_labels.sql` was applied to Production Supabase project `hopcezradkhrixwwswxn`. The migration service initially recorded generated version `20261006042936`; guarded metadata-only normalization changed that ledger identifier to repository version `110` without rerunning migration SQL. The final migration tail is 106, 107, 108, 109, 110 with `110 = crm_operational_row_staff_labels`.
+
+### Bounded Production acceptance
+
+- Authenticated `crm_list_staff` returned three current staff rows and only the expected `id/name/role/display_label` presentation fields; the bounded privacy check found no staff email/phone fields.
+- Authenticated `crm_get_work_queue` returned current work rows with `assignee_display_label` and nested lead `owner_display_label`; authenticated Opportunities returned current rows with `owner_display_label`.
+- Authenticated `crm_list_open_tasks` returned 32 current open tasks with `assignee_display_label` present and no email/phone fields.
+- A current operational drawer-card projection contained the expected owner label key and, when a next task is present, its assignee label key.
+- Existing authenticated execution remained available for `crm_list_staff`, `crm_list_open_tasks`, `crm_get_work_queue` and `crm_get_opportunities`.
+- Private `crm_security.staff_display_label(uuid)` and `crm_security.staff_reference(uuid)` remained non-executable by authenticated/anon API roles; the new helper was also non-executable by service_role. No new public RPC or permission expansion was observed.
+- Lifecycle remained dormant: zero enabled lifecycle connections, zero open or historical activation epochs, zero live or total external deliveries, zero delivery attempts and zero active lifecycle cron jobs.
+- Vercel reported no runtime error clusters in the 15-minute runtime-log query performed at release closeout. A public probe of `/crm/leads` returned HTTP 200 and correctly resolved to the login surface for an unauthenticated request.
+
+This was a bounded release verification, not a fresh authenticated receptionist browser walkthrough. Browser/UI acceptance remains the exact-SHA Chromium/WebKit evidence from the reviewed PR, including the 54-staff picker-stability regression, Students touch/focus checks and sidebar breakpoint cleanup. No Meta lifecycle activation, provider delivery, finance/enrollment behavior or unrelated Production mutation occurred.
