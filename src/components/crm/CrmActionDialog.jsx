@@ -1,8 +1,9 @@
 'use client';
 
-import { cloneElement, useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import FormField from '@/components/operational/FormField';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import { STATUS, TASKS, OUTCOMES, LOST, NOT_QUALIFIED, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel } from '@/lib/crm/presentation.mjs';
@@ -30,16 +31,8 @@ const nextTypes = {
   center_visit: 'Visite au centre',
   enrollment_followup: 'Suivi de pré-inscription'
 };
-export function Field({
-  label,
-  children
-}) {
-  const id = useId();
-  return <div className="space-y-1.5 text-sm font-medium text-slate-700"><label className="block" htmlFor={id}>{label}</label>{cloneElement(children, {
-      id
-    })}</div>;
-}
-const inputClass = 'min-h-11 w-full rounded-md border bg-white px-3 py-2 text-sm font-normal';
+export const Field = FormField;
+const inputClass = 'operational-control font-normal';
 export default function CrmActionDialog({
   action,
   lead,
@@ -62,6 +55,7 @@ export default function CrmActionDialog({
     assignee: task?.assigned_to || '',
     channel: 'phone'
   });
+  const [selectedStaffLabel, setSelectedStaffLabel] = useState((task ? task.assignee_display_label : lead?.owner_display_label) || 'Responsable indisponible');
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [result, setResult] = useState(null),
@@ -271,7 +265,7 @@ export default function CrmActionDialog({
   }
   return <Dialog open onOpenChange={open => {
     if (!open && !busy) onClose();
-  }}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); (returnFocus.current?.isConnected ? returnFocus.current : returnFocusRef?.current)?.focus(); }} className="max-h-[92dvh] overflow-y-auto sm:max-w-lg" onInteractOutside={e => {
+  }}><DialogContent onCloseAutoFocus={event => { event.preventDefault(); (returnFocus.current?.isConnected ? returnFocus.current : returnFocusRef?.current)?.focus(); }} className="operational max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[640px]" onInteractOutside={e => {
       if (busy) e.preventDefault();
     }} onEscapeKeyDown={e => {
       if (busy) e.preventDefault();
@@ -288,9 +282,9 @@ export default function CrmActionDialog({
               Recommandation: 'Recommandation',
               Autre: 'Autre'
             })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details></>}
-  {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}{conversation && <>{select('decision', 'Quelle suite donner ?', { callback: 'Rappeler plus tard', ...(lead.status !== 'QUALIFIED' ? { qualify: 'Avancer dans le projet' } : {}), lost: 'Pas intéressé', not_qualified: 'Non adapté' })}{values.decision === 'not_qualified' && select('unsuitableReason', 'Motif', NOT_QUALIFIED)}</>}</>}
-  {action === 'conversation' && select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}
-  {action === 'whatsapp' && <>{links.whatsapp && <a className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
+  {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}{conversation && <>{select('decision', 'Quelle suite donner ?', { callback: 'Rappeler plus tard', ...(lead.status !== 'QUALIFIED' ? { qualify: 'Avancer dans le projet' } : {}), lost: 'Pas intéressé', not_qualified: 'Non adapté' })}{values.decision === 'not_qualified' && select('unsuitableReason', 'Motif', NOT_QUALIFIED)}</>}</>}
+  {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>}</>}
+  {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
               whatsapp_sent: 'Message envoyé',
               meaningful_whatsapp_conversation: 'Conversation réelle avec le parent'
             })}</>}
@@ -305,7 +299,7 @@ export default function CrmActionDialog({
               in_person: 'Au centre'
             })}</>}
   {closing && <>{select('reason', 'Motif', action === 'notQualified' ? NOT_QUALIFIED : LOST)}{values.reason === 'unreachable' && <p className="text-sm">{lead.failed_attempts} / 5 appels infructueux dans la séquence actuelle.</p>}</>}
-  {action === 'reassign' && <><Field label={task ? 'Responsable de l’action' : 'Responsable du prospect'}><select className={inputClass} value={task ? values.assignee : values.owner} onChange={e => set(task ? 'assignee' : 'owner', e.target.value)}><option value="">Non attribué</option>{(task ? values.assignee : values.owner) && !staff.data?.rows.some(p => p.id === (task ? values.assignee : values.owner)) && <option value={task ? values.assignee : values.owner}>Responsable sélectionné</option>}{staff.data?.rows.map(person => <option key={person.id} value={person.id}>{staffLabel(person)}</option>)}</select></Field>{staff.isError && <p role="alert" className="text-sm">Liste indisponible. <button type="button" onClick={() => staff.refetch()}>Réessayer</button></p>}{(staff.data?.total > 50 || staffOffset > 0) && <div className="flex gap-2"><Button type="button" variant="outline" disabled={!staffOffset} onClick={() => setStaffOffset(x => Math.max(0, x - 50))}>Précédents</Button><Button type="button" variant="outline" disabled={staffOffset + 50 >= staff.data?.total} onClick={() => setStaffOffset(x => x + 50)}>Suivants</Button></div>}<p className="text-xs text-slate-500">{task ? 'Seule cette action change de responsable. Le responsable du prospect reste inchangé.' : 'Les responsables des actions déjà prévues restent inchangés.'}</p></>}
+  {action === 'reassign' && <><Field label={task ? 'Responsable de l’action' : 'Responsable du prospect'}><select className={inputClass} value={task ? values.assignee : values.owner} onChange={e => { set(task ? 'assignee' : 'owner', e.target.value); setSelectedStaffLabel(e.target.selectedOptions[0].textContent); }}><option value="">Non attribué</option>{(task ? values.assignee : values.owner) && !staff.data?.rows.some(p => p.id === (task ? values.assignee : values.owner)) && <option value={task ? values.assignee : values.owner}>{selectedStaffLabel}</option>}{staff.data?.rows.map(person => <option key={person.id} value={person.id}>{staffLabel(person)}</option>)}</select></Field>{staff.isError && <p role="alert" className="text-sm">Liste indisponible. <button type="button" onClick={() => staff.refetch()}>Réessayer</button></p>}{(staff.data?.total > 50 || staffOffset > 0) && <div className="flex gap-2"><Button type="button" variant="outline" disabled={!staffOffset} onClick={() => setStaffOffset(x => Math.max(0, x - 50))}>Précédents</Button><Button type="button" variant="outline" disabled={staffOffset + 50 >= staff.data?.total} onClick={() => setStaffOffset(x => x + 50)}>Suivants</Button></div>}<p className="text-xs text-slate-500">{task ? 'Seule cette action change de responsable. Le responsable du prospect reste inchangé.' : 'Les responsables des actions déjà prévues restent inchangés.'}</p></>}
   {!['manual', 'reassign', 'schedule', 'reschedule'].includes(action) && <Field label={['cancel', 'reopen'].includes(action) ? 'Motif' : action === 'complete' ? 'Résultat de l’action' : 'Note'}><textarea className={`${inputClass} min-h-24`} maxLength={4000} required={conversation || action === 'conversation' || action === 'whatsapp' && values.kind === 'meaningful_whatsapp_conversation' || ['note', 'cancel', 'reopen', 'complete'].includes(action) || closing && values.reason === 'other' || action === 'qualify' && (!lead.last_conversation_at || values.step === 'other')} value={values.note || ''} onChange={e => set('note', e.target.value)} /></Field>}
   {needsTask && <div className="space-y-3 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">{action === 'reschedule' ? 'Nouvel horaire' : 'Prochaine action'}</h3>{action !== 'reschedule' && !(qualifying && values.step !== 'other') && !(conversation && values.decision === 'callback') && !(action === 'conversation' && values.channel === 'phone') && select('taskType', 'Action', nextTypes)}<Field label="Date et heure · Casablanca"><input className={inputClass} type="datetime-local" required value={values.due || ''} onChange={e => set('due', e.target.value)} /></Field>{text('instructions', 'Précisions (facultatif)', false, 'text', 4000)}<p className="text-xs text-slate-500">Les appels hors horaires d’ouverture sont décalés au prochain créneau par le calendrier de suivi.</p></div>}
   </fieldset>{error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Annuler</Button><Button type="submit" disabled={busy || action === 'unreachable' && !lead.unreachable_eligible}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button></div>

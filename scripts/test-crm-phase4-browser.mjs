@@ -53,7 +53,7 @@ try {
  assert.equal(sql('select jsonb_build_array((select count(*) from public.students),(select count(*) from public.enrollments),(select count(*) from public.placement_tests))'),centerBefore);
  console.log('PASS receptionist home/sidebar, no-policy error, manual intake, first task, no center records');
  // URL survives reload and browser back/forward.
- await page.reload();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();await page.getByRole('button',{name:'Close',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.goBack();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
+ await page.reload();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.goBack();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
  // Opening links does not log; suppress protocol navigation only in this test.
  await page.getByRole('button',{name:'Appel',exact:true}).click();const activityBefore=sql(`select count(*) from public.crm_activities where lead_id='${lead}'`);
  const tel=dialog().getByRole('link',{name:/Appeler/});assert.equal(await tel.getAttribute('href'),'tel:+212612345678');await tel.evaluate(node=>node.addEventListener('click',e=>e.preventDefault(),{once:true}));await tel.click();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${lead}'`),activityBefore);
@@ -151,10 +151,10 @@ try {
  for(let i=0;i<28;i++)intake('File accueil '+i);
  sql("update public.crm_tasks set due_at=now()-interval '2 minutes' where lead_id in (select id from public.crm_leads where contact_id in(select id from public.crm_contacts where display_name like 'File accueil %'))");
  await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByTestId('work-row').first().waitFor();const firstTask=await page.getByTestId('work-row').first().getAttribute('data-task-id');
- await page.getByRole('button',{name:'Suivantes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,firstTask);
+ await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,firstTask);
  await page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect',exact:true}).click();await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Note',exact:true}).click();await dialog().getByLabel('Note',{exact:true}).fill('Mise à jour depuis la deuxième page');await save();await done();
- await page.getByRole('button',{name:'Close',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,firstTask);
+ await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,firstTask);
  assert.equal(await page.getByTestId('work-row').count(),25);
  console.log('PASS live queue reset to page 1 after a mutation; bounded unique cards');
  await context.close();

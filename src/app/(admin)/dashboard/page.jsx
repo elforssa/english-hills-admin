@@ -1,5 +1,8 @@
 'use client';
 
+import { useAuth } from '@/context/AuthContext';
+import ReadState from '@/components/operational/ReadState';
+import { financeReadResult, failedRead } from '@/lib/ui/readResults.mjs';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -14,10 +17,19 @@ import ContextLink from '@/components/ContextLink';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { user, role } = useAuth();
+  const identity = `${user?.id}:${role}`;
+  const [authScope, setAuthScope] = useState(null);
+  const [authError, setAuthError] = useState(false);
+  const [authRetry, setAuthRetry] = useState(0);
   const [userRole, setUserRole] = useState('');
   const [stats, setStats] = useState({ students: 0, teachers: 0, groups: 0, totalEncaisse: 0, enrollmentsPending: 0, testsPlanifies: 0 });
   const [recentReceipts, setRecentReceipts] = useState([]);
-  const [monthlyData, setMonthlyData] = useState({ encaisse: 0, restant: 0, total: 0, count: 0 });
+  const [monthlyRead, setMonthlyRead] = useState({state:'loading'});
+  const [financeRead, setFinanceRead] = useState({state:'loading'});
+  const [readError, setReadError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const monthlyData = monthlyRead.data;
   const [loading, setLoading] = useState(true);
   // True until we know the viewer belongs here. Non-admin roles are redirected
   // to their portal; we render a neutral loader (not the admin shell) until the
@@ -27,18 +39,31 @@ export default function Dashboard() {
   const isAdmin = userRole === 'admin' || userRole === 'director';
 
   useEffect(() => {
+    let active = true;
+    setRedirecting(true); setAuthError(false);
     auth.me().then(user => {
-      if (!user) { setRedirecting(false); setLoading(false); return; }
+      if (!active) return;
+      if (!user) { setAuthError(true); setRedirecting(false); setLoading(false); return; }
       if (user.role === 'parent') { router.replace('/parent-portal'); return; }
       if (user.role === 'student') { router.replace('/student-portal'); return; }
       if (user.role === 'teacher') { router.replace('/teacher-portal'); return; }
+      setStats({}); setRecentReceipts([]);
+      setFinanceRead({state:'loading', scope:identity}); setMonthlyRead({state:'loading'});
+      setAuthScope(identity);
       setUserRole(user.role || '');
       setRedirecting(false);
-    }).catch(() => { setRedirecting(false); setLoading(false); });
-  }, [router]);
+    }).catch(() => { if (active) { setAuthError(true); setRedirecting(false); setLoading(false); } });
+    return () => { active = false; };
+  }, [router, identity, authRetry]);
 
   useEffect(() => {
-    if (!userRole) return;
+    if (!userRole || authScope !== identity) return;
+    let active = true;
+    setLoading(true); setReadError(false);
+    setFinanceRead(previous => previous.scope === authScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:authScope});
+    const monthStart = new Date().toISOString().slice(0, 7) + '-01';
+    const monthlyScope = `${authScope}:${monthStart}`;
+    setMonthlyRead(previous => previous.scope === monthlyScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:monthlyScope});
     Promise.all([
       entities.Student.listAll('full_name'),
       entities.Teacher.listAll('full_name'),
@@ -47,26 +72,32 @@ export default function Dashboard() {
       entities.Enrollment.listAll('-created_date'),
       entities.PlacementTest.filter({ status: 'Planifié' }),
       getBrowserClient().rpc('get_finance_charge_summary'),
-      getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: new Date().toISOString().slice(0, 7) + '-01' }),
+      getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
     ]).then(([students, teachers, groups, receipts, pendingEnroll, plannedTests, financeResult, monthlyResult]) => {
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      void currentMonth;
-      setMonthlyData(monthlyResult.data || { encaisse: 0, restant: 0, total: 0, count: 0 });
-
+      if (!active) return;
+      const finance = financeReadResult(financeResult, ['total_encaisse']);
+      const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
+      setFinanceRead(previous => finance.state === 'ready' ? {...finance, scope:authScope} : {...failedRead(previous, finance.reason), state: previous.data ? 'stale' : finance.state});
+      setMonthlyRead(previous => monthly.state === 'ready' ? {...monthly, scope:monthlyScope} : {...failedRead(previous, monthly.reason), scope:monthlyScope, state: previous.data ? 'stale' : monthly.state});
       const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
       setStats({
         students: students.filter(s => ACTIVE_STATUSES.includes(s.status)).length,
         teachers: teachers.length,
         groups: groups.length,
-        totalEncaisse: Number(financeResult.data?.total_encaisse || 0),
+        totalEncaisse: finance.data?.total_encaisse,
         enrollmentsPending: pendingEnroll.filter(isPendingPreEnrollment).length,
         testsPlanifies: plannedTests.length,
       });
       setRecentReceipts(receipts.slice(0, 5));
       setLoading(false);
+    }).catch(() => {
+      if (!active) return;
+      setReadError(true); setLoading(false);
+      setFinanceRead(previous => failedRead(previous));
+      setMonthlyRead(previous => failedRead(previous));
     });
-  }, [userRole]);
+    return () => { active = false; };
+  }, [userRole, reload, authScope, identity]);
 
   const PAYMENT_STATUS = {
     'Soldé': { bg: 'bg-emerald-50 text-emerald-700 ring-emerald-100', dot: 'bg-emerald-500' },
@@ -75,7 +106,8 @@ export default function Dashboard() {
     'En retard': { bg: 'bg-red-50 text-red-700 ring-red-100', dot: 'bg-red-500' },
   };
 
-  if (redirecting) {
+  if (authError) return <div className="p-8"><ReadState state="error" message="Impossible de charger le tableau de bord." onRetry={() => setAuthRetry(x=>x+1)}/></div>;
+  if (redirecting || authScope !== identity) {
     return <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>;
   }
 
@@ -98,13 +130,15 @@ export default function Dashboard() {
         )}
       </div>
 
+      {readError && <ReadState state="error" message="Impossible de charger le tableau de bord." onRetry={() => setReload(x=>x+1)}/>}
+      {isAdmin && !['ready','loading'].includes(financeRead.state) && <ReadState state={financeRead.state} message={financeRead.state === 'refreshing' ? 'Actualisation du total encaissé…' : financeRead.state === 'stale' ? 'Total encaissé : actualisation impossible, dernière valeur conservée.' : financeRead.state === 'error' ? 'Impossible de charger le total encaissé.' : 'Total encaissé indisponible.'} onRetry={() => setReload(x=>x+1)}/>}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
           { label: 'Apprenants', value: stats.students, icon: Users, href: '/students', color: 'var(--brand)', bg: '#EEF2FF' },
           { label: 'Enseignants', value: stats.teachers, icon: GraduationCap, href: '/teachers', color: '#7c3aed', bg: '#F5F3FF' },
           { label: 'Groupes actifs', value: stats.groups, icon: BookOpen, href: '/groups', color: '#0891b2', bg: '#ECFEFF' },
           ...(isAdmin ? [
-            { label: 'Total encaissé', value: `${stats.totalEncaisse.toLocaleString('fr-MA')} MAD`, icon: TrendingUp, href: '/finance', color: '#059669', bg: '#ECFDF5' },
+            { label: 'Total encaissé', value: financeRead.data ? `${financeRead.data.total_encaisse.toLocaleString('fr-MA')} MAD` : 'Indisponible', icon: TrendingUp, href: '/finance', color: '#059669', bg: '#ECFDF5' },
             { label: 'Inscriptions en attente', value: stats.enrollmentsPending, icon: Clock, href: '/enrollments', color: '#d97706', bg: '#FFFBEB' },
             { label: 'Tests planifiés', value: stats.testsPlanifies, icon: CheckCircle, href: '/placement-tests', color: '#B91C2E', bg: '#FFF1F2' },
           ] : [
@@ -122,7 +156,7 @@ export default function Dashboard() {
               </div>
               <ArrowRight size={14} className="text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-all mt-1" />
             </div>
-            <p className="text-2xl font-bold text-foreground mb-1">{loading ? '—' : value}</p>
+            <p className="text-2xl font-bold text-foreground mb-1">{label === 'Total encaissé' && financeRead.data ? value : loading ? '—' : readError && label !== 'Total encaissé' ? 'Indisponible' : value}</p>
             <p className="text-xs text-muted-foreground font-medium">{label}</p>
           </Link>
         ))}
@@ -134,24 +168,25 @@ export default function Dashboard() {
             <h2 className="font-semibold text-sm text-foreground">
               Paiements — {new Date().toLocaleDateString('fr-MA', { month: 'long', year: 'numeric' })}
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{loading ? '—' : monthlyData.count} reçu(s) ce mois</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{monthlyData ? monthlyData.count : '—'} reçu(s) ce mois</p>
           </div>
           <Link href="/finance" className="text-xs font-semibold hover:underline flex items-center gap-1 self-start sm:self-auto" style={{ color: 'var(--brand)' }}>
             Voir Finance <ArrowRight size={11} />
           </Link>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <ReadState state={monthlyRead.state} onRetry={['error','stale','unavailable'].includes(monthlyRead.state) ? () => setReload(x=>x+1) : undefined}>
+        {monthlyData && <><div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-emerald-50 rounded-xl p-4">
             <p className="text-xs text-emerald-600 font-medium mb-1">Encaissé</p>
-            <p className="text-xl font-bold text-emerald-700">{loading ? '—' : monthlyData.encaisse.toLocaleString('fr-MA')} MAD</p>
+            <p className="text-xl font-bold text-emerald-700">{monthlyData.encaisse.toLocaleString('fr-MA')} MAD</p>
           </div>
           <div className="bg-red-50 rounded-xl p-4">
             <p className="text-xs text-red-500 font-medium mb-1">Solde restant</p>
-            <p className="text-xl font-bold text-red-600">{loading ? '—' : monthlyData.restant.toLocaleString('fr-MA')} MAD</p>
+            <p className="text-xl font-bold text-red-600">{monthlyData.restant.toLocaleString('fr-MA')} MAD</p>
           </div>
           <div className="bg-muted rounded-xl p-4">
             <p className="text-xs text-muted-foreground font-medium mb-1">Total facturé</p>
-            <p className="text-xl font-bold text-foreground">{loading ? '—' : monthlyData.total.toLocaleString('fr-MA')} MAD</p>
+            <p className="text-xl font-bold text-foreground">{monthlyData.total.toLocaleString('fr-MA')} MAD</p>
           </div>
         </div>
         {!loading && monthlyData.total > 0 && (
@@ -176,6 +211,7 @@ export default function Dashboard() {
         {!loading && monthlyData.total === 0 && (
           <p className="text-xs text-muted-foreground text-center py-2">Aucun reçu enregistré ce mois.</p>
         )}
+        </>}</ReadState>
       </div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -230,7 +266,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          ) : recentReceipts.length === 0 ? (
+          ) : readError ? <ReadState state="error" message="Reçus indisponibles." onRetry={() => setReload(x=>x+1)}/> : recentReceipts.length === 0 ? (
             <div className="p-8 text-center">
               <FileText size={32} className="mx-auto text-muted-foreground/30 mb-3" />
               <p className="text-sm text-muted-foreground">Aucun reçu pour l&apos;instant.</p>

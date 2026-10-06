@@ -2,13 +2,13 @@
 
 ## Status
 
-**PROPOSED — owner approval pending**, 2026-10-05. Contract revision [UIF-r1](../plans/english-hills-ui-foundation.md). No UIF implementation, merge, deployment or release approval is recorded by this ADR; architecture merge must not imply implementation approval.
+**OWNER-APPROVED — implementation authorized**, 2026-10-05. Contract revision [UIF-r1](../plans/english-hills-ui-foundation.md). The owner explicitly approved the complete UIF-r1 implementation scope in the implementation task; approval evidence is recorded in the plan. Merge, deployment and Production release remain unauthorized.
 
 ## Context
 
 The completed source UI proposal and receptionist QA found reusable primitives alongside inconsistent controls, vocabulary, filter composition and read-state presentation. Completed O3-r2 already owns CRM operational semantics. A foundation must consolidate presentation without absorbing new product workflows or reinterpreting those semantics.
 
-## Decision proposed
+## Decision
 
 Retain Tailwind, shadcn/Radix, Lucide and Recharts. Use shared semantic tokens and small controlled presentation components, with domain-owned queries, commands, permission gates and labels. Establish the foundation through Opportunities + lead drawer, Tasks / My Work, and Students list/detail as one implementation outcome. Do not build universal entity tables, form engines or dashboard builders, or mandate conversion of every existing page.
 
@@ -28,4 +28,8 @@ Shared token changes require compatibility checks beyond the pilots. Future auth
 
 ## Implementation evidence
 
-None. Record owner approval of the exact plan revision before implementation; record source and deployed evidence separately after the required review/release flow.
+UIF-r1 owner approval is recorded in the plan. Source implementation on `codex/ui-foundation-implementation` is based on main `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`; the [usage guide](../../ui/operational-foundation.md) describes the small shared primitives and domain adapters. [Implementation evidence](../evidence/english-hills-ui-foundation-implementation-2026-10-06.md) records local validation and the separate CI/review/release holds. Source implementation is not merge, deployment or Production verification. No schema, RPC or permission change belongs to UIF-r1.
+
+## UIF-r1a amendment — 2026-10-06
+
+The owner explicitly approved [UIF-r1a](../plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity): compatible existing operational read projections may add safe server labels for already-referenced staff. Migration 110 reuses the migration-109 rule through a private helper shared with the bounded picker; no browser algorithm/directory scan, new public RPC, permission/RLS/private field or business write. The previous no-new-read/migration boundary is superseded only for this amendment; historical blocked evidence is preserved. Source work remains on PR #104, unmerged/undeployed, with Tier-3 exact-SHA independent review and separate explicit release/operator approval required.

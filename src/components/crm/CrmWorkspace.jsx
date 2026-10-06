@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import PageFrame from '@/components/operational/PageFrame';
+import PageHeader from '@/components/operational/PageHeader';
+import CursorPager from '@/components/operational/CursorPager';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
@@ -44,6 +47,14 @@ export default function CrmWorkspace({
     if (key === 'stage' && value) next.set(key, value);
     window.history.replaceState(null, '', `${pathname}?${next}`);
   }
+  function resetFilters() {
+    const next = new URLSearchParams(window.location.search);
+    ['q','owner','channel','source','program','stage','contact'].forEach(key => next.delete(key));
+    if (mode === 'today') next.delete('assignee');
+    setCursors([null]);
+    window.history.replaceState(null, '', `${pathname}${next.size ? '?' + next : ''}`);
+    window.dispatchEvent(new Event('crm:filter-reset'));
+  }
   const parseFacet = value => { try { return value ? JSON.parse(value) : null; } catch { return {kind:'invalid',value:'invalid'}; } };
   const source = parseFacet(filters.source), program = parseFacet(filters.program);
   const args = {p_view:filters.view,p_query:filters.q,p_contact:contact,p_owner_mode:['all','me','unassigned'].includes(filters.owner) ? filters.owner : 'staff',p_owner:UUID.test(filters.owner) ? filters.owner : null,p_channel:filters.channel || source?.kind || null,p_source_label:source?.value || null,p_program_kind:program?.kind === 'unspecified' ? 'unspecified' : program?.kind || 'all',p_program:program?.value || null,p_layout:layout,p_stage:layout === 'list' ? filters.stage || null : null,p_limit:25};
@@ -63,16 +74,17 @@ export default function CrmWorkspace({
   function routeAction(id, name, task = null) { setInitialAction(name); setInitialTask(task); selectLead(id); }
   const opportunityPage = opportunities.data?.pages?.[filters.stage || 'list'];
   const matchedCount = layout === 'list' && filters.stage ? opportunities.data?.counts?.[filters.stage] : opportunities.data?.total;
-  const closedCount = (opportunities.data?.counts?.LOST || 0) + (opportunities.data?.counts?.NOT_QUALIFIED || 0);
-  return <div className="mx-auto w-full min-w-0 max-w-[1600px] px-4 py-5 sm:px-6">
-  <header className="mb-5 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-800">Accueil · English Hills</p><h1 ref={headingRef} tabIndex={-1} className="text-xl font-semibold tracking-tight text-slate-900">{mode === 'today' ? 'Tâches · Mon travail' : 'Pipeline admissions'}</h1><p className="mt-2 text-sm text-slate-500">{mode === 'today' ? 'Vos prochaines actions, une tâche à la fois.' : 'Retrouvez un parent et reprenez la conversation.'}</p></div><Button onClick={() => setManual(true)}><Plus size={16} className="mr-2" />Ajouter un prospect</Button></header>
-  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-4">
+  const counts = opportunities.data?.counts;
+  const closedCount = Number.isFinite(counts?.LOST) && Number.isFinite(counts?.NOT_QUALIFIED) ? counts.LOST + counts.NOT_QUALIFIED : '—';
+  return <PageFrame width="wide">
+  <PageHeader headingRef={headingRef} title={mode === 'today' ? 'Tâches · Mon travail' : 'Pipeline admissions'} description={mode === 'today' ? 'Vos prochaines actions, une tâche à la fois.' : 'Retrouvez un parent et reprenez la conversation.'} actions={<Button onClick={() => setManual(true)}><Plus size={16} />Ajouter un prospect</Button>} />
+  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-slate-500">{matchedCount ?? '—'} prospects correspondants</p><div className="flex gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}>Tableau</Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}>Liste</Button></div></div>
-    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} />
+    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
     {filters.view === 'closed' ? <p className="text-xs text-slate-500">Les clôtures sont affichées en Liste. Choisissez une autre vue pour accéder au Tableau.</p> : layout === 'board' && <p className="text-xs text-slate-500">Le Tableau montre les opportunités ouvertes et converties. <Button variant="link" className="px-1" onClick={() => setFilter('view','closed')}>Clôturés : {closedCount}</Button> · Inclus dans le total ; visibles en Liste.</p>}
     <div role="status" className="sr-only">Les vues sont actualisées après chaque action ; les prospects qui ne correspondent plus aux filtres quittent la vue.</div>
-    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} args={args} onOpen={openLead} onAction={routeAction} /> : <><OpportunitiesList query={opportunities} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><div className="flex gap-2"><Button variant="outline" disabled={cursors.length === 1} onClick={() => setCursors(x => x.slice(0,-1))}>Précédents</Button><Button variant="outline" disabled={!opportunityPage?.has_more} onClick={() => setCursors(x => [...x,opportunityPage.next_cursor])}>Suivants</Button></div></>}
+    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all'} onReset={resetFilters} args={args} onOpen={openLead} onAction={routeAction} /> : <><OpportunitiesList query={opportunities} filtered={filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all'} onReset={resetFilters} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></>}
   </section>}
 
   {selected && <LeadDetailSheet key={`${selected}:${initialAction || "detail"}`} leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={() => { (originFocus.current?.isConnected ? originFocus.current : headingRef.current)?.focus(); }} onClose={() => selectLead(null)} />}
@@ -83,5 +95,5 @@ export default function CrmWorkspace({
       setManual(false);
       router.push(`/crm/leads?contact=${id}`);
     }} />}
- </div>;
+ </PageFrame>;
 }

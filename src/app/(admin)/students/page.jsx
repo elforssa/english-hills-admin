@@ -4,11 +4,17 @@ import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Download, Upload, UserSearch, Crown } from 'lucide-react';
+import { Plus, Download, Upload, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import Pagination from '@/components/ui/pagination';
-import SkeletonTable from '@/components/ui/SkeletonTable';
+import PageFrame from '@/components/operational/PageFrame';
+import PageHeader from '@/components/operational/PageHeader';
+import SearchField from '@/components/operational/SearchField';
+import FilterBar from '@/components/operational/FilterBar';
+import FormField from '@/components/operational/FormField';
+import ReadState from '@/components/operational/ReadState';
+import { queryReadState, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
@@ -39,16 +45,16 @@ function InlineSelect({ value, options, onChange, empty, label, className = '' }
       value={value ?? ''}
       aria-label={label}
       onChange={e => onChange(e.target.value)}
-      className={`text-sm rounded-md border border-transparent hover:border-border focus:border-primary px-1.5 py-1 -ml-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary ${className}`}
+      className={`operational-control cursor-pointer ${className}`}
     >
       {empty !== undefined && <option value="">{empty}</option>}
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
+      {options.map(o => <option key={o} value={o}>{programmeLabel(o)}</option>)}
     </select>
   );
 }
 
 export default function StudentsPage() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const canEditProgramme = hasCapability(role, 'canEditStudentProgramme');
   const canImport = hasCapability(role, 'canImportStudents');
   const canExport = hasCapability(role, 'canExportStudents');
@@ -85,6 +91,7 @@ export default function StudentsPage() {
   const [urlReady, setUrlReady] = useState(false);
 
   useEffect(() => {
+    const restore = () => {
     const params = new URLSearchParams(window.location.search);
     setSearch(params.get('q') || '');
     setFilterStatus(params.get('status') || '');
@@ -99,6 +106,10 @@ export default function StudentsPage() {
     setFilterPayment(['', 'due', 'unpaid', 'partial', 'overdue', 'paid', 'none'].includes(payment) ? payment : '');
     setPage(Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1));
     setUrlReady(true);
+    };
+    restore();
+    window.addEventListener('popstate',restore);
+    return () => window.removeEventListener('popstate',restore);
   }, []);
 
   const listUrl = listHref('/students', { q: search, status: filterStatus, group: filterGroup,
@@ -114,17 +125,19 @@ export default function StudentsPage() {
     p_source: filterSource, p_plan: filterPlan, p_group: filterGroup,
     p_payment: filterPayment,
   };
-  const { data: result, isLoading: queryLoading, isError, refetch } = useQuery({
-    queryKey: ['Student', 'page', filters, page],
+  const listRead = useQuery({
+    queryKey: ['Student', 'page', user?.id, role, filters, page],
     enabled: urlReady,
     queryFn: async () => {
       const { data, error } = await getBrowserClient().rpc('search_students_page', {
         ...filters, p_page: page, p_page_size: PAGE_SIZE,
       });
       if (error) throw error;
+      if (!data || !Array.isArray(data.rows) || !Number.isSafeInteger(data.count) || data.count < 0 || !Number.isSafeInteger(data.total) || data.total < 0) return null;
       return data;
     },
   });
+  const { data: result, isLoading: queryLoading, isError, refetch } = listRead;
   const loading = !urlReady || queryLoading;
   const paged = result?.rows || [];
   const matchedCount = Number(result?.count || 0);
@@ -152,7 +165,7 @@ export default function StudentsPage() {
           Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
         </button>
       ))}
-      {!student.groupe_id && !student.pending_enrollments?.length && <Link href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
+      {!student.groupe_id && !student.pending_enrollments?.length && <Link data-touch-target href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
     </div>;
 
     if (enrollmentsLoading) return <span className="text-xs text-muted-foreground">Chargement des inscriptions…</span>;
@@ -163,13 +176,13 @@ export default function StudentsPage() {
       {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
       {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
-        Groupe à affecter · {awaitingGroup[0].status} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
+        Groupe à affecter · {displayLabel(ENROLLMENT_LABELS, awaitingGroup[0].status)} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
       </button>}
       {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
       {!student.groupe_id && relevant.length === 0 && <button className="text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>}
-      {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
+      {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link data-touch-target href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
     </div>;
   };
 
@@ -199,17 +212,16 @@ export default function StudentsPage() {
     } catch { toast.error('Export impossible. Aucun fichier CSV créé.'); }
   };
 
+  const activeFilterCount = [search,filterStatus,filterGroup,filterCat,filterLevel,filterSession,filterIncomplete,filterSource,filterPlan,filterPayment].filter(Boolean).length;
+  function resetFilters() {
+    setSearch(''); setFilterStatus(''); setFilterGroup(''); setFilterCat(''); setFilterLevel(''); setFilterSession(''); setFilterIncomplete(false); setFilterSource(''); setFilterPlan(''); setFilterPayment(''); setPage(1);
+  }
   return (
-    <div className="p-4 lg:p-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Apprenants</h1>
-          <p className="text-muted-foreground text-sm mt-1">{loading || isError ? '—' : matchedCount} apprenants correspondants · {loading || isError ? '—' : result.total} au total</p>
-        </div>
-        <div className="flex gap-2 self-start sm:self-auto">
+    <PageFrame>
+      <PageHeader title="Apprenants" description={<>{loading || isError || !result ? '—' : matchedCount} apprenants correspondants · {loading || isError || !result ? '—' : result?.total} au total</>} actions={<>
           {canExport && <button
             onClick={exportStudents}
-            disabled={loading || isError}
+            disabled={loading || isError || !result}
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50"
           >
             <Download size={15} /> CSV
@@ -221,24 +233,13 @@ export default function StudentsPage() {
             <Upload size={15} /> Import CSV
           </Link>}
           <Button asChild>
-            <Link href="/students/new">
+            <Link data-touch-target href="/students/new">
               <Plus size={15} /> Ajouter
             </Link>
           </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 mb-5">
-        <div className="relative flex-1 min-w-0 w-full sm:w-auto">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Rechercher..." aria-label="Rechercher un apprenant" maxLength={120} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
-        </div>
-        <select aria-label="Filtrer par statut" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-          <option value="">Actifs (Enrolled/Trial/Alumni)</option>
-          <option value="all_shown">Tous les statuts</option>
-          {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select aria-label="Filtrer par paiement" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
+      </>}/>
+      <FilterBar activeCount={activeFilterCount} onReset={resetFilters} search={<SearchField label="Rechercher un apprenant" className="flex-1 basis-60" placeholder="Nom ou téléphone…" maxLength={120} value={search} onChange={value=>{setSearch(value);setPage(1);}}/>} more={<>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par paiement"><select aria-label="Filtrer par paiement" className="operational-control" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
           <option value="">Paiements : tous</option>
           <option value="due">Reste à payer (tous)</option>
           <option value="unpaid">En attente</option>
@@ -246,37 +247,40 @@ export default function StudentsPage() {
           <option value="overdue">En retard</option>
           <option value="paid">Soldé</option>
           <option value="none">Aucun engagement</option>
-        </select>
-        <select aria-label="Filtrer par catégorie" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par catégorie"><select aria-label="Filtrer par catégorie" className="operational-control" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
           <option value="">Toutes catégories</option>
           {AGE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-        </select>
-        <select aria-label="Filtrer par affectation de groupe" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterGroup} onChange={e => { setFilterGroup(e.target.value); setPage(1); }}>
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par affectation de groupe"><select aria-label="Filtrer par affectation de groupe" className="operational-control" value={filterGroup} onChange={e => { setFilterGroup(e.target.value); setPage(1); }}>
           <option value="">Groupes : tous</option>
           <option value="unassigned">Groupe à affecter</option>
-        </select>
-        <select aria-label="Filtrer par session" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par session"><select aria-label="Filtrer par session" className="operational-control" value={filterSession} onChange={e => { setFilterSession(e.target.value); setPage(1); }}>
           <option value="">Toutes sessions</option>
-          {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select aria-label="Filtrer par niveau" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
+          {SESSION_TYPES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par niveau"><select aria-label="Filtrer par niveau" className="operational-control" value={filterLevel} onChange={e => { setFilterLevel(e.target.value); setPage(1); }}>
           <option value="">Tous les niveaux</option>
           {(filterSession ? getLevelsForSession(filterSession) : ALL_LEVELS).map(l => <option key={l}>{l}</option>)}
-        </select>
-        <select aria-label="Filtrer par complétude" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par complétude"><select aria-label="Filtrer par complétude" className="operational-control" value={filterIncomplete ? 'incomplete' : ''} onChange={e => { setFilterIncomplete(e.target.value === 'incomplete'); setPage(1); }}>
           <option value="">Complétude : tous</option>
           <option value="incomplete">À compléter (sans email)</option>
-        </select>
-        <select aria-label="Filtrer par source" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par source"><select aria-label="Filtrer par source" className="operational-control" value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}>
           <option value="">Source : toutes</option>
-          {SOURCES.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select aria-label="Filtrer par formule" className="border border-border rounded-md px-3 py-2 text-sm bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex-1 sm:flex-none" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
+          {SOURCES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
+        </select></FormField></div>
+<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par formule"><select aria-label="Filtrer par formule" className="operational-control" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
           <option value="">Toutes les formules</option>
           <option value="Premium">Premium</option>
           <option value="Standard">Standard</option>
-        </select>
-      </div>
+        </select></FormField></div>      </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
+          <option value="">Dossiers actifs (inscrits, essai, anciens)</option>
+          <option value="all_shown">Tous les statuts</option>
+          {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
+        </select></FormField></div>}</FilterBar>
 
       {placement && (placement.choices ? <EnrollmentChoiceDialog student={placement.student} enrollments={placement.choices}
         onSelect={enrollment => setPlacement({ student: placement.student, enrollment })} onClose={() => setPlacement(null)} />
@@ -294,58 +298,43 @@ export default function StudentsPage() {
               queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
             }} />)}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? (
-          <SkeletonTable rows={10} cols={8} />
-        ) : isError ? (
-          <div className="p-10 text-center" role="alert"><p className="text-sm font-medium">Impossible de charger les apprenants.</p><button className="mt-3 rounded-md bg-primary px-4 py-2 text-sm text-white" onClick={() => refetch()}>Réessayer</button></div>
-        ) : matchedCount === 0 ? (
-          <div className="p-10 text-center">
-            <UserSearch size={32} className="mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium text-foreground">Aucun apprenant trouvé</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Essayez d&apos;élargir vos filtres, ou ajoutez un nouvel apprenant.
-            </p>
-            <Link href="/students/new" className="inline-flex items-center gap-1 text-sm font-semibold mt-3 hover:underline" style={{ color: 'var(--brand)' }}>
-              <Plus size={14} /> Ajouter un apprenant
-            </Link>
-          </div>
-        ) : (
-          <>
+        <ReadState state={!urlReady ? 'loading' : queryReadState(listRead, {empty: matchedCount === 0, filtered: activeFilterCount > 0})} message={result && matchedCount === 0 && !isError && !loading ? activeFilterCount ? 'Aucun apprenant correspondant à ces filtres.' : 'Aucun dossier dans le périmètre actif. Choisissez Tous les statuts ou ajoutez un apprenant.' : undefined} onRetry={isError || (!result && !loading) ? refetch : undefined} onReset={activeFilterCount ? resetFilters : undefined}>
+          {paged.length > 0 && <>
             <div className="sm:hidden divide-y divide-border">
               {paged.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
+                <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link href={studentHref(s.id)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {s.session_type || 'Yearly'} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {programmeLabel(s.session_type)} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
-                    <p className="mt-1 text-xs"><span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD restants</span>}</p>
+                    <p className="mt-1 text-xs"><span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD · solde restant actuel</span>}</p>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 flex-shrink-0 ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 max-w-28 break-words ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
                 </div>
               ))}
             </div>
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-sm">
+            <div role="region" tabIndex={0} aria-label="Tableau des apprenants, défilement horizontal" className="hidden sm:block overflow-x-auto max-w-full transition-none focus:outline focus:outline-2 focus:outline-ring focus:outline-offset-2">
+              <table aria-label="Dossiers apprenants" className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Nom</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Catégorie</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Groupe</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Session</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Niveau</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Téléphone</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Statut</th>
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Paiement</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Nom</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Catégorie</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Groupe</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Programme</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Niveau</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Téléphone</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Statut</th>
+                    <th scope="col" className="text-left px-3 py-3 font-semibold text-muted-foreground">Paiement</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
-                      <td className="px-4 py-3 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1.5"><Link href={studentHref(s.id)} className="inline-flex min-h-10 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold"><Crown size={10} /> Premium</span>}</span>
+                      <td className="px-3 py-3 font-medium text-foreground">
+                        <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-3 py-3 text-muted-foreground">
                         <InlineSelect
                           value={s.age_category}
                           label={`Catégorie de ${s.full_name}`}
@@ -354,17 +343,17 @@ export default function StudentsPage() {
                           onChange={v => patchStudent(s, 'age_category', v)}
                         />
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{renderGroup(s)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-muted-foreground">{renderGroup(s)}</td>
+                      <td className="px-3 py-3">
                         {canEditProgramme ? <InlineSelect
-                          value={s.session_type || 'Yearly'}
+                          value={s.session_type}
                           label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
                           onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null, groupe_id: null })}
-                        /> : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{s.session_type || 'Yearly'}</span>}
+                        /> : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</span>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         {canEditProgramme ? <InlineSelect
                           value={s.niveau_cefr}
                           label={`Niveau de ${s.full_name}`}
@@ -374,21 +363,21 @@ export default function StudentsPage() {
                           onChange={v => patchStudentFields(s, { niveau_cefr: v || null, groupe_id: null })}
                         /> : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
+                      <td className="px-3 py-3 text-muted-foreground">{s.telephone || '—'}</td>
+                      <td className="px-3 py-3">
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
                       </td>
-                      <td className="px-4 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="block mt-1 text-xs font-semibold text-foreground">{money(s.payment_balance)} MAD restants</span>}</td>
+                      <td className="px-3 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="block mt-1 text-xs font-semibold text-foreground">{money(s.payment_balance)} MAD · solde restant actuel</span>}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </>
-        )}
-        <Pagination page={page} total={matchedCount} pageSize={PAGE_SIZE} onChange={setPage} />
+        }</ReadState>
+        {result && <Pagination pending={listRead.isFetching || isError} page={page} total={matchedCount} pageSize={PAGE_SIZE} onChange={setPage} />}
       </div>
-    </div>
+    </PageFrame>
   );
 }
 
@@ -400,7 +389,7 @@ function EnrollmentChoiceDialog({ student, enrollments, onSelect, onClose }) {
       <div className="space-y-2">
         {enrollments.map(enrollment => <button key={enrollment.id} type="button" className="block w-full rounded-md border border-border p-3 text-left text-sm hover:border-primary"
           onClick={() => onSelect(enrollment)}>
-          <span className="block font-semibold">{enrollment.status} · {enrollment.session_type || student.session_type || 'Session'} · {enrollment.level || 'Niveau à définir'}</span>
+          <span className="block font-semibold">{displayLabel(ENROLLMENT_LABELS,enrollment.status)} · {enrollment.session_type || student.session_type || 'Session'} · {enrollment.level || 'Niveau à définir'}</span>
           <span className="text-xs text-muted-foreground">{enrollment.school_year || 'Année non renseignée'} · Réf. {enrollment.id.slice(0, 8)}</span>
         </button>)}
       </div>
@@ -435,7 +424,7 @@ function DossierGroupPlacement({ student, groups, onClose, onSave }) {
     <DialogContent className="max-w-md">
       <DialogHeader><DialogTitle>Affecter un groupe à {student.full_name}</DialogTitle></DialogHeader>
       {!student.niveau_cefr
-        ? <p className="text-sm text-muted-foreground">Le niveau doit être défini avant l’affectation directe. Créez une pré-inscription depuis la <Link href={`/students/${student.id}`} className="text-primary underline" onClick={onClose}>fiche apprenant</Link> pour choisir un niveau et un groupe.</p>
+        ? <p className="text-sm text-muted-foreground">Le niveau doit être défini avant l’affectation directe. Créez une pré-inscription depuis la <Link data-touch-target href={`/students/${student.id}`} className="text-primary underline" onClick={onClose}>fiche apprenant</Link> pour choisir un niveau et un groupe.</p>
         : <form onSubmit={assign} className="space-y-4">
           <label className="block text-sm font-medium">Groupe compatible
             <select aria-label="Groupe compatible" required className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2" value={groupId} onChange={event => setGroupId(event.target.value)}>

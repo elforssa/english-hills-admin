@@ -16,14 +16,18 @@
     --secondary-foreground: 216 64% 25%;
     --muted: 220 15% 94%;
     --muted-foreground: 220 10% 40%;
-    --accent: 352 77% 42%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 216 30% 95%;
+    --accent-foreground: 216 64% 25%;
     --destructive: 352 77% 42%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 20% 90%;
     --input: 220 20% 90%;
     --ring: 216 64% 33%;
     --radius: 0.5rem;
+    --radius-overlay: 0.75rem;
+    --navy: 216 64% 33%;
+    --navy-deep: 216 52% 25%;
+    --red-accent: 352 77% 42%;
     --sidebar-background: 220 45% 14%;
     --sidebar-foreground: 210 30% 88%;
     --sidebar-primary: 0 0% 100%;
@@ -56,3 +60,33 @@
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 99px; }
+
+/* UIF-r1: opt-in density keeps untouched consumers compatible. */
+@layer components {
+  .operational { @apply text-sm leading-5; }
+  .operational-control { @apply min-h-9 w-full min-w-0 max-w-full rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 disabled:opacity-50; }
+  .operational-control:not(textarea) { height: 36px; padding-block: 4px; }
+  [role=menuitem] { min-height: 36px; }
+  .operational :is(button, input, select, textarea, a, summary, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .operational :is(button, a, summary) { scroll-margin-block: 4rem; }
+  .operational button { min-height: 36px; font-size: 14px; line-height: 20px; }
+  .operational :is(button, input, select):not(:focus-visible) { box-shadow: none; }
+  .operational-sidebar :is(button, a):focus-visible { outline-color: white; }
+  .operational-panel { @apply rounded-lg border bg-card p-4; }
+  .operational-secondary { @apply text-[13px] leading-[18px] text-muted-foreground; }
+}
+@media (max-width: 1023px), (pointer: coarse) {
+  .operational :is(button, select, input:not([type=checkbox]):not([type=radio]), [role=combobox], summary),
+  .operational [data-touch-target] { display: inline-flex; align-items: center; min-height: 44px; }
+  .operational select, [role=dialog] select { height: 44px; }
+  .operational-sidebar a { min-height: 44px; }
+  .operational button, [data-icon-control] { min-width: 44px; min-height: 44px; }
+  [role=dialog] :is(button, select, input:not([type=checkbox]):not([type=radio]), [role=combobox]) { min-height: 44px; }
+  [role=menuitem], [role=option] { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

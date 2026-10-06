@@ -7,7 +7,9 @@ module.exports = {
   		fontFamily: {
 			inter: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
   		},
-  		borderRadius: {
+			maxWidth: { standard: "1280px", detail: "1024px", form: "768px", wide: "1600px" },
+        borderRadius: {
+            overlay: "var(--radius-overlay)",
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'

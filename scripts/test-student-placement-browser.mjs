@@ -1,5 +1,7 @@
-// Run with the app at localhost:3017 and local Supabase. Synthetic data only.
+// Run with the app at localhost:3101 and local Supabase. Synthetic data only.
 import assert from 'node:assert/strict';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -31,7 +33,8 @@ try {
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   page.setDefaultTimeout(30000);
-  await page.goto('http://localhost:3017/login');
+  async function groupFilter(){const filter=page.getByRole('combobox',{name:'Filtrer par affectation de groupe'});if(!await filter.isVisible())await page.getByText('Plus de filtres',{exact:false}).click();return filter;}
+  await page.goto('http://localhost:3101/login');
   await page.waitForLoadState('networkidle');
   // Prove React is handling events before filling the login fields.
   await page.getByRole('button',{name:'Connexion par lien magique',exact:true}).click();
@@ -40,26 +43,28 @@ try {
   await page.locator('input[type=password]').fill(password);
   await page.locator('button[type=submit]').click();
   await page.waitForURL('**/dashboard');
-  await page.goto('http://localhost:3017/students/new');
+  await page.goto('http://localhost:3101/students/new');
   await expect(page.locator('#status')).toHaveValue('Enrolled');
   await expect(page.locator('#status')).toBeDisabled();
   await page.locator('#full_name').fill(run+' manual');
   await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
   await page.waitForURL('**/students');
-  await page.getByRole('textbox',{name:'Rechercher un apprenant'}).fill(run);
+  await page.getByRole('searchbox',{name:'Rechercher un apprenant'}).fill(run);
   await expect(page.getByRole('cell',{name:run+' manual',exact:true})).toBeVisible();
   const headers=await page.locator('thead th').allTextContents();
-  assert.deepEqual(headers.slice(1,4), ['Catégorie','Groupe','Session']);
-  await page.getByRole('combobox',{name:'Filtrer par affectation de groupe'}).selectOption('unassigned');
+  assert.deepEqual(headers.slice(1,4), ['Catégorie','Groupe','Programme']);
+  await expect(page.getByRole('combobox',{name:`Session de ${run} manual`,exact:true})).toHaveValue('Yearly');
+  await expect(page.getByRole('combobox',{name:`Session de ${run} manual`,exact:true}).locator('option[value=Yearly]')).toHaveText('Programme annuel');
+  await (await groupFilter()).selectOption('unassigned');
   // Confirmed registrations must be absent even before group assignment.
-  await page.goto('http://localhost:3017/enrollments');
+  await page.goto('http://localhost:3101/enrollments');
   await expect(page.getByRole('cell',{name:run+' prospect',exact:true})).toBeVisible();
   await expect(page.getByRole('cell',{name:run+' paid',exact:true})).toHaveCount(0);
   await page.locator('select').first().selectOption('all');
   await expect(page.getByRole('cell',{name:run+' paid',exact:true})).toHaveCount(0);
-  await page.goto('http://localhost:3017/students');
-  await page.getByRole('textbox',{name:'Rechercher un apprenant'}).fill(run);
-  await page.getByRole('combobox',{name:'Filtrer par affectation de groupe'}).selectOption('unassigned');
+  await page.goto('http://localhost:3101/students');
+  await page.getByRole('searchbox',{name:'Rechercher un apprenant'}).fill(run);
+  await (await groupFilter()).selectOption('unassigned');
   const paidRow=page.getByRole('row').filter({has:page.getByRole('cell',{name:run+' paid',exact:true})});
   await paidRow.getByRole('button',{name:/Groupe à affecter/}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -67,14 +72,14 @@ try {
   await page.getByRole('dialog').getByRole('button',{name:'Enregistrer',exact:true}).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(paidRow).toHaveCount(0);
-  await page.getByRole('combobox',{name:'Filtrer par affectation de groupe'}).selectOption('');
+  await (await groupFilter()).selectOption('');
   await expect(paidRow.getByText(run+' group',{exact:true})).toBeVisible();
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('.sm\\:hidden').getByText(run+' group',{exact:true})).toBeVisible();
-  await page.screenshot({path:'/tmp/student-placement-mobile.png',fullPage:true});
+  await page.screenshot({path:join(tmpdir(),'student-placement-mobile.png'),fullPage:true});
   await page.setViewportSize({width:1440,height:1000});
-  await page.screenshot({path:'/tmp/student-placement-desktop.png',fullPage:true});
-  await page.goto('http://localhost:3017/enrollments');
+  await page.screenshot({path:join(tmpdir(),'student-placement-desktop.png'),fullPage:true});
+  await page.goto('http://localhost:3101/enrollments');
   await expect(page.getByRole('cell',{name:run+' prospect',exact:true})).toBeVisible();
   await expect(page.getByRole('cell',{name:run+' paid',exact:true})).toHaveCount(0);
   await expect(page.getByRole('cell',{name:run+' manual',exact:true})).toHaveCount(0);
@@ -82,7 +87,7 @@ try {
   await expect(page.getByRole('cell',{name:run+' paid',exact:true})).toHaveCount(0);
   assert.equal(sql(`select status from public.students where full_name='${run} manual'`).trim(),'Enrolled');
   // Enrollment history remains editable after it leaves pre-registration.
-  await page.goto(`http://localhost:3017/students/${paidId}`);
+  await page.goto(`http://localhost:3101/students/${paidId}`);
   await expect(page.getByRole('heading',{name:'Inscriptions et groupes'})).toBeVisible();
   await page.getByRole('button',{name:'Modifier l’inscription'}).click();
   await page.locator('#enrollment-group').selectOption('');
@@ -90,14 +95,14 @@ try {
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('Inscrit — groupe à affecter',{exact:true})).toBeVisible();
   // The existing student edit form must synchronize the same enrollment.
-  await page.goto(`http://localhost:3017/students/${paidId}/edit`);
+  await page.goto(`http://localhost:3101/students/${paidId}/edit`);
   await expect(page.locator('#full_name')).toHaveValue(run+' paid');
   await page.locator('#groupe_id').selectOption(groupId);
   await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
   await page.waitForURL('**/students');
   assert.equal(sql(`select status from public.enrollments where student_id='${paidId}'`).trim(),'Validated');
   // Group-page removal and re-assignment also synchronize enrollment records.
-  await page.goto(`http://localhost:3017/groups/${groupId}`);
+  await page.goto(`http://localhost:3101/groups/${groupId}`);
   const rosterRow=page.getByRole('row').filter({has:page.getByRole('link',{name:run+' paid',exact:true})});
   page.once('dialog', dialog => dialog.accept());
   await rosterRow.getByRole('button',{name:'Retirer'}).click();
@@ -107,7 +112,7 @@ try {
   await page.getByRole('option').filter({hasText:run+' paid'}).click();
   await expect.poll(() => sql(`select status from public.enrollments where student_id='${paidId}'`).trim()).toBe('Validated');
   // CSV with no status gets the same default as Add student.
-  await page.goto('http://localhost:3017/students/import');
+  await page.goto('http://localhost:3101/students/import');
   await page.locator('textarea').fill('full_name,session_type\n'+run+' imported,Yearly');
   await page.getByRole('button',{name:'Importer 1 apprenant(s)',exact:true}).click();
   await expect.poll(() => sql(`select status from public.students where full_name='${run} imported'`).trim()).toBe('Enrolled');

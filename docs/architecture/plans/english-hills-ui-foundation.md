@@ -1,5 +1,7 @@
 # Owner summary
 
+**Current approved contract: UIF-r1 + UIF-r1a (2026-10-06).** The owner explicitly approved the bounded staff-row read-projection amendment below for the same PR #104. Original UIF-r1 scope/approval and earlier no-migration boundary remain historical evidence; UIF-r1a supersedes that boundary only for safe labels of staff already referenced by existing operational reads.
+
 ## What will change
 
 One reusable operational UI foundation consolidates existing English Hills patterns: **GoHighLevel operational usefulness + Linear restraint + English Hills identity**. Foundation Stage 1 supplies tokens and small shared primitives; Stage 2 proves them in Opportunities + lead drawer, Tasks / My Work, and Students list/detail; Stage 3 verifies responsive/state behavior and records future-page guidance. These are stages of one implementation outcome, not three independent product commissions.
@@ -30,7 +32,7 @@ Presentation consumes existing authorized projections. Staff labels must not exp
 
 ## Contract identity, sources and approval
 
-- Revision **UIF-r1**, 2026-10-05 (Asia/Shanghai). Status: **PROPOSED — owner approval pending**. The owner selected the visual direction and requested this specification; that is not acceptance of this exact contract or implementation/release approval.
+- Revision **UIF-r1**, 2026-10-05 (Asia/Shanghai). Status: **OWNER-APPROVED UIF-r1 — implementation authorized**. The original architecture task selected the visual direction; the separate explicit implementation approval below accepts this exact contract and preserves the release hold.
 - Architecture source baseline after prerequisite adoption: main `3c462f7fce87261ff92c565fecf8ab652262bb81` (PR #102 merge). This documentation PR is rebased onto that baseline before final review; record the final head in its handoff.
 - Completed read-only proposal: Codex task **Audit UI foundation**, `01a10bfe-c4f2-74c3-a2a3-d336c0d4deed`, completed 2026-10-05. It inspected the earlier source baseline `05ef83c7427353019eb49c48900dd7044a2fcc7b` plus then-changing correction files; no browser/Production verification. This plan preserves its implementation-relevant decisions and P1 classifications.
 - Completed receptionist QA: **Audit receptionist workflows**, `01a10bff-53ed-7d12-97c1-f15a592bb4a0`, report `receptionist-audit/AUDIT.md`, 2026-10-05. Read-only Production observations; F01–F17 are mapped below. No write-dependent operation was verified and no deployment SHA/ledger was freshly established. Do not commit its screenshots or customer records as fixtures.
@@ -39,7 +41,7 @@ Presentation consumes existing authorized projections. Staff labels must not exp
 
 **Adopted prerequisite baseline:** all four PR #102 corrections are now present on main: server/database Casablanca civil scheduled-time projections, composable debounced filter/drawer navigation, shared safe staff disambiguation, and truthful Attention wording. Migration `109_crm_operational_scheduled_display.sql` and the matching Production frontend were verified compatible. Future UIF implementation must branch from then-current **main**, reuse these adopted interfaces, and must not duplicate migration 109 or independently reimplement the corrections.
 
-Record owner approval here before implementation: approval date/evidence, accepted revision and exact scope, including the two bounded read-state corrections. Architecture merge, implementation, release and Production verification are distinct states.
+Owner approval recorded 2026-10-05 (Asia/Shanghai): the owner’s “Implement the approved English Hills UI Foundation — UIF-r1 as one coherent outcome” task explicitly accepts UIF-r1 and ADR-005, authorizing Stage 1 shared primitives, Stage 2 Opportunities/drawer, Tasks/My Work, Students list/detail, the two bounded Dashboard/Placement read-state corrections, and Stage 3 verification/guidance. Start from main `b8fe8eb31659358e9c2817e0f5740716bc29f6d5` on `codex/ui-foundation-implementation`. Tier 2; one branch/PR. Production release, merge and Production operations remain unauthorized. Architecture merge, implementation, release and Production verification are distinct states.
 
 ## Current-state audit and QA disposition
 
@@ -182,7 +184,7 @@ Future release contains presentation only; #102's separately approved read migra
 
 | Decision | Options / consequences | Recommendation / blocking status |
 | --- | --- | --- |
-| Accept UIF-r1 for future implementation? | A: accept exact three-pilot outcome plus bounded dashboard/Placement read-state corrections and drawer presentation order. B: return specific scope/visual changes; revise before implementation. | Recommend A. **Blocking implementation; not yet approved.** No enrollment effects or separate QA outcomes included. |
+| Accept UIF-r1 for future implementation? | A: accept exact three-pilot outcome plus bounded dashboard/Placement read-state corrections and drawer presentation order. B: return specific scope/visual changes; revise before implementation. | Recommend A. **Accepted 2026-10-05 for implementation only; release hold remains.** No enrollment effects or separate QA outcomes included. |
 | Baseline adoption evidence | #102 head `8f12f674f1c1fd910b8410b4bbb2d4d3b3917e3c` merged as `3c462f7fce87261ff92c565fecf8ab652262bb81`; migration 109 and matching Production frontend were verified compatible in the [release closeout](../evidence/receptionist-production-ux-corrections-2026-10-05.md#production-closeout--2026-10-05), indexed by [CURRENT_STATE](../../ai/CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout). | **Satisfied.** Future UIF implementation still requires explicit owner acceptance and must branch from then-current main. |
 
 No new owner decision is needed to gather safe missing source/test evidence within this scope. A changed product/security/read boundary requires explicit decision, not an implementation shortcut.
@@ -200,3 +202,30 @@ No new owner decision is needed to gather safe missing source/test evidence with
 **Stop conditions:** missing owner approval or loss/regression of the adopted #102 baseline; need for new fields/reads/permissions/migration; inability to preserve authoritative civil display or safe labels; proposed changes to My Work default, enrollment/finance/provider effects, placement semantics or CRM predicates; unsafe Production observation or credentials; unexplained failed/insufficient tests; new boundary conflicts. Continue safe evidence gathering in the same outcome, but obtain owner scope/architecture decision before crossing the boundary. Never guess time, show failure as zero, expose private fields or weaken a test to finish.
 
 **Handoff:** record approved revision, branch/head/base, PR, local tested SHA/tree, checks and CI run/status/tested merge SHA where applicable; one focused author self-check and documentation changes. Confirm remote scheduling then stop polling under AGENTS. Coordinator verifies terminal checks before separate exact-SHA review. Preserve merge/release hold. Future screens adopt this contract when touched by an authorized outcome; deviations need documented rationale and review, not a new universal engine.
+
+## Source implementation record — 2026-10-06
+
+UIF-r1 is implemented as one Tier-2 source outcome on `codex/ui-foundation-implementation`, from verified main `b8fe8eb31659358e9c2817e0f5740716bc29f6d5` (PR #103). The historical architecture audit and release boundaries above remain intact. See [implementation evidence](../evidence/english-hills-ui-foundation-implementation-2026-10-06.md) for acceptance/check results and [usage guidance](../../ui/operational-foundation.md) for concrete primitives and future touched-page examples. There is no UIF migration, new RPC, permission or sensitive handler change. Independent exact-SHA review and explicit owner merge/release approval remain required; Production is unchanged by this implementation task.
+
+## UIF-r1a — owner-approved stable row staff identity
+
+**OWNER APPROVED — 2026-10-06 (Asia/Shanghai).** The owner's explicit amendment in the continuing PR #104 implementation task authorizes the same `codex/ui-foundation-implementation` branch to add one compatible forward migration, `110_crm_operational_row_staff_labels.sql`. Current main was fetched and verified at `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`, with migrations through 109; 110 was the next available number. This is architecture/implementation approval only. Production remains on recorded migration 109; no merge/release or Production operation is approved.
+
+The historical 54-staff reproduction established that bounded picker-page lookup cannot identify arbitrary current row owners/assignees reliably. Increasing the page size, iterating pages or copying the server reference algorithm into React would not satisfy the approved invariant within the earlier read boundary. That historical **FAIL / BLOCKED** evidence is retained in the [implementation record](../evidence/english-hills-ui-foundation-implementation-2026-10-06.md#staff-identity-boundary--unresolved-not-deferred-acceptance); this amendment authorizes its narrow resolution.
+
+Migration 110 extracts migration 109's exact label rule into a private, non-API `crm_security.staff_display_label(uuid)` helper; the existing paginated `crm_list_staff` uses that same authority. Existing bounded operational projections add only presentation keys for identities already represented:
+
+- `crm_security.opportunity_card`: `owner_display_label` and `next_task.assignee_display_label`, inherited by `crm_get_opportunities`.
+- `crm_security.operational_card`: `owner_display_label` and `next_task.assignee_display_label`, inherited by `crm_get_workspace_detail` and existing operational-card consumers.
+- `crm_list_open_tasks`: `assignee_display_label`, including the drawer's existing `open_tasks` projection.
+- `crm_get_work_queue`: `assignee_display_label` and `lead.owner_display_label`.
+
+Board/List, My Work and drawer identities consume these row fields. Reassignment dialogs retain the current row-provided label when that identity is outside the loaded picker page; explicit selection retains only that selected option's safe label while navigating picker pages. Historical actors are not enriched. Unavailable labels have explicit unavailable wording, never a UUID or a second label algorithm.
+
+**Fixed boundary:** no new public RPC/table/RLS/role/capability, no public signature or permission expansion, no private staff field, no business-data update/backfill. Preserve current authorization helpers, SECURITY DEFINER/search_path/configuration, grants/revokes, membership/cursors/order, scheduling, lifecycle, owner-versus-assignee semantics, conversion, finance and dormant providers. Only the new private helper receives a deny-all API-role revoke. Production application remains a separate release/operator task after explicit owner release approval.
+
+**Acceptance:** >50 eligible staff with duplicate names and same-role/reference collisions; correct initial outside-page-1 identity in Board/List and task rows; unchanged owner/assignee labels across explicit page 1→2→1 transitions; drawer/current reassignment identity; exact migration-109 label parity; bounded picker and fixed safe browser response keys; distinct task assignee/prospect owner. Retain the prior time/filter/Students touch-focus/sidebar/read-truth regressions. Local passing evidence is appended only after execution.
+
+**Risk:** Tier 3 for this amendment's migration affecting existing CRM read projections. The original Tier-2 UIF-r1 assessment remains historical. This implementation task must not perform or orchestrate its formal independent review. Separate exact-SHA independent review and explicit human release approval/operator flow remain mandatory.
+
+**Coordination:** preserve the Students `min-w-11` correction in this outcome. Keep the `source-map-js` repair in dependency PR #105. Implement and validate locally now; do not push to rerun CI while that baseline is unresolved. After the dependency fix is merged, fetch/rebase onto corrected main, resolve genuine conflicts, refresh affected local evidence, push the complete revision, confirm one fresh full Verify run and stop polling. No merge. Final remote handoff includes final base/head, migration/projection manifest, security-boundary evidence and local browser results.

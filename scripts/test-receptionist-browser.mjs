@@ -147,6 +147,7 @@ try {
   assert(studentListRpcs.every(path => [
     '/rest/v1/rpc/search_students_page', '/rest/v1/rpc/apply_pending_role',
   ].includes(path)), `Shared Students loaded an unauthorized RPC: ${studentListRpcs.join(', ')}`);
+  await page.getByText('Plus de filtres',{exact:false}).click();
   for (const label of ['Filtrer par statut','Filtrer par paiement','Filtrer par catégorie',
     'Filtrer par affectation de groupe','Filtrer par session','Filtrer par niveau',
     'Filtrer par complétude','Filtrer par source','Filtrer par formule']) {
@@ -225,6 +226,7 @@ try {
     const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
     await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
     await row.getByText(run, { exact: true }).waitFor(); // existing dossier group
+    await page.getByText('Plus de filtres',{exact:false}).click();
     const filtered = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/search_students_page')
       && response.request().postDataJSON()?.p_group === 'unassigned');
     await page.getByRole('combobox', { name: 'Filtrer par affectation de groupe' }).selectOption('unassigned');
@@ -276,7 +278,7 @@ try {
   assert.equal(pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group)$/.test(path)).length,
     assignmentWritesBefore, 'Multiple enrollments were assigned before explicit selection');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${multipleStudent}' and group_id is not null`), '0');
-  await chooser.getByRole('button', { name: new RegExp(`Under Review.*${multipleReview.slice(0, 8)}`) }).click();
+  await chooser.getByRole('button', { name: new RegExp(`En cours d’examen.*${multipleReview.slice(0, 8)}`) }).click();
   const chosenDialog = page.getByRole('dialog');
   await chosenDialog.locator('#enrollment-group').selectOption(group);
   const chosenSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));

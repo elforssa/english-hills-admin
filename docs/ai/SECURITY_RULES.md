@@ -47,3 +47,7 @@ Production migrations, provider activation, secrets, scheduler and Vercel config
 ## Dependency audit gates
 
 Production dependency advisories at moderate or above remain CI-blocking without exceptions. The full dependency gate retains a temporary exact advisory/path/version exception for unpatched build/lint-only braces exposure, with fail-closed metadata, path and compatible-fix checks. See the [dependency audit policy](../security/dependency-audit-policy.md) for the approved graph, retirement triggers and validation commands. This source policy is not merge or release authorization.
+
+## UIF-r1a safe-label projection boundary
+
+The owner-approved [UIF-r1a](../architecture/plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity) presentation extension reuses existing CRM reader authorization and migration-109 staff eligibility/disambiguation. Only safe display-label JSON keys for identities already referenced by bounded operational reads are added. The new private helper is denied to public/anon/authenticated/service-role API execution; existing RPC signatures, grants/revokes and SECURITY DEFINER/search_path posture remain unchanged. No new RLS, capability, private staff email/phone or historical actor enrichment. Migration 110 is local source implementation only; Production application still requires explicit release/operator approval.

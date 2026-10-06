@@ -55,3 +55,28 @@ begin
 end $$;
 
 \echo PASS receptionist server-oracle displays and staff references across pages
+
+-- UIF-r1a: identities from picker page 2 are projected by existing bounded reads.
+do $$ declare staff jsonb:=public.crm_list_staff(50,50); owner jsonb:=staff->'rows'->0;
+ assignee jsonb:=staff->'rows'->1; l uuid:=(select lead from fixture where i=2);
+ t uuid; card jsonb; detail jsonb; queue jsonb; item jsonb;
+begin
+ perform pg_temp.ok(owner is not null and assignee is not null,'two outside-page-1 staff identities');
+ update public.crm_leads set owner_id=(owner->>'id')::uuid where id=l;
+ select id into t from public.crm_tasks where lead_id=l and status='open' order by due_at,id limit 1;
+ update public.crm_tasks set assigned_to=(assignee->>'id')::uuid,due_at=now()-interval '1 hour' where id=t;
+ card:=crm_security.opportunity_card(l);detail:=public.crm_get_workspace_detail(l);
+ perform pg_temp.ok(card->>'owner_display_label'=owner->>'display_label','opportunity owner uses exact safe picker authority');
+ perform pg_temp.ok(detail->>'owner_display_label'=owner->>'display_label','drawer owner outside page 1');
+ perform pg_temp.ok(detail->'next_task'->>'assignee_display_label'=assignee->>'display_label','drawer next task outside page 1');
+ select x into item from jsonb_array_elements(detail->'open_tasks')x where x->>'id'=t::text;
+ perform pg_temp.ok(item->>'assignee_display_label'=assignee->>'display_label','open-task current identity');
+ queue:=public.crm_get_work_queue(p_bucket=>'overdue',p_assignee_mode=>'staff',p_assignee=>(assignee->>'id')::uuid,p_owner_mode=>'staff',p_owner=>(owner->>'id')::uuid);
+ select x into item from jsonb_array_elements(queue->'rows')x where x->>'id'=t::text;
+ perform pg_temp.ok(item->>'assignee_display_label'=assignee->>'display_label' and item->'lead'->>'owner_display_label'=owner->>'display_label','task assignee and prospect owner independent safe labels');
+ perform pg_temp.ok(item->>'assigned_to'<>item->'lead'->>'owner_id','assignee never falls back to owner');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(item->'lead')k)=array['contact_name','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed nested lead projection: no private staff fields');
+ perform pg_temp.ok(crm_security.staff_display_label(null) is null,'unassigned label remains null');
+ perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('anon','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('service_role','crm_security.staff_display_label(uuid)','execute'),'private label helper denied to API roles');
+end $$;
+\echo PASS UIF-r1a outside-picker-page row identity, fixed safe fields and private helper denial

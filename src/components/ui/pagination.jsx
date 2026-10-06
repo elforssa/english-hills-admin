@@ -4,7 +4,7 @@ import * as React from "react"
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 const Pagination = ({
   className,
@@ -12,7 +12,7 @@ const Pagination = ({
 }) => (
   <nav
     role="navigation"
-    aria-label="pagination"
+    aria-label="Pagination"
     className={cn("mx-auto flex w-full justify-center", className)}
     {...props} />
 )
@@ -52,12 +52,12 @@ const PaginationPrevious = ({
   ...props
 }) => (
   <PaginationLink
-    aria-label="Go to previous page"
+    aria-label="Page précédente"
     size="default"
     className={cn("gap-1 pl-2.5", className)}
     {...props}>
     <ChevronLeft className="h-4 w-4" />
-    <span>Previous</span>
+    <span>Précédent</span>
   </PaginationLink>
 )
 PaginationPrevious.displayName = "PaginationPrevious"
@@ -67,11 +67,11 @@ const PaginationNext = ({
   ...props
 }) => (
   <PaginationLink
-    aria-label="Go to next page"
+    aria-label="Page suivante"
     size="default"
     className={cn("gap-1 pr-2.5", className)}
     {...props}>
-    <span>Next</span>
+    <span>Suivant</span>
     <ChevronRight className="h-4 w-4" />
   </PaginationLink>
 )
@@ -86,7 +86,7 @@ const PaginationEllipsis = ({
     className={cn("flex h-9 w-9 items-center justify-center", className)}
     {...props}>
     <MoreHorizontal className="h-4 w-4" />
-    <span className="sr-only">More pages</span>
+    <span className="sr-only">Autres pages</span>
   </span>
 )
 PaginationEllipsis.displayName = "PaginationEllipsis"
@@ -106,7 +106,7 @@ export {
 // API the existing Vite pages call against. Built on top of the shadcn
 // primitives above so styling stays consistent.
 // -----------------------------------------------------------------------------
-function SimplePager({ page, total, pageSize, onChange, className }) {
+function SimplePager({ page, total, pageSize, onChange, className, pending = false }) {
   const pageCount = Math.max(1, Math.ceil((total || 0) / (pageSize || 1)));
   if (pageCount <= 1) return null;
 
@@ -126,43 +126,12 @@ function SimplePager({ page, total, pageSize, onChange, className }) {
   if (hi < pageCount - 1) pages.push('…-right');
   if (pageCount > 1) pages.push(pageCount);
 
-  return (
-    <Pagination className={cn("px-4 py-3 border-t border-border", className)}>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            href="#"
-            onClick={(e) => { e.preventDefault(); go(page - 1); }}
-            aria-disabled={page <= 1}
-            className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
-          />
-        </PaginationItem>
-        {pages.map((p, i) =>
-          typeof p === 'number' ? (
-            <PaginationItem key={`p-${p}`}>
-              <PaginationLink
-                href="#"
-                isActive={p === page}
-                onClick={(e) => { e.preventDefault(); go(p); }}
-              >
-                {p}
-              </PaginationLink>
-            </PaginationItem>
-          ) : (
-            <PaginationItem key={`e-${i}`}><PaginationEllipsis /></PaginationItem>
-          )
-        )}
-        <PaginationItem>
-          <PaginationNext
-            href="#"
-            onClick={(e) => { e.preventDefault(); go(page + 1); }}
-            aria-disabled={page >= pageCount}
-            className={page >= pageCount ? 'pointer-events-none opacity-50' : ''}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  );
+  return <Pagination className={cn("operational flex-wrap gap-2 px-3 py-3 border-t border-border", className)}>
+    <Button variant="outline" disabled={pending || page <= 1} onClick={() => go(page - 1)} aria-label="Page précédente">Précédent</Button>
+    <span className="text-xs tabular-nums sm:hidden" aria-current="page">{page} / {pageCount}</span>
+    <PaginationContent className="hidden sm:flex">{pages.map((p,i)=>typeof p === 'number' ? <PaginationItem key={`p-${p}`}><Button variant={p===page ? 'secondary' : 'ghost'} size="icon" aria-label={`Page ${p}`} aria-current={p===page ? 'page' : undefined} disabled={pending} onClick={()=>go(p)}>{p}</Button></PaginationItem> : <PaginationItem key={`e-${i}`}><PaginationEllipsis/></PaginationItem>)}</PaginationContent>
+    <Button variant="outline" disabled={pending || page >= pageCount} onClick={() => go(page + 1)} aria-label="Page suivante">Suivant</Button>
+  </Pagination>;
 }
 
 export default SimplePager;

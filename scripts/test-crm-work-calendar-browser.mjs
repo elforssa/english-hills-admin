@@ -29,7 +29,7 @@ async function save(){const outcome=dialog().getByLabel('Résultat de l’appel'
 async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
-async function closeDrawer(){await page.getByRole('button',{name:'Close',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
+async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
 async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
 try {
@@ -88,9 +88,10 @@ try {
   for(const label of ['Responsable de la tâche','Responsable du prospect']) {
    for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel(label).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
   }
-  await page.goto(app+'/crm/leads');await page.getByLabel('Responsable',{exact:true}).waitFor();
+  await page.goto(app+'/crm/leads');await page.getByText('Plus de filtres',{exact:false}).click();await page.getByLabel('Responsable',{exact:true}).waitFor();
   for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel('Responsable',{exact:true}).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
   // Same center visit in Calendar, Tasks and drawer; browser ICU is wrong.
+  await page.locator(`[data-testid=opportunity-card][data-lead-id="${visitLead}"]`).getByText(expected,{exact:false}).waitFor();
   const browserTime=await page.evaluate(stamp=>new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Casablanca',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(stamp)),visitTask.due_at);
   assert.notEqual(browserTime,visitTask.local_time.slice(0,5),'forced browser/server disagreement established');
   await page.goto(app+'/placement-tests?view=calendar&date='+day+'&kind=center_visit');
@@ -104,16 +105,16 @@ try {
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   assert.equal(await page.getByLabel('Responsable de la tâche').inputValue(),'me');assert.equal(await page.getByTestId('work-row').count(),25,'bounded task page, multiple tasks of same lead');
   const first=await page.getByTestId('work-row').first().getAttribute('data-task-id');
-  await page.getByRole('button',{name:'Suivantes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
+  await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
   const second=await page.getByTestId('work-row').evaluateAll(ns=>ns.map(n=>n.dataset.taskId));assert(!second.includes(first));
-  await page.getByRole('button',{name:'Précédentes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,first);
+  await page.getByRole('button',{name:'Précédent',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,first);
   for(const label of ['Premier contact','Appel de suivi','Rappel','Suivi WhatsApp','Préparer un test de niveau','Rappeler le parent · Résultat disponible','Visite au centre','Finaliser l’inscription'])assert(await page.getByTestId('work-row').filter({hasText:label}).count()>0,label);
-  await page.getByLabel('Responsable du prospect').selectOption('me');await page.getByText('Aucune tâche dans cette échéance.',{exact:true}).waitFor();
+  await page.getByLabel('Responsable du prospect').selectOption('me');await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
   await page.getByLabel('Responsable du prospect').selectOption(users[0].id);await page.getByTestId('work-row').first().waitFor();
   await page.getByLabel('Responsable de la tâche').selectOption('unassigned');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByLabel('Responsable de la tâche').selectOption('me');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===25);
   // Independent cursors: leaving and returning to a bucket preserves its page.
-  await page.getByRole('button',{name:'Suivantes',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
+  await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
   const remembered=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:/^Demain/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByRole('button',{name:/^En retard/}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,remembered);
@@ -164,7 +165,7 @@ try {
   await page.getByRole('alert').filter({hasText:'Impossible de charger ces informations.'}).waitFor();
   await page.unroute(readUrl);
   await page.getByRole('alert').getByRole('button',{name:'Réessayer',exact:true}).click();
-  await page.getByText('Aucune tâche dans cette échéance.',{exact:true}).waitFor();
+  await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
   // Real query interval; the server still owns all scheduling and bucket logic.
   await page.goto(app+'/crm/today?bucket=overdue');await page.waitForLoadState('networkidle');
   const minuteRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
@@ -175,7 +176,7 @@ try {
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));
- for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
+ for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
  for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
  console.log('PASS actual fixed RPC response shapes; no technical/score/notes/provider payload or browser Meta activity');
 } catch(error) {
