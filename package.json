@@ -21,7 +21,7 @@
     "test:inspector-monitor": "node scripts/test-meta-debugger-transport-monitor.mjs",
     "test:crm-work-calendar": "node scripts/test-crm-work-calendar.mjs",
     "test:crm-work-calendar-local": "node scripts/test-crm-work-calendar-local.mjs",
-    "test:crm-work-calendar-browser": "node scripts/test-crm-work-calendar-browser.mjs && npm run test:ui-foundation-browser",
+    "test:crm-work-calendar-browser": "node scripts/test-crm-work-calendar-browser.mjs && node scripts/test-crm-row-staff-labels-browser.mjs && npm run test:ui-foundation-browser",
     "test:crm-opportunities": "node scripts/test-crm-opportunities.mjs",
     "test:crm-opportunities-local": "node scripts/test-crm-opportunities-local.mjs --regressions",
     "test:crm-opportunities-browser": "node scripts/test-crm-opportunities-browser.mjs && node scripts/test-crm-phase4-browser.mjs && node scripts/test-crm-phase5-browser.mjs && node scripts/test-crm-phase6-browser.mjs",

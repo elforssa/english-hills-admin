@@ -1,5 +1,7 @@
 # Owner summary
 
+**Current approved contract: UIF-r1 + UIF-r1a (2026-10-06).** The owner explicitly approved the bounded staff-row read-projection amendment below for the same PR #104. Original UIF-r1 scope/approval and earlier no-migration boundary remain historical evidence; UIF-r1a supersedes that boundary only for safe labels of staff already referenced by existing operational reads.
+
 ## What will change
 
 One reusable operational UI foundation consolidates existing English Hills patterns: **GoHighLevel operational usefulness + Linear restraint + English Hills identity**. Foundation Stage 1 supplies tokens and small shared primitives; Stage 2 proves them in Opportunities + lead drawer, Tasks / My Work, and Students list/detail; Stage 3 verifies responsive/state behavior and records future-page guidance. These are stages of one implementation outcome, not three independent product commissions.
@@ -204,3 +206,26 @@ No new owner decision is needed to gather safe missing source/test evidence with
 ## Source implementation record — 2026-10-06
 
 UIF-r1 is implemented as one Tier-2 source outcome on `codex/ui-foundation-implementation`, from verified main `b8fe8eb31659358e9c2817e0f5740716bc29f6d5` (PR #103). The historical architecture audit and release boundaries above remain intact. See [implementation evidence](../evidence/english-hills-ui-foundation-implementation-2026-10-06.md) for acceptance/check results and [usage guidance](../../ui/operational-foundation.md) for concrete primitives and future touched-page examples. There is no UIF migration, new RPC, permission or sensitive handler change. Independent exact-SHA review and explicit owner merge/release approval remain required; Production is unchanged by this implementation task.
+
+## UIF-r1a — owner-approved stable row staff identity
+
+**OWNER APPROVED — 2026-10-06 (Asia/Shanghai).** The owner's explicit amendment in the continuing PR #104 implementation task authorizes the same `codex/ui-foundation-implementation` branch to add one compatible forward migration, `110_crm_operational_row_staff_labels.sql`. Current main was fetched and verified at `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`, with migrations through 109; 110 was the next available number. This is architecture/implementation approval only. Production remains on recorded migration 109; no merge/release or Production operation is approved.
+
+The historical 54-staff reproduction established that bounded picker-page lookup cannot identify arbitrary current row owners/assignees reliably. Increasing the page size, iterating pages or copying the server reference algorithm into React would not satisfy the approved invariant within the earlier read boundary. That historical **FAIL / BLOCKED** evidence is retained in the [implementation record](../evidence/english-hills-ui-foundation-implementation-2026-10-06.md#staff-identity-boundary--unresolved-not-deferred-acceptance); this amendment authorizes its narrow resolution.
+
+Migration 110 extracts migration 109's exact label rule into a private, non-API `crm_security.staff_display_label(uuid)` helper; the existing paginated `crm_list_staff` uses that same authority. Existing bounded operational projections add only presentation keys for identities already represented:
+
+- `crm_security.opportunity_card`: `owner_display_label` and `next_task.assignee_display_label`, inherited by `crm_get_opportunities`.
+- `crm_security.operational_card`: `owner_display_label` and `next_task.assignee_display_label`, inherited by `crm_get_workspace_detail` and existing operational-card consumers.
+- `crm_list_open_tasks`: `assignee_display_label`, including the drawer's existing `open_tasks` projection.
+- `crm_get_work_queue`: `assignee_display_label` and `lead.owner_display_label`.
+
+Board/List, My Work and drawer identities consume these row fields. Reassignment dialogs retain the current row-provided label when that identity is outside the loaded picker page; explicit selection retains only that selected option's safe label while navigating picker pages. Historical actors are not enriched. Unavailable labels have explicit unavailable wording, never a UUID or a second label algorithm.
+
+**Fixed boundary:** no new public RPC/table/RLS/role/capability, no public signature or permission expansion, no private staff field, no business-data update/backfill. Preserve current authorization helpers, SECURITY DEFINER/search_path/configuration, grants/revokes, membership/cursors/order, scheduling, lifecycle, owner-versus-assignee semantics, conversion, finance and dormant providers. Only the new private helper receives a deny-all API-role revoke. Production application remains a separate release/operator task after explicit owner release approval.
+
+**Acceptance:** >50 eligible staff with duplicate names and same-role/reference collisions; correct initial outside-page-1 identity in Board/List and task rows; unchanged owner/assignee labels across explicit page 1→2→1 transitions; drawer/current reassignment identity; exact migration-109 label parity; bounded picker and fixed safe browser response keys; distinct task assignee/prospect owner. Retain the prior time/filter/Students touch-focus/sidebar/read-truth regressions. Local passing evidence is appended only after execution.
+
+**Risk:** Tier 3 for this amendment's migration affecting existing CRM read projections. The original Tier-2 UIF-r1 assessment remains historical. This implementation task must not perform or orchestrate its formal independent review. Separate exact-SHA independent review and explicit human release approval/operator flow remain mandatory.
+
+**Coordination:** preserve the Students `min-w-11` correction in this outcome. Keep the `source-map-js` repair in dependency PR #105. Implement and validate locally now; do not push to rerun CI while that baseline is unresolved. After the dependency fix is merged, fetch/rebase onto corrected main, resolve genuine conflicts, refresh affected local evidence, push the complete revision, confirm one fresh full Verify run and stop polling. No merge. Final remote handoff includes final base/head, migration/projection manifest, security-boundary evidence and local browser results.

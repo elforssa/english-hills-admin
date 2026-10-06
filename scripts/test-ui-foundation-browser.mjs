@@ -110,6 +110,17 @@ try {
    return json([]);
   });
   page=await ctx.newPage();page.setDefaultTimeout(15000);page.on('requestfailed',r=>{const failure=r.failure()?.errorText||'';if(/cancel|abort/i.test(failure))cancelled.push(new URL(r.url()).pathname);});page.on('pageerror',e=>{if(rejectDashboard && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(e.name==='Fetch API cannot load http' && e.message.includes('access control checks'))transportErrors.push({message:e.message,phase});else errors.push(e.message);});await page.clock.install();await login(users[0]);
+  if(process.argv.includes('--students-touch-only')) {
+   for(const width of [768,720,390,375,320]) {
+    phase=engine.name()+' '+width+' Students touch targets';await page.setViewportSize({width,height:1024});await navigate(app+'/students');
+    const record=page.getByRole('link',{name:longName,exact:true});await record.waitFor();await noOverflow();await touchTargets();
+    const target=await record.evaluate(el=>{const box=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(el);return {width:box.width,height:box.height,lines:range.getClientRects().length,overflow:el.scrollWidth>el.clientWidth+1,text:el.textContent};});
+    assert.equal(target.text,longName);assert(!target.overflow,phase+' name overflows target');assert(target.lines>1,phase+' long name wraps');
+    if(width===768)await studentsTableKeyboard();
+    console.log('PASS '+phase+' '+JSON.stringify(target));
+   }
+   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await ctx.close();await browser.close();browser=null;continue;
+  }
   if(process.argv.includes('--table-only')) {phase=engine.name()+' Students table accessibility';await page.setViewportSize({width:768,height:1024});await navigate(app+'/students');await studentsTableKeyboard();await noOverflow();await touchTargets();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await ctx.close();await browser.close();browser=null;console.log('PASS '+engine.name()+' named keyboard-focusable Students table region and tablet touch targets');continue;}
   if(process.argv.includes('--corrections-only')) {phase=engine.name()+' Students focus/sidebar resize';await sidebarResize();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await ctx.close();await browser.close();browser=null;console.log('PASS '+engine.name()+' Students 2px focus at 768 and sidebar 768→1440 resize, pointer/focus, Escape/backdrop/navigation restoration');continue;}
   const sheet=page.getByRole('dialog'),search=page.getByRole('searchbox',{name:'Rechercher un prospect',exact:true});

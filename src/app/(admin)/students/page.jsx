@@ -304,7 +304,7 @@ export default function StudentsPage() {
               {paged.map(s => (
                 <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {programmeLabel(s.session_type)} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
@@ -332,7 +332,7 @@ export default function StudentsPage() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-3 py-3 font-medium text-foreground">
-                        <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold"><Crown size={10} /> Premium</span>}</span>
+                        <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold"><Crown size={10} /> Premium</span>}</span>
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">
                         <InlineSelect

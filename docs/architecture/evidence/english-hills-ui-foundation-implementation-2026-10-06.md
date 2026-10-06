@@ -120,3 +120,86 @@ The correction handoff records the new exact head, tested tree and fresh full Ve
 | 54-staff stable row identity | **FAIL / BLOCKED** in both engines as detailed above; no staff correction or passing acceptance claim. |
 
 Before the correction push, CI parity was checked for the desktop breakpoint, mixed keyboard/pointer focus after fake-clock read retries, hidden-trigger locators, collapsed CRM navigation, fixed viewport paths, unchanged global tokens/locale behavior, and preservation of all 2px assertions. The single focused correction author self-check is complete: final source/test/doc diffs, breakpoint cleanup and focus restoration, truthful evidence and the explicit staff read boundary were inspected. It does not approve the PR or perform independent review.
+
+### Students record-link minimum width — local working-tree correction
+
+Continued from exact PR #104 head `2006f572346398986b1105db7cc27aff3e8b8fd8`, on the same Tier-2 `codex/ui-foundation-implementation` branch; recorded base remains `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`. The owner reported a subsequent local-database CI failure: WebKit at 768px measured the long student-name link at `43.96875px` wide, below UIF's 44px minimum, with sufficient height. Earlier local passes did not prove Linux parity for this target.
+
+Both actual student record anchors (table and mobile card) now use `min-w-11` alongside `min-h-11`. Existing name wrapping, table width and bounded horizontal scroll are retained; no truncation or table minimum width was added. The existing touch-target assertion remains unchanged. A focused `--students-touch-only` harness mode adds full-name retention, multiline wrapping and target-overflow checks using the same synthetic fixture, real local Auth and built application.
+
+| Focused local check | Result / evidence scope |
+| --- | --- |
+| Chromium + WebKit Students browser | PASS at 768, 720, 390, 375 and 320px: every visible operational touch target ≥44×44px; full long Arabic/French name wraps without target or viewport overflow; named table keyboard/pointer focus remains solid 2px at 768px. Local macOS evidence only; no new Linux CI result is claimed. |
+| Long-name link measurements | Chromium widths: 63.109375, 49.40625, 212.53125, 197.53125, 142.53125px respectively. WebKit widths: 75.078125, 53.203125, 212.53125, 197.53125, 142.53125px respectively. Heights: 160, 220, 60, 60, 80px in both engines. |
+| Production build (local configuration) | PASS with external email disabled and Sentry DSNs empty; existing sidebar image/framework warnings only. |
+| UIF semantic/SSR; script portability; whitespace | PASS; 58 portable Node test entrypoints; `git diff --check`. |
+
+Command: `node scripts/test-ui-foundation-browser.mjs --students-touch-only`. Local logs: `/tmp/uif-students-touch.log` and `/tmp/uif-touch-build.log` (not committed). Evidence applies to the uncommitted working-tree correction above the exact head, not to the unchanged remote SHA. The focused author self-check inspected the anchor-only sizing change, unchanged acceptance assertion/layout rules and truthful evidence; it is not independent review.
+
+**Tier 2/3: NOT READY FOR INDEPENDENT REVIEW.** Per owner instruction, this correction is prepared locally and remains uncommitted/unpushed; no unchanged CI rerun or new full CI run was requested. The reported `source-map-js` dependency audit failure remains a separate dependency/security outcome, with no package/lockfile/audit-policy change here. The >50-staff read-contract issue remains **FAIL / BLOCKED**, exactly as recorded above, pending owner authorization. Required exact-SHA CI, independent review and explicit merge/release approval remain outstanding. No migration, new read contract or Production operation is included.
+
+## UIF-r1a — owner-approved staff identity resolution
+
+**Owner approval: 2026-10-06 (Asia/Shanghai), continuing Window A / PR #104.** The owner explicitly approved [UIF-r1a](../plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity), crossing only the previously blocked safe row-label read-projection boundary. The earlier 54-staff **FAIL / BLOCKED** reproduction and its valid no-migration stop are historical evidence and remain unchanged above. The new architecture approval authorizes this resolution; it does not retroactively turn the earlier reproduction into a pass.
+
+### Source and migration manifest
+
+Continued on `codex/ui-foundation-implementation` above exact head `2006f572346398986b1105db7cc27aff3e8b8fd8`. Fetched main remains `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`, with migration 109 the latest available/deployed recorded baseline. `110_crm_operational_row_staff_labels.sql` is a forward migration applied only to local synthetic Supabase for these checks; Production remains at recorded migration 109. The earlier Students table/mobile `min-w-11` correction is retained in the same working tree.
+
+The migration extracts the exact 109 rule into private `crm_security.staff_display_label(uuid)` and makes existing `crm_list_staff` use it. The browser has no label/reference algorithm and does not scan directories. Existing projections extend only these presentation fields:
+
+| Existing projection | Added keys / consumer |
+| --- | --- |
+| `crm_security.opportunity_card` → `crm_get_opportunities` | `owner_display_label`, `next_task.assignee_display_label`; Board/List row identity uses the supplied owner label. |
+| `crm_security.operational_card` → `crm_get_workspace_detail` and existing operational-card consumers | `owner_display_label`, `next_task.assignee_display_label`; drawer current owner and next-task identity. |
+| `crm_list_open_tasks` → drawer `open_tasks` and existing bounded task pages | `assignee_display_label`; current task identity/reassignment. |
+| `crm_get_work_queue` | `assignee_display_label`, `lead.owner_display_label`; My Work rows use their own labels. |
+| `crm_list_staff` | No response-key change; same bounds/order and shared private label authority. |
+
+Row-only picker reads/propagation were removed from the workspace and drawer. Independent filter/reassignment pickers retain 50-row pages. A reassignment dialog uses the current row label while its account is absent from the page; an explicitly selected option retains just that safe label when paging, without accumulating a directory. Task-assignee and prospect-owner identity/commands remain separate. Historical actors are not enriched.
+
+### Security and compatibility evidence
+
+Local before/after catalog comparison of every existing `public`/`crm_security` function confirms identical signatures, owners, ACLs, SECURITY DEFINER flags and configuration/search_path. The sole new function is the private helper, with API-role execution revoked; its denial is also tested. No new public RPC, table, RLS, role/capability, private staff email/phone, business-data update/backfill or Production mutation. Existing membership/order/cursor/auth checks, schedules, lifecycle, conversion, finance and dormant provider behavior are unchanged.
+
+### Local regression results
+
+| Check | Result / scope |
+| --- | --- |
+| New 54-staff real browser regression | **PASS Chromium + WebKit.** Initial outside-page-1 owner on Board/List; initial outside-page-1 task assignee and prospect owner; unchanged row labels across explicit page 1→2→1; drawer/current assignment labels; distinct assignee/owner; bounded picker requests (`p_limit=50`, offsets 0/50); exact safe picker and task/nested-lead response keys. Synthetic fixture cleanup/history guards restored. |
+| Migration-109 authority oracle | PASS: exact equality to the original 109 picker body executed as a rollback-only temporary SQL function. Covers unique operational name, cross-role duplicate, same-role duplicates and colliding UUID prefixes requiring longer ID-derived references. No raw UUID normal label or private staff field. |
+| Work/Calendar rollback-only SQL | PASS membership/buckets/cursors/roles, exact fixed projections, PostgreSQL Casablanca civil oracle, >50 staff, outside-page-1 row/drawer/open-task labels and private-helper denial; no persisted fixture. |
+| Opportunities rollback-only SQL | PASS views/membership/cursors, compact safe projections and existing command/denial regressions; no persisted fixture. |
+| Real Work/Calendar browser | PASS Chromium + WebKit: deliberately incorrect browser Casablanca tzdata, identical server scheduling, task owner/assignee AND filters, cursor memory, exact-task stale/version safeguards, Calendar/legacy/Back/responsive behavior and exact safe response shape. |
+| Full UIF browser matrix | PASS Chromium + WebKit: all read-state/zero/error/stale cases, bounded inquiry answers/destinations, reset/filter composition, Students context, 1440/768/390/375/320/720px and actual 200% zoom, no viewport overflow, ≥44×44 touch targets, explicit solid 2px Students focus, mobile menu 768→1440 inert cleanup and Escape/backdrop/navigation restoration. The earlier focused Students pass separately confirms full long-name wrapping without target overflow. |
+| Build; UIF semantic/SSR; navigation; CRM presentation; pagination; portability | PASS; existing sidebar image/framework warnings only; 59 portable Node entrypoints. |
+
+Commands: `node scripts/test-crm-row-staff-labels-browser.mjs`, `node scripts/test-crm-work-calendar-local.mjs`, `node scripts/test-crm-opportunities-local.mjs --regressions`, `node scripts/test-crm-work-calendar-browser.mjs`, `node scripts/test-ui-foundation-browser.mjs`. Local logs are `/tmp/uifr1a-{staff-browser,work-sql,opportunities-sql,work-browser,uif-browser,build}.log`; these are not committed. The new real browser regression joins the existing `test:crm-work-calendar-browser` chain; full CI remains required. Exact-key assertions were extended only for the approved label keys, not replaced with weaker privacy checks. Native-option DOM and cached-page assertions accommodate browser behavior without changing application expectations; route reads/prefetches are drained before document replacement, retaining fatal unexpected-error checks.
+
+Local source/test/migration tree SHA-256: `98a54860b54d6014455219357a6e1a5508155dbc9b901f403f62aeb968823074` (file manifest `/tmp/uifr1a-tested-tree.json`, excludes documentation). These results apply to the uncommitted working tree above the unchanged head, not to the remote PR SHA or Linux CI.
+
+### Handoff and remaining gates
+
+**Tier 2/3: NOT READY FOR INDEPENDENT REVIEW.** UIF-r1a is Tier 3 because migration 110 changes existing CRM read projections; original UIF-r1's Tier-2 assessment is historical. No independent review, merge/release or Production approval is claimed. The source remains uncommitted/unpushed per the dependency coordination hold. A one-time metadata check found dependency PR #105 still OPEN; no audit fix is included here, and no unchanged/full remote CI rerun was requested. After #105 merges, rebase onto corrected current main, refresh any affected local evidence, push the complete UIF-r1/UIF-r1a/Students revision, confirm one fresh full Verify run and stop polling. Only then provide the owner's requested remote-CI-pending handoff with final base/head/run reference. Separate exact-SHA independent review and explicit human release/operator approval remain mandatory.
+
+The single focused UIF-r1a author self-check is complete: migration-109 algorithm extraction, bounded projection-only diffs, unchanged authorization/ACLs/membership/cursors/commands/time fields, no private enrichment, removal of row-picker dependencies, selected-label state, exact response-key safeguards, synthetic cleanup and truthful source/deployment evidence were inspected. Changed Markdown links/anchors and added-Markdown secret/PII heuristics pass, as does `git diff --check`. A supplemental source scan flags the test’s runtime-generated password and explicit synthetic phone fixture; focused manual inspection confirms neither is a committed credential or customer export. This is not independent review or PR approval.
+
+## PR #105 baseline rebase and final author handoff
+
+**Owner-authorized continuation — 2026-10-06 (Asia/Shanghai).** PR #105 merged to main as `f0fa13dc9aeaac6e3c33fa441ced9e97d5f28b0e`. The owner explicitly authorized fetching/rebasing this same PR #104 branch, preserving UIF-r1a and Students corrections, validating affected checks, committing/pushing the complete revision and confirming one fresh full Verify run, then stopping polling. No merge or Production action is authorized.
+
+The working tree was preserved through a temporary stash (including migration 110 and the new browser regression), rebased and restored. The sole genuine conflict was `package.json` test wiring: both the dependency PR's CSS-toolchain checks and UIF's semantic/browser checks were retained. The merged dependency manifest/override and lockfile match main exactly; only existing UIF test-script additions differ from main. The lock resolves `source-map-js@1.2.2` and exact `postcss-selector-parser@7.1.6`, with unchanged parent versions. `npm ci` installed these patched versions locally. Migration `110_crm_operational_row_staff_labels.sql` remains the next forward migration; no UIF source/test/migration content changed during rebase, apart from composing the package scripts with #105.
+
+| Rebase validation | Result / scope |
+| --- | --- |
+| Dependency baseline / live gates | PASS installed dependency graph, zero production audit vulnerabilities, full policy audit with only the existing exact braces exception; audit policy regressions pass. |
+| CSS compiler / UIF semantic checks | PASS actual app CSS, 23 utility/variant probes and seven nested-selector fixtures; UIF semantic/SSR read-truth checks pass. |
+| Build | PASS patched production build with local-only Supabase, external email disabled and Sentry DSNs empty; existing sidebar/framework warnings only. |
+| 54-staff browser | PASS fresh Chromium + WebKit on the patched build: Board/List initial outside-page-1 owners, task assignee/prospect owner, drawer/current assignment, stable picker page 1→2→1, exact 109 oracle, fixed safe fields and fixture cleanup. |
+| Students touch/focus/sidebar | PASS fresh Chromium + WebKit: ≥44×44 targets and full-name wrapping/no overflow at 768/720/390/375/320px; immediate solid 2px Students keyboard/pointer focus; 768→1440 modal removal/non-inert main, usable controls, resize-back and Escape/backdrop/navigation focus restoration. |
+| Unaffected evidence reuse | Earlier successful Work/Calendar and Opportunities SQL, migration/ACL catalog comparison, full UIF and real Work/Calendar browser results remain sufficient for unchanged domain/read code. Fresh focused browser checks cover the dependency-sensitive rendering paths. |
+| Documentation / portability | 60 portable Node entrypoints; final changed-Markdown/whitespace checks recorded in handoff. |
+
+The earlier blocked/reproduction and pre-rebase validation records above remain historical and unmodified. Tier 3 remains applicable to UIF-r1a/migration 110. The author handoff supplies the new exact committed head and CI run reference; a scheduled run is not successful required CI or independent-review readiness. Mandatory separate exact-SHA independent review and explicit human release/operator approval remain outstanding. Recorded Production remains at migration 109; no fresh Production inspection or operation is claimed.
+
+Rebased local source/test/dependency/migration tree SHA-256: `e14c626e44f6bbfe53d1bbea3b413505b14d492be2827a936d235623aea0aebd` (manifest `/tmp/uifr1a-rebased-tested-tree.json`, excludes documentation). Local rebase logs: `/tmp/uifr1a-rebase-{install,prod-audit,policy-audit,build,staff-browser,students-browser,corrections-browser}.log`. The targeted author rebase check confirms unchanged UIF/read/migration content, preservation of both test chains, exact patched dependency resolutions and accurate evidence. No second internal review or independent-review verdict was issued.

@@ -176,7 +176,7 @@ try {
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));
- for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
+ for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
  for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
  console.log('PASS actual fixed RPC response shapes; no technical/score/notes/provider payload or browser Meta activity');
 } catch(error) {
