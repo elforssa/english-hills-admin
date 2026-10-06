@@ -3,7 +3,7 @@
 Evidence register as of **2026-10-06 (Asia/Shanghai)**. Two baselines are tracked separately:
 
 - **Recorded deployed application source:** `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8` (PR #104 merge), per the [UIF Production closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06).
-- **Repository main:** advances with later merges. As of this register, main `c41b962538c5073e5e00cb264a31388533735ac9` (PR #106) differs from the deployed source only by documentation. Later documentation-only merges do not change the deployed application; always check a freshly fetched `origin/main` and do not infer deployment from merge.
+- **Repository main:** advances independently through documentation or later implementation merges, so this register does not name a current main SHA. Fetch `origin/main` for the current repository SHA. A repository merge is not deployment evidence; only dated release evidence changes the recorded deployed source above. (The tool-independent transition work began from base `c41b962538c5073e5e00cb264a31388533735ac9`, PR #106, which differed from the deployed source only by documentation.)
 
 Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 approved for implementation, not yet implemented). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
 
