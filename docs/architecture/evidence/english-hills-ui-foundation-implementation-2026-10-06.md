@@ -220,6 +220,6 @@ The exact repository SQL from `110_crm_operational_row_staff_labels.sql` was app
 - Existing authenticated execution remained available for `crm_list_staff`, `crm_list_open_tasks`, `crm_get_work_queue` and `crm_get_opportunities`.
 - Private `crm_security.staff_display_label(uuid)` and `crm_security.staff_reference(uuid)` remained non-executable by authenticated/anon API roles; the new helper was also non-executable by service_role. No new public RPC or permission expansion was observed.
 - Lifecycle remained dormant: zero enabled lifecycle connections, zero open or historical activation epochs, zero live or total external deliveries, zero delivery attempts and zero active lifecycle cron jobs.
-- Vercel reported no runtime error clusters in the post-release 15-minute window. A public probe of `/crm/leads` returned HTTP 200 and correctly resolved to the login surface for an unauthenticated request.
+- Vercel reported no runtime error clusters in the 15-minute runtime-log query performed at release closeout. A public probe of `/crm/leads` returned HTTP 200 and correctly resolved to the login surface for an unauthenticated request.
 
 This was a bounded release verification, not a fresh authenticated receptionist browser walkthrough. Browser/UI acceptance remains the exact-SHA Chromium/WebKit evidence from the reviewed PR, including the 54-staff picker-stability regression, Students touch/focus checks and sidebar breakpoint cleanup. No Meta lifecycle activation, provider delivery, finance/enrollment behavior or unrelated Production mutation occurred.
