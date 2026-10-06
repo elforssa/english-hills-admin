@@ -52,7 +52,7 @@ Copy `.env.example` to `.env.local` and fill in the values. `.env.local` is giti
 
 ## Database
 - Inspect cumulative migrations and current grants/RLS rather than a historical table count or only migration 006.
-- Main includes migrations through 095; [current state](docs/ai/CURRENT_STATE.md) records production evidence separately.
+- Do not rely on a migration ceiling written in this README. [Current state](docs/ai/CURRENT_STATE.md) records migration and Production evidence; fetch current `origin/main` and check `supabase/migrations` for the actual repository migration ceiling.
 - Migrations live in [supabase/migrations/](supabase/migrations/)
 - Apply pending migrations to local Supabase first: `supabase migration up --local`
 
