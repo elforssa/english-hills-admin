@@ -4,6 +4,7 @@ Read [master architecture](../../ai/ARCHITECTURE.md) and [current evidence](../.
 
 | Contract | Current authority / limit |
 | --- | --- |
+| [RCC-r1 receptionist CRM completion](rcc-r1-receptionist-crm-completion.md) | **Current active plan.** RCC-A0 investigation complete; RCC-A1 owner-approved for Tier-3 implementation; RCC-A2 and RCC-B1 planned, not approved. Owner decisions are summarized in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md). |
 | [English Hills UI Foundation](english-hills-ui-foundation.md) | Owner-approved UIF-r1 implemented on the feature branch as one Tier-2 outcome: shared presentation, three pilots and bounded Dashboard/Placement read-state fixes. Local evidence and guidance are linked in the contract. Exact-SHA CI, independent review and owner merge/release approval remain separate; no UIF deployment claimed. |
 | [R4 lifecycle model](crm-meta-funnel-revision-4.md) | Five-event product/identity/order/prospective ownership contract, as amended by completed advisory-D2 and sharing-stop contracts. Implemented dormant; do not replay its implementation commission. |
 | [H3 technical readiness](crm-h3-technical-readiness.md) | Provider manifest, transport/timestamp and H3-06/07/08 dormant-acceptance contract. Credential sections from older revisions are historical; S1 replaces them. |

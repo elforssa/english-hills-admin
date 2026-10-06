@@ -1,6 +1,11 @@
 # Current state
 
-Evidence register as of **2026-10-06 (Asia/Shanghai)**. Repository and current recorded Production source baseline: main `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8` (PR #104 merge). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
+Evidence register as of **2026-10-06 (Asia/Shanghai)**. Two baselines are tracked separately:
+
+- **Recorded deployed application source:** `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8` (PR #104 merge), per the [UIF Production closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06).
+- **Repository main:** advances with later merges. As of this register, main `c41b962538c5073e5e00cb264a31388533735ac9` (PR #106) differs from the deployed source only by documentation. Later documentation-only merges do not change the deployed application; always check a freshly fetched `origin/main` and do not infer deployment from merge.
+
+Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 approved for implementation, not yet implemented). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
 
 ## Capability register
 
@@ -40,9 +45,9 @@ Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED /
 | PR #92 outcome batching | Main merge `c9662b242f5f8894e7247349dea42972b714b4f5` | [Adopted execution policy](../../AGENTS.md#outcome-based-batching); Outcome 2 not implemented by this cleanup. |
 | PR #93 S1 architecture | Source `27274492b3a2f6dab1cbb86ae239c056bee1421d`; merge `284c2fe32014f8f3011ac6677ddfe99b0a16ca22` | Credential-process supersession only; R4/H3/H4 safeguards unchanged. |
 
-## Outcome-2 CI source implementation
+## Outcome-2 CI routing — merged
 
-The Outcome-2 branch implements the [revision-3 four-lane CI contract](../architecture/plans/ci-tooling-fast-path.md): docs, exact AGENTS policy, isolated monitor tooling and fail-closed full. All PRs gain changed-Markdown checks; app/database behavior is unchanged. This is source implementation pending full remote CI, separate Tier-2 review and merge; the PR #90 adoption row above remains historical merged evidence. No deployment, branch-protection or provider configuration change is established. Vercel filtering remains NEEDS VERIFICATION.
+**MERGED.** The [revision-3 four-lane CI contract](../architecture/plans/ci-tooling-fast-path.md) (docs, exact AGENTS policy, isolated monitor tooling and fail-closed full, plus changed-Markdown checks on all PRs) merged in PR #95: head `e4b548591cd2efd40fe3330312e5c476b70f25a3`, merge `e76ed9b6a88349a0d53f192f112b230c6c75d2b3` (2026-10-05). [AGENTS](../../AGENTS.md#ci-selection-and-remote-ci-handoff) is the current authority. An earlier version of this section recorded the branch as pending CI, review and merge; that was accurate before PR #95. App/database behavior is unchanged. No branch-protection or provider configuration change is established, and Vercel filtering remains NEEDS VERIFICATION.
 
 ## Outcome-3 Production closeout
 
