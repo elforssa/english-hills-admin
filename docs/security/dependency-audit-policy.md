@@ -26,3 +26,11 @@ Before this change, tailwindcss-animate was incorrectly a production dependency;
 DOMPurify is a production optional dependency of `jspdf@4.2.1` with range `^3.3.1`. The lockfile updates `3.4.15 -> 3.4.16`, resolving [GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p) without a direct jsPDF upgrade or override.
 
 Run `npm run test:audit-policy` for synthetic positive/negative policy regressions, then both live gates. These are source/CI policy changes only; they do not authorize merge, deployment or Production operations. Architecture, product invariants, permissions and CRM/H3 behavior are unchanged.
+
+## Compatible selector-parser remediation
+
+The dependency-security correction retains Tailwind CSS 3.4.19 and postcss-nested 6.2.0, and pins `postcss-selector-parser` to `7.1.6` through an exact npm override for [GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf). Both consumers request 6.x; registry investigation found no fixed 6.x parser or compatible same-major parent release moving both paths to a patched parser. This is a compatibility override, not an audit exception. The existing `source-map-js` lockfile correction to 1.2.2 also remains in place.
+
+Tailwind uses synchronous parsing, AST factories/traversal/mutation, serialization and `dist/util/unesc`; postcss-nested uses synchronous parsing, nesting replacement, cloning and combinator/prepend serialization. The v7 insertion-during-iteration change and later bounded-depth/serialization fixes require consumer validation. `npm run test:css-toolchain`, included in full app tests, executes both actual consumers and covers application CSS, responsive/dark/group/peer/arbitrary variants, prefix/important modes, `@apply`, nesting and bubbled at-rules. Local differential compilation compared application and UI Foundation CSS plus selector fixtures against parser 6.1.4; browser validation remains separate evidence.
+
+Reassess this exact override when compatible parent releases adopt a fixed parser. Keep both live audit gates and the existing braces policy unchanged; installation alone is not compatibility evidence. This source change remains subject to exact-SHA independent review and owner merge/release approval.
