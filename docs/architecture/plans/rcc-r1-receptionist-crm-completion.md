@@ -5,7 +5,7 @@
 | Phase | State |
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
-| RCC-A1 | **OWNER APPROVED FOR IMPLEMENTATION** — Tier 3; not yet implemented |
+| RCC-A1 | **OWNER APPROVED; IMPLEMENTED ON BRANCH `feature/rcc-a1` — NOT MERGED, NOT DEPLOYED** — Tier 3; awaiting exact-SHA independent review ([record](#implementation-record--branch-not-merged-or-deployed)) |
 | RCC-A2 | **PLANNED / NOT YET APPROVED** |
 | RCC-B1 | **PLANNED / NOT YET APPROVED** |
 
@@ -82,6 +82,39 @@ RCC-A1 does **not** include:
 - task-engine replacement.
 
 Work that needs any of these returns to the owner for a decision ([outcome-based batching](../../../AGENTS.md#outcome-based-batching)).
+
+### Implementation record — branch, not merged or deployed
+
+Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`, created from origin/main `b33d9a8078abce738a9ef43588c9385cfc4f7cb9`. Implementation is not merge, migration or deployment authority; the Tier-3 review and release gates above still apply.
+
+[Migration 111](../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql) was allocated after confirming a 110 ceiling on origin/main, on every remote branch and in [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries).
+
+| Boundary item | Implementation |
+| --- | --- |
+| 1. Outcome-led workflow | Call (parent answered), other-channel conversation and meaningful-WhatsApp dialogs ask **Résultat de l’échange**: test de niveau, visite, inscription, en réflexion, souhaite être rappelé, pas intéressé, projet non adapté, autre étape. `crm_record_conversation_decision` gains a `considering` decision and an optional `channel` (`phone`/`whatsapp`/`in_person`) and still delegates to the existing commands, which derive status. Qualifying results are hidden for a lead that is already QUALIFIED. |
+| 2. Terminology | Presentation labels only: CONTACTING → **Contact en cours**, CONVERTED → **Inscription confirmée**. Stored values and the director lifecycle screen’s Meta event label are unchanged. |
+| 3. En réflexion | `crm_tasks.followup_reason = 'considering'` on a callback or WhatsApp follow-up. The wrapper sets it only for the `considering` decision and rejects it on other decisions. Direct scheduling may also mark one. Status still comes from the conversation command, so QUALIFIED stays QUALIFIED and no lifecycle status activity is emitted. |
+| 4. Optional prose | `record_conversation`, channel-evidenced `qualify_lead` and the decision wrapper no longer require a note. Explanations remain required for standalone notes, Other qualification/closure reasons, task cancellation and reopening. |
+| 5. Completion length | Mapping confirmed: the **Résultat de l’action** textarea is sent as `complete_task.outcome`, which the server caps at 200 characters and records as the completion activity body. `note` is accepted but unused. Fix: the textarea is capped at 200 characters with a visible counter. The server contract is unchanged. |
+| 6. Appointments vs reminders | New `crm_tasks.schedule_kind` column: `appointment` is a time agreed with the prospect; `reminder` is internal. NULL means cadence/system work or a pre-A1 task; there is no backfill. Center visits are always appointments, and preparing a placement test is always internal. |
+| 7. Reminder presets | `due_preset` takes `in_2_hours`, `tomorrow`, `in_2_days`, `in_3_days` or `next_week`, for reminders only. The private `crm_security.reminder_due` resolves it to the next calling window of the lead’s Casablanca follow-up policy. Appointments require an explicit time, and the browser never computes preset times. |
+| 8. Failed-call cadence | Failed-call recording, attempt slots, spacing and the five-failure stop are unchanged; attempt tasks keep a NULL kind. |
+| 9. Compatibility | Payloads without the new keys behave as before, including callback window adjustment. Request keys, payload-hash replay and expected versions are unchanged. A preset resolves once, and replay returns the stored result. |
+| 10. Assignment | The owner/assignee model and `crm_reassign` are unchanged. Task reassignment moves to overflow menus: **Autres actions** in the drawer, and **Plus d’options** on open-task rows and Work Queue rows. The prospect-owner line is plain text, and owner assignment stays under **Autres actions**. |
+
+**Migration-103 safeguard.** In 111, `crm_security.command` is migration 103’s definition copied verbatim; its body was first verified byte-identical to the local function at ledger 110. Exactly two lines change, the two note requirements above. The lifecycle barrier, pre-identity keys and pending-stop handoff are retained and asserted by the acceptance suite. Migration 111 replaces only these definitions: `command`, `new_task`, `crm_record_conversation_decision`, and the four migration-110 read projections, which gain the two additive fields. Grants are unchanged and the new helper is private.
+
+**Validation (local, synthetic):**
+
+- [SQL acceptance](../../../scripts/test-crm-rcc-a1.sql), rollback-only.
+- [110→111 stateful upgrade](../../../scripts/test-crm-rcc-a1-upgrade.mjs): unchanged table hashes, grants, RLS, triggers and other function bodies, and no backfill.
+- [Pure presentation contract](../../../scripts/test-crm-rcc-a1.mjs).
+- [Browser acceptance](../../../scripts/test-crm-rcc-a1-browser.mjs).
+- The existing CRM SQL, lifecycle/R4 and browser suites.
+
+**Observation, unchanged behavior:** the existing callback calling-window adjustment also applies to an agreed callback appointment. For example, an agreed 13:00 callback during a lunch closure still moves to the next opening. Exempting appointments would change existing scheduling semantics and needs an owner decision.
+
+The exclusions above are untouched: no change to enrollment, Commencer/Continuer/Ouvrir, B1 responsive work, finance, permissions, conversion, lifecycle/Meta, backfills or the task engine.
 
 ## RCC-A2 — enrollment UX hardening
 

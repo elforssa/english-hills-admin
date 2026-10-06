@@ -30,7 +30,7 @@ async function done(){await dialog().getByRole('button',{name:'Terminé',exact:t
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
-async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
+async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local synthetic baseline');
@@ -122,7 +122,7 @@ try {
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   // Exact chosen task, including stale rejection and explicit renewed confirmation.
   const reassigned=engine===chromium?taskIds[1]:taskIds[2];
-  const row=page.locator(`[data-task-id="${reassigned}"]`);await row.getByRole('button',{name:'Réattribuer',exact:true}).click();await dialog().getByLabel('Responsable de l’action').waitFor();
+  const row=page.locator(`[data-task-id="${reassigned}"]`);await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Réattribuer l’action',exact:true}).click();await dialog().getByLabel('Responsable de l’action').waitFor();
   sql(`update public.crm_tasks set version=version+1 where id='${reassigned}'`);
   await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').waitFor();
   assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),actor,'stale intent denied');
@@ -176,7 +176,7 @@ try {
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));
- for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
+ for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','schedule_kind','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
  for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
  console.log('PASS actual fixed RPC response shapes; no technical/score/notes/provider payload or browser Meta activity');
 } catch(error) {

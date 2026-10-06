@@ -1,11 +1,11 @@
 export const STATUS = {
   NEW: 'Nouveau',
-  CONTACTING: 'À contacter',
+  CONTACTING: 'Contact en cours',
   ENGAGED: 'En discussion',
   QUALIFIED: 'Qualifié',
   LOST: 'Perdu',
   NOT_QUALIFIED: 'Non qualifié',
-  CONVERTED: 'Converti'
+  CONVERTED: 'Inscription confirmée'
 };
 export const TASKS = {
   first_contact: 'Premier contact',
@@ -17,6 +17,79 @@ export const TASKS = {
   center_visit: 'Visite au centre',
   enrollment_followup: 'Finaliser l’inscription'
 };
+// Agreed appointments and internal reminders are separate server facts.
+export const SCHEDULE_KINDS = {
+  appointment: 'Rendez-vous convenu',
+  reminder: 'Rappel interne'
+};
+export const FOLLOWUP_REASONS = { considering: 'En réflexion' };
+// Bounded presets; the server resolves each against the Casablanca follow-up policy.
+export const REMINDER_PRESETS = {
+  in_2_hours: 'Dans 2 heures',
+  tomorrow: 'Demain',
+  in_2_days: 'Dans 2 jours',
+  in_3_days: 'Dans 3 jours',
+  next_week: 'Dans une semaine'
+};
+// Outcome-led conversation results: the receptionist records what happened and the
+// server command derives the stage. Qualifying results are hidden once QUALIFIED.
+export const CONVERSATION_OUTCOMES = {
+  placement_test: { label: 'Souhaite passer un test de niveau', decision: 'qualify', step: 'placement_test', task: 'confirm_placement_test', qualifies: true },
+  center_visit: { label: 'Souhaite visiter le centre', decision: 'qualify', step: 'center_visit', task: 'center_visit', qualifies: true },
+  enrollment: { label: 'Prêt à avancer vers l’inscription', decision: 'qualify', step: 'enrollment', task: 'enrollment_followup', defaultKind: 'appointment', qualifies: true },
+  considering: { label: 'Intéressé, a besoin de réfléchir', decision: 'considering', task: 'callback', defaultKind: 'reminder' },
+  callback: { label: 'Souhaite être rappelé', decision: 'callback', task: 'callback', defaultKind: 'appointment' },
+  not_interested: { label: 'Pas intéressé', decision: 'lost' },
+  not_suitable: { label: 'Projet non adapté', decision: 'not_qualified' },
+  other_step: { label: 'Autre prochaine étape', decision: 'qualify', step: 'other', qualifies: true }
+};
+export function conversationOutcomes(status) {
+  return Object.fromEntries(Object.entries(CONVERSATION_OUTCOMES)
+    .filter(([, outcome]) => !(outcome.qualifies && status === 'QUALIFIED')).map(([key, outcome]) => [key, outcome.label]));
+}
+// Explains the server rule; the confirmation screen shows the actual saved stage.
+export function outcomeStage(key, status) {
+  const decision = CONVERSATION_OUTCOMES[key]?.decision;
+  if (!decision) return null;
+  if (decision === 'qualify') return 'QUALIFIED';
+  if (decision === 'lost') return 'LOST';
+  if (decision === 'not_qualified') return 'NOT_QUALIFIED';
+  return ['NEW', 'CONTACTING'].includes(status) ? 'ENGAGED' : status;
+}
+// A conversation by WhatsApp naturally continues on WhatsApp while the parent decides.
+export function outcomeTask(key, channel) {
+  const outcome = CONVERSATION_OUTCOMES[key];
+  return outcome?.decision === 'considering' && channel === 'whatsapp' ? 'whatsapp_followup' : outcome?.task || null;
+}
+// Center visits are always agreed; preparing a placement test is internal work.
+export function scheduleKindRule(taskType, preferred) {
+  if (taskType === 'center_visit') return { fixed: true, kind: 'appointment' };
+  if (taskType === 'confirm_placement_test') return { fixed: true, kind: 'reminder' };
+  return { fixed: false, kind: preferred || 'reminder' };
+}
+export function nextTaskSpec({ taskType, kind, preset, due, instructions }) {
+  const spec = { task_type: taskType, ...(kind ? { schedule_kind: kind } : {}) };
+  if (kind === 'reminder' && REMINDER_PRESETS[preset]) spec.due_preset = preset;
+  else spec.due_at = casablancaInstant(due);
+  spec.instructions = instructions || null;
+  return spec;
+}
+export function conversationDecision(key, { channel, note, reason, next }) {
+  const outcome = CONVERSATION_OUTCOMES[key];
+  if (!outcome) throw new Error('Choisissez le résultat de l’échange.');
+  const data = { decision: outcome.decision, channel, ...(note?.trim() ? { note: note.trim() } : {}) };
+  if (outcome.decision === 'lost') data.reason = 'not_interested';
+  else if (outcome.decision === 'not_qualified') data.reason = reason;
+  else {
+    data.next_task = next;
+    if (outcome.step) data.qualification_step = outcome.step;
+  }
+  return data;
+}
+export function taskTitle(task) {
+  if (!task) return 'Action';
+  return `${TASKS[task.task_type] || 'Action'}${FOLLOWUP_REASONS[task.followup_reason] ? ` · ${FOLLOWUP_REASONS[task.followup_reason]}` : ''}`;
+}
 export const OUTCOMES = {
   no_answer: 'Pas de réponse',
   busy: 'Occupé',
@@ -144,6 +217,9 @@ export function commandError(error) {
   if (message.includes('No effective follow-up policy')) return 'Le calendrier de suivi n’est pas encore configuré. Demandez à un directeur de le publier.';
   if (message.includes('minimum spacing')) return 'Le délai minimum entre deux appels n’est pas encore écoulé (3 heures par défaut).';
   if (message.includes('five current-cycle')) return 'Cinq appels sans réponse dans la séquence actuelle sont nécessaires.';
+  if (message.includes('Reminder preset')) return 'Choisissez soit un rappel rapide, soit une date précise.';
+  if (message.includes('Invalid follow-up kind')) return 'Une visite au centre est toujours un rendez-vous convenu avec le parent.';
+  if (message.includes('Considering decision')) return 'Pour un parent en réflexion, prévoyez un rappel ou un suivi WhatsApp.';
   if (message.includes('next') || message.includes('Next')) return 'Choisissez une prochaine action et une date future.';
   if (error?.code === '22023') return 'Vérifiez les champs, la date future et les conditions de cette action.';
   return 'Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon.';
