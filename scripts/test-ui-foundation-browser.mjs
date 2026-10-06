@@ -28,7 +28,33 @@ async function drainReads(){await page.waitForTimeout(600);await page.waitForLoa
 async function navigate(url){if(!hold)await drainReads();await page.goto(url);}
 async function login(user){await navigate(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(u=>u.pathname!='/login');}
 async function noOverflow(){assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),phase+' viewport overflow');}
-async function studentsTableKeyboard(){const region=page.getByRole('region',{name:'Tableau des apprenants, défilement horizontal',exact:true});await region.waitFor();await region.focus();await page.keyboard.press('Shift+Tab');await page.keyboard.press('Tab');assert(await region.evaluate(el=>document.activeElement===el));assert.equal(await region.evaluate(el=>getComputedStyle(el).outlineWidth),'2px');assert.equal(await region.evaluate(el=>getComputedStyle(el).overflowX),'auto');}
+async function studentsTableKeyboard(){
+ const region=page.getByRole('region',{name:'Tableau des apprenants, défilement horizontal',exact:true});
+ await region.waitFor();await region.focus();await page.keyboard.press('Shift+Tab');await page.keyboard.press('Tab');
+ assert(await region.evaluate(el=>document.activeElement===el));
+ const focus=await region.evaluate(el=>{const style=getComputedStyle(el);return {width:style.outlineWidth,style:style.outlineStyle,offset:style.outlineOffset,transition:style.transition,visible:el.matches(':focus-visible')};});
+ assert.equal(focus.width,'2px',JSON.stringify(focus));assert.equal(focus.style,'solid');assert.equal(focus.offset,'2px');
+ assert.equal(await region.evaluate(el=>getComputedStyle(el).overflowX),'auto');
+ await page.mouse.click(700,10);await region.focus();assert.equal(await region.evaluate(el=>getComputedStyle(el).outlineWidth),'2px','explicit region focus survives preceding pointer input');
+}
+async function sidebarResize(){
+ await page.setViewportSize({width:768,height:1024});await navigate(app+'/students');await studentsTableKeyboard();
+ const trigger=page.getByRole('button',{name:'Ouvrir le menu',exact:true,includeHidden:true}),menu=page.getByRole('dialog',{name:'Menu de navigation',exact:true});
+ await trigger.click();await menu.waitFor();assert(await page.locator('#main-content').evaluate(el=>el.inert));
+ await page.setViewportSize({width:1440,height:900});await menu.waitFor({state:'detached'});
+ assert(!(await page.locator('#main-content').evaluate(el=>el.inert)),'desktop main content is not inert');
+ assert(!(await trigger.evaluate(el=>document.activeElement===el)),'desktop resize does not focus a hidden trigger');
+ const search=page.getByRole('searchbox',{name:'Rechercher un apprenant',exact:true});
+ await search.focus();assert(await search.evaluate(el=>document.activeElement===el));await search.click();await search.fill('absent');
+ await page.waitForURL(u=>u.searchParams.get('q')==='absent');await search.fill('');await page.waitForURL(u=>!u.searchParams.has('q'));
+ await page.setViewportSize({width:768,height:1024});assert.equal(await trigger.getAttribute('aria-expanded'),'false');
+ await trigger.click();await menu.waitFor();await page.keyboard.press('Escape');await menu.waitFor({state:'detached'});
+ assert(!(await page.locator('#main-content').evaluate(el=>el.inert)));assert(await trigger.evaluate(el=>document.activeElement===el),'normal close restores visible trigger focus');
+ await trigger.click();await menu.waitFor();await page.mouse.click(700,500);await menu.waitFor({state:'detached'});
+ assert(!(await page.locator('#main-content').evaluate(el=>el.inert)),'backdrop close clears inert');
+ await trigger.click();await menu.waitFor();await menu.getByRole('button',{name:'CRM',exact:true}).click();await menu.getByRole('link',{name:'Opportunités',exact:true}).click();await menu.waitFor({state:'detached'});
+ await page.waitForURL(u=>u.pathname==='/crm/leads');assert(!(await page.locator('#main-content').evaluate(el=>el.inert)),'navigation close clears inert');
+}
 async function touchTargets(){const targets=await page.locator('.operational button:visible,.operational select:visible,.operational input:visible,.operational [data-touch-target]:visible').evaluateAll(nodes=>nodes.map(el=>({name:el.getAttribute('aria-label')||el.textContent,height:el.getBoundingClientRect().height,width:el.getBoundingClientRect().width})));assert(targets.every(t=>t.height>=44&&t.width>=44),phase+' '+JSON.stringify(targets));}
 async function visibleFirstResult(locator){const box=await locator.first().boundingBox();assert(box && box.y < (await page.evaluate(()=>innerHeight)),phase+' result/state above first mobile fold '+JSON.stringify(box));}
 try {
@@ -85,6 +111,7 @@ try {
   });
   page=await ctx.newPage();page.setDefaultTimeout(15000);page.on('requestfailed',r=>{const failure=r.failure()?.errorText||'';if(/cancel|abort/i.test(failure))cancelled.push(new URL(r.url()).pathname);});page.on('pageerror',e=>{if(rejectDashboard && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(e.name==='Fetch API cannot load http' && e.message.includes('access control checks'))transportErrors.push({message:e.message,phase});else errors.push(e.message);});await page.clock.install();await login(users[0]);
   if(process.argv.includes('--table-only')) {phase=engine.name()+' Students table accessibility';await page.setViewportSize({width:768,height:1024});await navigate(app+'/students');await studentsTableKeyboard();await noOverflow();await touchTargets();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await ctx.close();await browser.close();browser=null;console.log('PASS '+engine.name()+' named keyboard-focusable Students table region and tablet touch targets');continue;}
+  if(process.argv.includes('--corrections-only')) {phase=engine.name()+' Students focus/sidebar resize';await sidebarResize();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await ctx.close();await browser.close();browser=null;console.log('PASS '+engine.name()+' Students 2px focus at 768 and sidebar 768→1440 resize, pointer/focus, Escape/backdrop/navigation restoration');continue;}
   const sheet=page.getByRole('dialog'),search=page.getByRole('searchbox',{name:'Rechercher un prospect',exact:true});
   if(!process.argv.includes('--responsive-only')) {
   phase=engine.name()+' reset/debounce';await navigate(app+'/crm/leads?view=mine&layout=list&contact='+contactId+'&lead='+leadId);await page.getByRole('dialog').getByText('Contexte de la demande',{exact:true}).waitFor();
@@ -123,6 +150,7 @@ try {
   studentMode='unavailable';await navigate(app+'/students?q=missing');await page.getByText('Informations indisponibles.',{exact:true}).waitFor();assert.equal(await page.getByText('0 apprenants correspondants',{exact:false}).count(),0);
   studentMode='empty';await navigate(app+'/students');await page.getByText('Aucun dossier dans le périmètre actif. Choisissez Tous les statuts ou ajoutez un apprenant.',{exact:true}).waitFor();studentMode='ready';
   }
+  phase=engine.name()+' sidebar resize';await sidebarResize();
   phase=engine.name()+' responsive and keyboard';for(const viewport of [{width:1440,height:900},{width:768,height:1024},{width:390,height:844},{width:375,height:812},{width:320,height:812},{width:720,height:450}]) {
    await page.setViewportSize(viewport);
    for(const route of ['/crm/leads?layout=list','/crm/today','/students']) {

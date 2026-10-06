@@ -314,7 +314,7 @@ export default function StudentsPage() {
                 </div>
               ))}
             </div>
-            <div role="region" tabIndex={0} aria-label="Tableau des apprenants, défilement horizontal" className="hidden sm:block overflow-x-auto max-w-full">
+            <div role="region" tabIndex={0} aria-label="Tableau des apprenants, défilement horizontal" className="hidden sm:block overflow-x-auto max-w-full transition-none focus:outline focus:outline-2 focus:outline-ring focus:outline-offset-2">
               <table aria-label="Dossiers apprenants" className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted border-b border-border">

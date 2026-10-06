@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -237,10 +238,21 @@ export default function Sidebar() {
 
   const closeMobile = useCallback(() => {
     setMobileOpen(false);
-    requestAnimationFrame(() => triggerRef.current?.focus());
+    requestAnimationFrame(() => {
+      if (!window.matchMedia('(min-width: 1024px)').matches) triggerRef.current?.focus();
+    });
   }, []);
 
   useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const resetAtDesktop = () => {
+      if (desktop.matches) flushSync(() => setMobileOpen(false));
+    };
+    desktop.addEventListener('change', resetAtDesktop);
+    return () => desktop.removeEventListener('change', resetAtDesktop);
+  }, []);
+
+  useLayoutEffect(() => {
     if (!mobileOpen) return undefined;
     const main = document.getElementById('main-content');
     if (main) main.inert = true;

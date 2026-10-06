@@ -10,6 +10,8 @@ Source implementation, merge, deployment and Production verification are separat
 
 ## Completed source stages
 
+The initial source-stage and local-check record below is retained as historical evidence. The later [PR #104 correction record](#pr-104-coordinated-corrections--2026-10-06) establishes a remaining staff-row acceptance gap; these stage entries do not assert complete current acceptance.
+
 - Stage 1: semantic accent/danger separation, named widths, operational density/touch/focus, PageFrame/PageHeader, controlled search/filter/field presentation, explicit ReadState, French cursor/numbered pagination, domain-specific labels/tones, compatible shadcn overlays/control refinements and shell spacing/accessibility.
 - Stage 2a: Opportunities Board/List/cards, fixed Views/filter/reset, existing safe staff and PostgreSQL civil display adapters, shared lead drawer hierarchy, bounded sanitized first-page inquiry summary and paged full answers, visible telephone/WhatsApp destinations and presentation-only action dialog changes.
 - Stage 2b: task/action and due time first, explicit task assignee versus prospect owner, shared filters/states/drawer. Mes tâches, server buckets/membership/counts and commands are preserved.
@@ -69,3 +71,52 @@ Verification found and corrected WebKit native-select height, 44×44 overlay clo
 ## Holds and deliberate exclusions
 
 Keep mandatory exact-SHA independent review and explicit owner merge/release approval. No Production release is performed or claimed. Unassigned backlog/default changes (QA F04), placement cancellation/booking redesign, new family/contact/CRM reads, walk-in redesign, consequential enrollment/email safety, finance calculations, receipt/PDF redesign, new permissions/RLS/RPCs/migrations, Meta/provider activation, Director Intelligence, portal-wide redesign and dark mode/custom font remain separate outcomes.
+
+## PR #104 coordinated corrections — 2026-10-06
+
+The owner authorized continuing this same Tier-2 branch/PR with the Students focus, stable staff-row identity and mobile-sidebar resize findings. The instruction explicitly requires stopping the staff part if safe disambiguation needs a new field/read contract or migration. No architecture amendment, permission/RLS change, CRM semantic change or Production action is authorized. Current main was fetched again and remains `b8fe8eb31659358e9c2817e0f5740716bc29f6d5`.
+
+### Failed CI and two bounded source corrections
+
+[Verify 37343245052](https://github.com/elforssa/english-hills-admin/actions/runs/37343245052) tested head `83af3ba0aff8f37fffbf7d2a7c901a39d333f599` against that base, with synthetic merge `792507018683bde1ae648303c7f0570ff6066af7`. Classify/docs/app passed; local-database failed in `studentsTableKeyboard` at Chromium 768px: expected 2px outline, actual 3px. The original local macOS passes above did not establish Linux parity. The two final R4 concurrency steps were skipped after this failure.
+
+- Students' named, `tabIndex=0` horizontal table region did not explicitly apply UIF's focus utilities. Isolated focus checks passed while the full mixed pointer/keyboard sequence reproduced 3px. Matched-rule inspection then showed an author-declared 2px width but a computed 3px width/base outline color during the implicit transition created by the global reduced-motion duration rule. The final region uses `focus` utilities plus `transition-none` for an immediate solid 2px semantic-ring outline with 2px offset whenever focused. The assertion remains 2px and also checks focus after pointer input; keyboard reachability, region semantics and `overflow-x-auto` remain intact.
+- Opening mobile navigation makes main content inert. Previously, `lg:hidden` hid the overlay on desktop resize without closing its state, leaving main content inert. A desktop `matchMedia` change now synchronously resets mobile state; layout-effect cleanup removes inert and the keyboard trap before paint. Normal close restores the visible mobile trigger, while the scheduled restoration checks the breakpoint to avoid focusing a hidden desktop trigger.
+- The required UIF browser chain now includes actual 768×1024 → 1440×900 resize, detached modal, non-inert main, normal page-control focus and pointer interaction, resize back with closed state, plus Escape/backdrop/navigation close and normal focus restoration. The focused `--corrections-only` mode runs those checks with the unchanged 2px Students keyboard assertion in both engines.
+
+### Staff identity boundary — unresolved, not deferred acceptance
+
+Inspection of [109](../../../supabase/migrations/109_crm_operational_scheduled_display.sql) confirms `crm_get_opportunities` projects `owner_name`, and `crm_get_work_queue` projects `assignee_name` and nested `owner_name`: these are operational full names, without global duplicate-name/role disambiguation. Only `crm_list_staff(p_limit,p_offset)` supplies #102 `display_label`, calculated across the complete eligible staff population. It has no ID/name-targeted lookup. The private `staff_reference` helper is not an authorized browser read. A receptionist's profile table access is not a substitute for the safe operational staff contract.
+
+The shared drawer's operational-card/open-task reads carry staff IDs without staff names. Name-based ordinal probing cannot supply a general ID lookup for these surfaces, and stale/renamed row names are not an identity index. A picker-page cache cannot provide an outside-page-1 identity on a fresh browser load. These are read-contract limits, not permission to invent a different label or require picker navigation to identify work.
+
+The temporary real-RPC browser reproduction extended the existing Work/Calendar synthetic fixture to 54 owned staff accounts sharing an operational name. It selected two identities from the second 50-row picker page, assigned them separately as prospect owner and task assignee, then checked Board/List and My Work in Chromium and WebKit. All fixtures were removed and history/security guards restored. It was an investigation, not a passing staff-acceptance regression or a weakened replacement assertion.
+
+| Requirement | Observed result, Chromium + WebKit |
+| --- | --- |
+| Outside-page-1 identity | **FAIL / BLOCKED:** Opportunities Board/List owner remained “Responsable sélectionné”, including after the independent filter picker moved to page 2. |
+| Unchanged My Work row stable across picker pages | **FAIL / BLOCKED:** both generic assignee/owner labels became their distinct server labels on page 2, then reverted on page 1; task and prospect identities themselves did not change. |
+| Adopted duplicate-name rule | PASS for server/picker labels: globally distinct role/reference labels across the two bounded pages; the row integration remains blocked. |
+| No private staff enrichment | PASS: every observed staff row had exactly `id`, `name`, `role`, `display_label`; no staff email/phone was added. |
+
+Scanning successive picker pages until arbitrary row IDs are found would become a directory scan; copying the global duplicate/reference algorithm or inventing a different client label would fork #102. A fixed larger first page only moves the failure threshold. The safe durable resolution needs an owner-authorized bounded identity lookup or safe label fields on the existing row projections, with the requisite read-contract/migration decision. Neither is implemented here. Existing picker pagination and CRM row semantics remain unchanged. **F4/stable assignment identity acceptance remains unresolved even if the correction CI passes.** No source/release readiness or independent-review verdict is claimed.
+
+### Correction verification and handoff
+
+The correction handoff records the new exact head, tested tree and fresh full Verify scheduling reference. Local logs and the temporary synthetic reproduction remain outside the repository. No database migration, new RPC, permission, RLS, provider or Production change is included. The staff boundary remains an owner decision before full UIF acceptance.
+
+| Correction check | Result / evidence scope |
+| --- | --- |
+| Focused focus/sidebar browser regression | PASS Chromium + WebKit: 768px Students keyboard and pointer-following focus, immediate solid 2px outline/2px offset, horizontal scroll; 768→1440 menu removal, inert cleanup, usable focus/pointer interaction, resize back, Escape/backdrop/navigation close and restoration. |
+| Full UIF browser matrix | PASS Chromium + WebKit on the final correction source: all read-state/zero/error/stale cases, bounded inquiry answers and destinations, reset, Students context, responsive widths/zoom/contrast, keyboard focus, touch targets and the new sidebar resize regression. |
+| Surrounding real-RPC Work/Calendar browser | PASS Chromium + WebKit before the final Students-only focus refinement; its CRM/sidebar source is unchanged by that refinement. Civil-time oracle, task filters/version guards, cursor/Calendar/Back behavior and existing safe selector labels retained. |
+| Surrounding Opportunities browser | PASS Chromium + WebKit behavior mode; CRM source unchanged by final Students-only refinement. Search/Programme composition, actual URL/RPC args, fixed Views, Board/List, drag proposals, cursors, drawer Back/focus and responsive behavior. |
+| Students operational browser | PASS manual enrollment/placement, filter, desktop/mobile, history and dossier editing, group synchronization and CSV defaults; the final refinement changes scroll-region focus only. |
+| Build/lint | PASS final source; existing sidebar image/framework deprecation warnings only. |
+| Navigation, UIF semantic/SSR, CRM presentation, pagination, portability | PASS; 58 portable Node entrypoints. |
+| CI routing/gate regressions | PASS, 14 tests. |
+| Previously unreached R4 isolated concurrency | PASS simultaneous claim/begin, equal-second revalidation, predecessor/stale-worker fencing and local fixture rebuild. |
+| Previously unreached advisory sharing-stop race matrix | PASS both winner orders, admission/revoke/identity/cleanup/barrier and isolation guards; local fixture rebuild. |
+| 54-staff stable row identity | **FAIL / BLOCKED** in both engines as detailed above; no staff correction or passing acceptance claim. |
+
+Before the correction push, CI parity was checked for the desktop breakpoint, mixed keyboard/pointer focus after fake-clock read retries, hidden-trigger locators, collapsed CRM navigation, fixed viewport paths, unchanged global tokens/locale behavior, and preservation of all 2px assertions. The single focused correction author self-check is complete: final source/test/doc diffs, breakpoint cleanup and focus restoration, truthful evidence and the explicit staff read boundary were inspected. It does not approve the PR or perform independent review.
