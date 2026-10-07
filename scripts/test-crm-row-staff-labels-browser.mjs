@@ -94,9 +94,10 @@ try {
     for (const layout of ['board','list']) {
       await navigate(app+'/crm/leads?layout='+layout);
       const row=layout==='board'?page.locator(`[data-testid="opportunity-card"][data-lead-id="${lead}"]`):page.getByTestId('opportunity-row').filter({hasText:'UIF stable row identity'});
-      await row.getByText(owner.display_label,{exact:layout==='list'}).waitFor();
+      // RCC-B1: board cards no longer repeat the owner; the List table, drawer header and filter keep it.
+      if(layout==='list')await row.getByText(owner.display_label,{exact:true}).waitFor();else{await row.waitFor();assert.equal(await row.getByText(owner.display_label).count(),0);}
       const before=await row.innerText();
-      await page.getByText('Plus de filtres',{exact:false}).click();
+      await page.getByRole('button',{name:/^Filtres/}).click();
       await pageStaff('Responsables suivants','Responsables précédents',page.getByLabel('Responsable',{exact:true}));
       assert.equal(await row.innerText(),before,'unchanged '+layout+' owner across picker pages');
       console.log('PASS '+engine.name()+' '+layout+' initial owner and stable picker pages');
@@ -109,7 +110,7 @@ try {
     assert.equal(await row.innerText(),before,'unchanged task assignee/owner across picker pages');
     await row.getByRole('button',{name:'Voir le prospect',exact:true}).click();
     const drawer=page.getByRole('dialog').first();await drawer.getByText('Historique',{exact:true}).waitFor();
-    await drawer.getByText('Responsable du prospect : '+owner.display_label,{exact:true}).waitFor();
+    await drawer.getByText('Responsable : '+owner.display_label,{exact:true}).waitFor();
     await drawer.getByText('Responsable de la tâche : '+assignee.display_label,{exact:true}).waitFor();
     // Current assignment stays labelled when absent from the bounded dialog page.
     await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Attribuer un responsable',exact:true}).click();

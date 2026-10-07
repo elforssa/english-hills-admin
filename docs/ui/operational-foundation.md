@@ -16,6 +16,8 @@ Use `PageFrame` with `width="standard"` (1280px), `detail` (1024px), `form` (768
 </PageFrame>
 ```
 
+`PageHeader compact` and `FilterBar compact` are opt-in variants added by [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md) for dense workspaces; their defaults are unchanged. The compact header stays on one row at every width. The compact filter bar is a single toolbar row: its reset appears only when `onReset` is given, and its polite summary stays announced but is visually hidden unless `summaryVisible`.
+
 `FormField` associates its label, help and error with its single input/select/textarea. Existing handlers retain command validation and errors. Short selects remain native; bounded staff and facet reads retain paging. Use `operational-secondary` for 13px secondary row text; helpers/time/badges use 12px. Never shrink essential text below 12px. Use semantic theme tokens; danger is reserved for destructive actions, ordinary interaction uses the neutral blue accent.
 
 ## Filters and navigation
@@ -44,7 +46,13 @@ The three pilots demonstrate wide Board/List, task-first rows, and standard Stud
 
 Keep Radix Sheet/Dialog focus management. Operational drawer is approximately 620px desktop / full width mobile. Standard Dialog is 480px; form dialogs may be 640px, always bounded by viewport minus gutters with scrollable content. Add the operational class to domain overlays. Use named close controls, visible focus, Escape and focus restoration. Frequent domain action remains visible; rare/destructive actions use existing menus and existing semantic commands.
 
-The CRM drawer presents destinations before quick actions, then stage/owner, next task/assignee, first-page inquiry context, placement/enrollment, acquisition, paged full answers and history. The summary uses one sanitized submission and at most three labelled answers. Full answers retain limit 5 / offset paging. Telephone and WhatsApp are visibly distinct; show the same destination used by the existing launcher. Launching records no activity.
+Since [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#drawer-and-sheet-behavior), the CRM drawer keeps a fixed header (contact, learner/programme, stage and owner, destinations) above one scrolling body: next action, quick actions, other open actions, Demande (origin, latest/first inquiry, declared interest, summary and paged full answers), placement, enrollment and a collapsed history. `SheetContent` itself never scrolls, so the primitive's single close control stays visible. Non-Dialog popups inside a sheet are controlled and registered with the page-local Escape guard (`useNestedLayerEscapeGuard` / `useGuardedLayer`). The summary uses one sanitized submission and at most three labelled answers. Full answers retain limit 5 / offset paging. Telephone and WhatsApp are visibly distinct; show the same destination used by the existing launcher. Launching records no activity.
+
+## Responsive navigation and dialog footers
+
+Opportunities decides its band only with the Tailwind `sm` (640px) and `lg` (1024px) queries, shared verbatim by CSS variants and `matchMedia` (`BAND_QUERIES`). Below `lg` it shows a stage list: a labelled group of stage chips (`aria-pressed`, counts as display data) that set the existing `stage` filter and never issue a command. Single rows that may overflow (`ScrollRow`, the board) scroll inside themselves with decorative edge fades; the page never scrolls horizontally.
+
+Form dialogs that can outgrow the viewport wrap their existing error alert and button row in `DialogStickyFooter` and add `STICKY_DIALOG` to `DialogContent`: the dialog stays the single scroll container, the footer sticks to its bottom, a long alert scrolls inside a capped region, and the footer height becomes the dialog's scroll padding so a field focused by an error contract stays visible above it.
 
 ## Future touched pages
 

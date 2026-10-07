@@ -1,6 +1,6 @@
 # Owner summary
 
-**RCC-B1 — Responsive Opportunities presentation. Revision B1-r3, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 through B1-r3.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED, and B1-r2 incorporated those corrections. The re-review of B1-r2 returned CHANGES REQUIRED for R1 and R2 only, which B1-r3 incorporates, including the owner's R1 clarification (no tooltip on Autres actions). D1–D8 are unchanged ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections), [B1-r3 corrections](#b1-r3-re-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r3, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
+**RCC-B1 — Responsive Opportunities presentation. Revision B1-r3, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 through B1-r3.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED, and B1-r2 incorporated those corrections. The re-review of B1-r2 returned CHANGES REQUIRED for R1 and R2 only, which B1-r3 incorporates, including the owner's R1 clarification (no tooltip on Autres actions). D1–D8 are unchanged ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections), [B1-r3 corrections](#b1-r3-re-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r3, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized. **Update (2026-10-07):** all three conditions were met; the owner authorized implementation of B1-r3, which is recorded in the [implementation record](#implementation-record). Merge and release remain unauthorized.
 
 ## What will change
 
@@ -920,3 +920,50 @@ Constraints the owner restated with the approval, binding on implementation:
 - merge of any implementation;
 - release or deployment;
 - any Production access.
+
+## Implementation record
+
+**2026-10-07, revision B1-r3, Tier 2.** Owner implementation authorization of 2026-10-07 (after PR #114 was independently reviewed at `2fdb8ad74ee356f6590c1223740d8a51db0cba75` and merged). The authorization covers implementation, local synthetic testing, the implementation PR and CI only; it does not cover merge, deployment, Production access, migrations or any scope beyond this contract.
+
+- **Branch:** `feature/rcc-b1`. **Base:** `origin/main` = `612ccfd` (PR #114 merge). The implementation PR and its handoff record the exact head SHA and the CI run.
+- **Prerequisites rechecked:** migration 112 is still the latest; nothing in the module manifest changed since `13c1db1…`.
+- **No** database, migration, RPC, read-shape, permission, finance, conversion, lifecycle/Meta, dependency, lockfile, `ui/` primitive, `globals.css`, Tailwind configuration or `Sidebar.jsx` change. `package.json` changes are script entries only.
+
+**Files.** The module manifest, plus new presentation modules under `src/components/crm/`: `useResponsiveBand.js` (the `BAND_QUERIES` band), `useNestedLayerEscapeGuard.js` (`useNestedLayerEscapeGuard` / `useGuardedLayer`), `ScrollRow.jsx` (bounded rows and edge fades) and `DialogStickyFooter.jsx` (the sticky footer and its height observer). Tests: `scripts/test-crm-rcc-b1.mjs` (pure) and `scripts/test-crm-rcc-b1-browser.mjs` (Chromium + WebKit), registered in `test:crm-opportunities` and `test:crm-opportunities-browser`. Documentation: this record, the RCC-r1 phase table and [operational-foundation.md](../../ui/operational-foundation.md) (compact `PageHeader`/`FilterBar`, stage navigation, sticky dialog footer, and the drawer-order paragraph that B1 made stale).
+
+**Implementation notes and justified deviations** (all within the approved behavior):
+
+1. **WebKit edge feedback loop (X1).** With classic scrollbars, WebKit evaluates `(min-width: 1024px)` without the page scrollbar. Because the band now changes page height (a viewport-filling board versus a long stage list), the scrollbar appearing and disappearing flipped the band at exactly 1024 until React aborted with "Maximum update depth exceeded". While the workspace is mounted, `useResponsiveBand` keeps the root vertical scrollbar present (`overflow-y: scroll` on `<html>`, restored on unmount; page-local, no global CSS edit). WebKit then resolves a 1024 window consistently to the band it measures, which this contract accepts. Overlay-scrollbar platforms see no change.
+2. **E2 focus return was already broken on `main`.** Measured on an unmodified `origin/main` server, in both engines: after Autres actions → a dialog → Annuler, focus landed on the sheet's Fermer, not Autres actions. The cause: the dialog opened while the menu was closing, and its unchanged return-focus capture recorded the sheet's fallback focus. Autres actions items now open their dialog from the menu's `onCloseAutoFocus`, after focus has returned to the trigger. Dialog code is untouched. Browser suites' `more()` helpers wait for the dialog to appear.
+3. **Sticky footer and padding.** Both engines stop a sticky inset at the scroll container's padding. `STICKY_DIALOG` therefore drops the dialog's bottom padding only while it contains the footer (`has-[[data-dialog-footer]]:pb-0`), and the footer carries that padding. The footer stays in flow, so the body never sits under it at the end of scroll; no extra bottom margin is added. `--crm-dialog-footer` feeds `scroll-padding-bottom` as specified.
+4. **Card height ≤ 150px across the desktop band** (184–224px columns). Qualifiers share the next-action line, and "Tentative n sur 5" is shown from the second attempt; attempt 1 is the "Premier contact" title itself.
+5. **Views at 1280.** The chip-row/Vue-select switch uses `xl:`, as the toolbar table specifies. It is a toolbar detail and never decides the band or presentation.
+6. **Drawer header reserve** is `pr-14` rather than `pr-12`, so the 44px touch close button never overlaps the title.
+7. **Telephone gating** is CSS only (`hidden max-sm:[@media(pointer:coarse)]:inline-flex`, without `data-touch-target`, which would have overridden `hidden`). Elsewhere the link is `display: none`: not rendered visually, not focusable, not in the accessibility tree.
+8. **Band before reads.** `data-band` appears once the browser answers the media queries, and the Opportunities read waits for it, so a phone never fetches the desktop board default first. Arguments, keys and limits are unchanged.
+
+**Deliberately updated assertions** (each required by this contract):
+
+| Suite | Change | Decision |
+| --- | --- | --- |
+| `test-crm-phase4-browser.mjs` | No `tel:` link at 1440 with a mouse; new 390 coarse-pointer context asserts the link and that clicking records nothing; "Toutes les réponses aux formulaires" | D2 C, D1 |
+| `test-crm-opportunities-browser.mjs` | "2 clôturés" count-line link replaces "Clôturés : 2"; "Filtres" replaces "Plus de filtres"; count text matched as a prefix; Demande heading replaces Acquisition; "Première demande" absent when equal to the latest; Vue select below 1280 | Toolbar/header, D1 |
+| `test-crm-phase6-browser.mjs`, `test-crm-work-calendar-browser.mjs` | "Filtres" replaces "Plus de filtres" | Toolbar |
+| `test-crm-row-staff-labels-browser.mjs` | Board cards no longer show the owner (List table and drawer keep it); drawer "Responsable : …"; "Filtres" | Card hierarchy, drawer header |
+| `test-ui-foundation-browser.mjs` | "Résumé de la dernière demande" and "Toutes les réponses aux formulaires"; header "WhatsApp +…"; List cards below 1024 | D1, drawer header, list table desktop-only |
+| `test-crm-phase5/rcc-a1/opportunities/phase4/phase6/work-calendar-browser.mjs` | `more()` waits for the action dialog to appear | Note 2 |
+
+**Local validation** (synthetic data only, local Supabase `127.0.0.1:54321` at ledger 112, external delivery blocked, fixtures removed, local database back to zero CRM rows and users):
+
+- `npm run lint`: clean, except the pre-existing Sidebar `<img>` warning.
+- `npm run build`: passes.
+- Passing suites: `npm test` (including `test:ui-foundation`), `test:navigation`, `test:crm-opportunities` (including the new pure suite), `test:crm-opportunities-local`, `test:crm-work-calendar` and `test:crm-work-calendar-local`.
+- Passing browser suites: `test-crm-opportunities`, phase 4, phase 5, phase 6, RCC-A1, RCC-A2, work-calendar, row-staff-labels, UI Foundation, receptionist and student-placement.
+- **`test-crm-rcc-b1-browser.mjs`: passes in Chromium and WebKit.** It covers:
+  - five widths, the 639/640, 767/768 and 1023/1024 edges, and 320 reflow;
+  - stage chips, board scroll restoration and Escape E1–E6;
+  - history, Demande, phone reachability, focus;
+  - the 390×844 long uncertain alert, frozen retry across 640 and 1024, and the telephone matrix.
+- **The O3 "first Board ≤ 1s" check is environment-sensitive.** On `next dev` it fails on this machine for unmodified `main` as well (2.6–4.5s). On production builds: `main` 908–990ms, this branch 737–842ms.
+
+**Observation for review (unchanged by B1).** If Escape arrives within roughly one frame of an action dialog mounting above the sheet, the Radix 1.1.19 sheet may still hold its listener and dismiss. A human cannot type that fast. The browser test waits for dialog focus plus 150ms. The guard deliberately does not intercept Dialog-over-sheet Escape (contract I2 point 4).

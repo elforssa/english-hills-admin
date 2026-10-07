@@ -265,3 +265,65 @@ export function opportunityAction(from, to) {
   if (from === 'QUALIFIED' && to === 'CONVERTED') return 'enrollment';
   return 'unsupported';
 }
+
+// RCC-B1 responsive presentation. The only width thresholds deciding Opportunities
+// layout: the Tailwind sm/lg queries, shared verbatim by CSS variants and matchMedia.
+export const BAND_QUERIES = { sm: '(min-width: 640px)', lg: '(min-width: 1024px)' };
+export function resolveBand({ sm, lg }) {
+  return lg ? 'desktop' : sm ? 'tablet' : 'phone';
+}
+// List below lg renders the stage list; view=closed keeps forcing List.
+export function resolvePresentation({ band, layout }) {
+  if (layout === 'board') return 'board';
+  return band === 'desktop' ? 'list' : 'stage-list';
+}
+// Display/navigation only: chips set the existing stage filter and never a command.
+export function stageChips(view, stage) {
+  const chips = view === 'closed' ? ['LOST', 'NOT_QUALIFIED'] : [...BOARD_STAGES];
+  return STATUS[stage] && !chips.includes(stage) ? [...chips, stage] : chips;
+}
+export const MEANINGFUL_EVENTS = new Set([
+  'contact_attempted', 'call_no_answer', 'call_busy', 'call_declined', 'call_unreachable', 'call_wrong_number',
+  'conversation_recorded', 'whatsapp_sent', 'whatsapp_conversation', 'note_added',
+  'lead_engaged', 'lead_qualified', 'lead_lost', 'lead_not_qualified', 'lead_reopened',
+  'placement_test_booked', 'placement_test_rescheduled', 'placement_test_attended', 'placement_result_entered',
+  'enrollment_started', 'lead_converted', 'conversion_review_required'
+]);
+// Collapsed history: the latest meaningful exchanges of the first loaded page, else the latest entries.
+export function historySummary(rows, size = 3) {
+  const list = Array.isArray(rows) ? rows : [];
+  const meaningful = list.filter(row => MEANINGFUL_EVENTS.has(row?.event_type));
+  return (meaningful.length ? meaningful : list).slice(0, size);
+}
+// Escape inside a modal sheet: an already consumed Escape is final; otherwise a nested
+// popup closes before the sheet. Independent of document listener order.
+export function nestedEscapeAction({ defaultPrevented, nestedDetected, openCount }) {
+  if (defaultPrevented) return 'none';
+  return nestedDetected || openCount > 0 ? 'close-top' : 'allow-sheet';
+}
+// One controlled popup. close() changes only its own state and is idempotent.
+export function createGuardedEntry(setClosed) {
+  let open = false;
+  return {
+    get open() { return open; },
+    opened() { open = true; },
+    closed() { open = false; },
+    close() { if (!open) return false; open = false; setClosed(); return true; }
+  };
+}
+// Popups currently open inside one sheet, in opening order.
+export function createLayerStack() {
+  const entries = [];
+  return {
+    size: () => entries.length,
+    push(entry) { if (!entries.includes(entry)) entries.push(entry); },
+    remove(entry) { const index = entries.indexOf(entry); if (index >= 0) entries.splice(index, 1); },
+    closeTop() { const top = entries.pop(); return top ? top.close() : false; }
+  };
+}
+// Board scroll is presentation state: restored only within the same filter scope, clamped.
+export function restoredScroll(saved, filterKey, { scrollWidth, clientWidth, scrollHeight, clientHeight }) {
+  if (!saved || saved.filterKey !== filterKey) return null;
+  const clamp = (value, max) => Math.max(0, Math.min(Number(value) || 0, Math.max(0, max)));
+  return { left: clamp(saved.left, scrollWidth - clientWidth), top: clamp(saved.top, scrollHeight - clientHeight) };
+}

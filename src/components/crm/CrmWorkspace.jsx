@@ -5,16 +5,26 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import PageFrame from '@/components/operational/PageFrame';
 import PageHeader from '@/components/operational/PageHeader';
 import CursorPager from '@/components/operational/CursorPager';
-import { Plus } from 'lucide-react';
+import { Columns3, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
-import { UUID } from '@/lib/crm/presentation.mjs';
+import { STATUS, UUID, resolvePresentation, stageChips } from '@/lib/crm/presentation.mjs';
 import LeadDetailSheet from './LeadDetailSheet';
 import CrmActionDialog from './CrmActionDialog';
 import WorkQueue from './WorkQueue';
 import OpportunitiesBoard from './OpportunitiesBoard';
 import OpportunitiesList from './OpportunitiesList';
 import OpportunityFilters from './OpportunityFilters';
+import ScrollRow from './ScrollRow';
+import useResponsiveBand from './useResponsiveBand';
+// Navigation only: a chip sets the existing stage filter; counts are display data.
+function StageChips({ view, stage, counts, total, onSelect }) {
+  const count = value => Number.isFinite(value) ? value : '—';
+  return <ScrollRow role="group" aria-label="Étapes">
+    <Button type="button" variant={stage ? 'outline' : 'default'} className="shrink-0" aria-pressed={!stage} onClick={() => onSelect('')}>Tous <span className="tabular-nums">{count(total)}</span></Button>
+    {stageChips(view, stage).map(key => <Button key={key} type="button" variant={stage === key ? 'default' : 'outline'} className="shrink-0" aria-pressed={stage === key} onClick={() => onSelect(key)}>{STATUS[key]} <span className="tabular-nums">{count(counts?.[key])}</span></Button>)}
+  </ScrollRow>;
+}
 export default function CrmWorkspace({
   mode
 }) {
@@ -26,11 +36,12 @@ export default function CrmWorkspace({
   const originFocus = useRef(null), headingRef = useRef(null);
   const [initialAction, setInitialAction] = useState(null), [initialTask, setInitialTask] = useState(null);
   useEffect(() => { if (!selected) { setInitialAction(null); setInitialTask(null); } }, [selected]);
-  const [smallScreen, setSmallScreen] = useState(false);
-  useEffect(() => { const media = window.matchMedia('(max-width: 767px)'); const update = () => setSmallScreen(media.matches); update(); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  // Shared sm/lg queries decide the band; the default moves from 768 to the lg board (D7).
+  const band = useResponsiveBand();
   const filters = Object.fromEntries(['view','q','owner','channel','source','program','stage'].map(key => [key, params.get(key) ?? ({view:'all',owner:'all'}[key] || '')]));
-  const preferredLayout = params.get('layout') || (smallScreen ? 'list' : 'board');
+  const preferredLayout = params.get('layout') || (band === 'desktop' ? 'board' : 'list');
   const layout = filters.view === 'closed' ? 'list' : preferredLayout;
+  const presentation = band ? resolvePresentation({ band, layout }) : undefined;
   const [cursors, setCursors] = useState([null]);
   const cursorFilter = useRef(null);
   const [generation, setGeneration] = useState(0);
@@ -58,10 +69,18 @@ export default function CrmWorkspace({
   const parseFacet = value => { try { return value ? JSON.parse(value) : null; } catch { return {kind:'invalid',value:'invalid'}; } };
   const source = parseFacet(filters.source), program = parseFacet(filters.program);
   const args = {p_view:filters.view,p_query:filters.q,p_contact:contact,p_owner_mode:['all','me','unassigned'].includes(filters.owner) ? filters.owner : 'staff',p_owner:UUID.test(filters.owner) ? filters.owner : null,p_channel:filters.channel || source?.kind || null,p_source_label:source?.value || null,p_program_kind:program?.kind === 'unspecified' ? 'unspecified' : program?.kind || 'all',p_program:program?.value || null,p_layout:layout,p_stage:layout === 'list' ? filters.stage || null : null,p_limit:25};
-  const opportunities = useCrmRead('crm_get_opportunities', {...args,p_cursor:cursorFilter.current === filterKey ? cursors.at(-1) : null}, mode === 'leads');
+  // Read once the band is known, so a phone never fetches the desktop board default first.
+  const opportunities = useCrmRead('crm_get_opportunities', {...args,p_cursor:cursorFilter.current === filterKey ? cursors.at(-1) : null}, mode === 'leads' && !!band);
   const [manual, setManual] = useState(false);
+  // Board scroll is presentation state kept outside the keyed board subtree (never URL/query/storage).
+  const boardRegion = useRef(null), boardScroll = useRef(null), currentFilterKey = useRef(filterKey);
+  currentFilterKey.current = filterKey;
   useEffect(() => {
-    const reset = () => { setCursors([null]); setGeneration(x => x + 1); };
+    const reset = () => {
+      const region = boardRegion.current;
+      boardScroll.current = region ? { filterKey: currentFilterKey.current, left: region.scrollLeft, top: region.scrollTop } : null;
+      setCursors([null]); setGeneration(x => x + 1);
+    };
     window.addEventListener('crm:refresh', reset);
     return () => window.removeEventListener('crm:refresh', reset);
   }, []);
@@ -76,15 +95,20 @@ export default function CrmWorkspace({
   const matchedCount = layout === 'list' && filters.stage ? opportunities.data?.counts?.[filters.stage] : opportunities.data?.total;
   const counts = opportunities.data?.counts;
   const closedCount = Number.isFinite(counts?.LOST) && Number.isFinite(counts?.NOT_QUALIFIED) ? counts.LOST + counts.NOT_QUALIFIED : '—';
-  return <PageFrame width="wide">
-  <PageHeader headingRef={headingRef} title={mode === 'today' ? 'Tâches · Mon travail' : 'Pipeline admissions'} description={mode === 'today' ? 'Vos prochaines actions, une tâche à la fois.' : 'Retrouvez un parent et reprenez la conversation.'} actions={<Button onClick={() => setManual(true)}><Plus size={16} />Ajouter un prospect</Button>} />
-  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-slate-500">{matchedCount ?? '—'} prospects correspondants</p><div className="flex gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}>Tableau</Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}>Liste</Button></div></div>
-    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} onReset={resetFilters} />
+  const filtered = filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all';
+  const closedHref = () => { const next = new URLSearchParams(params.toString()); next.set('view', 'closed'); return `${pathname}?${next}`; };
+  const toggle = <div role="group" aria-label="Présentation" className="flex shrink-0 gap-1"><Button variant={layout === 'board' ? 'default' : 'outline'} disabled={filters.view === 'closed'} aria-pressed={layout === 'board'} onClick={() => setFilter('layout','board')}><Columns3 size={16} /><span className="max-sm:sr-only">Tableau</span></Button><Button variant={layout === 'list' ? 'default' : 'outline'} aria-pressed={layout === 'list'} onClick={() => setFilter('layout','list')}><List size={16} /><span className="max-sm:sr-only">Liste</span></Button></div>;
+  // The count line replaces the former count row and board notice.
+  const countLine = <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
+  return <PageFrame width="wide" data-band={band || undefined} data-presentation={mode === 'leads' ? presentation : undefined}>
+  {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<Button onClick={() => setManual(true)}><Plus size={16} />Ajouter un prospect</Button>} />
+    : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={() => setManual(true)}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
+  {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
+    <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
-    {filters.view === 'closed' ? <p className="text-xs text-slate-500">Les clôtures sont affichées en Liste. Choisissez une autre vue pour accéder au Tableau.</p> : layout === 'board' && <p className="text-xs text-slate-500">Le Tableau montre les opportunités ouvertes et converties. <Button variant="link" className="px-1" onClick={() => setFilter('view','closed')}>Clôturés : {closedCount}</Button> · Inclus dans le total ; visibles en Liste.</p>}
+    {presentation === 'stage-list' && <StageChips view={filters.view} stage={filters.stage} counts={counts} total={opportunities.data?.total} onSelect={value => setFilter('stage', value)} />}
     <div role="status" className="sr-only">Les vues sont actualisées après chaque action ; les prospects qui ne correspondent plus aux filtres quittent la vue.</div>
-    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all'} onReset={resetFilters} args={args} onOpen={openLead} onAction={routeAction} /> : <><OpportunitiesList query={opportunities} filtered={filters.view !== 'all' || !!contact || Object.entries(filters).some(([key,value]) => !['view','owner'].includes(key) && value) || filters.owner !== 'all'} onReset={resetFilters} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></>}
+    {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filtered} onReset={resetFilters} args={args} onOpen={openLead} onAction={routeAction} regionRef={boardRegion} restore={boardScroll} filterKey={filterKey} /> : <div className="space-y-3 pt-1"><OpportunitiesList query={opportunities} filtered={filtered} onReset={resetFilters} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></div>}
   </section>}
 
   {selected && <LeadDetailSheet key={`${selected}:${initialAction || "detail"}`} leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={() => { (originFocus.current?.isConnected ? originFocus.current : headingRef.current)?.focus(); }} onClose={() => selectLead(null)} />}

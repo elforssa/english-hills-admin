@@ -30,7 +30,8 @@ async function screenshot(options){await page.evaluate(async()=>{document.queryS
 async function save(){await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\.|Nouveau prospect créé\./).waitFor();}
 async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
 async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
-async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
+// RCC-B1 E2: an Autres actions item opens its dialog after the menu returns focus to its trigger.
+async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length>1);}
 async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
 try {

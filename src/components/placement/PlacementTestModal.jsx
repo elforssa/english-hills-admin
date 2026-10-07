@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 import { crmRpc, useCrmRefresh } from '@/lib/crm/queries';
 import { retryKey, commandError } from '@/lib/crm/presentation.mjs';
+import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
@@ -139,7 +140,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
 
   return (
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent onCloseAutoFocus={e => { e.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); }} onEscapeKeyDown={e => { if (saving) e.preventDefault(); }} onInteractOutside={e => { if (saving) e.preventDefault(); }} className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto">
+      <DialogContent onCloseAutoFocus={e => { e.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); }} onEscapeKeyDown={e => { if (saving) e.preventDefault(); }} onInteractOutside={e => { if (saving) e.preventDefault(); }} className={`max-w-lg ${STICKY_DIALOG}`}>
         <DialogHeader>
           <DialogTitle>{booking ? 'Réserver un test de niveau' : form.id ? 'Modifier le test' : 'Nouveau test de niveau'}</DialogTitle>
         </DialogHeader>
@@ -185,11 +186,13 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
             </div>
             }</><div className="sm:col-span-2"><label htmlFor="placement-notes" className={labelClass}>Notes</label><textarea id="placement-notes" maxLength={linked ? 4000 : undefined} className={`${inputClass} h-16 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
           </fieldset>
-          {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+          <DialogStickyFooter>
+          {error && <p role="alert" className={`text-sm text-red-700 ${FOOTER_ALERT}`}>{error}</p>}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>Annuler</Button>
             <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
           </DialogFooter>
+          </DialogStickyFooter>
         </form>
       </DialogContent>
     </Dialog>
