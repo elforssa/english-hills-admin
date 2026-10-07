@@ -41,7 +41,7 @@ Sources: [078 schema](../../supabase/migrations/078_crm_core_schema.sql), [080 c
 
 Only trusted linked enrollment reaching `Confirmed` or `Validated` converts a lead. `crm_start_enrollment` initiates Submitted/Trial from a qualified unlinked lead; initiation alone is not conversion. Conversion retains student, enrollment, timestamp and activity evidence. A subsequent downgrade flags review instead of deleting historical conversion. Payment may drive enrollment confirmation through the financial engine, but payment, revenue and conversion remain separate facts.
 
-RCC-A2 (implemented in migration 112, awaiting review, not deployed):
+RCC-A2 (migration 112; deployed and Production verified on 2026-10-07):
 
 - For **enrollment initiation** (`crm_start_enrollment`), a new learner's birth date cannot be after today's **Casablanca civil date**. Today is valid, and there is no minimum age.
 - Manual lead creation keeps its existing database `current_date` check, so this is **not** a universal CRM birth-date rule.

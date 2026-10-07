@@ -1,8 +1,10 @@
 # Owner summary
 
-> **Status: IMPLEMENTED — AWAITING INDEPENDENT REVIEW (2026-10-07); not merged, not deployed.** A2-r2 passed independent re-review at `154d8a21d662e9ec5bc411cc62098907719647a9` and merged as `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. The owner then authorized implementation, local synthetic validation, the implementation PR and CI only ([implementation record](#implementation-record)). Merge, Production migration 112, deployment and Production reads remain separately gated.
+> **Status: COMPLETED — MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07).** PR #112 reviewed head `b213e93408ccca2514a48bd9c68d483f8ee46999` merged as `79b08359363abd2e83c842c7360b14fadce88dea` after migration-first application of migration 112. Vercel Production is `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` ([release record](../../evidence/rcc-a2-production-2026-10-07.md)). This completes RCC-A2 only. The parent [RCC-r1](../rcc-r1-receptionist-crm-completion.md) stays active, because RCC-B1 is not approved.
 >
-> *Status at A2-r2 authoring (historical):* revision A2-r2 — AWAITING INDEPENDENT EXACT-SHA RE-REVIEW. Implementation is NOT AUTHORIZED. A2-r1 was owner-approved on 2026-10-07 (D1–D7). The independent Tier-3 review of A2-r1 returned CHANGES REQUIRED, and A2-r2 incorporates those findings plus the owner-approved B2 amendment ([approval record](#owner-approval-record)). Implementation stays unauthorized until A2-r2 passes independent re-review and this architecture PR is merged through the repository process. Migration 112, any merge of implementation and any Production release each need a further explicit owner instruction. Architecture revision **A2-r1** was recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
+> *Status at implementation (historical):* IMPLEMENTED — AWAITING INDEPENDENT REVIEW; not merged, not deployed. A2-r2 passed independent re-review at `154d8a21d662e9ec5bc411cc62098907719647a9` and merged as `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. The owner then authorized implementation, local synthetic validation, the implementation PR and CI only ([implementation record](#implementation-record)). Merge, Production migration 112, deployment and Production reads remain separately gated.
+>
+> *Status at A2-r2 authoring (historical):* revision A2-r2 — AWAITING INDEPENDENT EXACT-SHA RE-REVIEW. Implementation is NOT AUTHORIZED. A2-r1 was owner-approved on 2026-10-07 (D1–D7). The independent Tier-3 review of A2-r1 returned CHANGES REQUIRED, and A2-r2 incorporates those findings plus the owner-approved B2 amendment ([approval record](#owner-approval-record)). Implementation stays unauthorized until A2-r2 passes independent re-review and this architecture PR is merged through the repository process. Migration 112, any merge of implementation and any Production release each need a further explicit owner instruction. Architecture revision **A2-r1** was recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](../rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
 
 ## What will change
 
@@ -65,7 +67,7 @@
 | Fact | Evidence |
 | --- | --- |
 | Baseline | Fetched `origin/main` = `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59` (PR #110, RCC-A1 closeout docs), matching the expected baseline. |
-| Production ledger | [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries) records **001–111** (111 applied 2026-10-07). The repository ceiling is `111_crm_rcc_a1_outcome_led_followup.sql`, and no remote branch carries a 112+ migration at this baseline. |
+| Production ledger | [CURRENT_STATE](../../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries) records **001–111** (111 applied 2026-10-07). The repository ceiling is `111_crm_rcc_a1_outcome_led_followup.sql`, and no remote branch carries a 112+ migration at this baseline. |
 | Deployed source | `8d5af40…` (PR #108 merge) per CURRENT_STATE. The baseline differs from it only by documentation. |
 | Production observation | **None.** No Production data, logs, students, leads, enrollments or Auth users were read. See D7. |
 | Scope of inspection | Cumulative SQL definitions (below), the receptionist UI, error mapping, and the existing test suites. All of it was read from the repository; nothing was executed against any database during this task. |
@@ -76,17 +78,17 @@
 
 | Object | Latest definition | Notes |
 | --- | --- | --- |
-| `public.crm_start_enrollment(uuid,jsonb)` | [084](../../../supabase/migrations/084_crm_enrollment_and_conversion.sql) only | SECURITY DEFINER, `search_path=pg_catalog,pg_temp`, executable by `authenticated` only. It is not redefined by any later migration. |
+| `public.crm_start_enrollment(uuid,jsonb)` | [084](../../../../supabase/migrations/084_crm_enrollment_and_conversion.sql) only | SECURITY DEFINER, `search_path=pg_catalog,pg_temp`, executable by `authenticated` only. It is not redefined by any later migration. |
 | `public.crm_get_enrollment_context(uuid)` | 084 only | Returns `learner_name`, `birth_date`, `age`, `session_type`, `program_interest`, contact name/phone/email, `student_id` and `recommended_level`. |
-| `crm_security.new_task` | [111](../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql) | Called by `crm_start_enrollment` for the `enrollment_followup` task. |
-| `crm_security.next_window`, `finish_task`, `result` | [080](../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) | Unchanged since 080. |
-| `crm_security.require_reader` | [079](../../../supabase/migrations/079_crm_read_interfaces_and_permissions.sql) | Allows receptionist, admin and director. |
+| `crm_security.new_task` | [111](../../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql) | Called by `crm_start_enrollment` for the `enrollment_followup` task. |
+| `crm_security.next_window`, `finish_task`, `result` | [080](../../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) | Unchanged since 080. |
+| `crm_security.require_reader` | [079](../../../../supabase/migrations/079_crm_read_interfaces_and_permissions.sql) | Allows receptionist, admin and director. |
 | `crm_security.evaluate_conversion`, `student_candidates`, `candidate_token`, `lock_enrollment_intent`, `enrollment_summary` | 084 only | |
 | `crm_security.command` | 111 (migration 103's definition plus three RCC-A1 edits) | **Not used by enrollment initiation.** A2 does not touch it. |
-| Enrollment row triggers | [072](../../../supabase/migrations/072_paid_enrollment_without_group.sql) (`enforce_enrollment_student_sync` / `check_enrollment_student_sync`, latest definitions) and the 084 conversion trigger | For example, `Trial`/`Validated` without a group raises `23514 Active enrollment requires a group`. |
-| Manual lead creation birth-date check | `crm_security.command` → `create_manual_lead` ([080](../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) → [103](../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql) → [111](../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql)) | Rejects `learner_birth_date > current_date` with `22023 Birth date cannot be in the future`. This is the only other CRM birth-date check in the cumulative schema. It is part of the guarded command dispatcher, which A2 does not touch. The owner's amendment calls it the lead-edit path; in the repository it is the manual-lead creation command, and there is no separate lead-edit command. |
-| `public.save_receptionist_enrollment` | [096](../../../supabase/migrations/096_receptionist_operational_permissions.sql) | Behind the learner page's **Nouvelle pré-inscription** and **Modifier l’inscription**. It allows Submitted, Under Review or Trial and rejects confirmation (`42501`). It has **no guard** against another pre-enrollment for the same learner, program and year. |
-| `public.create_charge_payment` | [096](../../../supabase/migrations/096_receptionist_operational_permissions.sql) (supersedes 084's admin/director gate) | Gated on `operational_security.require_capability('manage_finance_operations')`, which 096 grants to director, admin **and receptionist**. This matches the owner-verified Batch-1 receipt permissions in [SECURITY_RULES](../../ai/SECURITY_RULES.md#current-roles). See the [repository note](#repository-note--payment-authority) on the review statement. A2 neither relies on it nor changes it. |
+| Enrollment row triggers | [072](../../../../supabase/migrations/072_paid_enrollment_without_group.sql) (`enforce_enrollment_student_sync` / `check_enrollment_student_sync`, latest definitions) and the 084 conversion trigger | For example, `Trial`/`Validated` without a group raises `23514 Active enrollment requires a group`. |
+| Manual lead creation birth-date check | `crm_security.command` → `create_manual_lead` ([080](../../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) → [103](../../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql) → [111](../../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql)) | Rejects `learner_birth_date > current_date` with `22023 Birth date cannot be in the future`. This is the only other CRM birth-date check in the cumulative schema. It is part of the guarded command dispatcher, which A2 does not touch. The owner's amendment calls it the lead-edit path; in the repository it is the manual-lead creation command, and there is no separate lead-edit command. |
+| `public.save_receptionist_enrollment` | [096](../../../../supabase/migrations/096_receptionist_operational_permissions.sql) | Behind the learner page's **Nouvelle pré-inscription** and **Modifier l’inscription**. It allows Submitted, Under Review or Trial and rejects confirmation (`42501`). It has **no guard** against another pre-enrollment for the same learner, program and year. |
+| `public.create_charge_payment` | [096](../../../../supabase/migrations/096_receptionist_operational_permissions.sql) (supersedes 084's admin/director gate) | Gated on `operational_security.require_capability('manage_finance_operations')`, which 096 grants to director, admin **and receptionist**. This matches the owner-verified Batch-1 receipt permissions in [SECURITY_RULES](../../../ai/SECURITY_RULES.md#current-roles). See the [repository note](#repository-note--payment-authority) on the review statement. A2 neither relies on it nor changes it. |
 
 ### Enrollment initiation: what actually happens
 
@@ -124,25 +126,25 @@ Status, task and activity effects: the opportunity **stays `QUALIFIED`**, gains 
 
 ### Receptionist UI
 
-- **Drawer section** ([LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx)):
+- **Drawer section** ([LeadEnrollmentSection.jsx](../../../../src/components/crm/LeadEnrollmentSection.jsx)):
   - no enrollment and `QUALIFIED`: **Commencer l’inscription**;
   - an enrollment exists: status, learner, program and an **Ouvrir l’apprenant** link to `/students/{id}`;
   - **there is no "Continuer" entry point.**
   - `isPreEnrollment()` includes `Rejected`, so a refused enrollment on a Qualified lead shows "Finaliser l’inscription avec le parent."
-  - Dragging a card from QUALIFIED to CONVERTED opens the drawer with `initialAction='enrollment'`. That either opens the dialog or focuses the enrollment section ([LeadDetailSheet.jsx](../../../src/components/crm/LeadDetailSheet.jsx)).
-- **Dialog** ([CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx)) is a three-step wizard (Apprenant → Inscription → Vérification). The steps are client state only; **no draft is persisted on the server**.
+  - Dragging a card from QUALIFIED to CONVERTED opens the drawer with `initialAction='enrollment'`. That either opens the dialog or focuses the enrollment section ([LeadDetailSheet.jsx](../../../../src/components/crm/LeadDetailSheet.jsx)).
+- **Dialog** ([CrmEnrollmentDialog.jsx](../../../../src/components/crm/CrmEnrollmentDialog.jsx)) is a three-step wizard (Apprenant → Inscription → Vérification). The steps are client state only; **no draft is persisted on the server**.
   - The birth date input has no `max`. The follow-up `datetime-local` input has no `min`.
   - The follow-up field is shown even when an enrollment follow-up already exists. Its help text says an existing one is kept.
   - On any `22023`/`42501` the dialog jumps to **step 2**, even when the cause is on step 1 (learner or birth date).
   - On `40001` it refetches detail. If an enrollment now exists, it shows the **same success panel as its own creation**, even when another actor created it. Otherwise it resets to step 1.
   - On any error it renders `commandError`. A failure without a SQLSTATE keeps the request key, because only `22023`, `42501` and `40001` clear it.
   - The request key is retained while the payload is unchanged, which supports uncertain-response retries. It is discarded after a `22023`/`42501`.
-- **Learner page** ([students/[id]/page.jsx](../../../src/app/(admin)/students/[id]/page.jsx)):
+- **Learner page** ([students/[id]/page.jsx](../../../../src/app/(admin)/students/[id]/page.jsx)):
   - It loads the student, enrollments and related rows asynchronously, and renders a loading state until the load for the current scope completes.
   - `Section` is a component declared **inside** the page render, takes only `title` and `children`, accepts no `id`, and is redeclared on every render. React therefore remounts its DOM on each render, so a plain `#inscriptions` hash or an element focused before a later render is not reliable.
   - The **Inscriptions et groupes** section lists enrollments. For receptionists it offers **Nouvelle pré-inscription**, **Modifier l’inscription** and document upload. Payment summaries and receipt links are in separate payment sections.
   - **Retour** follows the validated `returnTo` parameter.
-- **Error mapping** (`commandError` in [presentation.mjs](../../../src/lib/crm/presentation.mjs)) matches English message substrings. There is **no structured reason contract** for browser-facing CRM commands. The only machine tokens in the repository are migration 105's server-side `PT409` reconciliation tokens. supabase-js passes PostgREST `code`, `message`, `details` and `hint` through to `crmRpc` callers unchanged.
+- **Error mapping** (`commandError` in [presentation.mjs](../../../../src/lib/crm/presentation.mjs)) matches English message substrings. There is **no structured reason contract** for browser-facing CRM commands. The only machine tokens in the repository are migration 105's server-side `PT409` reconciliation tokens. supabase-js passes PostgREST `code`, `message`, `details` and `hint` through to `crmRpc` callers unchanged.
 
 ### Current error inventory and what the receptionist sees today
 
@@ -524,11 +526,11 @@ The full matrix is in the [contract](#acceptance-criteria).
 ## Expected modules / files
 
 - `supabase/migrations/112_crm_rcc_a2_enrollment_ux.sql` (new; number provisional)
-- [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx), [LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx), and [LeadDetailSheet.jsx](../../../src/components/crm/LeadDetailSheet.jsx) (props pass-through only, if needed)
+- [CrmEnrollmentDialog.jsx](../../../../src/components/crm/CrmEnrollmentDialog.jsx), [LeadEnrollmentSection.jsx](../../../../src/components/crm/LeadEnrollmentSection.jsx), and [LeadDetailSheet.jsx](../../../../src/components/crm/LeadDetailSheet.jsx) (props pass-through only, if needed)
 - `src/lib/crm/enrollmentErrors.mjs`, `src/lib/crm/enrollmentActions.mjs` (new, pure)
-- [students/[id]/page.jsx](../../../src/app/(admin)/students/[id]/page.jsx): the `enrollment` parameter highlight-and-focus only ([mechanism](#learner-page-navigation-mechanism)). This may include hoisting `Section` out of the render with unchanged output. The **Nouvelle pré-inscription** button stays unchanged.
-- `scripts/test-crm-rcc-a2.sql`, `scripts/test-crm-rcc-a2.mjs`, `scripts/test-crm-rcc-a2-upgrade.mjs`, `scripts/test-crm-rcc-a2-browser.mjs` (new), plus [package.json](../../../package.json) and [verify.yml](../../../.github/workflows/verify.yml) wiring
-- Documentation: this plan's implementation record, [RCC-r1](rcc-r1-receptionist-crm-completion.md), [WORKFLOWS](../../ai/WORKFLOWS.md#crm--enrollment), [PRODUCT_RULES](../../ai/PRODUCT_RULES.md#conversion-and-finance) (enrollment-initiation birth-date and linked-learner rules), [ARCHITECTURE](../../ai/ARCHITECTURE.md) (the error-reason contract) and [FEATURE_INDEX](../FEATURE_INDEX.md)
+- [students/[id]/page.jsx](../../../../src/app/(admin)/students/[id]/page.jsx): the `enrollment` parameter highlight-and-focus only ([mechanism](#learner-page-navigation-mechanism)). This may include hoisting `Section` out of the render with unchanged output. The **Nouvelle pré-inscription** button stays unchanged.
+- `scripts/test-crm-rcc-a2.sql`, `scripts/test-crm-rcc-a2.mjs`, `scripts/test-crm-rcc-a2-upgrade.mjs`, `scripts/test-crm-rcc-a2-browser.mjs` (new), plus [package.json](../../../../package.json) and [verify.yml](../../../../.github/workflows/verify.yml) wiring
+- Documentation: this plan's implementation record, [RCC-r1](../rcc-r1-receptionist-crm-completion.md), [WORKFLOWS](../../../ai/WORKFLOWS.md#crm--enrollment), [PRODUCT_RULES](../../../ai/PRODUCT_RULES.md#conversion-and-finance) (enrollment-initiation birth-date and linked-learner rules), [ARCHITECTURE](../../../ai/ARCHITECTURE.md) (the error-reason contract) and [FEATURE_INDEX](../../FEATURE_INDEX.md)
 
 ## Owner approval record
 
@@ -567,15 +569,15 @@ Approved plan revision: **A2-r1**, the [IMPLEMENTATION CONTRACT](#implementation
   - D6 remains Option B;
   - D7 remains Option B;
   - **no D8 behavior change is approved or proposed.**
-- **Implementation remains NOT AUTHORIZED** until A2-r2 passes the same independent reviewer's exact-SHA re-review and this architecture PR is merged through the repository process. Creating migration 112, merging implementation and any Production release, migration or read each still need a separate explicit owner instruction. The Tier-3 gates in [AGENTS](../../../AGENTS.md#high-risk-changes-tier-3) still apply: independent exact-SHA review, owner release approval, a separate release/operator task and Production verification.
+- **Implementation remains NOT AUTHORIZED** until A2-r2 passes the same independent reviewer's exact-SHA re-review and this architecture PR is merged through the repository process. Creating migration 112, merging implementation and any Production release, migration or read each still need a separate explicit owner instruction. The Tier-3 gates in [AGENTS](../../../../AGENTS.md#high-risk-changes-tier-3) still apply: independent exact-SHA review, owner release approval, a separate release/operator task and Production verification.
 
 ### Repository note — payment authority
 
 The review stated that `create_charge_payment` remains admin/director-only. The repository disagrees:
 
 - 084's wrapper did check admin/director.
-- The cumulative definition in [096](../../../supabase/migrations/096_receptionist_operational_permissions.sql) gates it on `manage_finance_operations`, which `operational_security.has_capability` grants to director, admin and receptionist.
-- [SECURITY_RULES](../../ai/SECURITY_RULES.md#current-roles), [WORKFLOWS](../../ai/WORKFLOWS.md#existing-in-person-entry-paths) and the completed Batch-1 permissions plan agree with 096.
+- The cumulative definition in [096](../../../../supabase/migrations/096_receptionist_operational_permissions.sql) gates it on `manage_finance_operations`, which `operational_security.has_capability` grants to director, admin and receptionist.
+- [SECURITY_RULES](../../../ai/SECURITY_RULES.md#current-roles), [WORKFLOWS](../../../ai/WORKFLOWS.md#existing-in-person-entry-paths) and the completed Batch-1 permissions plan agree with 096.
 
 This contradiction is flagged, not resolved here. A2-r2 is correct either way:
 
@@ -589,7 +591,9 @@ A2-r2 proposes **no** D8. A2 does not need to change **Nouvelle pré-inscription
 
 ## Implementation record
 
-**IMPLEMENTED — AWAITING INDEPENDENT REVIEW. Not merged, not deployed; migration 112 is not applied to Production.**
+**Released 2026-10-07:** merged, deployed and Production verified ([release record](../../evidence/rcc-a2-production-2026-10-07.md)). The record below is historical implementation evidence.
+
+*At implementation:* IMPLEMENTED — AWAITING INDEPENDENT REVIEW. Not merged, not deployed; migration 112 is not applied to Production.
 
 | Item | Evidence |
 | --- | --- |
@@ -597,9 +601,9 @@ A2-r2 proposes **no** D8. A2 does not need to change **Nouvelle pré-inscription
 | Architecture | PR #111, independently reviewed at `154d8a21d662e9ec5bc411cc62098907719647a9` (READY FOR FINAL REVIEW), merged as `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. |
 | Branch / base | `feature/rcc-a2` from `origin/main` `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. |
 | Migration ceiling | `111` on `origin/main`, in CURRENT_STATE (ledger 001–111), and on every remote branch; no open PR carried a migration. Local 111 bodies of both functions were byte-identical to 084 before the change. |
-| Migration | [`112_crm_rcc_a2_enrollment_ux.sql`](../../../supabase/migrations/112_crm_rcc_a2_enrollment_ux.sql): `crm_start_enrollment` (E1–E9 only) and `crm_get_enrollment_context` (`linked_student` only), grants re-asserted. No private helper was added. |
-| Frontend | [enrollmentErrors.mjs](../../../src/lib/crm/enrollmentErrors.mjs), [enrollmentActions.mjs](../../../src/lib/crm/enrollmentActions.mjs), [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx), [LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx), and the learner page's `enrollment` highlight with `Section` hoisted unchanged. `LeadDetailSheet.jsx` and **Nouvelle pré-inscription** are unchanged. |
-| Tests | [SQL](../../../scripts/test-crm-rcc-a2.sql), [pure](../../../scripts/test-crm-rcc-a2.mjs), [111→112 upgrade](../../../scripts/test-crm-rcc-a2-upgrade.mjs), [browser](../../../scripts/test-crm-rcc-a2-browser.mjs) and [cross-session races](../../../scripts/test-crm-rcc-a2-concurrency.py), wired into `package.json` and the full-lane `verify.yml` steps. |
+| Migration | [`112_crm_rcc_a2_enrollment_ux.sql`](../../../../supabase/migrations/112_crm_rcc_a2_enrollment_ux.sql): `crm_start_enrollment` (E1–E9 only) and `crm_get_enrollment_context` (`linked_student` only), grants re-asserted. No private helper was added. |
+| Frontend | [enrollmentErrors.mjs](../../../../src/lib/crm/enrollmentErrors.mjs), [enrollmentActions.mjs](../../../../src/lib/crm/enrollmentActions.mjs), [CrmEnrollmentDialog.jsx](../../../../src/components/crm/CrmEnrollmentDialog.jsx), [LeadEnrollmentSection.jsx](../../../../src/components/crm/LeadEnrollmentSection.jsx), and the learner page's `enrollment` highlight with `Section` hoisted unchanged. `LeadDetailSheet.jsx` and **Nouvelle pré-inscription** are unchanged. |
+| Tests | [SQL](../../../../scripts/test-crm-rcc-a2.sql), [pure](../../../../scripts/test-crm-rcc-a2.mjs), [111→112 upgrade](../../../../scripts/test-crm-rcc-a2-upgrade.mjs), [browser](../../../../scripts/test-crm-rcc-a2-browser.mjs) and [cross-session races](../../../../scripts/test-crm-rcc-a2-concurrency.py), wired into `package.json` and the full-lane `verify.yml` steps. |
 
 **Local validation (synthetic data, local Supabase, external email disabled).** The worktree used a three-key local-only `.env.local`, the same shape CI writes.
 
@@ -645,9 +649,11 @@ The divergence confirms the plan's caution that no fixed offset may be assumed. 
 - **I2: birth-date check on replay.** Aligned with the plan. The birth-date bound stays active on an uncertain replay, using the frozen value. Only follow-up futurity is skipped. `submitReason` makes this explicit, with pure tests.
 - **Test gaps:** browser coverage now includes a linked learner with a one-character lead name, and a deleted linked learner (safe unavailable state, no candidate or new-learner path).
 - **Release checklist:** the future release verification records both the Production PostgreSQL `TimeZone` setting and the effective `Africa/Casablanca` offset ([rollout](#rollout--recovery-strategy-design-only-no-rollout-authorized)). Production was not read.
-- **Known pre-existing limitation, outside RCC-A2:** `casablancaInstant` converts CRM wall-clock inputs with browser time-zone data. A browser or runtime with stale Morocco rules can shift CRM-entered wall-clock times by an hour relative to the server's civil projection. It is not fixed here; it is tracked in the [RCC-r1 deferred reliability backlog](rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
+- **Known pre-existing limitation, outside RCC-A2:** `casablancaInstant` converts CRM wall-clock inputs with browser time-zone data. A browser or runtime with stale Morocco rules can shift CRM-entered wall-clock times by an hour relative to the server's civil projection. It is not fixed here; it is tracked in the [RCC-r1 deferred reliability backlog](../rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
 
-**Remaining gates.** Fresh independent exact-SHA review, owner merge and release approval, a separate release/operator task (migration first, including the Production `TimeZone` configuration read), Production verification and documentation closeout. **Nouvelle pré-inscription** is unchanged; its duplicate risk remains a known limitation (no D8).
+**Release (2026-10-07).** The exact-SHA re-review returned READY FOR FINAL REVIEW, and the owner approved the release. Migration 112 was applied first and verified (ledger 001–112, stored MD5 `213c9a435b93a2fa267b8e0072a95caa`, only the two contracted functions changed). The merge and deployment followed. 41/41 rolled-back synthetic Production probes passed. Production `TimeZone` is `UTC`; `Africa/Casablanca` resolved to UTC+01:00. See the [release record](../../evidence/rcc-a2-production-2026-10-07.md).
+
+*Remaining gates at implementation (historical; all satisfied by the release):* fresh independent exact-SHA review, owner merge and release approval, a separate release/operator task (migration first, including the Production `TimeZone` configuration read), Production verification and documentation closeout. **Nouvelle pré-inscription** is unchanged; its duplicate risk remains a known limitation (no D8).
 
 ## Owner decisions required
 
@@ -761,7 +767,7 @@ The divergence confirms the plan's caution that no fixed offset may be assumed. 
 
 ## IMPLEMENTATION CONTRACT
 
-**Revision A2-r2.** It builds on the D1–D7 decisions approved on 2026-10-07 and the B2 owner amendment ([approval record](#owner-approval-record), also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md)). **Implementation is NOT AUTHORIZED** until A2-r2 passes independent exact-SHA re-review and this architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction. Any deviation from this contract requires an owner-approved amendment first.
+**Revision A2-r2.** It builds on the D1–D7 decisions approved on 2026-10-07 and the B2 owner amendment ([approval record](#owner-approval-record), also in [OWNER_DECISIONS](../../../ai/OWNER_DECISIONS.md)). **Implementation is NOT AUTHORIZED** until A2-r2 passes independent exact-SHA re-review and this architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction. Any deviation from this contract requires an owner-approved amendment first.
 
 ### Authorized scope (once implementation is separately authorized)
 
