@@ -22,13 +22,13 @@ Website product direction is durable EH intake followed promptly by acquisition 
 - Outreach cycle: Day 1 two failed calls; Day 2 one; Day 4 one; Day 6 one. Default SQL policy offsets are `[0,0,1,3,5]`, anchored to the first actual failed call, adjusted to configured Casablanca calling windows and minimum spacing. Meaningful conversations reset the uninterrupted sequence. Published policy versions are immutable; actual operating hours must be configured, not invented.
 - Failed phone outcomes counted are no answer, busy, declined and unreachable. Wrong number and WhatsApp are not failed-call attempts. Five failures stop automatic sequence scheduling; they **never automatically mark Lost**. Further explicit calls remain possible; closure is a separate audited action.
 
-RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql); deployment state in [CURRENT_STATE](CURRENT_STATE.md)) applies the [approved RCC-r1 decisions](../architecture/plans/rcc-r1-receptionist-crm-completion.md):
+RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql); deployed 2026-10-07, see [CURRENT_STATE](CURRENT_STATE.md)) applies the [approved RCC-r1 decisions](../architecture/plans/rcc-r1-receptionist-crm-completion.md):
 
 - The receptionist records the conversation outcome, and guarded commands derive status.
 - **En réflexion** is follow-up metadata (`followup_reason`) on a callback or WhatsApp follow-up, never a stage. A QUALIFIED prospect who needs time stays QUALIFIED.
-- Tasks separate agreed appointments from internal reminders (`schedule_kind`). Center visits are always appointments.
+- Tasks separate agreed appointments from internal reminders (`schedule_kind`). New center visits are created as appointments; a legacy-compatible payload without a kind keeps NULL. The receptionist UI creates placement-test preparation as an internal reminder; the server does not enforce this for direct RPC callers.
 - An agreed callback keeps its exact time and must fall inside the Casablanca calling window; otherwise it is rejected, never shifted. Internal reminders may resolve to the next window.
-- A lead has one active generic commercial follow-up (callback or WhatsApp follow-up). The latest conversation decision replaces it on any channel; visits, placement, enrollment and other operational tasks are preserved.
+- An explicit conversation decision (callback, considering or qualify) replaces any open generic commercial follow-up (callback or WhatsApp follow-up), on any channel; visits, placement, enrollment and other operational tasks are preserved. Other task-creation paths (manual Planifier, wrong-number follow-up, next task on completion or cancellation, reopen) keep their existing behavior. A rule of at most one generic follow-up from every path is deferred, not a current invariant.
 - Reminder presets resolve on the server to the Casablanca policy's calling windows; appointments need an explicit agreed time.
 - Structured outcomes need no prose. Explanations remain required for standalone notes, Other reasons, cancellation and reopening.
 - CONTACTING and CONVERTED display as **Contact en cours** and **Inscription confirmée**; stored values are unchanged.
