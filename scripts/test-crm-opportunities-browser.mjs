@@ -30,7 +30,7 @@ async function done(){await dialog().getByRole('button',{name:'Terminé',exact:t
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
-async function fillTask(){await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
+async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local policy baseline');
@@ -57,7 +57,7 @@ try {
   // Drag proposes a command, leaves server stage unchanged, and cancel writes nothing.
   if(engine===chromium) {
    const card=page.getByTestId('opportunity-card').filter({hasText:'O3 parent 31'});const before=sql(`select count(*) from public.crm_activities where lead_id='${leads[31]}'`);
-   await card.dragTo(page.getByRole('region',{name:'À contacter'}));await dialog().getByRole('heading',{name:'Enregistrer le résultat de l’appel'}).waitFor();assert.equal(await dialog().getByLabel('Résultat de l’appel').inputValue(),'');
+   await card.dragTo(page.getByRole('region',{name:'Contact en cours'}));await dialog().getByRole('heading',{name:'Enregistrer le résultat de l’appel'}).waitFor();assert.equal(await dialog().getByLabel('Résultat de l’appel').inputValue(),'');
    assert.equal(detail(leads[31]).status,'NEW');await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${leads[31]}'`),before);
   }
   await page.getByRole('button',{name:'Liste',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),25);

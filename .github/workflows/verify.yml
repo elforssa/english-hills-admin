@@ -126,6 +126,11 @@ jobs:
           supabase db reset --local --version 108 --no-seed
           node scripts/test-crm-receptionist-ux-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: RCC-A1 stateful 110 upgrade
+        run: |
+          supabase db reset --local --version 110 --no-seed
+          node scripts/test-crm-rcc-a1-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -175,6 +180,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-batch2.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-live.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a1.sql
       - name: Advisory D2 scope, safety and retention acceptance
         env:
           PGPASSWORD: postgres

@@ -109,10 +109,10 @@ try {
     assert.equal(await row.innerText(),before,'unchanged task assignee/owner across picker pages');
     await row.getByRole('button',{name:'Voir le prospect',exact:true}).click();
     const drawer=page.getByRole('dialog').first();await drawer.getByText('Historique',{exact:true}).waitFor();
-    await drawer.getByRole('button',{name:'Responsable du prospect : '+owner.display_label,exact:true}).waitFor();
+    await drawer.getByText('Responsable du prospect : '+owner.display_label,{exact:true}).waitFor();
     await drawer.getByText('Responsable de la tâche : '+assignee.display_label,{exact:true}).waitFor();
     // Current assignment stays labelled when absent from the bounded dialog page.
-    await drawer.getByRole('button',{name:'Responsable du prospect : '+owner.display_label,exact:true}).click();
+    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Attribuer un responsable',exact:true}).click();
     let dialog=page.getByRole('dialog').last(),select=dialog.getByLabel('Responsable du prospect',{exact:true});
     await select.waitFor();assert.equal(await select.locator('option:checked').textContent(),owner.display_label);
     for (const button of ['Suivants','Précédents']) {
@@ -122,7 +122,7 @@ try {
       assert.equal(await select.locator('option:checked').textContent(),owner.display_label);
     }
     await dialog.getByRole('button',{name:'Annuler',exact:true}).click();
-    await drawer.getByRole('button',{name:'Réattribuer l’action',exact:true}).click();
+    await drawer.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:'Réattribuer la prochaine action',exact:true}).click();
     dialog=page.getByRole('dialog').last();select=dialog.getByLabel('Responsable de l’action',{exact:true});await select.waitFor();
     assert.equal(await select.locator('option:checked').textContent(),assignee.display_label);
     await dialog.getByRole('button',{name:'Annuler',exact:true}).click();
@@ -135,7 +135,7 @@ try {
       if(name==='crm_list_staff')for(const p of data.rows)assert.deepEqual(Object.keys(p).sort(),['display_label','id','name','role']);
       if(name==='crm_get_opportunities')for(const p of Object.values(data.pages))for(const l of p.rows)if(l.id===lead)assert.equal(l.owner_display_label,owner.display_label);
       if(name==='crm_get_work_queue')for(const t of data.rows) {
-        assert.deepEqual(Object.keys(t).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','id','lead','lead_id','local_date','local_time','scheduled_end_at','task_type','version']);
+        assert.deepEqual(Object.keys(t).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','schedule_kind','scheduled_end_at','task_type','version']);
         assert.deepEqual(Object.keys(t.lead).sort(),['contact_name','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version']);
         if(t.id===task.id){assert.equal(t.assignee_display_label,assignee.display_label);assert.equal(t.lead.owner_display_label,owner.display_label);assert.notEqual(t.assigned_to,t.lead.owner_id);}
       }

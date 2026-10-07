@@ -22,6 +22,17 @@ Website product direction is durable EH intake followed promptly by acquisition 
 - Outreach cycle: Day 1 two failed calls; Day 2 one; Day 4 one; Day 6 one. Default SQL policy offsets are `[0,0,1,3,5]`, anchored to the first actual failed call, adjusted to configured Casablanca calling windows and minimum spacing. Meaningful conversations reset the uninterrupted sequence. Published policy versions are immutable; actual operating hours must be configured, not invented.
 - Failed phone outcomes counted are no answer, busy, declined and unreachable. Wrong number and WhatsApp are not failed-call attempts. Five failures stop automatic sequence scheduling; they **never automatically mark Lost**. Further explicit calls remain possible; closure is a separate audited action.
 
+RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql); deployment state in [CURRENT_STATE](CURRENT_STATE.md)) applies the [approved RCC-r1 decisions](../architecture/plans/rcc-r1-receptionist-crm-completion.md):
+
+- The receptionist records the conversation outcome, and guarded commands derive status.
+- **En réflexion** is follow-up metadata (`followup_reason`) on a callback or WhatsApp follow-up, never a stage. A QUALIFIED prospect who needs time stays QUALIFIED.
+- Tasks separate agreed appointments from internal reminders (`schedule_kind`). Center visits are always appointments.
+- An agreed callback keeps its exact time and must fall inside the Casablanca calling window; otherwise it is rejected, never shifted. Internal reminders may resolve to the next window.
+- A lead has one active generic commercial follow-up (callback or WhatsApp follow-up). The latest conversation decision replaces it on any channel; visits, placement, enrollment and other operational tasks are preserved.
+- Reminder presets resolve on the server to the Casablanca policy's calling windows; appointments need an explicit agreed time.
+- Structured outcomes need no prose. Explanations remain required for standalone notes, Other reasons, cancellation and reopening.
+- CONTACTING and CONVERTED display as **Contact en cours** and **Inscription confirmée**; stored values are unchanged.
+
 Implementation caveat: SQL validates five ordered offsets with the first two on Day 1, but allows later offsets beyond the approved Day 2/4/6 cadence. The approved cadence above is the product rule; do not assume the live policy matches it without inspecting authorized configuration. Changing that product cadence needs an explicit decision.
 
 Sources: [078 schema](../../supabase/migrations/078_crm_core_schema.sql), [080 commands](../../supabase/migrations/080_crm_commands_and_followup_engine.sql), [082 conversation decisions](../../supabase/migrations/082_crm_conversation_decision.sql), [ADR-001](../architecture/decisions/ADR-001-crm-lifecycle.md).
