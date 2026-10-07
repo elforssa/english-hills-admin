@@ -7,7 +7,7 @@
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
 | RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
-| RCC-B1 | **PLANNED / NOT YET APPROVED** |
+| RCC-B1 | **OWNER APPROVED FOR IMPLEMENTATION (2026-10-07)** — architecture B1-r1 approved with D1–D8 as recommended; current revision B1-r3 carries the approval forward after review corrections and owner decision R1 ([plan](rcc-b1-responsive-opportunities.md), [approval](rcc-b1-responsive-opportunities.md#owner-approval-record)). Implementation, merge and release not yet authorized. |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
 
@@ -157,7 +157,7 @@ Separate future work, not approved or scheduled:
 
 ## RCC-B1 — responsive Opportunities presentation
 
-**PLANNED / NOT YET APPROVED.** Candidate scope:
+**OWNER APPROVED FOR IMPLEMENTATION (2026-10-07); implementation not yet authorized.** Original candidate scope:
 
 - compact Opportunities header and toolbars;
 - improved card and action hierarchy;
@@ -170,6 +170,19 @@ Separate future work, not approved or scheduled:
 - remove desktop telephone-launch links while keeping **Enregistrer un appel**.
 
 Acceptance widths: **1440 / 1280 / 1024 / 768 / 390 CSS px**.
+
+**Architecture (2026-10-07):** [RCC-B1 — responsive Opportunities presentation](rcc-b1-responsive-opportunities.md), revision B1-r1, turns the candidate scope above into a precise contract, based on local synthetic Chromium/WebKit evidence at all five widths. Proposed as a presentation-only Tier-2 outcome with no database, RPC or permission change, and no change to the shared sidebar. Owner decisions D1–D8 cover:
+
+- Demande unification;
+- telephone links;
+- collapsed history;
+- intermediate sidebar;
+- phone list;
+- mobile sheet;
+- tablet default;
+- drawer modality.
+
+**Owner approval (2026-10-07):** the owner approved B1-r1 as recommended: D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](rcc-b1-responsive-opportunities.md#owner-approval-record)). The approval restates the Tier-2 presentation boundary and the Tier-3 stop conditions. **Review corrections (2026-10-07):** the independent review of `225d17d…` returned CHANGES REQUIRED. Revision **B1-r2** resolves its five findings and five test gaps, D1–D8 unchanged, and the owner's approval carries forward ([corrections](rcc-b1-responsive-opportunities.md#b1-r2-review-corrections)). **Re-review corrections (2026-10-07):** the re-review of `9068324…` returned CHANGES REQUIRED for R1 and R2 only. Revision **B1-r3** applies owner decision R1 (option a: no tooltip on Autres actions, which keeps its visible label) and makes the Escape guard order-independent ([corrections](rcc-b1-responsive-opportunities.md#b1-r3-re-review-corrections)). D1–D8 are unchanged. Implementation stays unauthorized until three things happen: exact-SHA independent re-review of B1-r3, the architecture PR merge, and a separate explicit owner instruction. Merge and release need further explicit owner approval.
 
 ## Not authorized by RCC-r1
 

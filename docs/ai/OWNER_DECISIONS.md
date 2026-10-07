@@ -20,7 +20,7 @@ Plan: [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md).
 - Internal reminder presets are resolved server-side using the existing Casablanca policy.
 - RCC-r1 does not change Meta/lifecycle authority, finance authority, enrollment-confirmation authority or permissions.
 
-Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 decisions **APPROVED** on 2026-10-07; **RCC-A2 released** on 2026-10-07 (PR #112, migration 112; evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-B1 **PLANNED / NOT APPROVED**.
+Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 decisions **APPROVED** on 2026-10-07; **RCC-A2 released** on 2026-10-07 (PR #112, migration 112; evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-B1 architecture **APPROVED** on 2026-10-07 (revision B1-r1); not implemented.
 
 RCC-A1 release clarifications (2026-10-07): the guaranteed generic-follow-up replacement covers explicit conversation decisions across channels only. Broader consolidation across every task-creation path is deferred. The placement-preparation kind is UI-enforced, and legacy payloads may keep NULL `schedule_kind`. See the plan for boundaries and exclusions.
 
@@ -47,6 +47,30 @@ Plan: [RCC-A2](../architecture/plans/completed/rcc-a2-enrollment-ux-hardening.md
 - **D6:** broader generic callback/WhatsApp follow-up consolidation is excluded from RCC-A2 and remains a separate future outcome. It is tracked in the [RCC-r1 deferred reliability backlog](../architecture/plans/rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog), alongside the pre-existing browser time-zone limitation of `casablancaInstant`.
 - **Success wording amendment (2026-10-07):** an existing enrollment linked by the request shows **Inscription rattachée**. Creation headings appear only for an enrollment the request created; **Inscription déjà rattachée** is used for a discovered result.
 - **D7:** no Production forensic read is authorized now.
+
+## RCC-B1 — responsive Opportunities presentation — APPROVED
+
+Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-approval-record), revision **B1-r1**. On **2026-10-07** the owner approved the architecture as recommended and marked it **OWNER APPROVED FOR IMPLEMENTATION**.
+
+- The independent review of `225d17d…` returned CHANGES REQUIRED, and revision B1-r2 incorporated its corrections.
+- The re-review of `9068324…` returned CHANGES REQUIRED for R1 and R2 only. Revision **B1-r3** incorporates both. D1–D8 are unchanged, and the approval carries forward to B1-r3.
+- Implementation itself is not yet authorized: it needs exact-SHA independent re-review of B1-r3, the architecture PR merge and a separate explicit owner instruction. Merge and release are not authorized.
+
+- **D1 — A:** merge the inquiry information into one **Demande** section.
+- **D2 — C:** show the `tel:` **Appeler** link only below 640px with a coarse pointer. The visible phone number, the copy action and **Enregistrer un appel** remain available everywhere.
+- **D3 — A:** show the latest three real exchanges by default, with **Afficher tout l’historique** for the complete history using the existing paging.
+- **D4 — A:** no sidebar change. Any compact or icon sidebar is a separate UI Foundation outcome.
+- **D5 — B:** a stage-navigated list is the default phone Opportunities view.
+- **D6 — B:** a full-width, full-height phone sheet with sticky header and close behavior; browser Back closes it.
+- **D7 — B:** the stage-list default applies below 1024px, including the tablet band.
+- **D8 — A:** the desktop drawer stays modal.
+- **R1 — option (a), 2026-10-07 (B1-r3):** no Radix tooltip on the drawer's Autres actions control; it keeps its visible label, as today.
+- **Restated constraints:**
+  - Tier 2, presentation-focused.
+  - No database, migration, server/API authority, lifecycle, permission, Meta, finance, enrollment-logic or global sidebar change.
+  - The Escape/menu fix must use page-local handling without dependency changes.
+  - Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a Tier-3 escalation and stop condition.
+  - Acceptance covers both sides of the 768px and 1024px edges plus the 390/768/1024/1280/1440 widths.
 
 ## Other roadmap decisions
 
