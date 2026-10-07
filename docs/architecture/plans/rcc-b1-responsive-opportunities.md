@@ -1,6 +1,6 @@
 # Owner summary
 
-**RCC-B1 — Responsive Opportunities presentation. Revision B1-r2, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 to B1-r2.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED. B1-r2 incorporates those corrections without changing any decision ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r2, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
+**RCC-B1 — Responsive Opportunities presentation. Revision B1-r3, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 through B1-r3.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED, and B1-r2 incorporated those corrections. The re-review of B1-r2 returned CHANGES REQUIRED for R1 and R2 only, which B1-r3 incorporates, including the owner's R1 clarification (no tooltip on Autres actions). D1–D8 are unchanged ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections), [B1-r3 corrections](#b1-r3-re-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r3, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
 
 ## What will change
 
@@ -56,10 +56,11 @@ Owner decisions D1–D8 were approved as recommended on 2026-10-07 ([approval re
 
 ## Contract identity, baseline and evidence limits
 
-- **Revision:** B1-r2, on architecture branch `docs/rcc-b1-architecture` (PR #114).
+- **Revision:** B1-r3, on architecture branch `docs/rcc-b1-architecture` (PR #114).
   - B1-r1 (`4ae6bbf…`) was owner approved on 2026-10-07.
   - The independent Tier-2 review of `225d17d1e6fa998ed0dd7ecfebd9d9f538164d8e` returned CHANGES REQUIRED ([review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6037684885)).
-  - B1-r2 resolves findings I1–I5 and the five test gaps; see [B1-r2 review corrections](#b1-r2-review-corrections).
+  - B1-r2 resolved findings I1–I5 and the five test gaps; see [B1-r2 review corrections](#b1-r2-review-corrections).
+  - The re-review of `9068324558f0a739a4d8c358cc090f25a3b6d9a6` returned CHANGES REQUIRED for R1 and R2 only ([re-review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6038018694)). B1-r3 resolves both; see [B1-r3 re-review corrections](#b1-r3-re-review-corrections).
 - **Baseline:** freshly fetched `origin/main` = `13c1db1a3862317f2b658780d0f3e8a9343bdbec` (PR #113 merge, RCC-A2 closeout), as expected.
 - **Recorded state:** [CURRENT_STATE](../../ai/CURRENT_STATE.md) records the deployed source as `79b0835…` (PR #112) with Production at migration 112. The baseline differs from it only by documentation. RCC-A1 and RCC-A2 are deployed and Production verified.
 - **No Production access:** no Production read or mutation was performed.
@@ -347,7 +348,7 @@ The header must stay ≤ 140px at desktop and ≤ 168px on phone with ordinary t
 1. the existing unsupported-move notice, when present;
 2. the **Prochaine action** panel: content and buttons exactly as today, with the primary first;
 3. **Actions rapides**: Appel, WhatsApp, Note, Planifier and Autres actions, with unchanged handlers:
-   - desktop: one row (four labelled buttons and an icon button whose accessible name is "Autres actions", with the existing `ui/tooltip` as supplementary help; its Escape behavior is covered by the I2 guard);
+   - desktop and tablet: one wrapping row of five labelled buttons. **Autres actions keeps its visible label, as today** (owner decision R1). No tooltip, no `TooltipProvider` and no replacement `title` are added; at 620px the row may wrap to a second line;
    - phone: a 2×2 grid plus a full-width "Autres actions";
 4. the failed-attempt panel and "Toutes les prochaines actions (n)", unchanged;
 5. the reopen action for closed prospects, unchanged;
@@ -376,7 +377,7 @@ Browser Back works in all three drawer hosts: Opportunities and Tâches push his
 
 **Required behavior:**
 
-1. The first Escape closes only the actual topmost popup: menu, tooltip, select listbox or popover.
+1. The first Escape closes only the actual topmost popup (today a menu; any guarded Select, Popover, HoverCard or ContextMenu if one is ever added).
 2. It does not close the underlying lead drawer.
 3. Once no nested popup remains, a later Escape closes the drawer as UIF F9 already specifies.
 4. A true Dialog opened above the sheet shares the 1.1.19 stack. It keeps closing first and the sheet does not react (unchanged). The guard must not interfere with that, nor with a busy dialog's existing Escape blocking.
@@ -388,23 +389,27 @@ onEscapeKeyDown?.(event);
 if (!event.defaultPrevented && onDismiss) { event.preventDefault(); onDismiss(); }
 ```
 
-- **Listener order.** Each layer listens on `document` in the capture phase. The sheet's listener is registered when the sheet opens, before any popup inside it, so for one physical keypress it runs **first**.
-- **Today's defect.** The sheet dismisses itself and marks the event `defaultPrevented`. The popup's own handler then skips, and the popup disappears only because the whole drawer unmounted.
-- **Why preventDefault alone fails.** If the sheet's `onEscapeKeyDown` merely called `event.preventDefault()`, the drawer would stay open, but the popup's handler would see `defaultPrevented` and **also** refuse to close. The first Escape would then do nothing.
-- **What the guard must do instead.** Block the sheet **and** explicitly close the topmost popup.
+- **Listener order is not fixed (R2).** Each layer listens on `document` in the capture phase. The 1.1.19 sheet attaches its listener only **while it is the highest layer** of its stack: it detaches when a Dialog opens above it and re-attaches when that Dialog closes. The 1.1.11 popup attaches when it mounts. Either listener may therefore run first for a given keypress. **`defaultPrevented` determines whether another layer has already consumed the Escape.** No invariant in this plan depends on registration order.
+- **Today's defect** (the order observed in the B1-r1 capture). The sheet's listener ran first, dismissed the sheet and marked the event `defaultPrevented`. The popup's own handler then skipped, and the popup disappeared only because the whole drawer unmounted.
+- **Why preventDefault alone fails.** When the sheet's handler runs first, a bare `event.preventDefault()` keeps the drawer open, but the popup's handler (running second) sees `defaultPrevented` and **also** refuses to close. The first Escape would then do nothing.
+- **What the guard must do instead.** Handle both orders. Where the event is not yet consumed, block the sheet **and** explicitly close exactly one popup. Where it is already consumed, do nothing.
 
 **Implementation approach (page-local; detection does not depend on React open-state timing).** A small module under `src/components/crm/`, for example `useNestedLayerEscapeGuard` plus a `useGuardedLayer` helper, used by `LeadDetailSheet` and by the new filter sheet:
 
 1. **Snapshot (detection).** While the sheet is open, register a `keydown` listener on **`window` in the capture phase**. For a real keypress it runs **before** every Radix `document` listener, because window capture precedes document capture, so the DOM is still unchanged. For an `Escape` event it records, keyed by the event object itself (for example a `WeakSet` of events), whether a nested non-Dialog layer is active. That is true if **either**:
    - **(a) target:** `event.target` is inside a popup surface, one of `[role="menu"]`, `[role="listbox"]`, `[role="tooltip"]` or `[data-radix-popper-content-wrapper]`; or
    - **(b) open popup:** the document contains an open non-Dialog popup, one of `[data-radix-popper-content-wrapper]`, `[role="menu"][data-state="open"]`, `[role="listbox"][data-state="open"]` or `[role="tooltip"]`.
-   - Because the sheet is modal, any such popup belongs to the sheet's subtree or to a Dialog above it. In the second case the sheet is not the highest layer of its stack, its listener is not registered, and the guard is never consulted.
-2. **Controlled popups (closing).** Every non-Dialog Radix popup rendered inside the drawer or the filter sheet is **controlled**: `open` plus `onOpenChange` through `useGuardedLayer()`. That covers the Autres actions `DropdownMenu`, each open-task Plus d'options `DropdownMenu`, the Autres actions `Tooltip`, and any future Select, Popover or HoverCard there. The helper keeps a per-sheet stack of currently open popups in opening order, each with a `close()` that sets its `open` to false. Existing props (for example the drawer menu's `onCloseAutoFocus` handling) are kept.
-3. **Guard.** Pass `onEscapeKeyDown` to `SheetContent`; it already forwards props to `SheetPrimitive.Content`. Radix calls it with the native event. If `snapshot.has(event)`:
-   - call `event.preventDefault()`, so the sheet does not dismiss;
-   - call `close()` on the **topmost** entry of the popup stack. Radix's normal close path then runs (a menu returns focus to its trigger).
-   - If the snapshot saw a popup but the stack is empty (an unregistered popup), the drawer still stays open. The B1 browser test fails on that case, because the popup did not close.
-   - If the snapshot saw no popup, do nothing, and the sheet closes as UIF F9 specifies.
+   - Because the sheet is modal, any such popup belongs to the sheet's subtree or to a Dialog above it. In the second case the sheet is not the highest layer of its stack, its listener is detached, and the guard is never consulted.
+2. **Controlled popups (closing).** Every non-Dialog Radix popup rendered inside the drawer or the filter sheet is **controlled**: `open` plus `onOpenChange` through `useGuardedLayer()`. Today that means exactly two popups: the Autres actions `DropdownMenu` and each open-task Plus d'options `DropdownMenu`. Any Select, Popover, HoverCard or ContextMenu added there within approved B1 scope must follow the same rule. B1 adds none, and no popup type is added just to satisfy this contract. Tooltip is not part of the drawer's popup set (R1). For each guarded popup:
+   - **controlled state:** `open` and `onOpenChange` both come from `useGuardedLayer()`;
+   - **registration:** the helper keeps a per-sheet stack of currently open popups in opening order, pushing on open and removing on `onOpenChange(false)`;
+   - **idempotent close:** each entry's `close()` sets only its own `open` to false. If that popup is already closing or closed, it is a no-op. It never falls through to another entry and never touches the sheet.
+   - **existing props kept:** for example the drawer menu's `onCloseAutoFocus` handling.
+3. **Guard (order-independent).** Pass `onEscapeKeyDown` to `SheetContent`; it already forwards props to `SheetPrimitive.Content`. Radix calls it with the native event *before* checking `defaultPrevented`, whichever listener ran first.
+   - **Case A — `event.defaultPrevented === true`.** A nested popup has already handled this Escape and dismissed itself. The guard does **nothing**: no `close()` call, no second popup closed. The sheet does not dismiss, because Radix sees the event as already prevented. The one-layer dismissal for this keypress is complete.
+   - **Case B — `event.defaultPrevented === false`, and a nested popup is open** (the stack is non-empty, or `snapshot.has(event)`): call `event.preventDefault()` so the sheet does not dismiss, then call `close()` on exactly **one** entry, the **topmost** of the stack. Radix's normal close path runs, and the menu returns focus to its trigger. If the popup's own listener runs afterwards, it sees the prevented event and does nothing; the controlled close has already happened. If the snapshot saw a popup but the stack is empty (an unregistered popup), the drawer stays open and nothing else closes. The B1 browser test fails on that case, because the popup did not close.
+   - **Case B, no nested popup open:** do nothing, and the sheet closes as UIF F9 specifies.
+   - The decision is a pure function exported for unit tests, for example `nestedEscapeAction({ defaultPrevented, nestedDetected, openCount }) → 'none' | 'close-top' | 'allow-sheet'` in `src/lib/crm/presentation.mjs`.
 4. **Cleanup.** Remove the window listener when the sheet closes or unmounts. Never call `stopPropagation` or `stopImmediatePropagation`.
 
 **Result:**
@@ -413,9 +418,9 @@ if (!event.defaultPrevented && onDismiss) { event.preventDefault(); onDismiss();
 - next Escape (no popup left) → the drawer closes;
 - a Dialog above the drawer → closes first via the shared 1.1.19 stack, unchanged; a busy dialog still ignores Escape.
 
-Detection is DOM- and event-based; closing is an ordinary controlled-state update that happens after the sheet has already been blocked synchronously, so no race exists.
+Detection is DOM- and event-based. Closing is an ordinary controlled-state update made after the sheet has already been blocked synchronously, and `close()` is idempotent, so neither listener order nor React render timing can close two layers for one keypress.
 
-**Coverage.** The guard is layer-generic. It covers the existing `DropdownMenu`s in the drawer (Autres actions; Plus d'options on open-task rows), the new Autres actions `Tooltip`, and any `Select`, `Popover`, `HoverCard` or `ContextMenu` should one ever appear in the drawer or the filter sheet. B1 itself adds no Radix Select or Popover: the drawer and filter controls stay native (`select`, `details`).
+**Coverage.** The guard is layer-generic. It covers the existing `DropdownMenu`s in the drawer (Autres actions; Plus d'options on open-task rows), and any `Select`, `Popover`, `HoverCard` or `ContextMenu` added in approved B1 scope to the drawer or the filter sheet. There is no tooltip on Autres actions (R1). Tooltip behavior elsewhere in the application is untouched. B1 itself adds no Radix Select or Popover: the drawer and filter controls stay native (`select`, `details`).
 
 **Stop condition.** If this page-local guard cannot meet the required behavior without a dependency or shared-primitive change, stop under the existing escalation rule.
 
@@ -549,7 +554,7 @@ Local Supabase, synthetic data only, external delivery disabled. Two engines, fi
 | Stage chips | Both | 768, 390, 767, 640, 639 | Chip set per view (`closed` shows Tous, Perdu and Non qualifié only); **Tous** count equals `total` for the current view and filters; stage counts equal `counts`; selection sets or clears `stage`; synchronized with the Statut select; pager resets. Clicking a chip issues **no** CRM command request (the test asserts zero write-RPC requests); dropping a dragged card on a chip or a jump button does nothing |
 | Sidebar state | Both | All | Unchanged shell. Sidebar at ≥1024 or top bar below (WebKit edge accepted); mobile navigation focus trap unchanged |
 | Drawer | Both | All, plus 639/640 | Width per band; `SheetContent` does not scroll and the body does; **exactly one** button named "Fermer" in the drawer (strict-mode locator), still visible and inside the viewport after scrolling the body to the bottom; no other close affordance added; body order; scrim/Back/X close; focus restoration; board scroll unchanged beneath |
-| Escape layering | Both | 1440 and 390 (Opportunities), 390 (Calendar drawer), 390 (filter sheet) | For each popup — Autres actions menu, open-task Plus d'options menu, Autres actions tooltip (shown by keyboard focus), and any Select or Popover present in the drawer or filter sheet (B1 adds none; the test asserts none exist, or covers each one that does) — the first Escape closes only the popup (asserting the popup element is gone, not merely that the drawer stayed open) and the drawer stays open; a second Escape closes the drawer. A Dialog above the drawer closes first on Escape and the drawer stays; Escape is ignored while that dialog is busy, as today. In the filter sheet, Escape on a native control closes the sheet and returns focus to Filtres |
+| Escape layering | Both | 1440 and 390 (Opportunities), 390 (Tâches drawer), 390 (Calendar drawer), 390 (filter sheet) | The [Escape acceptance sequences](#escape-acceptance-sequences) E1–E6 pass exactly as written. The drawer contains no `role="tooltip"` element and no tooltip trigger on Autres actions (R1). B1 adds no Radix Select or Popover: the test asserts none exist in the drawer or filter sheet, or covers each one that does with E1's pattern |
 | Board scroll after refresh | Chromium + WebKit | 1024 (sidebar) and 768 with Tableau | Scroll the board horizontally; open a prospect and perform an existing action that dispatches `crm:refresh`; assert the board remounted (column paging reset to page 1, for example a column advanced with Voir les suivants is back on its first page) **and** `scrollLeft` is within 24px of the saved value, clamped to the new maximum; `window.scrollX` stays 0 |
 | Dialogs | Both | All | Within the viewport; sticky footer visible at the bottom of the dialog while the body scrolls; alert and primary action visible together; RCC-A2 error focus visible above the sticky footer |
 | Phone dialog with long uncertain alert | Chromium + WebKit | 390×844 | Drive the RCC-A2 uncertain path (route-fulfilled 502 on `crm_start_enrollment`, as in `test-crm-rcc-a2-browser.mjs`) on the step with the most fields. Assert: the long uncertain alert is inside the sticky footer and does not push Annuler/Retour/submit off-screen; the body scrolls independently; a field focused by the error contract is fully visible above the footer; Tab and Shift+Tab stay in the dialog; zero page overflow; frozen state intact |
@@ -561,6 +566,41 @@ Local Supabase, synthetic data only, external delivery disabled. Two engines, fi
 | Keyboard and focus | Both | 1440, 1024, 390 | 2px focus; Tab order through toolbar → board → drawer; Escape semantics; focus return. At 390: open a dialog above the full-screen sheet; focus is trapped in the dialog; Escape closes only the dialog; closing returns focus to the triggering control inside the lead workspace, or the drawer heading if it vanished |
 | Calendar drawer at 390 | Chromium + WebKit | 390×844 | Open a prospect from the Admissions Calendar (`/placement-tests?view=calendar`): full-screen sheet; exactly one visible "Fermer" that stays visible after scrolling the body; body scrolls inside the sheet; Escape with Autres actions open closes only the menu, a second Escape closes the drawer and returns focus per the Calendar's existing restoration; browser Back closes the sheet; zero page overflow |
 | Shared-consumer regression | Both | 1440, 768, 390 | Tâches/WorkQueue (including the existing shared-drawer coverage), Admissions Calendar drawer, Students list/detail and `/placement-tests` render as before |
+
+### Escape acceptance sequences
+
+Each sequence asserts the popup element is gone (not merely that the drawer stayed open), and counts Escapes exactly.
+
+- **E1 — Autres actions menu (exactly two Escapes).**
+  1. Open the lead drawer.
+  2. Open Autres actions.
+  3. Press Escape: the menu closes and the drawer remains open.
+  4. Focus returns to the Autres actions button, and no popup opens on focus return (no tooltip exists).
+  5. Press Escape once more: the drawer closes.
+  6. Focus restores per the host's existing rule.
+- **E2 — action dialog opened from Autres actions (R1 regression).**
+  1. Open Autres actions and choose an action (for example Attribuer un responsable).
+  2. Close the dialog with Annuler: focus returns to the Autres actions button, and no tooltip or other popup appears.
+  3. Press Escape **once**: the drawer closes.
+- **E3 — Plus d'options menu** on an open-task row: as E1. Focus returns to that row's trigger.
+- **E4 — Dialog above the drawer (UIF F9).**
+  1. Open an action dialog above the sheet and press Escape: only the Dialog closes.
+  2. Press Escape again: the drawer closes, since no popup remains.
+  3. While a dialog is busy (pending command), Escape is ignored, as today.
+- **E5 — order independence (R2).**
+  - **Unit level** (`scripts/test-crm-rcc-b1.mjs`). `nestedEscapeAction` returns:
+    - `'none'` when `defaultPrevented` is true, whatever the stack;
+    - `'close-top'` when not prevented and a popup is open;
+    - `'allow-sheet'` when not prevented and nothing is open.
+    - A stack fixture proves `close()` is idempotent and closes exactly one entry. Calling it twice, or after the popup's own close, closes nothing else.
+  - **Browser, popup first.** A test-only listener is injected with `addInitScript`, registered on `document` in the capture phase before the app's listeners. It calls `preventDefault()` on the first Escape, standing in for a layer that consumed it first. Assert:
+    - the drawer guard takes no action, and no registered popup's `close()` runs: the open Autres actions menu is still open, because the simulated consumer did not close it;
+    - the drawer remains open.
+    - Remove the stand-in, then press Escape: the menu closes. Press Escape again: the drawer closes.
+  - **Browser, sheet first.** The natural order of E1, with the menu opened after the drawer. The guard prevents the event and closes exactly that menu. The menu's own listener sees the prevented event. The drawer remains open, and a single Escape then closes it.
+- **E6 — filter sheet.** With focus on a native control, Escape closes the filter sheet and returns focus to the Filtres button. No popup exists there.
+
+E1, E2 and E4 run in Opportunities at 1440 and 390, in the Tâches drawer at 390, and in the Admissions Calendar drawer at 390, in Chromium and WebKit.
 
 ## Rollout and recovery
 
@@ -707,7 +747,7 @@ Each finding of the [independent review](https://github.com/elforssa/english-hil
 | Finding | Resolution | Where |
 | --- | --- | --- |
 | I1 — sticky close versus the Sheet primitive | `SheetContent` becomes a non-scrolling flex column with a fixed header and an inner scrolling body. The primitive's single existing "Fermer" stays pinned. No edit to `ui/sheet.jsx` and no second close button. | [Drawer and sheet behavior](#drawer-and-sheet-behavior) |
-| I2 — Escape across Radix layer stacks | A layer-generic page-local guard. A window-capture snapshot keyed to the event detects a nested popup from the DOM and the event target. The sheet's `onEscapeKeyDown` then blocks the sheet and explicitly closes the topmost controlled popup, because a bare `preventDefault` would also stop the popup's own dismissal. Covers menus, the new tooltip, and any Select, Popover or HoverCard; applies to the drawer and the filter sheet. No dependency or primitive change. | [Drawer and sheet behavior](#drawer-and-sheet-behavior) |
+| I2 — Escape across Radix layer stacks | A layer-generic page-local guard. A window-capture snapshot keyed to the event detects a nested popup from the DOM and the event target. The sheet's `onEscapeKeyDown` then blocks the sheet and explicitly closes the topmost controlled popup, because a bare `preventDefault` would also stop the popup's own dismissal. Covers menus, the new tooltip, and any Select, Popover or HoverCard; applies to the drawer and the filter sheet. No dependency or primitive change. *Superseded in part by B1-r3: the tooltip is removed (R1), and the guard rule is order-independent (R2).* | [Drawer and sheet behavior](#drawer-and-sheet-behavior) |
 | I3 — 640 edge, breakpoint parity, telephone row | 639/640 added to the edge pairs. One shared breakpoint definition for CSS and JS. Tests assert the active mode first. Four-case D2 C telephone matrix. | [Responsive model](#recommended-responsive-model), [Testing matrix](#testing-matrix) |
 | I4 — scroll after action refresh | The remount and paging reset stay. Scroll is captured before the refresh, restored after the rebuilt board renders, and clamped. | [Kanban and list behavior](#kanban-and-list-behavior) |
 | I5 — RCC-A2 frozen retry across breakpoints | One drawer and dialog tree; dialogs are direct stable children of `SheetContent`; class-only band differences. Resize-while-frozen and 390 focus tests. | [Drawer and sheet behavior](#drawer-and-sheet-behavior), [Testing matrix](#testing-matrix) |
@@ -717,11 +757,34 @@ Each finding of the [independent review](https://github.com/elforssa/english-hil
 | Test gap 4 — Calendar drawer at 390 | A dedicated Calendar-drawer row; existing Tâches coverage kept. | [Testing matrix](#testing-matrix) |
 | Test gap 5 — long uncertain alert at 390 | Sticky footer with a capped alert region and measured scroll padding; dedicated 390×844 test. | [Dialog behavior](#dialog-behavior), [Testing matrix](#testing-matrix) |
 
+## B1-r3 re-review corrections
+
+The [re-review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6038018694) of `9068324…` accepted every B1-r2 correction except the two items below. All other B1-r2 content is unchanged:
+
+- I1 sheet structure;
+- I3 edge pairs and breakpoint parity;
+- the D2 telephone matrix;
+- I4 scroll restoration;
+- I5 single tree;
+- mode-keyed budgets;
+- the explicit Tableau toggle;
+- `view=closed` chips;
+- Calendar 390 coverage;
+- the phone long-alert footer;
+- the presentation authority rule;
+- Tier 2;
+- the stop conditions.
+
+| Finding | Resolution | Where |
+| --- | --- | --- |
+| R1 — the tooltip reopens on programmatic focus return (Radix Tooltip 1.2.8 opens `onFocus` when no pointer is down; menu close and `returnFocusRef={moreRef}` both refocus the trigger) | **Owner decision R1, 2026-10-07: option (a).** No Radix tooltip on Autres actions; it keeps its visible label as today. No local `TooltipProvider`, no replacement tooltip, no `title`. Tooltip-specific tests removed; E2 proves one Escape closes the drawer after a dialog returns focus. | [Drawer body order](#drawer-and-sheet-behavior), [Escape sequences](#escape-acceptance-sequences) |
+| R2 — listener order is not guaranteed (the 1.1.19 sheet re-attaches its listener when a Dialog above it closes) | Order-independent rule: already `defaultPrevented` → do nothing; otherwise preventDefault and close exactly one (the topmost) controlled popup; idempotent `close()`; no registration-order invariant. Unit and browser tests for both orders. | [Drawer and sheet behavior](#drawer-and-sheet-behavior), [Escape sequences](#escape-acceptance-sequences) |
+
 ## IMPLEMENTATION CONTRACT
 
-**Status:** architecture OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07 (B1-r1, D1–D8 as recommended), carried forward to revision **B1-r2**; see the [approval record](#owner-approval-record). **Implementation is not yet authorized.** It may start only after all three of these:
+**Status:** architecture OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07 (B1-r1, D1–D8 as recommended), carried forward to revision **B1-r3**; see the [approval record](#owner-approval-record). **Implementation is not yet authorized.** It may start only after all three of these:
 
-1. exact-SHA independent re-review of B1-r2 passes;
+1. exact-SHA independent re-review of B1-r3 passes;
 2. the architecture PR is merged;
 3. a separate explicit owner instruction to implement.
 
@@ -777,7 +840,7 @@ The owner approved every recommended option, so no alternative option behavior i
 **Acceptance per width:** the [testing matrix](#testing-matrix), the [vertical budgets](#page-header-and-toolbar), the [phone task table](#phone-and-touch-behavior) and the [board containment criteria](#kanban-and-list-behavior). It must hold at 1440×900, 1280×800, 1024×768, 768×1024 and 390×844, on both sides of the 639/640, 767/768 and 1023/1024 edges, and at 320 for reflow. Each test asserts the active band and presentation before applying that mode's criteria.
 
 **Chromium and WebKit:**
-- Add `scripts/test-crm-rcc-b1-browser.mjs`, modelled on `test-ui-foundation-browser.mjs`: real local Auth, synthetic fixtures removed in `finally`, local feature-branch guard. It runs the matrix in both engines and asserts measured values: overflow, visible stages, budgets, target sizes, dialog bounds, the single Fermer, Escape layering (menu, tooltip, dialog, filter sheet, Calendar drawer), scroll restoration, frozen retry across breakpoints, history and Demande content, and the four-case telephone gating.
+- Add `scripts/test-crm-rcc-b1-browser.mjs`, modelled on `test-ui-foundation-browser.mjs`: real local Auth, synthetic fixtures removed in `finally`, local feature-branch guard. It runs the matrix in both engines and asserts measured values: overflow, visible stages, budgets, target sizes, dialog bounds, the single Fermer, Escape sequences E1–E6 (menu, dialog return, dialog above, order independence, filter sheet; Opportunities, Tâches and Calendar drawers), scroll restoration, frozen retry across breakpoints, history and Demande content, and the four-case telephone gating.
 - Add pure tests in `scripts/test-crm-rcc-b1.mjs` for the helpers.
 - Register both in `test:crm-opportunities` and `test:crm-opportunities-browser`.
 
@@ -827,13 +890,21 @@ Stop and report; do not work around it.
 | D6 — phone drawer | **B:** a full-width, full-height sheet with sticky header and close behavior; browser Back closes the sheet. |
 | D7 — tablet default | **B:** the stage-list default applies below 1024px, including the tablet band. |
 | D8 — desktop drawer | **A:** the desktop drawer stays modal. |
+| R1 — Autres actions tooltip (2026-10-07, B1-r3) | **Option (a):** no Radix tooltip; Autres actions keeps its visible label. |
 
 **Revision history after approval:**
 
 - The independent Tier-2 architecture review of exact head `225d17d1e6fa998ed0dd7ecfebd9d9f538164d8e` (B1-r1 plus this record) returned **CHANGES REQUIRED** ([review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6037684885)): no blocking findings, five important findings (I1–I5) and five test gaps.
 - **Revision B1-r2** incorporates all of them (see [B1-r2 review corrections](#b1-r2-review-corrections)).
 - None of the findings changes an approved product choice: D1–D8 are unchanged. The owner's 2026-10-07 approval carries forward to B1-r2, as the owner instructed when commissioning the corrections.
-- Implementation stays **not authorized** until B1-r2 passes exact-SHA independent re-review, PR #114 is merged, and a separate implementation instruction is given.
+- The independent re-review of exact head `9068324558f0a739a4d8c358cc090f25a3b6d9a6` (B1-r2) returned **CHANGES REQUIRED for R1 and R2 only** ([re-review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6038018694)). It accepted every other item.
+- **Owner decision R1 (2026-10-07): option (a).** Do not add a Radix tooltip to Autres actions; keep it visibly labelled, as today.
+- **Revision B1-r3** incorporates R1 and the order-independent Escape rule for R2 (see [B1-r3 re-review corrections](#b1-r3-re-review-corrections)).
+- D1–D8 remain unchanged. The owner's existing approval carries forward to B1-r3.
+- Implementation stays **not authorized** until three things happen:
+  1. B1-r3 passes fresh exact-SHA independent re-review;
+  2. PR #114 is merged;
+  3. a separate owner implementation instruction is given.
 
 Constraints the owner restated with the approval, binding on implementation:
 
@@ -845,7 +916,7 @@ Constraints the owner restated with the approval, binding on implementation:
 
 **Not authorized by this approval:**
 
-- implementation, until B1-r2 passes exact-SHA independent re-review, the architecture PR merge and a separate explicit owner instruction;
+- implementation, until B1-r3 passes exact-SHA independent re-review, the architecture PR merge and a separate explicit owner instruction;
 - merge of any implementation;
 - release or deployment;
 - any Production access.

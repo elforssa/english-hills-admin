@@ -52,8 +52,9 @@ Plan: [RCC-A2](../architecture/plans/completed/rcc-a2-enrollment-ux-hardening.md
 
 Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-approval-record), revision **B1-r1**. On **2026-10-07** the owner approved the architecture as recommended and marked it **OWNER APPROVED FOR IMPLEMENTATION**.
 
-- The independent review of `225d17d…` returned CHANGES REQUIRED. Revision **B1-r2** incorporates its corrections without changing any decision, and the approval carries forward to B1-r2.
-- Implementation itself is not yet authorized: it needs exact-SHA independent re-review of B1-r2, the architecture PR merge and a separate explicit owner instruction. Merge and release are not authorized.
+- The independent review of `225d17d…` returned CHANGES REQUIRED, and revision B1-r2 incorporated its corrections.
+- The re-review of `9068324…` returned CHANGES REQUIRED for R1 and R2 only. Revision **B1-r3** incorporates both. D1–D8 are unchanged, and the approval carries forward to B1-r3.
+- Implementation itself is not yet authorized: it needs exact-SHA independent re-review of B1-r3, the architecture PR merge and a separate explicit owner instruction. Merge and release are not authorized.
 
 - **D1 — A:** merge the inquiry information into one **Demande** section.
 - **D2 — C:** show the `tel:` **Appeler** link only below 640px with a coarse pointer. The visible phone number, the copy action and **Enregistrer un appel** remain available everywhere.
@@ -63,6 +64,7 @@ Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-ap
 - **D6 — B:** a full-width, full-height phone sheet with sticky header and close behavior; browser Back closes it.
 - **D7 — B:** the stage-list default applies below 1024px, including the tablet band.
 - **D8 — A:** the desktop drawer stays modal.
+- **R1 — option (a), 2026-10-07 (B1-r3):** no Radix tooltip on the drawer's Autres actions control; it keeps its visible label, as today.
 - **Restated constraints:**
   - Tier 2, presentation-focused.
   - No database, migration, server/API authority, lifecycle, permission, Meta, finance, enrollment-logic or global sidebar change.
