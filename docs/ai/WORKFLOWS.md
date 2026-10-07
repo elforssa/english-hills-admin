@@ -51,6 +51,13 @@ From a lead, `crm_book_placement_test` links a planned test and completes existi
 
 For a QUALIFIED, unlinked lead, review learner candidates, choose an existing learner or explicitly confirm a new one, and choose compatible program/year/level/group. `crm_start_enrollment` checks versions, candidate evidence and retry identity; it links/creates enrollment and records `enrollment_started`. Submitted/Trial initiation keeps follow-up open. Only trusted Confirmed/Validated evidence converts and closes commercial tasks. Downgrade after conversion raises review without erasing history. [084](../../supabase/migrations/084_crm_enrollment_and_conversion.sql).
 
+RCC-A2 (implemented, awaiting review; [record](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#implementation-record); migration 112, not deployed):
+
+- The drawer shows at most one enrollment action. A QUALIFIED lead without an enrollment gets **Commencer l'inscription**. A QUALIFIED lead with a pre-confirmation enrollment gets **Continuer l'inscription**, which opens the learner file with the CRM-linked enrollment highlighted and focused, and **Retour** goes back to the CRM. Every other state gets **Ouvrir l'apprenant** or no action, with an explicit note for reopened, closed, refused, unknown and changed-after-confirmation states.
+- A lead already linked to a learner preselects that learner. The dialog hides candidates and the new-learner choice, and does not depend on the lead's own learner name or birth date.
+- The enrollment follow-up defaults to tomorrow at the next calling window. An existing one is shown and kept, and a chosen date must be in the future.
+- Known failures name their step and field. A failure without a SQLSTATE is treated as uncertain and resent with the same request key.
+
 ## Payment/receipt relationship
 
 Authorized staff select an existing learner or new learner, an existing balance or new agreement, and record payment through `create_charge_payment`. Existing CRM-linked tuition requires an explicit compatible enrollment; do not guess among several enrollments. A nonzero payment creates an immutable receipt snapshot; later installments update the live balance, not earlier receipts. Zero creates no receipt. Voids/corrections use authorized audited functions; collected CRM revenue follows payment and reversal evidence separately from conversion. [Receipt model](../receipt-financial-model.md), [enrollment behavior](../../scripts/README-enrollment-workflow.md).

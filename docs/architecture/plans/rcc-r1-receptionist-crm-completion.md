@@ -6,7 +6,7 @@
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
-| RCC-A2 | **DECISIONS APPROVED (2026-10-07); ARCHITECTURE A2-r2 AWAITING INDEPENDENT RE-REVIEW** — Tier 3; [RCC-A2 plan](rcc-a2-enrollment-ux-hardening.md#owner-approval-record). Implementation NOT AUTHORIZED. |
+| RCC-A2 | **IMPLEMENTED — AWAITING REVIEW (2026-10-07)** — Tier 3; architecture A2-r2 merged (PR #111); migration 112 ([implementation record](rcc-a2-enrollment-ux-hardening.md#implementation-record)). Not merged or deployed. |
 | RCC-B1 | **PLANNED / NOT YET APPROVED** |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
@@ -131,11 +131,11 @@ Accepted limitations (owner, 2026-10-07):
 - Placement-preparation `schedule_kind` is enforced by the receptionist UI, not as a universal direct-RPC invariant.
 - New center visits use appointment semantics; legacy-compatible payloads may keep a NULL `schedule_kind`.
 
-RCC-A1 is complete. The plan stays active for RCC-A2 and RCC-B1, which remain not approved.
+RCC-A1 is complete. The plan stays active for RCC-A2 (implemented, awaiting review) and RCC-B1 (not approved).
 
 ## RCC-A2 — enrollment UX hardening
 
-**Owner decisions approved (2026-10-07); revision A2-r2 awaiting independent re-review; implementation NOT AUTHORIZED.** Original candidate scope:
+**IMPLEMENTED — AWAITING INDEPENDENT REVIEW (2026-10-07).** Revision A2-r2 passed re-review and merged (PR #111); the owner authorized implementation, the PR and CI only ([implementation record](rcc-a2-enrollment-ux-hardening.md#implementation-record)). Original candidate scope:
 
 - enrollment UX hardening;
 - field-specific errors instead of generic `22023` messages;

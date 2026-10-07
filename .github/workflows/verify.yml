@@ -131,6 +131,11 @@ jobs:
           supabase db reset --local --version 110 --no-seed
           node scripts/test-crm-rcc-a1-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: RCC-A2 stateful 111 upgrade
+        run: |
+          supabase db reset --local --version 111 --no-seed
+          node scripts/test-crm-rcc-a2-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -181,6 +186,7 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-live.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a1.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a2.sql
       - name: Advisory D2 scope, safety and retention acceptance
         env:
           PGPASSWORD: postgres
@@ -201,6 +207,7 @@ jobs:
           python3 scripts/test-crm-phase4-concurrency.py
           python3 scripts/test-crm-phase5-concurrency.py
           python3 scripts/test-crm-phase6-concurrency.py
+          python3 scripts/test-crm-rcc-a2-concurrency.py
           python3 scripts/test-crm-phase10-concurrency.py
           node scripts/test-crm-phase12-security.mjs
       - name: Synthetic database and API role suites
