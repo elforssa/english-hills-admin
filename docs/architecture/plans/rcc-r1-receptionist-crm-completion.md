@@ -7,7 +7,7 @@
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
 | RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
-| RCC-B1 | **OWNER APPROVED FOR IMPLEMENTATION (2026-10-07)** — architecture B1-r1, D1–D8 as recommended ([plan](rcc-b1-responsive-opportunities.md), [approval](rcc-b1-responsive-opportunities.md#owner-approval-record)). Implementation, merge and release not yet authorized. |
+| RCC-B1 | **OWNER APPROVED FOR IMPLEMENTATION (2026-10-07)** — architecture B1-r1 approved with D1–D8 as recommended; current revision B1-r2 carries the approval forward after review corrections ([plan](rcc-b1-responsive-opportunities.md), [approval](rcc-b1-responsive-opportunities.md#owner-approval-record)). Implementation, merge and release not yet authorized. |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
 
@@ -182,7 +182,7 @@ Acceptance widths: **1440 / 1280 / 1024 / 768 / 390 CSS px**.
 - tablet default;
 - drawer modality.
 
-**Owner approval (2026-10-07):** the owner approved B1-r1 as recommended: D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](rcc-b1-responsive-opportunities.md#owner-approval-record)). The approval restates the Tier-2 presentation boundary and the Tier-3 stop conditions. Implementation stays unauthorized until three things happen: independent architecture review, the architecture PR merge, and a separate explicit owner instruction. Merge and release need further explicit owner approval.
+**Owner approval (2026-10-07):** the owner approved B1-r1 as recommended: D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](rcc-b1-responsive-opportunities.md#owner-approval-record)). The approval restates the Tier-2 presentation boundary and the Tier-3 stop conditions. **Review corrections (2026-10-07):** the independent review of `225d17d…` returned CHANGES REQUIRED. Revision **B1-r2** resolves its five findings and five test gaps, D1–D8 unchanged, and the owner's approval carries forward ([corrections](rcc-b1-responsive-opportunities.md#b1-r2-review-corrections)). Implementation stays unauthorized until three things happen: exact-SHA independent re-review of B1-r2, the architecture PR merge, and a separate explicit owner instruction. Merge and release need further explicit owner approval.
 
 ## Not authorized by RCC-r1
 

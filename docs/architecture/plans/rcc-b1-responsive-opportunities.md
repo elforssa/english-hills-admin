@@ -1,6 +1,6 @@
 # Owner summary
 
-**RCC-B1 — Responsive Opportunities presentation. Revision B1-r1, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](#owner-approval-record)). Implementation itself is **not yet authorized**: it still needs independent architecture review, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
+**RCC-B1 — Responsive Opportunities presentation. Revision B1-r2, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 to B1-r2.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED. B1-r2 incorporates those corrections without changing any decision ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r2, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
 
 ## What will change
 
@@ -49,14 +49,17 @@ Presentation only, built from the deployed [UI Foundation](english-hills-ui-foun
 
 - The drawer is shared with Tâches and the Calendar.
 - The CRM dialogs host the RCC-A1 and RCC-A2 flows. Only their container layout may change.
-- Breakpoint edges at exactly 768 and 1024 behave differently in WebKit with classic scrollbars, so both sides of each edge must pass.
+- Breakpoint edges at exactly 640 and 1024 can resolve differently in WebKit with classic scrollbars. CSS and JS therefore share one breakpoint definition, tests assert the active mode first, and both sides of 639/640, 767/768 and 1023/1024 must pass.
 - Several existing browser assertions must be updated deliberately: the `tel:` link and the Acquisition/Demande labels.
 
 Owner decisions D1–D8 were approved as recommended on 2026-10-07 ([approval record](#owner-approval-record)).
 
 ## Contract identity, baseline and evidence limits
 
-- **Revision:** B1-r1. Architecture branch `docs/rcc-b1-architecture`.
+- **Revision:** B1-r2, on architecture branch `docs/rcc-b1-architecture` (PR #114).
+  - B1-r1 (`4ae6bbf…`) was owner approved on 2026-10-07.
+  - The independent Tier-2 review of `225d17d1e6fa998ed0dd7ecfebd9d9f538164d8e` returned CHANGES REQUIRED ([review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6037684885)).
+  - B1-r2 resolves findings I1–I5 and the five test gaps; see [B1-r2 review corrections](#b1-r2-review-corrections).
 - **Baseline:** freshly fetched `origin/main` = `13c1db1a3862317f2b658780d0f3e8a9343bdbec` (PR #113 merge, RCC-A2 closeout), as expected.
 - **Recorded state:** [CURRENT_STATE](../../ai/CURRENT_STATE.md) records the deployed source as `79b0835…` (PR #112) with Production at migration 112. The baseline differs from it only by documentation. RCC-A1 and RCC-A2 are deployed and Production verified.
 - **No Production access:** no Production read or mutation was performed.
@@ -172,7 +175,22 @@ Three bands use the existing Tailwind breakpoints. No new tokens.
 
 The existing **Tableau / Liste** toggle and the `layout` URL parameter keep working in every band, and the board stays contained wherever it is shown. `view=closed` still forces List. Explicit URLs keep their meaning; only the *default* moves from 768 to 1024.
 
-**Edge robustness rule.** Each acceptance width must pass in the layout each engine actually resolves. Tests also run at 1023 and 767, and both sides of each edge must satisfy that width's criteria. The desktop board is therefore specified to fit all five stages at 976px (1024 without the sidebar) and to scroll in a contained way at 736px (1024 with it).
+**One breakpoint definition.** Bands are decided by exactly two media queries, the Tailwind defaults (no `screens` override in `tailwind.config.js`):
+
+- `sm` = `(min-width: 640px)`;
+- `lg` = `(min-width: 1024px)`.
+
+CSS uses the `sm:`, `max-sm:` and `lg:` variants. JavaScript calls `matchMedia` with **the identical query strings**, exported once from a shared presentation constant (for example `BAND_QUERIES` in `src/lib/crm/presentation.mjs`). No other width threshold may decide Opportunities layout. In particular, the current `matchMedia('(max-width: 767px)')` default in `CrmWorkspace` is replaced by the `lg` query (D7), and no `max-width: 639px`-style near-duplicates are added. Within one engine, CSS and JS therefore always land in the same band.
+
+**Active mode, not nominal width.** The workspace root exposes its resolved band (`data-band="phone|tablet|desktop"`) and presentation (`data-presentation="board|stage-list|list"`), both derived from the same queries and the URL. With classic scrollbars WebKit can resolve an exact edge (640 or 1024) about 5px lower than Chromium (X1). So every acceptance test first reads the active band and presentation, then asserts **that mode's** criteria. A test never assumes both engines resolve the same branch at a nominal edge width.
+
+**Edge robustness rule.** Tests run both sides of each edge, in Chromium and WebKit:
+
+- **639 / 640:** phone ↔ tablet. Controls the D2 `tel:` gating, full-screen versus 620px sheet, one- versus two-column cards and the quick-action grid.
+- **767 / 768:** a regression of the old default threshold that D7 removed. Both sides must resolve to the tablet band and the stage list.
+- **1023 / 1024:** tablet ↔ desktop (stage list ↔ board default, top bar ↔ sidebar).
+
+At each edge, both sides must satisfy the criteria of the band they actually resolve to. The desktop board is therefore specified to fit all five stages at 976px (1024 without the sidebar, Tableau active) and to scroll in a contained way at 736px (1024 with it).
 
 ## Page header and toolbar
 
@@ -186,7 +204,17 @@ Opportunities uses opt-in compact variants of `PageHeader` and `FilterBar`. The 
 | Stage navigation | Board jump control, only when stages are clipped (see [Kanban](#kanban-and-list-behavior)) | Stage chips with counts | Stage chips with counts |
 | Active filters | Removable chips row, shown only when something is active. The polite live summary is retained (visually hidden when zero). | Same | Same |
 
-**Vertical budget.** With no active filters or notices, at 1440×900, 1280×800 and 1024×768 the top of the first card (or the board's first row) is **≤ 300px**, and the board receives ≥ 55% of the viewport height. At 768×1024 the first result is ≤ 340px. At 390×844 the first result is ≤ 360px, and at least the first two results begin in the first viewport.
+**Vertical budget.** The budget depends on the **active band and presentation**, read from `data-band`/`data-presentation` before asserting, never on the nominal width. Conditions: no active filters, no notices, ordinary fixture text.
+
+| Active mode | Applies at (typical) | Budget |
+| --- | --- | --- |
+| Desktop band, board presentation | 1440×900, 1280×800, 1024×768 when `lg` matches | Top of the first card ≤ **300px**, and the board region ≥ **55%** of viewport height |
+| Desktop band, list (table) presentation | Desktop with Liste chosen | First table row ≤ **300px** |
+| Tablet band, stage list | 768×1024, 767, 640, and 1024×768 when `lg` does not match (WebKit classic scrollbar) | First result card ≤ **340px** |
+| Phone band, stage list | 390×844, 639 | First result card ≤ **360px**, and at least the first two results begin in the first viewport |
+| Tablet or phone band with Tableau toggled | Any | No vertical budget; containment and overflow criteria only |
+
+Exactly one budget applies to each rendered mode.
 
 ## Kanban and list behavior
 
@@ -200,14 +228,30 @@ Opportunities uses opt-in compact variants of `PageHeader` and `FilterBar`. The 
   - a decorative edge fade (`aria-hidden`) marks each clipped side;
   - an **Aller à l’étape** button group lists each stage with its count, and each button scrolls its column into view. These buttons only scroll the board; they never filter.
 - **Keyboard.** The region stays focusable and labelled ("Tableau des opportunités, défilement horizontal"), and native arrow and Shift-wheel scrolling work.
-- **Drawer and refresh.** The board stays mounted while the drawer is open. Horizontal and vertical scroll positions are kept across drawer open and close and across the post-action refresh (`crm:refresh`). Focus restoration is unchanged.
+- **Drawer open and close.** The board stays mounted while the drawer is open; opening or closing the drawer does not remount it, so its scroll position is naturally kept. Focus restoration is unchanged.
+- **Scroll restoration after action refresh (I4).** The existing refresh stays authoritative and unchanged. Today `crm:refresh` runs `setCursors([null])` and `setGeneration(x => x + 1)`, and the board is keyed `filterKey + generation`. Every action therefore **remounts** the board, which resets each column's local paging, and that reset stays. Scroll position is restored *around* the rebuild as presentation state only:
+  1. **Storage.** A ref owned by `CrmWorkspace`, outside the keyed board subtree: `{ filterKey, left, top }`. It is never stored in the URL, React Query, local storage or server state.
+  2. **Capture.** Inside the existing `crm:refresh` handler, *before* calling `setGeneration`, read `scrollLeft` and `scrollTop` from the current board scroll container and save them with the current `filterKey`. Because the save happens synchronously at refresh time, the value is the one the user saw.
+  3. **Rebuild.** The existing generation bump and cursor reset run unchanged. Columns remount with fresh first pages; no stale column paging is retained, and no fetch or paging semantics change.
+  4. **Restore.** After the new board has committed **and** its initial data has rendered, restore the saved position once. Use a layout effect in the board keyed to generation and data readiness, or a ref callback plus `requestAnimationFrame`. Restore only if the saved `filterKey` equals the current one; a filter, view or layout change discards it. Clear the saved value after the attempt.
+  5. **Clamping.** Restoration uses `min(saved, scrollWidth - clientWidth)` horizontally (and the same vertically), never negative. If the board no longer overflows, it stays at 0.
+  6. **Scope.** Only the board's own container is scrolled. Page-level horizontal scroll stays forbidden, and `window.scrollX` must remain 0.
 - **Drag-and-drop** stays a desktop pointer convenience that opens the same guarded dialog as `opportunityAction` (unchanged). It is never required: every route is in the card overflow menu and the drawer. No drag-and-drop on touch.
 - **Paging.** Per-column paging ("Voir les suivants / Précédents") is unchanged.
 
 **Stage list** (phone and tablet default):
 
-- A **group of stage chips** (`role="group"`, label "Étapes") sits above the list: **Tous**, then the five board stages, each with its count from the existing `counts` object. When the existing `stage` URL value is Perdu or Non qualifié (chosen through the Statut filter), an extra selected chip shows it.
-- **Chips set the existing `stage` URL parameter**, which becomes `p_stage` in list mode. That is the same mechanism as today's Statut select, so the chips and the select stay synchronized.
+- A **group of stage chips** (`role="group"`, label "Étapes") sits above the list. Which chips appear depends on the selected high-level view; the population comes from migration 108's `opportunity_ids`, where `closed` = `LOST`/`NOT_QUALIFIED`:
+
+| Selected view | Chips shown | Notes |
+| --- | --- | --- |
+| Any view except `closed` | **Tous**, Nouveau, Contact en cours, En discussion, Qualifié, Inscription confirmée | An extra selected chip (Perdu or Non qualifié) appears only while the `stage` URL value is one of those, chosen through the Statut filter |
+| `closed` | **Tous**, Perdu, Non qualifié | Open-stage chips are not shown, because they are always 0 in this view |
+
+- **Tous** always means *every opportunity in the currently selected view and filter context*, never every opportunity globally. Its count is the existing `total`, which in views that include closed prospects (for example `all`) includes them; the header's "dont n clôturés" link already explains this. Selecting **Tous** removes the `stage` URL parameter.
+- Each stage chip's count is that stage's value in the existing `counts` object ("—" when the read is unavailable). Counts come from `matching`, which ignores `p_stage`, so they stay stable while switching chips. A chip with count 0 stays selectable and then shows the truthful filtered-empty state.
+- **Chips set the existing `stage` URL parameter**, which becomes `p_stage` in list mode. That is the same mechanism as today's Statut select, so the chips and the select stay synchronized, and selecting a chip resets list paging.
+- Counts are display data only. They are never used to decide a command, enable a transition, or as write authority.
 - The chip row may scroll horizontally *inside itself*, with an edge fade. On a 390px phone it never pushes the page.
 - **Cards** are one column below 640px and two columns at 640–1023px. With **Tous** selected, each card shows its stage badge; with a single stage selected, the badge is hidden. The current per-card stage label above the card is removed.
 - The cursor pager (Précédent / Suivant) is unchanged.
@@ -261,6 +305,7 @@ Rules:
 - **Counts.** The active count excludes the view, the layout and the default owner, as today. The stage chip counts toward it only when a stage is selected, matching today's Statut filter.
 - **Focus.** Closing the filter sheet returns focus to the Filtres button.
 - **Facets** keep their bounded reads, paging and truthful read states.
+- **Filter sheet structure.** The filter sheet (tablet and phone) uses the same I1 structure as the drawer: a non-scrolling `SheetContent`, a fixed header sharing its row with the primitive's single "Fermer", an inner scrolling body and a sticky footer (Effacer les filtres / Voir les résultats). It also uses the same I2 Escape guard. Its controls stay native (`select`, `input`, `details`): no Radix Select or Popover is introduced.
 
 ## Sidebar behavior
 
@@ -276,9 +321,21 @@ The fluid board fits all five stages at 1280 and 1440 inside today's 240px sideb
 - **≥640:** the existing 620px right sheet with an overlay radius.
 - **Modality:** the sheet stays modal (D8 A), with a focus trap and an inert background.
 
-**Sticky header**, top of the sheet scroll container, with a background and a bottom border once scrolled:
+**Scroll mechanism and the single close control (I1).** Today `LeadDetailSheet` puts `overflow-y-auto` on `SheetContent` itself. The primitive's own close button is a `SheetPrimitive.Close` positioned `absolute right-2 top-2`, with the visually hidden "Fermer" label, in [ui/sheet.jsx](../../../src/components/ui/sheet.jsx). Because it sits inside that scrolling element, it scrolls away. B1 fixes this **without touching the primitive**:
 
-- row 1: contact name as the title (wraps) and the close control, named "Fermer" (36×36 desktop, 44×44 touch);
+- `src/components/ui/sheet.jsx` is **not edited**.
+- No second close button is added. The drawer has **exactly one** visible, accessibly named "Fermer" control: the primitive's existing one.
+- `LeadDetailSheet` passes classes to `SheetContent` so that it becomes a **non-scrolling flex column**: `flex flex-col overflow-hidden`, full available height, with padding moved to the children. The primitive's `p-6` default is overridden by the call-site class, as today.
+- **First child:** the header region, `shrink-0`. It reserves the close area with right padding (`pr-12`), so the title never sits under the button.
+- **Second child:** the body, `min-h-0 flex-1 overflow-y-auto`. This is the drawer's only vertical scroll region.
+- Because `SheetContent` no longer scrolls, the primitive's absolute close button stays pinned at the top-right of the visible drawer while the body scrolls.
+- **Desktop and tablet (≥640):** a 620px side sheet, full viewport height, with the header at its top. The close button is 36×36 with a fine pointer; the existing touch rule makes it 44×44 with a coarse pointer.
+- **Phone (<640):** the same structure, full width and full height. The header carries `env(safe-area-inset-top)` padding and the body carries `env(safe-area-inset-bottom)` padding. The close button is 44×44 under the existing touch rule.
+- The same `SheetContent` element and component tree serve every band; only classes differ (see [I5](#b1-r2-review-corrections)).
+
+**Header region** (the non-scrolling first child; given a bottom border):
+
+- row 1: contact name as the title (wraps), sharing its row with the primitive's existing "Fermer" button, which needs no new markup;
 - row 2: learner · age · programme;
 - row 3: stage badge, then "Responsable : {label}" (12px muted);
 - row 4: destinations, as plain text: "Tél. {numéro} · WhatsApp {numéro}".
@@ -290,7 +347,7 @@ The header must stay ≤ 140px at desktop and ≤ 168px on phone with ordinary t
 1. the existing unsupported-move notice, when present;
 2. the **Prochaine action** panel: content and buttons exactly as today, with the primary first;
 3. **Actions rapides**: Appel, WhatsApp, Note, Planifier and Autres actions, with unchanged handlers:
-   - desktop: one row (four labelled buttons and an icon button named "Autres actions" with a tooltip);
+   - desktop: one row (four labelled buttons and an icon button whose accessible name is "Autres actions", with the existing `ui/tooltip` as supplementary help; its Escape behavior is covered by the I2 guard);
    - phone: a 2×2 grid plus a full-width "Autres actions";
 4. the failed-attempt panel and "Toutes les prochaines actions (n)", unchanged;
 5. the reopen action for closed prospects, unchanged;
@@ -310,16 +367,80 @@ The duplicated bordered learner block is removed; its information stays in the h
 - a scrim click (≥640);
 - browser Back, unchanged because opening a prospect already uses `pushState`.
 
-Focus restoration (origin element, else the page heading) is unchanged. The fix for X2 is mandatory: one Escape closes only the topmost layer (menu → drawer → page). The guard is page-local, for example preventing the sheet's `onEscapeKeyDown` while a drawer menu is open. Package or lockfile changes are a stop condition.
+Browser Back works in all three drawer hosts: Opportunities and Tâches push history through `CrmWorkspace`, and the Admissions Calendar through `router.push`. Focus restoration (origin element, else the page heading) is unchanged.
+
+**Escape and Radix layering (I2) — mandatory.**
+
+- **Root cause.** Dialog and Sheet use the top-level `@radix-ui/react-dismissable-layer` 1.1.19. Menu, Tooltip, Select, Popover, HoverCard and the other non-Dialog layers bundle 1.1.11. Each copy keeps its own layer stack and its own `document` keydown listener (capture phase, from `react-use-escape-keydown`), so a non-Dialog popup and the sheet each believe they are topmost.
+- **Not allowed as a fix:** a Radix upgrade, a `package.json` or lockfile change, or an edit to `ui/sheet.jsx` / `ui/dialog.jsx`.
+
+**Required behavior:**
+
+1. The first Escape closes only the actual topmost popup: menu, tooltip, select listbox or popover.
+2. It does not close the underlying lead drawer.
+3. Once no nested popup remains, a later Escape closes the drawer as UIF F9 already specifies.
+4. A true Dialog opened above the sheet shares the 1.1.19 stack. It keeps closing first and the sheet does not react (unchanged). The guard must not interfere with that, nor with a busy dialog's existing Escape blocking.
+
+**Why a plain `preventDefault` is not enough.** Both copies run the same handler (verified in the installed 1.1.19 and 1.1.11 builds):
+
+```js
+onEscapeKeyDown?.(event);
+if (!event.defaultPrevented && onDismiss) { event.preventDefault(); onDismiss(); }
+```
+
+- **Listener order.** Each layer listens on `document` in the capture phase. The sheet's listener is registered when the sheet opens, before any popup inside it, so for one physical keypress it runs **first**.
+- **Today's defect.** The sheet dismisses itself and marks the event `defaultPrevented`. The popup's own handler then skips, and the popup disappears only because the whole drawer unmounted.
+- **Why preventDefault alone fails.** If the sheet's `onEscapeKeyDown` merely called `event.preventDefault()`, the drawer would stay open, but the popup's handler would see `defaultPrevented` and **also** refuse to close. The first Escape would then do nothing.
+- **What the guard must do instead.** Block the sheet **and** explicitly close the topmost popup.
+
+**Implementation approach (page-local; detection does not depend on React open-state timing).** A small module under `src/components/crm/`, for example `useNestedLayerEscapeGuard` plus a `useGuardedLayer` helper, used by `LeadDetailSheet` and by the new filter sheet:
+
+1. **Snapshot (detection).** While the sheet is open, register a `keydown` listener on **`window` in the capture phase**. For a real keypress it runs **before** every Radix `document` listener, because window capture precedes document capture, so the DOM is still unchanged. For an `Escape` event it records, keyed by the event object itself (for example a `WeakSet` of events), whether a nested non-Dialog layer is active. That is true if **either**:
+   - **(a) target:** `event.target` is inside a popup surface, one of `[role="menu"]`, `[role="listbox"]`, `[role="tooltip"]` or `[data-radix-popper-content-wrapper]`; or
+   - **(b) open popup:** the document contains an open non-Dialog popup, one of `[data-radix-popper-content-wrapper]`, `[role="menu"][data-state="open"]`, `[role="listbox"][data-state="open"]` or `[role="tooltip"]`.
+   - Because the sheet is modal, any such popup belongs to the sheet's subtree or to a Dialog above it. In the second case the sheet is not the highest layer of its stack, its listener is not registered, and the guard is never consulted.
+2. **Controlled popups (closing).** Every non-Dialog Radix popup rendered inside the drawer or the filter sheet is **controlled**: `open` plus `onOpenChange` through `useGuardedLayer()`. That covers the Autres actions `DropdownMenu`, each open-task Plus d'options `DropdownMenu`, the Autres actions `Tooltip`, and any future Select, Popover or HoverCard there. The helper keeps a per-sheet stack of currently open popups in opening order, each with a `close()` that sets its `open` to false. Existing props (for example the drawer menu's `onCloseAutoFocus` handling) are kept.
+3. **Guard.** Pass `onEscapeKeyDown` to `SheetContent`; it already forwards props to `SheetPrimitive.Content`. Radix calls it with the native event. If `snapshot.has(event)`:
+   - call `event.preventDefault()`, so the sheet does not dismiss;
+   - call `close()` on the **topmost** entry of the popup stack. Radix's normal close path then runs (a menu returns focus to its trigger).
+   - If the snapshot saw a popup but the stack is empty (an unregistered popup), the drawer still stays open. The B1 browser test fails on that case, because the popup did not close.
+   - If the snapshot saw no popup, do nothing, and the sheet closes as UIF F9 specifies.
+4. **Cleanup.** Remove the window listener when the sheet closes or unmounts. Never call `stopPropagation` or `stopImmediatePropagation`.
+
+**Result:**
+
+- first Escape → only the topmost popup closes;
+- next Escape (no popup left) → the drawer closes;
+- a Dialog above the drawer → closes first via the shared 1.1.19 stack, unchanged; a busy dialog still ignores Escape.
+
+Detection is DOM- and event-based; closing is an ordinary controlled-state update that happens after the sheet has already been blocked synchronously, so no race exists.
+
+**Coverage.** The guard is layer-generic. It covers the existing `DropdownMenu`s in the drawer (Autres actions; Plus d'options on open-task rows), the new Autres actions `Tooltip`, and any `Select`, `Popover`, `HoverCard` or `ContextMenu` should one ever appear in the drawer or the filter sheet. B1 itself adds no Radix Select or Popover: the drawer and filter controls stay native (`select`, `details`).
+
+**Stop condition.** If this page-local guard cannot meet the required behavior without a dependency or shared-primitive change, stop under the existing escalation rule.
 
 **Layering.** Action, enrollment and placement dialogs open above the sheet, then menus and toasts. Closing a dialog returns focus inside the drawer, as today.
+
+**Single component tree (I5) — structural invariant.** RCC-A2's uncertain-retry state lives only in component state. `EnrollmentForm` inside `CrmEnrollmentDialog` keeps `frozen` (state) and `pending.current` (a ref holding the request key and payload). It survives today because the dialog is a stable child of `SheetContent`, rendered outside `ReadState`. B1 must keep that:
+
+- **One tree.** There is exactly one `Sheet` → `SheetContent` → lead-workspace tree for every band. No `isPhone ? <PhoneSheet/> : <SideSheet/>` swap, no band-specific wrappers that change component identity or position, and no `key` that depends on band, width or presentation.
+- **Dialog placement.** `CrmActionDialog`, `CrmEnrollmentDialog` and `PlacementTestModal` stay **direct, stably positioned children of that single `SheetContent`**. They are outside:
+  - the header and body regions' conditional content;
+  - `ReadState` and every loading or error branch;
+  - any band, breakpoint or presentation conditional.
+  Their existing mount conditions (`action && lead`, `enrolling && lead`, `placement !== undefined && lead`) are unchanged.
+- **Class-only band differences.** Responsive differences are CSS classes (`sm:`, `max-sm:`, `lg:`) on the same elements. JavaScript band values may choose classes or default presentation, never which drawer or dialog subtree mounts.
+- **No remount on breakpoint crossing.** Resizing or rotating across 640px or 1024px must not unmount an open dialog. This also holds for the drawer hosts' own keys (`AdmissionsCalendar` keys the drawer by `selected`; `CrmWorkspace` by lead and initial action); those keys stay unchanged and band-independent.
 
 ## Dialog behavior
 
 Scope: `CrmActionDialog` (every action and manual creation), `CrmEnrollmentDialog`, and `PlacementTestModal` when opened from CRM.
 
 - **Size.** Widths are unchanged (640 form / 576 / 512), bounded by viewport − 2rem. Height is `max-h-[calc(100dvh-2rem)]` everywhere, fixing `100vh` in the enrollment and placement dialogs. Dialogs stay centered on phone; the measurements show they fit.
-- **Layout.** The header stays at the top, the body scrolls, and a **sticky footer** holds the action buttons. The form's error alert sits directly above the buttons inside the sticky region, so validation and submit are visible together. The scroll container gets `scroll-padding-bottom` equal to the footer height, so a field focused by the RCC-A2 error contract is never hidden.
+- **Layout.** `DialogContent` stays the dialog's single scroll container (the primitive's existing `overflow-y-auto`, with the call-site `max-h`). The header scrolls with the body. The footer is **sticky**: the existing action-button row gets `sticky bottom-0`, an opaque background and a top border, as the last in-flow child, so it stays visible at the bottom of the dialog while the body scrolls under it.
+- **Error alert in the sticky footer.** The form's existing error alert (`role="alert"`) moves into the sticky region directly above the buttons, so validation and submit are visible together. This covers the long RCC-A2 uncertain message, "Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon." The alert part of the sticky region is capped at about 40% of the dialog height and scrolls internally if longer, so a long alert can never push the buttons off-screen.
+- **Space reservation.** A `ResizeObserver` on the sticky footer writes its height to a CSS variable on the scroll container (for example `--crm-dialog-footer`). The container sets `scroll-padding-bottom: var(--crm-dialog-footer)`, and the last body element gets equal bottom margin. The RCC-A2 error contract focuses the failing field with the existing `focus()` call; the browser then scrolls it into view above the footer, so no focus logic changes.
+- **Structural limits** inside `CrmEnrollmentDialog`, `CrmActionDialog` and `PlacementTestModal`: only class names, plus one presentational wrapper around the existing alert and button row. No change to hooks, state, refs, handlers, request keys, component boundaries or the order of stateful components. `EnrollmentForm` must not remount.
 - **Behavior is untouched:** busy/lock behavior, the frozen-uncertain retry state, request keys, expected versions, payloads, error mapping, step logic, success views, field validation, the 200-character completion counter, schedule-kind rules, reminder presets and the Casablanca help text.
 - **PlacementTestModal** is shared with `/placement-tests` and `LegacyPlacementEditor`. Only the container (height unit and sticky footer) may change. Anything more is a stop condition, because placement redesign is a UIF exclusion.
 
@@ -398,42 +519,48 @@ UIF F8–F10 stay binding. In addition:
 
 | Module | Expected change | Other consumers / regression scope |
 | --- | --- | --- |
-| [CrmWorkspace.jsx](../../../src/components/crm/CrmWorkspace.jsx) | Band defaults (list below 1024), compact header and toolbar, count line, stage chips, board height container | **Tâches** (`mode="today"`) shares the component; its header and WorkQueue must stay unchanged |
+| [CrmWorkspace.jsx](../../../src/components/crm/CrmWorkspace.jsx) | Band defaults (`lg` query replaces `max-width: 767px`), `data-band`/`data-presentation`, compact header and toolbar, count line, stage chips, board height container, board-scroll capture ref in the existing `crm:refresh` handler (I4) | **Tâches** (`mode="today"`) shares the component; its header and WorkQueue must stay unchanged |
 | [OpportunityFilters.jsx](../../../src/components/crm/OpportunityFilters.jsx) | Toolbar row, view chips/select, filter disclosure row, filter sheet, active chips | Opportunities only |
-| [OpportunitiesBoard.jsx](../../../src/components/crm/OpportunitiesBoard.jsx) | Fluid grid, sticky headers, affordance, jump control, scroll preservation | Opportunities only |
+| [OpportunitiesBoard.jsx](../../../src/components/crm/OpportunitiesBoard.jsx) | Fluid grid, sticky headers, affordance, jump control (never a drop target), post-render scroll restore (I4) | Opportunities only |
 | [OpportunitiesList.jsx](../../../src/components/crm/OpportunitiesList.jsx) / [OpportunityCard.jsx](../../../src/components/crm/OpportunityCard.jsx) | Card hierarchy, grouped overflow menu, touch layout fix, tablet card grid | Opportunities only |
-| [LeadDetailSheet.jsx](../../../src/components/crm/LeadDetailSheet.jsx) | Container, sticky header, order, Demande, history collapse, quick-action layout, Escape guard | **Tâches** and the **Admissions Calendar** |
+| [LeadDetailSheet.jsx](../../../src/components/crm/LeadDetailSheet.jsx) | Non-scrolling `SheetContent` with fixed header and inner body (I1), order, Demande, history collapse, quick-action layout, Escape guard (I2); dialogs kept as direct stable children (I5) | **Tâches** and the **Admissions Calendar** |
 | [LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx) / [LeadPlacementSection.jsx](../../../src/components/crm/LeadPlacementSection.jsx) | Spacing only, if any. Action rules and links unchanged. | Drawer hosts |
 | [CrmActionDialog.jsx](../../../src/components/crm/CrmActionDialog.jsx) | Container and sticky footer; telephone-link gating (D2). No payload change. | Every drawer host plus manual creation |
-| [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx) | `100dvh` and sticky footer only | Drawer hosts; the RCC-A2 suite |
+| [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx) | `100dvh` and sticky footer only: classes plus one presentational wrapper around the existing alert and button row; no hook, state, ref, handler or boundary change | Drawer hosts; the RCC-A2 suite |
 | [PlacementTestModal.jsx](../../../src/components/placement/PlacementTestModal.jsx) | Optional container-only change | `/placement-tests`, `LegacyPlacementEditor` |
 | [FilterBar.jsx](../../../src/components/operational/FilterBar.jsx) / [PageHeader.jsx](../../../src/components/operational/PageHeader.jsx) | Opt-in compact props only; default rendering unchanged | **Students**, **Tâches** |
-| [presentation.mjs](../../../src/lib/crm/presentation.mjs) | Additive pure helpers (meaningful-event set, history summary selection, band constants). Existing exports, including `phoneLinks`, unchanged. | Pure tests |
-| New `src/components/crm/*` presentation components (stage nav, filter sheet) | Allowed | — |
-| **Not changed** | `Sidebar.jsx`, `globals.css` global rules, `tailwind.config.js`, the `ui/sheet.jsx` and `ui/dialog.jsx` defaults, `package.json` dependencies and the lockfile | — |
+| [presentation.mjs](../../../src/lib/crm/presentation.mjs) | Additive pure helpers: meaningful-event set, history summary selection, `BAND_QUERIES` (the single breakpoint definition), stage-chip set per view. Existing exports, including `phoneLinks`, unchanged. | Pure tests |
+| New `src/components/crm/*` presentation modules: stage nav, filter sheet, `useNestedLayerEscapeGuard`/`useGuardedLayer`, the dialog-footer height observer | Allowed | — |
+| **Not changed** | `Sidebar.jsx`, `globals.css` global rules, `tailwind.config.js`, `ui/sheet.jsx`, `ui/dialog.jsx`, `ui/tooltip.jsx` and other `ui/` primitives, `package.json` dependencies and the lockfile | — |
 
 ## Testing matrix
 
-Local Supabase, synthetic data only, external delivery disabled. Two engines, five widths, plus edge checks at 767 and 1023:
+Local Supabase, synthetic data only, external delivery disabled. Two engines, five widths, plus edge pairs 639/640, 767/768 and 1023/1024. Every row first asserts the active `data-band` and `data-presentation`, then that mode's criteria:
 
 | Check | Engines | Widths | Pass condition |
 | --- | --- | --- | --- |
-| Page overflow | Chromium + WebKit | All, plus 767, 1023, 320 | `documentElement` and `#main-content` horizontal overflow = 0 with board, list, filters open, drawer, dialogs |
-| Board containment | Both | 1440, 1280, 1024 (and toggled at 768/390) | 1440 and 1280: 5/5 stages fully visible. 1024 with sidebar: ≥ 3 fully visible, the rest reachable by contained scroll and the jump control. 1024 without sidebar: 5/5. |
-| Vertical budget | Both | All | Budgets in [Page header and toolbar](#page-header-and-toolbar) |
+| Page overflow | Chromium + WebKit | All, plus 639, 640, 767, 1023, 320 | `documentElement` and `#main-content` horizontal overflow = 0 with board, list, filters open, drawer, dialogs |
+| Board containment | Both | 1440, 1280, 1024, 1023 (and toggled at 768/390) | **The test first activates Tableau explicitly** (clicks Tableau or sets `layout=board`) whenever the default presentation is not the board, then asserts. 1440 and 1280: 5/5 stages fully visible. 1024 with sidebar (`lg` matches): ≥ 3 fully visible, the rest reachable by contained scroll and the jump control. 1024/1023 without sidebar (`lg` does not match), Tableau active: 5/5 fully visible. Toggled at 768/390: contained scroll, zero page overflow. |
+| Vertical budget | Both | All | Assert the active mode first, then the single budget for that mode in [Page header and toolbar](#page-header-and-toolbar) |
+| Breakpoint consistency | Both | 639, 640, 767, 768, 1023, 1024 | `data-band` equals the result of the shared `BAND_QUERIES` media queries; CSS-visible layout (sheet width, card columns, quick-action grid, sidebar) matches that band in the same engine; 767 and 768 both resolve to the tablet band and stage list |
 | Card readability | Both | All | Long Arabic/French names wrap without clipping; identity stacks vertically under touch; desktop card ≤ 150px for ordinary text |
 | Action reachability | Both | All | Every card overflow item and every drawer action is reachable by pointer and by keyboard; touch targets ≥ 44px below 1024 |
 | Toolbar and filters | Both | All | Layout per the filter table; filters sheet below 1024; URL, visible controls and RPC arguments agree; reset and Back/Forward unchanged |
-| Stage chips | Both | 768, 390, 767 | Counts equal the existing `counts`; selection sets `stage`; synchronized with the Statut select; pager resets |
+| Stage chips | Both | 768, 390, 767, 640, 639 | Chip set per view (`closed` shows Tous, Perdu and Non qualifié only); **Tous** count equals `total` for the current view and filters; stage counts equal `counts`; selection sets or clears `stage`; synchronized with the Statut select; pager resets. Clicking a chip issues **no** CRM command request (the test asserts zero write-RPC requests); dropping a dragged card on a chip or a jump button does nothing |
 | Sidebar state | Both | All | Unchanged shell. Sidebar at ≥1024 or top bar below (WebKit edge accepted); mobile navigation focus trap unchanged |
-| Drawer | Both | All | Width per band; sticky header and close always visible; body order; single-Escape layering (menu, then drawer); scrim/Back/X close; focus restoration; scroll preserved on the page beneath |
-| Dialogs | Both | All | Within the viewport; footer and alert visible without scrolling the page; RCC-A2 error focus visible above the sticky footer |
+| Drawer | Both | All, plus 639/640 | Width per band; `SheetContent` does not scroll and the body does; **exactly one** button named "Fermer" in the drawer (strict-mode locator), still visible and inside the viewport after scrolling the body to the bottom; no other close affordance added; body order; scrim/Back/X close; focus restoration; board scroll unchanged beneath |
+| Escape layering | Both | 1440 and 390 (Opportunities), 390 (Calendar drawer), 390 (filter sheet) | For each popup — Autres actions menu, open-task Plus d'options menu, Autres actions tooltip (shown by keyboard focus), and any Select or Popover present in the drawer or filter sheet (B1 adds none; the test asserts none exist, or covers each one that does) — the first Escape closes only the popup (asserting the popup element is gone, not merely that the drawer stayed open) and the drawer stays open; a second Escape closes the drawer. A Dialog above the drawer closes first on Escape and the drawer stays; Escape is ignored while that dialog is busy, as today. In the filter sheet, Escape on a native control closes the sheet and returns focus to Filtres |
+| Board scroll after refresh | Chromium + WebKit | 1024 (sidebar) and 768 with Tableau | Scroll the board horizontally; open a prospect and perform an existing action that dispatches `crm:refresh`; assert the board remounted (column paging reset to page 1, for example a column advanced with Voir les suivants is back on its first page) **and** `scrollLeft` is within 24px of the saved value, clamped to the new maximum; `window.scrollX` stays 0 |
+| Dialogs | Both | All | Within the viewport; sticky footer visible at the bottom of the dialog while the body scrolls; alert and primary action visible together; RCC-A2 error focus visible above the sticky footer |
+| Phone dialog with long uncertain alert | Chromium + WebKit | 390×844 | Drive the RCC-A2 uncertain path (route-fulfilled 502 on `crm_start_enrollment`, as in `test-crm-rcc-a2-browser.mjs`) on the step with the most fields. Assert: the long uncertain alert is inside the sticky footer and does not push Annuler/Retour/submit off-screen; the body scrolls independently; a field focused by the error contract is fully visible above the footer; Tab and Shift+Tab stay in the dialog; zero page overflow; frozen state intact |
 | History | Both | 1440, 390 | Collapsed shows ≤ 3 meaningful entries; expand and collapse; paging; read states |
 | Demande | Both | 1440, 390 | All former information present; per-read failure isolation |
-| Telephone | Both | All | Per D2: no `tel:` link at desktop (and tablet as decided); phone-width coarse-pointer link present and records nothing; Copier le numéro everywhere |
+| Telephone (D2 C) | Chromium + WebKit (emulated pointer: Chromium `hasTouch`/`isMobile`, WebKit `hasTouch`, with `matchMedia('(pointer: coarse)')` asserted first) | 390 and 639; 640 and 768; 1440 | The Appeler `tel:` link appears **only when both** the viewport is below 640px **and** the pointer is coarse:<br>• <640 + coarse → link present, href `tel:+…`, clicking records no activity;<br>• <640 + fine/mouse → **no** `tel:` link;<br>• ≥640 + coarse → **no** `tel:` link;<br>• ≥640 + fine/mouse → **no** `tel:` link.<br>In all four cases the phone number text, **Copier le numéro**, the call-outcome form and **Enregistrer un appel** remain available; the recording workflow is unchanged |
 | Enrollment actions | Both | 1440, 390 | Commencer / Continuer / Ouvrir l’apprenant identical to RCC-A2 (`enrollmentAction` rows); frozen/uncertain retry unchanged |
-| Keyboard and focus | Both | 1440, 1024 | 2px focus, Tab order through toolbar → board → drawer, Escape semantics, focus return |
-| Shared-consumer regression | Both | 1440, 768, 390 | Tâches/WorkQueue, Admissions Calendar drawer, Students list/detail and `/placement-tests` render as before |
+| Frozen retry across breakpoints (I5) | Chromium (required) + WebKit | 390 → 700 → 390 (and 1000 → 1100 → 1000 for `lg`) | Open the enrollment dialog from the drawer at 390; reach the RCC-A2 uncertain state (route-fulfilled 502); record the frozen request body and its request key; resize across 640 (and back), and separately across 1024. Assert: the dialog element stays connected (the same DOM node, checked through a test-held element handle; no remount); the frozen inputs and displayed view are unchanged; the retry request sends the **identical** request key and payload; RCC-A2 frozen-retry behavior (no field edits, same-key resend, outcome handling) passes as in its own suite |
+| Keyboard and focus | Both | 1440, 1024, 390 | 2px focus; Tab order through toolbar → board → drawer; Escape semantics; focus return. At 390: open a dialog above the full-screen sheet; focus is trapped in the dialog; Escape closes only the dialog; closing returns focus to the triggering control inside the lead workspace, or the drawer heading if it vanished |
+| Calendar drawer at 390 | Chromium + WebKit | 390×844 | Open a prospect from the Admissions Calendar (`/placement-tests?view=calendar`): full-screen sheet; exactly one visible "Fermer" that stays visible after scrolling the body; body scrolls inside the sheet; Escape with Autres actions open closes only the menu, a second Escape closes the drawer and returns focus per the Calendar's existing restoration; browser Back closes the sheet; zero page overflow |
+| Shared-consumer regression | Both | 1440, 768, 390 | Tâches/WorkQueue (including the existing shared-drawer coverage), Admissions Calendar drawer, Students list/detail and `/placement-tests` render as before |
 
 ## Rollout and recovery
 
@@ -573,11 +700,28 @@ No other genuine product choices were found. Everything else above is ordinary i
 - a shared `Sidebar` change (D4 B);
 - dependency or lockfile changes.
 
+## B1-r2 review corrections
+
+Each finding of the [independent review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6037684885) of `225d17d…` is resolved in the body of this plan; this table indexes them. No owner decision changed.
+
+| Finding | Resolution | Where |
+| --- | --- | --- |
+| I1 — sticky close versus the Sheet primitive | `SheetContent` becomes a non-scrolling flex column with a fixed header and an inner scrolling body. The primitive's single existing "Fermer" stays pinned. No edit to `ui/sheet.jsx` and no second close button. | [Drawer and sheet behavior](#drawer-and-sheet-behavior) |
+| I2 — Escape across Radix layer stacks | A layer-generic page-local guard. A window-capture snapshot keyed to the event detects a nested popup from the DOM and the event target. The sheet's `onEscapeKeyDown` then blocks the sheet and explicitly closes the topmost controlled popup, because a bare `preventDefault` would also stop the popup's own dismissal. Covers menus, the new tooltip, and any Select, Popover or HoverCard; applies to the drawer and the filter sheet. No dependency or primitive change. | [Drawer and sheet behavior](#drawer-and-sheet-behavior) |
+| I3 — 640 edge, breakpoint parity, telephone row | 639/640 added to the edge pairs. One shared breakpoint definition for CSS and JS. Tests assert the active mode first. Four-case D2 C telephone matrix. | [Responsive model](#recommended-responsive-model), [Testing matrix](#testing-matrix) |
+| I4 — scroll after action refresh | The remount and paging reset stay. Scroll is captured before the refresh, restored after the rebuilt board renders, and clamped. | [Kanban and list behavior](#kanban-and-list-behavior) |
+| I5 — RCC-A2 frozen retry across breakpoints | One drawer and dialog tree; dialogs are direct stable children of `SheetContent`; class-only band differences. Resize-while-frozen and 390 focus tests. | [Drawer and sheet behavior](#drawer-and-sheet-behavior), [Testing matrix](#testing-matrix) |
+| Test gap 1 — vertical budget at 1024 WebKit | Budgets are keyed to the active band and presentation, exactly one per mode. | [Page header and toolbar](#page-header-and-toolbar) |
+| Test gap 2 — 1024 without sidebar | The test activates Tableau explicitly before asserting 5/5. | [Testing matrix](#testing-matrix) |
+| Test gap 3 — stage chips and `view=closed` | Chip set per view; **Tous** = the current view and filter population; chips and jump buttons are never drop targets or commands. | [Kanban and list behavior](#kanban-and-list-behavior), [IMPLEMENTATION CONTRACT](#implementation-contract) |
+| Test gap 4 — Calendar drawer at 390 | A dedicated Calendar-drawer row; existing Tâches coverage kept. | [Testing matrix](#testing-matrix) |
+| Test gap 5 — long uncertain alert at 390 | Sticky footer with a capped alert region and measured scroll padding; dedicated 390×844 test. | [Dialog behavior](#dialog-behavior), [Testing matrix](#testing-matrix) |
+
 ## IMPLEMENTATION CONTRACT
 
-**Status:** architecture OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07 (B1-r1, D1–D8 as recommended; see the [approval record](#owner-approval-record)). **Implementation is not yet authorized.** It may start only after all three of these:
+**Status:** architecture OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07 (B1-r1, D1–D8 as recommended), carried forward to revision **B1-r2**; see the [approval record](#owner-approval-record). **Implementation is not yet authorized.** It may start only after all three of these:
 
-1. independent architecture review of this PR's exact head SHA;
+1. exact-SHA independent re-review of B1-r2 passes;
 2. the architecture PR is merged;
 3. a separate explicit owner instruction to implement.
 
@@ -590,10 +734,10 @@ Approval to implement is not approval to merge or release.
 
 **Authorized scope (the approved options):**
 - The responsive bands; compact header and toolbar; view chips/select; filter disclosure row and filter sheet; active-filter chips.
-- The fluid contained board with sticky headers, affordance, jump control and scroll preservation.
+- The fluid contained board with sticky headers, affordance, jump control and post-refresh scroll restoration (I4).
 - The stage list with chips, the tablet card grid, and the desktop-only table.
 - The card hierarchy and grouped overflow menu; the card touch layout fix.
-- In the drawer: sticky header, body order, Demande, collapsed history, quick-action layout, single-Escape layering fix, phone full-screen sheet.
+- In the drawer: non-scrolling `SheetContent` with fixed header and inner scroll body (I1), body order, Demande, collapsed history, quick-action layout, the layer-generic Escape guard (I2), phone full-screen sheet.
 - Dialog containers with sticky footers and `100dvh`; telephone-link gating per D2.
 - Pure helpers and tests.
 
@@ -602,14 +746,17 @@ The owner approved every recommended option, so no alternative option behavior i
 **Module manifest:** exactly the table in [Modules expected to change](#modules-expected-to-change-and-shared-component-blast-radius), plus new presentation components under `src/components/crm/`, new tests under `scripts/`, and `package.json` *script* entries only. Any other file needs a written justification in the PR. The files marked "Not changed" in that table are out of scope (stop condition).
 
 **Breakpoints and responsive behavior:**
-- Bands: phone below 640, tablet 640–1023, desktop ≥1024, using the existing Tailwind `sm`/`lg` breakpoints and matching `matchMedia` values.
+- Bands: phone below 640, tablet 640–1023, desktop ≥1024, decided only by the Tailwind `sm` `(min-width: 640px)` and `lg` `(min-width: 1024px)` queries. CSS uses `sm:`/`max-sm:`/`lg:`; JS uses `matchMedia` with the identical strings from one shared constant. No other width threshold.
+- D2: the `tel:` link is shown only under `not all and (min-width: 640px)` (Tailwind `max-sm:`) combined with `(pointer: coarse)`.
+- `data-band` and `data-presentation` on the workspace root reflect the resolved mode, for tests.
 - Default layout: board at ≥1024 and stage list below (D7).
 - The `layout` and `view=closed` semantics are unchanged.
 
 **Layout invariants:**
 - Zero horizontal overflow on `documentElement` and `#main-content` at every width and state.
 - Horizontal scrolling only inside the board, the chip rows and labelled table regions.
-- Close and primary actions are always reachable.
+- Close and primary actions are always reachable. The drawer has exactly one "Fermer" control (the primitive's) and it is never scrolled out of view.
+- One drawer and dialog component tree for every band; dialogs are direct stable children of `SheetContent`, outside `ReadState` and outside any band conditional (I5).
 - No essential text below 12px; touch targets ≥ 44px below 1024 or with a coarse pointer.
 - Only existing UIF tokens and primitives; no page-local brand hex values.
 
@@ -620,11 +767,17 @@ The owner approved every recommended option, so no alternative option behavior i
 - Read limits, cursors and query keys; filter URL composition, debounce, reset and Back/Forward.
 - Staff labels and the scheduled-time formatter; drawer focus restoration; Tâches/WorkQueue defaults; Calendar behavior.
 - Drag-and-drop stays a route to guarded dialogs only.
+- **Presentation authority rule.** Every new presentation control is a read/navigation control only: stage chips, stage-jump buttons, phone and tablet stage-list navigation, Tableau/Liste toggles and filter controls. These controls must never:
+  - trigger a stage transition directly;
+  - become a drag-and-drop target (only board columns stay drop targets, routing to guarded dialogs as today);
+  - call a guarded CRM write command, or `opportunityAction`, as a result of navigation.
+  Counts are display data, not authority. Existing guarded actions and dialogs remain the only authority for commercial-stage changes.
+- Board refresh semantics (`crm:refresh` → cursor reset and generation remount) and per-column paging reset are unchanged; scroll restoration is presentation state around them (I4).
 
-**Acceptance per width:** the [testing matrix](#testing-matrix), the [vertical budgets](#page-header-and-toolbar), the [phone task table](#phone-and-touch-behavior) and the [board containment criteria](#kanban-and-list-behavior). It must hold at 1440×900, 1280×800, 1024×768, 768×1024 and 390×844, and also at 1023, 767 and 320 for overflow and edge robustness.
+**Acceptance per width:** the [testing matrix](#testing-matrix), the [vertical budgets](#page-header-and-toolbar), the [phone task table](#phone-and-touch-behavior) and the [board containment criteria](#kanban-and-list-behavior). It must hold at 1440×900, 1280×800, 1024×768, 768×1024 and 390×844, on both sides of the 639/640, 767/768 and 1023/1024 edges, and at 320 for reflow. Each test asserts the active band and presentation before applying that mode's criteria.
 
 **Chromium and WebKit:**
-- Add `scripts/test-crm-rcc-b1-browser.mjs`, modelled on `test-ui-foundation-browser.mjs`: real local Auth, synthetic fixtures removed in `finally`, local feature-branch guard. It runs the matrix in both engines and asserts measured values (overflow, visible stages, budgets, target sizes, dialog bounds, Escape layering, history and Demande content, telephone gating).
+- Add `scripts/test-crm-rcc-b1-browser.mjs`, modelled on `test-ui-foundation-browser.mjs`: real local Auth, synthetic fixtures removed in `finally`, local feature-branch guard. It runs the matrix in both engines and asserts measured values: overflow, visible stages, budgets, target sizes, dialog bounds, the single Fermer, Escape layering (menu, tooltip, dialog, filter sheet, Calendar drawer), scroll restoration, frozen retry across breakpoints, history and Demande content, and the four-case telephone gating.
 - Add pure tests in `scripts/test-crm-rcc-b1.mjs` for the helpers.
 - Register both in `test:crm-opportunities` and `test:crm-opportunities-browser`.
 
@@ -643,7 +796,8 @@ The owner approved every recommended option, so no alternative option behavior i
 **Stop conditions:**
 - A need for any new read, field, RPC, migration, permission or server change.
 - A change to command payloads, enrollment/conversion logic or RCC-A1/RCC-A2 behavior.
-- A need to edit `Sidebar.jsx`, global CSS rules, Tailwind configuration, the `ui/` primitive defaults, dependencies or the lockfile.
+- A need to edit `Sidebar.jsx`, global CSS rules, Tailwind configuration, `ui/sheet.jsx`, `ui/dialog.jsx` or other `ui/` primitive defaults, dependencies or the lockfile.
+- Inability to meet the I2 Escape behavior with the page-local guard, to keep a single drawer and dialog tree (I5), or to restore board scroll without changing refresh or paging semantics (I4).
 - Placement form changes beyond the container.
 - Inability to meet a layout invariant without one of the above.
 - A failing or INCONCLUSIVE test that cannot be explained.
@@ -674,17 +828,24 @@ Stop and report; do not work around it.
 | D7 — tablet default | **B:** the stage-list default applies below 1024px, including the tablet band. |
 | D8 — desktop drawer | **A:** the desktop drawer stays modal. |
 
+**Revision history after approval:**
+
+- The independent Tier-2 architecture review of exact head `225d17d1e6fa998ed0dd7ecfebd9d9f538164d8e` (B1-r1 plus this record) returned **CHANGES REQUIRED** ([review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6037684885)): no blocking findings, five important findings (I1–I5) and five test gaps.
+- **Revision B1-r2** incorporates all of them (see [B1-r2 review corrections](#b1-r2-review-corrections)).
+- None of the findings changes an approved product choice: D1–D8 are unchanged. The owner's 2026-10-07 approval carries forward to B1-r2, as the owner instructed when commissioning the corrections.
+- Implementation stays **not authorized** until B1-r2 passes exact-SHA independent re-review, PR #114 is merged, and a separate implementation instruction is given.
+
 Constraints the owner restated with the approval, binding on implementation:
 
 - RCC-B1 stays **Tier 2** and presentation-focused.
 - No database, migration, server/API authority, lifecycle semantics, permissions, Meta, finance, enrollment logic or global sidebar change is authorized.
 - The Escape/menu defect may be fixed with the documented page-local drawer/menu handling, **without changing dependencies**.
 - Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a **Tier 3 escalation and stop condition**.
-- Acceptance must cover the documented responsive boundaries: both sides of the 768px and 1024px edges (767/768 and 1023/1024) and the required 390, 768, 1024, 1280 and 1440 widths.
+- Acceptance must cover the documented responsive boundaries: both sides of the 768px and 1024px edges (767/768 and 1023/1024) and the required 390, 768, 1024, 1280 and 1440 widths. B1-r2 adds the 639/640 edge as the review required.
 
 **Not authorized by this approval:**
 
-- implementation, until independent architecture review, the architecture PR merge and a separate explicit owner instruction;
+- implementation, until B1-r2 passes exact-SHA independent re-review, the architecture PR merge and a separate explicit owner instruction;
 - merge of any implementation;
 - release or deployment;
 - any Production access.

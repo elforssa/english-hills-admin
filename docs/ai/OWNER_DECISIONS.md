@@ -50,7 +50,10 @@ Plan: [RCC-A2](../architecture/plans/completed/rcc-a2-enrollment-ux-hardening.md
 
 ## RCC-B1 — responsive Opportunities presentation — APPROVED
 
-Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-approval-record), revision **B1-r1**. On **2026-10-07** the owner approved the architecture as recommended and marked it **OWNER APPROVED FOR IMPLEMENTATION**. Implementation itself is not yet authorized: it needs independent architecture review, the architecture PR merge and a separate explicit owner instruction. Merge and release are not authorized.
+Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-approval-record), revision **B1-r1**. On **2026-10-07** the owner approved the architecture as recommended and marked it **OWNER APPROVED FOR IMPLEMENTATION**.
+
+- The independent review of `225d17d…` returned CHANGES REQUIRED. Revision **B1-r2** incorporates its corrections without changing any decision, and the approval carries forward to B1-r2.
+- Implementation itself is not yet authorized: it needs exact-SHA independent re-review of B1-r2, the architecture PR merge and a separate explicit owner instruction. Merge and release are not authorized.
 
 - **D1 — A:** merge the inquiry information into one **Demande** section.
 - **D2 — C:** show the `tel:` **Appeler** link only below 640px with a coarse pointer. The visible phone number, the copy action and **Enregistrer un appel** remain available everywhere.
