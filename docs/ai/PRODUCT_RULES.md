@@ -41,6 +41,13 @@ Sources: [078 schema](../../supabase/migrations/078_crm_core_schema.sql), [080 c
 
 Only trusted linked enrollment reaching `Confirmed` or `Validated` converts a lead. `crm_start_enrollment` initiates Submitted/Trial from a qualified unlinked lead; initiation alone is not conversion. Conversion retains student, enrollment, timestamp and activity evidence. A subsequent downgrade flags review instead of deleting historical conversion. Payment may drive enrollment confirmation through the financial engine, but payment, revenue and conversion remain separate facts.
 
+RCC-A2 (implemented in migration 112, awaiting review, not deployed):
+
+- For **enrollment initiation** (`crm_start_enrollment`), a new learner's birth date cannot be after today's **Casablanca civil date**. Today is valid, and there is no minimum age.
+- Manual lead creation keeps its existing database `current_date` check, so this is **not** a universal CRM birth-date rule.
+- An opportunity linked to a learner can only enroll that learner.
+- A pre-enrollment shows **Continuer l'inscription**. It is not conversion, and the opportunity stays QUALIFIED.
+
 A charge is an agreement; a nonzero payment issues a receipt. Zero payment may create a charge but no receipt or payment-driven enrollment. Collected CRM revenue derives from actual linked payment/void events, not quotes, charge totals or a status change. Preserve idempotency and append-only financial history. See [084](../../supabase/migrations/084_crm_enrollment_and_conversion.sql), [085](../../supabase/migrations/085_crm_revenue_attribution.sql), and [receipt model](../receipt-financial-model.md).
 
 ## People, opportunities and academics

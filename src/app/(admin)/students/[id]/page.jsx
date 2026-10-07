@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { entities, integrations } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
@@ -22,11 +22,22 @@ import { safeReturnTo } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
+import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
 
 const PREMIUM_STATUS_LABELS = {
   Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
   Cancelled: 'Annulée', Missed: 'Absence',
 };
+
+// Module scope keeps section DOM stable across renders (a focused row survives).
+const Section = ({ title, children }) => (
+  <div className="bg-card border border-border rounded-lg overflow-hidden mb-6">
+    <div className="px-4 py-3 border-b border-border bg-muted/30">
+      <h3 className="font-semibold text-base leading-6 text-foreground">{title}</h3>
+    </div>
+    <div className="p-4">{children}</div>
+  </div>
+);
 
 export default function StudentDetailPage() {
   return <StudentDetail />;
@@ -56,6 +67,10 @@ function StudentDetail() {
   const [loadedScope, setLoadedScope] = useState(null);
   const scope = `${user?.id}:${role}:${id}`;
   const [reload, setReload] = useState(0);
+  // CRM Continuer: highlight and focus the linked enrollment once loaded.
+  const linkedEnrollment = enrollmentParam(useSearchParams()?.get('enrollment'));
+  const [highlightedEnrollmentId, setHighlightedEnrollmentId] = useState(null);
+  const highlightApplied = useRef(null);
 
   useEffect(() => {
     if (!id) return;
@@ -119,21 +134,24 @@ function StudentDetail() {
   };
 
   const sameScope = loadedScope === scope;
+  useEffect(() => {
+    if (!linkedEnrollment || loading || !sameScope || highlightApplied.current === linkedEnrollment) return;
+    if (!enrollments.some(enrollment => enrollment.id === linkedEnrollment)) return;
+    highlightApplied.current = linkedEnrollment;
+    setHighlightedEnrollmentId(linkedEnrollment);
+  }, [linkedEnrollment, loading, sameScope, enrollments]);
+  useEffect(() => {
+    if (!highlightedEnrollmentId) return;
+    const row = document.getElementById(`enrollment-${highlightedEnrollmentId}`);
+    row?.scrollIntoView({ block: 'center' });
+    row?.focus({ preventScroll: true });
+  }, [highlightedEnrollmentId]);
   if ((loading || loadError) && !sameScope) return <PageFrame width="detail"><PageHeader title="Fiche apprenant"/><ReadState state={loading ? 'loading' : 'error'} message={loadError ? 'Impossible de charger la fiche complète.' : undefined} onRetry={loadError ? () => setReload(value=>value+1) : undefined}/></PageFrame>;
   if (!student || !sameScope) return <PageFrame width="detail"><PageHeader title="Fiche apprenant"/><ReadState state="unavailable" message="Apprenant introuvable ou archivé."/><Button variant="link" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}>Retour</Button></PageFrame>;
 
   const paymentSummary = studentPaymentSummary(charges);
   const present = attendance.filter(a => a.status === 'Présent').length;
   const presenceRate = attendance.length ? Math.round((present / attendance.length) * 100) : null;
-
-  const Section = ({ title, children }) => (
-    <div className="bg-card border border-border rounded-lg overflow-hidden mb-6">
-      <div className="px-4 py-3 border-b border-border bg-muted/30">
-        <h3 className="font-semibold text-base leading-6 text-foreground">{title}</h3>
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
 
   return (
     <PageFrame width="detail" className="break-words">
@@ -209,8 +227,8 @@ function StudentDetail() {
         {student.groupe_id && <p className="mb-3 text-sm">Groupe du dossier : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
         {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. <Link data-touch-target href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
           <div className="space-y-3">{enrollments.map(enrollment => (
-            <div key={enrollment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm">
-              <div><p className="font-semibold">{programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.school_year || 'Année non renseignée'}</p>
+            <div key={enrollment.id} {...(enrollment.id === highlightedEnrollmentId ? { id: `enrollment-${enrollment.id}`, tabIndex: -1 } : {})} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm ${enrollment.id === highlightedEnrollmentId ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-border'}`}>
+              <div>{enrollment.id === highlightedEnrollmentId && <p className="mb-1 text-xs font-semibold text-primary">Inscription liée au prospect CRM</p>}<p className="font-semibold">{programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.school_year || 'Année non renseignée'}</p>
                 <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
                 <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}</p>
               </div>

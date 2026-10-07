@@ -157,3 +157,12 @@ Owner-approved [RCC-A1](../architecture/plans/rcc-r1-receptionist-crm-completion
 - Additive fields in the four migration-110 read projections.
 
 `crm_security.command` is migration 103's definition with only two note-requirement relaxations and an agreed-callback reschedule guard, so lifecycle barriers and pending-stop handling are unchanged. No public RPC signature, grant/RLS, status vocabulary, conversion, finance or lifecycle behavior changed.
+
+## Enrollment initiation reason hints — implemented, not deployed
+
+RCC-A2 ([record](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#implementation-record)) adds migration 112, which is awaiting review and not deployed.
+
+- **Server contract.** `crm_start_enrollment` keeps every SQLSTATE and message and adds a PostgreSQL `HINT` from a closed vocabulary, `crm_enrollment.<reason>`. Hints are plain tokens and never carry data.
+- **Browser contract.** [enrollmentErrors.mjs](../../src/lib/crm/enrollmentErrors.mjs) maps reasons to French text, step and field. Only an error carrying a five-character SQLSTATE counts as a definite rejection. Network, gateway, HTTP 5xx and `PGRST…` failures are uncertain and keep the request key for an exact resend. Hint-less errors fall back to the legacy matcher, and the browser never renders raw server text.
+- **Read projection.** `crm_get_enrollment_context` adds `linked_student`, using fields `crm_find_student_candidates` already exposes. The result gains `enrollment_followup` with the server civil time.
+- **Unchanged.** Locks, replay ordering, follow-up semantics, conversion, finance, grants/RLS and the guarded task/command functions. The hint convention is enrollment-specific; making it CRM-wide would need an ADR.

@@ -20,7 +20,7 @@ Plan: [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md).
 - Internal reminder presets are resolved server-side using the existing Casablanca policy.
 - RCC-r1 does not change Meta/lifecycle authority, finance authority, enrollment-confirmation authority or permissions.
 
-Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 decisions **APPROVED** on 2026-10-07, with architecture revision A2-r2 **awaiting independent re-review; implementation NOT AUTHORIZED** (see below); RCC-B1 **PLANNED / NOT APPROVED**.
+Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 decisions **APPROVED** on 2026-10-07; A2-r2 merged after re-review and **implementation authorized and completed, awaiting independent review** (see below); RCC-B1 **PLANNED / NOT APPROVED**.
 
 RCC-A1 release clarifications (2026-10-07): the guaranteed generic-follow-up replacement covers explicit conversation decisions across channels only. Broader consolidation across every task-creation path is deferred. The placement-preparation kind is UI-enforced, and legacy payloads may keep NULL `schedule_kind`. See the plan for boundaries and exclusions.
 
@@ -30,7 +30,8 @@ Plan: [RCC-A2](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#owner-app
 
 - Revision **A2-r1** was approved by the owner on **2026-10-07**, as recommended.
 - The independent Tier-3 review of A2-r1 (`fde4c6a2187bd761ead7b1d2b3b1ce7d7bbdafd5`) returned CHANGES REQUIRED. Revision **A2-r2** incorporates those findings.
-- **Implementation is NOT AUTHORIZED** until A2-r2 passes exact-SHA independent re-review and the architecture PR is merged. Migration 112, merging implementation and any Production release each need a further explicit owner instruction.
+- A2-r2 passed independent re-review (`154d8a2…`) and merged in PR #111 (`6dae234…`). On **2026-10-07** the owner authorized implementation on a feature branch, local synthetic validation, the implementation PR and CI only ([implementation record](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#implementation-record)).
+- Merging the implementation, applying migration 112 to Production, deployment and any Production read or mutation each still need a further explicit owner instruction.
 
 - **D1:** server reason codes in the PostgreSQL `HINT`; existing SQLSTATEs and messages are preserved.
 - **D2:** future birth dates are prevented in both browser and server, using the Casablanca civil date. Today remains valid; no minimum-age rule.
@@ -43,7 +44,8 @@ Plan: [RCC-A2](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#owner-app
   - A2-r2 clarification: the CRM-linked enrollment there is highlighted and focused, and return to the CRM is preserved.
   - No payment, confirmation or safeguard change is implied.
   - The page's **Nouvelle pré-inscription** button is unchanged; its duplicate risk is a known limitation, and no D8 is approved.
-- **D6:** broader generic callback/WhatsApp follow-up consolidation is excluded from RCC-A2 and remains a separate future outcome.
+- **D6:** broader generic callback/WhatsApp follow-up consolidation is excluded from RCC-A2 and remains a separate future outcome. It is tracked in the [RCC-r1 deferred reliability backlog](../architecture/plans/rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog), alongside the pre-existing browser time-zone limitation of `casablancaInstant`.
+- **Success wording amendment (2026-10-07):** an existing enrollment linked by the request shows **Inscription rattachée**. Creation headings appear only for an enrollment the request created; **Inscription déjà rattachée** is used for a discovered result.
 - **D7:** no Production forensic read is authorized now.
 
 ## Other roadmap decisions

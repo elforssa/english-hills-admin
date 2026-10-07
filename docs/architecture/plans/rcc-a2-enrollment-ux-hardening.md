@@ -1,6 +1,8 @@
 # Owner summary
 
-> **Status: revision A2-r2 — AWAITING INDEPENDENT EXACT-SHA RE-REVIEW. Implementation is NOT AUTHORIZED.** A2-r1 was owner-approved on 2026-10-07 (D1–D7). The independent Tier-3 review of A2-r1 returned CHANGES REQUIRED, and A2-r2 incorporates those findings plus the owner-approved B2 amendment ([approval record](#owner-approval-record)). Implementation stays unauthorized until A2-r2 passes independent re-review and this architecture PR is merged through the repository process. Migration 112, any merge of implementation and any Production release each need a further explicit owner instruction. Architecture revision **A2-r1** was recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
+> **Status: IMPLEMENTED — AWAITING INDEPENDENT REVIEW (2026-10-07); not merged, not deployed.** A2-r2 passed independent re-review at `154d8a21d662e9ec5bc411cc62098907719647a9` and merged as `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. The owner then authorized implementation, local synthetic validation, the implementation PR and CI only ([implementation record](#implementation-record)). Merge, Production migration 112, deployment and Production reads remain separately gated.
+>
+> *Status at A2-r2 authoring (historical):* revision A2-r2 — AWAITING INDEPENDENT EXACT-SHA RE-REVIEW. Implementation is NOT AUTHORIZED. A2-r1 was owner-approved on 2026-10-07 (D1–D7). The independent Tier-3 review of A2-r1 returned CHANGES REQUIRED, and A2-r2 incorporates those findings plus the owner-approved B2 amendment ([approval record](#owner-approval-record)). Implementation stays unauthorized until A2-r2 passes independent re-review and this architecture PR is merged through the repository process. Migration 112, any merge of implementation and any Production release each need a further explicit owner instruction. Architecture revision **A2-r1** was recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
 
 ## What will change
 
@@ -513,6 +515,7 @@ The full matrix is in the [contract](#acceptance-criteria).
      - record it as release evidence.
 
      This is a Production configuration read. It needs the later release/operator authorization and is **not** performed in this architecture task.
+   - **Effective PostgreSQL `Africa/Casablanca` behavior (configuration read, added by the 2026-10-07 implementation review):** record the UTC offset PostgreSQL applies to `Africa/Casablanca` at release time (for example `now() at time zone 'Africa/Casablanca'` against `now()`). A2 compares against that zone explicitly, so the server's effective tz data matters in addition to the session `TimeZone`. Same authorization as above.
 3. Recovery:
    - **Frontend:** revert (safe with the new database).
    - **Database:** forward-fix with a new migration restoring the 084 body. Hints are additive, so a database rollback should rarely be needed.
@@ -583,6 +586,68 @@ This contradiction is flagged, not resolved here. A2-r2 is correct either way:
 ### D8 — not proposed
 
 A2-r2 proposes **no** D8. A2 does not need to change **Nouvelle pré-inscription** to meet its outcome. The duplicate pre-enrollment possibility already exists today, independently of A2, and it stays a documented [known limitation](#5-contextual-enrollment-actions). If the owner later wants it addressed, it should be raised as a separate decision.
+
+## Implementation record
+
+**IMPLEMENTED — AWAITING INDEPENDENT REVIEW. Not merged, not deployed; migration 112 is not applied to Production.**
+
+| Item | Evidence |
+| --- | --- |
+| Authorization | Owner, 2026-10-07: implementation of A2-r2 exactly as contracted, on a dedicated branch, with local synthetic validation, the implementation PR and remote CI. Merge, Production migration, deployment and Production reads or mutations are **not** authorized. |
+| Architecture | PR #111, independently reviewed at `154d8a21d662e9ec5bc411cc62098907719647a9` (READY FOR FINAL REVIEW), merged as `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. |
+| Branch / base | `feature/rcc-a2` from `origin/main` `6dae2346e4dcbed2faab87429cdf5f57d83c63d0`. |
+| Migration ceiling | `111` on `origin/main`, in CURRENT_STATE (ledger 001–111), and on every remote branch; no open PR carried a migration. Local 111 bodies of both functions were byte-identical to 084 before the change. |
+| Migration | [`112_crm_rcc_a2_enrollment_ux.sql`](../../../supabase/migrations/112_crm_rcc_a2_enrollment_ux.sql): `crm_start_enrollment` (E1–E9 only) and `crm_get_enrollment_context` (`linked_student` only), grants re-asserted. No private helper was added. |
+| Frontend | [enrollmentErrors.mjs](../../../src/lib/crm/enrollmentErrors.mjs), [enrollmentActions.mjs](../../../src/lib/crm/enrollmentActions.mjs), [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx), [LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx), and the learner page's `enrollment` highlight with `Section` hoisted unchanged. `LeadDetailSheet.jsx` and **Nouvelle pré-inscription** are unchanged. |
+| Tests | [SQL](../../../scripts/test-crm-rcc-a2.sql), [pure](../../../scripts/test-crm-rcc-a2.mjs), [111→112 upgrade](../../../scripts/test-crm-rcc-a2-upgrade.mjs), [browser](../../../scripts/test-crm-rcc-a2-browser.mjs) and [cross-session races](../../../scripts/test-crm-rcc-a2-concurrency.py), wired into `package.json` and the full-lane `verify.yml` steps. |
+
+**Local validation (synthetic data, local Supabase, external email disabled).** The worktree used a three-key local-only `.env.local`, the same shape CI writes.
+
+- RCC-A2 SQL: every one of the 36 server reasons with its unchanged SQLSTATE and message and the exact hint; happy paths; replay before validation; birth date under three session TimeZones; linked learner; follow-up variants; owner and policy reasons; grants; dormancy.
+- RCC-A2 pure: the vocabulary is identical across the plan, the migration and the browser table; definite vs uncertain; legacy `commandError` output unchanged by hints; Casablanca bounds; rows 1–10; result origin.
+- 111→112 stateful upgrade: 68 table hashes unchanged; only the two bodies differ; `command`, `new_task`, `next_window`, `evaluate_conversion`, `lock_enrollment_intent` and `create_charge_payment` are byte-identical; a stored 084 result replays unchanged.
+- RCC-A2 browser (Chromium): the scenarios in the acceptance criteria, including lost-response replay after the selected follow-up time passed (advanced browser clock) and a follow-up that went stale while the dialog was open.
+- RCC-A2 concurrency: linkage races in real separate sessions, the intent lock (hint present, lock held until commit) and a same-key replay after real time passed.
+- Regressions: Phase-6 SQL, browser and concurrency; the RCC-A1 SQL, upgrade, pure and browser suites; opportunities (pure, local and Chromium/WebKit browser); work-calendar (pure, local and browser); lifecycle/R4 (pure, advisory SQL, provider-time, browser); the CI rollback-only list; `npm test`; `npm run lint`; `npm run build`; and `scripts/ci/test_verify.py`.
+
+**Implementation notes (within the contract; no deviation).**
+
+1. Birth date: the infinite check precedes the Casablanca comparison, so `infinity` gives `birth_date_invalid`, as the reason table says. The rejected set and the message are unchanged.
+2. `followup_policy_unavailable` cannot be reached through a validated policy (`validate_policy` requires a window). The SQL suite reaches it with a direct synthetic policy row.
+3. Error ordering: Trial with no group and an invalid level is tested with a level the `students` CHECK accepts but the programme rejects (`Beginning 1` for Yearly). A level outside every programme still fails first at the new student's row (`record_rejected`), exactly as in 084.
+4. E4: a missing requested learner while the opportunity is linked to a different learner is `learner_link_mismatch`.
+5. E6: the live catalog confirms that `enrollment_student_sync_before` is the only BEFORE INSERT trigger on `enrollments`, so the Trial pre-check is equivalent.
+6. A hint-less `22023`/`42501` (old database) keeps today's step-2 navigation.
+7. The linked path omits `learner_name` and `birth_date`, as the linked-learner section requires. No request key was added.
+8. Test-only addition: the two contracted races live in a separate `test-crm-rcc-a2-concurrency.py`, run in the CI concurrency step.
+9. Browser validation found that the submit-time date checks used the value from the last render. They are now re-evaluated at submission; the fix landed before the first commit.
+
+**CI fix-up after the first run.** Run `37585317670` on head `d4b1d753bd0938d9c70492d5b92c2942a3b8bb81` failed for two test-only reasons, both fixed:
+
+- The pure suite's fixed clocks assumed a Casablanca UTC offset. On 2026-10-06 23:30 UTC, CI's Node 22 tz data puts Casablanca at UTC+0, while Node 25 (tz 2026a) and local PostgreSQL put it at UTC+1. The fixed clocks are now derived from the runtime's own Casablanca conversion, and the browser suite takes wall-clock values from the page's own clock and tz data.
+- Four existing upgrade-to-current scripts hard-coded the migration ceiling as 111 (097, 100, 102 and 103 → current). They now expect 112, as RCC-A1 did for 111. All four steps pass locally.
+
+The divergence confirms the plan's caution that no fixed offset may be assumed. Near Casablanca midnight, the browser's birth-date `max` and follow-up `min` follow the browser's tz data, while the server's civil date stays authoritative and still answers with its reason code.
+
+**Local harness notes.** The existing Phase-6 concurrency and lifecycle browser scripts accept only `codex/` branches or a pull-request CI environment, and the former reads `.git/HEAD` directly. Both ran unchanged with that environment, the former from a copy outside the worktree. The UI-Foundation WebKit sidebar check failed once and passed on two reruns; that code is untouched.
+
+**Review corrections — 2026-10-07.** The independent review of head `a853712b6f094d952c4fc7071a22a74232cd9036` returned CHANGES REQUIRED. It found migration 112 and the server-side work sound, so **migration 112 is unchanged**. The corrections are browser-side:
+
+- **B1 (blocking): frozen uncertain request.**
+  - *Defect:* after an uncertain failure, a refetch (focus or invalidation) could already reflect the committed request. Through the linked-learner sync it then mutated the form, so a retry was sent with a new key and showed the discovered result. Derived follow-up validation could also replace the uncertain-retry message.
+  - *Fix:* while uncertain, the dialog freezes the submitted form, payload, request key and the linked/follow-up view they were built from. Fields and Retour are disabled, linked-learner synchronization is suspended, and derived validation never replaces the uncertain message. Retry resends the frozen request with the same key.
+  - *Resolution:* the freeze ends only when the same-key retry succeeds, which shows this dialog's own success panel, or when a definite SQLSTATE rejection arrives. Closing the dialog still discards it; no new abandon workflow was added.
+  - *Regression:* commit, lost response, the clock advanced past the follow-up, then a real React Query `visibilitychange` refetch whose context already holds the committed learner. The test failed on `a853712` and passes after the fix.
+- **I1 — owner-approved wording amendment (2026-10-07).**
+  - An existing enrollment linked by this request, whether Submitted or Trial, shows **Inscription rattachée**. Confirmed/Validated keeps **Inscription confirmée rattachée**.
+  - **Pré-inscription créée** and **Essai démarré** appear only for an enrollment this request created. **Inscription déjà rattachée** stays the discovered/race heading.
+  - The dialog decides from its own request payload (`enrollment_id` present). Server semantics are unchanged.
+- **I2: birth-date check on replay.** Aligned with the plan. The birth-date bound stays active on an uncertain replay, using the frozen value. Only follow-up futurity is skipped. `submitReason` makes this explicit, with pure tests.
+- **Test gaps:** browser coverage now includes a linked learner with a one-character lead name, and a deleted linked learner (safe unavailable state, no candidate or new-learner path).
+- **Release checklist:** the future release verification records both the Production PostgreSQL `TimeZone` setting and the effective `Africa/Casablanca` offset ([rollout](#rollout--recovery-strategy-design-only-no-rollout-authorized)). Production was not read.
+- **Known pre-existing limitation, outside RCC-A2:** `casablancaInstant` converts CRM wall-clock inputs with browser time-zone data. A browser or runtime with stale Morocco rules can shift CRM-entered wall-clock times by an hour relative to the server's civil projection. It is not fixed here; it is tracked in the [RCC-r1 deferred reliability backlog](rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
+
+**Remaining gates.** Fresh independent exact-SHA review, owner merge and release approval, a separate release/operator task (migration first, including the Production `TimeZone` configuration read), Production verification and documentation closeout. **Nouvelle pré-inscription** is unchanged; its duplicate risk remains a known limitation (no D8).
 
 ## Owner decisions required
 
