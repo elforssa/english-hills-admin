@@ -20,9 +20,31 @@ Plan: [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md).
 - Internal reminder presets are resolved server-side using the existing Casablanca policy.
 - RCC-r1 does not change Meta/lifecycle authority, finance authority, enrollment-confirmation authority or permissions.
 
-Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 and RCC-B1 **PLANNED / NOT APPROVED**.
+Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 decisions **APPROVED** on 2026-10-07, with architecture revision A2-r2 **awaiting independent re-review; implementation NOT AUTHORIZED** (see below); RCC-B1 **PLANNED / NOT APPROVED**.
 
 RCC-A1 release clarifications (2026-10-07): the guaranteed generic-follow-up replacement covers explicit conversation decisions across channels only. Broader consolidation across every task-creation path is deferred. The placement-preparation kind is UI-enforced, and legacy payloads may keep NULL `schedule_kind`. See the plan for boundaries and exclusions.
+
+## RCC-A2 — receptionist enrollment UX hardening — APPROVED
+
+Plan: [RCC-A2](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#owner-approval-record).
+
+- Revision **A2-r1** was approved by the owner on **2026-10-07**, as recommended.
+- The independent Tier-3 review of A2-r1 (`fde4c6a2187bd761ead7b1d2b3b1ce7d7bbdafd5`) returned CHANGES REQUIRED. Revision **A2-r2** incorporates those findings.
+- **Implementation is NOT AUTHORIZED** until A2-r2 passes exact-SHA independent re-review and the architecture PR is merged. Migration 112, merging implementation and any Production release each need a further explicit owner instruction.
+
+- **D1:** server reason codes in the PostgreSQL `HINT`; existing SQLSTATEs and messages are preserved.
+- **D2:** future birth dates are prevented in both browser and server, using the Casablanca civil date. Today remains valid; no minimum-age rule.
+  - **B2 owner amendment (A2-r2):** this applies to **enrollment initiation only** (`crm_start_enrollment`).
+  - Manual lead creation in the guarded `crm_security.command` keeps its database `current_date` check, so there is no universal CRM-wide birth-date rule. This divergence is accepted for A2, and harmonization is a separate future decision.
+  - The Production `TimeZone` check belongs to future release verification.
+- **D3:** a prospect already linked to a learner preselects that learner. Alternative and new-learner choices are hidden; no receptionist override in A2.
+- **D4:** default-first enrollment follow-up presentation. Existing scheduling semantics are preserved; no reminder presets.
+- **D5:** single contextual action rules. **Continuer l’inscription** goes to the learner file's **Inscriptions et groupes** section.
+  - A2-r2 clarification: the CRM-linked enrollment there is highlighted and focused, and return to the CRM is preserved.
+  - No payment, confirmation or safeguard change is implied.
+  - The page's **Nouvelle pré-inscription** button is unchanged; its duplicate risk is a known limitation, and no D8 is approved.
+- **D6:** broader generic callback/WhatsApp follow-up consolidation is excluded from RCC-A2 and remains a separate future outcome.
+- **D7:** no Production forensic read is authorized now.
 
 ## Other roadmap decisions
 
