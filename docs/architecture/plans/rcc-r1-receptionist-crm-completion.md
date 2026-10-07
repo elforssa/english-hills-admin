@@ -6,7 +6,7 @@
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
-| RCC-A2 | **IMPLEMENTED — AWAITING REVIEW (2026-10-07)** — Tier 3; architecture A2-r2 merged (PR #111); migration 112 ([implementation record](rcc-a2-enrollment-ux-hardening.md#implementation-record)). Not merged or deployed. |
+| RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
 | RCC-B1 | **PLANNED / NOT YET APPROVED** |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
@@ -131,11 +131,11 @@ Accepted limitations (owner, 2026-10-07):
 - Placement-preparation `schedule_kind` is enforced by the receptionist UI, not as a universal direct-RPC invariant.
 - New center visits use appointment semantics; legacy-compatible payloads may keep a NULL `schedule_kind`.
 
-RCC-A1 is complete. The plan stays active for RCC-A2 (implemented, awaiting review) and RCC-B1 (not approved).
+RCC-A1 is complete. The plan stays active for RCC-B1 (not approved); RCC-A2 is complete.
 
 ## RCC-A2 — enrollment UX hardening
 
-**IMPLEMENTED — AWAITING INDEPENDENT REVIEW (2026-10-07).** Revision A2-r2 passed re-review and merged (PR #111); the owner authorized implementation, the PR and CI only ([implementation record](rcc-a2-enrollment-ux-hardening.md#implementation-record)). Original candidate scope:
+**MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07).** PR #112 reviewed head `b213e93…` merged as `79b0835…` after migration 112 was applied first; Vercel Production `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` ([release record](../evidence/rcc-a2-production-2026-10-07.md)). Revision A2-r2 is the [completed plan](completed/rcc-a2-enrollment-ux-hardening.md). Original candidate scope:
 
 - enrollment UX hardening;
 - field-specific errors instead of generic `22023` messages;
@@ -146,7 +146,7 @@ RCC-A1 is complete. The plan stays active for RCC-A2 (implemented, awaiting revi
 
 The exact owner-case root cause is still unresolved (see RCC-A0).
 
-**Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved A2-r1 as recommended on 2026-10-07. Revision A2-r2 incorporates the independent review's required changes and the owner's B2 amendment, which scopes the birth-date rule to enrollment initiation ([approval record](rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Implementation stays unauthorized until A2-r2 passes independent exact-SHA re-review and the architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction.
+**Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](completed/rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved A2-r1 as recommended on 2026-10-07. Revision A2-r2 incorporates the independent review's required changes and the owner's B2 amendment, which scopes the birth-date rule to enrollment initiation ([approval record](completed/rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Implementation stays unauthorized until A2-r2 passes independent exact-SHA re-review and the architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction.
 
 ### Deferred CRM reliability backlog
 

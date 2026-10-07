@@ -2,21 +2,22 @@
 
 Evidence register as of **2026-10-07 (Asia/Shanghai)**. Two baselines are tracked separately:
 
-- **Recorded deployed application source:** `8d5af40bc21177c582efe5df96d31ada8d7d9ff5` (PR #108 merge), per the [RCC-A1 release record](../architecture/evidence/rcc-a1-production-2026-10-07.md).
+- **Recorded deployed application source:** `79b08359363abd2e83c842c7360b14fadce88dea` (PR #112 merge), per the [RCC-A2 release record](../architecture/evidence/rcc-a2-production-2026-10-07.md).
 - **Repository main:** advances independently through documentation or later implementation merges, so this register does not name a current main SHA. Fetch `origin/main` for the current repository SHA. A repository merge is not deployment evidence; only dated release evidence changes the recorded deployed source above. (The tool-independent transition work began from base `c41b962538c5073e5e00cb264a31388533735ac9`, PR #106, which differed from the deployed source only by documentation.)
 
-Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 deployed and Production verified on 2026-10-07 with migration 111; RCC-A2 and RCC-B1 not approved). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
+Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 deployed and Production verified on 2026-10-07 with migration 111; RCC-A2 deployed and Production verified on 2026-10-07 with migration 112; RCC-B1 not approved, so RCC-r1 is not complete). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
 
 ## Capability register
 
 | Capability | State | Current evidence | Important limit |
 | --- | --- | --- | --- |
-| Core school platform | IMPLEMENTED; production application | Next.js/Supabase code and cumulative migrations; [latest recorded runtime release](../architecture/evidence/rcc-a1-production-2026-10-07.md) | A deployed application/ledger is not feature-by-feature acceptance. |
+| Core school platform | IMPLEMENTED; production application | Next.js/Supabase code and cumulative migrations; [latest recorded runtime release](../architecture/evidence/rcc-a2-production-2026-10-07.md) | A deployed application/ledger is not feature-by-feature acceptance. |
 | Receptionist operating workspace | LIVE; Outcome 3 complete | PRs #97/#99; migrations 107/108; [Outcome-3 closeout](../architecture/evidence/outcome-3-batch-2-implementation-2026-10-05.md#production-closeout--2026-10-05) | Opportunities, Tasks/My Work and Admissions Calendar are Production verified; the dedicated walk-in redesign remains a separate planned outcome. |
 | RCC-A1 outcome-led follow-up | LIVE; Production verified 2026-10-07 | PR #108, migration 111; [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md) | Follow-up replacement covers explicit conversation decisions only; placement-preparation kind is UI-enforced; legacy payloads may keep NULL kind. No fresh authenticated browser walkthrough at release. |
+| RCC-A2 enrollment UX hardening | LIVE; Production verified 2026-10-07 | PR #112, migration 112; [release record](../architecture/evidence/rcc-a2-production-2026-10-07.md) | Casablanca birth-date rule covers enrollment initiation only (manual lead creation keeps `current_date`); browser `casablancaInstant` tz-data limitation deferred; Nouvelle pré-inscription unchanged. No fresh authenticated browser walkthrough at release. |
 | CRM status/tasks/activities/Today | IMPLEMENTED | 078–082/091; [ADR-001](../architecture/decisions/ADR-001-crm-lifecycle.md) | Live follow-up policy values/operating hours NEEDS VERIFICATION; SQL defaults do not prove configuration. |
 | Placement | IMPLEMENTED | 083, linked placement commands and [workflow](WORKFLOWS.md#placement-test) | Dedicated Production feature acceptance NEEDS VERIFICATION; test completion is not conversion. |
-| Admissions/enrollment/conversion | IMPLEMENTED | 062, 070–074, 084; [workflow](WORKFLOWS.md#crm--enrollment) | Feature-specific Production acceptance NEEDS VERIFICATION; only linked Confirmed/Validated enrollment converts. |
+| Admissions/enrollment/conversion | IMPLEMENTED | 062, 070–074, 084, 112; [workflow](WORKFLOWS.md#crm--enrollment) | Feature-specific Production acceptance NEEDS VERIFICATION; only linked Confirmed/Validated enrollment converts. |
 | Finance and CRM revenue | IMPLEMENTED | Cumulative charge/receipt engine, 085 and [receipt model](../receipt-financial-model.md) | Receptionist receipt permissions verified in Batch 1; broader finance/payroll feature acceptance NEEDS VERIFICATION. |
 | Meta inbound/reconciliation | LIVE via reconciliation | [Initial activation history](../architecture/history/current-state-before-outcome-1.md#earlier-verified-production-activation-pr-29-history), [105 repair acceptance](../architecture/evidence/crm-meta-reconciliation-stale-lease-production-2026-10-02.md), [106 health check](../architecture/evidence/crm-h3-04-production-2026-10-02.md#dormancy-and-health) | Last explicit realtime webhook state disabled; working polling is not webhook activation or historical backfill. |
 | Website inquiry | IMPLEMENTED — NEEDS VERIFICATION | 087/092/093; [website contract](../crm-website-inquiries.md) | Live external-site configuration not established. Public registration is a different flow. |
@@ -32,7 +33,7 @@ Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active
 
 ## Deployment and credential evidence boundaries
 
-The latest recorded Production database ledger is **001–111**. Migration 111 was applied on 2026-10-07 for RCC-A1, recorded atomically as version `111` with no normalization. Exact Production source is `8d5af40bc21177c582efe5df96d31ada8d7d9ff5`; Vercel deployment `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY with Production alias `admin.english-hills.com` ([RCC-A1 release record](../architecture/evidence/rcc-a1-production-2026-10-07.md)). The ledger was 001–110 after the UI Foundation release on 2026-10-06, with 110 normalized then. The [UI Foundation closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06) records migration 110 and bounded frontend/read-model compatibility evidence. Migrations 107–111 are deployed and immutable. Outcome 3 itself completed through 107–108; migration 109 remains the post-O3 scheduling/picker correction and migration 110 is the later UIF-r1a presentation-only row-label extension. Check current main and deployment evidence before allocating any future migration.
+The latest recorded Production database ledger is **001–112**. Migration 112 was applied on 2026-10-07 for RCC-A2, recorded atomically as version `112` with no normalization; the stored statement MD5 `213c9a435b93a2fa267b8e0072a95caa` equals the reviewed file's. Exact Production source is `79b08359363abd2e83c842c7360b14fadce88dea`; Vercel deployment `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` is READY with Production alias `admin.english-hills.com` ([RCC-A2 release record](../architecture/evidence/rcc-a2-production-2026-10-07.md)). Production PostgreSQL `TimeZone` is `UTC`, and PostgreSQL resolved `Africa/Casablanca` to UTC+01:00 at release. Migration 111 was applied earlier the same day for RCC-A1 ([RCC-A1 release record](../architecture/evidence/rcc-a1-production-2026-10-07.md)). The ledger was 001–110 after the UI Foundation release on 2026-10-06, with 110 normalized then. The [UI Foundation closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06) records migration 110 and bounded frontend/read-model compatibility evidence. Migrations 107–112 are deployed and immutable. Outcome 3 itself completed through 107–108; migration 109 remains the post-O3 scheduling/picker correction and migration 110 is the later UIF-r1a presentation-only row-label extension. Check current main and deployment evidence before allocating any future migration.
 
 Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED / LIFECYCLE DELIVERY REMAINS DISABLED**. Accepted identities, scope/lifetime, capability and metadata-only Vercel verification are recorded once in the [nonsecret Gate-B closeout](../architecture/evidence/crm-h3-s1-gate-b-closeout-2026-10-05.md). [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) is the sole credential architecture and the [Gate-B runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) the sole procedure. Earlier token/key absence and uncreated-C2 statements are historical observations, not current blockers.
 
@@ -89,6 +90,32 @@ Rolled-back receptionist probes confirmed the following:
 All other functions, grants, RLS policies and triggers are identical to the pre-release baseline, so finance and conversion authority are unchanged. Lifecycle/Meta remains dormant: lifecycle cron inactive, and zero activation epochs, pending intents and sync runs.
 
 Accepted limitations: follow-up replacement is guaranteed only for explicit conversation decisions; other creation paths keep their existing behavior, and broader consolidation is deferred. Placement-preparation `schedule_kind` is UI-enforced rather than a direct-RPC invariant. New center visits are appointments, but legacy payloads may keep NULL. **No fresh authenticated receptionist browser walkthrough was performed during release verification.** Details: [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md).
+
+## RCC-A2 Production closeout — 2026-10-07
+
+**RCC-A2: MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** PR #112 reviewed head `b213e93408ccca2514a48bd9c68d483f8ee46999` merged as `79b08359363abd2e83c842c7360b14fadce88dea`. The owner approved migration-first, so `112_crm_rcc_a2_enrollment_ux.sql` was applied before the merge. Vercel Production `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` is READY on that commit.
+
+Only `crm_start_enrollment` and `crm_get_enrollment_context` changed. Every other function, and all grants, RLS policies, triggers and schema, are identical to the pre-release baseline, including `command`, `new_task`, `next_window`, `evaluate_conversion`, `create_charge_payment` and `lock_enrollment_intent`.
+
+Rolled-back synthetic probes (41/41) confirmed:
+
+- historical SQLSTATE and message plus the `crm_enrollment.*` reason for a future birth date, a past follow-up and other validations;
+- `linked_student` projection for receptionist, admin and director, including the safe archived-learner shape;
+- pre-enrollment initiation keeps the opportunity QUALIFIED and creates the enrollment follow-up, with the result carrying its metadata;
+- other roles and `anon` are denied;
+- conversion only through a linked Confirmed enrollment;
+- no finance, lifecycle or delivery rows.
+
+Lifecycle/Meta remains dormant, intake is healthy, and no release-related runtime errors appeared.
+
+Limitations:
+
+- The Casablanca birth-date rule covers enrollment initiation only; manual lead creation keeps `current_date`, in session `UTC`.
+- The pre-existing browser `casablancaInstant` tz-data issue is deferred.
+- **Nouvelle pré-inscription** is unchanged.
+- No fresh authenticated browser walkthrough was performed.
+
+RCC-r1 is not complete: RCC-B1 is not approved. Details: [release record](../architecture/evidence/rcc-a2-production-2026-10-07.md).
 
 ## Next meaningful outcomes
 

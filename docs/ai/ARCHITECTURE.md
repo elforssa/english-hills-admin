@@ -158,9 +158,9 @@ Owner-approved [RCC-A1](../architecture/plans/rcc-r1-receptionist-crm-completion
 
 `crm_security.command` is migration 103's definition with only two note-requirement relaxations and an agreed-callback reschedule guard, so lifecycle barriers and pending-stop handling are unchanged. No public RPC signature, grant/RLS, status vocabulary, conversion, finance or lifecycle behavior changed.
 
-## Enrollment initiation reason hints — implemented, not deployed
+## Enrollment initiation reason hints — deployed
 
-RCC-A2 ([record](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#implementation-record)) adds migration 112, which is awaiting review and not deployed.
+RCC-A2 ([record](../architecture/plans/completed/rcc-a2-enrollment-ux-hardening.md#implementation-record)) adds migration 112, deployed and Production verified on 2026-10-07 ([release record](../architecture/evidence/rcc-a2-production-2026-10-07.md)).
 
 - **Server contract.** `crm_start_enrollment` keeps every SQLSTATE and message and adds a PostgreSQL `HINT` from a closed vocabulary, `crm_enrollment.<reason>`. Hints are plain tokens and never carry data.
 - **Browser contract.** [enrollmentErrors.mjs](../../src/lib/crm/enrollmentErrors.mjs) maps reasons to French text, step and field. Only an error carrying a five-character SQLSTATE counts as a definite rejection. Network, gateway, HTTP 5xx and `PGRST…` failures are uncertain and keep the request key for an exact resend. Hint-less errors fall back to the legacy matcher, and the browser never renders raw server text.
