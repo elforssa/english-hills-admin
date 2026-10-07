@@ -60,7 +60,7 @@ async function targets(scope,label){const small=await scope.evaluate(root=>[...r
 async function openDrawer(id,from='leads'){if(from==='leads')await nav(`${app}/crm/leads?lead=${id}`);await sheet().getByRole('heading',{name:'Historique',exact:true}).waitFor();}
 async function closeDrawer(){await fermer().click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.locator('[role=dialog]').waitFor({state:'detached'});}
 async function drawerShape(label,ordinary=false){
- const m=await mode(),shape=await sheet().evaluate(el=>{const body=el.querySelector('[data-drawer-body]'),head=el.querySelector('[data-drawer-header]'),r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,height:r.height,overflowY:getComputedStyle(el).overflowY,scrollTop:el.scrollTop,bodyScroll:body.scrollHeight>body.clientHeight,header:head.getBoundingClientRect().height,bodyBelow:body.getBoundingClientRect().top>=head.getBoundingClientRect().bottom-0.5,vw:document.documentElement.clientWidth,vh:innerHeight};});
+ await settled(sheet());const m=await mode(),shape=await sheet().evaluate(el=>{const body=el.querySelector('[data-drawer-body]'),head=el.querySelector('[data-drawer-header]'),r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,height:r.height,overflowY:getComputedStyle(el).overflowY,scrollTop:el.scrollTop,bodyScroll:body.scrollHeight>body.clientHeight,header:head.getBoundingClientRect().height,bodyBelow:body.getBoundingClientRect().top>=head.getBoundingClientRect().bottom-0.5,vw:document.documentElement.clientWidth,vh:innerHeight};});
  if(m.sm){assert(shape.width<=620.5&&Math.abs(shape.right-shape.vw)<1,`${label}: 620px side sheet ${JSON.stringify(shape)}`);}else assert(Math.abs(shape.width-shape.vw)<1&&shape.left<=0.5&&Math.abs(shape.height-shape.vh)<1,`${label}: full-screen phone sheet ${JSON.stringify(shape)}`);
  assert.equal(shape.overflowY,'hidden',`${label}: SheetContent does not scroll`);
  assert(shape.bodyBelow,`${label}: the body never sits under the header`);
@@ -78,6 +78,11 @@ async function focusIs(predicate,label,arg=null){await page.waitForFunction(pred
 // A dialog is ready for Escape once its focus scope has moved focus inside it and the
 // Radix layer stack has re-rendered the sheet below it (a few ms after mount).
 async function dialogFocused(){await focusIs(()=>{const d=document.querySelectorAll('[role=dialog]');return d.length>1&&d[d.length-1].contains(document.activeElement);},'dialog focused');await page.waitForTimeout(150);}
+// Geometry is asserted on the settled overlay: Linux WebKit paints the first open-animation
+// frame (zoom-in-95 start) before the sticky footer is positioned, then corrects it.
+async function settled(locator){await locator.evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(a=>a.finished.catch(()=>{}))));}
+// A footer-less dialog view (result/success) keeps bottom spacing above the dialog edge.
+async function footerlessSpacing(label){await settled(top());const gap=await top().evaluate(el=>{const r=el.getBoundingClientRect(),b=[...el.querySelectorAll('button')].filter(x=>x.textContent.trim()==='Terminé').at(-1).getBoundingClientRect();return {gap:r.bottom-b.bottom,min:matchMedia('(min-width: 640px)').matches?24:16,footer:!!el.querySelector('[data-dialog-footer]')};});assert(!gap.footer&&gap.gap>=gap.min-1,`${phase} ${label}: footer-less view keeps bottom spacing ${JSON.stringify(gap)}`);}
 async function noPopup(label){assert.equal(await page.locator('[role=tooltip],[data-radix-popper-content-wrapper],[role=menu]').count(),0,`${label}: no popup/tooltip open`);}
 async function settle(){await page.waitForTimeout(120);}
 // Escape sequences E1–E4 for any drawer host; reopen() opens the drawer, restored() checks host focus.
@@ -160,9 +165,10 @@ try {
    if(dm.sm){await page.mouse.click(10,Math.round(viewport.height/2));await page.locator('[role=dialog]').waitFor({state:'detached'});}else await closeDrawer();
    await page.waitForURL(url=>!url.searchParams.has('lead'));
    // Dialog bounds and sticky footer (call dialog from the drawer's primary action).
-   await openDrawer(fresh[1]);await drawerShape(phase+' ordinary drawer',true);await sheet().getByRole('button',{name:'Enregistrer un appel',exact:true}).click();await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();
-   const dialogBox=await top().evaluate(el=>{const r=el.getBoundingClientRect(),f=el.querySelector('[data-dialog-footer]').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,fb:f.bottom,ft:f.top,vw:innerWidth,vh:innerHeight,scroll:el.scrollHeight>el.clientHeight};});
+   await openDrawer(fresh[1]);await drawerShape(phase+' ordinary drawer',true);await sheet().getByRole('button',{name:'Enregistrer un appel',exact:true}).click();await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();await settled(top());
+   const dialogBox=await top().evaluate(el=>{const r=el.getBoundingClientRect(),f=el.querySelector('[data-dialog-footer]').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,fb:f.bottom,ft:f.top,vw:innerWidth,vh:innerHeight,scroll:el.scrollHeight>el.clientHeight,paddingBottom:getComputedStyle(el).paddingBottom};});
    assert(dialogBox.top>=0&&dialogBox.bottom<=dialogBox.vh&&dialogBox.left>=0&&dialogBox.right<=dialogBox.vw,`${phase}: dialog within viewport ${JSON.stringify(dialogBox)}`);
+   assert.equal(dialogBox.paddingBottom,'0px',`${phase}: the dialog's bottom padding is carried by the footer`);
    assert(dialogBox.fb<=dialogBox.bottom+1&&dialogBox.fb>=dialogBox.bottom-2,`${phase}: sticky footer at the dialog bottom ${JSON.stringify(dialogBox)}`);
    await noOverflow('dialog');await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
   }
@@ -198,9 +204,10 @@ try {
    assert.equal(names[0],`Tous ${data.total}`,'Tous = total for the view and filters');
    for(const [i,key] of ['NEW','CONTACTING','ENGAGED','QUALIFIED','CONVERTED'].entries())assert.equal(names[i+1].split(' ').at(-1),String(data.counts[key]),`${key} chip count`);
    const writesBefore=writes.length,stageRead=page.waitForRequest(r=>r.url().endsWith('/rpc/crm_get_opportunities')&&r.postDataJSON()?.p_stage==='CONTACTING');await chips.getByRole('button',{name:/^Contact en cours/}).click();const stageArgs=(await stageRead).postDataJSON();await page.waitForURL(url=>url.searchParams.get('stage')==='CONTACTING');
-   await page.waitForFunction(()=>[...document.querySelectorAll('[data-testid=opportunity-card]')].filter(c=>c.getClientRects().length).every(c=>c.dataset.stage==='CONTACTING'));
+   // At least one card: the loading state between reads has none, which would satisfy every() vacuously.
+   await page.waitForFunction(()=>{const cards=[...document.querySelectorAll('[data-testid=opportunity-card]')].filter(c=>c.getClientRects().length);return cards.length>0&&cards.every(c=>c.dataset.stage==='CONTACTING');});
    assert.equal(await chips.getByRole('button',{name:/^Contact en cours/}).getAttribute('aria-pressed'),'true');assert.equal(stageArgs.p_layout,'list');assert.equal(stageArgs.p_cursor??null,null,'chip resets list paging');
-   assert.equal(await page.locator('[data-testid=opportunity-card]:visible .inline-flex').count(),0,'single-stage cards hide the stage badge');
+   assert.equal(await page.locator('[data-testid=opportunity-card]:visible').getByText('Contact en cours',{exact:true}).count(),0,'single-stage cards hide the stage badge');
    await page.getByRole('button',{name:/^Filtres/}).click();const statut=top().getByLabel('Statut',{exact:true});await statut.waitFor();assert.equal(await statut.inputValue(),'CONTACTING','chips and Statut stay synchronized');
    await statut.selectOption('QUALIFIED');await page.waitForURL(url=>url.searchParams.get('stage')==='QUALIFIED');await top().getByRole('button',{name:'Voir les résultats',exact:true}).click();await page.locator('[role=dialog]').waitFor({state:'detached'});
    assert.equal(await chips.getByRole('button',{name:/^Qualifié/}).getAttribute('aria-pressed'),'true');
@@ -220,10 +227,12 @@ try {
    phase=`${E} scroll ${viewport.width}`;await setSize(viewport);await gotoLeads('?layout=board');const m=await assertBand(phase);assert.equal(m.presentation,'board');
    const newColumn=page.locator('[data-board-stage="NEW"]');await newColumn.getByRole('button',{name:'Voir les suivants',exact:true}).click();await newColumn.getByRole('button',{name:'Précédents',exact:true}).waitFor();
    const region=page.locator('[data-board-region]'),max=await region.evaluate(el=>el.scrollWidth-el.clientWidth);
-   const saved=await region.evaluate((el,target)=>{el.scrollLeft=target;return el.scrollLeft;},Math.min(260,max));
-   await page.locator(`[data-board-stage="ENGAGED"] [data-testid=opportunity-card] button`).first().click();await sheet().getByRole('heading',{name:'Historique'}).waitFor();
-   assert.equal(await region.evaluate(el=>el.scrollLeft),saved,'board stays mounted beneath the drawer');
-   await sheet().getByRole('button',{name:'Note',exact:true}).click();await top().getByLabel('Note',{exact:true}).fill('Note B1 rafraîchissement');await top().getByRole('button',{name:'Enregistrer',exact:true}).click();await top().getByText('Action enregistrée.',{exact:false}).waitFor();await top().getByRole('button',{name:'Terminé',exact:true}).click();
+   const saved=await region.evaluate((el,target)=>{el.scrollLeft=target;return el.scrollLeft;},Math.min(260,max)),regionNode=await region.elementHandle();
+   // A real pointer click on the visible card: a locator click's own scroll-into-view moves the region in Linux WebKit.
+   {const card=page.locator(`[data-board-stage="ENGAGED"] [data-testid=opportunity-card] button`).first();await card.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest'}));const box=await card.boundingBox();await page.mouse.click(box.x+box.width/2,box.y+box.height/2);}
+   await sheet().getByRole('heading',{name:'Historique'}).waitFor();
+   assert(await regionNode.evaluate(el=>el.isConnected),'board stays mounted beneath the drawer');assert.equal(await region.evaluate(el=>el.scrollLeft),saved,'board scroll kept beneath the drawer');
+   await sheet().getByRole('button',{name:'Note',exact:true}).click();await top().getByLabel('Note',{exact:true}).fill('Note B1 rafraîchissement');await top().getByRole('button',{name:'Enregistrer',exact:true}).click();await top().getByText('Action enregistrée.',{exact:false}).waitFor();await footerlessSpacing('action result');await top().getByRole('button',{name:'Terminé',exact:true}).click();
    await closeDrawer();await newColumn.getByRole('button',{name:'Voir les suivants',exact:true}).waitFor();
    assert.equal(await newColumn.getByRole('button',{name:'Précédents',exact:true}).count(),0,'refresh still remounts the board: column paging back on page 1');
    const restored=await page.locator('[data-board-region]').evaluate(el=>({left:el.scrollLeft,max:el.scrollWidth-el.clientWidth}));
@@ -319,7 +328,7 @@ try {
 
   await sheet().getByRole('button',{name:"Commencer l'inscription",exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();
   await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();
-  await top().getByRole('button',{name:'Choisir une autre date',exact:true}).click();
+  await top().getByRole('button',{name:'Choisir une autre date',exact:true}).click();await settled(top());
   const step2=await top().evaluate(el=>{const f=el.querySelector('[data-dialog-footer]').getBoundingClientRect(),r=el.getBoundingClientRect();return {scrolls:el.scrollHeight>el.clientHeight,fb:f.bottom,bottom:r.bottom,top:r.top,vh:innerHeight};});
   assert(step2.scrolls,'step 2 scrolls at 390×844');assert(Math.abs(step2.fb-step2.bottom)<=2&&step2.bottom<=step2.vh,`sticky footer visible while the body scrolls ${JSON.stringify(step2)}`);
   await top().getByRole('button',{name:'Garder la date par défaut',exact:true}).click();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Vérification').waitFor();
@@ -349,7 +358,7 @@ try {
   assert.equal(await handle.evaluate(el=>el.innerText),before,'frozen view unchanged after crossing 640 and 1024');assert(await top().evaluate(el=>el.querySelector('fieldset').disabled));
   await page.unroute('**/rest/v1/rpc/crm_start_enrollment');await top().getByRole('button',{name:'Créer la pré-inscription',exact:true}).click();await top().getByText('Pré-inscription créée',{exact:true}).waitFor();
   assert.equal(startCalls.length,2);assert.equal(startCalls[1].p_request_key,frozen.p_request_key,'identical request key');assert.deepEqual(startCalls[1].p_data,frozen.p_data,'identical frozen payload');
-  assert.equal(sql(`select count(*) from public.enrollments where student_id=(select student_id from public.crm_leads where id='${frozenLead}')`),'1');await top().getByRole('button',{name:'Terminé',exact:true}).click();await closeDrawer();
+  assert.equal(sql(`select count(*) from public.enrollments where student_id=(select student_id from public.crm_leads where id='${frozenLead}')`),'1');await footerlessSpacing('enrollment success');await top().getByRole('button',{name:'Terminé',exact:true}).click();await closeDrawer();
   console.log(`PASS ${E} frozen RCC-A2 request across 390→700→390 and 1000→1100→1000: same dialog node, unchanged frozen view, identical key and payload, one enrollment`);
   }
   await context.close();

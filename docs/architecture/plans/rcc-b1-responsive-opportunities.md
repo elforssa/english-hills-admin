@@ -967,3 +967,12 @@ Constraints the owner restated with the approval, binding on implementation:
 - **The O3 "first Board ≤ 1s" check is environment-sensitive.** On `next dev` it fails on this machine for unmodified `main` as well (2.6–4.5s). On production builds: `main` 908–990ms, this branch 737–842ms.
 
 **Observation for review (unchanged by B1).** If Escape arrives within roughly one frame of an action dialog mounting above the sheet, the Radix 1.1.19 sheet may still hold its listener and dismiss. A human cannot type that fast. The browser test waits for dialog focus plus 150ms. The guard deliberately does not intercept Dialog-over-sheet Escape (contract I2 point 4).
+
+**CI correction (2026-10-08).** Verify run 37644607159 for head `457633c…` failed in Linux WebKit at 1440. The sticky footer measured 24.5px above the dialog bottom. The cause was the test's measurement timing, not the product layout:
+
+- **What the test measured:** the dialog's first open-animation frame (`zoom-in-95` start, scale 0.95). Linux WebKit paints that frame before the sticky footer is positioned.
+- **What happens next:** from the next frame the footer is flush (gap 1px, the dialog border). The computed bottom padding is 0, and the `:has()` rule matches.
+- **How this was confirmed:** with Playwright 1.63.0 Linux browsers (official container) against a local production build, with and without reduced motion.
+- **Why local runs passed:** macOS WebKit already had the footer positioned when the test read it.
+
+The product code is unchanged. The B1 browser suite now measures overlay geometry after its open animations finish. It adds checks that the dialog's bottom padding is 0 and that footer-less views keep their spacing. It also fixes two Linux-only test races: the stage-chip wait now needs at least one card, and the drawer is opened with a real pointer click so a locator's scroll-into-view cannot move the board. The full B1 suite passes on Linux Chromium + WebKit and on macOS Chromium + WebKit.
