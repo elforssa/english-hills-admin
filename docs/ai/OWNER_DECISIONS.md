@@ -20,7 +20,7 @@ Plan: [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md).
 - Internal reminder presets are resolved server-side using the existing Casablanca policy.
 - RCC-r1 does not change Meta/lifecycle authority, finance authority, enrollment-confirmation authority or permissions.
 
-Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 and RCC-B1 **PLANNED / NOT APPROVED**.
+Phase states: RCC-A0 complete (investigation only); **RCC-A1 APPROVED and released** on 2026-10-07 (deployment evidence in [CURRENT_STATE](CURRENT_STATE.md)); RCC-A2 and RCC-B1 **PLANNED / NOT APPROVED**. RCC-A2 architecture is proposed in the [RCC-A2 plan](../architecture/plans/rcc-a2-enrollment-ux-hardening.md#owner-decisions-required) and awaits owner decisions D1–D7.
 
 RCC-A1 release clarifications (2026-10-07): the guaranteed generic-follow-up replacement covers explicit conversation decisions across channels only. Broader consolidation across every task-creation path is deferred. The placement-preparation kind is UI-enforced, and legacy payloads may keep NULL `schedule_kind`. See the plan for boundaries and exclusions.
 
