@@ -1,6 +1,6 @@
 // RCC-A1 pure presentation contract: labels, outcome routing and payload shapes.
 import assert from 'node:assert/strict';
-import { STATUS, CONVERSATION_OUTCOMES, REMINDER_PRESETS, SCHEDULE_KINDS, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, casablancaInstant } from '../src/lib/crm/presentation.mjs';
+import { STATUS, CONVERSATION_OUTCOMES, REMINDER_PRESETS, SCHEDULE_KINDS, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, casablancaInstant, noteRequired, commandError } from '../src/lib/crm/presentation.mjs';
 
 // Presentation labels only; stored status values are unchanged.
 assert.equal(STATUS.CONTACTING, 'Contact en cours');
@@ -62,6 +62,18 @@ for (const key of Object.keys(CONVERSATION_OUTCOMES)) {
   if (payload.next_task) assert(Object.keys(payload.next_task).every(field => taskKeys.includes(field)), `${key} task stays inside the server allowlist`);
 }
 
+// Stale hidden selection: other_step chosen, then the call outcome changed to no answer.
+const stale = { action: 'call', interaction: 'other_step', reason: 'not_interested', step: 'placement_test', unsuitableReason: 'other' };
+assert.equal(noteRequired({ ...stale, outcomeLed: true }), true, 'visible Other step requires an explanation');
+assert.equal(noteRequired({ ...stale, outcomeLed: false }), false, 'hidden other_step no longer requires a note');
+assert.equal(noteRequired({ ...stale, interaction: 'not_suitable', outcomeLed: false }), false, 'hidden not_suitable/Other no longer requires a note');
+assert.equal(noteRequired({ ...stale, interaction: 'not_suitable', outcomeLed: true }), true);
+assert.equal(noteRequired({ action: 'whatsapp', outcomeLed: false, interaction: 'other_step' }), false, 'sent WhatsApp ignores a hidden result');
+for (const action of ['note', 'cancel', 'reopen', 'complete']) assert.equal(noteRequired({ action, outcomeLed: false }), true, `${action} explanation required`);
+assert.equal(noteRequired({ action: 'lost', outcomeLed: false, reason: 'other' }), true);
+assert.equal(noteRequired({ action: 'qualify', outcomeLed: false, step: 'other' }), true);
+assert.equal(noteRequired({ action: 'qualify', outcomeLed: false, step: 'center_visit' }), false);
+assert.match(commandError({ code: '22023', message: 'Agreed callback time is outside calling hours' }), /hors des horaires d’appel/);
 assert.equal(taskTitle({ task_type: 'callback', followup_reason: 'considering' }), 'Rappel · En réflexion');
 assert.equal(taskTitle({ task_type: 'center_visit' }), 'Visite au centre');
 assert.equal(taskTitle(null), 'Action');

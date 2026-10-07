@@ -86,6 +86,15 @@ export function conversationDecision(key, { channel, note, reason, next }) {
   }
   return data;
 }
+// Prose is required only for explanations; a hidden conversation result never counts.
+export function noteRequired({ action, outcomeLed, interaction, reason, step, unsuitableReason }) {
+  const result = outcomeLed ? interaction : '';
+  return ['note', 'cancel', 'reopen', 'complete'].includes(action)
+    || ['lost', 'unreachable', 'notQualified'].includes(action) && reason === 'other'
+    || action === 'qualify' && step === 'other'
+    || result === 'other_step'
+    || result === 'not_suitable' && unsuitableReason === 'other';
+}
 export function taskTitle(task) {
   if (!task) return 'Action';
   return `${TASKS[task.task_type] || 'Action'}${FOLLOWUP_REASONS[task.followup_reason] ? ` · ${FOLLOWUP_REASONS[task.followup_reason]}` : ''}`;
@@ -217,6 +226,7 @@ export function commandError(error) {
   if (message.includes('No effective follow-up policy')) return 'Le calendrier de suivi n’est pas encore configuré. Demandez à un directeur de le publier.';
   if (message.includes('minimum spacing')) return 'Le délai minimum entre deux appels n’est pas encore écoulé (3 heures par défaut).';
   if (message.includes('five current-cycle')) return 'Cinq appels sans réponse dans la séquence actuelle sont nécessaires.';
+  if (message.includes('Agreed callback time is outside calling hours')) return 'Cette heure convenue est hors des horaires d’appel. Choisissez avec le parent une autre heure compatible.';
   if (message.includes('Reminder preset')) return 'Choisissez soit un rappel rapide, soit une date précise.';
   if (message.includes('Invalid follow-up kind')) return 'Une visite au centre est toujours un rendez-vous convenu avec le parent.';
   if (message.includes('Considering decision')) return 'Pour un parent en réflexion, prévoyez un rappel ou un suivi WhatsApp.';

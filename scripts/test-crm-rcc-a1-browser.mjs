@@ -49,6 +49,16 @@ try {
  assert.equal(await page.getByRole('dialog').getByRole('button',{name:/Réattribuer/}).count(),0,'no foreground task reassignment');
  assert.equal(await page.getByRole('dialog').getByRole('button',{name:/^Responsable du prospect/}).count(),0,'owner label is not a reassignment control');
  await page.getByRole('dialog').getByText('Nouveau',{exact:true}).first().waitFor();
+ // Stale hidden selection: an Other step chosen, then the call outcome changed.
+ await page.getByRole('button',{name:'Appel',exact:true}).click();
+ await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
+ await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('other_step');
+ assert.notEqual(await dialog().getByLabel('Note',{exact:true}).getAttribute('required'),null,'visible Other step requires an explanation');
+ await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('no_answer');
+ assert.equal(await dialog().getByLabel('Résultat de l’échange',{exact:true}).count(),0);
+ assert.equal(await dialog().getByLabel('Note',{exact:true}).getAttribute('required'),null,'hidden other_step no longer requires a note');
+ await save();await done();assert.equal(detail(lead).failed_attempts,1);assert.equal(detail(lead).status,'CONTACTING');
+ console.log('PASS stale hidden other_step selection cannot block a failed-call record');
  await page.getByRole('button',{name:'Appel',exact:true}).click();
  await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
  await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('considering');
@@ -94,6 +104,25 @@ try {
  await save();await done();
  assert.equal(sql(`select length(body) from public.crm_activities where lead_id=${quote(lead)} and event_type='task_completed' and actor_id=${quote(actor)} order by occurred_at desc,id desc limit 1`),'200');
  console.log('PASS completion outcome capped at 200 characters and accepted by the server');
+ // An agreed callback keeps its exact time: outside calling hours it is rejected,
+ // and it replaces the open generic follow-up while operational tasks remain.
+ const lunch=future,agreed=future.slice(0,10)+'T16:00';
+ await page.goto(app+`/crm/leads?lead=${lead}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
+ const genericBefore=detail(lead).open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type));assert.equal(genericBefore.length,1);
+ await page.getByRole('button',{name:'Appel',exact:true}).click();
+ await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
+ await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('callback');
+ assert(await dialog().getByLabel('Rendez-vous convenu',{exact:true}).isChecked(),'a requested callback defaults to an agreed appointment');
+ await dialog().getByText(/garde son heure exacte/).waitFor();
+ await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(lunch);
+ await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').filter({hasText:'hors des horaires d’appel'}).waitFor();
+ assert.deepEqual(detail(lead).open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type)).map(t=>t.id),genericBefore.map(t=>t.id),'rejected agreed time changes nothing');
+ await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(agreed);await save();await done();
+ saved=detail(lead);const generic=saved.open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type));
+ assert.equal(generic.length,1);assert.equal(generic[0].schedule_kind,'appointment');assert.notEqual(generic[0].id,genericBefore[0].id,'latest decision replaced the previous follow-up');
+ assert.equal(sql(`select due_at=(${quote(agreed)}::timestamp at time zone 'Africa/Casablanca') from public.crm_tasks where id=${quote(generic[0].id)}`),'t','agreed callback kept its exact time');
+ assert(saved.open_tasks.some(t=>t.task_type==='center_visit'),'center visit preserved');
+ console.log('PASS agreed callback outside hours rejected, exact compatible time kept, previous follow-up replaced, visit preserved');
  // Presentation labels; stored values unchanged.
  await page.goto(app+'/crm/leads');await page.getByRole('region',{name:'Contact en cours'}).waitFor();await page.getByRole('region',{name:'Inscription confirmée'}).waitFor();
  // Work Queue: agreed appointment labelled, reassignment moved to the row's overflow menu.

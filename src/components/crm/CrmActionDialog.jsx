@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import FormField from '@/components/operational/FormField';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
-import { STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle } from '@/lib/crm/presentation.mjs';
+import { STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
 const titles = {
   manual: 'Ajouter un prospect',
   call: 'Enregistrer le résultat de l’appel',
@@ -90,16 +90,19 @@ export default function CrmActionDialog({
   // Outcome-led: record what happened in a real conversation; the server derives the stage.
   const outcomeLed = action === 'call' && values.outcome === 'spoke_with_contact' || action === 'conversation' || action === 'whatsapp' && values.kind === 'meaningful_whatsapp_conversation';
   const channel = action === 'call' ? 'phone' : action === 'whatsapp' ? 'whatsapp' : values.channel;
-  const interaction = outcomeLed ? CONVERSATION_OUTCOMES[values.interaction] : null;
+  // A hidden conversation result must never influence the form or payload.
+  const interactionKey = outcomeLed ? values.interaction : '';
+  const interaction = CONVERSATION_OUTCOMES[interactionKey] || null;
   const qualifying = action === 'qualify';
   const closing = ['lost', 'unreachable', 'notQualified'].includes(action);
   const closingOutcome = ['lost', 'not_qualified'].includes(interaction?.decision);
   const needsTask = ['schedule', 'reschedule', 'qualify', 'reopen', 'complete', 'cancel'].includes(action) || action === 'call' && values.outcome === 'wrong_number' || !!interaction && !closingOutcome;
-  const fixedTask = qualifying ? stepTasks[values.step] : interaction ? outcomeTask(values.interaction, channel) : null;
+  const fixedTask = qualifying ? stepTasks[values.step] : interaction ? outcomeTask(interactionKey, channel) : null;
   const taskType = fixedTask || values.taskType;
   const kindRule = scheduleKindRule(taskType, values.scheduleKind || interaction?.defaultKind);
   const exactTime = action === 'reschedule' || kindRule.kind === 'appointment' || values.preset === 'exact';
-  const noteRequired = ['note', 'cancel', 'reopen', 'complete'].includes(action) || closing && values.reason === 'other' || qualifying && values.step === 'other' || values.interaction === 'other_step' || values.interaction === 'not_suitable' && values.unsuitableReason === 'other';
+  const noteRequired = requiresNote({ action, outcomeLed, interaction: values.interaction, reason: values.reason, step: values.step, unsuitableReason: values.unsuitableReason });
+  const agreedCallback = action !== 'reschedule' ? kindRule.kind === 'appointment' && taskType === 'callback' : task?.task_type === 'callback' && task?.schedule_kind === 'appointment';
   const text = (key, label, required = false, type = 'text', maxLength = 200) => <Field label={label}><input className={inputClass} type={type} maxLength={maxLength} required={required} value={values[key] || ''} onChange={e => set(key, e.target.value)} /></Field>;
   const select = (key, label, options) => <Field label={label}><select required className={inputClass} value={values[key]} onChange={e => set(key, e.target.value)}>{!values[key] && <option value="">Choisir explicitement…</option>}{Object.entries(options).map(([value, label]) => <option key={value} value={value} disabled={key === 'reason' && value === 'unreachable' && !lead?.unreachable_eligible}>{label}</option>)}</select></Field>;
   function payload() {
@@ -139,7 +142,7 @@ export default function CrmActionDialog({
       if (action === 'call') withTask();
       return ['crm_record_conversation_decision', {
         ...data,
-        ...conversationDecision(values.interaction, { channel, note: values.note, reason: values.unsuitableReason, next })
+        ...conversationDecision(interactionKey, { channel, note: values.note, reason: values.unsuitableReason, next })
       }];
     }
     if (action === 'call') {
@@ -310,10 +313,10 @@ export default function CrmActionDialog({
   {closing && <>{select('reason', 'Motif', action === 'notQualified' ? NOT_QUALIFIED : LOST)}{values.reason === 'unreachable' && <p className="text-sm">{lead.failed_attempts} / 5 appels infructueux dans la séquence actuelle.</p>}</>}
   {action === 'reassign' && <><Field label={task ? 'Responsable de l’action' : 'Responsable du prospect'}><select className={inputClass} value={task ? values.assignee : values.owner} onChange={e => { set(task ? 'assignee' : 'owner', e.target.value); setSelectedStaffLabel(e.target.selectedOptions[0].textContent); }}><option value="">Non attribué</option>{(task ? values.assignee : values.owner) && !staff.data?.rows.some(p => p.id === (task ? values.assignee : values.owner)) && <option value={task ? values.assignee : values.owner}>{selectedStaffLabel}</option>}{staff.data?.rows.map(person => <option key={person.id} value={person.id}>{staffLabel(person)}</option>)}</select></Field>{staff.isError && <p role="alert" className="text-sm">Liste indisponible. <button type="button" onClick={() => staff.refetch()}>Réessayer</button></p>}{(staff.data?.total > 50 || staffOffset > 0) && <div className="flex gap-2"><Button type="button" variant="outline" disabled={!staffOffset} onClick={() => setStaffOffset(x => Math.max(0, x - 50))}>Précédents</Button><Button type="button" variant="outline" disabled={staffOffset + 50 >= staff.data?.total} onClick={() => setStaffOffset(x => x + 50)}>Suivants</Button></div>}<p className="text-xs text-slate-500">{task ? 'Seule cette action change de responsable. Le responsable du prospect reste inchangé.' : 'Les responsables des actions déjà prévues restent inchangés.'}</p></>}
   {!['manual', 'reassign', 'schedule', 'reschedule'].includes(action) && <Field label={['cancel', 'reopen'].includes(action) ? 'Motif' : action === 'complete' ? 'Résultat de l’action' : 'Note'} help={action === 'complete' ? `${(values.note || '').length} / ${COMPLETION_LIMIT} caractères` : noteRequired ? undefined : 'Facultative : les choix ci-dessus suffisent comme trace.'}><textarea className={`${inputClass} min-h-24`} maxLength={action === 'complete' ? COMPLETION_LIMIT : 4000} required={noteRequired} value={values.note || ''} onChange={e => set('note', e.target.value)} /></Field>}
-  {needsTask && <div className="space-y-3 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">{action === 'reschedule' ? 'Nouvel horaire' : 'Prochaine action'}</h3>{action !== 'reschedule' && (fixedTask ? <p className="text-sm">{nextTypes[fixedTask] || taskTitle({ task_type: fixedTask })}{values.interaction === 'considering' ? ' · En réflexion' : ''}</p> : select('taskType', 'Action', nextTypes))}
+  {needsTask && <div className="space-y-3 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">{action === 'reschedule' ? 'Nouvel horaire' : 'Prochaine action'}</h3>{action !== 'reschedule' && (fixedTask ? <p className="text-sm">{nextTypes[fixedTask] || taskTitle({ task_type: fixedTask })}{interactionKey === 'considering' ? ' · En réflexion' : ''}</p> : select('taskType', 'Action', nextTypes))}
    {action !== 'reschedule' && (kindRule.fixed ? <p className="text-sm font-medium text-blue-900">{SCHEDULE_KINDS[kindRule.kind]}</p> : <fieldset><legend className="text-sm font-medium">Type de suivi</legend><div className="mt-1 flex flex-wrap gap-x-4">{Object.entries(SCHEDULE_KINDS).map(([value, label]) => <label key={value} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="radio" name="schedule-kind" value={value} checked={kindRule.kind === value} onChange={() => set('scheduleKind', value)} />{label}</label>)}</div><p className="text-xs text-slate-500">{kindRule.kind === 'appointment' ? 'Horaire fixé avec le parent.' : 'Rappel pour l’équipe ; aucun horaire n’a été promis au parent.'}</p></fieldset>)}
    {action !== 'reschedule' && kindRule.kind === 'reminder' && <Field label="Échéance du rappel" help={values.preset === 'exact' ? undefined : 'Calculée par le serveur selon les horaires de suivi de Casablanca.'}><select className={inputClass} value={values.preset} onChange={e => set('preset', e.target.value)}>{Object.entries(REMINDER_PRESETS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="exact">Date et heure précises</option></select></Field>}
-   {exactTime && <Field label="Date et heure · Casablanca"><input className={inputClass} type="datetime-local" required value={values.due || ''} onChange={e => set('due', e.target.value)} /></Field>}{text('instructions', 'Précisions (facultatif)', false, 'text', 4000)}<p className="text-xs text-slate-500">Les appels hors horaires d’ouverture sont décalés au prochain créneau par le calendrier de suivi.</p></div>}
+   {exactTime && <Field label="Date et heure · Casablanca"><input className={inputClass} type="datetime-local" required value={values.due || ''} onChange={e => set('due', e.target.value)} /></Field>}{text('instructions', 'Précisions (facultatif)', false, 'text', 4000)}<p className="text-xs text-slate-500">{agreedCallback ? 'Un rappel convenu garde son heure exacte : elle doit tomber dans les horaires d’appel, sinon l’enregistrement est refusé.' : 'Les appels hors horaires d’ouverture sont décalés au prochain créneau par le calendrier de suivi.'}</p></div>}
   </fieldset>{error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Annuler</Button><Button type="submit" disabled={busy || action === 'unreachable' && !lead.unreachable_eligible}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button></div>
  </form>}
  </DialogContent></Dialog>;

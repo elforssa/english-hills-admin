@@ -156,4 +156,4 @@ Owner-approved [RCC-A1](../architecture/plans/rcc-r1-receptionist-crm-completion
 - An extended task primitive and conversation-decision wrapper.
 - Additive fields in the four migration-110 read projections.
 
-`crm_security.command` is migration 103's definition with only two note-requirement relaxations, so lifecycle barriers and pending-stop handling are unchanged. No public RPC signature, grant/RLS, status vocabulary, conversion, finance or lifecycle behavior changed.
+`crm_security.command` is migration 103's definition with only two note-requirement relaxations and an agreed-callback reschedule guard, so lifecycle barriers and pending-stop handling are unchanged. No public RPC signature, grant/RLS, status vocabulary, conversion, finance or lifecycle behavior changed.

@@ -27,6 +27,8 @@ RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_fol
 - The receptionist records the conversation outcome, and guarded commands derive status.
 - **En réflexion** is follow-up metadata (`followup_reason`) on a callback or WhatsApp follow-up, never a stage. A QUALIFIED prospect who needs time stays QUALIFIED.
 - Tasks separate agreed appointments from internal reminders (`schedule_kind`). Center visits are always appointments.
+- An agreed callback keeps its exact time and must fall inside the Casablanca calling window; otherwise it is rejected, never shifted. Internal reminders may resolve to the next window.
+- A lead has one active generic commercial follow-up (callback or WhatsApp follow-up). The latest conversation decision replaces it on any channel; visits, placement, enrollment and other operational tasks are preserved.
 - Reminder presets resolve on the server to the Casablanca policy's calling windows; appointments need an explicit agreed time.
 - Structured outcomes need no prose. Explanations remain required for standalone notes, Other reasons, cancellation and reopening.
 - CONTACTING and CONVERTED display as **Contact en cours** and **Inscription confirmée**; stored values are unchanged.

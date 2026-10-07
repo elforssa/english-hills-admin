@@ -58,7 +58,13 @@ begin
   schedule:='reminder'; due:=crm_security.reminder_due(l.followup_policy_id,spec->>'due_preset');
  else due:=(spec->>'due_at')::timestamptz; end if;
  if due is null or not isfinite(due) or due<now() then raise exception 'Valid future task required' using errcode='22023'; end if;
- if typ in ('first_contact','contact_attempt','callback') then due:=crm_security.next_window(l.followup_policy_id,due); end if;
+ if typ in ('first_contact','contact_attempt','callback') then
+  -- An agreed callback keeps its agreed time: reject, never shift, outside hours.
+  -- Reminders and legacy explicit times still resolve to the next calling window.
+  if schedule='appointment' and crm_security.next_window(l.followup_policy_id,due)<>due then
+   raise exception 'Agreed callback time is outside calling hours' using errcode='22023'; end if;
+  due:=crm_security.next_window(l.followup_policy_id,due);
+ end if;
  assignee:=case when spec ? 'assigned_to' then (spec->>'assigned_to')::uuid else l.owner_id end;
  perform crm_security.assert_staff(assignee);
  if length(spec->>'instructions')>4000 then raise exception 'Instructions too long' using errcode='22023'; end if;
@@ -71,8 +77,9 @@ end $$;
 
 -- SAFEGUARD: migration 103's cumulative crm_security.command, copied verbatim
 -- (lifecycle barrier, pre-identity keys and pending-stop handoff unchanged), with
--- only two edits: record_conversation and channel-evidenced qualify_lead no
--- longer require prose. Never reconstruct this function from migration 080.
+-- only three edits: record_conversation and channel-evidenced qualify_lead no
+-- longer require prose, and rescheduling an agreed callback outside calling hours
+-- is rejected instead of shifted. Never reconstruct this function from migration 080.
 CREATE OR REPLACE FUNCTION crm_security.command(cmd text, request uuid, data jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -276,7 +283,12 @@ begin
     if jsonb_typeof(next_spec) is distinct from 'object' or next_spec-array['due_at','instructions']<>'{}'::jsonb then raise exception 'Reschedule accepts due_at and instructions only' using errcode='22023'; end if;
     due:=(next_spec->>'due_at')::timestamptz;
     if due is null or not isfinite(due) or due<now() then raise exception 'Future due time required' using errcode='22023'; end if;
-    if t.task_type in ('first_contact','contact_attempt','callback') then due:=crm_security.next_window(l.followup_policy_id,due); end if;
+    if t.task_type in ('first_contact','contact_attempt','callback') then
+     -- An agreed callback keeps its agreed time; never shift it silently.
+     if t.schedule_kind='appointment' and crm_security.next_window(l.followup_policy_id,due)<>due then
+      raise exception 'Agreed callback time is outside calling hours' using errcode='22023'; end if;
+     due:=crm_security.next_window(l.followup_policy_id,due);
+    end if;
     if length(next_spec->>'instructions')>4000 then raise exception 'Instructions too long' using errcode='22023'; end if;
     update public.crm_tasks set due_at=due,scheduled_end_at=null,instructions=case when next_spec ? 'instructions' then next_spec->>'instructions' else instructions end,
      updated_at=now(),version=version+1 where id=t.id;
@@ -431,11 +443,12 @@ begin
  -- Structured outcome facts are sufficient evidence; prose stays optional. Inner
  -- commands still require explanations for Other qualification/closure reasons.
  data:=jsonb_build_object('lead_id',l.id,'expected_version',l.version)||case when note is not null then jsonb_build_object('note',note) else '{}'::jsonb end;
- -- A new conversation decision supersedes outstanding call follow-ups, including
- -- a previously scheduled callback when no task was explicitly selected.
+ -- One active generic commercial follow-up: the latest conversation decision
+ -- replaces any open callback or WhatsApp follow-up, whatever the channel.
+ -- Visits, placement, enrollment and other operational tasks are untouched.
  if decision in ('callback','considering','qualify') then
   for obsolete in select * from public.crm_tasks where lead_id=l.id and status='open'
-   and task_type='callback' and id is distinct from t.id order by id loop
+   and task_type in ('callback','whatsapp_followup') and id is distinct from t.id order by id loop
    perform crm_security.finish_task(obsolete,true,'Conversation follow-up replaced',source||':superseded:'||obsolete.id);
   end loop;
  end if;
