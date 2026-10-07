@@ -1,6 +1,6 @@
 # Owner summary
 
-**RCC-B1 — Responsive Opportunities presentation. Revision B1-r1, 2026-10-07. Status: PROPOSED / AWAITING OWNER DECISIONS.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. Implementation is **not authorized**. Decisions D1–D8 below are pending.
+**RCC-B1 — Responsive Opportunities presentation. Revision B1-r1, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](#owner-approval-record)). Implementation itself is **not yet authorized**: it still needs independent architecture review, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized.
 
 ## What will change
 
@@ -52,7 +52,7 @@ Presentation only, built from the deployed [UI Foundation](english-hills-ui-foun
 - Breakpoint edges at exactly 768 and 1024 behave differently in WebKit with classic scrollbars, so both sides of each edge must pass.
 - Several existing browser assertions must be updated deliberately: the `tel:` link and the Acquisition/Demande labels.
 
-Owner decisions D1–D8 are required before implementation.
+Owner decisions D1–D8 were approved as recommended on 2026-10-07 ([approval record](#owner-approval-record)).
 
 ## Contract identity, baseline and evidence limits
 
@@ -349,7 +349,7 @@ Today "Demande" is fragmented across four drawer places plus the card:
 | **Réponses aux formulaires**: full paged answers | Collapsible | `crm_get_form_answers` (limit 5 / offset, lazy) |
 | "Intérêt déclaré : … · {source}" | Card; programme also in the drawer description | `lead.program`, `lead.source_label` |
 
-Proposed single **Demande** section (D1 A), using the same reads and the same truthful per-read states:
+Approved single **Demande** section (D1 A), using the same reads and the same truthful per-read states:
 
 ```text
 Demande
@@ -454,7 +454,7 @@ Local Supabase, synthetic data only, external delivery disabled. Two engines, fi
 
 ## Owner decisions required
 
-All eight block implementation until decided, because the contract below depends on each. The plan as a whole stays PROPOSED until the owner approves it.
+**All eight were decided by the owner on 2026-10-07, each as recommended** ([approval record](#owner-approval-record)). The options and consequences below are kept as the decision record.
 
 ### D1 — "Demande" unification
 
@@ -463,7 +463,7 @@ All eight block implementation until decided, because the contract below depends
 - **Option B:** keep separate sections. Only rename "Contexte de la demande" to "Demande" and move "Origine" into it. Acquisition and Réponses aux formulaires stay separate.
 - **Consequences:** A shortens the drawer by about two section headers and puts inquiry evidence in one place. Assertions on "Acquisition" and "Réponses aux formulaires" must be updated deliberately. B changes less but leaves the fragmentation.
 - **Recommendation:** A.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** A — approved. Blocking resolved.
 
 ### D2 — telephone links
 
@@ -478,7 +478,7 @@ All eight block implementation until decided, because the contract below depends
   - **C:** best matches the reality that calls happen on the external business phone or WhatsApp, and that browser `tel:` on a computer opens an unrelated calling app.
   - **Tests:** `test-crm-phase4-browser.mjs` must change from asserting the link at 1440 to asserting its absence there. It must add a phone/coarse-pointer assertion that clicking still records nothing.
 - **Recommendation:** C.
-- **Blocking:** yes, for the telephone item only.
+- **Owner decision (2026-10-07):** C — approved. Blocking resolved.
 
 ### D3 — collapsed history
 
@@ -492,7 +492,7 @@ All eight block implementation until decided, because the contract below depends
   - C needs aggregation the cursor read cannot make truthful without loading everything.
   - The full history stays accessible under every option.
 - **Recommendation:** A, with three entries.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** A — approved. Blocking resolved.
 
 ### D4 — intermediate sidebar
 
@@ -505,7 +505,7 @@ All eight block implementation until decided, because the contract below depends
   - **B's coverage:** regression on representative non-CRM pages, an ADR-005 amendment, and its own owner approval and Tier-2 review.
   - **What A gives up:** about 176px at 1024.
 - **Recommendation:** A. If the owner still wants a rail, approve it as a **separate UI Foundation outcome**, not inside RCC-B1.
-- **Blocking:** yes; it decides scope.
+- **Owner decision (2026-10-07):** A — approved. Blocking resolved.
 
 ### D5 — phone layout at 390px
 
@@ -526,7 +526,7 @@ All eight block implementation until decided, because the contract below depends
 
   B is presentation and navigation only. It adds no status values and no server transitions, and every stage action stays reachable through the existing guarded actions. The Tableau toggle remains available.
 - **Recommendation:** B.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** B — approved. Blocking resolved.
 
 ### D6 — mobile drawer
 
@@ -535,7 +535,7 @@ All eight block implementation until decided, because the contract below depends
 - **Option B:** a full-width, full-height sheet using the existing `Sheet` primitive, with a sticky header and close control, safe-area padding, no sticky footer (the primary action sits in Prochaine action), body scrolling, action dialogs layered above, and browser Back closing it.
 - **Consequences:** A spends part of a 390px screen on a dimmed strip and squeezes forms. B already matches today's width rule and adds the missing sticky header and safe-area handling. Desktop and tablet keep the 620px side sheet.
 - **Recommendation:** B.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** B — approved. Blocking resolved.
 
 ### D7 — default presentation at tablet width (768)
 
@@ -547,7 +547,7 @@ All eight block implementation until decided, because the contract below depends
   - **A:** keeps desktop-like scanning, but with heavy sideways scrolling.
   - **Either way:** existing `layout` URLs keep working.
 - **Recommendation:** B.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** B — approved. Blocking resolved.
 
 ### D8 — drawer modality on desktop
 
@@ -558,7 +558,7 @@ All eight block implementation until decided, because the contract below depends
   - **A:** keeps the UIF F9 focus/inertness contract and all existing drawer tests.
   - **B:** is faster for switching between prospects, but it requires a non-modal focus model, background interaction during pending commands, layout reflow of a board with five stages beside a 620px panel, and new accessibility review. It is a larger change than B1's presentation scope.
 - **Recommendation:** A. Revisit B as a future enhancement if needed.
-- **Blocking:** yes.
+- **Owner decision (2026-10-07):** A — approved. Blocking resolved.
 
 No other genuine product choices were found. Everything else above is ordinary implementation detail inside this contract.
 
@@ -575,14 +575,20 @@ No other genuine product choices were found. Everything else above is ordinary i
 
 ## IMPLEMENTATION CONTRACT
 
-**Status:** not authorized. Implementation may start only after the owner records approval of B1-r1 with explicit choices for D1–D8 in this file's approval record, and the architecture PR is merged. Approval to implement is not approval to merge or release.
+**Status:** architecture OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07 (B1-r1, D1–D8 as recommended; see the [approval record](#owner-approval-record)). **Implementation is not yet authorized.** It may start only after all three of these:
+
+1. independent architecture review of this PR's exact head SHA;
+2. the architecture PR is merged;
+3. a separate explicit owner instruction to implement.
+
+Approval to implement is not approval to merge or release.
 
 **Prerequisites:**
 - Branch from then-current `origin/main` on a named feature branch.
 - Confirm migration 112 is still the latest and that nothing in this plan's module manifest changed materially since `13c1db1…`. If something did, reassess before coding.
 - Record the approved revision and decisions in the handoff.
 
-**Authorized scope (assuming the recommended options):**
+**Authorized scope (the approved options):**
 - The responsive bands; compact header and toolbar; view chips/select; filter disclosure row and filter sheet; active-filter chips.
 - The fluid contained board with sticky headers, affordance, jump control and scroll preservation.
 - The stage list with chips, the tablet card grid, and the desktop-only table.
@@ -591,7 +597,7 @@ No other genuine product choices were found. Everything else above is ordinary i
 - Dialog containers with sticky footers and `100dvh`; telephone-link gating per D2.
 - Pure helpers and tests.
 
-If the owner chooses a non-recommended option, implement that option's described behavior and nothing broader.
+The owner approved every recommended option, so no alternative option behavior is in scope.
 
 **Module manifest:** exactly the table in [Modules expected to change](#modules-expected-to-change-and-shared-component-blast-radius), plus new presentation components under `src/components/crm/`, new tests under `scripts/`, and `package.json` *script* entries only. Any other file needs a written justification in the PR. The files marked "Not changed" in that table are out of scope (stop condition).
 
@@ -655,4 +661,30 @@ Stop and report; do not work around it.
 
 ## Owner approval record
 
-*Pending.* No owner decision has been recorded for B1-r1.
+**Recorded 2026-10-07.** The owner approved the RCC-B1 architecture, revision **B1-r1**, as recommended. Architecture PR [#114](https://github.com/elforssa/english-hills-admin/pull/114); the approved content is commit `4ae6bbfb62563ec69db4195b27852e05ccd45a3e`, plus this approval record.
+
+| Decision | Approved option |
+| --- | --- |
+| D1 — Demande | **A:** merge the inquiry information into one Demande section. |
+| D2 — telephone links | **C:** show the `tel:` **Appeler** link only below 640px with a coarse pointer. The visible phone number, **Copier le numéro** and **Enregistrer un appel** remain available everywhere. |
+| D3 — history | **A:** show the latest three real exchanges by default, with **Afficher tout l’historique** for the complete history using the existing paging. |
+| D4 — sidebar | **A:** no sidebar change. Any compact or icon sidebar is a separate UI Foundation outcome. |
+| D5 — phone layout | **B:** a stage-navigated list is the default phone Opportunities view. |
+| D6 — phone drawer | **B:** a full-width, full-height sheet with sticky header and close behavior; browser Back closes the sheet. |
+| D7 — tablet default | **B:** the stage-list default applies below 1024px, including the tablet band. |
+| D8 — desktop drawer | **A:** the desktop drawer stays modal. |
+
+Constraints the owner restated with the approval, binding on implementation:
+
+- RCC-B1 stays **Tier 2** and presentation-focused.
+- No database, migration, server/API authority, lifecycle semantics, permissions, Meta, finance, enrollment logic or global sidebar change is authorized.
+- The Escape/menu defect may be fixed with the documented page-local drawer/menu handling, **without changing dependencies**.
+- Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a **Tier 3 escalation and stop condition**.
+- Acceptance must cover the documented responsive boundaries: both sides of the 768px and 1024px edges (767/768 and 1023/1024) and the required 390, 768, 1024, 1280 and 1440 widths.
+
+**Not authorized by this approval:**
+
+- implementation, until independent architecture review, the architecture PR merge and a separate explicit owner instruction;
+- merge of any implementation;
+- release or deployment;
+- any Production access.
