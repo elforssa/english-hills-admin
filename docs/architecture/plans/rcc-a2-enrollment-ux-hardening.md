@@ -515,6 +515,7 @@ The full matrix is in the [contract](#acceptance-criteria).
      - record it as release evidence.
 
      This is a Production configuration read. It needs the later release/operator authorization and is **not** performed in this architecture task.
+   - **Effective PostgreSQL `Africa/Casablanca` behavior (configuration read, added by the 2026-10-07 implementation review):** record the UTC offset PostgreSQL applies to `Africa/Casablanca` at release time (for example `now() at time zone 'Africa/Casablanca'` against `now()`). A2 compares against that zone explicitly, so the server's effective tz data matters in addition to the session `TimeZone`. Same authorization as above.
 3. Recovery:
    - **Frontend:** revert (safe with the new database).
    - **Database:** forward-fix with a new migration restoring the 084 body. Hints are additive, so a database rollback should rarely be needed.
@@ -629,6 +630,22 @@ A2-r2 proposes **no** D8. A2 does not need to change **Nouvelle pré-inscription
 The divergence confirms the plan's caution that no fixed offset may be assumed. Near Casablanca midnight, the browser's birth-date `max` and follow-up `min` follow the browser's tz data, while the server's civil date stays authoritative and still answers with its reason code.
 
 **Local harness notes.** The existing Phase-6 concurrency and lifecycle browser scripts accept only `codex/` branches or a pull-request CI environment, and the former reads `.git/HEAD` directly. Both ran unchanged with that environment, the former from a copy outside the worktree. The UI-Foundation WebKit sidebar check failed once and passed on two reruns; that code is untouched.
+
+**Review corrections — 2026-10-07.** The independent review of head `a853712b6f094d952c4fc7071a22a74232cd9036` returned CHANGES REQUIRED. It found migration 112 and the server-side work sound, so **migration 112 is unchanged**. The corrections are browser-side:
+
+- **B1 (blocking): frozen uncertain request.**
+  - *Defect:* after an uncertain failure, a refetch (focus or invalidation) could already reflect the committed request. Through the linked-learner sync it then mutated the form, so a retry was sent with a new key and showed the discovered result. Derived follow-up validation could also replace the uncertain-retry message.
+  - *Fix:* while uncertain, the dialog freezes the submitted form, payload, request key and the linked/follow-up view they were built from. Fields and Retour are disabled, linked-learner synchronization is suspended, and derived validation never replaces the uncertain message. Retry resends the frozen request with the same key.
+  - *Resolution:* the freeze ends only when the same-key retry succeeds, which shows this dialog's own success panel, or when a definite SQLSTATE rejection arrives. Closing the dialog still discards it; no new abandon workflow was added.
+  - *Regression:* commit, lost response, the clock advanced past the follow-up, then a real React Query `visibilitychange` refetch whose context already holds the committed learner. The test failed on `a853712` and passes after the fix.
+- **I1 — owner-approved wording amendment (2026-10-07).**
+  - An existing enrollment linked by this request, whether Submitted or Trial, shows **Inscription rattachée**. Confirmed/Validated keeps **Inscription confirmée rattachée**.
+  - **Pré-inscription créée** and **Essai démarré** appear only for an enrollment this request created. **Inscription déjà rattachée** stays the discovered/race heading.
+  - The dialog decides from its own request payload (`enrollment_id` present). Server semantics are unchanged.
+- **I2: birth-date check on replay.** Aligned with the plan. The birth-date bound stays active on an uncertain replay, using the frozen value. Only follow-up futurity is skipped. `submitReason` makes this explicit, with pure tests.
+- **Test gaps:** browser coverage now includes a linked learner with a one-character lead name, and a deleted linked learner (safe unavailable state, no candidate or new-learner path).
+- **Release checklist:** the future release verification records both the Production PostgreSQL `TimeZone` setting and the effective `Africa/Casablanca` offset ([rollout](#rollout--recovery-strategy-design-only-no-rollout-authorized)). Production was not read.
+- **Known pre-existing limitation, outside RCC-A2:** `casablancaInstant` converts CRM wall-clock inputs with browser time-zone data. A browser or runtime with stale Morocco rules can shift CRM-entered wall-clock times by an hour relative to the server's civil projection. It is not fixed here; it is tracked in the [RCC-r1 deferred reliability backlog](rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
 
 **Remaining gates.** Fresh independent exact-SHA review, owner merge and release approval, a separate release/operator task (migration first, including the Production `TimeZone` configuration read), Production verification and documentation closeout. **Nouvelle pré-inscription** is unchanged; its duplicate risk remains a known limitation (no D8).
 

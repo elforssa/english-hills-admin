@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { commandError, casablancaInstant } from '../src/lib/crm/presentation.mjs';
 import { ENROLLMENT_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, discardsRequestKey } from '../src/lib/crm/enrollmentErrors.mjs';
-import { casablancaToday, casablancaNowInput, birthDateReason, followupReason, enrollmentAction, continueHref, studentHref, enrollmentParam, enrollmentSuccess, followupNotice } from '../src/lib/crm/enrollmentActions.mjs';
+import { casablancaToday, casablancaNowInput, birthDateReason, followupReason, submitReason, enrollmentAction, continueHref, studentHref, enrollmentParam, enrollmentSuccess, followupNotice } from '../src/lib/crm/enrollmentActions.mjs';
 
 // The closed plan §1 vocabulary, the migration's hints and the browser table agree.
 const PLAN = ['lead_unavailable','lead_already_enrolled','lead_not_qualified','program_invalid','school_year_invalid','notes_too_long','initial_status_not_permitted',
@@ -112,6 +112,14 @@ assert.equal(followupReason('2026-10-07T00:29', halfPast), 'followup_in_past');
 assert.equal(followupReason('2026-10-07T00:31', halfPast), null);
 assert.equal(followupReason('', halfPast), null);
 assert.equal(followupReason('not-a-date'), 'followup_invalid');
+// I2: an uncertain replay skips only the follow-up futurity check that time alone can
+// invalidate; the birth-date bound stays active (its frozen value only gets more valid).
+assert.equal(submitReason({ birth: '', due: '2026-10-07T00:29', replay: true }, halfPast), null, 'replay never asks for a new follow-up date');
+assert.equal(submitReason({ birth: '', due: '2026-10-07T00:29', replay: false }, halfPast), 'followup_in_past');
+assert.equal(submitReason({ birth: '2026-10-08', due: '', replay: true }, halfPast), 'birth_date_future', 'birth bound still applies on replay');
+assert.equal(submitReason({ birth: '2026-10-08', due: '2026-10-07T00:29', replay: true }, halfPast), 'birth_date_future');
+assert.equal(submitReason({ birth: '2026-10-08', due: '', checkBirth: false, replay: true }, halfPast), null, 'linked path sends no birth date');
+assert.equal(submitReason({ birth: '2026-10-07', due: '2026-10-07T00:31', replay: false }, halfPast), null);
 
 // Contextual actions, plan §5 rows 1–10: exactly one action or none.
 const e = status => ({ id: 'e', student_id: 's', status });
@@ -153,6 +161,16 @@ assert.equal(enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, stat
 assert.equal(enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status: 'Under Review' } }, 'request').heading, 'Inscription rattachée');
 const confirmed = enrollmentSuccess({ lead: { status: 'CONVERTED' }, enrollment: { ...base.enrollment, status: 'Confirmed' }, enrollment_followup: null }, 'request');
 assert.equal(confirmed.heading, 'Inscription confirmée rattachée');assert.equal(confirmed.followup, null);assert.match(confirmed.lead, /Le suivi commercial est terminé/);
+// Owner wording amendment (2026-10-07): creation headings only for an enrollment this
+// request created; an existing enrollment linked by this request is "Inscription rattachée".
+const heading = (status, linkedExisting, origin = 'request') => enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status } }, origin, { linkedExisting }).heading;
+assert.equal(heading('Submitted', false), 'Pré-inscription créée', 'newly created Submitted');
+assert.equal(heading('Trial', false), 'Essai démarré', 'newly created Trial');
+assert.equal(heading('Submitted', true), 'Inscription rattachée', 'existing Submitted linked');
+assert.equal(heading('Trial', true), 'Inscription rattachée', 'existing Trial linked');
+assert.equal(heading('Under Review', true), 'Inscription rattachée');
+assert.equal(heading('Confirmed', true), 'Inscription confirmée rattachée');
+for (const status of ['Submitted','Trial']) assert.equal(heading(status, true, 'discovered'), 'Inscription déjà rattachée', `discovered ${status}`);
 for (const status of ['Submitted','Trial','Under Review','Confirmed']) {
   const found = enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status } }, 'discovered');
   assert.equal(found.heading, 'Inscription déjà rattachée');

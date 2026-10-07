@@ -113,6 +113,21 @@ try {
  assert.equal(candidateCalls.length,0,'no candidate query on the linked path');assert.equal(sql('select count(*) from public.students'),studentsBefore,'no learner created');
  await dialog().getByText(/^A2 Lina rattachée · Programme annuel/).waitFor();await done();assert.equal(detail(lead2).enrollment.student_id,linkedStudent);
  console.log('PASS linked learner preselected without lead name/birth, payload omits learner_name/birth_date, no candidate query, no new learner');
+ // A one-character lead name never blocks an active linked learner.
+ const shortLinked=student('A2 Malik court');const leadShort=makeLead('A2 parent court','A2 temporaire court');
+ sql(`update public.crm_leads set student_id='${shortLinked}',learner_name='A' where id='${leadShort}'`);candidateCalls.length=0;
+ await start(leadShort);await dialog().getByText('Apprenant rattaché à ce prospect : A2 Malik court · 2015-03-01',{exact:true}).waitFor();
+ assert.equal(await button('Créer un nouvel apprenant').count(),0);assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).count(),0);assert.equal(await button('Continuer').isDisabled(),false,'one-character lead name does not block');
+ await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toReview();await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();await done();
+ assert.equal(detail(leadShort).enrollment.student_id,shortLinked);assert.equal(candidateCalls.length,0);
+ // A deleted linked learner shows the safe unavailable state; no candidate or new-learner path.
+ const goneLinked=student('A2 Nadia archivée');sql(`update public.students set deleted_at=now() where id='${goneLinked}'`);const leadGone=makeLead('A2 parent archivé','A2 Nadia archivée');
+ sql(`update public.crm_leads set student_id='${goneLinked}' where id='${leadGone}'`);candidateCalls.length=0;
+ await start(leadGone);await dialog().getByText('Le dossier de l’apprenant rattaché à ce prospect n’est plus actif. Contactez la direction.',{exact:true}).waitFor();
+ assert.equal(await button('Créer un nouvel apprenant').count(),0);assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).count(),0);assert.equal(await button('Utiliser cet apprenant').count(),0);
+ assert.ok(await button('Continuer').isDisabled(),'submission unavailable');assert.equal(candidateCalls.length,0,'no candidate query');await noRaw();await button('Annuler').click();
+ assert.equal(detail(leadGone).enrollment,null);
+ console.log('PASS linked learner with a one-character lead name enrolls; a deleted linked learner shows the unavailable state without candidate or new-learner paths');
 
  // Existing enrollment follow-up: shown, kept, never sent.
  const lead3=makeLead('A2 parent suivi','A2 Nora suivi','enrollment','enrollment_followup');const kept=detail(lead3).open_tasks.find(t=>t.task_type==='enrollment_followup');
@@ -161,6 +176,19 @@ try {
  await dialog().getByText('Cet apprenant a déjà une inscription pour ce programme et cette année, rattachée à un autre prospect. Choisissez un autre programme ou une autre année, ou clôturez ce prospect comme doublon.',{exact:true}).waitFor();
  assert.equal(await dialog().getByText('Choisissez l’inscription existante pour éviter un doublon.').count(),0);assert.ok(await button('Continuer').isDisabled());await button('Annuler').click();
  console.log('PASS linked-elsewhere explanation replaces the dead-end selection prompt');
+ // Owner wording amendment: an existing enrollment linked by this request is never "created".
+ const trialGroup=randomUUID();fixtureGroups.push(trialGroup);sql(`insert into public.groups(id,name,session_type,niveau) values('${trialGroup}','A2 groupe essai','Yearly','Child 2')`);
+ for(const status of ['Submitted','Trial']){
+  const name=`A2 Existant ${status}`,existing=student(name),existingEnrollment=randomUUID();
+  sql(`insert into public.enrollments(id,student_id,session_type,school_year,status,level,group_id) values('${existingEnrollment}','${existing}','Yearly','${year}','${status}','Child 2',${status==='Trial'?`'${trialGroup}'`:'null'})`);
+  const leadExisting=makeLead('A2 parent '+status,name);await start(leadExisting);
+  await dialog().getByText(name,{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
+  await button('Rattacher cette inscription').click();await toReview();startCalls.length=0;await button('Rattacher cette inscription').click();
+  await dialog().getByText('Inscription rattachée',{exact:true}).waitFor();assert.equal(startCalls[0].p_data.enrollment_id,existingEnrollment);
+  assert.equal(await dialog().getByText(/^(Pré-inscription créée|Essai démarré|Inscription déjà rattachée)$/).count(),0,`existing ${status} linked is not presented as created or discovered`);
+  await done();assert.equal(detail(leadExisting).enrollment.id,existingEnrollment);
+ }
+ console.log('PASS existing Submitted and Trial enrollments linked by this request show "Inscription rattachée"');
 
  // Uncertain transport failure, hinted and hint-less definite rejections (stubbed).
  const lead8=makeLead('A2 parent erreurs','A2 Rania erreurs');await start(lead8);await newLearner();await toReview();
@@ -225,8 +253,38 @@ try {
  const lost=detail(lead11);assert.equal(sql(`select count(*) from public.students where full_name='A2 Maya perte'`),'1');assert.equal(sql(`select count(*) from public.enrollments where student_id='${lost.enrollment.student_id}'`),'1');
  assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${lead11}' and task_type='enrollment_followup' and status='open'`),'1');
  assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${lead11}' and event_type='enrollment_started'`),'1');
+ await done();
+ console.log('PASS lost response replayed with the same key after the follow-up time passed; exactly one student, enrollment, follow-up and activity');
+ // B1 regression: a real refetch that already reflects the committed request must not
+ // change the frozen request, its presentation or its uncertain-retry message.
+ await page.clock.setFixedTime(new Date());
+ const leadFrozen=makeLead('A2 parent gel','A2 Lucas gel');await start(leadFrozen);await newLearner();
+ await button('Choisir une autre date').click();await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(await wall(5*60000));await toReview();
+ drop=true;await page.route('**/rest/v1/rpc/crm_start_enrollment',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
+ startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+ assert.equal(sql(`select count(*) from public.students where full_name='A2 Lucas gel'`),'1','the first request committed');
+ await page.clock.setFixedTime(new Date(Date.now()+10*60000));
+ const refetched=page.waitForResponse(response=>response.url().endsWith('/rpc/crm_get_enrollment_context'));
+ const drawerRefetched=page.waitForResponse(response=>response.url().endsWith('/rpc/crm_get_workspace_detail'));
+ await page.evaluate(()=>window.dispatchEvent(new Event('visibilitychange')));
+ const refreshedContext=await (await refetched).json();await drawerRefetched;
+ assert.equal(refreshedContext.linked_student?.available,true,'the refetched context already reflects the committed enrollment');
+ await page.waitForTimeout(1000);
+ await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+ assert.equal(await dialog().getByText(/Cette date de suivi est passée/).count(),0,'the past-date warning does not replace the uncertain-retry text');
+ assert.equal(await dialog().getByText(/Apprenant rattaché à ce prospect|Un suivi d’inscription est déjà prévu/).count(),0,'refetched state does not change the frozen request');
+ await dialog().getByText('Création d’un nouvel apprenant',{exact:true}).waitFor();await dialog().getByText(/^Suivi « Finaliser l’inscription » demandé le /).waitFor();
+ await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();
+ assert.equal(startCalls.length,2);assert.equal(startCalls[1].p_request_key,startCalls[0].p_request_key,'same request key');
+ assert.deepEqual(startCalls[1].p_data,startCalls[0].p_data,'identical frozen business payload');assert(startCalls[0].p_data.followup_at&&startCalls[0].p_data.learner_name==='A2 Lucas gel');
+ assert.equal(await dialog().getByText('Inscription déjà rattachée').count(),0,'own replay, not a discovered result');
+ await dialog().getByText(/^Suivi « Finaliser l’inscription » prévu le [0-9]{2}\/[0-9]{2}\/[0-9]{4} à [0-9]{2}:[0-9]{2}\.$/).waitFor();await page.unroute('**/rest/v1/rpc/crm_start_enrollment');
+ const frozenLead=detail(leadFrozen);assert.equal(sql(`select count(*) from public.students where full_name='A2 Lucas gel'`),'1');
+ assert.equal(sql(`select count(*) from public.enrollments where student_id='${frozenLead.enrollment.student_id}'`),'1');
+ assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${leadFrozen}' and task_type='enrollment_followup'`),'1');
+ assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${leadFrozen}' and event_type='enrollment_started'`),'1');
  await done();assert.deepEqual(pageErrors,[]);
- console.log('PASS lost response replayed with the same key after the follow-up time passed; exactly one student, enrollment, follow-up and activity; no browser errors');
+ console.log('PASS B1 frozen uncertain request: refetch reflecting the commit changes nothing; same key and payload replay to this dialog’s own success; one learner/enrollment/follow-up; no browser errors');
 } catch(error) {
  console.error(error.message);
  if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4500));await page.screenshot({path:join(tmpdir(),'hills-rcc-a2-failure.png'),fullPage:true});}throw error;

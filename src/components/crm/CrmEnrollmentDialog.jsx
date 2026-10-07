@@ -7,18 +7,24 @@ import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import { retryKey, casablancaInstant } from '@/lib/crm/presentation.mjs';
 import { ENROLLMENT_STATUS, PROGRAMS, enrollmentSchoolYear } from '@/lib/crm/enrollment.mjs';
 import { ENROLLMENT_REASONS, discardsRequestKey, enrollmentFailure } from '@/lib/crm/enrollmentErrors.mjs';
-import { birthDateReason, casablancaNowInput, casablancaToday, enrollmentSuccess, followupNotice, followupReason } from '@/lib/crm/enrollmentActions.mjs';
+import { birthDateReason, casablancaNowInput, casablancaToday, enrollmentSuccess, followupNotice, followupReason, submitReason } from '@/lib/crm/enrollmentActions.mjs';
 import { Pager, ReadState } from './CrmShared';
 const input = 'min-h-11 w-full rounded-md border bg-white px-3 py-2 text-sm';
 const DEFAULT_FOLLOWUP = 'Suivi « Finaliser l’inscription » : demain, au prochain créneau d’appel autorisé.';
 // A field reason marks its control invalid and describes it with the inline message.
 function Field({ label, name, failure, children }) { const id = useId(); const [control, ...help] = Children.toArray(children); const invalid = !!name && failure?.field === name; return <div className="space-y-1 text-sm"><label htmlFor={id} className="block font-medium">{label}</label>{cloneElement(control, { id, ...(name ? { 'data-field': name } : {}), 'aria-invalid': invalid || undefined, 'aria-describedby': invalid ? `${id}-error` : undefined })}{help}{invalid && <p id={`${id}-error`} className="text-sm text-red-800">{failure.message}</p>}</div>; }
 const reasonFailure = reason => ({ definite: false, reason, ...ENROLLMENT_REASONS[reason] });
+// The follow-up value a form/view pair would send; empty keeps the server default.
+const sentDue = (f, v) => !['Confirmed', 'Validated'].includes(f.enrollment?.status) && !v.kept && f.customDue && f.due ? f.due : '';
 function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   const session = context.session_type || 'Yearly';
   // linked_student is authoritative: that learner only, no candidates, no new learner.
-  const linked = context.linked_student || null, linkedActive = linked?.available === true;
-  const kept = lead.open_tasks?.find(t => t.task_type === 'enrollment_followup') || null;
+  const liveLinked = context.linked_student || null;
+  const live = { linked: liveLinked, linkedActive: liveLinked?.available === true, kept: lead.open_tasks?.find(t => t.task_type === 'enrollment_followup') || null };
+  // While an outcome is uncertain the submitted request is frozen: refetched context
+  // or tasks (which may already reflect its commit) never change what is shown or resent.
+  const [frozen, setFrozen] = useState(null);
+  const { linked, linkedActive, kept } = frozen?.view || live;
   const [form, setForm] = useState(() => ({ name: context.learner_name || '', birth: context.birth_date || '', choice: linkedActive ? 'existing' : '', student: linkedActive ? { id: linked.id, name: linked.name, birth_date: linked.birth_date } : null,
     session, year: enrollmentSchoolYear(), level: getLevelsForSession(session).includes(context.recommended_level) ? context.recommended_level : '',
     group: '', status: 'Submitted', enrollment: null, confirmNew: false, customDue: false, due: '', notes: '' }));
@@ -28,9 +34,10 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   const candidates = useCrmRead('crm_find_student_candidates', { p_lead: lead.id, p_name: form.name.trim(), p_birth_date: form.birth || null, p_limit: 5, p_offset: offset }, !linked && form.name.trim().length >= 2);
   const enrollments = useCrmRead('crm_find_enrollment_candidates', { p_student: form.student?.id, p_session: form.session, p_year: form.year, p_limit: 5, p_offset: enrollmentOffset }, form.choice === 'existing' && !!form.student && step >= 2);
   const groups = useCrmRead('crm_enrollment_groups', { p_session: form.session, p_level: form.level || null, p_limit: 50, p_offset: groupOffset }, step >= 2);
-  const linkedId = linkedActive ? linked.id : null, linkedName = linked?.name, linkedBirth = linked?.birth_date;
-  // A linkage discovered after a rejection moves the dialog to the linked presentation.
-  useEffect(() => { if (linkedId) setForm(f => f.choice === 'existing' && f.student?.id === linkedId ? f : { ...f, choice: 'existing', student: { id: linkedId, name: linkedName, birth_date: linkedBirth }, confirmNew: false, enrollment: null }); }, [linkedId, linkedName, linkedBirth]);
+  const linkedId = live.linkedActive ? liveLinked.id : null, linkedName = liveLinked?.name, linkedBirth = liveLinked?.birth_date, isFrozen = !!frozen;
+  // A linkage discovered after a rejection moves the dialog to the linked presentation,
+  // never while an uncertain request is frozen.
+  useEffect(() => { if (!isFrozen && linkedId) setForm(f => f.choice === 'existing' && f.student?.id === linkedId ? f : { ...f, choice: 'existing', student: { id: linkedId, name: linkedName, birth_date: linkedBirth }, confirmNew: false, enrollment: null }); }, [linkedId, linkedName, linkedBirth, isFrozen]);
   useEffect(() => { if (failure?.field) formRef.current?.querySelector(`[data-field="${failure.field}"]`)?.focus(); }, [failure, step]);
   const set = (key, value) => { setForm(f => ({ ...f, [key]: value })); setFailure(null); };
   const birthIssue = linkedActive ? null : birthDateReason(form.birth);
@@ -38,7 +45,8 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   // An empty custom date keeps the server default; only a chosen value is sent.
   const customDue = followupShown && !kept && form.customDue && !!form.due;
   const dueIssue = customDue ? followupReason(form.due) : null;
-  const shown = failure?.field ? failure : birthIssue ? reasonFailure(birthIssue) : dueIssue ? reasonFailure(dueIssue) : failure;
+  // Derived validation never replaces the uncertain-retry message.
+  const shown = frozen ? failure : failure?.field ? failure : birthIssue ? reasonFailure(birthIssue) : dueIssue ? reasonFailure(dueIssue) : failure;
   const validIdentity = linked ? linkedActive : !birthIssue && form.name.trim().length >= 2 && (form.choice === 'existing' && form.student || form.choice === 'new' && candidates.isSuccess && (!candidates.data.total || form.confirmNew));
   const existingReady = form.choice !== 'existing' || enrollments.isSuccess && (!enrollments.data.total || form.enrollment);
   const linkedElsewhere = form.choice === 'existing' && !form.enrollment && enrollments.isSuccess && enrollments.data.total > 0 && enrollments.data.rows.length === enrollments.data.total && enrollments.data.rows.every(en => en.already_linked);
@@ -53,18 +61,18 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
     if (step === 2 && dueIssue) return fail(reasonFailure(dueIssue), 2);
     if (step < 3) { setFailure(null);setStep(x => x + 1); return; }
     const intent = JSON.stringify(form);
-    // An uncertain outcome is resent byte-identically with the same key, even if
-    // the chosen follow-up time has passed meanwhile: the server replays first.
-    const replay = pending.current?.intent === intent && pending.current.uncertain;
-    if (!replay) {
-      // Re-evaluated now, not at the last render: a value may have gone stale meanwhile.
-      const birthNow = linkedActive ? null : birthDateReason(form.birth), dueNow = customDue ? followupReason(form.due) : null;
-      if (birthNow) return fail(reasonFailure(birthNow), 1);
-      if (dueNow) return fail(reasonFailure(dueNow), 2);
-    }
-    locked.current = true;setSaving(true);setBusy(true);setFailure(null);
+    // An uncertain request is resent byte-identically with the same key, even if the
+    // chosen follow-up time has passed meanwhile: the server replays before validating.
+    const replay = !!pending.current?.uncertain;
+    const checked = replay ? pending.current : { form, view: { linked, linkedActive, kept } };
+    // Re-evaluated now, not at the last render. The birth bound always applies; only
+    // follow-up futurity is skipped for the frozen replay.
+    const issue = submitReason({ birth: checked.form.birth, due: sentDue(checked.form, checked.view), checkBirth: !checked.view.linkedActive, replay });
+    if (issue) return fail(reasonFailure(issue), ENROLLMENT_REASONS[issue].step);
+    locked.current = true;setSaving(true);setBusy(true);
+    if (!replay) setFailure(null);
     try {
-      if (pending.current?.intent !== intent) {
+      if (!replay && pending.current?.intent !== intent) {
         const payload = { lead_id: lead.id, expected_version: version, student_choice: form.choice,
           ...(linkedActive ? {} : { learner_name: form.name.trim(), birth_date: form.birth || null }), session_type: form.session, school_year: form.year,
           ...(form.choice === 'new' ? { candidate_review: candidates.data?.review_token, confirm_new: form.confirmNew }
@@ -72,13 +80,17 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
           ...(form.enrollment ? { enrollment_id: form.enrollment.id, expected_enrollment_updated_at: form.enrollment.updated_at }
             : { level: form.level || null, group_id: form.group || null, initial_status: form.status, notes: form.notes || null }),
           ...(customDue ? { followup_at: casablancaInstant(form.due) } : {}) };
-        pending.current = { ...retryKey(null, 'crm_start_enrollment', payload), payload, intent, uncertain: false };
+        pending.current = { ...retryKey(null, 'crm_start_enrollment', payload), payload, intent, form, view: { linked, linkedActive, kept }, uncertain: false };
       }
-      const saved = await crmRpc('crm_start_enrollment', { p_request_key: pending.current.key, p_data: pending.current.payload });
-      setResult({ data: saved, origin: 'request' });await refresh();
+      const sent = pending.current;
+      const saved = await crmRpc('crm_start_enrollment', { p_request_key: sent.key, p_data: sent.payload });
+      setFrozen(null);setResult({ data: saved, origin: 'request', linkedExisting: !!sent.payload.enrollment_id });await refresh();
     } catch (err) {
       const next = enrollmentFailure(err);
-      if (!next.definite) { if (pending.current) pending.current.uncertain = true;setFailure(next);return; }
+      if (!next.definite) { if (pending.current) { pending.current.uncertain = true;setFrozen({ view: pending.current.view }); } setFailure(next);return; }
+      // A definite rejection resolves the uncertainty: the request committed nothing.
+      if (pending.current) pending.current.uncertain = false;
+      setFrozen(null);
       if (discardsRequestKey(err)) pending.current = null;
       if (next.submit === false) setBlocked({ intent: null });else if (next.submit === 'until-change') setBlocked({ intent });
       let target = next.step || (!next.reason && ['22023', '42501'].includes(err.code) ? 2 : null);
@@ -100,11 +112,11 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
       fail(next, target);
     } finally { locked.current = false;setSaving(false);setBusy(false); }
   }
-  if (result) { const view = enrollmentSuccess(result.data, result.origin); return <div className="space-y-4"><div role="status" className="space-y-2"><p className="font-semibold">{view.heading}</p>{view.intro && <p className="text-sm">{view.intro}</p>}{view.status && <p className="text-sm">{view.status}</p>}<p className="text-sm">{view.learner}</p>{view.lead && <p className="text-sm text-slate-500">{view.lead}</p>}{view.followup && <p className="text-sm">{view.followup}</p>}</div><Button onClick={onClose}>Terminé</Button></div>; }
+  if (result) { const view = enrollmentSuccess(result.data, result.origin, { linkedExisting: result.linkedExisting }); return <div className="space-y-4"><div role="status" className="space-y-2"><p className="font-semibold">{view.heading}</p>{view.intro && <p className="text-sm">{view.intro}</p>}{view.status && <p className="text-sm">{view.status}</p>}<p className="text-sm">{view.learner}</p>{view.lead && <p className="text-sm text-slate-500">{view.lead}</p>}{view.followup && <p className="text-sm">{view.followup}</p>}</div><Button onClick={onClose}>Terminé</Button></div>; }
   const learnerName = form.student?.name || form.name;
-  const followupLine = kept ? followupNotice(kept) : customDue && !dueIssue ? `Suivi « Finaliser l’inscription » demandé le ${form.due.slice(8, 10)}/${form.due.slice(5, 7)}/${form.due.slice(0, 4)} à ${form.due.slice(11)}, ajusté au prochain créneau d’appel autorisé si nécessaire.` : DEFAULT_FOLLOWUP;
+  const followupLine = kept ? followupNotice(kept) : customDue ? `Suivi « Finaliser l’inscription » demandé le ${form.due.slice(8, 10)}/${form.due.slice(5, 7)}/${form.due.slice(0, 4)} à ${form.due.slice(11)}, ajusté au prochain créneau d’appel autorisé si nécessaire.` : DEFAULT_FOLLOWUP;
   return <form ref={formRef} onSubmit={submit} className="space-y-4"><p className="text-xs font-semibold uppercase tracking-wider text-blue-800">{step} / 3 · {['Apprenant', 'Inscription', 'Vérification'][step - 1]}</p>
-    <fieldset disabled={saving} className="space-y-4">
+    <fieldset disabled={saving || isFrozen} className="space-y-4">
       {step === 1 && <><div className="rounded-lg bg-slate-50 p-3 text-sm"><p className="font-medium">{context.contact_name}</p><p>{context.phone}{context.email ? ` · ${context.email}` : ''}</p>{context.age != null && <p>Âge connu : {context.age} ans</p>}</div>
         {linked ? linkedActive ? <div className="space-y-1 rounded-lg border p-3 text-sm"><p className="font-semibold">Apprenant rattaché à ce prospect : {linked.name}{linked.birth_date ? ` · ${linked.birth_date}` : ''}</p><p className="text-slate-500">Ce prospect est déjà rattaché à cet apprenant ; l’inscription sera créée pour lui. Pour changer d’apprenant, contactez la direction.</p></div>
           : <p className="rounded-lg border p-3 text-sm">{ENROLLMENT_REASONS.linked_learner_unavailable.message}</p> : <>
@@ -131,7 +143,7 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
       {step === 3 && <div className="space-y-2 rounded-lg border p-4 text-sm"><p className="font-semibold">{learnerName}</p><p>{form.choice === 'new' ? 'Création d’un nouvel apprenant' : linkedActive ? 'Apprenant rattaché à ce prospect' : 'Utilisation de l’apprenant sélectionné'}</p><p>{PROGRAMS[form.session]} · {form.year}</p><p>{ENROLLMENT_STATUS[form.enrollment?.status || form.status]}</p>{(form.enrollment?.level || form.level) && <p>Niveau : {form.enrollment?.level || form.level}</p>}{selectedGroup && <p>{selectedGroup.name}</p>}{followupShown && <p>{followupLine}</p>}<p className="pt-2 text-slate-500">{['Confirmed', 'Validated'].includes(form.enrollment?.status) ? 'Cette inscription est déjà confirmée. Son rattachement terminera le suivi commercial de ce prospect.' : 'La création ne confirme pas l’inscription. Le suivi se poursuit jusqu’à sa confirmation.'}</p></div>}
     </fieldset>
     {shown && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{shown.message}</p>}
-    <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={saving} onClick={onClose}>Annuler</Button>{step > 1 && <Button type="button" variant="outline" disabled={saving} onClick={() => setStep(s => s - 1)}>Retour</Button>}<Button type="submit" disabled={saving || isBlocked || step === 1 && !validIdentity || step === 2 && (!existingReady || !!dueIssue)}>{saving ? 'Enregistrement…' : step === 3 ? form.enrollment ? 'Rattacher cette inscription' : form.status === 'Trial' ? 'Démarrer l’essai' : 'Créer la pré-inscription' : 'Continuer'}</Button></div>
+    <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="ghost" disabled={saving} onClick={onClose}>Annuler</Button>{step > 1 && <Button type="button" variant="outline" disabled={saving || isFrozen} onClick={() => setStep(s => s - 1)}>Retour</Button>}<Button type="submit" disabled={saving || isBlocked || step === 1 && !validIdentity || step === 2 && (!existingReady || !!dueIssue)}>{saving ? 'Enregistrement…' : step === 3 ? form.enrollment ? 'Rattacher cette inscription' : form.status === 'Trial' ? 'Démarrer l’essai' : 'Créer la pré-inscription' : 'Continuer'}</Button></div>
   </form>;
 }
 export default function CrmEnrollmentDialog({ lead, onClose }) {

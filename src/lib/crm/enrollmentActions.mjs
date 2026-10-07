@@ -28,6 +28,12 @@ export function followupReason(value, now = new Date()) {
   try { return Date.parse(casablancaInstant(value)) < now.getTime() ? 'followup_in_past' : null; }
   catch { return 'followup_invalid'; }
 }
+// Final-submit checks. The birth-date bound always applies, including an uncertain
+// replay (its frozen value can only become more valid). Only follow-up futurity,
+// which time alone can invalidate, is skipped for an exact same-key replay.
+export function submitReason({ birth, due, checkBirth = true, replay = false }, now = new Date()) {
+  return (checkBirth ? birthDateReason(birth, now) : null) || (replay ? null : followupReason(due, now));
+}
 
 const PRE_CONFIRMATION = ['Submitted', 'Under Review', 'Trial'];
 const OPEN_LEAD = ['NEW', 'CONTACTING', 'ENGAGED'];
@@ -69,16 +75,19 @@ export function followupNotice(task) {
   const at = civil(task);
   return at ? `Un suivi d’inscription est déjà prévu le ${at.date} à ${at.time}. Il est conservé.` : 'Un suivi d’inscription est déjà prévu. Il est conservé.';
 }
-const HEADINGS = { Submitted: 'Pré-inscription créée', Trial: 'Essai démarré', 'Under Review': 'Inscription rattachée', Confirmed: 'Inscription confirmée rattachée', Validated: 'Inscription confirmée rattachée' };
+const CREATED = { Submitted: 'Pré-inscription créée', Trial: 'Essai démarré' };
 // origin 'request' covers this dialog's own success, including its same-key replay;
 // 'discovered' is a refetch that found another request's or actor's enrollment.
-export function enrollmentSuccess(result, origin) {
+// linkedExisting: this request linked an enrollment that already existed (owner
+// wording amendment, 2026-10-07): never a creation heading for it.
+export function enrollmentSuccess(result, origin, { linkedExisting = false } = {}) {
   const enrollment = result.enrollment, converted = result.lead?.status === 'CONVERTED';
   const learner = [enrollment.student_name, PROGRAMS[enrollment.session_type] || 'Programme à préciser', enrollment.school_year].filter(Boolean).join(' · ');
   if (origin === 'discovered') return { heading: 'Inscription déjà rattachée', intro: 'Une inscription a été rattachée à ce prospect entre-temps. Vérifiez-la avant de poursuivre.',
     status: ENROLLMENT_STATUS[enrollment.status] || 'Statut à vérifier', learner, lead: null, followup: converted ? null : 'Le suivi d’inscription apparaît dans Prochaine action.' };
   const followup = result.enrollment_followup, at = civil(followup);
-  return { heading: HEADINGS[enrollment.status] || 'Inscription rattachée', intro: null, status: null, learner,
+  const confirmedLink = ['Confirmed', 'Validated'].includes(enrollment.status) ? 'Inscription confirmée rattachée' : 'Inscription rattachée';
+  return { heading: linkedExisting ? confirmedLink : CREATED[enrollment.status] || confirmedLink, intro: null, status: null, learner,
     lead: converted ? 'La confirmation de l’inscription a été vérifiée. Le suivi commercial est terminé.' : 'Le prospect reste qualifié : l’inscription n’est pas encore confirmée. Elle reste à confirmer par le parcours habituel.',
     followup: converted ? null : !at ? 'Le suivi d’inscription apparaît dans Prochaine action.'
       : followup.created ? `Suivi « Finaliser l’inscription » prévu le ${at.date} à ${at.time}.` : `Le suivi d’inscription déjà prévu est conservé : ${at.date} à ${at.time}.` };

@@ -148,6 +148,13 @@ The exact owner-case root cause is still unresolved (see RCC-A0).
 
 **Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved A2-r1 as recommended on 2026-10-07. Revision A2-r2 incorporates the independent review's required changes and the owner's B2 amendment, which scopes the birth-date rule to enrollment initiation ([approval record](rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Implementation stays unauthorized until A2-r2 passes independent exact-SHA re-review and the architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction.
 
+### Deferred CRM reliability backlog
+
+Separate future work, not approved or scheduled:
+
+- broader generic callback/WhatsApp follow-up consolidation across every task-creation path (RCC-A2 D6);
+- *pre-existing limitation, recorded during the RCC-A2 review (2026-10-07):* `casablancaInstant` converts CRM wall-clock inputs with the browser's time-zone data. A browser or runtime with stale Morocco rules can shift entered times by an hour relative to the server's Casablanca civil projection.
+
 ## RCC-B1 — responsive Opportunities presentation
 
 **PLANNED / NOT YET APPROVED.** Candidate scope:
