@@ -48,6 +48,19 @@ Plan: [RCC-A2](../architecture/plans/completed/rcc-a2-enrollment-ux-hardening.md
 - **Success wording amendment (2026-10-07):** an existing enrollment linked by the request shows **Inscription rattachée**. Creation headings appear only for an enrollment the request created; **Inscription déjà rattachée** is used for a discovered result.
 - **D7:** no Production forensic read is authorized now.
 
+## RCC-B1 — responsive Opportunities presentation — PLANNED / NOT APPROVED
+
+Plan: [RCC-B1](../architecture/plans/rcc-b1-responsive-opportunities.md#owner-decisions-required), revision **B1-r1**, proposed on 2026-10-07. The decisions below are pending: none is approved, and implementation is not authorized.
+
+- **D1:** unify the inquiry fragments into one **Demande** section. Recommended: A.
+- **D2:** placement of the call dialog's `tel:` link. Recommended: C, show it only on phone-sized touch layouts. **Enregistrer un appel** stays everywhere.
+- **D3:** collapsed history. Recommended: A, the latest three meaningful exchanges with full history on expansion.
+- **D4:** the shared sidebar. Recommended: A, no change in RCC-B1; a rail mode would be a separate UI Foundation outcome.
+- **D5:** phone presentation. Recommended: B, a stage list, presentation only.
+- **D6:** mobile drawer. Recommended: B, a full-width, full-height sheet.
+- **D7:** tablet default. Recommended: B, the stage list below 1024.
+- **D8:** desktop drawer modality. Recommended: A, keep it modal.
+
 ## Other roadmap decisions
 
 | Item | State | Note |

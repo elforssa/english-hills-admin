@@ -7,7 +7,7 @@
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
 | RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
-| RCC-B1 | **PLANNED / NOT YET APPROVED** |
+| RCC-B1 | **PLANNED / NOT YET APPROVED** — architecture B1-r1 proposed, awaiting owner decisions D1–D8 ([plan](rcc-b1-responsive-opportunities.md)) |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
 
@@ -170,6 +170,19 @@ Separate future work, not approved or scheduled:
 - remove desktop telephone-launch links while keeping **Enregistrer un appel**.
 
 Acceptance widths: **1440 / 1280 / 1024 / 768 / 390 CSS px**.
+
+**Architecture (2026-10-07):** [RCC-B1 — responsive Opportunities presentation](rcc-b1-responsive-opportunities.md), revision B1-r1, turns the candidate scope above into a precise contract, based on local synthetic Chromium/WebKit evidence at all five widths. Status: **PROPOSED / AWAITING OWNER DECISIONS**. It proposes a presentation-only Tier-2 outcome with no database, RPC or permission change, and no change to the shared sidebar. The pending owner decisions D1–D8 cover:
+
+- Demande unification;
+- telephone links;
+- collapsed history;
+- intermediate sidebar;
+- phone list;
+- mobile sheet;
+- tablet default;
+- drawer modality.
+
+Implementation is not authorized until the owner records those decisions and the architecture PR is merged.
 
 ## Not authorized by RCC-r1
 
