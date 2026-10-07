@@ -5,7 +5,7 @@
 | Phase | State |
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
-| RCC-A1 | **OWNER APPROVED; IMPLEMENTED ON BRANCH `feature/rcc-a1` — NOT MERGED, NOT DEPLOYED** — Tier 3; awaiting exact-SHA independent review ([record](#implementation-record--branch-not-merged-or-deployed)) |
+| RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
 | RCC-A2 | **PLANNED / NOT YET APPROVED** |
 | RCC-B1 | **PLANNED / NOT YET APPROVED** |
 
@@ -22,7 +22,8 @@ RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](comple
 - Routine prose notes are optional where structured facts already provide sufficient evidence.
 - Agreed appointments and internal reminders are separate concepts.
 - **Owner decisions, 2026-10-07 (RCC-A1 review follow-up):**
-  - A lead has one active generic commercial follow-up, either a callback or a WhatsApp follow-up. The latest explicit conversation decision replaces the previous one regardless of channel. Center visits, placement, enrollment and other operational tasks are preserved.
+  - The latest explicit conversation decision replaces any open generic commercial follow-up (callback or WhatsApp follow-up), regardless of channel. Center visits, placement, enrollment and other operational tasks are preserved.
+  - *Release clarification (2026-10-07):* this guarantee covers explicit conversation decisions only. Other task-creation paths (manual Planifier, wrong-number follow-up, next task on completion or cancellation, reopen) keep their existing behavior. A broader "at most one generic follow-up from every path" rule is deferred and not part of RCC-A1.
   - An agreed callback appointment is never silently shifted. If the agreed time is outside the allowed Casablanca calling window, it is rejected, and the receptionist must agree another compatible time. Internal reminders, including presets, may still resolve through the server policy.
 - Internal reminder presets are resolved server-side using the existing Casablanca policy.
 - RCC-r1 does not change Meta/lifecycle authority, finance authority, enrollment-confirmation authority or permissions.
@@ -86,7 +87,7 @@ RCC-A1 does **not** include:
 
 Work that needs any of these returns to the owner for a decision ([outcome-based batching](../../../AGENTS.md#outcome-based-batching)).
 
-### Implementation record — branch, not merged or deployed
+### Implementation record
 
 Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`, created from origin/main `b33d9a8078abce738a9ef43588c9385cfc4f7cb9`. Implementation is not merge, migration or deployment authority; the Tier-3 review and release gates above still apply.
 
@@ -99,11 +100,11 @@ Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`
 | 3. En réflexion | `crm_tasks.followup_reason = 'considering'` on a callback or WhatsApp follow-up. The wrapper sets it only for the `considering` decision and rejects it on other decisions. Direct scheduling may also mark one. Status still comes from the conversation command, so QUALIFIED stays QUALIFIED and no lifecycle status activity is emitted. |
 | 4. Optional prose | `record_conversation`, channel-evidenced `qualify_lead` and the decision wrapper no longer require a note. Explanations remain required for standalone notes, Other qualification/closure reasons, task cancellation and reopening. |
 | 5. Completion length | Mapping confirmed: the **Résultat de l’action** textarea is sent as `complete_task.outcome`, which the server caps at 200 characters and records as the completion activity body. `note` is accepted but unused. Fix: the textarea is capped at 200 characters with a visible counter. The server contract is unchanged. |
-| 6. Appointments vs reminders | New `crm_tasks.schedule_kind` column: `appointment` is a time agreed with the prospect; `reminder` is internal. NULL means cadence/system work or a pre-A1 task; there is no backfill. Center visits are always appointments, and preparing a placement test is always internal. An agreed callback must fall inside the Casablanca calling window. It is kept exactly or rejected, never shifted, including on reschedule. Internal reminders and legacy explicit times still resolve to the next window. |
+| 6. Appointments vs reminders | New `crm_tasks.schedule_kind` column: `appointment` is a time agreed with the prospect; `reminder` is internal. NULL means cadence/system work or a pre-A1 task; there is no backfill. New center visits are created as appointments (a legacy payload without a kind still stores NULL), and the receptionist UI always creates placement-test preparation as an internal reminder; the server does not enforce that second rule for direct RPC callers. An agreed callback must fall inside the Casablanca calling window. It is kept exactly or rejected, never shifted, including on reschedule. Internal reminders and legacy explicit times still resolve to the next window. |
 | 7. Reminder presets | `due_preset` takes `in_2_hours`, `tomorrow`, `in_2_days`, `in_3_days` or `next_week`, for reminders only. The private `crm_security.reminder_due` resolves it to the next calling window of the lead’s Casablanca follow-up policy. Appointments require an explicit time, and the browser never computes preset times. |
 | 8. Failed-call cadence | Failed-call recording, attempt slots, spacing and the five-failure stop are unchanged; attempt tasks keep a NULL kind. |
 | 9. Compatibility | Payloads without the new keys behave as before, including callback window adjustment. Only `schedule_kind = 'appointment'` callbacks are exempt from adjustment, and those are rejected instead. Request keys, payload-hash replay and expected versions are unchanged. A preset resolves once, and replay returns the stored result. |
-| One active generic follow-up | Each conversation decision (callback, considering or qualify) cancels any open callback or WhatsApp follow-up as an audited "Conversation follow-up replaced" cancellation, then creates the new one. This applies across channels. Visits, placement, enrollment, post-test and cadence tasks are untouched. |
+| Conversation-decision follow-up replacement | Each conversation decision (callback, considering or qualify) cancels any open callback or WhatsApp follow-up as an audited "Conversation follow-up replaced" cancellation, then creates the new one. This applies across channels. Visits, placement, enrollment, post-test and cadence tasks are untouched. Other task-creation paths do not replace (see the [release limitations](#production-release--2026-10-07)). |
 | 10. Assignment | The owner/assignee model and `crm_reassign` are unchanged. Task reassignment moves to overflow menus: **Autres actions** in the drawer, and **Plus d’options** on open-task rows and Work Queue rows. The prospect-owner line is plain text, and owner assignment stays under **Autres actions**. |
 
 **Migration-103 safeguard.** In 111, `crm_security.command` is migration 103’s definition copied verbatim; its body was first verified byte-identical to the local function at ledger 110. Exactly three places change: the two note requirements above, and rescheduling an agreed callback outside calling hours, which is now rejected instead of shifted. The lifecycle barrier, pre-identity keys and pending-stop handoff are retained and asserted by the acceptance suite. Migration 111 replaces only these definitions: `command`, `new_task`, `crm_record_conversation_decision`, and the four migration-110 read projections, which gain the two additive fields. Grants are unchanged and the new helper is private.
@@ -119,6 +120,18 @@ Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`
 **Review follow-up (2026-10-07).** After rebasing onto main `4cb0eb9` (PR #109, sharp remediation), the review findings and owner decisions above were applied in place to unmerged, undeployed migration 111. A hidden conversation result can no longer make the note required after the call outcome changes.
 
 The exclusions above are untouched: no change to enrollment, Commencer/Continuer/Ouvrir, B1 responsive work, finance, permissions, conversion, lifecycle/Meta, backfills or the task engine.
+
+### Production release — 2026-10-07
+
+**MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** Reviewed head `7444fdc5fa7155c57d36cef2605160b36b280fe4` merged as `8d5af40bc21177c582efe5df96d31ada8d7d9ff5`. Vercel Production `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY on that commit. Migration 111 was applied first, with owner approval, and the Production ledger is 001–111. Evidence: [release record](../evidence/rcc-a1-production-2026-10-07.md).
+
+Accepted limitations (owner, 2026-10-07):
+
+- Replacement of open generic follow-ups is guaranteed only for explicit conversation decisions across channels. Manual Planifier, wrong-number follow-up, next tasks on completion or cancellation, and reopen keep their existing behavior. Broader consolidation is deferred.
+- Placement-preparation `schedule_kind` is enforced by the receptionist UI, not as a universal direct-RPC invariant.
+- New center visits use appointment semantics; legacy-compatible payloads may keep a NULL `schedule_kind`.
+
+RCC-A1 is complete. The plan stays active for RCC-A2 and RCC-B1, which remain not approved.
 
 ## RCC-A2 — enrollment UX hardening
 

@@ -1,19 +1,19 @@
 # Current state
 
-Evidence register as of **2026-10-06 (Asia/Shanghai)**. Two baselines are tracked separately:
+Evidence register as of **2026-10-07 (Asia/Shanghai)**. Two baselines are tracked separately:
 
-- **Recorded deployed application source:** `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8` (PR #104 merge), per the [UIF Production closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06).
+- **Recorded deployed application source:** `8d5af40bc21177c582efe5df96d31ada8d7d9ff5` (PR #108 merge), per the [RCC-A1 release record](../architecture/evidence/rcc-a1-production-2026-10-07.md).
 - **Repository main:** advances independently through documentation or later implementation merges, so this register does not name a current main SHA. Fetch `origin/main` for the current repository SHA. A repository merge is not deployment evidence; only dated release evidence changes the recorded deployed source above. (The tool-independent transition work began from base `c41b962538c5073e5e00cb264a31388533735ac9`, PR #106, which differed from the deployed source only by documentation.)
 
-Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 implemented by migration 111 in its Tier-3 PR, [record](../architecture/plans/rcc-r1-receptionist-crm-completion.md#implementation-record--branch-not-merged-or-deployed); not deployed). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
+Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active receptionist outcome is [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) (RCC-A1 deployed and Production verified on 2026-10-07 with migration 111; RCC-A2 and RCC-B1 not approved). This register reconciles repository implementation with dated owner/release evidence; the UIF closeout below records the bounded 2026-10-06 Production inspection. [Architecture](ARCHITECTURE.md) explains structure and state vocabulary; [feature index](../architecture/FEATURE_INDEX.md) links code/migrations.
 
 ## Capability register
 
 | Capability | State | Current evidence | Important limit |
 | --- | --- | --- | --- |
-| Core school platform | IMPLEMENTED; production application | Next.js/Supabase code and cumulative migrations; [latest recorded runtime release](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06) | A deployed application/ledger is not feature-by-feature acceptance. |
+| Core school platform | IMPLEMENTED; production application | Next.js/Supabase code and cumulative migrations; [latest recorded runtime release](../architecture/evidence/rcc-a1-production-2026-10-07.md) | A deployed application/ledger is not feature-by-feature acceptance. |
 | Receptionist operating workspace | LIVE; Outcome 3 complete | PRs #97/#99; migrations 107/108; [Outcome-3 closeout](../architecture/evidence/outcome-3-batch-2-implementation-2026-10-05.md#production-closeout--2026-10-05) | Opportunities, Tasks/My Work and Admissions Calendar are Production verified; the dedicated walk-in redesign remains a separate planned outcome. |
-| RCC-A1 outcome-led follow-up | IMPLEMENTED — NOT DEPLOYED | Migration 111 and receptionist UI; [RCC-r1 implementation record](../architecture/plans/rcc-r1-receptionist-crm-completion.md#implementation-record--branch-not-merged-or-deployed) | Requires exact-SHA independent review, owner release approval and a separate release; the Production ledger remains 001–110. |
+| RCC-A1 outcome-led follow-up | LIVE; Production verified 2026-10-07 | PR #108, migration 111; [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md) | Follow-up replacement covers explicit conversation decisions only; placement-preparation kind is UI-enforced; legacy payloads may keep NULL kind. No fresh authenticated browser walkthrough at release. |
 | CRM status/tasks/activities/Today | IMPLEMENTED | 078–082/091; [ADR-001](../architecture/decisions/ADR-001-crm-lifecycle.md) | Live follow-up policy values/operating hours NEEDS VERIFICATION; SQL defaults do not prove configuration. |
 | Placement | IMPLEMENTED | 083, linked placement commands and [workflow](WORKFLOWS.md#placement-test) | Dedicated Production feature acceptance NEEDS VERIFICATION; test completion is not conversion. |
 | Admissions/enrollment/conversion | IMPLEMENTED | 062, 070–074, 084; [workflow](WORKFLOWS.md#crm--enrollment) | Feature-specific Production acceptance NEEDS VERIFICATION; only linked Confirmed/Validated enrollment converts. |
@@ -32,7 +32,7 @@ Current owner decisions are in [OWNER_DECISIONS](OWNER_DECISIONS.md); the active
 
 ## Deployment and credential evidence boundaries
 
-The latest recorded Production database ledger is **001–110**, normalized through repository migration 110 during the UI Foundation release on 2026-10-06. Exact Production source is `f30e8d9ac628839c2282549324f4a3fa9b5b8ae8`; Vercel deployment `dpl_H9LkTg4jaEU4jV7tHBqi4AxsFJoV` is READY with Production alias `admin.english-hills.com`. The [UI Foundation closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06) records migration 110 and bounded frontend/read-model compatibility evidence. Migrations 107–110 are deployed and immutable. Outcome 3 itself completed through 107–108; migration 109 remains the post-O3 scheduling/picker correction and migration 110 is the later UIF-r1a presentation-only row-label extension. Repository migration 111 is allocated to RCC-A1 and is not deployed. Check current main and deployment evidence before allocating any future migration.
+The latest recorded Production database ledger is **001–111**. Migration 111 was applied on 2026-10-07 for RCC-A1, recorded atomically as version `111` with no normalization. Exact Production source is `8d5af40bc21177c582efe5df96d31ada8d7d9ff5`; Vercel deployment `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY with Production alias `admin.english-hills.com` ([RCC-A1 release record](../architecture/evidence/rcc-a1-production-2026-10-07.md)). The ledger was 001–110 after the UI Foundation release on 2026-10-06, with 110 normalized then. The [UI Foundation closeout](../architecture/evidence/english-hills-ui-foundation-implementation-2026-10-06.md#production-closeout--2026-10-06) records migration 110 and bounded frontend/read-model compatibility evidence. Migrations 107–111 are deployed and immutable. Outcome 3 itself completed through 107–108; migration 109 remains the post-O3 scheduling/picker correction and migration 110 is the later UIF-r1a presentation-only row-label extension. Check current main and deployment evidence before allocating any future migration.
 
 Current credential state is **CREDENTIAL READY / DELIVERY SUCCESS NOT VERIFIED / LIFECYCLE DELIVERY REMAINS DISABLED**. Accepted identities, scope/lifetime, capability and metadata-only Vercel verification are recorded once in the [nonsecret Gate-B closeout](../architecture/evidence/crm-h3-s1-gate-b-closeout-2026-10-05.md). [S1](../architecture/plans/crm-meta-lifecycle-credential-simplification.md) is the sole credential architecture and the [Gate-B runbook](../architecture/plans/crm-h3-s1-gate-b-credential-runbook.md) the sole procedure. Earlier token/key absence and uncreated-C2 statements are historical observations, not current blockers.
 
@@ -71,6 +71,24 @@ The [dated release evidence](../architecture/evidence/receptionist-production-ux
 Bounded Production verification confirmed authenticated Opportunities and Work Queue projections include the new safe row label fields, `crm_list_open_tasks` includes `assignee_display_label`, the operational drawer projection includes current owner/task safe labels, and the staff picker projection remains limited to `id/name/role/display_label` without email/phone. Existing public read RPC execution remains available to authenticated staff while the private `staff_display_label` and `staff_reference` helpers remain non-executable by API roles. No new public RPC, permission/RLS expansion, private staff field or business write was introduced.
 
 The deployment route reaches the expected login surface, no recent Vercel runtime errors were found, and lifecycle remained dormant: zero enabled lifecycle connections, zero open/total activation epochs, zero live/total external deliveries, zero delivery attempts and zero active lifecycle cron jobs. **No fresh authenticated receptionist browser walkthrough was performed during this release verification**; browser acceptance remains the exact-SHA Chromium/WebKit evidence from PR #104.
+
+## RCC-A1 Production closeout — 2026-10-07
+
+**RCC-A1: MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** PR #108 reviewed head `7444fdc5fa7155c57d36cef2605160b36b280fe4` merged as `8d5af40bc21177c582efe5df96d31ada8d7d9ff5` after migration-first application of `111_crm_rcc_a1_outcome_led_followup.sql`, as the owner approved. Vercel Production `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY on that commit.
+
+Rolled-back receptionist probes confirmed the following:
+
+- outcome-led decisions without notes;
+- server-resolved reminder presets;
+- cross-channel replacement of open callback and WhatsApp follow-ups by conversation decisions;
+- rejection of out-of-window agreed callbacks;
+- legacy payload compatibility;
+- the new read fields, without email or phone;
+- denial of direct table and private-helper access and of profileless identities.
+
+All other functions, grants, RLS policies and triggers are identical to the pre-release baseline, so finance and conversion authority are unchanged. Lifecycle/Meta remains dormant: lifecycle cron inactive, and zero activation epochs, pending intents and sync runs.
+
+Accepted limitations: follow-up replacement is guaranteed only for explicit conversation decisions; other creation paths keep their existing behavior, and broader consolidation is deferred. Placement-preparation `schedule_kind` is UI-enforced rather than a direct-RPC invariant. New center visits are appointments, but legacy payloads may keep NULL. **No fresh authenticated receptionist browser walkthrough was performed during release verification.** Details: [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md).
 
 ## Next meaningful outcomes
 
