@@ -1,6 +1,6 @@
 # Owner summary
 
-> **Status: PROPOSED / AWAITING OWNER DECISIONS — NOT APPROVED. Implementation is not authorized.** Architecture revision **A2-r1**, recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
+> **Status: OWNER APPROVED FOR IMPLEMENTATION on 2026-10-07, as recommended (D1–D7; see the [approval record](#owner-approval-record)). Implementation, migration 112, merge and Production release are NOT yet authorized; each needs a separate explicit owner instruction.** Architecture revision **A2-r1**, recorded 2026-10-07 from repository baseline `origin/main` `f1b8ba8ebdd820fb0242c6e68f439e2696b09e59`. Parent plan: [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening).
 
 ## What will change
 
@@ -52,7 +52,7 @@
   - every existing enrollment test suite must still pass.
 - **The cause of the owner's original Production failure is still unknown.** This design makes every known cause self-explanatory next time, but it does not prove which one happened.
 - The broader "one generic follow-up from every path" rule is recommended as a **separate** outcome (decision D6).
-- Seven decisions need the owner (D1–D7). Approving "as recommended" resolves D1–D6. D7 does not block.
+- The owner decided D1–D7 as recommended on 2026-10-07 ([approval record](#owner-approval-record)).
 
 ---
 
@@ -444,9 +444,27 @@ The full matrix is in the [contract](#acceptance-criteria).
 - `scripts/test-crm-rcc-a2.sql`, `scripts/test-crm-rcc-a2.mjs`, `scripts/test-crm-rcc-a2-upgrade.mjs`, `scripts/test-crm-rcc-a2-browser.mjs` (new), plus [package.json](../../../package.json) and [verify.yml](../../../.github/workflows/verify.yml) wiring
 - Documentation: this plan's implementation record, [RCC-r1](rcc-r1-receptionist-crm-completion.md), [WORKFLOWS](../../ai/WORKFLOWS.md#crm--enrollment), [PRODUCT_RULES](../../ai/PRODUCT_RULES.md#conversion-and-finance) (birth-date and linked-learner rules), [ARCHITECTURE](../../ai/ARCHITECTURE.md) (the error-reason contract) and [FEATURE_INDEX](../FEATURE_INDEX.md)
 
+## Owner approval record
+
+**OWNER APPROVED FOR IMPLEMENTATION — 2026-10-07.** The owner approved architecture revision **A2-r1 as recommended**, with these decisions:
+
+| Decision | Owner choice |
+| --- | --- |
+| D1 — Error contract | **Option A.** Server reason codes in the PostgreSQL `HINT`, preserving existing SQLSTATEs and messages. |
+| D2 — Future birth date | **Option C.** Prevented in both the browser and the server, using the Casablanca civil date. Today remains valid; no minimum-age rule is added. |
+| D3 — Linked learner | **Option A.** When a prospect is already linked to a learner, that learner is preselected, the alternative and new-learner choices are hidden, and there is no receptionist override in A2. |
+| D4 — Follow-up | **Option A.** Default-first enrollment follow-up presentation. Existing scheduling semantics are preserved; no reminder presets are added. |
+| D5 — Contextual actions | **Option A.** The proposed single contextual action rules apply. **Continuer l’inscription** goes to the learner file's **Inscriptions et groupes** section. |
+| D6 — Follow-up consolidation | **Option B.** Broader generic callback/WhatsApp follow-up consolidation is excluded from RCC-A2 and remains a separate future outcome. |
+| D7 — Production forensic read | **Option B.** No Production forensic read is authorized now. |
+
+Approved plan revision: **A2-r1**, the [IMPLEMENTATION CONTRACT](#implementation-contract) below with the recommended options.
+
+**Still not authorized:** starting implementation, creating migration 112, merging this architecture PR or any implementation PR, and any Production release, migration or read. Each requires a separate explicit owner instruction. The Tier-3 gates in [AGENTS](../../../AGENTS.md#high-risk-changes-tier-3) still apply: independent exact-SHA review, owner release approval, a separate release/operator task and Production verification.
+
 ## Owner decisions required
 
-Approving "as recommended" resolves D1–D6 together. D7 does not block.
+*Resolved on 2026-10-07; see the [approval record](#owner-approval-record). The options below are kept as the decision record.*
 
 ### D1 — Error contract mechanism
 
@@ -552,9 +570,9 @@ Approving "as recommended" resolves D1–D6 together. D7 does not block.
 
 ## IMPLEMENTATION CONTRACT
 
-**Not authorized until the owner records approval of revision A2-r1 (date, decisions D1–D6 as chosen, approved plan revision) in this file and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md).** This contract assumes the recommended options. Any other choice requires the matching amendment before implementation.
+**Owner approved on 2026-10-07 (revision A2-r1, D1–D7 as recommended; [approval record](#owner-approval-record), also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md)).** The contract below reflects those choices. **Starting implementation, creating the migration, merging and releasing are not yet authorized;** each needs a separate explicit owner instruction. Any deviation from this contract requires an owner-approved amendment first.
 
-### Authorized scope (upon approval)
+### Authorized scope (once implementation is separately authorized)
 
 Implement product behavior §1–§6 of this plan for the receptionist CRM enrollment entry flow, through one forward migration and the frontend modules listed below.
 

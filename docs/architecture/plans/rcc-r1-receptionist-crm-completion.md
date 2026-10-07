@@ -6,7 +6,7 @@
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
-| RCC-A2 | **PLANNED / NOT YET APPROVED** — architecture proposed in [RCC-A2 plan](rcc-a2-enrollment-ux-hardening.md) (revision A2-r1, awaiting owner decisions) |
+| RCC-A2 | **OWNER APPROVED FOR IMPLEMENTATION (2026-10-07)** — Tier 3; [RCC-A2 plan](rcc-a2-enrollment-ux-hardening.md#owner-approval-record) revision A2-r1. Implementation, migration, merge and release not yet authorized. |
 | RCC-B1 | **PLANNED / NOT YET APPROVED** |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
@@ -135,7 +135,7 @@ RCC-A1 is complete. The plan stays active for RCC-A2 and RCC-B1, which remain no
 
 ## RCC-A2 — enrollment UX hardening
 
-**PLANNED / NOT YET APPROVED.** Candidate scope:
+**OWNER APPROVED FOR IMPLEMENTATION (2026-10-07); implementation, migration, merge and release not yet authorized.** Original candidate scope:
 
 - enrollment UX hardening;
 - field-specific errors instead of generic `22023` messages;
@@ -146,7 +146,7 @@ RCC-A1 is complete. The plan stays active for RCC-A2 and RCC-B1, which remain no
 
 The exact owner-case root cause is still unresolved (see RCC-A0).
 
-**Proposed architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](rcc-a2-enrollment-ux-hardening.md), revision A2-r1. It is **PROPOSED / AWAITING OWNER DECISIONS**: the plan turns the candidate scope above into a precise contract with owner decisions D1–D7 and does not authorize implementation. It recommends keeping broader generic follow-up consolidation as a separate outcome (D6).
+**Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved it as recommended on 2026-10-07 ([approval record](rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Starting implementation, creating the migration, merging and releasing each still need a separate explicit owner instruction.
 
 ## RCC-B1 — responsive Opportunities presentation
 
