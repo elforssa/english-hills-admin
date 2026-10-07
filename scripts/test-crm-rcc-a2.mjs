@@ -2,7 +2,7 @@
 // fallbacks, Casablanca bounds, contextual actions and result origin.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { commandError } from '../src/lib/crm/presentation.mjs';
+import { commandError, casablancaInstant } from '../src/lib/crm/presentation.mjs';
 import { ENROLLMENT_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, discardsRequestKey } from '../src/lib/crm/enrollmentErrors.mjs';
 import { casablancaToday, casablancaNowInput, birthDateReason, followupReason, enrollmentAction, continueHref, studentHref, enrollmentParam, enrollmentSuccess, followupNotice } from '../src/lib/crm/enrollmentActions.mjs';
 
@@ -94,19 +94,23 @@ assert(DEFINITE_GENERIC_MESSAGE.includes('rien n’a été enregistré'));
 for (const code of ['22023','42501','40001']) assert.equal(discardsRequestKey({ code }), true);
 assert.equal(discardsRequestKey({ code: '23514' }), false, 'other SQLSTATEs keep today\'s retained key');
 
-// Casablanca civil bounds with fixed clocks around Casablanca midnight (UTC+1 in October).
-const at = iso => new Date(iso);
-assert.equal(casablancaToday(at('2026-10-06T23:30:00Z')), '2026-10-07', '00:30 Casablanca is already the next civil day');
-assert.equal(casablancaToday(at('2026-10-06T22:59:00Z')), '2026-10-06');
-assert.equal(birthDateReason('2026-10-07', at('2026-10-06T23:30:00Z')), null, 'today allowed at 00:30 Casablanca');
-assert.equal(birthDateReason('2026-10-08', at('2026-10-06T23:30:00Z')), 'birth_date_future');
-assert.equal(birthDateReason('2026-10-07', at('2026-10-06T22:59:00Z')), 'birth_date_future', 'still yesterday in Casablanca');
-assert.equal(birthDateReason('', at('2026-10-06T22:59:00Z')), null, 'blank stays valid');
+// Casablanca civil bounds with fixed clocks around Casablanca midnight. The instants
+// come from the runtime's own Casablanca conversion: no UTC offset is assumed, since
+// tz data versions disagree on Morocco's offset (the plan assumes no fixed difference).
+const at = wall => new Date(casablancaInstant(wall));
+const halfPast = at('2026-10-07T00:30'), beforeMidnight = at('2026-10-06T23:59');
+assert.equal(halfPast.getTime() - beforeMidnight.getTime(), 31 * 60000, 'consecutive civil minutes across midnight');
+assert.equal(casablancaToday(halfPast), '2026-10-07', '00:30 Casablanca is already the next civil day');
+assert.equal(casablancaToday(beforeMidnight), '2026-10-06');
+assert.equal(birthDateReason('2026-10-07', halfPast), null, 'today allowed at 00:30 Casablanca');
+assert.equal(birthDateReason('2026-10-08', halfPast), 'birth_date_future');
+assert.equal(birthDateReason('2026-10-07', beforeMidnight), 'birth_date_future', 'still yesterday in Casablanca');
+assert.equal(birthDateReason('', beforeMidnight), null, 'blank stays valid');
 assert.equal(birthDateReason('2015-01-01'), null);assert.equal(birthDateReason('07/10/2026'), 'birth_date_invalid');
-assert.equal(casablancaNowInput(at('2026-10-06T23:30:00Z')), '2026-10-07T00:30');
-assert.equal(followupReason('2026-10-07T00:29', at('2026-10-06T23:30:00Z')), 'followup_in_past');
-assert.equal(followupReason('2026-10-07T00:31', at('2026-10-06T23:30:00Z')), null);
-assert.equal(followupReason('', at('2026-10-06T23:30:00Z')), null);
+assert.equal(casablancaNowInput(halfPast), '2026-10-07T00:30');
+assert.equal(followupReason('2026-10-07T00:29', halfPast), 'followup_in_past');
+assert.equal(followupReason('2026-10-07T00:31', halfPast), null);
+assert.equal(followupReason('', halfPast), null);
 assert.equal(followupReason('not-a-date'), 'followup_invalid');
 
 // Contextual actions, plan §5 rows 1–10: exactly one action or none.

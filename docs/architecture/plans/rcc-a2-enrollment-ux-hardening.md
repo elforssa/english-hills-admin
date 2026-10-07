@@ -621,6 +621,13 @@ A2-r2 proposes **no** D8. A2 does not need to change **Nouvelle pré-inscription
 8. Test-only addition: the two contracted races live in a separate `test-crm-rcc-a2-concurrency.py`, run in the CI concurrency step.
 9. Browser validation found that the submit-time date checks used the value from the last render. They are now re-evaluated at submission; the fix landed before the first commit.
 
+**CI fix-up after the first run.** Run `37585317670` on head `d4b1d753bd0938d9c70492d5b92c2942a3b8bb81` failed for two test-only reasons, both fixed:
+
+- The pure suite's fixed clocks assumed a Casablanca UTC offset. On 2026-10-06 23:30 UTC, CI's Node 22 tz data puts Casablanca at UTC+0, while Node 25 (tz 2026a) and local PostgreSQL put it at UTC+1. The fixed clocks are now derived from the runtime's own Casablanca conversion, and the browser suite takes wall-clock values from the page's own clock and tz data.
+- Four existing upgrade-to-current scripts hard-coded the migration ceiling as 111 (097, 100, 102 and 103 → current). They now expect 112, as RCC-A1 did for 111. All four steps pass locally.
+
+The divergence confirms the plan's caution that no fixed offset may be assumed. Near Casablanca midnight, the browser's birth-date `max` and follow-up `min` follow the browser's tz data, while the server's civil date stays authoritative and still answers with its reason code.
+
 **Local harness notes.** The existing Phase-6 concurrency and lifecycle browser scripts accept only `codex/` branches or a pull-request CI environment, and the former reads `.git/HEAD` directly. Both ran unchanged with that environment, the former from a copy outside the worktree. The UI-Foundation WebKit sidebar check failed once and passed on two reruns; that code is untouched.
 
 **Remaining gates.** Fresh independent exact-SHA review, owner merge and release approval, a separate release/operator task (migration first, including the Production `TimeZone` configuration read), Production verification and documentation closeout. **Nouvelle pré-inscription** is unchanged; its duplicate risk remains a known limitation (no D8).

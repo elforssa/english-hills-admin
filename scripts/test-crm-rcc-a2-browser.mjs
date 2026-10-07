@@ -8,7 +8,6 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
-import { casablancaToday, casablancaNowInput } from '../src/lib/crm/enrollmentActions.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
@@ -37,6 +36,9 @@ async function start(id){await open(id);await page.getByRole('button',{name:"Com
 async function newLearner(){await button('Créer un nouvel apprenant').click();await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();}
 async function toReview(){await button('Continuer').click();await dialog().getByText('3 / 3 · Vérification').waitFor();}
 async function noRaw(){const text=await page.locator('body').innerText();assert(!/crm_enrollment|SQLSTATE|\b22023\b|\b40001\b|\b42501\b|Invalid new learner|Qualified unlinked|Student unavailable|Enrollment (unavailable|group)|Valid future task|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text),'no raw server text, hint, SQLSTATE or identifier rendered');}
+// Casablanca wall clock from the browser's own clock and tz data, which the dialog uses;
+// Node and browser tz data may disagree on Morocco's offset.
+const wall=(delta=0)=>page.evaluate(ms=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Casablanca',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(Date.now()+ms)).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;},delta);
 const focused=()=>page.evaluate(()=>({field:document.activeElement?.getAttribute('data-field'),id:document.activeElement?.id,invalid:document.activeElement?.getAttribute('aria-invalid')}));
 const civil=task=>{const [d,t]=sql(`select to_char(due_at at time zone 'Africa/Casablanca','DD/MM/YYYY'),to_char(due_at at time zone 'Africa/Casablanca','HH24:MI') from public.crm_tasks where id='${task}'`).split('|');return `${d} à ${t}`;};
 const startCalls=[];
@@ -57,7 +59,7 @@ try {
  // Browser birth bound, default-first follow-up and the created result.
  const lead1=makeLead('A2 parent principal','A2 Adam principal');await start(lead1);
  const birth=dialog().getByLabel('Date de naissance (si connue)',{exact:true});
- const today=casablancaToday(),tomorrow=casablancaToday(new Date(Date.now()+86400000+60000));
+ const today=(await wall()).slice(0,10),tomorrow=(await wall(86400000+60000)).slice(0,10);
  assert.equal(await birth.getAttribute('max'),today,'birth max is Casablanca today');
  await birth.fill(tomorrow);await dialog().getByText('La date de naissance ne peut pas être dans le futur.').first().waitFor();
  assert.equal(await birth.getAttribute('aria-invalid'),'true');assert.equal(await dialog().locator('#'+await birth.getAttribute('aria-describedby')).innerText(),'La date de naissance ne peut pas être dans le futur.');
@@ -66,8 +68,8 @@ try {
  await newLearner();
  await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();assert.equal(await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).count(),0,'no input by default');
  await button('Choisir une autre date').click();const due=dialog().getByLabel('Prochain suivi · Casablanca',{exact:true});
- assert.ok((await due.getAttribute('min'))<=casablancaNowInput(new Date(Date.now()+60000)),'follow-up min is Casablanca now');
- await due.fill(casablancaNowInput(new Date(Date.now()-86400000)));await dialog().getByText('Cette date de suivi est passée. Choisissez une date future ou gardez le suivi par défaut.').first().waitFor();
+ assert.ok((await due.getAttribute('min'))<=await wall(60000),'follow-up min is Casablanca now');
+ await due.fill(await wall(-86400000));await dialog().getByText('Cette date de suivi est passée. Choisissez une date future ou gardez le suivi par défaut.').first().waitFor();
  assert.equal(await due.getAttribute('aria-invalid'),'true');assert.ok(await button('Continuer').isDisabled(),'past follow-up blocked on change');
  await button('Garder la date par défaut').click();await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();
  await toReview();await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();
@@ -76,7 +78,7 @@ try {
  const saved1=detail(lead1);const task1=saved1.open_tasks.find(t=>t.task_type==='enrollment_followup');
  await dialog().getByText(`Suivi « Finaliser l’inscription » prévu le ${civil(task1.id)}.`,{exact:true}).waitFor();
  await dialog().getByText('Le prospect reste qualifié : l’inscription n’est pas encore confirmée. Elle reste à confirmer par le parcours habituel.',{exact:true}).waitFor();
- assert.equal(await dialog().getByRole('status').count(),1,'one in-dialog confirmation');await noRaw();await done();
+ assert.equal(await dialog().getByRole('status').filter({hasText:'Pré-inscription créée'}).count(),1,'one in-dialog confirmation');assert.equal(await page.locator('[data-sonner-toast]').count(),0,'no additional toast');await noRaw();await done();
  const section=page.getByRole('dialog').locator('#crm-enrollment');
  await section.getByRole('link',{name:"Continuer l'inscription",exact:true}).waitFor();await section.getByText('Pré-inscription en attente de confirmation.',{exact:true}).waitFor();
  assert.equal(await section.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).count(),0,'exactly one action');assert.equal(await section.getByText(/Finaliser/).count(),0);
@@ -204,7 +206,7 @@ try {
  // replayed with the same key after the chosen follow-up time has passed.
  context=await browser.newContext({viewport:{width:1440,height:1000}});await newPage(context);
  const lead10=makeLead('A2 parent horloge','A2 Hugo horloge');await start(lead10);await newLearner();
- await button('Choisir une autre date').click();const stale=casablancaNowInput(new Date(Date.now()+3*60000));await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(stale);await toReview();
+ await button('Choisir une autre date').click();const stale=await wall(3*60000);await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(stale);await toReview();
  await page.clock.setFixedTime(new Date(Date.now()+10*60000));startCalls.length=0;
  await button('Créer la pré-inscription').click();await dialog().getByText('2 / 3 · Inscription').waitFor();
  await dialog().getByRole('alert').filter({hasText:'Cette date de suivi est passée. Choisissez une date future ou gardez le suivi par défaut.'}).waitFor();
@@ -213,7 +215,7 @@ try {
  console.log('PASS a follow-up that became past while the dialog was open returns to step 2 unchanged');
  await page.clock.setFixedTime(new Date());
  const lead11=makeLead('A2 parent perte','A2 Maya perte');await start(lead11);await newLearner();
- await button('Choisir une autre date').click();await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(casablancaNowInput(new Date(Date.now()+5*60000)));await toReview();
+ await button('Choisir une autre date').click();await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(await wall(5*60000));await toReview();
  let drop=true;await page.route('**/rest/v1/rpc/crm_start_enrollment',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
  startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
  await page.clock.setFixedTime(new Date(Date.now()+10*60000));
