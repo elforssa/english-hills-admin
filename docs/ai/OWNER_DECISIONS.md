@@ -74,6 +74,25 @@ Plan: [RCC-B1](../architecture/plans/completed/rcc-b1-responsive-opportunities.m
   - Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a Tier-3 escalation and stop condition.
   - Acceptance covers both sides of the 768px and 1024px edges plus the 390/768/1024/1280/1440 widths.
 
+## Premium retirement — decisions recorded 2026-10-08 (plan proposed)
+
+Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r4, **APPROVED FOR RELEASE A IMPLEMENTATION** on 2026-10-08; nothing implemented). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
+
+1. **Formule:** stop showing "Formule" everywhere (receipt form, receipt list, print page, PDF, finance export, student form, list and detail, reports). "Standard" is not shown either: all Yearly students are the same.
+2. **Old receipts:** take the easier route code-wise. Historical receipts are not specially preserved as Premium; do not build compatibility rendering for them.
+3. **Existing Premium students:** move to Standard. There is no Formule concept afterwards.
+4. **Workshop module:** remove entirely, including weekend workshops, Premium groups/memberships/attendance and homework.
+
+Owner instruction on the PR #118 review (plan revision PR-r2, carried into later revisions): new receipts get a description built from session type and school year (so instalments on pre-113 charges never carry the plan word), **and** a separately approved, counted, rehearsed data step removes the plan word from open, non-voided Yearly charge text (issued receipts untouched). Both are part of the proposed design.
+
+Owner answers to the plan's questions, recorded **2026-10-08** (approver Maroine, against plan revision PR-r4):
+
+- **Q1:** leave issued Yearly receipts and settled or voided non-legacy Yearly charges untouched (no display-time handling, no text rewrite).
+- **Q7:** Option A, keep accepting the old request fingerprint so a lost-response retry returns the original receipt.
+- **Q2 to Q6:** option A, the recommended option, each (Q2 keep `plan_type` columns inert; Q3 two-phase removal; Q4 separately approved student data script; Q5 remove report sections with no replacement; Q6 delete `premium_homework` notification rows in Release B).
+
+**Plan approval (Maroine, 2026-10-08): APPROVED FOR RELEASE A IMPLEMENTATION**, revision PR-r4 at exact head `531cf30cf4e4b121a720b019c684ec044a5decc0`, following the independent reviewer's READY FOR FINAL REVIEW on that head. Answers as above, plus Part A and Part B as written in the plan. The owner acknowledges that future workshops, pending homework, attendance history and homework files are permanently deleted in Release B after a full export; **export retention: until the 2026/2027 school-year closure, kept private, access limited to Maroine.** **This approves Release A implementation only. Release B, the open-charge description data step (D5a), the Premium student data step, every Production count or read, and any deployment each still need the owner's separate explicit approval.** Nothing is implemented, merged or deployed.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
