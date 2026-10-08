@@ -85,7 +85,13 @@ Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revisio
 
 Owner instruction on the PR #118 review (plan revision PR-r2, carried into later revisions): new receipts get a description built from session type and school year (so instalments on pre-113 charges never carry the plan word), **and** a separately approved, counted, rehearsed data step removes the plan word from open, non-voided Yearly charge text (issued receipts untouched). Both are part of the proposed design.
 
-Open questions **Q1–Q7** (Q1: stored text on issued receipts and settled or voided charges, with display-time handling reserved to the owner; Q2: `plan_type` column fate; Q3: two-phase removal; Q4: where the student data step runs; Q5: report removal; Q6: notification history; Q7: retrying a payment whose response was lost, across the finance migration) are listed in the plan and are **PLANNED / NOT APPROVED**. Implementation does not start until Q1 is answered (and the finance migration not until Q7) and the owner records the plan approval there.
+Owner answers to the plan's questions, recorded **2026-10-08** (approver Maroine, against plan revision PR-r4):
+
+- **Q1:** leave issued Yearly receipts and settled or voided non-legacy Yearly charges untouched (no display-time handling, no text rewrite).
+- **Q7:** Option A, keep accepting the old request fingerprint so a lost-response retry returns the original receipt.
+- **Q2 to Q6:** option A, the recommended option, each (Q2 keep `plan_type` columns inert; Q3 two-phase removal; Q4 separately approved student data script; Q5 remove report sections with no replacement; Q6 delete `premium_homework` notification rows in Release B).
+
+These answers are **APPROVED as owner choices** but the plan itself is **NOT APPROVED for implementation**: approval waits for the independent re-review and will be recorded in the plan's approval record. Nothing is implemented, merged or deployed.
 
 ## Deferred backlog after RCC-r1
 
