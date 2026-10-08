@@ -1,0 +1,16 @@
+{
+  "comment": "First-load JS in decimal kB (gzip), checked by `node scripts/perf-bundle-report.mjs --check` after `npm run build`. Ceiling = Phase-0 baseline (2026-10-08, main 857b159) plus about 2% headroom: a regression guard. Target = performance plan goal; lower a ceiling only when a change has delivered the reduction.",
+  "sharedKB": { "baseline": 185.2, "ceiling": 189, "target": 150 },
+  "routes": {
+    "/login": { "baseline": 253.1, "ceiling": 258, "target": 220 },
+    "/crm/leads": { "baseline": 372, "ceiling": 380, "target": 320 },
+    "/crm/today": { "baseline": 372, "ceiling": 380, "target": 320 },
+    "/dashboard": { "baseline": 290.9, "ceiling": 297, "target": 260 },
+    "/students": { "baseline": 319, "ceiling": 326, "target": 290 },
+    "/finance": { "baseline": 276.9, "ceiling": 283, "target": 245 },
+    "/receipts": { "baseline": 414.9, "ceiling": 424, "target": 320 },
+    "/receipts/[id]/print": { "baseline": 409.7, "ceiling": 418, "target": 320 },
+    "/parent-portal": { "baseline": 440.2, "ceiling": 449, "target": 345 },
+    "/student-portal": { "baseline": 439.1, "ceiling": 448, "target": 345 }
+  }
+}

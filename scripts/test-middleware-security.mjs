@@ -74,6 +74,17 @@ for (const path of routes) {
   checks++;
 }
 console.log('PASS active production middleware manifest; all ' + routes.length + ' route patterns matched');
+// Only Vercel's platform prefix is exempt (Speed Insights script/beacon); look-alikes stay gated.
+const matched = path => manifest.middleware['/'].matchers.some(m => new RegExp(m.regexp).test(path));
+for (const path of ['/_vercel/speed-insights/script.js', '/_vercel/speed-insights/vitals']) {
+  assert.equal(matched(path), false, 'Platform path must bypass middleware: ' + path);
+  checks++;
+}
+for (const path of ['/_vercel', '/_vercelx', '/_vercel-admin/dashboard', '/students/_vercel/x', '/dashboard/_vercel/']) {
+  assert.equal(matched(path), true, 'Look-alike path must stay behind middleware: ' + path);
+  checks++;
+}
+console.log('PASS middleware exempts only the /_vercel/ platform prefix');
 
 // Execute the unmodified middleware body with only its Auth dependency replaced.
 const middlewareSource = readFileSync(new URL('src/middleware.js', root), 'utf8')

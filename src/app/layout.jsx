@@ -1,5 +1,6 @@
 import './globals.css';
 import Providers from './providers';
+import SpeedInsightsReporter from '@/components/SpeedInsightsReporter';
 
 export const metadata = {
   title: 'English Hills — Admin',
@@ -18,6 +19,7 @@ export default function RootLayout({ children }) {
           Passer au contenu principal
         </a>
         <Providers>{children}</Providers>
+        <SpeedInsightsReporter />
       </body>
     </html>
   );

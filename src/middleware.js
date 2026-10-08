@@ -174,6 +174,9 @@ export const config = {
   matcher: [
     // `monitoring` is the Sentry tunnel route — must bypass auth so error
     // reports send even from unauthenticated pages (e.g. /login).
-    '/((?!_next/static|_next/image|monitoring|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // `_vercel/` is Vercel's platform prefix (Speed Insights script and vitals
+    // beacon). No application route can live there: `_`-prefixed app folders
+    // are private and never routable.
+    '/((?!_next/static|_next/image|_vercel/|monitoring|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
