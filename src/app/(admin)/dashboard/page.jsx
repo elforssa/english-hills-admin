@@ -6,19 +6,27 @@ import { financeReadResult, failedRead } from '@/lib/ui/readResults.mjs';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
-import { isPendingPreEnrollment } from '@/lib/enrollmentWorkflow.mjs';
+import { PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
 
+async function countRows(query) {
+  const { count, error } = await query;
+  if (error) throw error;
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error('Incomplete count response');
+  return count;
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const { user, role } = useAuth();
   const identity = `${user?.id}:${role}`;
+  const hasUser = Boolean(user);
   const [authScope, setAuthScope] = useState(null);
   const [authError, setAuthError] = useState(false);
   const [authRetry, setAuthRetry] = useState(0);
@@ -38,23 +46,21 @@ export default function Dashboard() {
 
   const isAdmin = userRole === 'admin' || userRole === 'director';
 
+  // The session identity and stored role come from AuthContext, which the admin
+  // layout resolves before rendering this page; re-reading them here would only
+  // repeat the same Auth and profile requests.
   useEffect(() => {
-    let active = true;
     setRedirecting(true); setAuthError(false);
-    auth.me().then(user => {
-      if (!active) return;
-      if (!user) { setAuthError(true); setRedirecting(false); setLoading(false); return; }
-      if (user.role === 'parent') { router.replace('/parent-portal'); return; }
-      if (user.role === 'student') { router.replace('/student-portal'); return; }
-      if (user.role === 'teacher') { router.replace('/teacher-portal'); return; }
-      setStats({}); setRecentReceipts([]);
-      setFinanceRead({state:'loading', scope:identity}); setMonthlyRead({state:'loading'});
-      setAuthScope(identity);
-      setUserRole(user.role || '');
-      setRedirecting(false);
-    }).catch(() => { if (active) { setAuthError(true); setRedirecting(false); setLoading(false); } });
-    return () => { active = false; };
-  }, [router, identity, authRetry]);
+    if (!hasUser) { setAuthError(true); setRedirecting(false); setLoading(false); return; }
+    if (role === 'parent') { router.replace('/parent-portal'); return; }
+    if (role === 'student') { router.replace('/student-portal'); return; }
+    if (role === 'teacher') { router.replace('/teacher-portal'); return; }
+    setStats({}); setRecentReceipts([]);
+    setFinanceRead({state:'loading', scope:identity}); setMonthlyRead({state:'loading'});
+    setAuthScope(identity);
+    setUserRole(role || '');
+    setRedirecting(false);
+  }, [router, identity, hasUser, role, authRetry]);
 
   useEffect(() => {
     if (!userRole || authScope !== identity) return;
@@ -64,29 +70,31 @@ export default function Dashboard() {
     const monthStart = new Date().toISOString().slice(0, 7) + '-01';
     const monthlyScope = `${authScope}:${monthStart}`;
     setMonthlyRead(previous => previous.scope === monthlyScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:monthlyScope});
+    // Head-only exact counts under the same RLS as the former full-table reads.
+    const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
+    const sb = getBrowserClient();
     Promise.all([
-      entities.Student.listAll('full_name'),
-      entities.Teacher.listAll('full_name'),
-      entities.Group.listAll('name'),
+      countRows(sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),
+      countRows(sb.from('teachers').select('id', { count: 'exact', head: true })),
+      countRows(sb.from('groups').select('id', { count: 'exact', head: true })),
       entities.Receipt.list('-created_date', 5),
-      entities.Enrollment.listAll('-created_date'),
-      entities.PlacementTest.filter({ status: 'Planifié' }),
+      countRows(sb.from('enrollments').select('id', { count: 'exact', head: true }).in('status', PENDING_PRE_ENROLLMENT_STATUSES)),
+      countRows(sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
       getBrowserClient().rpc('get_finance_charge_summary'),
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
-    ]).then(([students, teachers, groups, receipts, pendingEnroll, plannedTests, financeResult, monthlyResult]) => {
+    ]).then(([students, teachers, groups, receipts, enrollmentsPending, testsPlanifies, financeResult, monthlyResult]) => {
       if (!active) return;
       const finance = financeReadResult(financeResult, ['total_encaisse']);
       const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
       setFinanceRead(previous => finance.state === 'ready' ? {...finance, scope:authScope} : {...failedRead(previous, finance.reason), state: previous.data ? 'stale' : finance.state});
       setMonthlyRead(previous => monthly.state === 'ready' ? {...monthly, scope:monthlyScope} : {...failedRead(previous, monthly.reason), scope:monthlyScope, state: previous.data ? 'stale' : monthly.state});
-      const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
       setStats({
-        students: students.filter(s => ACTIVE_STATUSES.includes(s.status)).length,
-        teachers: teachers.length,
-        groups: groups.length,
+        students,
+        teachers,
+        groups,
         totalEncaisse: finance.data?.total_encaisse,
-        enrollmentsPending: pendingEnroll.filter(isPendingPreEnrollment).length,
-        testsPlanifies: plannedTests.length,
+        enrollmentsPending,
+        testsPlanifies,
       });
       setRecentReceipts(receipts.slice(0, 5));
       setLoading(false);

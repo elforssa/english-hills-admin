@@ -103,7 +103,8 @@ function reportError(operation, entityName, error) {
   // eslint-disable-next-line no-console
   console.error(msg, error);
   if (typeof window !== 'undefined') {
-    toast.error(msg);
+    // One toast per message: read retries must not stack identical errors.
+    toast.error(msg, { id: msg });
   }
 }
 
