@@ -9,14 +9,19 @@ import { Columns3, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
 import { STATUS, UUID, resolvePresentation, stageChips } from '@/lib/crm/presentation.mjs';
-import LeadDetailSheet from './LeadDetailSheet';
-import CrmActionDialog from './CrmActionDialog';
+import dynamic from 'next/dynamic';
 import WorkQueue from './WorkQueue';
 import OpportunitiesBoard from './OpportunitiesBoard';
 import OpportunitiesList from './OpportunitiesList';
 import OpportunityFilters from './OpportunityFilters';
 import ScrollRow from './ScrollRow';
 import useResponsiveBand from './useResponsiveBand';
+// The drawer and the manual-create dialog are needed only after a click. Load them
+// as separate chunks, prefetched once the page is idle so the first open is not slower.
+const loadLeadDetailSheet = () => import('./LeadDetailSheet');
+const loadCrmActionDialog = () => import('./CrmActionDialog');
+const LeadDetailSheet = dynamic(loadLeadDetailSheet, { ssr: false });
+const CrmActionDialog = dynamic(loadCrmActionDialog, { ssr: false });
 // Navigation only: a chip sets the existing stage filter; counts are display data.
 function StageChips({ view, stage, counts, total, onSelect }) {
   const count = value => Number.isFinite(value) ? value : '—';
@@ -36,6 +41,12 @@ export default function CrmWorkspace({
   const originFocus = useRef(null), headingRef = useRef(null);
   const [initialAction, setInitialAction] = useState(null), [initialTask, setInitialTask] = useState(null);
   useEffect(() => { if (!selected) { setInitialAction(null); setInitialTask(null); } }, [selected]);
+  useEffect(() => {
+    // Best effort: a prefetch cancelled by navigation is not an error; opening retries the load.
+    const prefetch = () => { loadLeadDetailSheet().catch(() => {}); loadCrmActionDialog().catch(() => {}); };
+    if ('requestIdleCallback' in window) { const id = window.requestIdleCallback(prefetch, { timeout: 3000 }); return () => window.cancelIdleCallback(id); }
+    const id = window.setTimeout(prefetch, 1500); return () => window.clearTimeout(id);
+  }, []);
   // Shared sm/lg queries decide the band; the default moves from 768 to the lg board (D7).
   const band = useResponsiveBand({ stableScrollbar: mode === 'leads' });
   const filters = Object.fromEntries(['view','q','owner','channel','source','program','stage'].map(key => [key, params.get(key) ?? ({view:'all',owner:'all'}[key] || '')]));

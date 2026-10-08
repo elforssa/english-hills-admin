@@ -80,4 +80,13 @@ export default withSentryConfig(nextConfig, {
   widenClientFileUpload: true,
   // Skip source-map upload entirely when there's no auth token (local dev).
   sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  // Errors only (tracesSampleRate 0, no Session Replay, no `debug`): tree-shake
+  // the SDK code for those features out of every bundle. Revisit before ever
+  // enabling Sentry tracing or Replay.
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+    excludeTracing: true,
+    excludeReplayShadowDom: true,
+    excludeReplayIframe: true,
+  },
 });

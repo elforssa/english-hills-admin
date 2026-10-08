@@ -1,6 +1,5 @@
 'use client';
 
-import jsPDF from 'jspdf';
 import { money, receiptAmounts, receiptStatus } from './receiptFinance.js';
 import { RECEIPT_PAPER_FORMAT, receiptSchoolYear } from './receiptPresentation.js';
 
@@ -8,6 +7,13 @@ const BLUE = [30, 77, 139];
 const RED = [185, 28, 46];
 const INK = [28, 36, 50];
 const MUTED = [100, 116, 139];
+
+// jsPDF (with html2canvas/canvg) is about 100 kB gzipped. Load it when a PDF is
+// generated instead of with every page that offers a receipt download.
+export async function loadJsPDF() {
+  const { default: jsPDF } = await import('jspdf');
+  return jsPDF;
+}
 
 let logoPromise;
 export async function loadReceiptLogo() {
@@ -135,7 +141,7 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
 }
 
 export async function downloadReceiptPDF(receipt) {
-  const logoData = await loadReceiptLogo();
+  const [jsPDF, logoData] = await Promise.all([loadJsPDF(), loadReceiptLogo()]);
   const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT, orientation: 'portrait' });
   buildReceiptPDF(doc, receipt, { logoData });
   doc.save(`recu-english-hills-${receipt.receipt_number || receipt.date}.pdf`);
@@ -148,7 +154,7 @@ export async function printReceiptPDF(receipt) {
   if (!preview) throw new Error('Autorisez l’ouverture du PDF ou utilisez le bouton PDF A5.');
   preview.opener = null;
   try {
-    const logoData = await loadReceiptLogo();
+    const [jsPDF, logoData] = await Promise.all([loadJsPDF(), loadReceiptLogo()]);
     const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT, orientation: 'portrait' });
     buildReceiptPDF(doc, receipt, { logoData });
     const url = URL.createObjectURL(doc.output('blob'));

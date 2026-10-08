@@ -6,11 +6,10 @@ import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Download, CheckSquare, Square } from 'lucide-react';
-import jsPDF from 'jspdf';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
-import { buildReceiptPDF, loadReceiptLogo } from '@/lib/receiptPdf';
+import { buildReceiptPDF, loadJsPDF, loadReceiptLogo } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { RECEIPT_PAPER_FORMAT, receiptServiceSummary } from '@/lib/receiptPresentation';
 import { toast } from 'sonner';
@@ -62,7 +61,7 @@ export default function Receipts() {
       }
       if (rows.length !== ids.length) throw new Error('Incomplete receipt selection');
       rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.id).localeCompare(String(b.id)));
-      const logoData = await loadReceiptLogo();
+      const [jsPDF, logoData] = await Promise.all([loadJsPDF(), loadReceiptLogo()]);
       const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT });
       rows.forEach((receipt, index) => { if (index) doc.addPage(RECEIPT_PAPER_FORMAT, 'portrait'); buildReceiptPDF(doc, receipt, { logoData }); });
       doc.save(`recus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
