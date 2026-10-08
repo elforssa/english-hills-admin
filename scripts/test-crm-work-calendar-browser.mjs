@@ -28,7 +28,8 @@ const dialog=()=>page.getByRole('dialog').last();
 async function save(){const outcome=dialog().getByLabel('Résultat de l’appel',{exact:true});if(await outcome.count() && !(await outcome.inputValue())) await outcome.selectOption('no_answer');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\.|Nouveau prospect créé\./).waitFor();}
 async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
-async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
+// RCC-B1 E2: an Autres actions item opens its dialog after the menu returns focus to its trigger.
+async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length>1);}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
 async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
@@ -88,7 +89,7 @@ try {
   for(const label of ['Responsable de la tâche','Responsable du prospect']) {
    for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel(label).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
   }
-  await page.goto(app+'/crm/leads');await page.getByText('Plus de filtres',{exact:false}).click();await page.getByLabel('Responsable',{exact:true}).waitFor();
+  await page.goto(app+'/crm/leads');await page.getByRole('button',{name:/^Filtres/}).click();await page.getByLabel('Responsable',{exact:true}).waitFor();
   for(let i=0;i<users.length;i++)assert.equal(await page.getByLabel('Responsable',{exact:true}).locator(`option[value="${users[i].id}"]`).textContent(),labels[i]);
   // Same center visit in Calendar, Tasks and drawer; browser ICU is wrong.
   await page.locator(`[data-testid=opportunity-card][data-lead-id="${visitLead}"]`).getByText(expected,{exact:false}).waitFor();

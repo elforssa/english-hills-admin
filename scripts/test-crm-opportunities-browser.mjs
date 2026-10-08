@@ -28,7 +28,8 @@ const dialog=()=>page.getByRole('dialog').last();
 async function save(){const outcome=dialog().getByLabel('Résultat de l’appel',{exact:true});if(await outcome.count() && !(await outcome.inputValue())) await outcome.selectOption('no_answer');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\.|Nouveau prospect créé\./).waitFor();}
 async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
-async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
+// RCC-B1 E2: an Autres actions item opens its dialog after the menu returns focus to its trigger.
+async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length>1);}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
 async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
@@ -52,7 +53,7 @@ try {
   page=await ctx.newPage();page.on('response',async r=>{if(r.url().endsWith('/rpc/crm_get_operational_acquisition_summary') && r.ok())acquisitions.push(await r.json());});page.on('pageerror',e=>{failures.push(e.message);console.error('BROWSER_ERROR',engine.name(),phase,new URL(page.url()).pathname+new URL(page.url()).search.replace(/lead=[^&]+/g,'lead=synthetic'),e.name,e.message);});page.on('requestfailed',r=>{if(r.url().includes('/rest/v1/rpc/')){const data=r.postDataJSON();console.error('RPC_FAILED',engine.name(),new URL(r.url()).pathname,r.failure()?.errorText,{view:data?.p_view,layout:data?.p_layout,stage:data?.p_stage});}});page.on('request',r=>{if(r.url().includes('/rest/v1/rpc/'))requests.push(r.url().split('/').at(-1));});page.setDefaultTimeout(60000);await login(users[1]);
   await page.getByRole('heading',{name:'Pipeline admissions'}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();
   assert.equal(await page.locator('[aria-label="Tableau des opportunités, défilement horizontal"] > section').count(),5);
-  assert(await page.getByRole('button',{name:'Clôturés : 2'}).count());assert.equal(await page.getByTestId('opportunity-card').count(),27);
+  assert(await page.getByRole('link',{name:'2 clôturés',exact:true}).count());// RCC-B1: the count line replaces the board noticeassert.equal(await page.getByTestId('opportunity-card').count(),27);
   const initialIds=await page.getByTestId('opportunity-card').evaluateAll(nodes=>nodes.map(n=>n.dataset.leadId));assert.equal(new Set(initialIds).size,initialIds.length);
   // Drag proposes a command, leaves server stage unchanged, and cancel writes nothing.
   if(engine===chromium) {
@@ -61,7 +62,7 @@ try {
    assert.equal(detail(leads[31]).status,'NEW');await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${leads[31]}'`),before);
   }
   await page.getByRole('button',{name:'Liste',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),25);
-  await page.getByText('Plus de filtres',{exact:false}).click();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('NEW');await page.waitForURL(url=>url.searchParams.get('stage')==='NEW');await page.getByText('28 prospects correspondants',{exact:true}).waitFor();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('');await page.waitForURL(url=>!url.searchParams.has('stage'));await page.getByText('32 prospects correspondants',{exact:true}).waitFor();
+  await page.getByRole('button',{name:/^Filtres/}).click();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('NEW');await page.waitForURL(url=>url.searchParams.get('stage')==='NEW');await page.getByText(/^28 prospects correspondants/).waitFor();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('');await page.waitForURL(url=>!url.searchParams.has('stage'));await page.getByText(/^32 prospects correspondants/).waitFor();
   const firstIds=await page.getByTestId('opportunity-row').evaluateAll(nodes=>nodes.map(n=>n.textContent));await page.getByRole('button',{name:'Suivant',exact:true}).last().click();await page.getByTestId('opportunity-row').filter({hasText:'O3 parent 0'}).waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),7);
   await page.getByRole('button',{name:'Mes prospects',exact:true}).click();await page.getByText('Aucun prospect correspondant à cette vue et ces filtres.',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Clôturés',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),2);assert(await page.getByRole('button',{name:'Tableau',exact:true}).isDisabled());
@@ -92,12 +93,13 @@ try {
   await page.goto(app+'/crm/leads');await page.getByTestId('opportunity-card').first().waitFor();
   console.log('PASS programme → immediate search and reverse; actual URL/RPC preserve filters, stage/contact and drawer');
   // Keyboard opening, contextual acquisition response, Back and focus return.
-  phase='keyboard drawer';const button=page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first();await button.focus();await page.keyboard.press('Enter');await page.getByRole('dialog').getByText('Acquisition',{exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('lead'),leads[3]);
-  await page.getByRole('dialog').getByText('Première demande',{exact:true}).waitFor();
+  phase='keyboard drawer';const button=page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first();await button.focus();await page.keyboard.press('Enter');await page.getByRole('dialog').getByRole('heading',{name:'Demande',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('lead'),leads[3]);
+  // RCC-B1 D1: one Demande section; the first inquiry is listed only when it differs from the latest.
+  await page.getByRole('dialog').getByText('Dernière demande · ',{exact:true}).waitFor();assert.equal(await page.getByRole('dialog').getByText('Première demande · ',{exact:true}).count(),0);
   assert(acquisitions.length>0,'actual acquisition RPC response observed');for(const summary of acquisitions){assert.deepEqual(Object.keys(summary).sort(),['first_inquiry','latest_inquiry']);for(const inquiry of Object.values(summary))assert.deepEqual(Object.keys(inquiry).sort(),['channel','occurred_at','source_label']);}
   // UI network must only call the narrow summary, never broad detail/attribution.
   assert(!requests.includes('crm_get_lead_detail'));assert(!requests.includes('crm_get_submission_attribution'));
-  await closeDrawer();await page.waitForURL(url=>!url.searchParams.has('lead'));await button.waitFor();await page.waitForFunction(id=>document.activeElement?.closest('[data-lead-id]')?.dataset.leadId===id,leads[3]);await page.goBack();await page.getByRole('dialog').getByText('Acquisition',{exact:true}).waitFor();await page.goForward();await page.getByRole('dialog').waitFor({state:'hidden'});assert(!new URL(page.url()).searchParams.has('lead'),'Forward restores the closed drawer URL');
+  await closeDrawer();await page.waitForURL(url=>!url.searchParams.has('lead'));await button.waitFor();await page.waitForFunction(id=>document.activeElement?.closest('[data-lead-id]')?.dataset.leadId===id,leads[3]);await page.goBack();await page.getByRole('dialog').getByRole('heading',{name:'Demande',exact:true}).waitFor();await page.goForward();await page.getByRole('dialog').waitFor({state:'hidden'});assert(!new URL(page.url()).searchParams.has('lead'),'Forward restores the closed drawer URL');
   for(const viewport of [{width:1440,height:900},{width:768,height:1024},{width:390,height:844}]) {
    phase='viewport '+viewport.width;
    if(await page.getByRole('dialog').count())await closeDrawer();
@@ -105,9 +107,10 @@ try {
    await page.setViewportSize(viewport);await page.waitForTimeout(100);await page.waitForLoadState('networkidle');
    if(viewport.width===390) assert(await page.getByRole('button',{name:'Liste',exact:true}).getAttribute('aria-pressed')==='true');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no body overflow');
-   await page.getByRole('button',{name:'Qualifiés',exact:true}).click();
+   // RCC-B1: view chips from 1280px, the Vue select below.
+   if(viewport.width>=1280)await page.getByRole('button',{name:'Qualifiés',exact:true}).click();else await page.getByRole('combobox',{name:'Vue',exact:true}).selectOption('qualified');await page.waitForURL(url=>url.searchParams.get('view')==='qualified');
    await page.locator(`[data-testid="opportunity-card"][data-lead-id="${leads[3]}"]`).getByRole('button').first().click();
-   await page.getByRole('dialog').getByText('Acquisition',{exact:true}).waitFor();await page.waitForFunction(()=>{const box=document.querySelector('[role=dialog]')?.getBoundingClientRect();return box&&box.x>=-1&&box.right<=innerWidth+1;});const box=await page.getByRole('dialog').boundingBox();assert(box.x>=-1 && box.x+box.width<=viewport.width+1,JSON.stringify({viewport,box}));
+   await page.getByRole('dialog').getByRole('heading',{name:'Demande',exact:true}).waitFor();await page.waitForFunction(()=>{const box=document.querySelector('[role=dialog]')?.getBoundingClientRect();return box&&box.x>=-1&&box.right<=innerWidth+1;});const box=await page.getByRole('dialog').boundingBox();assert(box.x>=-1 && box.x+box.width<=viewport.width+1,JSON.stringify({viewport,box}));
    await page.waitForLoadState('networkidle');await page.screenshot({path:join(tmpdir(), `o3-${engine.name()}-${viewport.width}.png`),fullPage:false});
   }
   phase='200% viewport';await closeDrawer();await page.goto(app+'/crm/leads?layout=list');await page.waitForLoadState('networkidle');await page.setViewportSize({width:720,height:450});await page.waitForLoadState('networkidle');await page.getByRole('heading',{name:'Pipeline admissions'}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'200% equivalent CSS viewport');

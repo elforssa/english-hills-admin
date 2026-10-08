@@ -7,7 +7,7 @@
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
 | RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
-| RCC-B1 | **OWNER APPROVED FOR IMPLEMENTATION (2026-10-07)** — architecture B1-r1 approved with D1–D8 as recommended; current revision B1-r3 carries the approval forward after review corrections and owner decision R1 ([plan](rcc-b1-responsive-opportunities.md), [approval](rcc-b1-responsive-opportunities.md#owner-approval-record)). Implementation, merge and release not yet authorized. |
+| RCC-B1 | **IMPLEMENTATION IN REVIEW (2026-10-07)** — architecture B1-r3 merged (PR #114) and implementation authorized by the owner on 2026-10-07; implemented on `feature/rcc-b1` ([plan](rcc-b1-responsive-opportunities.md), [implementation record](rcc-b1-responsive-opportunities.md#implementation-record)). Awaiting terminal CI and the mandatory independent Tier-2 review. Merge and release not authorized. |
 
 RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
 
@@ -131,7 +131,7 @@ Accepted limitations (owner, 2026-10-07):
 - Placement-preparation `schedule_kind` is enforced by the receptionist UI, not as a universal direct-RPC invariant.
 - New center visits use appointment semantics; legacy-compatible payloads may keep a NULL `schedule_kind`.
 
-RCC-A1 is complete. The plan stays active for RCC-B1 (not approved); RCC-A2 is complete.
+RCC-A1 is complete. The plan stays active for RCC-B1 (implementation in review); RCC-A2 is complete.
 
 ## RCC-A2 — enrollment UX hardening
 
