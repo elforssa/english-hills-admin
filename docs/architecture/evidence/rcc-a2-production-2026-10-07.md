@@ -1,6 +1,6 @@
 # RCC-A2 Production release — 2026-10-07
 
-Release record for [RCC-A2](../plans/completed/rcc-a2-enrollment-ux-hardening.md) (Tier 3), a child of [RCC-r1](../plans/rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening). It records what was released and observed; product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md) and current state in [CURRENT_STATE](../../ai/CURRENT_STATE.md). Times are UTC.
+Release record for [RCC-A2](../plans/completed/rcc-a2-enrollment-ux-hardening.md) (Tier 3), a child of [RCC-r1](../plans/completed/rcc-r1-receptionist-crm-completion.md#rcc-a2--enrollment-ux-hardening). It records what was released and observed; product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md) and current state in [CURRENT_STATE](../../ai/CURRENT_STATE.md). Times are UTC.
 
 **State: MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.**
 
@@ -119,7 +119,7 @@ No fresh authenticated browser walkthrough was performed. Browser acceptance rem
 
 ## Known limitations and deferred items
 
-1. **Browser `casablancaInstant` tz data (pre-existing, outside RCC-A2):** CRM wall-clock inputs are converted with the browser's time-zone data. A browser with stale Morocco rules can shift entered times by an hour relative to the server's civil projection. Near Casablanca midnight, the dialog's birth-date `max` and follow-up `min` follow the browser's tz data while the server's civil date stays authoritative. Deferred reliability item in the [RCC-r1 backlog](../plans/rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
+1. **Browser `casablancaInstant` tz data (pre-existing, outside RCC-A2):** CRM wall-clock inputs are converted with the browser's time-zone data. A browser with stale Morocco rules can shift entered times by an hour relative to the server's civil projection. Near Casablanca midnight, the dialog's birth-date `max` and follow-up `min` follow the browser's tz data while the server's civil date stays authoritative. Deferred reliability item in the [RCC-r1 backlog](../plans/completed/rcc-r1-receptionist-crm-completion.md#deferred-crm-reliability-backlog).
 2. **Birth-date rule scope:** the Casablanca birth-date rule covers enrollment initiation only. Manual lead creation keeps `current_date` (session UTC), which is the owner-accepted B2 divergence.
 3. **Nouvelle pré-inscription:** unchanged; its duplicate risk remains (no D8).
 4. **Follow-up consolidation:** broader generic callback/WhatsApp consolidation is still deferred (D6).

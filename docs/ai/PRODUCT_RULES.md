@@ -22,7 +22,7 @@ Website product direction is durable EH intake followed promptly by acquisition 
 - Outreach cycle: Day 1 two failed calls; Day 2 one; Day 4 one; Day 6 one. Default SQL policy offsets are `[0,0,1,3,5]`, anchored to the first actual failed call, adjusted to configured Casablanca calling windows and minimum spacing. Meaningful conversations reset the uninterrupted sequence. Published policy versions are immutable; actual operating hours must be configured, not invented.
 - Failed phone outcomes counted are no answer, busy, declined and unreachable. Wrong number and WhatsApp are not failed-call attempts. Five failures stop automatic sequence scheduling; they **never automatically mark Lost**. Further explicit calls remain possible; closure is a separate audited action.
 
-RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql); deployed 2026-10-07, see [CURRENT_STATE](CURRENT_STATE.md)) applies the [approved RCC-r1 decisions](../architecture/plans/rcc-r1-receptionist-crm-completion.md):
+RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql); deployed 2026-10-07, see [CURRENT_STATE](CURRENT_STATE.md)) applies the [approved RCC-r1 decisions](../architecture/plans/completed/rcc-r1-receptionist-crm-completion.md):
 
 - The receptionist records the conversation outcome, and guarded commands derive status.
 - **En réflexion** is follow-up metadata (`followup_reason`) on a callback or WhatsApp follow-up, never a stage. A QUALIFIED prospect who needs time stays QUALIFIED.

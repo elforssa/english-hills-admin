@@ -1,6 +1,6 @@
 # RCC-A1 Production release — 2026-10-07
 
-Release record for [RCC-A1](../plans/rcc-r1-receptionist-crm-completion.md#rcc-a1--outcome-led-receptionist-crm) (Tier 3). It records what was released and observed; product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md) and current state in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
+Release record for [RCC-A1](../plans/completed/rcc-r1-receptionist-crm-completion.md#rcc-a1--outcome-led-receptionist-crm) (Tier 3). It records what was released and observed; product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md) and current state in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
 
 **State: MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.**
 
