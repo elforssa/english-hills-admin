@@ -76,7 +76,7 @@ Plan: [RCC-B1](../architecture/plans/completed/rcc-b1-responsive-opportunities.m
 
 ## Premium retirement — decisions recorded 2026-10-08 (plan proposed)
 
-Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r1, **PROPOSED**, not approved; nothing implemented). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
+Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r3, **PROPOSED**, not approved; nothing implemented). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
 
 1. **Formule:** stop showing "Formule" everywhere (receipt form, receipt list, print page, PDF, finance export, student form, list and detail, reports). "Standard" is not shown either: all Yearly students are the same.
 2. **Old receipts:** take the easier route code-wise. Historical receipts are not specially preserved as Premium; do not build compatibility rendering for them.
@@ -85,7 +85,7 @@ Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revisio
 
 Owner instruction on the PR #118 review (plan revision PR-r2, carried unchanged into PR-r3): new receipts get a description built from session type and school year (so instalments on pre-113 charges never carry the plan word), **and** a separately approved, counted, rehearsed data step removes the plan word from open, non-voided Yearly charge text (issued receipts untouched). Both are part of the proposed design.
 
-Open questions **Q1–Q6** (Q1: stored text on issued receipts and closed charges, with display-time handling reserved to the owner; Q2: `plan_type` column fate; Q3: two-phase removal; Q4: where the student data step runs; Q5: report removal; Q6: notification history) are listed in the plan and are **PLANNED / NOT APPROVED**. Implementation does not start until Q1 is answered and the owner records the plan approval there.
+Open questions **Q1–Q6** (Q1: stored text on issued receipts and settled or voided charges, with display-time handling reserved to the owner; Q2: `plan_type` column fate; Q3: two-phase removal; Q4: where the student data step runs; Q5: report removal; Q6: notification history) are listed in the plan and are **PLANNED / NOT APPROVED**. Implementation does not start until Q1 is answered and the owner records the plan approval there.
 
 ## Deferred backlog after RCC-r1
 
