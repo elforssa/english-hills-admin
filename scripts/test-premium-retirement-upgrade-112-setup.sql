@@ -24,9 +24,11 @@ update public.profiles set role='director',full_name='Synthetic Upgrade Director
 
 insert into public.students(id,full_name,status,session_type)
 select ('b1130000-0000-0000-0000-0000000000a'||n)::uuid, 'Synthetic upgrade learner '||n, 'Prospect', 'Yearly'
-from generate_series(1,8) n;
+from generate_series(1,9) n;
 
 -- Case payloads (a)-(e) of the plan's lost-response retry test, plus fixtures.
+-- The 112-era client sent plan_type 'Standard' on every new request, including
+-- non-Yearly ones (d) and (o); 096 left it out of their fingerprint.
 insert into rehearsal113.fx values
  ('payload_a', jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a1','session_type','Yearly','school_year','2026/2027',
    'plan_type','Standard','gross_amount',2000,'payment_amount',500,'payment_date','2026-09-15','payment_method','Espèces',
@@ -38,15 +40,18 @@ insert into rehearsal113.fx values
    'plan_type','Standard','gross_amount',1500,'payment_amount',0,'payment_date','2026-09-15','payment_method','Espèces',
    'idempotency_key','b1130000-0000-0000-0000-0000000000c3')),
  ('payload_d', jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a4','session_type','Adults','school_year','2026/2027',
-   'level','Beginning 1','gross_amount',600,'payment_amount',100,'payment_date','2026-09-15','payment_method','Espèces',
-   'idempotency_key','b1130000-0000-0000-0000-0000000000c4'));
+   'plan_type','Standard','level','Beginning 1','gross_amount',600,'payment_amount',100,'payment_date','2026-09-15','payment_method','Espèces',
+   'idempotency_key','b1130000-0000-0000-0000-0000000000c4')),
+ ('payload_o', jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a9','session_type','Other','school_year','2026/2027',
+   'service_detail','Atelier synthétique','plan_type','Standard','gross_amount',50,'payment_amount',50,'payment_date','2026-09-15',
+   'payment_method','Espèces','idempotency_key','b1130000-0000-0000-0000-0000000000ca'));
 
 select set_config('request.jwt.claim.sub','b1130000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 set local role authenticated;
 
 insert into rehearsal113.fx select 'result_'||right(k,1), public.create_charge_payment(v)
-from rehearsal113.fx where k in ('payload_a','payload_b','payload_c','payload_d') order by k;
+from rehearsal113.fx where k in ('payload_a','payload_b','payload_c','payload_d','payload_o') order by k;
 
 -- (e) an instalment on an existing charge.
 insert into rehearsal113.fx values ('payload_e', jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a4',

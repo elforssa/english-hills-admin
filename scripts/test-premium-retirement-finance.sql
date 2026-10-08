@@ -130,6 +130,24 @@ do $$ begin
  end if;
 end $$;
 
+-- Q7 option A: a non-Yearly request carrying a plan value (as the 112-era client
+-- sent on every new request) keeps migration 112's fingerprint, without the plan.
+reset role;
+do $$ declare v jsonb; begin
+ for v in select payload from r where k in ('adults','other') loop
+  if (select request_fingerprint from public.financial_requests where idempotency_key=(v->>'idempotency_key')::uuid)
+    <> encode(extensions.digest(jsonb_strip_nulls(jsonb_build_object(
+         'student_id',v->>'student_id','update_contacts',false,'session_type',v->>'session_type','school_year','2026/2027',
+         'service_detail',case when v->>'session_type'='Other' then v->>'service_detail' end,'level',v->>'level',
+         'gross_amount',(v->>'gross_amount')::numeric(12,2),'discount_amount',0.00::numeric(12,2),
+         'payment_amount',(v->>'payment_amount')::numeric(12,2),'payment_date',current_date,'payment_method','Espèces',
+         'request_email',false))::text,'sha256'),'hex') then
+   raise exception 'Fingerprint of a non-Yearly % request differs from migration 112', v->>'session_type';
+  end if;
+ end loop;
+end $$;
+set local role authenticated;
+
 -- Instalments on pre-113 shapes: dated, undated, and a legacy balance.
 insert into r values
  ('dated',   '{"student_id":"b1131000-0000-0000-0000-0000000000a4","charge_id":"b1131000-0000-0000-0000-0000000000b1"}', null),
@@ -157,7 +175,7 @@ do $$ declare v_dated public.receipts; v_undated public.receipts; v_legacy publi
             where (to_jsonb(c) - 'enrollment_id' - 'updated_at') is distinct from (p.row - 'enrollment_id' - 'updated_at')) then
   raise exception 'A payment changed a pre-113 charge';
  end if;
- -- Numbering stays consecutive.
+ -- Receipt numbers are distinct (consecutive numbering and the unchanged counter are checked in the upgrade script).
  if (select count(distinct receipt_number) from public.receipts where id in (select (result->>'receipt_id')::uuid from r where result->>'receipt_id' is not null))
     <> (select count(*) from r where result->>'receipt_id' is not null) then
   raise exception 'Duplicate receipt numbers';

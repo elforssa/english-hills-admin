@@ -38,7 +38,7 @@ do $$
 declare v_case text; v_result jsonb; v_before jsonb := pg_temp.counts(); v_original jsonb;
 begin
  if v_before <> pg_temp.fx('setup_counts') then raise exception 'Counts changed across the upgrade: %', v_before; end if;
- foreach v_case in array array['a','b','c','d','e'] loop
+ foreach v_case in array array['a','b','c','d','e','o'] loop
   execute 'set local role authenticated';
   v_result := public.create_charge_payment(pg_temp.fx('payload_'||v_case));
   execute 'reset role';

@@ -89,7 +89,7 @@ reset role;
 do $$ begin
  if exists(select 1 from d5a_after where k <> 'instalment' and ((result->>'replayed')::boolean is not true
      or result->>'charge_id' is distinct from original->>'charge_id' or result->>'receipt_id' is distinct from original->>'receipt_id'))
-  or (select count(*) from d5a_after where k <> 'instalment') <> 5 then
+  or (select count(*) from d5a_after where k <> 'instalment') <> 6 then
   raise exception 'A 112 request no longer replays after D5a';
  end if;
  if (select service_description||'|'||coalesce(plan_type,'NULL') from public.receipts
