@@ -145,7 +145,15 @@ try {
  alter table public.crm_submissions enable trigger crm_submission_immutable;commit;`);
  await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByTestId('work-row').first().waitFor();assert.match(await page.getByTestId('work-row').first().innerText(),/Urgence synthétique/);await page.screenshot({path:join(tmpdir(), 'hills-phase4-today.png'),fullPage:true});await page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect',exact:true}).click();await page.waitForURL(url=>url.searchParams.get('lead')===overdue);
  await page.goto(app+'/crm/leads?view=attention&layout=list');await page.getByTestId('opportunity-row').filter({hasText:'Sans action synthétique'}).waitFor();await page.getByTestId('opportunity-row').filter({hasText:'Relance synthétique'}).waitFor();
- await open(lead);await page.screenshot({path:join(tmpdir(), 'hills-phase4-detail.png'),fullPage:false});await page.getByText('Toutes les réponses aux formulaires',{exact:true}).click();await page.getByText('Mercredi · Samedi',{exact:true}).waitFor();await page.getByText('Oui',{exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE-SENTINEL|campaign_id/);
+ await open(lead);await page.screenshot({path:join(tmpdir(), 'hills-phase4-detail.png'),fullPage:false});
+ // RCC-B1 D1: the Demande summary legitimately repeats up to three answers, so assert the
+ // expanded full-answer projection itself: the <details> opened by its own summary.
+ const fullAnswers=page.getByRole('dialog').locator('details',{has:page.getByText('Toutes les réponses aux formulaires',{exact:true})});
+ await fullAnswers.locator('summary').click();assert.equal(await fullAnswers.evaluate(el=>el.open),true);
+ await fullAnswers.getByText('Mercredi · Samedi',{exact:true}).waitFor();await fullAnswers.getByText('Oui',{exact:true}).waitFor();
+ const fullAnswer=label=>fullAnswers.getByText(label,{exact:true}).locator('xpath=following-sibling::dd[1]');
+ assert.equal(await fullAnswer('Jours souhaités').innerText(),'Mercredi · Samedi');assert.equal(await fullAnswer('Disponible').innerText(),'Oui');
+ assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE-SENTINEL|campaign_id/);
  console.log('PASS Today overdue ordering, missing/stale indicators, Today drawer and safe scalar/array/boolean form answers');
  // Search + mobile screenshot; no technical fields leak in UI or read responses.
  await page.goto(app+'/crm/leads?layout=board');await page.getByLabel('Rechercher un prospect').fill('0612345678');await page.getByTestId('opportunity-card').first().waitFor();assert.ok(await page.getByTestId('opportunity-card').count()>0);
