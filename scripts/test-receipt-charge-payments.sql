@@ -18,8 +18,8 @@ update public.profiles set role='student' where id='10000000-0000-0000-0000-0000
 update public.profiles set role='admin' where id='10000000-0000-0000-0000-000000000005';
 delete from public.profiles where id='10000000-0000-0000-0000-000000000004';
 
-insert into public.students(id,full_name,telephone,email,parent_email,status,session_type,plan_type,premium_start_date)
-values ('20000000-0000-0000-0000-000000000001','Synthetic Premium','0600000000','student@example.test','parent@example.test','Enrolled','Yearly','Premium',current_date-30);
+insert into public.students(id,full_name,telephone,email,parent_email,status,session_type)
+values ('20000000-0000-0000-0000-000000000001','Synthetic Yearly','0600000000','student@example.test','parent@example.test','Enrolled','Yearly');
 insert into public.students(id,full_name,telephone,status)
 values ('20000000-0000-0000-0000-000000000003','Second Synthetic','0611111111','Prospect');
 update public.profiles set role='parent',linked_student_id='20000000-0000-0000-0000-000000000001' where id='10000000-0000-0000-0000-000000000002';
@@ -125,7 +125,10 @@ do $$ declare c record; begin
   select * into c from public.charge_balances where id = (select (result->>'charge_id')::uuid from test_results where name='first');
   if c.paid_amount <> 3000 or c.balance <> 0 or c.settlement_status <> 'Soldé' then raise exception 'Installment totals failed: %',row_to_json(c); end if;
   if (select school_year from public.charge_balances where id=c.id) is distinct from '2026/2027' then raise exception 'Balance view lost school year'; end if;
-  if c.school_year <> '2026/2027' or c.service_description <> 'Yearly · Premium · 2026/2027' then raise exception 'Structured school year/service failed'; end if;
+  -- Migration 113: a stale payload plan value is ignored; no formule is stored or shown.
+  if c.school_year <> '2026/2027' or c.service_description <> 'Yearly · 2026/2027' then raise exception 'Structured school year/service failed'; end if;
+  if (select plan_type from public.charges where id=c.id) is distinct from 'Standard' then raise exception 'Yearly charge did not get the fixed server plan value'; end if;
+  if exists(select 1 from public.receipts where charge_id=c.id and (plan_type is not null or service_description <> 'Yearly · 2026/2027')) then raise exception 'Receipt stored a formule'; end if;
   if (select count(*) from public.receipts where charge_id=c.id) <> 2 then raise exception 'Expected exactly two receipts'; end if;
   if exists(select 1 from public.receipts where charge_id=c.id and school_year_snapshot <> '2026/2027') then raise exception 'Receipt school-year snapshot failed'; end if;
   if (select count(*) from public.financial_events where charge_id=c.id and event_type='charge_created') <> 1 then raise exception 'Charge audit event missing/duplicated'; end if;
@@ -160,17 +163,17 @@ do $$ declare c record; begin
   if (select result->>'receipt_id' from test_results where name='zero') is not null then raise exception 'Zero payment issued a receipt'; end if;
 end $$;
 
--- A missing Yearly formula must fail closed (SQL NULL is not a valid plan).
-do $$ begin
-  begin
-    perform public.create_charge_payment(jsonb_build_object(
-      'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly',
-      'school_year','2026/2027','gross_amount','10','payment_amount','1',
-      'payment_method','Espèces','idempotency_key',gen_random_uuid()));
-    raise exception 'Missing Yearly formula accepted';
-  exception when others then
-    if sqlerrm <> 'A Yearly charge requires Standard or Premium.' then raise; end if;
-  end;
+-- Migration 113: a Yearly charge needs no formule; the server stores the fixed value.
+do $$ declare r jsonb; begin
+  r := public.create_charge_payment(jsonb_build_object(
+    'student_id','20000000-0000-0000-0000-000000000001','session_type','Yearly',
+    'school_year','2026/2027','gross_amount','10','payment_amount','1',
+    'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+  if (select plan_type from public.charges where id=(r->>'charge_id')::uuid) is distinct from 'Standard'
+    or (select service_description from public.charges where id=(r->>'charge_id')::uuid) <> 'Yearly · 2026/2027'
+    or (select plan_type from public.receipts where id=(r->>'receipt_id')::uuid) is not null then
+    raise exception 'Yearly charge without a formule was not stored as the fixed value';
+  end if;
 end $$;
 
 -- Unrequested email inputs are ignored both in the fingerprint and snapshot.
@@ -184,18 +187,24 @@ do $$ declare k uuid := gen_random_uuid(); first_result jsonb; retry_result json
   if (select email from public.receipts where id=(first_result->>'receipt_id')::uuid) is distinct from 'parent@example.test' then raise exception 'Unrequested recipient affected snapshot'; end if;
 end $$;
 
--- Invalid/excess/Premium misuse fail atomically.
+-- Invalid/excess input fails atomically; a stale non-Yearly plan value is ignored.
 do $$ begin
   begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','charge_id',(select result->>'charge_id' from test_results where name='decimal'),'payment_amount','60.01','payment_date',current_date,'payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000005')); raise exception 'overpayment accepted'; exception when others then if sqlerrm='overpayment accepted' then raise; end if; end;
-  begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027','plan_type','Premium','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000006')); raise exception 'non-Yearly Premium accepted'; exception when others then if sqlerrm='non-Yearly Premium accepted' then raise; end if; end;
+  declare r jsonb; begin
+    r := public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027','plan_type','Premium','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000006'));
+    if (select plan_type is not null or service_description <> 'Adults · 2026/2027' from public.charges where id=(r->>'charge_id')::uuid)
+      or (select plan_type is not null or service_description <> 'Adults · 2026/2027' from public.receipts where id=(r->>'receipt_id')::uuid) then
+      raise exception 'Stale non-Yearly plan value was stored';
+    end if;
+  end;
   begin perform public.create_charge_payment(jsonb_build_object('student_name','Should Roll Back','session_type','Other','school_year','2026/2027','service_detail','x','gross_amount','10','payment_amount','-1','payment_method','Espèces','idempotency_key','30000000-0000-0000-0000-000000000007')); raise exception 'negative accepted'; exception when others then if sqlerrm='negative accepted' then raise; end if; end;
   begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Other','school_year','2026/2027','gross_amount','10','payment_amount','1','payment_method','Espèces','idempotency_key',gen_random_uuid())); raise exception 'Other without description accepted'; exception when others then if sqlerrm='Other without description accepted' then raise; end if; end;
   begin perform public.create_charge_payment(jsonb_build_object('student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027','gross_amount','10','payment_amount','1','payment_method','Espèces','request_email',true,'idempotency_key',gen_random_uuid())); raise exception 'Email request without recipient accepted'; exception when others then if sqlerrm='Email request without recipient accepted' then raise; end if; end;
   if exists(select 1 from public.students where full_name='Should Roll Back') then raise exception 'Failed transaction left a student'; end if;
 end $$;
 
--- Financial writes never alter academic identity or Premium entitlement.
-do $$ declare s record; begin select * into s from public.students where id='20000000-0000-0000-0000-000000000001'; if s.session_type<>'Yearly' or s.plan_type<>'Premium' or s.premium_start_date is null then raise exception 'Academic Premium identity changed'; end if; end $$;
+-- Financial writes never alter academic identity.
+do $$ declare s record; begin select * into s from public.students where id='20000000-0000-0000-0000-000000000001'; if s.session_type<>'Yearly' or s.plan_type<>'Standard' then raise exception 'Academic identity changed'; end if; end $$;
 
 -- A migrated charge preserves its historical program, unknown audit fields,
 -- and accepts a later balance payment without violating receipt constraints.
@@ -205,7 +214,7 @@ insert into public.receipts(id,student_id,date,nom_prenom,session_type,service_d
   gross_amount_snapshot,discount_amount_snapshot,net_amount_snapshot,
   paid_before_snapshot,balance_after_snapshot,email_delivery_status)
 values('60000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',
-  current_date-100,'Synthetic Premium','Adults','Module historique',100,40,'Espèces',
+  current_date-100,'Synthetic Yearly','Adults','Module historique',100,40,'Espèces',
   'Acompte versé',true,null,100,0,100,0,60,'unknown');
 insert into public.charges(id,student_id,session_type,service_description,gross_amount,
   discount_amount,created_by,legacy,legacy_receipt_id)

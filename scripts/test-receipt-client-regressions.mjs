@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
-import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
 import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
@@ -15,12 +15,24 @@ assert.equal(generated, 1, 'an uncertain browser retry must reuse its request ke
 
 assert.equal(SCHOOL_YEAR_OPTIONS.length, 3);
 assert(SCHOOL_YEAR_OPTIONS.includes(DEFAULT_SCHOOL_YEAR));
-assert.equal(buildServiceDescription({ sessionType: 'Yearly', planType: 'Premium', schoolYear: '2026/2027' }), 'Yearly · Premium · 2026/2027');
-assert.equal(buildServiceDescription({ sessionType: 'Adults', planType: 'Premium', schoolYear: '2026/2027' }), 'Adults · 2026/2027');
+// Formule retirement: the generated text is session and school year only; a stale plan argument is ignored.
+assert.equal(buildServiceDescription({ sessionType: 'Yearly', schoolYear: '2026/2027' }), 'Yearly · 2026/2027');
+assert.equal(buildServiceDescription({ sessionType: 'Yearly', planType: 'Standard', schoolYear: '2026/2027' }), 'Yearly · 2026/2027');
+assert.equal(buildServiceDescription({ sessionType: 'Adults', schoolYear: '2026/2027' }), 'Adults · 2026/2027');
 assert.equal(buildServiceDescription({ sessionType: 'Other', schoolYear: '2026/2027', serviceDetail: 'Examen Cambridge' }), 'Autre · Examen Cambridge · 2026/2027');
 assert.equal(receiptSchoolYear({ school_year_snapshot: '2026/2027' }), '2026/2027');
 assert.equal(receiptSchoolYear({ service_description: 'Legacy 2024 text only' }), '', 'historical text must not be parsed for a year');
-assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Yearly · Standard · 2026/2027');
+assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: 'Standard', school_year_snapshot: '2026/2027' }), 'Yearly · 2026/2027');
+assert.equal(receiptServiceSummary({ session_type: 'Yearly', plan_type: null, school_year_snapshot: '2026/2027' }), 'Yearly · 2026/2027');
+
+// Owner decision Q7: every idempotency conflict shows the receptionist-facing French wording.
+assert.equal(PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, "Ce paiement a peut-être déjà été enregistré. Ne le saisissez pas une deuxième fois : ouvrez la liste des reçus de l'élève et vérifiez d'abord.");
+for (const message of ['Idempotency key conflict: request contents changed.', 'Idempotency key conflict: this key belongs to another actor.',
+  'Idempotency key conflict: selected enrollment changed.']) {
+  assert.equal(paymentErrorMessage({ message }), PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE);
+}
+assert.equal(paymentErrorMessage({ message: 'Payment exceeds the remaining balance of 10.00 MAD.' }), 'Payment exceeds the remaining balance of 10.00 MAD.');
+assert.equal(paymentErrorMessage({}), 'Impossible d’enregistrer le paiement.');
 
 const yearlyStudentInAdults = { session_type: 'Yearly', niveau_cefr: 'Child 1' };
 const adultEnrollment = { session_type: 'Adults', level: 'Beginning 1' };
@@ -100,7 +112,7 @@ const refreshed = coordinator.startChargeLoad('student-a');
 assert.deepEqual(coordinator.resolveChargeLoad(refreshed, [intended, alternate]), { status: 'ready' });
 assert.deepEqual(emptyChargeTerms(), {
   charge_id: '', session_type: '', school_year: DEFAULT_SCHOOL_YEAR, service_detail: '',
-  service_description: '', plan_type: 'Standard',
+  service_description: '',
   level: '', gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
 });
 
@@ -171,7 +183,6 @@ assert.match(schoolYearMigration, /case when v_request_email then 'pending' else
 assert.match(schoolYearMigration, /new\.email_delivery_status <> 'pending'/);
 
 const receiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
-assert.match(receiptPage, /Idempotency key conflict/);
-assert.match(receiptPage, /éviter un double paiement/);
+assert.match(receiptPage, /toast\.error\(paymentErrorMessage\(error\)\)/);
 
 console.log('receipt client/email regression tests passed');

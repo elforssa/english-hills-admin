@@ -136,6 +136,14 @@ jobs:
           supabase db reset --local --version 111 --no-seed
           node scripts/test-crm-rcc-a2-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Premium retirement stateful 112 to 113 upgrade and open-charge text rehearsal
+        run: |
+          supabase db reset --local --version 112 --no-seed
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-premium-retirement-upgrade-112-setup.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-premium-retirement-upgrade-113-current.sql
+          bash scripts/test-premium-retirement-open-charges.sh
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -174,6 +182,7 @@ jobs:
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-paid-enrollment.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-premium-retirement-finance.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-student-placement.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-enrollment-workflow.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-batch1.sql

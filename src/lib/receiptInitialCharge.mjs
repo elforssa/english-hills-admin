@@ -50,7 +50,7 @@ export function createInitialChargeCoordinator(initialStudentId = '', initialCha
 export function emptyChargeTerms() {
   return {
     charge_id: '', session_type: '', school_year: DEFAULT_SCHOOL_YEAR, service_detail: '',
-    service_description: '', plan_type: 'Standard',
+    service_description: '',
     level: '', gross_amount: '', discount_amount: '', due_date: '', payment_amount: '',
   };
 }

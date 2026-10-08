@@ -82,7 +82,6 @@ export default function Finance() {
         Session: r.session_type || '',
         'Année scolaire': r.school_year_snapshot || '',
         Service: r.service_description || '',
-        Formule: r.session_type === 'Yearly' ? (r.plan_type || '') : '',
         Niveau: r.niveau || '',
         'Prix brut': amounts.gross,
         Remise: amounts.discount,

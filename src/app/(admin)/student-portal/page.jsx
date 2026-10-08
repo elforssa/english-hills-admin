@@ -10,7 +10,6 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
-import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
 import { getBrowserClient } from '@/lib/supabase';
 import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
@@ -35,7 +34,6 @@ const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
-  premium_homework: 'Devoir Premium',
 };
 
 const PROJECT_TYPES = ['Oral Presentation', 'Written Essay', 'Audio Recording', 'Video Project', 'PDF Document', 'Other'];
@@ -54,9 +52,6 @@ export default function StudentPortal() {
   const [charges, setCharges] = useState([]);
   const [portfolios, setPortfolios] = useState([]);
   const [learning, setLearning] = useState([]);
-  const [premiumSessions, setPremiumSessions] = useState([]);
-  const [premiumMemberships, setPremiumMemberships] = useState([]);
-  const [premiumHomework, setPremiumHomework] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -82,19 +77,15 @@ export default function StudentPortal() {
       const me = matches[0];
       setStudent(me || null);
       if (me) {
-        const [att, ass, la, premium, memberships, homework, receiptRows, chargeResult] = await Promise.all([
+        const [att, ass, la, receiptRows, chargeResult] = await Promise.all([
           entities.Attendance.filter({ student_id: me.id }, '-session_date'),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
-          entities.PremiumSession.listAll('-scheduled_date'),
-          entities.PremiumMembership.filterAll({ student_id: me.id }, '-created_at'),
-          entities.PremiumHomework.filterAll({ student_id: me.id }, '-created_date'),
           entities.Receipt.filter({ student_id: me.id }, '-date'),
           getBrowserClient().from('charge_balances').select('*').eq('student_id', me.id),
         ]);
         if (chargeResult.error) throw chargeResult.error;
         setAttendance(att); setAssessments(ass); setLearning(la);
-        setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
         setReceipts(receiptRows); setCharges(chargeResult.data || []);
         loadPortfolios(me.id);
       }
@@ -247,16 +238,6 @@ export default function StudentPortal() {
 
       {tab === 'progress' && (
         <div className="space-y-4">
-          <PremiumHomeworkSubmitter
-            student={student}
-            sessions={premiumSessions}
-            memberships={premiumMemberships}
-            submissions={premiumHomework}
-            onChanged={(saved) => setPremiumHomework((current) => {
-              const exists = current.some((item) => item.id === saved.id);
-              return exists ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current];
-            })}
-          />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-card border border-border rounded-lg p-4 text-center">
               <p className="text-2xl font-bold" style={{ color: '#059669' }}>{rate}%</p>
@@ -387,7 +368,7 @@ export default function StudentPortal() {
                 <p className="text-sm font-semibold">{n.subject}</p>
                 <span className="text-xs text-muted-foreground flex-shrink-0">{(n.created_date || '').slice(0, 10)}</span>
               </div>
-              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || n.type}</p>
+              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || NOTIF_TYPE_LABELS.general}</p>
               <p className="text-sm text-foreground/90 whitespace-pre-wrap">{n.message}</p>
             </div>
           ))}

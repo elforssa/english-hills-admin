@@ -118,7 +118,7 @@ try {
   assert.deepEqual(await profileResponse.json(), [{ id: user, role: 'receptionist' }]);
   for (const button of await page.locator('nav button').all()) { if (await button.getAttribute('aria-expanded') !== 'true') await button.click(); }
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
-  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/premium-sessions','/assessments','/placement-tests','/placement-tests?view=calendar','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
+  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/assessments','/placement-tests','/placement-tests?view=calendar','/enrollments','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
   for (const path of ['/finance','/reports','/payroll','/teachers/new','/integrations','/settings/users']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS stored receptionist role, real login, forged metadata ignored and permitted sidebar');
 
@@ -150,7 +150,7 @@ try {
   await page.getByText('Plus de filtres',{exact:false}).click();
   for (const label of ['Filtrer par statut','Filtrer par paiement','Filtrer par catégorie',
     'Filtrer par affectation de groupe','Filtrer par session','Filtrer par niveau',
-    'Filtrer par complétude','Filtrer par source','Filtrer par formule']) {
+    'Filtrer par complétude','Filtrer par source']) {
     await page.getByRole('combobox', { name: label }).waitFor();
   }
   assert.equal(await page.getByRole('button', { name: 'CSV', exact: true }).count(), 0);
@@ -340,7 +340,7 @@ try {
   await page.getByText('Compte mis à jour', { exact: true }).waitFor();
   assert.equal(sql(`select full_name from public.profiles where id='${user}'`), 'Phase 1 self-service');
   for (const path of ['/students/new',`/students/${student}/edit`,'/groups',`/groups/${group}`,
-    '/timetable','/attendance','/premium-sessions','/assessments','/receipts','/receipts/new',
+    '/timetable','/attendance','/assessments','/receipts','/receipts/new',
     `/receipts/${student}/print`,'/teachers',`/teachers/${student}`,`/teachers/${student}/edit`]) {
     const allowed = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(allowed.status(), 200, `Server access for ${path}`);

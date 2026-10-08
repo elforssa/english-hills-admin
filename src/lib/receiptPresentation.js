@@ -9,12 +9,12 @@ export const SCHOOL_YEAR_OPTIONS = [-1, 0, 1].map(offset => {
 export const DEFAULT_SCHOOL_YEAR = SCHOOL_YEAR_OPTIONS[1];
 export const RECEIPT_PAPER_FORMAT = 'a5';
 
-export function buildServiceDescription({ sessionType, planType, schoolYear, serviceDetail }) {
+export function buildServiceDescription({ sessionType, schoolYear, serviceDetail }) {
   const session = String(sessionType || '').trim();
   const year = String(schoolYear || '').trim();
   if (!session || !year) return '';
   if (session === 'Other') return ['Autre', String(serviceDetail || '').trim(), year].filter(Boolean).join(' · ');
-  return [session, session === 'Yearly' ? (planType || 'Standard') : '', year].filter(Boolean).join(' · ');
+  return [session, year].join(' · ');
 }
 
 export function receiptSchoolYear(receipt) {
@@ -23,10 +23,18 @@ export function receiptSchoolYear(receipt) {
 
 export function receiptServiceSummary(receipt) {
   const parts = [receipt?.session_type || 'Historique'];
-  if (receipt?.session_type === 'Yearly' && receipt?.plan_type) parts.push(receipt.plan_type);
   const year = receiptSchoolYear(receipt);
   if (year) parts.push(year);
   return parts.join(' · ');
+}
+
+// Any idempotency conflict (owner decision Q7) gets one receptionist-facing message.
+export const PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE = "Ce paiement a peut-être déjà été enregistré. Ne le saisissez pas une deuxième fois : ouvrez la liste des reçus de l'élève et vérifiez d'abord.";
+
+export function paymentErrorMessage(error) {
+  const message = String(error?.message || '');
+  if (message.startsWith('Idempotency key conflict')) return PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE;
+  return message || 'Impossible d’enregistrer le paiement.';
 }
 
 export function receiptServiceDescription(receipt) {

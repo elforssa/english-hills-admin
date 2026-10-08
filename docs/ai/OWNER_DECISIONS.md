@@ -76,7 +76,7 @@ Plan: [RCC-B1](../architecture/plans/completed/rcc-b1-responsive-opportunities.m
 
 ## Premium retirement — decisions recorded 2026-10-08 (plan proposed)
 
-Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r4, **APPROVED FOR RELEASE A IMPLEMENTATION** on 2026-10-08; nothing implemented). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
+Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r4, **APPROVED FOR RELEASE A IMPLEMENTATION** on 2026-10-08; Release A implemented on a branch and awaiting independent review, not merged or deployed; see the [implementation record](../architecture/plans/premium-retirement.md#release-a-implementation-record)). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
 
 1. **Formule:** stop showing "Formule" everywhere (receipt form, receipt list, print page, PDF, finance export, student form, list and detail, reports). "Standard" is not shown either: all Yearly students are the same.
 2. **Old receipts:** take the easier route code-wise. Historical receipts are not specially preserved as Premium; do not build compatibility rendering for them.

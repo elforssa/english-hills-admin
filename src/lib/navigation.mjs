@@ -2,7 +2,7 @@ const ORIGIN = 'https://english-hills.local';
 const RETURN_SCREENS = new Set([
   '/crm/leads', '/crm/today', '/students', '/students-directory', '/teachers', '/receipts', '/dashboard', '/finance',
   '/attendance', '/assessments', '/payroll', '/dismissal', '/enrollments',
-  '/timetable', '/groups', '/premium-sessions', '/learning-assessments',
+  '/timetable', '/groups', '/learning-assessments',
   '/leave-requests', '/placement-tests', '/certificates', '/portfolios', '/activity-log',
 ]);
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';

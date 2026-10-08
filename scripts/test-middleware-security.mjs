@@ -23,7 +23,7 @@ const app = 'http://127.0.0.1:3241';
 const key = 'middleware-local-test';
 let checks = 0;
 const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director', 'receptionist'];
-const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/premium-sessions', '/dashboard', '/', '/settings'];
+const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings'];
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';

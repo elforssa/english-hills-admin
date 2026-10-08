@@ -120,11 +120,6 @@ export default function ReportsPage() {
   const { data: teachers   = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError } = useEntityAll('Group', 'name');
   const { data: enrollments = [], isLoading: enrollmentsLoading, isError: enrollmentsError } = useEntityAll('Enrollment', '-created_date');
-  const { data: premiumSessions = [], isLoading: premiumLoading, isError: premiumError } = useEntityAll('PremiumSession', '-scheduled_date');
-  const { data: premiumHomework = [], isLoading: homeworkLoading, isError: homeworkError } = useEntityAll('PremiumHomework', '-submitted_at');
-  const { data: premiumGroups = [], isLoading: premiumGroupsLoading, isError: premiumGroupsError } = useEntityAll('PremiumGroup', 'name');
-  const { data: premiumMemberships = [], isLoading: premiumMembershipsLoading, isError: premiumMembershipsError } = useEntityAll('PremiumMembership', '-created_at');
-  const { data: premiumAttendance = [], isLoading: premiumAttendanceLoading, isError: premiumAttendanceError } = useEntityAll('PremiumAttendance', '-created_at');
 
   useEffect(() => {
     let active = true;
@@ -252,11 +247,9 @@ export default function ReportsPage() {
   }, [receipts, payroll, currentYear]);
 
   const loading = attLoading || recLoading || payLoading || financeLoading;
-  const academicLoading = studentsLoading || teachersLoading || groupsLoading || enrollmentsLoading || recLoading || premiumLoading || homeworkLoading
-    || premiumGroupsLoading || premiumMembershipsLoading || premiumAttendanceLoading;
+  const academicLoading = studentsLoading || teachersLoading || groupsLoading || enrollmentsLoading || recLoading;
   const dataError = attError || recError || payError || studentsError || teachersError || groupsError
-    || enrollmentsError || premiumError || homeworkError || premiumGroupsError
-    || premiumMembershipsError || premiumAttendanceError;
+    || enrollmentsError;
 
   if (dataError || financeError) return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto" role="alert">
@@ -324,11 +317,6 @@ export default function ReportsPage() {
           teachers={teachers}
           groups={groups}
           enrollments={enrollments}
-          premiumSessions={premiumSessions}
-          premiumHomework={premiumHomework}
-          premiumGroups={premiumGroups}
-          premiumMemberships={premiumMemberships}
-          premiumAttendance={premiumAttendance}
           loading={academicLoading}
         />
 

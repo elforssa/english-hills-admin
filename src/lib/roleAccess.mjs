@@ -48,7 +48,7 @@ const exact = new Map([
   ['/students', 'canManageStudents'], ['/students-directory', 'canManageStudents'],
   ['/students/new', 'canManageStudents'], ['/groups', 'canManageGroups'],
   ['/timetable', 'canManageAcademics'], ['/attendance', 'canRecordAttendance'],
-  ['/premium-sessions', 'canManageAcademics'], ['/assessments', 'canManageAcademics'],
+  ['/assessments', 'canManageAcademics'],
   ['/receipts', 'canManageFinanceOperations'], ['/receipts/new', 'canManageFinanceOperations'],
   ['/teachers', 'canManageTeacherOperations'], ['/settings', 'canManageOwnAccount'],
 ]);
