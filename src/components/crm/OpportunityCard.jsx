@@ -32,14 +32,16 @@ export default function OpportunityCard({ lead, onOpen, onAction, asOf, showStag
     lead.next_task && lead.next_placement && 'Test de niveau planifié'
   ].filter(Boolean);
   const meta = [lead.source_label || 'Origine à préciser', lead.program && programmeLabel(lead.program), lead.last_activity_at ? `Dernière activité ${dateLabel(lead.last_activity_at)}` : 'Aucune activité'].filter(Boolean);
-  return <article data-testid="opportunity-card" data-lead-id={lead.id} data-stage={lead.status} draggable={active} onDragStart={e => { e.dataTransfer.setData('application/eh-opportunity', JSON.stringify({ id: lead.id, status: lead.status })); e.dataTransfer.effectAllowed = 'move'; }} className="min-w-0 rounded-lg border border-slate-200 bg-white p-2 text-sm">
-    <div className="flex items-start gap-1">
-      {/* One span child keeps parent and learner stacked even when the touch rule makes the button inline-flex. */}
-      <button onClick={() => onOpen(lead.id)} className="min-h-9 w-full min-w-0 flex-1 justify-start text-left focus-visible:outline-blue-600"><span className="block min-w-0 text-left"><span className="block break-words font-semibold text-slate-900">{lead.contact_name}</span><span className="block break-words operational-secondary">{lead.learner_name || 'Apprenant à préciser'}{lead.learner_age != null ? ` · ${lead.learner_age} ans` : ''}</span></span></button>
-      <OpportunityActions lead={lead} onAction={onAction} />
+  return <article data-testid="opportunity-card" data-lead-id={lead.id} data-stage={lead.status} draggable={active} onDragStart={e => { e.dataTransfer.setData('application/eh-opportunity', JSON.stringify({ id: lead.id, status: lead.status })); e.dataTransfer.effectAllowed = 'move'; }} className="min-w-0 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm">
+    <div className="relative">
+      {/* One span child keeps parent and learner stacked even when the touch rule makes the button inline-flex.
+          Only the name line reserves room for the overflow trigger (36px, 44px under touch);
+          the learner line uses the full width. */}
+      <button onClick={() => onOpen(lead.id)} className="min-h-9 w-full min-w-0 justify-start text-left focus-visible:outline-blue-600"><span className="block min-w-0 text-left"><span className="block break-words pr-[38px] font-semibold text-slate-900 max-lg:pr-12 [@media(pointer:coarse)]:pr-12">{lead.contact_name}</span><span className="block break-words operational-secondary">{lead.learner_name || 'Apprenant à préciser'}{lead.learner_age != null ? ` · ${lead.learner_age} ans` : ''}</span></span></button>
+      <div className="absolute right-0 top-0"><OpportunityActions lead={lead} onAction={onAction} /></div>
     </div>
     {showStage && <div className="mt-2"><LifecycleBadge status={lead.status}/></div>}
-    <p className={`mt-2 break-words text-xs ${late ? 'text-red-700' : 'text-slate-700'}`}>{late ? 'En retard · ' : ''}{lead.next_task ? `${taskTitle(lead.next_task)} · ${scheduledLabel(lead.next_task)}` : lead.next_placement ? `Test de niveau · ${scheduledLabel(lead.next_placement)}` : active ? 'Prochaine action à choisir' : 'Suivi clos'}{qualifiers.length > 0 && <span className="text-slate-600"> · {qualifiers.join(' · ')}</span>}</p>
+    <p className={`mt-1.5 break-words text-xs ${late ? 'text-red-700' : 'text-slate-700'}`}>{late ? 'En retard · ' : ''}{lead.next_task ? `${taskTitle(lead.next_task)} · ${scheduledLabel(lead.next_task)}` : lead.next_placement ? `Test de niveau · ${scheduledLabel(lead.next_placement)}` : active ? 'Prochaine action à choisir' : 'Suivi clos'}{qualifiers.length > 0 && <span className="text-slate-600"> · {qualifiers.join(' · ')}</span>}</p>
     {lead.closed_at && <p className="mt-1 text-xs">{LOST[lead.closure_reason] || NOT_QUALIFIED[lead.closure_reason]} · {dateLabel(lead.closed_at)}</p>}
     <p className="mt-1 break-words text-xs text-muted-foreground">{meta.join(' · ')}</p>
   </article>;

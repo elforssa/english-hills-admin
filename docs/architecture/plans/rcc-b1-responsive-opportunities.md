@@ -976,3 +976,13 @@ Constraints the owner restated with the approval, binding on implementation:
 - **Why local runs passed:** macOS WebKit already had the footer positioned when the test read it.
 
 The product code is unchanged. The B1 browser suite now measures overlay geometry after its open animations finish. It adds checks that the dialog's bottom padding is 0 and that footer-less views keep their spacing. It also fixes two Linux-only test races: the stage-chip wait now needs at least one card, and the drawer is opened with a real pointer click so a locator's scroll-into-view cannot move the board. The full B1 suite passes on Linux Chromium + WebKit and on macOS Chromium + WebKit.
+
+**CI correction (2026-10-08, card height).** Verify run 37711840967 for head `27949c1…` measured the ordinary board card at 166px in Linux WebKit at 1280. The npm audit failure in the same run belongs to a separate dependency PR. The cause is a font difference: CI's `sans-serif` resolves to DejaVu Sans, which is wider than the macOS system font.
+
+- **Before:** in the 178px card, the identity button shared its whole height with the 36px overflow trigger. The learner line ("Enfant synthétique", 124px) then had about 120px and wrapped.
+- **Fix:**
+  - the trigger is positioned at the card's top-right, and only the name line reserves its width (38px; 48px below `lg` or with a coarse pointer);
+  - the learner and later lines use the full width;
+  - card vertical padding is 6px and the next-action gap 6px.
+- **Unchanged:** all content and font sizes.
+- **Result:** Linux WebKit with DejaVu Sans at 1280 measures 142.5px (was 166). Chromium measures 126px at 1280 and 142px at 1024.
