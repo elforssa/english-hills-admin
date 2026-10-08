@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/test-script-portability.mjs && node scripts/test-local-feature-branch.mjs && node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-enrollment-workflow.mjs && npm run test:inspector-monitor && npm run test:css-toolchain && npm run test:ui-foundation",
+    "test": "node scripts/test-script-portability.mjs && node scripts/test-local-feature-branch.mjs && node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-premium-retirement-absence.mjs && node scripts/test-enrollment-workflow.mjs && npm run test:inspector-monitor && npm run test:css-toolchain && npm run test:ui-foundation",
     "test:crm-intake": "node scripts/test-crm-meta-reconciliation.mjs && node scripts/test-crm-meta-reconciliation-repair.mjs && node scripts/test-crm-phase8.mjs && node scripts/test-crm-phase9.mjs && node scripts/test-crm-intake-scheduler.mjs",
     "test:crm-reconciliation-repair-local": "node scripts/test-crm-meta-reconciliation-repair-local.mjs",
     "test:crm-lifecycle": "node scripts/test-crm-phase10.mjs && node scripts/test-crm-batch2.mjs && node scripts/test-crm-r4-advisory.mjs",

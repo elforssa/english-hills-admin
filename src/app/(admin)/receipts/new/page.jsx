@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { paymentErrorMessage } from '@/lib/receiptPresentation';
 
 export default function ReceiptNew() {
   const { role } = useAuth();
@@ -21,10 +22,7 @@ export default function ReceiptNew() {
     setSaving(true);
     const { data, error } = await getBrowserClient().rpc('create_charge_payment', { p_payload: payload });
     if (error) {
-      const idempotencyConflict = error.message?.includes('Idempotency key conflict');
-      toast.error(idempotencyConflict
-        ? 'Cette tentative ne correspond plus à la demande déjà enregistrée. Rechargez la page avant toute nouvelle saisie afin d’éviter un double paiement.'
-        : (error.message || 'Impossible d’enregistrer le paiement.'));
+      toast.error(paymentErrorMessage(error));
       setSaving(false);
       return;
     }

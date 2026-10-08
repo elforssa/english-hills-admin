@@ -15,9 +15,9 @@ where id::text like '96000000-%';
 insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
  values('96000000-0000-0000-0000-000000000010','Batch teacher','batch1-teacher@example.test',
  '0611111111','Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');
-insert into public.students(id,full_name,email,status,session_type,niveau_cefr,plan_type)
+insert into public.students(id,full_name,email,status,session_type,niveau_cefr)
  values('96000000-0000-0000-0000-000000000020','Batch learner','batch1-student@example.test',
- 'Enrolled','Yearly','Child 1','Premium');
+ 'Enrolled','Yearly','Child 1');
 insert into public.groups(id,name,session_type,niveau,teacher_id)
  values('96000000-0000-0000-0000-000000000030','Batch group','Yearly','Child 1',
  '96000000-0000-0000-0000-000000000010');
@@ -105,6 +105,23 @@ declare before_row jsonb; after_row jsonb; affected bigint; before_count bigint;
    raise exception 'Direct-write probe persisted a change: %',table_name; end if;
 end $$;
 
+-- Workshop tables remain until Release B; seed one readable row of each as the
+-- owner (the receptionist workshop commands are retired) for the deny probes.
+insert into public.students(id,full_name,status,session_type,niveau_cefr,plan_type,premium_start_date)
+ values('96000000-0000-0000-0000-000000000029','Workshop fixture learner','Enrolled','Yearly','Child 1','Premium',current_date);
+insert into public.premium_groups(id,name,teacher_id,weekday,start_time)
+ values('96000000-0000-0000-0000-000000000050','Batch workshop','96000000-0000-0000-0000-000000000010',6,'10:00');
+insert into public.premium_group_memberships(id,premium_group_id,student_id,start_date)
+ values('96000000-0000-0000-0000-000000000051','96000000-0000-0000-0000-000000000050',
+ '96000000-0000-0000-0000-000000000029',current_date);
+insert into public.premium_sessions(id,teacher_id,premium_group_id,scheduled_date,start_time)
+ values('96000000-0000-0000-0000-000000000052','96000000-0000-0000-0000-000000000010',
+ '96000000-0000-0000-0000-000000000050',
+ current_date + ((6-extract(isodow from current_date)::integer+7)%7),'10:00');
+insert into public.premium_attendance(id,premium_session_id,student_id,status)
+ values('96000000-0000-0000-0000-000000000053','96000000-0000-0000-0000-000000000052',
+ '96000000-0000-0000-0000-000000000029','Present');
+
 select set_config('request.jwt.claim.sub','96000000-0000-0000-0000-000000000003',true);
 select set_config('request.jwt.claims',
  '{"sub":"96000000-0000-0000-0000-000000000003","role":"authenticated","user_metadata":{"role":"director"}}',true);
@@ -138,7 +155,6 @@ select pg_temp.denied($q$select public.void_financial_charge(gen_random_uuid(),'
 select pg_temp.invalid($q$select public.save_receptionist_teacher_operations('96000000-0000-0000-0000-000000000010',now(),'{"iban":"changed"}')$q$);
 select pg_temp.invalid($q$select public.save_receptionist_student('96000000-0000-0000-0000-000000000020',now(),'{"email":"changed@example.test"}')$q$);
 select pg_temp.invalid($q$select public.save_receptionist_group('96000000-0000-0000-0000-000000000030',now(),'{"deleted_at":"2026-01-01"}')$q$);
-select pg_temp.invalid($q$select public.save_receptionist_premium_session(gen_random_uuid(),null,'{"teacher_id":"96000000-0000-0000-0000-000000000010"}')$q$);
 do $$ begin
  update public.students set full_name='forged' where id='96000000-0000-0000-0000-000000000020';
  if found then raise exception 'Direct student UPDATE allowed'; end if;
@@ -280,30 +296,6 @@ do $$ declare v_student uuid:='96000000-0000-0000-0000-000000000021';
    gen_random_uuid(),v_attendance));
 end $$;
 
--- Premium scheduling and roster commands retain the 051-054 entitlement guards.
-do $$ declare pg_id uuid:='96000000-0000-0000-0000-000000000050';
-  member_id uuid:='96000000-0000-0000-0000-000000000051';
-  session_id uuid:='96000000-0000-0000-0000-000000000052';
-  session_date date; version timestamptz; attendance_id uuid; begin
-  session_date:=current_date + ((6-extract(isodow from current_date)::integer+7)%7);
-  perform public.create_receptionist_premium_group(pg_id,'Batch Premium',
-    '96000000-0000-0000-0000-000000000010',6::smallint,'10:00',null,null);
-  perform public.save_receptionist_premium_membership(member_id,null,pg_id,
-    '96000000-0000-0000-0000-000000000020',current_date);
-  perform public.save_receptionist_premium_session(session_id,null,
-    jsonb_build_object('premium_group_id',pg_id,'scheduled_date',session_date));
-  attendance_id:=public.save_receptionist_premium_attendance(session_id,
-    '96000000-0000-0000-0000-000000000020','Present');
-  if not exists(select 1 from public.premium_attendance where id=attendance_id) then
-    raise exception 'Premium attendance unavailable'; end if;
-  select updated_at into version from public.premium_sessions where id=session_id;
-  perform public.save_receptionist_premium_session(session_id,version,'{"status":"Confirmed"}');
-  perform pg_temp.invalid(format('select public.save_receptionist_premium_session(%L,null,%L::jsonb)',
-    gen_random_uuid(),'{}'));
-  if exists(select 1 from public.premium_homework_submissions) then
-    raise exception 'Premium homework leaked'; end if;
-end $$;
-
 -- Payment engine remains the sole financial write path. Zero does not issue a receipt.
 do $$ declare result jsonb; v_student uuid:='96000000-0000-0000-0000-000000000020'; begin
  result:=public.create_charge_payment(jsonb_build_object('idempotency_key',gen_random_uuid(),
@@ -333,12 +325,10 @@ select pg_temp.denied($q$select public.create_charge_payment(jsonb_build_object(
 -- Readable operational tables remain non-writable except through bounded RPCs.
 -- Probe INSERT, UPDATE and DELETE as receptionist, and compare each readable
 -- fixture before/after so a silent RLS zero-row result is also verified.
-do $$ declare v_charge uuid; v_receipt uuid; v_premium_attendance uuid; begin
+do $$ declare v_charge uuid; v_receipt uuid; begin
  select id into v_charge from public.charges
    where student_id='96000000-0000-0000-0000-000000000020' limit 1;
  select id into v_receipt from public.receipts where email='newpayer@example.test' limit 1;
- select id into v_premium_attendance from public.premium_attendance
-   where premium_session_id='96000000-0000-0000-0000-000000000052' limit 1;
  perform pg_temp.no_direct_write('receipts',v_receipt);
  perform pg_temp.no_direct_write('charges',v_charge);
  perform pg_temp.no_direct_write('assessments','96000000-0000-0000-0000-000000000060');
@@ -346,7 +336,7 @@ do $$ declare v_charge uuid; v_receipt uuid; v_premium_attendance uuid; begin
  perform pg_temp.no_direct_write('premium_groups','96000000-0000-0000-0000-000000000050');
  perform pg_temp.no_direct_write('premium_group_memberships','96000000-0000-0000-0000-000000000051');
  perform pg_temp.no_direct_write('premium_sessions','96000000-0000-0000-0000-000000000052');
- perform pg_temp.no_direct_write('premium_attendance',v_premium_attendance);
+ perform pg_temp.no_direct_write('premium_attendance','96000000-0000-0000-0000-000000000053');
 end $$;
 
 -- Existing role scopes are unchanged; new school-wide mutations are reception-only.

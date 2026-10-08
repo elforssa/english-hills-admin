@@ -23,7 +23,7 @@ const app = 'http://127.0.0.1:3241';
 const key = 'middleware-local-test';
 let checks = 0;
 const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director', 'receptionist'];
-const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/premium-sessions', '/dashboard', '/', '/settings'];
+const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings'];
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
@@ -186,6 +186,18 @@ try {
       if (target) { assert.equal(new URL(r.headers.get('location'), app).pathname, target, role + ' ' + path); assert.ok(!(await r.text()).includes('self.__next_f')); }
       else await r.arrayBuffer();
       checks++;
+    }
+    {
+      // Premium retirement Release A: the retired workshop route has no page and no allowlist entry.
+      // Teachers and receptionists (who could reach it before) are sent home; admin/director get not-found.
+      const retired = '/premium-sessions';
+      const r = await fetch(app + retired, { headers: { Cookie }, redirect: 'manual' });
+      const target = expected(role, retired);
+      if (role === 'teacher') assert.equal(target, '/teacher-portal');
+      if (role === 'receptionist') assert.equal(target, '/crm/leads');
+      assert.equal(r.status, target ? 307 : 404, role + ' ' + retired);
+      if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target, role + ' ' + retired);
+      await r.arrayBuffer(); checks++;
     }
     for (const path of ['/dashboard', '/groups/00000000-0000-4000-8000-000000000001']) {
       for (const extras of [{ RSC: '1' }, { RSC: '1', 'Next-Router-Prefetch': '1', purpose: 'prefetch' }]) {

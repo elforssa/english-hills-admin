@@ -11,7 +11,6 @@ import { downloadReceiptPDF } from '@/lib/receiptPdf';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
-import PremiumHomeworkSubmitter from '@/components/premium/PremiumHomeworkSubmitter';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
@@ -34,7 +33,6 @@ const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
-  premium_homework: 'Devoir Premium',
 };
 
 export default function ParentPortal() {
@@ -49,9 +47,6 @@ export default function ParentPortal() {
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
   const [authorizedAdults, setAuthorizedAdults] = useState([]);
-  const [premiumSessions, setPremiumSessions] = useState([]);
-  const [premiumMemberships, setPremiumMemberships] = useState([]);
-  const [premiumHomework, setPremiumHomework] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -101,7 +96,6 @@ export default function ParentPortal() {
     let cancelled = false;
     setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]);
     setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
-    setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
     Promise.all([
       entities.Attendance.filter({ student_id: selectedStudent.id }, '-session_date'),
       entities.Assessment.filter({ student_id: selectedStudent.id }, '-created_date'),
@@ -109,25 +103,21 @@ export default function ParentPortal() {
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
-      entities.PremiumSession.listAll('-scheduled_date'),
-      entities.PremiumMembership.filterAll({ student_id: selectedStudent.id }, '-created_at'),
-      entities.PremiumHomework.filterAll({ student_id: selectedStudent.id }, '-created_date'),
       getBrowserClient().from('charge_balances').select('*').eq('student_id', selectedStudent.id),
     ])
-      .then(async ([att, ass, rec, port, la, adults, premium, memberships, homework, chargeResult]) => {
+      .then(async ([att, ass, rec, port, la, adults, chargeResult]) => {
         if (cancelled) return;
         if (chargeResult.error) throw chargeResult.error;
         setAttendance(att); setAssessments(ass);
         setReceipts(rec); setCharges(chargeResult.data || []);
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
-        setPremiumSessions(premium); setPremiumMemberships(memberships); setPremiumHomework(homework);
       })
       .catch((err) => {
         if (cancelled) return;
         // eslint-disable-next-line no-console
         console.error('[parent-portal] student detail load failed:', err);
         toast.error('Impossible de charger les données de l’apprenant.');
-        setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]); setPremiumSessions([]); setPremiumMemberships([]); setPremiumHomework([]);
+        setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]); setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
       });
     return () => { cancelled = true; };
   }, [selectedStudent]);
@@ -327,16 +317,6 @@ export default function ParentPortal() {
               </button>
             </div>
           </div>
-          <PremiumHomeworkSubmitter
-            student={selectedStudent}
-            sessions={premiumSessions}
-            memberships={premiumMemberships}
-            submissions={premiumHomework}
-            onChanged={(saved) => setPremiumHomework((current) => {
-              const exists = current.some((item) => item.id === saved.id);
-              return exists ? current.map((item) => item.id === saved.id ? saved : item) : [saved, ...current];
-            })}
-          />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Taux de présence', value: `${attendanceRate}%`, color: '#059669' },
@@ -522,7 +502,7 @@ export default function ParentPortal() {
                 <p className="text-sm font-semibold">{n.subject}</p>
                 <span className="text-xs text-muted-foreground flex-shrink-0">{(n.created_date || '').slice(0, 10)}</span>
               </div>
-              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || n.type}</p>
+              <p className="text-xs text-muted-foreground mb-1">{NOTIF_TYPE_LABELS[n.type] || NOTIF_TYPE_LABELS.general}</p>
               <p className="text-sm text-foreground/90 whitespace-pre-wrap">{n.message}</p>
             </div>
           ))}

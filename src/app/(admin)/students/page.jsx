@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Download, Upload, Crown } from 'lucide-react';
+import { Plus, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import Pagination from '@/components/ui/pagination';
@@ -85,7 +85,6 @@ export default function StudentsPage() {
   const [filterSession, setFilterSession] = useState('');
   const [filterIncomplete, setFilterIncomplete] = useState(false);
   const [filterSource, setFilterSource] = useState('');
-  const [filterPlan, setFilterPlan] = useState('');
   const [filterPayment, setFilterPayment] = useState('');
   const [page, setPage] = useState(1);
   const [urlReady, setUrlReady] = useState(false);
@@ -101,7 +100,6 @@ export default function StudentsPage() {
     setFilterSession(params.get('session') || '');
     setFilterIncomplete(params.get('incomplete') === '1');
     setFilterSource(params.get('source') || '');
-    setFilterPlan(params.get('plan') || '');
     const payment = params.get('payment') || '';
     setFilterPayment(['', 'due', 'unpaid', 'partial', 'overdue', 'paid', 'none'].includes(payment) ? payment : '');
     setPage(Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1));
@@ -115,14 +113,14 @@ export default function StudentsPage() {
   const listUrl = listHref('/students', { q: search, status: filterStatus, group: filterGroup,
     category: filterCat, level: filterLevel, session: filterSession,
     incomplete: filterIncomplete ? '1' : '', source: filterSource,
-    plan: filterPlan, payment: filterPayment, page });
+    payment: filterPayment, page });
   useEffect(() => { if (urlReady) window.history.replaceState(window.history.state, '', listUrl); }, [urlReady, listUrl]);
   const studentHref = (id) => recordHref(`/students/${id}`, listUrl);
 
   const filters = {
     p_search: search, p_status: filterStatus, p_age_category: filterCat,
     p_session: filterSession, p_level: filterLevel, p_incomplete: filterIncomplete,
-    p_source: filterSource, p_plan: filterPlan, p_group: filterGroup,
+    p_source: filterSource, p_group: filterGroup,
     p_payment: filterPayment,
   };
   const listRead = useQuery({
@@ -205,16 +203,15 @@ export default function StudentsPage() {
         Statut: s.status || '',
         'Statut paiement': s.payment_status || 'Aucun engagement',
         'Solde restant (MAD)': Number(s.payment_balance || 0),
-        Formule: s.plan_type || 'Standard',
         Source: s.referral_source || '',
         'Date naissance': s.date_naissance || '',
       })), `apprenants-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch { toast.error('Export impossible. Aucun fichier CSV créé.'); }
   };
 
-  const activeFilterCount = [search,filterStatus,filterGroup,filterCat,filterLevel,filterSession,filterIncomplete,filterSource,filterPlan,filterPayment].filter(Boolean).length;
+  const activeFilterCount = [search,filterStatus,filterGroup,filterCat,filterLevel,filterSession,filterIncomplete,filterSource,filterPayment].filter(Boolean).length;
   function resetFilters() {
-    setSearch(''); setFilterStatus(''); setFilterGroup(''); setFilterCat(''); setFilterLevel(''); setFilterSession(''); setFilterIncomplete(false); setFilterSource(''); setFilterPlan(''); setFilterPayment(''); setPage(1);
+    setSearch(''); setFilterStatus(''); setFilterGroup(''); setFilterCat(''); setFilterLevel(''); setFilterSession(''); setFilterIncomplete(false); setFilterSource(''); setFilterPayment(''); setPage(1);
   }
   return (
     <PageFrame>
@@ -272,11 +269,7 @@ export default function StudentsPage() {
           <option value="">Source : toutes</option>
           {SOURCES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
         </select></FormField></div>
-<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par formule"><select aria-label="Filtrer par formule" className="operational-control" value={filterPlan} onChange={e => { setFilterPlan(e.target.value); setPage(1); }}>
-          <option value="">Toutes les formules</option>
-          <option value="Premium">Premium</option>
-          <option value="Standard">Standard</option>
-        </select></FormField></div>      </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
+      </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">Dossiers actifs (inscrits, essai, anciens)</option>
           <option value="all_shown">Tous les statuts</option>
           {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
@@ -304,7 +297,7 @@ export default function StudentsPage() {
               {paged.map(s => (
                 <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <Crown size={13} className="shrink-0 text-primary" />}</p>
+                    <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></p>
                     <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {programmeLabel(s.session_type)} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
@@ -332,7 +325,7 @@ export default function StudentsPage() {
                   {paged.map(s => (
                     <tr key={s.id} className="hover:bg-muted/40 transition-colors">
                       <td className="px-3 py-3 font-medium text-foreground">
-                        <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link>{s.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-bold"><Crown size={10} /> Premium</span>}</span>
+                        <span className="inline-flex min-w-0 max-w-64 flex-wrap items-center gap-1.5 break-words"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></span>
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">
                         <InlineSelect

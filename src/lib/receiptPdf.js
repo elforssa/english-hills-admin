@@ -37,8 +37,7 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
 
   // Client receipts never paginate. Fit the variable detail rows into one A5.
   const details = [receipt.nom_prenom, receipt.telephone, receipt.email,
-    receipt.session_type, receiptSchoolYear(receipt),
-    receipt.session_type === 'Yearly' ? receipt.plan_type : '', receipt.niveau,
+    receipt.session_type, receiptSchoolYear(receipt), receipt.niveau,
     receipt.service_description, receipt.mode_paiement, receipt.transaction_reference].filter(Boolean);
   let detailFontSize = 8.5;
   const detailHeight = () => {
@@ -103,7 +102,6 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   sectionTitle('Session');
   detailRow('Session', receipt.session_type || (receipt.legacy ? 'Historique' : ''));
   detailRow('Année scolaire', receiptSchoolYear(receipt));
-  if (receipt.session_type === 'Yearly') detailRow('Formule', receipt.plan_type);
   detailRow('Niveau', receipt.niveau);
   detailRow('Service', receipt.service_description || (receipt.legacy ? 'Reçu historique' : ''));
 

@@ -15,14 +15,14 @@ import { uploadAsset } from './storage';
 export const integrations = {
   Core: {
     /**
-     * UploadFile({ file, purpose, studentId?, teacherId?, enrollmentId?, premiumSessionId? })
+     * UploadFile({ file, purpose, studentId?, teacherId?, enrollmentId? })
      * → Promise<{ file_url, file_ref, file_name }>.
      */
-    async UploadFile({ file, purpose, studentId, teacherId, enrollmentId, premiumSessionId } = {}) {
+    async UploadFile({ file, purpose, studentId, teacherId, enrollmentId } = {}) {
       if (!file) throw new Error('UploadFile: missing `file`');
       if (typeof purpose !== 'string' || !purpose) throw new Error('UploadFile: registry purpose required');
       try {
-        const { url, ref } = await uploadAsset(file, { purpose, studentId, teacherId, enrollmentId, premiumSessionId });
+        const { url, ref } = await uploadAsset(file, { purpose, studentId, teacherId, enrollmentId });
         return { file_url: url, file_ref: ref, file_name: file.name };
       } catch (err) {
         toast.error(`Upload échoué : ${err.message || 'erreur inconnue'}`);

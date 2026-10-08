@@ -46,7 +46,6 @@ const NAV = [
       { href: '/groups', label: 'Groupes & niveaux', roles: [...OPERATIONS, 'teacher'] },
       { href: '/attendance', label: 'Présences', roles: [...OPERATIONS, 'teacher'] },
       { href: '/timetable', label: 'Emploi du temps', roles: [...OPERATIONS, 'teacher'] },
-      { href: '/premium-sessions', label: 'Heures Premium', roles: [...OPERATIONS, 'teacher'] },
       { href: '/assessments', label: 'Notes & bulletins', roles: [...OPERATIONS, 'teacher'] },
     ],
   },

@@ -13,9 +13,9 @@ import PageHeader from '@/components/operational/PageHeader';
 import ReadState from '@/components/operational/ReadState';
 import { Button } from '@/components/ui/button';
 import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
-import { ArrowLeft, Edit, FileText, Trash2, Crown, CalendarDays, Clock3 } from 'lucide-react';
+import { ArrowLeft, Edit, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS, PREMIUM_SESSION_STATUS_COLORS } from '@/lib/statusColors';
+import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
 import { safeReturnTo } from '@/lib/navigation.mjs';
@@ -23,11 +23,6 @@ import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
 import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
-
-const PREMIUM_STATUS_LABELS = {
-  Scheduled: 'Planifiée', Confirmed: 'Confirmée', Completed: 'Terminée',
-  Cancelled: 'Annulée', Missed: 'Absence',
-};
 
 // Module scope keeps section DOM stable across renders (a focused row survives).
 const Section = ({ title, children }) => (
@@ -59,9 +54,6 @@ function StudentDetail() {
   const [attendance, setAttendance] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [adults, setAdults] = useState([]);
-  const [premiumSessions, setPremiumSessions] = useState([]);
-  const [premiumMemberships, setPremiumMemberships] = useState([]);
-  const [premiumGroups, setPremiumGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [loadedScope, setLoadedScope] = useState(null);
@@ -82,13 +74,10 @@ function StudentDetail() {
       entities.Attendance.filter({ student_id: id }),
       entities.Assessment.filter({ student_id: id }),
       entities.AuthorizedAdult.filter({ student_id: id }),
-      entities.PremiumSession.listAll('-scheduled_date'),
-      entities.PremiumMembership.filterAll({ student_id: id }, '-created_at'),
-      entities.PremiumGroup.listAll('name'),
       getBrowserClient().from('charge_balances').select('*').eq('student_id', id),
       entities.Enrollment.filterAll({ student_id: id }, '-created_at'),
       entities.Group.listAll('name'),
-    ]).then(([s, p, a, as_, adults, premium, memberships, premiumGroupRows, chargeResult, enrollmentRows, groupRows]) => {
+    ]).then(([s, p, a, as_, adults, chargeResult, enrollmentRows, groupRows]) => {
       if (!active) return;
       if (chargeResult.error) throw chargeResult.error;
       if (!Array.isArray(chargeResult.data)) throw new Error('Unavailable balance read');
@@ -100,10 +89,6 @@ function StudentDetail() {
       setAttendance(a);
       setAssessments(as_);
       setAdults(adults);
-      const sharedGroupIds = new Set(memberships.filter((item) => item.active).map((item) => item.premium_group_id));
-      setPremiumSessions(premium.filter((item) => item.student_id === id || sharedGroupIds.has(item.premium_group_id)));
-      setPremiumMemberships(memberships);
-      setPremiumGroups(premiumGroupRows);
       setCharges(chargeResult.data || []);
     }).catch(() => { if (active) setLoadError(true); })
       .finally(() => { if (active) setLoading(false); });
@@ -155,7 +140,7 @@ function StudentDetail() {
 
   return (
     <PageFrame width="detail" className="break-words">
-      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span>{student.plan_type === 'Premium' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-900"><Crown size={12}/>Premium</span>}</div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
+      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
       <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
@@ -252,34 +237,6 @@ function StudentDetail() {
           queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
           setReload(value => value + 1);
         }} />}
-
-      {student.plan_type === 'Premium' && (
-        <Section title="Programme Premium">
-          <div className="mb-4 flex flex-col justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center">
-            <div>
-              <p className="flex items-center gap-2 font-semibold text-primary"><Crown size={16} /> Un atelier partagé supplémentaire chaque week-end</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {student.premium_start_date ? `Du ${student.premium_start_date}` : 'Début non limité'}{student.premium_end_date ? ` au ${student.premium_end_date}` : ' · sans date de fin'}
-                {premiumMemberships.find((item) => item.active) && ` · ${premiumGroups.find((group) => group.id === premiumMemberships.find((item) => item.active)?.premium_group_id)?.name || 'Atelier affecté'}`}
-              </p>
-            </div>
-            <Link data-touch-target href="/premium-sessions" className="shrink-0 rounded-md bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90">Gérer les séances</Link>
-          </div>
-          {premiumSessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucune heure Premium planifiée.</p>
-          ) : (
-            <div className="space-y-2">
-              {premiumSessions.slice(0, 6).map((session) => (
-                <div key={session.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-sm">
-                  <span className="flex items-center gap-2 font-medium"><CalendarDays size={14} className="text-muted-foreground" /> {session.scheduled_date}</span>
-                  <span className="flex items-center gap-1 text-muted-foreground"><Clock3 size={13} /> {String(session.start_time).slice(0, 5)} · 60 min</span>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${PREMIUM_SESSION_STATUS_COLORS[session.status]}`}>{PREMIUM_STATUS_LABELS[session.status]}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-      )}
 
       <Section title="Adultes autorisés au retrait">
         {adults.length === 0 ? (

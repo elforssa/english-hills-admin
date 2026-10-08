@@ -35,7 +35,7 @@ for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestinat
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
 for (const path of ['/crm/today', '/crm/leads', '/students', '/students-directory', '/students/new',
   '/enrollments', '/settings', '/placement-tests', '/groups', '/timetable', '/attendance',
-  '/premium-sessions', '/assessments', '/receipts', '/receipts/new', '/teachers',
+  '/assessments', '/receipts', '/receipts/new', '/teachers',
   '/students/00000000-0000-0000-0000-000000000001',
   '/students/00000000-0000-0000-0000-000000000001/edit',
   '/groups/00000000-0000-0000-0000-000000000001',
