@@ -83,7 +83,9 @@ Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revisio
 3. **Existing Premium students:** move to Standard. There is no Formule concept afterwards.
 4. **Workshop module:** remove entirely, including weekend workshops, Premium groups/memberships/attendance and homework.
 
-Open decisions (stored text on old records, `plan_type` column fate, two-phase removal, where the student data step runs, report removal, notification history) are listed in the plan and are **PLANNED / NOT APPROVED** until the owner records the plan approval there.
+Owner instruction on the PR #118 review (plan revision PR-r2): new receipts get a description built from session type and school year (so instalments on pre-113 charges never carry the plan word), **and** a separately approved, counted, rehearsed data step removes the plan word from open, non-voided Yearly charge text (issued receipts untouched). Both are part of the proposed design.
+
+Open questions **Q1–Q6** (Q1: stored text on issued receipts and closed charges, with display-time handling reserved to the owner; Q2: `plan_type` column fate; Q3: two-phase removal; Q4: where the student data step runs; Q5: report removal; Q6: notification history) are listed in the plan and are **PLANNED / NOT APPROVED**. Implementation does not start until Q1 is answered and the owner records the plan approval there.
 
 ## Deferred backlog after RCC-r1
 
