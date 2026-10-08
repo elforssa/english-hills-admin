@@ -1,4 +1,4 @@
-> **Status: PROPOSED — architecture for owner review (not approved, not implemented).** Revision PR-r4 (after independent reviews CHANGES REQUIRED on PR-r1 `88a60469…`, PR-r2 `40932905…` and PR-r3 `eb42ffc7…`), 2026-10-08. Owner: Maroine. Risk tier: **3**. Baseline: `origin/main` `857b159746b78233578790bdb999878cd113e088`. Planned, implemented, merged, deployed and Production-verified are distinct states; nothing in this plan has happened yet. Owner answers to Q1–Q7 were recorded on 2026-10-08 (see the approval record), but **the plan itself is still NOT APPROVED for implementation: approval waits for the independent re-review.**
+> **Status: APPROVED FOR RELEASE A IMPLEMENTATION (2026-10-08, Maroine) — not implemented.** **This approves Release A implementation only. Release B, the open-charge description data step (D5a), the Premium student data step, every Production count or read, and any deployment each still need the owner's separate explicit approval.** Revision PR-r4 (after independent reviews CHANGES REQUIRED on PR-r1 `88a60469…`, PR-r2 `40932905…` and PR-r3 `eb42ffc7…`), 2026-10-08. Owner: Maroine. Risk tier: **3**. Baseline: `origin/main` `857b159746b78233578790bdb999878cd113e088`. Planned, implemented, merged, deployed and Production-verified are distinct states; nothing in this plan has happened yet. Owner answers to Q1–Q7 and the approval are recorded in the approval record.
 
 # Owner summary
 
@@ -299,7 +299,10 @@ Release A and B may be one working day or weeks apart; A is independently stable
 - The French wording and the client mapping are added under A as well, for any other mismatch.
 - **Owner answer (Maroine, 2026-10-08): Option A, keep accepting the old fingerprint.** D1 and the tests are written for A.
 
-**Approval record.** Approver: **Maroine**. Date of answers: **2026-10-08**. Answers recorded against plan revision PR-r4 (head `2ad7385d…`): **Q1** leave issued Yearly receipts and settled or voided non-legacy Yearly charges untouched (no display-time handling, no text rewrite); **Q7** Option A (keep accepting the old fingerprint); **Q2, Q3, Q4, Q5, Q6** option A (the recommended option) each. **Plan approval status: NOT APPROVED for implementation.** The owner's approval of the plan waits for the independent re-review; it will be recorded here with the approved revision and date, and implementation does not start before it. Nothing is implemented, merged or deployed.
+**Approval record.** Approver: **Maroine**. Date of answers: **2026-10-08**. Answers recorded against plan revision PR-r4 (head `2ad7385d…`): **Q1** leave issued Yearly receipts and settled or voided non-legacy Yearly charges untouched (no display-time handling, no text rewrite); **Q7** Option A (keep accepting the old fingerprint); **Q2, Q3, Q4, Q5, Q6** option A (the recommended option) each.
+
+**Plan approval (Maroine, 2026-10-08): APPROVED FOR RELEASE A IMPLEMENTATION.** Approved revision **PR-r4 at exact head `531cf30cf4e4b121a720b019c684ec044a5decc0`**, following the independent reviewer's READY FOR FINAL REVIEW on that exact head. Answers as recorded above (Q1 leave issued receipts and settled or voided non-legacy Yearly charges untouched; Q7 Option A; Q2–Q6 option A; Part A and Part B as written in this plan). The owner acknowledges that future-dated workshops, pending homework, attendance history and homework files are permanently deleted in Release B after a full export. **Export retention:** until the 2026/2027 school-year closure, kept private, access limited to Maroine.
+**This approves Release A implementation only. Release B, the open-charge description data step (D5a), the Premium student data step, every Production count or read, and any deployment each still need the owner's separate explicit approval.** Nothing is implemented, merged or deployed.
 
 ---
 
@@ -311,7 +314,7 @@ Retire Formule and Premium from the platform as specified above, in two releases
 
 ### Prerequisites
 
-1. Owner approval of this plan revision (not yet given; the 2026-10-08 answers to Q1–Q7 are recorded in the approval record), recorded in the approval record and [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md).
+1. Owner approval of this plan revision for **Release A implementation only** (given 2026-10-08 for PR-r4 at head `531cf30c…`; Release B and the other Production-affecting steps still need separate explicit approval), recorded in the approval record and [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md).
 2. Fresh `origin/main`; verify the latest migration number (provisionally 113 and 114) and re-read cumulative definitions with `pg_get_functiondef` on a local database at the current head before editing any function.
 3. Local Supabase only (`http://127.0.0.1:54321`), synthetic data, external e-mail disabled. A dedicated feature branch; never `main`.
 4. Release A and Release B are separate PRs/work items unless Q3 option B is chosen.
