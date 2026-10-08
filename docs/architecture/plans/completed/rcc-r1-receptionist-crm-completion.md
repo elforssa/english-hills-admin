@@ -1,15 +1,16 @@
 # RCC-r1 — Receptionist CRM completion
 
-**Active plan.** Recorded 2026-10-06 from the owner's explicit instructions, so any agent can continue without earlier chats. Owner decisions are summarized in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md). Implementation and deployment evidence belongs in [CURRENT_STATE](../../ai/CURRENT_STATE.md); execution, review and release gates are in [AGENTS](../../../AGENTS.md).
+**COMPLETED — all phases merged, deployed and Production verified (closed 2026-10-08).** Recorded 2026-10-06 from the owner's explicit instructions. Owner decisions are summarized in [OWNER_DECISIONS](../../../ai/OWNER_DECISIONS.md). Deployment evidence is in [CURRENT_STATE](../../../ai/CURRENT_STATE.md); execution, review and release gates are in [AGENTS](../../../../AGENTS.md). This plan is now a design and history record, not authority to replay implementation or release operations.
 
 | Phase | State |
 | --- | --- |
 | RCC-A0 | **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE** |
 | RCC-A1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #108, migration 111 ([record](#implementation-record), [release](#production-release--2026-10-07)) |
-| RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](completed/rcc-a2-enrollment-ux-hardening.md), [release record](../evidence/rcc-a2-production-2026-10-07.md)). |
-| RCC-B1 | **IMPLEMENTATION IN REVIEW (2026-10-07)** — architecture B1-r3 merged (PR #114) and implementation authorized by the owner on 2026-10-07; implemented on `feature/rcc-b1` ([plan](rcc-b1-responsive-opportunities.md), [implementation record](rcc-b1-responsive-opportunities.md#implementation-record)). Awaiting terminal CI and the mandatory independent Tier-2 review. Merge and release not authorized. |
+| RCC-A2 | **MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07)** — Tier 3; PR #112 merged as `79b0835…`, migration 112 ([completed plan](rcc-a2-enrollment-ux-hardening.md), [release record](../../evidence/rcc-a2-production-2026-10-07.md)). |
+| RCC-B1 | **MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE (2026-10-08)** — Tier 2; PR #115 merged as `b278d4c…` ([plan](rcc-b1-responsive-opportunities.md), [release record](../../evidence/rcc-b1-production-2026-10-08.md)). No migration. |
+| **RCC-r1 outcome** | **COMPLETE (2026-10-08)** — RCC-A1, RCC-A2 and RCC-B1 are each Production verified. See [Closeout](#closeout--2026-10-08). |
 
-RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](completed/outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](english-hills-ui-foundation.md). It does not replay their implementation or release operations.
+RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](outcome-3-receptionist-workspace.md) and the deployed [UI Foundation](../english-hills-ui-foundation.md). It does not replay their implementation or release operations.
 
 ## Owner product decisions (approved)
 
@@ -33,14 +34,14 @@ RCC-r1 builds on the completed, Production-verified [Outcome 3 workspace](comple
 **COMPLETE — INVESTIGATION ONLY — NO CODE CHANGE.** Synthetic local data only; **no Production mutation occurred.**
 
 - **Path tested:** Commencer l’inscription → Créer un nouvel apprenant → Continuer → Continuer → Créer la pré-inscription.
-- The final button invokes `public.crm_start_enrollment` ([084](../../../supabase/migrations/084_crm_enrollment_and_conversion.sql)).
+- The final button invokes `public.crm_start_enrollment` ([084](../../../../supabase/migrations/084_crm_enrollment_and_conversion.sql)).
 - **Synthetic reproduced failures:**
 
 | Input | Result | Source check |
 | --- | --- | --- |
 | Future birth date | `22023` / `Invalid new learner` | 084 new-learner validation (`birth>current_date`) |
 | Already-linked learner, then “new learner” selected | `22023` / `Invalid new learner` | Same check (`l.student_id is not null` with `student_choice='new'`) |
-| Past follow-up date with no existing enrollment follow-up | `22023` / `Valid future task required` | Follow-up task validation in [080](../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) |
+| Past follow-up date with no existing enrollment follow-up | `22023` / `Valid future task required` | Follow-up task validation in [080](../../../../supabase/migrations/080_crm_commands_and_followup_engine.sql) |
 
 - **Ordinary path succeeded:** new learner, Yearly / 2026–2027 / Submitted, with optional birth date, level, group, notes and follow-up left blank. The opportunity stayed **QUALIFIED**, which is correct because initiation is not conversion.
 - **The owner's exact Production failure remains INCONCLUSIVE.** Blank optional fields were **not** established as the cause. Do not assume one of the reproduced causes was the owner's case.
@@ -49,7 +50,7 @@ Follow-up belongs to RCC-A2, not A1.
 
 ## RCC-A1 — outcome-led receptionist CRM
 
-**OWNER APPROVED FOR IMPLEMENTATION. Risk tier: Tier 3.** It amends guarded CRM commands and follow-up/task scheduling that affect existing Production data and commercial status, so the full Tier-3 lifecycle in [AGENTS](../../../AGENTS.md#high-risk-changes-tier-3) applies: implementation on its own branch, focused local validation with synthetic data, one author self-check, PR, then a separate independent exact-SHA review, owner release approval, a separate release/operator task, Production verification and documentation closeout. Approval to implement is not approval to merge, migrate Production or deploy.
+**OWNER APPROVED FOR IMPLEMENTATION. Risk tier: Tier 3.** It amends guarded CRM commands and follow-up/task scheduling that affect existing Production data and commercial status, so the full Tier-3 lifecycle in [AGENTS](../../../../AGENTS.md#high-risk-changes-tier-3) applies: implementation on its own branch, focused local validation with synthetic data, one author self-check, PR, then a separate independent exact-SHA review, owner release approval, a separate release/operator task, Production verification and documentation closeout. Approval to implement is not approval to merge, migrate Production or deploy.
 
 ### Approved implementation boundary
 
@@ -57,16 +58,16 @@ Follow-up belongs to RCC-A2, not A1.
 2. **Contact en cours** and **Inscription confirmée** presentation terminology.
 3. Qualified + needs time stays **QUALIFIED**, with structured **En réflexion** follow-up metadata (not a new stage).
 4. Routine structured conversations no longer require unnecessary prose. Required explanations stay for standalone notes, **Other** reasons, cancel and reopen.
-5. Correct the task-completion frontend/database length mismatch. Starting evidence: the completion textarea in [CrmActionDialog.jsx](../../../src/components/crm/CrmActionDialog.jsx) allows 4000 characters, while `complete_task` rejects an `outcome` over 200 characters (080, carried into 103). Confirm the field mapping before choosing the fix.
+5. Correct the task-completion frontend/database length mismatch. Starting evidence: the completion textarea in [CrmActionDialog.jsx](../../../../src/components/crm/CrmActionDialog.jsx) allows 4000 characters, while `complete_task` rejects an `outcome` over 200 characters (080, carried into 103). Confirm the field mapping before choosing the fix.
 6. Separate agreed appointments (with the prospect) from internal reminders.
 7. Bounded internal reminder presets, resolved server-side using the existing Casablanca policy (no browser-computed due times).
-8. Preserve the failed-call cadence ([PRODUCT_RULES](../../ai/PRODUCT_RULES.md#commercial-lifecycle-and-follow-up)).
+8. Preserve the failed-call cadence ([PRODUCT_RULES](../../../ai/PRODUCT_RULES.md#commercial-lifecycle-and-follow-up)).
 9. Preserve explicit-date compatibility and retry/idempotency stability (request keys and expected versions).
 10. Keep the owner/task-assignee architecture, but move reassignment out of the everyday foreground.
 
 ### Critical safeguard
 
-> Any amendment or replacement of `crm_security.command` must preserve the latest implementation from [migration 103](../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql), including lifecycle barriers and pending-stop handling. **Never reconstruct it from migration 080.**
+> Any amendment or replacement of `crm_security.command` must preserve the latest implementation from [migration 103](../../../../supabase/migrations/103_crm_meta_funnel_r4_advisory_d2.sql), including lifecycle barriers and pending-stop handling. **Never reconstruct it from migration 080.**
 
 Before allocating a migration number, check `supabase/migrations`, CURRENT_STATE and a freshly fetched `origin/main`, and coordinate with any other active agent.
 
@@ -85,13 +86,13 @@ RCC-A1 does **not** include:
 - historical backfills;
 - task-engine replacement.
 
-Work that needs any of these returns to the owner for a decision ([outcome-based batching](../../../AGENTS.md#outcome-based-batching)).
+Work that needs any of these returns to the owner for a decision ([outcome-based batching](../../../../AGENTS.md#outcome-based-batching)).
 
 ### Implementation record
 
 Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`, created from origin/main `b33d9a8078abce738a9ef43588c9385cfc4f7cb9`. Implementation is not merge, migration or deployment authority; the Tier-3 review and release gates above still apply.
 
-[Migration 111](../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql) was allocated after confirming a 110 ceiling on origin/main, on every remote branch and in [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries).
+[Migration 111](../../../../supabase/migrations/111_crm_rcc_a1_outcome_led_followup.sql) was allocated after confirming a 110 ceiling on origin/main, on every remote branch and in [CURRENT_STATE](../../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries).
 
 | Boundary item | Implementation |
 | --- | --- |
@@ -111,10 +112,10 @@ Recorded 2026-10-07 by the RCC-A1 implementation task on branch `feature/rcc-a1`
 
 **Validation (local, synthetic):**
 
-- [SQL acceptance](../../../scripts/test-crm-rcc-a1.sql), rollback-only.
-- [110→111 stateful upgrade](../../../scripts/test-crm-rcc-a1-upgrade.mjs): unchanged table hashes, grants, RLS, triggers and other function bodies, and no backfill.
-- [Pure presentation contract](../../../scripts/test-crm-rcc-a1.mjs).
-- [Browser acceptance](../../../scripts/test-crm-rcc-a1-browser.mjs).
+- [SQL acceptance](../../../../scripts/test-crm-rcc-a1.sql), rollback-only.
+- [110→111 stateful upgrade](../../../../scripts/test-crm-rcc-a1-upgrade.mjs): unchanged table hashes, grants, RLS, triggers and other function bodies, and no backfill.
+- [Pure presentation contract](../../../../scripts/test-crm-rcc-a1.mjs).
+- [Browser acceptance](../../../../scripts/test-crm-rcc-a1-browser.mjs).
 - The existing CRM SQL, lifecycle/R4 and browser suites.
 
 **Review follow-up (2026-10-07).** After rebasing onto main `4cb0eb9` (PR #109, sharp remediation), the review findings and owner decisions above were applied in place to unmerged, undeployed migration 111. A hidden conversation result can no longer make the note required after the call outcome changes.
@@ -123,7 +124,7 @@ The exclusions above are untouched: no change to enrollment, Commencer/Continuer
 
 ### Production release — 2026-10-07
 
-**MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** Reviewed head `7444fdc5fa7155c57d36cef2605160b36b280fe4` merged as `8d5af40bc21177c582efe5df96d31ada8d7d9ff5`. Vercel Production `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY on that commit. Migration 111 was applied first, with owner approval, and the Production ledger is 001–111. Evidence: [release record](../evidence/rcc-a1-production-2026-10-07.md).
+**MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** Reviewed head `7444fdc5fa7155c57d36cef2605160b36b280fe4` merged as `8d5af40bc21177c582efe5df96d31ada8d7d9ff5`. Vercel Production `dpl_CBvNM7AzLrqR6frH3NQ8CZMrmNHU` is READY on that commit. Migration 111 was applied first, with owner approval, and the Production ledger is 001–111. Evidence: [release record](../../evidence/rcc-a1-production-2026-10-07.md).
 
 Accepted limitations (owner, 2026-10-07):
 
@@ -135,7 +136,7 @@ RCC-A1 is complete. The plan stays active for RCC-B1 (implementation in review);
 
 ## RCC-A2 — enrollment UX hardening
 
-**MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07).** PR #112 reviewed head `b213e93…` merged as `79b0835…` after migration 112 was applied first; Vercel Production `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` ([release record](../evidence/rcc-a2-production-2026-10-07.md)). Revision A2-r2 is the [completed plan](completed/rcc-a2-enrollment-ux-hardening.md). Original candidate scope:
+**MERGED / DEPLOYED / PRODUCTION VERIFIED (2026-10-07).** PR #112 reviewed head `b213e93…` merged as `79b0835…` after migration 112 was applied first; Vercel Production `dpl_6NEt396vjcKG53c6WEHgKQoGp4Ho` ([release record](../../evidence/rcc-a2-production-2026-10-07.md)). Revision A2-r2 is the [completed plan](rcc-a2-enrollment-ux-hardening.md). Original candidate scope:
 
 - enrollment UX hardening;
 - field-specific errors instead of generic `22023` messages;
@@ -146,18 +147,18 @@ RCC-A1 is complete. The plan stays active for RCC-B1 (implementation in review);
 
 The exact owner-case root cause is still unresolved (see RCC-A0).
 
-**Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](completed/rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved A2-r1 as recommended on 2026-10-07. Revision A2-r2 incorporates the independent review's required changes and the owner's B2 amendment, which scopes the birth-date rule to enrollment initiation ([approval record](completed/rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Implementation stays unauthorized until A2-r2 passes independent exact-SHA re-review and the architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction.
+**Architecture (2026-10-07):** [RCC-A2 — receptionist enrollment UX hardening](rcc-a2-enrollment-ux-hardening.md), revision A2-r1, turns the candidate scope above into a precise contract. The owner approved A2-r1 as recommended on 2026-10-07. Revision A2-r2 incorporates the independent review's required changes and the owner's B2 amendment, which scopes the birth-date rule to enrollment initiation ([approval record](rcc-a2-enrollment-ux-hardening.md#owner-approval-record)). Broader generic follow-up consolidation is excluded and remains a separate future outcome (D6). Implementation stays unauthorized until A2-r2 passes independent exact-SHA re-review and the architecture PR is merged. Creating the migration, merging implementation and releasing each need a further explicit owner instruction.
 
 ### Deferred CRM reliability backlog
 
-Separate future work, not approved or scheduled:
+Separate future work, not approved or scheduled (the consolidated list after closeout is in [Closeout](#closeout--2026-10-08)):
 
 - broader generic callback/WhatsApp follow-up consolidation across every task-creation path (RCC-A2 D6);
 - *pre-existing limitation, recorded during the RCC-A2 review (2026-10-07):* `casablancaInstant` converts CRM wall-clock inputs with the browser's time-zone data. A browser or runtime with stale Morocco rules can shift entered times by an hour relative to the server's Casablanca civil projection.
 
 ## RCC-B1 — responsive Opportunities presentation
 
-**OWNER APPROVED FOR IMPLEMENTATION (2026-10-07); implementation not yet authorized.** Original candidate scope:
+**MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE (2026-10-08)** — PR #115, reviewed head `73b3826395b4af184e4d724bdfbb705c097230a1`, merge `b278d4ca348447a9a20aefeb6d8c3fafab13a312`, no migration ([release record](../../evidence/rcc-b1-production-2026-10-08.md)). The text below is the historical scope and approval chronology. Original candidate scope:
 
 - compact Opportunities header and toolbars;
 - improved card and action hierarchy;
@@ -184,6 +185,28 @@ Acceptance widths: **1440 / 1280 / 1024 / 768 / 390 CSS px**.
 
 **Owner approval (2026-10-07):** the owner approved B1-r1 as recommended: D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A ([approval record](rcc-b1-responsive-opportunities.md#owner-approval-record)). The approval restates the Tier-2 presentation boundary and the Tier-3 stop conditions. **Review corrections (2026-10-07):** the independent review of `225d17d…` returned CHANGES REQUIRED. Revision **B1-r2** resolves its five findings and five test gaps, D1–D8 unchanged, and the owner's approval carries forward ([corrections](rcc-b1-responsive-opportunities.md#b1-r2-review-corrections)). **Re-review corrections (2026-10-07):** the re-review of `9068324…` returned CHANGES REQUIRED for R1 and R2 only. Revision **B1-r3** applies owner decision R1 (option a: no tooltip on Autres actions, which keeps its visible label) and makes the Escape guard order-independent ([corrections](rcc-b1-responsive-opportunities.md#b1-r3-re-review-corrections)). D1–D8 are unchanged. Implementation stays unauthorized until three things happen: exact-SHA independent re-review of B1-r3, the architecture PR merge, and a separate explicit owner instruction. Merge and release need further explicit owner approval.
 
+## Closeout — 2026-10-08
+
+**RCC-r1 receptionist CRM outcome: COMPLETE.**
+
+| Phase | Result |
+| --- | --- |
+| RCC-A1 | Complete; Production verified 2026-10-07 (PR #108, migration 111) |
+| RCC-A2 | Complete; Production verified 2026-10-07 (PR #112, migration 112) |
+| RCC-B1 | Complete; Production verified with bounded acceptance 2026-10-08 (PR #115, merge `b278d4ca348447a9a20aefeb6d8c3fafab13a312`, no migration) |
+
+RCC-B1 acceptance is bounded: no authenticated real-staff Production walkthrough was performed by the release session. The receptionist/owner performs that operational walkthrough separately. The Production migration ledger remains 001–112.
+
+**Deferred backlog (preserved, none approved or scheduled):**
+
+- **D6** — universal ordinary communication follow-up consolidation across every task-creation path.
+- Browser Casablanca timezone reliability (`casablancaInstant` uses browser tz data).
+- Director correction tool for wrongly linked learners.
+- Nouvelle pré-inscription duplicate-risk behavior (no D8).
+- Possible sidebar icon-rail / intermediate sidebar, as a future UI Foundation outcome.
+
+**Roadmap.** The next major product outcome is **Director CRM & Growth Intelligence**. H3/H4 Meta lifecycle work is not activated and is not moved ahead of that roadmap unless separately authorized.
+
 ## Not authorized by RCC-r1
 
-H3/H4 Meta lifecycle work remains separate under its own contracts. Outcome 5 / online learning is parked until next month. See [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#other-roadmap-decisions).
+H3/H4 Meta lifecycle work remains separate under its own contracts. Outcome 5 / online learning is parked until next month. See [OWNER_DECISIONS](../../../ai/OWNER_DECISIONS.md#other-roadmap-decisions).

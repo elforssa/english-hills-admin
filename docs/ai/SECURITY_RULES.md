@@ -54,4 +54,4 @@ The owner-approved [UIF-r1a](../architecture/plans/english-hills-ui-foundation.m
 
 ## RCC-r1 boundary
 
-The approved [RCC-r1](../architecture/plans/rcc-r1-receptionist-crm-completion.md) receptionist work adds no permission, role capability, finance authority, enrollment-confirmation authority or Meta/lifecycle authority. Any change to `crm_security.command` must preserve its latest cumulative definition (migration 103), including lifecycle barriers and pending-stop handling.
+The approved [RCC-r1](../architecture/plans/completed/rcc-r1-receptionist-crm-completion.md) receptionist work adds no permission, role capability, finance authority, enrollment-confirmation authority or Meta/lifecycle authority. Any change to `crm_security.command` must preserve its latest cumulative definition (migration 103), including lifecycle barriers and pending-stop handling.

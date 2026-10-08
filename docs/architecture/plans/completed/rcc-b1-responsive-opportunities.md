@@ -1,3 +1,5 @@
+> **Status: COMPLETED — MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE (2026-10-08).** Revision B1-r3. PR #115 reviewed head `73b3826395b4af184e4d724bdfbb705c097230a1` merged as `b278d4ca348447a9a20aefeb6d8c3fafab13a312`, with no migration. Vercel Production is `dpl_CqtdvAWUwNmtVTByFaQqBBv5zKcs` ([release record](../../evidence/rcc-b1-production-2026-10-08.md)). The wording below is historical chronology. Parent: [RCC-r1](rcc-r1-receptionist-crm-completion.md), now complete.
+
 # Owner summary
 
 **RCC-B1 — Responsive Opportunities presentation. Revision B1-r3, 2026-10-07. Status: OWNER APPROVED FOR IMPLEMENTATION (2026-10-07), all decisions as recommended; approval carried forward from B1-r1 through B1-r3.** Child of the active [RCC-r1](rcc-r1-receptionist-crm-completion.md#rcc-b1--responsive-opportunities-presentation) plan. The owner approved revision B1-r1 with D1 A, D2 C, D3 A, D4 A, D5 B, D6 B, D7 B and D8 A. The independent review of B1-r1 returned CHANGES REQUIRED, and B1-r2 incorporated those corrections. The re-review of B1-r2 returned CHANGES REQUIRED for R1 and R2 only, which B1-r3 incorporates, including the owner's R1 clarification (no tooltip on Autres actions). D1–D8 are unchanged ([approval record](#owner-approval-record), [B1-r2 corrections](#b1-r2-review-corrections), [B1-r3 corrections](#b1-r3-re-review-corrections)). Implementation itself is **not yet authorized**: it still needs exact-SHA independent re-review of B1-r3, the architecture PR merged, and a separate explicit owner instruction. Merge and release are not authorized. **Update (2026-10-07):** all three conditions were met; the owner authorized implementation of B1-r3, which is recorded in the [implementation record](#implementation-record). Merge and release remain unauthorized.
@@ -30,7 +32,7 @@ The shared admin sidebar is not changed by the recommended scope.
 
 ## UI impact
 
-Presentation only, built from the deployed [UI Foundation](english-hills-ui-foundation.md) ([ADR-005](../decisions/ADR-005-operational-ui-foundation.md)) tokens and primitives. No new design system. The affected surfaces are Opportunities, the shared lead drawer and the CRM dialogs. Tâches, Calendar and Students may only change through the shared drawer and dialogs, or through opt-in shared-component variants whose defaults stay unchanged.
+Presentation only, built from the deployed [UI Foundation](../english-hills-ui-foundation.md) ([ADR-005](../../decisions/ADR-005-operational-ui-foundation.md)) tokens and primitives. No new design system. The affected surfaces are Opportunities, the shared lead drawer and the CRM dialogs. Tâches, Calendar and Students may only change through the shared drawer and dialogs, or through opt-in shared-component variants whose defaults stay unchanged.
 
 ## Database impact
 
@@ -62,7 +64,7 @@ Owner decisions D1–D8 were approved as recommended on 2026-10-07 ([approval re
   - B1-r2 resolved findings I1–I5 and the five test gaps; see [B1-r2 review corrections](#b1-r2-review-corrections).
   - The re-review of `9068324558f0a739a4d8c358cc090f25a3b6d9a6` returned CHANGES REQUIRED for R1 and R2 only ([re-review](https://github.com/elforssa/english-hills-admin/pull/114#issuecomment-6038018694)). B1-r3 resolves both; see [B1-r3 re-review corrections](#b1-r3-re-review-corrections).
 - **Baseline:** freshly fetched `origin/main` = `13c1db1a3862317f2b658780d0f3e8a9343bdbec` (PR #113 merge, RCC-A2 closeout), as expected.
-- **Recorded state:** [CURRENT_STATE](../../ai/CURRENT_STATE.md) records the deployed source as `79b0835…` (PR #112) with Production at migration 112. The baseline differs from it only by documentation. RCC-A1 and RCC-A2 are deployed and Production verified.
+- **Recorded state:** [CURRENT_STATE](../../../ai/CURRENT_STATE.md) records the deployed source as `79b0835…` (PR #112) with Production at migration 112. The baseline differs from it only by documentation. RCC-A1 and RCC-A2 are deployed and Production verified.
 - **No Production access:** no Production read or mutation was performed.
 - **Local evidence.** The app ran with `next dev` on `localhost:3101`. Its working tree was byte-identical to the baseline (`git diff 5ed56d2 origin/main` is empty). The database was local Supabase `127.0.0.1:54321` at ledger 112.
   - **Synthetic fixture:** 22 prospects across all stages, created through the real guarded RPCs. One prospect has a long mixed Arabic/French name and 18 history entries in its first loaded page.
@@ -79,10 +81,10 @@ Owner decisions D1–D8 were approved as recommended on 2026-10-07 ([approval re
 
 Shared source facts:
 
-- **Shell:** the [shared sidebar](../../../src/components/layout/Sidebar.jsx) is 240px at ≥1024 (`lg`). Below that it becomes a 56px top bar with modal navigation.
-- **Default layout:** [CrmWorkspace](../../../src/components/crm/CrmWorkspace.jsx) defaults to **List below 768px** (`matchMedia('(max-width: 767px)')`) and to Board otherwise. The `layout` URL parameter overrides the default, and `view=closed` forces List.
-- **Board columns:** the [board](../../../src/components/crm/OpportunitiesBoard.jsx) uses five fixed 280px columns in an `overflow-x-auto` region, a scroll width of 1448px.
-- **Drawer:** the [drawer](../../../src/components/crm/LeadDetailSheet.jsx) is a modal Radix sheet: full width below 640px, 620px above.
+- **Shell:** the [shared sidebar](../../../../src/components/layout/Sidebar.jsx) is 240px at ≥1024 (`lg`). Below that it becomes a 56px top bar with modal navigation.
+- **Default layout:** [CrmWorkspace](../../../../src/components/crm/CrmWorkspace.jsx) defaults to **List below 768px** (`matchMedia('(max-width: 767px)')`) and to Board otherwise. The `layout` URL parameter overrides the default, and `view=closed` forces List.
+- **Board columns:** the [board](../../../../src/components/crm/OpportunitiesBoard.jsx) uses five fixed 280px columns in an `overflow-x-auto` region, a scroll width of 1448px.
+- **Drawer:** the [drawer](../../../../src/components/crm/LeadDetailSheet.jsx) is a modal Radix sheet: full width below 640px, 620px above.
 
 | Width | Shell | Default view | Page horizontal overflow | Board area → stages fully visible | First result top / results in first viewport | Drawer |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -114,7 +116,7 @@ Shared source facts:
 **768.**
 - Two stages are visible.
 - The List table overflows its container by 84px.
-- Under touch, the global 44px rule (`.operational button { display: inline-flex }` in [globals.css](../../../src/app/globals.css)) turns the card's identity button into a row. Parent and learner names are squeezed side by side; see finding X3.
+- Under touch, the global 44px rule (`.operational button { display: inline-flex }` in [globals.css](../../../../src/app/globals.css)) turns the card's identity button into a row. Parent and learner names are squeezed side by side; see finding X3.
 
 **390.**
 - The header block is 112px. Search, the inline Programme facet and "Plus de filtres" take 288px, and opening filters makes them 636px. The nine view chips overflow by 795px.
@@ -310,7 +312,7 @@ Rules:
 
 ## Sidebar behavior
 
-Recommendation (D4 A): **no change** to the shared [Sidebar](../../../src/components/layout/Sidebar.jsx) in RCC-B1.
+Recommendation (D4 A): **no change** to the shared [Sidebar](../../../../src/components/layout/Sidebar.jsx) in RCC-B1.
 
 The fluid board fits all five stages at 1280 and 1440 inside today's 240px sidebar. At 1024 the board is a deliberate, discoverable contained scroll, and the top-bar shell at 1024 (X1) also passes because the board fits at 976px. Changing the sidebar would affect every admin route for every role, which is the reason D4 B routes it to a separate UI Foundation outcome.
 
@@ -322,7 +324,7 @@ The fluid board fits all five stages at 1280 and 1440 inside today's 240px sideb
 - **≥640:** the existing 620px right sheet with an overlay radius.
 - **Modality:** the sheet stays modal (D8 A), with a focus trap and an inert background.
 
-**Scroll mechanism and the single close control (I1).** Today `LeadDetailSheet` puts `overflow-y-auto` on `SheetContent` itself. The primitive's own close button is a `SheetPrimitive.Close` positioned `absolute right-2 top-2`, with the visually hidden "Fermer" label, in [ui/sheet.jsx](../../../src/components/ui/sheet.jsx). Because it sits inside that scrolling element, it scrolls away. B1 fixes this **without touching the primitive**:
+**Scroll mechanism and the single close control (I1).** Today `LeadDetailSheet` puts `overflow-y-auto` on `SheetContent` itself. The primitive's own close button is a `SheetPrimitive.Close` positioned `absolute right-2 top-2`, with the visually hidden "Fermer" label, in [ui/sheet.jsx](../../../../src/components/ui/sheet.jsx). Because it sits inside that scrolling element, it scrolls away. B1 fixes this **without touching the primitive**:
 
 - `src/components/ui/sheet.jsx` is **not edited**.
 - No second close button is added. The drawer has **exactly one** visible, accessibly named "Fermer" control: the primitive's existing one.
@@ -524,17 +526,17 @@ UIF F8–F10 stay binding. In addition:
 
 | Module | Expected change | Other consumers / regression scope |
 | --- | --- | --- |
-| [CrmWorkspace.jsx](../../../src/components/crm/CrmWorkspace.jsx) | Band defaults (`lg` query replaces `max-width: 767px`), `data-band`/`data-presentation`, compact header and toolbar, count line, stage chips, board height container, board-scroll capture ref in the existing `crm:refresh` handler (I4) | **Tâches** (`mode="today"`) shares the component; its header and WorkQueue must stay unchanged |
-| [OpportunityFilters.jsx](../../../src/components/crm/OpportunityFilters.jsx) | Toolbar row, view chips/select, filter disclosure row, filter sheet, active chips | Opportunities only |
-| [OpportunitiesBoard.jsx](../../../src/components/crm/OpportunitiesBoard.jsx) | Fluid grid, sticky headers, affordance, jump control (never a drop target), post-render scroll restore (I4) | Opportunities only |
-| [OpportunitiesList.jsx](../../../src/components/crm/OpportunitiesList.jsx) / [OpportunityCard.jsx](../../../src/components/crm/OpportunityCard.jsx) | Card hierarchy, grouped overflow menu, touch layout fix, tablet card grid | Opportunities only |
-| [LeadDetailSheet.jsx](../../../src/components/crm/LeadDetailSheet.jsx) | Non-scrolling `SheetContent` with fixed header and inner body (I1), order, Demande, history collapse, quick-action layout, Escape guard (I2); dialogs kept as direct stable children (I5) | **Tâches** and the **Admissions Calendar** |
-| [LeadEnrollmentSection.jsx](../../../src/components/crm/LeadEnrollmentSection.jsx) / [LeadPlacementSection.jsx](../../../src/components/crm/LeadPlacementSection.jsx) | Spacing only, if any. Action rules and links unchanged. | Drawer hosts |
-| [CrmActionDialog.jsx](../../../src/components/crm/CrmActionDialog.jsx) | Container and sticky footer; telephone-link gating (D2). No payload change. | Every drawer host plus manual creation |
-| [CrmEnrollmentDialog.jsx](../../../src/components/crm/CrmEnrollmentDialog.jsx) | `100dvh` and sticky footer only: classes plus one presentational wrapper around the existing alert and button row; no hook, state, ref, handler or boundary change | Drawer hosts; the RCC-A2 suite |
-| [PlacementTestModal.jsx](../../../src/components/placement/PlacementTestModal.jsx) | Optional container-only change | `/placement-tests`, `LegacyPlacementEditor` |
-| [FilterBar.jsx](../../../src/components/operational/FilterBar.jsx) / [PageHeader.jsx](../../../src/components/operational/PageHeader.jsx) | Opt-in compact props only; default rendering unchanged | **Students**, **Tâches** |
-| [presentation.mjs](../../../src/lib/crm/presentation.mjs) | Additive pure helpers: meaningful-event set, history summary selection, `BAND_QUERIES` (the single breakpoint definition), stage-chip set per view. Existing exports, including `phoneLinks`, unchanged. | Pure tests |
+| [CrmWorkspace.jsx](../../../../src/components/crm/CrmWorkspace.jsx) | Band defaults (`lg` query replaces `max-width: 767px`), `data-band`/`data-presentation`, compact header and toolbar, count line, stage chips, board height container, board-scroll capture ref in the existing `crm:refresh` handler (I4) | **Tâches** (`mode="today"`) shares the component; its header and WorkQueue must stay unchanged |
+| [OpportunityFilters.jsx](../../../../src/components/crm/OpportunityFilters.jsx) | Toolbar row, view chips/select, filter disclosure row, filter sheet, active chips | Opportunities only |
+| [OpportunitiesBoard.jsx](../../../../src/components/crm/OpportunitiesBoard.jsx) | Fluid grid, sticky headers, affordance, jump control (never a drop target), post-render scroll restore (I4) | Opportunities only |
+| [OpportunitiesList.jsx](../../../../src/components/crm/OpportunitiesList.jsx) / [OpportunityCard.jsx](../../../../src/components/crm/OpportunityCard.jsx) | Card hierarchy, grouped overflow menu, touch layout fix, tablet card grid | Opportunities only |
+| [LeadDetailSheet.jsx](../../../../src/components/crm/LeadDetailSheet.jsx) | Non-scrolling `SheetContent` with fixed header and inner body (I1), order, Demande, history collapse, quick-action layout, Escape guard (I2); dialogs kept as direct stable children (I5) | **Tâches** and the **Admissions Calendar** |
+| [LeadEnrollmentSection.jsx](../../../../src/components/crm/LeadEnrollmentSection.jsx) / [LeadPlacementSection.jsx](../../../../src/components/crm/LeadPlacementSection.jsx) | Spacing only, if any. Action rules and links unchanged. | Drawer hosts |
+| [CrmActionDialog.jsx](../../../../src/components/crm/CrmActionDialog.jsx) | Container and sticky footer; telephone-link gating (D2). No payload change. | Every drawer host plus manual creation |
+| [CrmEnrollmentDialog.jsx](../../../../src/components/crm/CrmEnrollmentDialog.jsx) | `100dvh` and sticky footer only: classes plus one presentational wrapper around the existing alert and button row; no hook, state, ref, handler or boundary change | Drawer hosts; the RCC-A2 suite |
+| [PlacementTestModal.jsx](../../../../src/components/placement/PlacementTestModal.jsx) | Optional container-only change | `/placement-tests`, `LegacyPlacementEditor` |
+| [FilterBar.jsx](../../../../src/components/operational/FilterBar.jsx) / [PageHeader.jsx](../../../../src/components/operational/PageHeader.jsx) | Opt-in compact props only; default rendering unchanged | **Students**, **Tâches** |
+| [presentation.mjs](../../../../src/lib/crm/presentation.mjs) | Additive pure helpers: meaningful-event set, history summary selection, `BAND_QUERIES` (the single breakpoint definition), stage-chip set per view. Existing exports, including `phoneLinks`, unchanged. | Pure tests |
 | New `src/components/crm/*` presentation modules: stage nav, filter sheet, `useNestedLayerEscapeGuard`/`useGuardedLayer`, the dialog-footer height observer | Allowed | — |
 | **Not changed** | `Sidebar.jsx`, `globals.css` global rules, `tailwind.config.js`, `ui/sheet.jsx`, `ui/dialog.jsx`, `ui/tooltip.jsx` and other `ui/` primitives, `package.json` dependencies and the lockfile | — |
 
@@ -872,7 +874,7 @@ Stop and report; do not work around it.
 
 **Documentation and status updates:**
 - On implementation, append an implementation record to this plan (branch, head/base SHA, checks, CI run) and update the RCC-r1 phase table.
-- Update [docs/ui/operational-foundation.md](../../ui/operational-foundation.md) only for reusable patterns actually added: the compact FilterBar/PageHeader variants, the stage navigation, and the sticky dialog footer.
+- Update [docs/ui/operational-foundation.md](../../../ui/operational-foundation.md) only for reusable patterns actually added: the compact FilterBar/PageHeader variants, the stage navigation, and the sticky dialog footer.
 - Leave CURRENT_STATE for the release closeout. No PRODUCT_RULES or SECURITY_RULES change is expected.
 - Hand off under the AGENTS Tier-2 flow: stop polling once CI is scheduled; no internal reviewer and no self-issued verdict.
 
@@ -929,7 +931,7 @@ Constraints the owner restated with the approval, binding on implementation:
 - **Prerequisites rechecked:** migration 112 is still the latest; nothing in the module manifest changed since `13c1db1…`.
 - **No** database, migration, RPC, read-shape, permission, finance, conversion, lifecycle/Meta, dependency, lockfile, `ui/` primitive, `globals.css`, Tailwind configuration or `Sidebar.jsx` change. `package.json` changes are script entries only.
 
-**Files.** The module manifest, plus new presentation modules under `src/components/crm/`: `useResponsiveBand.js` (the `BAND_QUERIES` band), `useNestedLayerEscapeGuard.js` (`useNestedLayerEscapeGuard` / `useGuardedLayer`), `ScrollRow.jsx` (bounded rows and edge fades) and `DialogStickyFooter.jsx` (the sticky footer and its height observer). Tests: `scripts/test-crm-rcc-b1.mjs` (pure) and `scripts/test-crm-rcc-b1-browser.mjs` (Chromium + WebKit), registered in `test:crm-opportunities` and `test:crm-opportunities-browser`. Documentation: this record, the RCC-r1 phase table and [operational-foundation.md](../../ui/operational-foundation.md) (compact `PageHeader`/`FilterBar`, stage navigation, sticky dialog footer, and the drawer-order paragraph that B1 made stale).
+**Files.** The module manifest, plus new presentation modules under `src/components/crm/`: `useResponsiveBand.js` (the `BAND_QUERIES` band), `useNestedLayerEscapeGuard.js` (`useNestedLayerEscapeGuard` / `useGuardedLayer`), `ScrollRow.jsx` (bounded rows and edge fades) and `DialogStickyFooter.jsx` (the sticky footer and its height observer). Tests: `scripts/test-crm-rcc-b1.mjs` (pure) and `scripts/test-crm-rcc-b1-browser.mjs` (Chromium + WebKit), registered in `test:crm-opportunities` and `test:crm-opportunities-browser`. Documentation: this record, the RCC-r1 phase table and [operational-foundation.md](../../../ui/operational-foundation.md) (compact `PageHeader`/`FilterBar`, stage navigation, sticky dialog footer, and the drawer-order paragraph that B1 made stale).
 
 **Implementation notes and justified deviations** (all within the approved behavior):
 
@@ -997,3 +999,13 @@ The product code is unchanged. The B1 browser suite now measures overlay geometr
   - **Root scrollbar.** Client-side navigation Students → Opportunités → Tâches, twice, starting from a pre-set inline root value. Opportunities applies `scroll`; leaving it restores the prior value; Tâches never applies it, including on a direct load.
   - **Demande.** When first and latest inquiries differ, both lines show their own values. The fixture adds a later submission, because first touch is immutable. The omission branch stays covered.
   - **Stage-chip drop.** A deterministic `DragEvent`/`DataTransfer` sequence runs the app's real `dragstart` and `drop` handlers, because Playwright WebKit's `dragTo()` is not reliable. A positive control onto a board column opens the guarded call dialog over the lead drawer and is cancelled with no command. The same sequence onto a stage chip is rejected (no `dragover` acceptance) and causes no dialog, no CRM write, no stage or version change and no URL change.
+
+## Production release — 2026-10-08
+
+- **PR #115**, reviewed head `73b3826395b4af184e4d724bdfbb705c097230a1`, exact-head Verify run [37732507087](https://github.com/elforssa/english-hills-admin/actions/runs/37732507087) green.
+- **Independent Tier-2 re-review** of that exact head: [READY FOR FINAL REVIEW](https://github.com/elforssa/english-hills-admin/pull/115#issuecomment-6053587429).
+- **Merge:** merge commit `b278d4ca348447a9a20aefeb6d8c3fafab13a312`, guarded by the reviewed head.
+- **Deployment:** Vercel Production `dpl_CqtdvAWUwNmtVTByFaQqBBv5zKcs` READY on that commit, aliased to `admin.english-hills.com`. Rollback target: `dpl_D4Tc8g1P8QwnBmZwY8DZkNDPMTFd` (source `e56a70b…`).
+- **No migration.** The Production ledger remains 001–112, and lifecycle/Meta remains dormant.
+- **Bounded acceptance:** read-only checks only. No authenticated real-staff Production walkthrough was performed by the release session; the receptionist/owner performs it separately.
+- Deferred, unchanged: D6, browser timezone reliability, the Director learner-link correction tool, Nouvelle pré-inscription duplicate risk, and a possible intermediate sidebar. Details: [release record](../../evidence/rcc-b1-production-2026-10-08.md).

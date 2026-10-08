@@ -149,7 +149,7 @@ The deployed owner-approved [UIF-r1](../architecture/plans/english-hills-ui-foun
 
 Owner-approved [UIF-r1a](../architecture/plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity) is deployed as migration 110, extending existing bounded Opportunities, Work Queue, operational-card/drawer and open-task JSON projections with staff display labels. A private helper carries the migration-109 label rule and also serves the existing paginated picker. Browser rows consume their own labels independently of picker pagination. No public RPC/signature, grant/RLS, private staff field, membership/order/cursor or business behavior changed. Production is recorded through 110 in [CURRENT_STATE](CURRENT_STATE.md#ui-foundation-production-closeout--2026-10-06).
 
-Owner-approved [RCC-A1](../architecture/plans/rcc-r1-receptionist-crm-completion.md#implementation-record) adds migration 111 (deployed 2026-10-07, [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md)):
+Owner-approved [RCC-A1](../architecture/plans/completed/rcc-r1-receptionist-crm-completion.md#implementation-record) adds migration 111 (deployed 2026-10-07, [release record](../architecture/evidence/rcc-a1-production-2026-10-07.md)):
 
 - Nullable `crm_tasks.schedule_kind` / `followup_reason` metadata, with no backfill.
 - A private `crm_security.reminder_due` preset resolver over the existing Casablanca policy windows.
