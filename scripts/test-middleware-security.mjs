@@ -187,6 +187,18 @@ try {
       else await r.arrayBuffer();
       checks++;
     }
+    {
+      // Premium retirement Release A: the retired workshop route has no page and no allowlist entry.
+      // Teachers and receptionists (who could reach it before) are sent home; admin/director get not-found.
+      const retired = '/premium-sessions';
+      const r = await fetch(app + retired, { headers: { Cookie }, redirect: 'manual' });
+      const target = expected(role, retired);
+      if (role === 'teacher') assert.equal(target, '/teacher-portal');
+      if (role === 'receptionist') assert.equal(target, '/crm/leads');
+      assert.equal(r.status, target ? 307 : 404, role + ' ' + retired);
+      if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target, role + ' ' + retired);
+      await r.arrayBuffer(); checks++;
+    }
     for (const path of ['/dashboard', '/groups/00000000-0000-4000-8000-000000000001']) {
       for (const extras of [{ RSC: '1' }, { RSC: '1', 'Next-Router-Prefetch': '1', purpose: 'prefetch' }]) {
         const r = await fetch(app + path + '?_rsc=fixture', { headers: { Cookie, ...extras }, redirect: 'manual' });

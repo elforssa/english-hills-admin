@@ -105,6 +105,23 @@ declare before_row jsonb; after_row jsonb; affected bigint; before_count bigint;
    raise exception 'Direct-write probe persisted a change: %',table_name; end if;
 end $$;
 
+-- Workshop tables remain until Release B; seed one readable row of each as the
+-- owner (the receptionist workshop commands are retired) for the deny probes.
+insert into public.students(id,full_name,status,session_type,niveau_cefr,plan_type,premium_start_date)
+ values('96000000-0000-0000-0000-000000000029','Workshop fixture learner','Enrolled','Yearly','Child 1','Premium',current_date);
+insert into public.premium_groups(id,name,teacher_id,weekday,start_time)
+ values('96000000-0000-0000-0000-000000000050','Batch workshop','96000000-0000-0000-0000-000000000010',6,'10:00');
+insert into public.premium_group_memberships(id,premium_group_id,student_id,start_date)
+ values('96000000-0000-0000-0000-000000000051','96000000-0000-0000-0000-000000000050',
+ '96000000-0000-0000-0000-000000000029',current_date);
+insert into public.premium_sessions(id,teacher_id,premium_group_id,scheduled_date,start_time)
+ values('96000000-0000-0000-0000-000000000052','96000000-0000-0000-0000-000000000010',
+ '96000000-0000-0000-0000-000000000050',
+ current_date + ((6-extract(isodow from current_date)::integer+7)%7),'10:00');
+insert into public.premium_attendance(id,premium_session_id,student_id,status)
+ values('96000000-0000-0000-0000-000000000053','96000000-0000-0000-0000-000000000052',
+ '96000000-0000-0000-0000-000000000029','Present');
+
 select set_config('request.jwt.claim.sub','96000000-0000-0000-0000-000000000003',true);
 select set_config('request.jwt.claims',
  '{"sub":"96000000-0000-0000-0000-000000000003","role":"authenticated","user_metadata":{"role":"director"}}',true);
@@ -316,6 +333,10 @@ do $$ declare v_charge uuid; v_receipt uuid; begin
  perform pg_temp.no_direct_write('charges',v_charge);
  perform pg_temp.no_direct_write('assessments','96000000-0000-0000-0000-000000000060');
  perform pg_temp.no_direct_write('authorized_adults','96000000-0000-0000-0000-000000000061');
+ perform pg_temp.no_direct_write('premium_groups','96000000-0000-0000-0000-000000000050');
+ perform pg_temp.no_direct_write('premium_group_memberships','96000000-0000-0000-0000-000000000051');
+ perform pg_temp.no_direct_write('premium_sessions','96000000-0000-0000-0000-000000000052');
+ perform pg_temp.no_direct_write('premium_attendance','96000000-0000-0000-0000-000000000053');
 end $$;
 
 -- Existing role scopes are unchanged; new school-wide mutations are reception-only.

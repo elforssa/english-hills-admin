@@ -25,6 +25,8 @@ update public.profiles set role='director',full_name='Synthetic Upgrade Director
 insert into public.students(id,full_name,status,session_type)
 select ('b1130000-0000-0000-0000-0000000000a'||n)::uuid, 'Synthetic upgrade learner '||n, 'Prospect', 'Yearly'
 from generate_series(1,9) n;
+insert into public.students(id,full_name,status,session_type)
+values ('b1130000-0000-0000-0000-0000000000aa','Synthetic upgrade learner 10','Prospect','Yearly');
 
 -- Case payloads (a)-(e) of the plan's lost-response retry test, plus fixtures.
 -- The 112-era client sent plan_type 'Standard' on every new request, including
@@ -71,10 +73,13 @@ insert into rehearsal113.fx values ('result_v', public.create_charge_payment(jso
 select public.void_financial_charge((select (v->>'charge_id')::uuid from rehearsal113.fx where k='result_v'),
   'Synthetic voided charge','b1130000-0000-0000-0000-0000000000c9');
 
--- An undated non-legacy Yearly charge, as pre-057 history left them, by direct insert.
+-- Undated non-legacy Yearly charges, as pre-057 history left them, by direct
+-- insert: one with the plan word and one with free text.
 reset role;
 insert into public.charges(id,student_id,session_type,service_description,plan_type,gross_amount,created_by)
 values ('b1130000-0000-0000-0000-0000000000b5','b1130000-0000-0000-0000-0000000000a5','Yearly','Yearly · Standard','Standard',1000,
+  'b1130000-0000-0000-0000-000000000001'),
+       ('b1130000-0000-0000-0000-0000000000b7','b1130000-0000-0000-0000-0000000000aa','Yearly','Année 2025–2026, module 1','Standard',900,
   'b1130000-0000-0000-0000-000000000001');
 
 -- A legacy Yearly balance, shaped as migrations 055/056 created them.
@@ -95,6 +100,9 @@ set local role authenticated;
 insert into rehearsal113.fx values ('result_u', public.create_charge_payment(jsonb_build_object(
   'student_id','b1130000-0000-0000-0000-0000000000a5','charge_id','b1130000-0000-0000-0000-0000000000b5','payment_amount',300,
   'payment_date','2026-09-15','payment_method','Espèces','idempotency_key','b1130000-0000-0000-0000-0000000000c6')));
+insert into rehearsal113.fx values ('result_t', public.create_charge_payment(jsonb_build_object(
+  'student_id','b1130000-0000-0000-0000-0000000000aa','charge_id','b1130000-0000-0000-0000-0000000000b7','payment_amount',200,
+  'payment_date','2026-09-15','payment_method','Espèces','idempotency_key','b1130000-0000-0000-0000-0000000000cb')));
 reset role;
 
 insert into rehearsal113.fx values
@@ -105,6 +113,7 @@ insert into rehearsal113.fx values
  ('charge_f',(select v->'charge_id' from rehearsal113.fx where k='result_f')),
  ('charge_v',(select v->'charge_id' from rehearsal113.fx where k='result_v')),
  ('charge_u','"b1130000-0000-0000-0000-0000000000b5"'),
+ ('charge_t','"b1130000-0000-0000-0000-0000000000b7"'),
  ('charge_l','"b1130000-0000-0000-0000-0000000000b6"');
 
 -- The 112 baseline really carries the plan word on charges and receipts.

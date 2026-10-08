@@ -75,12 +75,13 @@ insert into instalment values
  ('a',pg_temp.id('charge_a'),'b1130000-0000-0000-0000-0000000000a1',null),
  ('b',pg_temp.id('charge_b'),'b1130000-0000-0000-0000-0000000000a2',null),
  ('u',pg_temp.id('charge_u'),'b1130000-0000-0000-0000-0000000000a5',null),
+ ('t',pg_temp.id('charge_t'),'b1130000-0000-0000-0000-0000000000aa',null),
  ('l',pg_temp.id('charge_l'),'b1130000-0000-0000-0000-0000000000a6',null);
 grant select, update on instalment to authenticated;
 set local role authenticated;
 update instalment set result=public.create_charge_payment(jsonb_build_object('student_id',student_id,'charge_id',charge_id,
   'payment_amount',100,'payment_date','2026-10-01','payment_method','Espèces','idempotency_key',gen_random_uuid()))
-where k in ('a','b','u','l');
+where k in ('a','b','u','t','l');
 reset role;
 
 do $$
@@ -96,28 +97,31 @@ begin
   if v.plan_type is not null then raise exception 'Instalment % stored a plan value', v.k; end if;
   if v.k in ('a','b') and (v.service_description <> 'Yearly · 2026/2027' or v.school_year_snapshot <> '2026/2027') then
    raise exception 'Instalment % on a dated charge kept the old text: %', v.k, v.service_description; end if;
-  if v.k = 'u' and (v.service_description <> 'Yearly' or v.school_year_snapshot is not null) then
-   raise exception 'Instalment on the undated charge: %', v.service_description; end if;
+  -- Owner amendment (2026-10-08): an undated non-legacy Yearly charge keeps its own text, as in 112.
+  if v.k in ('u','t') and (v.service_description is distinct from v.charge_text or v.school_year_snapshot is not null
+     or v.charge_text <> case v.k when 'u' then 'Yearly · Standard' else 'Année 2025–2026, module 1' end) then
+   raise exception 'Instalment on the undated charge % did not keep its text: %', v.k, v.service_description; end if;
   if v.k = 'l' and (v.service_description is distinct from v.charge_text or v.charge_text not like 'Reçu historique EH-%'
      or v.school_year_snapshot is not null or not v.charge_legacy) then
    raise exception 'Legacy balance payment changed its text or invented a year: %', v.service_description; end if;
-  if v.service_description ~* '(standard|premium)' then raise exception 'Instalment % carries a plan word', v.k; end if;
+  if v.k <> 'u' and v.service_description ~* '(standard|premium)' then raise exception 'Instalment % carries a plan word', v.k; end if;
   if v.k in ('a','b','u') and v.first_text !~ ' · (Standard|Premium)' then raise exception 'First receipt fixture lost its text'; end if;
   v_checked := v_checked + 1;
  end loop;
- if v_checked <> 4 then raise exception 'Expected four instalment receipts, checked %', v_checked; end if;
- -- Arithmetic and numbering as before: four consecutive numbers, balances reduced by 100.
- if (select count(*) from instalment where result->>'receipt_id' is not null) <> 4
-  or (select last_value from public.receipt_number_seq) <> v_seq + 4
+ if v_checked <> 5 then raise exception 'Expected five instalment receipts, checked %', v_checked; end if;
+ -- Arithmetic and numbering as before: five consecutive numbers, balances reduced by 100.
+ if (select count(*) from instalment where result->>'receipt_id' is not null) <> 5
+  or (select last_value from public.receipt_number_seq) <> v_seq + 5
   or (select balance from public.charge_balances where id=pg_temp.id('charge_a')) <> 1400
   or (select balance from public.charge_balances where id=pg_temp.id('charge_b')) <> 1900
   or (select balance from public.charge_balances where id=pg_temp.id('charge_u')) <> 600
+  or (select balance from public.charge_balances where id=pg_temp.id('charge_t')) <> 600
   or (select balance from public.charge_balances where id=pg_temp.id('charge_l')) <> 1100 then
   raise exception 'Instalment numbering or balances differ from the 112 arithmetic';
  end if;
  if (select array_agg(r.receipt_number order by r.receipt_number) from instalment i
       join public.receipts r on r.id=(i.result->>'receipt_id')::uuid)
-    <> (select array_agg('EH-2026-'||lpad((v_seq+n)::text,5,'0') order by n) from generate_series(1,4) n) then
+    <> (select array_agg('EH-2026-'||lpad((v_seq+n)::text,5,'0') order by n) from generate_series(1,5) n) then
   raise exception 'Instalment receipt numbers are not consecutive';
  end if;
  -- Charge rows and every first receipt are byte-identical to before.

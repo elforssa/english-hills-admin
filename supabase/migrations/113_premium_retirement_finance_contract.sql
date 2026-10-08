@@ -5,9 +5,10 @@
 --  * a new Yearly charge stores plan_type 'Standard' (required by
 --    charges_yearly_formula_check, which is unchanged) and the text
 --    'Yearly · <school year>';
---  * a receipt on a non-legacy Yearly charge builds 'Yearly · <school year>'
---    instead of copying the charge text; legacy and non-Yearly charges keep
---    copying their own text;
+--  * a receipt on a dated non-legacy Yearly charge builds
+--    'Yearly · <school year>' instead of copying the charge text; an undated
+--    non-legacy Yearly charge, a legacy charge and a non-Yearly charge keep
+--    copying their own text, as in 096 (owner amendment 2026-10-08);
 --  * receipts always store plan_type NULL;
 --  * the request fingerprint keeps the 096 plan_type input for a new Yearly
 --    charge (owner decision Q7, option A) so committed requests still replay.
@@ -184,11 +185,12 @@ begin
   v_balance := round(v_balance-v_payment,2);
   v_status := case when v_balance=0 then 'Soldé' when v_charge.due_date<current_date then 'En retard' else 'Acompte versé' end;
   select coalesce(full_name,email) into v_actor_name from public.profiles where id=v_actor;
-  -- A receipt on a non-legacy Yearly charge gets its text from session type and
-  -- school year, never from the charge text; every other charge, including a
-  -- legacy balance, keeps copying its own text. Receipts never store a plan.
+  -- A receipt on a dated non-legacy Yearly charge gets its text from session
+  -- type and school year, never from the charge text; every other charge
+  -- (undated Yearly, legacy balance, other sessions) keeps copying its own
+  -- text. Receipts never store a plan.
   v_receipt_service := case
-    when v_charge.session_type = 'Yearly' and not v_charge.legacy
+    when v_charge.session_type = 'Yearly' and not v_charge.legacy and v_charge.school_year is not null
       then concat_ws(' · ', 'Yearly', v_charge.school_year)
     else v_charge.service_description
   end;

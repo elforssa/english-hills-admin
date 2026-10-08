@@ -27,12 +27,13 @@ update public.profiles set role='director' where id='b1131000-0000-0000-0000-000
 update public.profiles set role='parent' where id='b1131000-0000-0000-0000-000000000002';
 insert into public.students(id,full_name,status,session_type)
 select ('b1131000-0000-0000-0000-0000000000a'||n)::uuid, 'Synthetic retirement learner '||n, 'Prospect', 'Yearly'
-from generate_series(1,6) n;
+from generate_series(1,7) n;
 
 -- Pre-113 charge shapes by direct insert: dated with the plan word, undated, and legacy.
 insert into public.charges(id,student_id,session_type,school_year,service_description,plan_type,gross_amount,created_by)
 values ('b1131000-0000-0000-0000-0000000000b1','b1131000-0000-0000-0000-0000000000a4','Yearly','2026/2027','Yearly · Premium · 2026/2027','Premium',3000,'b1131000-0000-0000-0000-000000000001'),
-       ('b1131000-0000-0000-0000-0000000000b2','b1131000-0000-0000-0000-0000000000a5','Yearly',null,'Yearly · Standard','Standard',1000,'b1131000-0000-0000-0000-000000000001');
+       ('b1131000-0000-0000-0000-0000000000b2','b1131000-0000-0000-0000-0000000000a5','Yearly',null,'Yearly · Standard','Standard',1000,'b1131000-0000-0000-0000-000000000001'),
+       ('b1131000-0000-0000-0000-0000000000b3','b1131000-0000-0000-0000-0000000000a7','Yearly',null,'Année 2025–2026, module 1','Standard',900,'b1131000-0000-0000-0000-000000000001');
 insert into public.receipts(id,student_id,date,nom_prenom,session_type,plan_type,montant_total,montant_paye,mode_paiement,
   statut_paiement,legacy,actor_id,gross_amount_snapshot,discount_amount_snapshot,net_amount_snapshot,paid_before_snapshot,
   balance_after_snapshot,email_delivery_status)
@@ -148,23 +149,29 @@ do $$ declare v jsonb; begin
 end $$;
 set local role authenticated;
 
--- Instalments on pre-113 shapes: dated, undated, and a legacy balance.
+-- Instalments on pre-113 shapes: dated, undated (owner amendment: text copied), and a legacy balance.
 insert into r values
  ('dated',   '{"student_id":"b1131000-0000-0000-0000-0000000000a4","charge_id":"b1131000-0000-0000-0000-0000000000b1"}', null),
  ('undated', '{"student_id":"b1131000-0000-0000-0000-0000000000a5","charge_id":"b1131000-0000-0000-0000-0000000000b2"}', null),
+ ('undated_text', '{"student_id":"b1131000-0000-0000-0000-0000000000a7","charge_id":"b1131000-0000-0000-0000-0000000000b3"}', null),
  ('legacy',  '{"student_id":"b1131000-0000-0000-0000-0000000000a6","charge_id":"b1131000-0000-0000-0000-0000000000b6"}', null);
 update r set payload = payload || jsonb_build_object('payment_amount',100,'payment_method','Espèces','idempotency_key',gen_random_uuid())
-where k in ('dated','undated','legacy');
-update r set result = public.create_charge_payment(payload) where k in ('dated','undated','legacy');
+where k in ('dated','undated','undated_text','legacy');
+update r set result = public.create_charge_payment(payload) where k in ('dated','undated','undated_text','legacy');
 reset role;
-do $$ declare v_dated public.receipts; v_undated public.receipts; v_legacy public.receipts; begin
+do $$ declare v_dated public.receipts; v_undated public.receipts; v_undated_text public.receipts; v_legacy public.receipts; begin
  select * into v_dated from public.receipts where id=(select (result->>'receipt_id')::uuid from r where k='dated');
  select * into v_undated from public.receipts where id=(select (result->>'receipt_id')::uuid from r where k='undated');
+ select * into v_undated_text from public.receipts where id=(select (result->>'receipt_id')::uuid from r where k='undated_text');
  select * into v_legacy from public.receipts where id=(select (result->>'receipt_id')::uuid from r where k='legacy');
  if v_dated.service_description <> 'Yearly · 2026/2027' or v_dated.plan_type is not null or v_dated.school_year_snapshot <> '2026/2027' then
   raise exception 'Instalment on a dated pre-113 charge: %', v_dated.service_description; end if;
- if v_undated.service_description <> 'Yearly' or v_undated.plan_type is not null or v_undated.school_year_snapshot is not null then
+ -- Owner amendment (2026-10-08): an undated non-legacy Yearly charge keeps its own text, as in 112.
+ if v_undated.service_description <> 'Yearly · Standard' or v_undated.plan_type is not null or v_undated.school_year_snapshot is not null then
   raise exception 'Instalment on an undated pre-113 charge: %', v_undated.service_description; end if;
+ if v_undated_text.service_description <> 'Année 2025–2026, module 1' or v_undated_text.plan_type is not null
+  or v_undated_text.school_year_snapshot is not null or v_undated_text.balance_after_snapshot <> 800 then
+  raise exception 'Instalment on an undated free-text charge: %', v_undated_text.service_description; end if;
  if v_legacy.service_description is distinct from (select service_description from public.charges where id='b1131000-0000-0000-0000-0000000000b6')
   or v_legacy.service_description not like 'Reçu historique EH-%' or v_legacy.plan_type is not null or v_legacy.school_year_snapshot is not null then
   raise exception 'Legacy balance payment: %', v_legacy.service_description; end if;

@@ -35,6 +35,11 @@ begin
     <> array['Yearly','Yearly · 2026/2027','Yearly · 2026/2027','Yearly · 2026/2027'] then
   raise exception 'Open Yearly charge text was not cleaned as expected';
  end if;
+ -- Undated open charges: the plan word is removed; free text without one is not a target.
+ if (select service_description from public.charges where id=pg_temp.id('charge_u')) <> 'Yearly'
+  or (select service_description from public.charges where id=pg_temp.id('charge_t')) <> 'Année 2025–2026, module 1' then
+  raise exception 'Undated open charge text was not handled as expected';
+ end if;
  -- Only the description changed on the targets; plan_type keeps its historical value.
  if exists(select 1 from rehearsal113.snapshot s join public.charges c on c.id=s.id
             where s.stage='pre_d5a' and s.kind='charge' and c.id = any(v_targets)
