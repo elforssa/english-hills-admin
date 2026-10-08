@@ -12,14 +12,17 @@ const snapshot = () => resolveBand({ sm: window.matchMedia(BAND_QUERIES.sm).matc
 // Unknown until the browser answers; callers wait instead of guessing a band.
 const serverSnapshot = () => null;
 
-export default function useResponsiveBand() {
-  // Engines with classic scrollbars (WebKit) measure the width queries without the page
-  // scrollbar. The band changes page height, so a scrollbar that came and went with it
-  // would flip the band back and forth at an exact edge. Keep it present while mounted.
+// stableScrollbar (Opportunities only, owner decision 2026-10-08): engines with classic
+// scrollbars (WebKit) measure the width queries without the page scrollbar. Opportunities'
+// band changes page height, so a scrollbar that came and went with it would flip the band
+// back and forth at an exact edge. While enabled, the root scrollbar stays present; the
+// previous inline value is restored exactly on disable or unmount.
+export default function useResponsiveBand({ stableScrollbar = false } = {}) {
   useEffect(() => {
+    if (!stableScrollbar) return undefined;
     const root = document.documentElement, previous = root.style.overflowY;
     root.style.overflowY = 'scroll';
     return () => { root.style.overflowY = previous; };
-  }, []);
+  }, [stableScrollbar]);
   return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
 }

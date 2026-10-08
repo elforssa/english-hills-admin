@@ -11,10 +11,10 @@ function Column({ stage, initial, args, count, onOpen, onAction, dragging, asOf 
   const cursor = cursors.at(-1);
   const query = useCrmRead('crm_get_opportunities', { ...args, p_stage: stage, p_cursor: cursor }, !!cursor);
   const page = cursor ? query.data?.pages?.[stage] : initial;
-  return <section aria-label={STATUS[stage]} data-board-stage={stage} className={`min-w-0 rounded-lg bg-slate-100 px-1.5 pb-1.5 ${dragging && ![null,'unsupported'].includes(opportunityAction(dragging,stage)) ? 'ring-2 ring-blue-300' : ''}`} onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }} onDrop={e => {
+  return <section aria-label={STATUS[stage]} data-board-stage={stage} className={`min-w-0 rounded-lg bg-slate-100 px-1 pb-1 ${dragging && ![null,'unsupported'].includes(opportunityAction(dragging,stage)) ? 'ring-2 ring-blue-300' : ''}`} onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }} onDrop={e => {
     e.preventDefault();
     try { const lead = JSON.parse(e.dataTransfer.getData('application/eh-opportunity')); const action = opportunityAction(lead.status, stage); if (action) onAction(lead.id, action); } catch { /* Ignore foreign drag data. */ }
-  }}><header className="sticky top-0 z-10 -mx-1.5 flex items-center justify-between gap-2 rounded-t-lg bg-slate-100 px-3 py-2"><h2 className="min-w-0 break-words text-base leading-6 font-semibold">{STATUS[stage]}</h2><span className="text-sm tabular-nums text-slate-600">{query.data?.counts?.[stage] ?? count ?? '—'}</span></header>
+  }}><header className="sticky top-0 z-10 -mx-1 flex items-center justify-between gap-2 rounded-t-lg bg-slate-100 px-3 py-2"><h2 className="min-w-0 break-words text-base leading-6 font-semibold">{STATUS[stage]}</h2><span className="text-sm tabular-nums text-slate-600">{query.data?.counts?.[stage] ?? count ?? '—'}</span></header>
     {cursor && <ReadState query={query} />}
     <div className="space-y-2">{page?.rows?.map(lead => <OpportunityCard key={lead.id} lead={lead} onOpen={onOpen} onAction={onAction} asOf={asOf} />)}</div>
     {page && !page.rows.length && <p className="px-1 py-8 text-center text-xs text-slate-500">Aucun prospect</p>}

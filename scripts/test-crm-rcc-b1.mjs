@@ -85,4 +85,14 @@ assert.doesNotMatch(sheet, /<(Select|Popover|HoverCard|ContextMenu)\b/, 'B1 adds
 const tail = sheet.slice(sheet.lastIndexOf('</ReadState>'));
 for (const dialog of ['<CrmActionDialog', '<PlacementTestModal', '<CrmEnrollmentDialog']) assert.ok(tail.includes(dialog), `${dialog} stays a direct child of SheetContent, outside ReadState`);
 assert.doesNotMatch(readFileSync('src/components/ui/sheet.jsx', 'utf8'), /onEscapeKeyDown|useNestedLayerEscapeGuard/, 'the Sheet primitive is not edited for the guard');
+// Owner decision 2026-10-08 (I2): the root scrollbar workaround is Opportunities-only.
+const bandHook = readFileSync('src/components/crm/useResponsiveBand.js', 'utf8');
+assert.match(bandHook, /export default function useResponsiveBand\(\{ stableScrollbar = false \} = \{\}\)/, 'the workaround is opt-in');
+assert.match(bandHook, /if \(!stableScrollbar\) return undefined;/, 'nothing is applied unless enabled');
+assert.match(bandHook, /previous = root\.style\.overflowY;[\s\S]*return \(\) => \{ root\.style\.overflowY = previous; \};/, 'the exact previous inline value is restored');
+assert.match(readFileSync('src/components/crm/CrmWorkspace.jsx', 'utf8'), /useResponsiveBand\(\{ stableScrollbar: mode === 'leads' \}\)/, 'only Opportunities enables it; Tâches never does');
+// I1: the overflow trigger stays in flow beside the whole identity block.
+const card = readFileSync('src/components/crm/OpportunityCard.jsx', 'utf8');
+assert.match(card, /<div className="flex items-start gap-1">\s*\{\/\*[\s\S]*?\*\/\}\s*<button onClick=\{\(\) => onOpen\(lead\.id\)\}[\s\S]*?<\/button>\s*<OpportunityActions /, 'identity button and trigger share one flex row');
+assert.doesNotMatch(card, /absolute right-0 top-0/, 'the trigger is not positioned over the identity');
 console.log('PASS RCC-B1 pure helpers: bands, chips, history summary, Escape decision/stack, scroll restoration, telephone gating and drawer structure');

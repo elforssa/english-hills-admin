@@ -83,6 +83,24 @@ async function dialogFocused(){await focusIs(()=>{const d=document.querySelector
 async function settled(locator){await locator.evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(a=>a.finished.catch(()=>{}))));}
 // A footer-less dialog view (result/success) keeps bottom spacing above the dialog edge.
 async function footerlessSpacing(label){await settled(top());const gap=await top().evaluate(el=>{const r=el.getBoundingClientRect(),b=[...el.querySelectorAll('button')].filter(x=>x.textContent.trim()==='Terminé').at(-1).getBoundingClientRect();return {gap:r.bottom-b.bottom,min:matchMedia('(min-width: 640px)').matches?24:16,footer:!!el.querySelector('[data-dialog-footer]')};});assert(!gap.footer&&gap.gap>=gap.min-1,`${phase} ${label}: footer-less view keeps bottom spacing ${JSON.stringify(gap)}`);}
+// I1: no text line of a card's identity button may intersect its overflow trigger.
+async function identityClear(label,expectedTrigger){
+ const report=await page.evaluate(()=>[...document.querySelectorAll('[data-testid=opportunity-card]')].filter(c=>c.getClientRects().length).map(card=>{
+  const trigger=card.querySelector('button[aria-label^="Actions ·"]').getBoundingClientRect(),identity=card.querySelector('button:not([aria-label])');
+  const rects=[...identity.querySelectorAll('span span')].flatMap(span=>{const range=document.createRange();range.selectNodeContents(span);return [...range.getClientRects()].filter(r=>r.width&&r.height);});
+  const hits=rects.filter(r=>r.left<trigger.right&&r.right>trigger.left&&r.top<trigger.bottom&&r.bottom>trigger.top).map(r=>[Math.round(r.left),Math.round(r.right),Math.round(r.top),Math.round(r.bottom)]);
+  return {id:card.dataset.leadId,text:identity.textContent.slice(0,60),trigger:[Math.round(trigger.width),Math.round(trigger.height),Math.round(trigger.left),Math.round(trigger.top)],lines:rects.length,hits};}));
+ assert(report.length>0,`${phase} ${label}: cards measured`);
+ for(const card of report){assert.deepEqual(card.hits,[],`${phase} ${label}: identity text intersects the overflow trigger ${JSON.stringify(card)}`);assert.equal(card.trigger[0],expectedTrigger,`${phase} ${label}: trigger width ${JSON.stringify(card)}`);}
+ return report;
+}
+// Deterministic drag-and-drop through the real handlers: one DataTransfer shared by
+// dragstart on the card (the app writes its payload) and dragenter/dragover/drop on the
+// target. Used in both engines because Playwright WebKit's dragTo() is not reliable.
+async function syntheticDrop(card,target){
+ return page.evaluate(([source,destination])=>{const transfer=new DataTransfer();const fire=(el,type)=>el.dispatchEvent(new DragEvent(type,{bubbles:true,cancelable:true,dataTransfer:transfer}));
+  fire(source,'dragstart');const payload=transfer.getData('application/eh-opportunity');fire(destination,'dragenter');const accepted=!fire(destination,'dragover');fire(destination,'drop');fire(source,'dragend');return {payload,accepted};},[await card.elementHandle(),await target.elementHandle()]);
+}
 async function noPopup(label){assert.equal(await page.locator('[role=tooltip],[data-radix-popper-content-wrapper],[role=menu]').count(),0,`${label}: no popup/tooltip open`);}
 async function settle(){await page.waitForTimeout(120);}
 // Escape sequences E1–E4 for any drawer host; reopen() opens the drawer, restored() checks host focus.
@@ -125,9 +143,17 @@ try {
  const day=sql("select to_char((now() at time zone 'Africa/Casablanca')::date+1,'YYYY-MM-DD')");
  const calendarLead=intake('B1 calendrier');act('qualify_lead',calendarLead,{conversation_channel:'phone',note:'Test souhaité',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'10:00',examinateur:'Examinateur B1'});}
+ // I1: a deliberately long learner identity beside the overflow trigger (En discussion column).
+ const risky=intake('B1 identité longue',{learner:'Yasmine El Fassi-Bennani',data:{learner_age:8}});act('record_conversation',risky,{channel:'in_person',note:'Échange synthétique',next_task:next()});
+ // D1 positive branch: a later, distinct inquiry (first touch is immutable; the latest moves).
+ const distinct=intake('B1 demandes distinctes');
+ sql(`with f as(select s.* from public.crm_submissions s join public.crm_leads l on l.first_submission_id=s.id where l.id='${distinct}'),
+  n as(insert into public.crm_submissions(lead_id,channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,resolved_by,resolved_at,payload_hash)
+   select lead_id,'website',received_at+interval '5 minutes',occurred_at+interval '5 minutes',time_source,core_fields,form_answers,'Site web · Formulaire synthétique',match_status,resolved_by,resolved_at,encode(sha256(convert_to(id::text||':b1-latest','UTF8')),'hex') from f returning id)
+  update public.crm_leads set latest_submission_id=(select id from n) where id='${distinct}'`);
  const total=Number(sql(`select count(*) from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by='${actor}')`));
  const ordinaryCard=fresh[5];
- console.log(`fixture: ${total} synthetic prospects (27 Nouveau, 4+1 Contact en cours, 3 En discussion, 6 Qualifié, 1 Perdu, 1 Non qualifié, overdue task, booked test)`);
+ console.log(`fixture: ${total} synthetic prospects (27+1 Nouveau incl. distinct inquiries, 4+1 Contact en cours, 3+1 En discussion incl. long identity, 6 Qualifié, 1 Perdu, 1 Non qualifié, overdue task, booked test)`);
 
  // B1_ENGINES narrows a local iteration; the acceptance run uses both engines.
  for(const engine of (process.env.B1_ENGINES||'chromium,webkit').split(',').map(name=>({chromium,webkit})[name])){
@@ -294,6 +320,7 @@ try {
    await sheet().getByRole('button',{name:'Charger les plus anciens',exact:true}).waitFor();await sheet().getByRole('button',{name:'Afficher les derniers échanges',exact:true}).click();assert(await historyList.count()<=3);
    phase=`${E} Demande ${viewport.width}`;for(const text of ['Origine du prospect · ','Dernière demande · ','Intérêt déclaré · ','Résumé de la dernière demande','Toutes les réponses aux formulaires'])await sheet().getByText(text,{exact:true}).waitFor();
    await sheet().getByText('Programme annuel · Anglais pour jeunes apprenants',{exact:true}).first().waitFor();
+   assert.equal(await sheet().getByText('Première demande · ',{exact:true}).count(),0,'D1: an identical first inquiry is omitted');
    await closeDrawer();
    await page.route('**/rest/v1/rpc/crm_get_operational_acquisition_summary',route=>route.fulfill({status:500,contentType:'application/json',body:'{"message":"synthetic failure"}'}));
    await openDrawer(rich);await sheet().getByText('Impossible de charger ces informations.').first().waitFor();await sheet().getByText('Origine du prospect · ',{exact:true}).waitFor();await sheet().getByText('Intérêt déclaré · ',{exact:true}).waitFor();
@@ -379,6 +406,60 @@ try {
    await context.close();
   }
   console.log(`PASS ${E} telephone D2 C: coarse <640 → tel: present and records nothing; fine <640, coarse ≥640 and fine ≥640 → absent; number, Copier and recording always available`);
+  }
+  if(on(11)){
+  // 11. Review corrections: I1 identity/trigger geometry, I2 Opportunities-only root scrollbar,
+  // D1 distinct inquiries, and stage-chip drops (synthetic drag events, both engines).
+  await newContext(engine);
+  phase=`${E} I1 fine 1280`;await setSize({width:1280,height:800});await gotoLeads();assert.equal((await mode()).presentation,'board');
+  const riskyCard=page.locator(`[data-testid=opportunity-card][data-lead-id="${risky}"]`);await riskyCard.getByText('Yasmine El Fassi-Bennani · 8 ans',{exact:true}).waitFor();
+  const fine=await identityClear('board',36);assert(fine.find(c=>c.id===risky).lines>=2,'the risky learner wraps beside the trigger, never under it');
+  const ordinaryHeight=await page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`).evaluate(c=>c.getBoundingClientRect().height);assert(ordinaryHeight<=150,`${phase}: ordinary card ${ordinaryHeight}px ≤ 150`);
+  // I2: Opportunities applies the root scrollbar workaround, restores the prior inline value, and Tâches never applies it.
+  phase=`${E} I2 root scrollbar`;await setSize({width:1440,height:900});await nav(app+'/students');await page.getByRole('heading').first().waitFor();
+  await page.evaluate(()=>{document.documentElement.style.overflowY='auto';window.__b1Spa=true;});
+  const sideLink=async name=>{const link=page.locator('.operational-sidebar:not(#mobile-sidebar)').getByRole('link',{name,exact:true});if(!(await link.isVisible()))await page.locator('.operational-sidebar:not(#mobile-sidebar)').getByRole('button',{name:'CRM',exact:true}).click();await link.click();};
+  const rootOverflow=()=>page.evaluate(()=>({value:document.documentElement.style.overflowY,spa:window.__b1Spa===true}));
+  for(let round=0;round<2;round++){
+   await sideLink('Opportunités');await page.waitForURL(url=>url.pathname==='/crm/leads');await page.locator('[data-presentation]').waitFor();
+   assert.deepEqual(await rootOverflow(),{value:'scroll',spa:true},'Opportunities applies the root scrollbar (client-side navigation)');
+   await sideLink('Tâches');await page.waitForURL(url=>url.pathname==='/crm/today');await page.getByRole('heading',{name:'Tâches · Mon travail'}).waitFor();await page.locator('[data-band]').waitFor();
+   assert.deepEqual(await rootOverflow(),{value:'auto',spa:true},'leaving Opportunities restores the prior inline value; Tâches never applies it');
+  }
+  await nav(app+'/crm/today?bucket=overdue');await page.locator('[data-band]').waitFor();await page.getByTestId('work-row').first().waitFor();assert.equal((await rootOverflow()).value,'','a direct Tâches load leaves the root untouched');
+  await gotoLeads();assert.equal((await rootOverflow()).value,'scroll');await nav(app+'/students');await page.getByRole('heading').first().waitFor();assert.equal((await rootOverflow()).value,'','full navigation away restores the original empty value');
+  // D1: distinct latest and first inquiries both render with their own values.
+  phase=`${E} D1 distinct inquiries`;await openDrawer(distinct);
+  const inquiry=label=>sheet().getByText(label,{exact:true}).locator('xpath=following-sibling::dd[1]');
+  assert.match(await inquiry('Dernière demande · ').innerText(),/^Site web · Formulaire synthétique · \S/);assert.match(await inquiry('Première demande · ').innerText(),/^Manuel · Téléphone · \S/);
+  assert.notEqual(await inquiry('Dernière demande · ').innerText(),await inquiry('Première demande · ').innerText());await closeDrawer();
+  // Drop path: a positive control proves the synthetic sequence reaches the board's real drop handler...
+  phase=`${E} drop control 1280`;await setSize({width:1280,height:800});await gotoLeads();let writesBefore=writes.length;
+  const control=await syntheticDrop(page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`),page.locator('[data-board-stage="CONTACTING"]'));
+  assert(control.payload.includes(ordinaryCard)&&control.accepted,`${phase}: the card wrote its drag payload and the column accepted it ${JSON.stringify(control)}`);
+  // The column routes to the same guarded path as the card menu: the lead drawer with the call dialog above it.
+  await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
+  assert.equal(writes.length,writesBefore,'the guarded dialog was cancelled: no command');
+  // ...then the same sequence onto a stage chip is a no-op: no dialog, no write, no stage or URL change.
+  for(const width of [768,390]){
+   phase=`${E} chip drop ${width}`;await setSize({width,height:900});await gotoLeads();assert.equal((await mode()).presentation,'stage-list');
+   const draggable=page.locator('[data-testid=opportunity-card][draggable=true]:visible').first();await draggable.waitFor();
+   const lead=await draggable.getAttribute('data-lead-id'),before=detail(lead),url=page.url();writesBefore=writes.length;
+   const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${lead}"]`);
+   const result=await syntheticDrop(card,page.getByRole('group',{name:'Étapes'}).getByRole('button',{name:/^Contact en cours/}));
+   assert(result.payload.includes(lead),'the real dragstart handler ran');assert.equal(result.accepted,false,'a stage chip does not accept a drop');
+   await page.waitForTimeout(500);assert.equal(await page.locator('[role=dialog]').count(),0,'no guarded dialog opens');assert.equal(writes.length,writesBefore,'no CRM command');
+   const after=detail(lead);assert.equal(after.status,before.status);assert.equal(after.version,before.version,'lead unchanged');assert.equal(page.url(),url,'no stage filter change');
+  }
+  await context.close();
+  // I1 under a coarse pointer: the trigger is 44px and still never overlaps identity text.
+  await newContext(engine,{hasTouch:true,...(engine===chromium?{isMobile:true}:{})});
+  for(const width of [768,1280]){
+   phase=`${E} I1 coarse ${width}`;await setSize({width,height:900});await gotoLeads(width>=1024?'?layout=board':'');assert((await mode()).coarse,'coarse pointer asserted first');
+   await page.locator(`[data-testid=opportunity-card][data-lead-id="${risky}"]`).getByText('Yasmine El Fassi-Bennani · 8 ans',{exact:true}).waitFor();await identityClear('coarse',44);
+  }
+  await context.close();
+  console.log(`PASS ${E} review corrections: identity never under the overflow trigger (fine 36px at 1280; coarse 44px at 768/1280); Opportunities-only root scrollbar with exact restoration and Tâches untouched; distinct first/latest inquiries; stage-chip drop is a no-op behind a proven drop path`);
   }
   await browser.close();browser=null;
  }

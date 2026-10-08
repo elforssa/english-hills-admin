@@ -37,7 +37,7 @@ export default function CrmWorkspace({
   const [initialAction, setInitialAction] = useState(null), [initialTask, setInitialTask] = useState(null);
   useEffect(() => { if (!selected) { setInitialAction(null); setInitialTask(null); } }, [selected]);
   // Shared sm/lg queries decide the band; the default moves from 768 to the lg board (D7).
-  const band = useResponsiveBand();
+  const band = useResponsiveBand({ stableScrollbar: mode === 'leads' });
   const filters = Object.fromEntries(['view','q','owner','channel','source','program','stage'].map(key => [key, params.get(key) ?? ({view:'all',owner:'all'}[key] || '')]));
   const preferredLayout = params.get('layout') || (band === 'desktop' ? 'board' : 'list');
   const layout = filters.view === 'closed' ? 'list' : preferredLayout;

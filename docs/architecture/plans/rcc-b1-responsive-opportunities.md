@@ -986,3 +986,14 @@ The product code is unchanged. The B1 browser suite now measures overlay geometr
   - card vertical padding is 6px and the next-action gap 6px.
 - **Unchanged:** all content and font sizes.
 - **Result:** Linux WebKit with DejaVu Sans at 1280 measures 142.5px (was 166). Chromium measures 126px at 1280 and 142px at 1024.
+
+**Independent review corrections (2026-10-08).** The review of head `a828b02…` returned CHANGES REQUIRED. All fixes are presentation and test changes within B1-r3.
+
+- **I1 — identity never under the overflow trigger.** The earlier card-height fix positioned the ⋯ trigger over the card and reserved width on the name line only, so a learner line could render beneath it. The trigger now sits back in flow beside the whole identity block, which makes overlap impossible on every line, pointer type and engine. To keep the ordinary card ≤ 150px with CI's DejaVu Sans, the room comes from horizontal padding (card sides 6px, column sides 4px) rather than from text. Content, line-clamping and font sizes are unchanged.
+  - **Measured** (production build, Playwright 1.63.0 Linux, DejaVu Sans): WebKit at 1280, 142px; Chromium 110px at 1440 and 126px at 1280 and 1024.
+- **I2 — owner decision (2026-10-08): the root-scrollbar workaround applies only to Opportunities.** Tâches must stay unchanged. `useResponsiveBand({ stableScrollbar })` applies `overflow-y: scroll` to `<html>` only when enabled. `CrmWorkspace` enables it only for `mode === 'leads'`. Disabling or unmounting restores the exact previous inline value. The WebKit 1024 feedback-loop fix therefore remains for Opportunities, and Tâches never receives the side effect.
+- **New browser coverage in both engines** (B1 suite phase 11, Linux Chromium and WebKit):
+  - **Identity geometry.** No identity text rectangle intersects the trigger on any visible card. Checked with a long learner ("Yasmine El Fassi-Bennani · 8 ans") at 1280 with a fine pointer (36px trigger), and at 768 and 1280 with a coarse pointer (44px trigger).
+  - **Root scrollbar.** Client-side navigation Students → Opportunités → Tâches, twice, starting from a pre-set inline root value. Opportunities applies `scroll`; leaving it restores the prior value; Tâches never applies it, including on a direct load.
+  - **Demande.** When first and latest inquiries differ, both lines show their own values. The fixture adds a later submission, because first touch is immutable. The omission branch stays covered.
+  - **Stage-chip drop.** A deterministic `DragEvent`/`DataTransfer` sequence runs the app's real `dragstart` and `drop` handlers, because Playwright WebKit's `dragTo()` is not reliable. A positive control onto a board column opens the guarded call dialog over the lead drawer and is cancelled with no command. The same sequence onto a stage chip is rejected (no `dragover` acceptance) and causes no dialog, no CRM write, no stage or version change and no URL change.
