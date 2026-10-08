@@ -74,6 +74,17 @@ Plan: [RCC-B1](../architecture/plans/completed/rcc-b1-responsive-opportunities.m
   - Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a Tier-3 escalation and stop condition.
   - Acceptance covers both sides of the 768px and 1024px edges plus the 390/768/1024/1280/1440 widths.
 
+## Premium retirement — decisions recorded 2026-10-08 (plan proposed)
+
+Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r1, **PROPOSED**, not approved; nothing implemented). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
+
+1. **Formule:** stop showing "Formule" everywhere (receipt form, receipt list, print page, PDF, finance export, student form, list and detail, reports). "Standard" is not shown either: all Yearly students are the same.
+2. **Old receipts:** take the easier route code-wise. Historical receipts are not specially preserved as Premium; do not build compatibility rendering for them.
+3. **Existing Premium students:** move to Standard. There is no Formule concept afterwards.
+4. **Workshop module:** remove entirely, including weekend workshops, Premium groups/memberships/attendance and homework.
+
+Open decisions (stored text on old records, `plan_type` column fate, two-phase removal, where the student data step runs, report removal, notification history) are listed in the plan and are **PLANNED / NOT APPROVED** until the owner records the plan approval there.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
