@@ -35,7 +35,7 @@ None by design, apart from faster rendering and, in Phase 2, the connection-prob
 
 ## Database impact
 
-Phases 0 and 1 have none. Phase 2 adds one read-and-session RPC (migration 113). Phase 3 rewrites policy expressions to evaluate role helpers once per statement (migration 114). Both migrations are designed and reviewed separately and need owner release approval.
+Phases 0 and 1 have none. Phase 2 adds one read-and-session RPC (migration 113). Phase 3 rewrites policy expressions so that role helpers are evaluated once per statement and the per-row teacher check runs only for teachers (migration 114). Both migrations are designed and reviewed separately and need owner release approval.
 
 ## Important security decisions
 

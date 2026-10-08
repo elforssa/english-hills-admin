@@ -64,10 +64,15 @@ Measured with `npm run perf:bundle`; first-load JS is gzip-compressed and report
 ## Database
 
 - **Students read cost:** `students.*` ordered by name averages **516 ms** in Postgres (247 calls, max 1.06 s) for 213 rows.
-  - Seven permissive SELECT policies apply.
-  - Each one calls `get_my_role()` per row. It is a STABLE SECURITY DEFINER lookup on `profiles` and is not wrapped in a subselect.
-  - `teacher_can_see_student(id)` also runs per row.
-- **The pattern is widespread:** 144 of 163 public policies reference `get_my_role()`, and 125 do so unwrapped. The Supabase advisor does not detect this pattern.
+  - Seven permissive SELECT policies apply, ORed together.
+  - **Dominant cost (established by the isolated experiment below):** `teacher_can_see_student(id)` runs per row for **every** role. It is SECURITY DEFINER, so it is never inlined, and every branch requires `get_my_role() = 'teacher'`. Five other policies call `teacher_can_access_student_group(...)` the same way.
+  - **Minor cost:** the policies also call `get_my_role()` per row, unwrapped.
+- **Unwrapped helpers are widespread:** 144 of 163 public policies reference `get_my_role()`, none wrapped in a subselect (125 in `USING`). The Supabase advisor flags only the 10 direct `auth.uid()` uses.
+- **Isolated experiment.** It ran in a throwaway container: the same Postgres 17.6.1.155 image as Production, migrations 001–112, 5,000 synthetic students, one rolled-back transaction.
+  - Wrapping the helpers as `(select f())` alone gave no consistent speed-up.
+  - Adding a `(select get_my_role()) = 'teacher'` guard in front of the six teacher-helper policies cut the non-teacher students read from about 3.8 s to about 4 ms.
+  - There were 0 visible-row differences over 476 role × table comparisons.
+  - This is the migration-114 architecture (separate PR).
 - **Advisor counts (2026-10-08):**
   - unindexed foreign keys: 102;
   - `auth_rls_initplan`: 10;
