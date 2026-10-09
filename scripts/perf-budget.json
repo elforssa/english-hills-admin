@@ -1,16 +1,16 @@
 {
-  "comment": "First-load JS in decimal kB (gzip), checked manually (not by CI) by `node scripts/perf-bundle-report.mjs --check` right after `npm run build` on the same tree. Ceiling = Phase-0 baseline (2026-10-08, main 857b159) plus about 2% headroom: a regression guard. Target = performance plan goal; lower a ceiling only when a change has delivered the reduction.",
-  "sharedKB": { "baseline": 185.2, "ceiling": 189, "target": 150 },
+  "comment": "First-load JS in decimal kB (gzip), checked manually (not by CI) by `node scripts/perf-bundle-report.mjs --check` right after `npm run build` on the same tree. Baseline = PA measurement (2026-10-09, lighter first load, on main b141183); ceiling = baseline plus about 2% headroom: a regression guard. The Phase-0 baseline (main 857b159) is in the performance audit evidence. Target = performance plan goal; lower a ceiling only when a change has delivered the reduction.",
+  "sharedKB": { "baseline": 137.7, "ceiling": 141, "target": 150 },
   "routes": {
-    "/login": { "baseline": 253.1, "ceiling": 258, "target": 220 },
-    "/crm/leads": { "baseline": 372, "ceiling": 380, "target": 320 },
-    "/crm/today": { "baseline": 372, "ceiling": 380, "target": 320 },
-    "/dashboard": { "baseline": 290.9, "ceiling": 297, "target": 260 },
-    "/students": { "baseline": 319, "ceiling": 326, "target": 290 },
-    "/finance": { "baseline": 276.9, "ceiling": 283, "target": 245 },
-    "/receipts": { "baseline": 414.9, "ceiling": 424, "target": 320 },
-    "/receipts/[id]/print": { "baseline": 409.7, "ceiling": 418, "target": 320 },
-    "/parent-portal": { "baseline": 440.2, "ceiling": 449, "target": 345 },
-    "/student-portal": { "baseline": 439.1, "ceiling": 448, "target": 345 }
+    "/login": { "baseline": 205.7, "ceiling": 210, "target": 220 },
+    "/crm/leads": { "baseline": 300.2, "ceiling": 307, "target": 320 },
+    "/crm/today": { "baseline": 300.2, "ceiling": 307, "target": 320 },
+    "/dashboard": { "baseline": 245.3, "ceiling": 251, "target": 260 },
+    "/students": { "baseline": 271.9, "ceiling": 278, "target": 290 },
+    "/finance": { "baseline": 231.5, "ceiling": 237, "target": 245 },
+    "/receipts": { "baseline": 242.7, "ceiling": 248, "target": 320 },
+    "/receipts/[id]/print": { "baseline": 237.8, "ceiling": 243, "target": 320 },
+    "/parent-portal": { "baseline": 262.8, "ceiling": 269, "target": 345 },
+    "/student-portal": { "baseline": 261.2, "ceiling": 267, "target": 345 }
   }
 }
