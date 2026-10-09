@@ -124,7 +124,7 @@ For the session-context and RLS role-evaluation migrations (numbered 113 and 114
 - **Scope:**
   - `jspdf` and `receiptPdf` are imported on demand on the four PDF routes;
   - Sentry `bundleSizeOptimizations` exclude debug, tracing and Replay code, consistent with errors-only;
-  - CRM drawer and command dialogs move to `next/dynamic` with an accessible loading fallback.
+  - CRM drawer and command dialogs load on demand through a retrying loader (`src/components/crm/LazyOverlay.jsx` and `src/lib/retryingImport.mjs`) with an accessible loading fallback.
 - **Invariants:**
   - receipt PDFs are byte-identical for the same input (fixed creation date);
   - Sentry init, DSN gating and scrubbers are unchanged;

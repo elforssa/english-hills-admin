@@ -477,12 +477,15 @@ try {
     sql(`begin;
     delete from public.financial_events where actor_id='${user}';
     delete from public.financial_requests where actor_id='${user}';
-    delete from public.activity_log where actor_id in (${portalIds}) or target_id in (select id from public.receipts where student_id='${pdfStudent}') or target_id='${pdfStudent}';
+    create temporary table pdf_cleanup_receipts on commit drop as
+      select id from public.receipts where student_id='${pdfStudent}';
     delete from public.receipts where student_id='${pdfStudent}';
     delete from public.charges where student_id='${pdfStudent}';
     delete from public.students where id='${pdfStudent}';
     delete from public.rate_limits where user_id in (${portalIds});
-    delete from auth.users where id in (${portalIds}); commit;`);
+    delete from auth.users where id in (${portalIds});
+    delete from public.activity_log where actor_id in (${portalIds}) or target_id in (${portalIds})
+      or target_id in (select id from pdf_cleanup_receipts) or target_id='${pdfStudent}'; commit;`);
   }
   if (user) sql(`begin;
     create temporary table phase1_cleanup_ids on commit drop as
