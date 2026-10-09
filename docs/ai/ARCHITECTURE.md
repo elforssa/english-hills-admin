@@ -47,7 +47,7 @@ Next.js 15 / React 19 renders the application. TanStack Query caches browser rea
 | Acquisition | Meta/website submissions, immutable mappings, durable queue, attribution and ambiguous-match review. Receipt of an inquiry is not enrollment. |
 | CRM | Contacts, learner/program opportunities, commercial status, tasks, activities, Today and placement follow-up. |
 | Admissions/enrollment | Public pre-registration, student matching, program/year/level/group selection and explicit enrollment evidence. |
-| Academics | Students, teachers, groups, timetable, attendance, assessments, portfolios, certificates and Premium workshops/homework. |
+| Academics | Students, teachers, groups, timetable, attendance, assessments, portfolios and certificates. The Premium workshops/homework module was removed from the application by Premium retirement Release A; its database objects remain until Release B. |
 | Finance | Charges, installments/payments, receipt snapshots, balances, audited corrections and payroll. Conversion and collected revenue remain distinct. |
 | Reporting | School reports and finance aggregates; director CRM cohort/revenue/marketing analysis, with unavailable spend kept explicit. |
 | Integrations | Independent inbound Meta, website intake, dormant lifecycle feedback, unfinished live Insights sync and email delivery. |
@@ -62,7 +62,7 @@ Next.js 15 / React 19 renders the application. TanStack Query caches browser rea
 | Learner / student | School learner record, matched or explicitly created through trusted enrollment/operational flows. Siblings remain separate. |
 | Enrollment | Learner's admission into a program and school year, with status, level and optional compatible group. Trusted confirmation drives CRM conversion. |
 | Group | Teaching cohort with session/program, level, teacher and schedule relationships. Membership must agree with enrollment. |
-| Academic session | Program/session type (for example Yearly or Adults) scopes levels/groups; school year scopes enrollment. A Premium workshop session is a scheduled teaching event, not an online room. |
+| Academic session | Program/session type (for example Yearly or Adults) scopes levels/groups; school year scopes enrollment. The retired Premium workshop session was a scheduled teaching event, not an online room. |
 | Charge / payment / receipt | Agreement, actual collection and immutable payment snapshot respectively. Balance is derived from the financial engine; later payments do not rewrite old receipts. |
 | Attribution | Original acquisition source snapshot, distinct from latest touch and current provider names. First touch is immutable. |
 | Lifecycle outbox / destination | Durable intent and bounded attempts derived from committed CRM facts; destination/configuration, provider contract and activation evidence independently control delivery. |
@@ -81,7 +81,7 @@ Director has school management plus CRM technical configuration, revenue/reporti
 
 **Charge → payment/receipt → balance/revenue.** Authorized commands create an agreement and record actual collection. Zero payment can create a charge but no receipt or payment-driven enrollment. Actual linked payment/void events drive collected CRM revenue; quotations, charges and commercial status do not. Preserve retry identity and append-only financial history.
 
-**Enrollment/group → teaching schedule → attendance and learning evidence.** Academic relationships govern teacher access and student/group consistency. Attendance, assessments and portfolios describe teaching activity; Premium sessions add workshops, membership, attendance and homework. They do not imply video-room, breakout or remote-access architecture. See [WORKFLOWS](WORKFLOWS.md) for operational journeys.
+**Enrollment/group → teaching schedule → attendance and learning evidence.** Academic relationships govern teacher access and student/group consistency. Attendance, assessments and portfolios describe teaching activity; the retired Premium sessions added workshops, membership, attendance and homework. None of these imply video-room, breakout or remote-access architecture. See [WORKFLOWS](WORKFLOWS.md) for operational journeys.
 
 ## Opportunities operating architecture
 
