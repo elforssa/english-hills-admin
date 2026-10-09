@@ -1,6 +1,8 @@
-# Session context and connection resilience — migration 113 (architecture, revision S-r1)
+# Session context and connection resilience — migration 114, provisional (architecture, revision S-r1)
 
 **Status: PROPOSED — architecture only, awaiting owner review. Not implemented, not approved for implementation.** Tier 3 (authentication, roles, client authorization gate). This is Phase 2 of the performance plan P-r1 (PR #119); evidence: [performance audit](https://github.com/elforssa/english-hills-admin/blob/perf/phase0-measurement/docs/architecture/evidence/performance-audit-2026-10-08.md). Baseline: `origin/main` `857b159746b78233578790bdb999878cd113e088`, migration ledger 001–112.
+
+**Migration number is provisional.** This design was first written as migration 113. Production has since taken 113 (Premium retirement Release A, PR #125), so this revision calls it 114. The real number is whichever is next free in `supabase/migrations` on `origin/main` when the migration file is written; the Premium retirement plan also names 114 provisionally for its Release B. Renumbering changes nothing in the design.
 
 # Owner summary
 
@@ -39,7 +41,7 @@ Everything:
 
 ## Database impact
 
-Migration 113 adds one function, executable by `authenticated` only. There is no table, column, policy or data change, and no change to any existing function.
+Migration 114 adds one function, executable by `authenticated` only. There is no table, column, policy or data change, and no change to any existing function.
 
 ## Important security decisions
 
@@ -87,7 +89,7 @@ Migration 113 adds one function, executable by `authenticated` only. There is no
 
 **In scope:**
 
-- migration 113, `public.get_session_context()`;
+- migration 114, `public.get_session_context()`;
 - the `AuthContext` rewrite;
 - the shell skeleton and resolution states;
 - the connection-problem UI;
@@ -97,14 +99,14 @@ Migration 113 adds one function, executable by `authenticated` only. There is no
 **Out of scope:**
 
 - middleware (unchanged; `getClaims()` was deferred by the owner);
-- RLS (migration 114);
+- RLS (migration 115);
 - any change to role rules, invitations or `apply_pending_role`;
 - service-worker or offline caching;
 - the deterministic-`40001` outcome.
 
 ## Design
 
-### 1. Migration 113 — `public.get_session_context()`
+### 1. Migration 114 — `public.get_session_context()`
 
 ```sql
 create function public.get_session_context() returns jsonb
@@ -287,7 +289,7 @@ It carries no URL query, no identity and no payload. This shows whether requests
 
 ## Migration, test, rollout and recovery
 
-**Migration** `113_session_context.sql` is additive. It creates the function and sets its grants. Nothing else changes.
+**Migration** `114_session_context.sql` is additive. It creates the function and sets its grants. Nothing else changes.
 
 **Local tests (required):**
 
@@ -309,7 +311,7 @@ It carries no URL query, no identity and no payload. This shows whether requests
 3. `npm run test:middleware` is unchanged and must pass. The "disallowed children never render" DOM test is extended to the new non-ready states.
 4. **Performance:** `npm run perf:baseline` shows **1** session call before the heading, and the *center* profile improves by about one second.
 
-**Rollout:** apply 113 (it is additive; the old app is unaffected), verify the ACL and a director-scoped probe in a rolled-back transaction, then deploy the app. **Rollback:** revert the app; the old client never calls the function. Drop the function later only through a forward migration, if desired.
+**Rollout:** apply 114 (it is additive; the old app is unaffected), verify the ACL and a director-scoped probe in a rolled-back transaction, then deploy the app. **Rollback:** revert the app; the old client never calls the function. Drop the function later only through a forward migration, if desired.
 
 ## Owner decisions required
 
@@ -327,9 +329,9 @@ It carries no URL query, no identity and no payload. This shows whether requests
 - **Prerequisites:**
   - owner approval of this revision and D1/D2;
   - PR B merged (retry classifier) or its classifier vendored identically;
-  - the latest migration rechecked on `origin/main` before naming the file `113_…`.
+  - the latest migration rechecked on `origin/main` before naming the file `114_…`.
 - **Manifest:**
-  - `supabase/migrations/113_session_context.sql`;
+  - `supabase/migrations/114_session_context.sql`;
   - `src/context/AuthContext.jsx`;
   - `src/components/ProtectedRoute.jsx` (non-ready rendering only);
   - a new `src/components/layout/SessionStatus.jsx` (skeleton and status screens);
