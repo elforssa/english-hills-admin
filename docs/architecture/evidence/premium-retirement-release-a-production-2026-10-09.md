@@ -1,6 +1,6 @@
 # Premium retirement Release A — Production release record (2026-10-08/09 UTC)
 
-Release record for [Premium retirement](../plans/premium-retirement.md) Release A (Tier 3). It records what was released and observed. Product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md); the current register is [CURRENT_STATE](../../ai/CURRENT_STATE.md). Times are UTC. Production's clock reads UTC, and the owner's approvals carry the owner's local date, so steps run on 2026-10-08 UTC were approved on 2026-10-09 local.
+Release record for [Premium retirement](../plans/premium-retirement.md) Release A (Tier 3). It records what was released and observed. Product rules live in [PRODUCT_RULES](../../ai/PRODUCT_RULES.md); the current register is [CURRENT_STATE](../../ai/CURRENT_STATE.md). Times are UTC. Approval dates are owner-supplied; owner local time UTC+8 (Asia/Shanghai); Production's clock reads UTC, so steps run late on 2026-10-08 UTC fall on 2026-10-09 in that local time.
 
 **State: Release A MERGED / DEPLOYED / PRODUCTION VERIFIED WITH BOUNDED ACCEPTANCE.** Release B (migration 114, the Premium student data step, homework file deletion) is **planned only, not approved**.
 
@@ -22,6 +22,8 @@ This record holds counts, hashes and timestamps only. No charge id, description,
 | Supabase project | `hopcezradkhrixwwswxn` |
 
 ## Owner approvals (Maroine)
+
+Approval dates below are owner-supplied; owner local time UTC+8 (Asia/Shanghai).
 
 | Step | Approval | Scope |
 | --- | --- | --- |

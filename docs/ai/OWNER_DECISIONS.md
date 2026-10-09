@@ -74,7 +74,7 @@ Plan: [RCC-B1](../architecture/plans/completed/rcc-b1-responsive-opportunities.m
   - Any dependency change, server behavior change, enrollment or business-logic change, or cross-platform sidebar change is a Tier-3 escalation and stop condition.
   - Acceptance covers both sides of the 768px and 1024px edges plus the 390/768/1024/1280/1440 widths.
 
-## Premium retirement — decisions recorded 2026-10-08 (plan proposed)
+## Premium retirement — decisions (2026-10-08) and Release A approvals
 
 Plan: [Premium retirement](../architecture/plans/premium-retirement.md) (revision PR-r4, **APPROVED FOR RELEASE A IMPLEMENTATION** on 2026-10-08; Release A merged, deployed and Production verified on 2026-10-08/09 UTC, see the [release record](../architecture/evidence/premium-retirement-release-a-production-2026-10-09.md); Release B planned, not approved). Premium is a cancelled product. The owner (Maroine) decided on **2026-10-08**, recorded verbatim:
 
@@ -94,10 +94,11 @@ Owner answers to the plan's questions, recorded **2026-10-08** (approver Maroine
 
 **Plan approval (Maroine, 2026-10-08): APPROVED FOR RELEASE A IMPLEMENTATION**, revision PR-r4 at exact head `531cf30cf4e4b121a720b019c684ec044a5decc0`, following the independent reviewer's READY FOR FINAL REVIEW on that head. Answers as above, plus Part A and Part B as written in the plan. The owner acknowledges that future workshops, pending homework, attendance history and homework files are permanently deleted in Release B after a full export; **export retention: until the 2026/2027 school-year closure, kept private, access limited to Maroine.** **This approves Release A implementation only. Release B, the open-charge description data step (D5a), the Premium student data step, every Production count or read, and any deployment each still need the owner's separate explicit approval.** Nothing is implemented, merged or deployed. (Accurate at approval time; Release A has since been released, see below.)
 
-**Release A release decisions (Maroine, 2026-10-09, owner's local date; steps ran 2026-10-08/09 UTC):**
+**Release A release decisions (Maroine; dates owner-supplied; owner local time UTC+8 (Asia/Shanghai); steps ran 2026-10-08/09 UTC):**
 
-- **R0 and R1:** read-only Production pre-checks and pre-A1 baseline authorized and completed.
-- **Backup — accepted risk:** Release A proceeds **without a full backup** (no PITR or backup was available). Rollback for 113 is a forward migration restoring the 096 body; rollback for the open-charge cleanup is its own export. **Release B must not proceed without a backup**, and is not to be planned around the current state.
+- **R0:** read-only Production pre-checks, authorized in the release session before the 2026-10-08 UTC reads; the authorization carried no date. Completed.
+- **R1 (2026-10-09):** read-only pre-A1 checks and baseline, with the backup, probe and order decisions below. Completed.
+- **Backup — accepted risk:** Release A proceeds **without a full backup** (no PITR or backup was available). Rollback for 113 is a forward migration restoring the 096 body; rollback for the open-charge cleanup is its own export. **Release B must not proceed without a backup.** Release B must not be planned on the assumption that no backup is needed or exists; a backup is a hard prerequisite.
 - **Probe policy:** Production probes are zero-payment Yearly commitments only, rolled back, plus role-denial checks. No receipt-producing probes, because they consume receipt numbers. Receipt-text proof stays with the CI 112→113 rehearsal.
 - **Order:** migration 113 first (A1), then the guarded merge and Vercel deployment (A2) within minutes, then the `sendReceiptEmail` redeploy with `--no-verify-jwt` (A3); the open-charge cleanup (A4) separately approved.
 - **A1, A2, A3 and A4:** each approved separately on 2026-10-09 with its exact scope (wrapper hash, merge guard, clean worktree deploy, export and single write).
