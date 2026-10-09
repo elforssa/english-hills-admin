@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 const branch=execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim();
-assert(branch.startsWith('codex/') || (process.env.GITHUB_ACTIONS==='true' && process.env.GITHUB_EVENT_NAME==='pull_request'));
+assert(branch.startsWith('codex/') || branch.startsWith('claude/') || (process.env.GITHUB_ACTIONS==='true' && process.env.GITHUB_EVENT_NAME==='pull_request'));
 const parseEnv=value=>Object.fromEntries(value.split('\n').flatMap(l=>{const m=l.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const local=existsSync('.env.local')?parseEnv(readFileSync('.env.local','utf8')):parseEnv(execFileSync('npx',['supabase','status','-o','env'],{encoding:'utf8'}));
 const env={...local,NEXT_PUBLIC_SUPABASE_URL:process.env.NEXT_PUBLIC_SUPABASE_URL||local.NEXT_PUBLIC_SUPABASE_URL||local.API_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY:process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||local.NEXT_PUBLIC_SUPABASE_ANON_KEY||local.ANON_KEY,SUPABASE_SERVICE_ROLE_KEY:process.env.SUPABASE_SERVICE_ROLE_KEY||local.SUPABASE_SERVICE_ROLE_KEY||local.SERVICE_ROLE_KEY};
@@ -19,7 +19,9 @@ const cases=[
  ['crm_get_opportunities',{},'operations'],['crm_get_opportunity_filter_options',{p_kind:'source'},'operations'],['crm_get_operational_acquisition_summary',{p_lead:nil},'operations'],['crm_get_timeline',{p_lead:nil},'operations'],
  ['crm_get_today',{},'operations'],['crm_search_leads',{p_query:'phase12 synthetic'},'operations'],['crm_list_intake_review',{},'operations'],['crm_get_workspace_detail',{p_lead:nil},'operations'],['crm_list_placements',{p_lead:nil},'operations'],['crm_get_enrollment_context',{p_lead:nil},'operations'],
  ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_list_pending_lifecycle_stops',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
- ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],
+ // Harmless arguments: the director passes authorization and reaches the not-found/ineligible check.
+ ['crm_configure_insights',{p_connection:nil,p_version:1,p_data:{}},'director','40001'],['crm_request_insights_sync',{p_connection:nil,p_request:nil},'director','22023'],['crm_retry_insights_sync',{p_run:nil},'director','22023'],
+ ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],['crm_enqueue_insights_refresh',{},'service'],
 ];
 try {
  for(const role of roles){
@@ -34,10 +36,11 @@ try {
    const read=await client.from(table).select('*').limit(1);assert.equal(read.error?.code,'42501',`${role} direct read ${table}`);checks++;
    const write=await client.from(table).delete().eq(primaryKey,primaryType==='boolean'?false:nil);assert.equal(write.error?.code,'42501',`${role} direct delete ${table}`);checks++;
   }
-  for(const [name,args,access] of cases){
+  for(const [name,args,access,reached] of cases){
    const allowed=access==='operations'?['director','admin','receptionist'].includes(role):role===access;
    const {error}=await client.rpc(name,args);
-   if(allowed)assert.ifError(error);
+   if(allowed&&reached)assert.equal(error?.code,reached,`${role} ${name} must reach the domain check`);
+   else if(allowed)assert.ifError(error);
    else assert(error && ['42501','PGRST301','PGRST302'].includes(error.code),`${role} bypass ${name}: ${error?.code}`);
    checks++;
   }

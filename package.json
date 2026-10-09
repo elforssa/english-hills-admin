@@ -13,6 +13,7 @@
     "test:crm-reconciliation-repair-local": "node scripts/test-crm-meta-reconciliation-repair-local.mjs",
     "test:crm-lifecycle": "node scripts/test-crm-phase10.mjs && node scripts/test-crm-batch2.mjs && node scripts/test-crm-r4-advisory.mjs",
     "test:crm-lifecycle-browser": "node scripts/test-crm-batch2-browser.mjs",
+    "test:crm-insights": "node scripts/test-crm-phase11.mjs && node scripts/test-crm-insights-scheduler.mjs",
     "test:middleware": "node scripts/test-middleware-security.mjs",
     "test:navigation": "node scripts/test-navigation.mjs && node scripts/test-navigation-components.mjs",
     "test:crm-h3-04-local": "node scripts/test-crm-h3-04-local.mjs",

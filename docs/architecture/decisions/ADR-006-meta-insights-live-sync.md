@@ -48,4 +48,4 @@ Migrations 089/090 and the Phase 11 adapter implement Meta Insights storage, an 
 
 ## Implementation status
 
-**Not implemented.** Implementation is approved under the plan's IMPLEMENTATION CONTRACT (approval record of 2026-10-09) but has not started; migration number is the next free one at implementation; merge, Production reads, credential, secrets, gate, Vault, cron activation, configuration, live sync and backfill (steps R0–R8) are each separately approved.
+**Implemented, awaiting independent review** (2026-10-09) on branch `claude/dgi-a-meta-insights-live-sync` with migration `114_crm_meta_insights_live_sync.sql`; see the plan's [implementation record](../plans/director-growth-intelligence.md#implementation-record). Not merged, deployed or activated; merge, Production reads, credential, secrets, gate, Vault, cron activation, configuration, live sync and backfill (steps R0–R8) are each separately approved.

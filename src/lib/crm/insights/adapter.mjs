@@ -1,5 +1,6 @@
 // Server/test module: deliberately no default transport and no global fetch.
-// Live transport must be separately reviewed after provider/account verification.
+// Live mode uses the injected platform fetch (the scheduler route passes it); mock
+// mode uses the injected test double. Neither falls back to the other.
 const fail = (code) => { throw new Error(code); };
 const id = (v) => typeof v === 'string' && /^[0-9]{1,32}$/.test(v) ? v : fail('invalid_data');
 const text = (v, max = 300) => v == null ? null : typeof v === 'string' && v.length <= max ? v : fail('invalid_data');
@@ -7,16 +8,37 @@ const integer = (v) => v == null ? null : (typeof v === 'string' || (typeof v ==
 const decimal = (v) => typeof v === 'string' && /^\d{1,12}(\.\d{1,6})?$/.test(v) ? v : fail('invalid_data');
 const date = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(v).toISOString().slice(0, 10) === v ? v : fail('invalid_data');
 
-export async function fetchInsightsFixture({ config, from, to, token, mockFetch }) {
-  if (typeof window !== 'undefined' || typeof mockFetch !== 'function' || config.mode !== 'mock') fail('live_not_available');
+// Graph error codes for throttling (app, user, ads_insights BUC, custom limits).
+const throttled = new Set([4, 17, 80000, 613]);
+
+export async function fetchInsights({ config, from, to, token, fetchImpl, mockFetch, deadline = Infinity }) {
+  const live = config?.mode === 'live';
+  const transport = live ? fetchImpl : config?.mode === 'mock' ? mockFetch : null;
+  if (typeof window !== 'undefined' || typeof transport !== 'function') fail('live_not_available');
   const account = id(config.account_id);
   if (!/^v\d{1,3}\.0$/.test(config.api_version) || !token) fail('missing_secret');
   date(from); date(to);
   if (to < from || (Date.parse(to) - Date.parse(from)) / 86400000 > 30) fail('invalid_data');
   const rows = [], objects = [], grains = new Set(), identities = new Set();
   let bytes = 0, calls = 0;
+  async function read(response) {
+    // Stream the body with a global bound; don't buffer unlimited provider data.
+    const reader = response.body?.getReader();
+    if (!reader) return '';
+    const decoder = new TextDecoder(); let body = '';
+    while (true) {
+      const part = await reader.read(); if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > 4194304) { await reader.cancel(); fail('limit_exceeded'); }
+      body += decoder.decode(part.value, { stream: true });
+    }
+    return body + decoder.decode();
+  }
   async function request(path, params = {}) {
     if (++calls > 100) fail('limit_exceeded');
+    // Each request is bounded by 10 s and by the invocation deadline.
+    const remaining = deadline - Date.now();
+    if (!(remaining > 0)) fail('timeout');
     const url = new URL(`https://graph.facebook.com/${config.api_version}/${path}`);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
     const controller = new AbortController();
@@ -24,28 +46,25 @@ export async function fetchInsightsFixture({ config, from, to, token, mockFetch 
     try {
       return await Promise.race([
         (async () => {
-          const response = await mockFetch(url.toString(), { headers: { Authorization: `Bearer ${token}` }, redirect: 'error', signal: controller.signal });
-          if (response.status === 429) fail('rate_limit');
+          let response;
+          try {
+            response = await transport(url.toString(), { headers: { Authorization: `Bearer ${token}` }, redirect: 'error', cache: 'no-store', signal: controller.signal });
+          } catch (error) {
+            // The platform fetch rejects a redirect itself; it is never followed.
+            fail(/redirect/i.test(String(error?.cause?.message ?? '')) ? 'invalid_data' : 'network');
+          }
+          if (response.redirected || (response.status >= 300 && response.status < 400)) fail('invalid_data');
+          const body = await read(response);
+          let data = null; try { data = JSON.parse(body); } catch {}
+          const code = data && typeof data === 'object' ? data.error?.code : undefined;
+          if (code === 190) fail('provider_auth');
+          if (response.status === 429 || throttled.has(code)) fail('rate_limit');
           if ([401, 403].includes(response.status)) fail('provider_auth');
           if (response.status >= 500) fail('provider_unavailable');
-          if (!response.ok || response.redirected) fail('invalid_data');
-          // Stream the body with a global bound; don't buffer unlimited provider data.
-          const reader = response.body?.getReader();
-          if (!reader) fail('invalid_data');
-          const decoder = new TextDecoder(); let body = '';
-          while (true) {
-            const part = await reader.read(); if (part.done) break;
-            bytes += part.value.byteLength;
-            if (bytes > 4194304) { await reader.cancel(); fail('limit_exceeded'); }
-            body += decoder.decode(part.value, { stream: true });
-          }
-          body += decoder.decode();
-          let data; try { data = JSON.parse(body); } catch { fail('invalid_data'); }
-          if (!data || typeof data !== 'object' || Array.isArray(data)) fail('invalid_data');
-          if (data.error) fail(data.error.code === 190 ? 'provider_auth' : 'invalid_data');
+          if (!response.ok || !data || typeof data !== 'object' || Array.isArray(data) || data.error) fail('invalid_data');
           return data;
         })(),
-        new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, 10000); }),
+        new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, Math.min(10000, remaining)); }),
       ]);
     } finally { clearTimeout(timer); }
   }
@@ -78,6 +97,8 @@ export async function fetchInsightsFixture({ config, from, to, token, mockFetch 
     const params = { level: 'ad', time_increment: '1', time_range: JSON.stringify({ since: from, until: to }), limit: '100', fields: 'account_id,campaign_id,adset_id,ad_id,ad_name,date_start,date_stop,spend,impressions,reach,clicks,inline_link_clicks,actions' };
     let path = `act_${account}/insights`, first = await request(path, params);
     if (first.report_run_id) {
+      // Live mode never creates or follows async report jobs; this branch is fixture-only.
+      if (live) fail('invalid_data');
       const report = id(first.report_run_id); let done = false;
       for (let poll = 0; poll < 3; poll++) {
         const state = await request(report, { fields: 'async_status,async_percent_completion' });
@@ -102,4 +123,10 @@ export async function fetchInsightsFixture({ config, from, to, token, mockFetch 
     const safe = new Error(codes.includes(error.message) ? error.message : 'network');
     safe.rowsProcessed = rows.length; throw safe;
   }
+}
+
+// Thin mock-only wrapper kept for the synthetic harness.
+export async function fetchInsightsFixture({ mockFetch, ...args }) {
+  if (args.config?.mode !== 'mock' || typeof mockFetch !== 'function') fail('live_not_available');
+  return fetchInsights({ ...args, mockFetch });
 }
