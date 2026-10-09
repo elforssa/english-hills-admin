@@ -6,6 +6,7 @@ import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paym
 import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
+import { retryingImport } from '../src/lib/retryingImport.mjs';
 
 let generated = 0;
 const stableKey = createStableIdempotencyKey(() => `request-${++generated}`);
@@ -184,5 +185,31 @@ assert.match(schoolYearMigration, /new\.email_delivery_status <> 'pending'/);
 
 const receiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
 assert.match(receiptPage, /toast\.error\(paymentErrorMessage\(error\)\)/);
+
+// On-demand jsPDF: a failed chunk is retried, then forgotten so a later click loads it
+// again, and every caller reports a failure with the one French toast.
+{
+  let calls = 0, fail = 3;
+  const chunk = retryingImport(async () => { calls++; if (fail-- > 0) throw Object.assign(new Error('Loading chunk 1 failed.'), { name: 'ChunkLoadError' }); return { default: 'jsPDF' }; }, [0, 0]);
+  await assert.rejects(chunk.load(), { name: 'ChunkLoadError' });
+  assert.equal(calls, 3, 'three attempts before giving up');
+  assert.equal(chunk.value, undefined);
+  assert.deepEqual(await chunk.load(), { default: 'jsPDF' }, 'a later load retries the failed chunk');
+  assert.equal(calls, 4);
+  assert.equal(await chunk.load(), chunk.value, 'a loaded chunk is kept');
+  assert.equal(calls, 4);
+}
+assert.match(receiptPdf, /RECEIPT_PDF_ERROR = 'Impossible de préparer le PDF\. Vérifiez la connexion et réessayez\.'/);
+assert.match(receiptPdf, /throw new Error\(RECEIPT_PDF_ERROR, \{ cause \}\)/);
+assert.doesNotMatch(receiptPdf, /^import jsPDF/m, 'jsPDF stays out of the first load');
+for (const [path, count] of [['receipts/[id]/print', 1], ['parent-portal', 2], ['student-portal', 2]]) {
+  const page = await readFile(new URL(`../src/app/(admin)/${path}/page.jsx`, import.meta.url), 'utf8');
+  assert.equal(page.match(/downloadReceiptPDF\(/g).length, count, `${path}: download callers`);
+  assert.equal(page.match(/downloadReceiptPDF\(\w+\)\.catch\(showReceiptPdfError\)/g)?.length, count, `${path}: every download reports failure`);
+}
+for (const path of ['receipts/[id]/print', 'receipts']) {
+  const page = await readFile(new URL(`../src/app/(admin)/${path}/page.jsx`, import.meta.url), 'utf8');
+  assert.match(page, /if \(error\?\.message === RECEIPT_PDF_ERROR\) showReceiptPdfError\(\);/, `${path}: loader failure toast`);
+}
 
 console.log('receipt client/email regression tests passed');

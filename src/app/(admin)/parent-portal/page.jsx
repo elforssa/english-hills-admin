@@ -7,7 +7,7 @@ import { entities, auth } from '@/lib/entities';
 import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { openStoredFile as openFile } from '@/lib/storage';
-import { downloadReceiptPDF } from '@/lib/receiptPdf';
+import { downloadReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
@@ -400,7 +400,7 @@ export default function ParentPortal() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.voided_at ? 'bg-rose-100 text-rose-700' : PAY_COLORS[receiptStatus(r)] || 'bg-gray-100 text-gray-500'}`}>{receiptStatus(r)}</span>
                   </div>
                   <button
-                    onClick={() => downloadReceiptPDF(r)}
+                    onClick={() => downloadReceiptPDF(r).catch(showReceiptPdfError)}
                     title="Télécharger le reçu (PDF)" aria-label={`Télécharger le reçu ${r.receipt_number || r.date}`}
                     className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground"
                   >
@@ -531,7 +531,7 @@ export default function ParentPortal() {
             <p>Montant payé : {money(receiptAmounts(previewReceipt).payment)} MAD</p>
             <p>Restant indiqué sur ce reçu : {money(receiptAmounts(previewReceipt).balance)} MAD</p>
             <p>Statut : {receiptStatus(previewReceipt)}</p>
-            <button type="button" onClick={() => downloadReceiptPDF(previewReceipt)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><FileDown size={15} /> Télécharger le PDF</button>
+            <button type="button" onClick={() => downloadReceiptPDF(previewReceipt).catch(showReceiptPdfError)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><FileDown size={15} /> Télécharger le PDF</button>
           </div>}
         </DialogContent>
       </Dialog>

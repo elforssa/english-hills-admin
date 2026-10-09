@@ -9,7 +9,8 @@ import { Columns3, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
 import { STATUS, UUID, resolvePresentation, stageChips } from '@/lib/crm/presentation.mjs';
-import dynamic from 'next/dynamic';
+import { retryingImport } from '@/lib/retryingImport.mjs';
+import LazyOverlay from './LazyOverlay';
 import WorkQueue from './WorkQueue';
 import OpportunitiesBoard from './OpportunitiesBoard';
 import OpportunitiesList from './OpportunitiesList';
@@ -18,10 +19,8 @@ import ScrollRow from './ScrollRow';
 import useResponsiveBand from './useResponsiveBand';
 // The drawer and the manual-create dialog are needed only after a click. Load them
 // as separate chunks, prefetched once the page is idle so the first open is not slower.
-const loadLeadDetailSheet = () => import('./LeadDetailSheet');
-const loadCrmActionDialog = () => import('./CrmActionDialog');
-const LeadDetailSheet = dynamic(loadLeadDetailSheet, { ssr: false });
-const CrmActionDialog = dynamic(loadCrmActionDialog, { ssr: false });
+const leadDetailSheet = retryingImport(() => import('./LeadDetailSheet'));
+const crmActionDialog = retryingImport(() => import('./CrmActionDialog'));
 // Navigation only: a chip sets the existing stage filter; counts are display data.
 function StageChips({ view, stage, counts, total, onSelect }) {
   const count = value => Number.isFinite(value) ? value : '—';
@@ -38,12 +37,13 @@ export default function CrmWorkspace({
     params = useSearchParams();
   const selected = UUID.test(params.get('lead') || '') ? params.get('lead') : null;
   const contact = UUID.test(params.get('contact') || '') ? params.get('contact') : null;
-  const originFocus = useRef(null), headingRef = useRef(null);
+  const originFocus = useRef(null), headingRef = useRef(null), manualOrigin = useRef(null);
+  const restoreLeadFocus = () => { (originFocus.current?.isConnected ? originFocus.current : headingRef.current)?.focus(); };
   const [initialAction, setInitialAction] = useState(null), [initialTask, setInitialTask] = useState(null);
   useEffect(() => { if (!selected) { setInitialAction(null); setInitialTask(null); } }, [selected]);
   useEffect(() => {
     // Best effort: a prefetch cancelled by navigation is not an error; opening retries the load.
-    const prefetch = () => { loadLeadDetailSheet().catch(() => {}); loadCrmActionDialog().catch(() => {}); };
+    const prefetch = () => { leadDetailSheet.load().catch(() => {}); crmActionDialog.load().catch(() => {}); };
     if ('requestIdleCallback' in window) { const id = window.requestIdleCallback(prefetch, { timeout: 3000 }); return () => window.cancelIdleCallback(id); }
     const id = window.setTimeout(prefetch, 1500); return () => window.clearTimeout(id);
   }, []);
@@ -83,6 +83,8 @@ export default function CrmWorkspace({
   // Read once the band is known, so a phone never fetches the desktop board default first.
   const opportunities = useCrmRead('crm_get_opportunities', {...args,p_cursor:cursorFilter.current === filterKey ? cursors.at(-1) : null}, mode === 'leads' && !!band);
   const [manual, setManual] = useState(false);
+  // Kept for the dialog's focus return: a loading shell may hold focus when it mounts.
+  const openManual = () => { manualOrigin.current = document.activeElement; setManual(true); };
   // Board scroll is presentation state kept outside the keyed board subtree (never URL/query/storage).
   const boardRegion = useRef(null), boardScroll = useRef(null), currentFilterKey = useRef(filterKey);
   currentFilterKey.current = filterKey;
@@ -112,8 +114,8 @@ export default function CrmWorkspace({
   // The count line replaces the former count row and board notice.
   const countLine = <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
   return <PageFrame width="wide" data-band={band || undefined} data-presentation={mode === 'leads' ? presentation : undefined}>
-  {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<Button onClick={() => setManual(true)}><Plus size={16} />Ajouter un prospect</Button>} />
-    : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={() => setManual(true)}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
+  {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<Button onClick={openManual}><Plus size={16} />Ajouter un prospect</Button>} />
+    : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
   {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
     <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
     {contact && <p className="text-sm">Opportunités de ce contact · Les apprenants restent séparés. <Button variant="link" onClick={() => { const next = new URLSearchParams(window.location.search); next.delete('contact'); window.history.replaceState(null, '', `${pathname}?${next}`); }}>Tous les contacts</Button></p>}
@@ -122,13 +124,17 @@ export default function CrmWorkspace({
     {layout === 'board' ? <OpportunitiesBoard key={filterKey + generation} query={opportunities} filtered={filtered} onReset={resetFilters} args={args} onOpen={openLead} onAction={routeAction} regionRef={boardRegion} restore={boardScroll} filterKey={filterKey} /> : <div className="space-y-3 pt-1"><OpportunitiesList query={opportunities} filtered={filtered} onReset={resetFilters} stage={filters.stage} onOpen={openLead} onAction={routeAction} /><CursorPager hasPrevious={cursors.length > 1} hasMore={opportunityPage?.has_more} pending={opportunities.isFetching} onPrevious={() => setCursors(x => x.slice(0,-1))} onNext={() => setCursors(x => [...x,opportunityPage.next_cursor])} /></div>}
   </section>}
 
-  {selected && <LeadDetailSheet key={`${selected}:${initialAction || "detail"}`} leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={() => { (originFocus.current?.isConnected ? originFocus.current : headingRef.current)?.focus(); }} onClose={() => selectLead(null)} />}
-  {manual && <CrmActionDialog action="manual" onClose={() => setManual(false)} onCreated={id => {
+  {selected && <LazyOverlay key={`${selected}:${initialAction || "detail"}`} loader={leadDetailSheet} kind="lead" onClose={() => selectLead(null)} onRestoreFocus={restoreLeadFocus}>
+    {LeadDetailSheet => <LeadDetailSheet leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={restoreLeadFocus} onClose={() => selectLead(null)} />}
+  </LazyOverlay>}
+  {manual && <LazyOverlay loader={crmActionDialog} kind="form" onClose={() => setManual(false)} onRestoreFocus={() => manualOrigin.current?.focus()}>
+    {CrmActionDialog => <CrmActionDialog action="manual" returnFocusRef={manualOrigin} onClose={() => setManual(false)} onCreated={id => {
       setManual(false);
       selectLead(id);
     }} onCandidate={id => {
       setManual(false);
       router.push(`/crm/leads?contact=${id}`);
     }} />}
+  </LazyOverlay>}
  </PageFrame>;
 }

@@ -461,6 +461,99 @@ try {
   await context.close();
   console.log(`PASS ${E} review corrections: identity never under the overflow trigger (fine 36px at 1280; coarse 44px at 768/1280); Opportunities-only root scrollbar with exact restoration and Tâches untouched; distinct first/latest inquiries; stage-chip drop is a no-op behind a proven drop path`);
   }
+  if(on(12)){
+  // 12. PA lazy overlays: the drawer and the manual-create dialog are separate chunks. Their
+  // URLs are learned with the idle prefetch disabled; later steps hold (slow link) or abort
+  // (failed chunk) exactly those URLs while the prefetch runs as in real use.
+  await newContext(engine);
+  await context.addInitScript(()=>{try{if(sessionStorage.getItem('b1NoPrefetch'))window.requestIdleCallback=()=>0;}catch{/* opaque origin */}});
+  const chunkLog=[];page.on('request',r=>{if(r.url().includes('/_next/static/chunks/'))chunkLog.push(r.url());});
+  const since=()=>{const start=chunkLog.length;return ()=>[...new Set(chunkLog.slice(start))];};
+  const shell=()=>page.locator('[data-overlay-shell]'),cardButton=id=>page.locator(`[data-testid=opportunity-card][data-lead-id="${id}"] button:not([aria-label])`).first();
+  const visibleCards=()=>page.locator('[data-testid=opportunity-card]:visible').evaluateAll(nodes=>nodes.map(node=>node.dataset.leadId));
+  const addButton=()=>page.getByRole('button',{name:'Ajouter un prospect',exact:true});
+  const formReady=()=>top().getByRole('button',{name:'Enregistrer',exact:true}).waitFor();
+  const sameDocument=async()=>{await page.evaluate(()=>{window.__b1SameDocument=true;});return async label=>assert.equal(await page.evaluate(()=>window.__b1SameDocument),true,`${label}: recovered without a reload`);};
+  const onCard=id=>focusIs(id=>document.activeElement?.closest('[data-testid=opportunity-card]')?.dataset.leadId===id,'focus returns to the card',id);
+  const onAdd=()=>focusIs(()=>document.activeElement?.textContent?.trim()==='Ajouter un prospect','focus returns to Ajouter un prospect');
+  const onHeading=()=>focusIs(()=>document.activeElement?.tagName==='H1','focus falls back to the page heading');
+  async function openCard(id){await cardButton(id).focus();await page.keyboard.press('Enter');}
+  async function openForm(){await addButton().focus();await page.keyboard.press('Enter');}
+  async function loading(text){
+   await shell().waitFor();assert.equal(await shell().getAttribute('data-overlay-shell'),'loading',`${phase}: loading shell`);
+   assert.equal(await shell().getAttribute('role'),'dialog');assert.equal(await shell().getAttribute('aria-busy'),'true',`${phase}: aria-busy while loading`);
+   await shell().getByRole('status').filter({hasText:text}).waitFor();await focusIs(()=>!!document.activeElement?.closest('[data-overlay-shell]'),'the loading shell takes focus');
+  }
+  async function failed(text){
+   await page.locator('[data-overlay-shell=failed]').waitFor({timeout:20000});assert.equal(await shell().getAttribute('aria-busy'),'false');
+   await shell().getByRole('alert').filter({hasText:text}).waitFor();assert.doesNotMatch(await shell().innerText(),/Loading|chunk|_next|ChunkLoadError/i,`${phase}: no raw loader message`);
+   await focusIs(()=>document.activeElement?.textContent?.trim()==='Réessayer','Réessayer takes focus');
+   // The page behind stays mounted: no route error page, the board and its heading remain.
+   assert.equal(await page.getByText('Une erreur est survenue').count(),0,`${phase}: the page error boundary is not reached`);
+   assert.equal(await page.locator('h1').filter({hasText:'Pipeline admissions'}).count(),1);assert((await page.locator('[data-testid=opportunity-card]').count())>0,`${phase}: the board stays rendered`);
+  }
+  async function gone(label){await shell().waitFor({state:'detached'});assert.equal(await page.locator('[role=dialog]').count(),0,`${label}: no overlay`);}
+  // Held/aborted chunk URLs; `gate` releases held requests.
+  let blocked=new Set(),failing=false,gate=null,release=()=>{};const aborted=new Map();
+  await context.route(url=>blocked.has(url.href),async route=>{if(failing){aborted.set(route.request().url(),(aborted.get(route.request().url())||0)+1);return route.abort('failed');}await gate;return route.continue();});
+  const hold=urls=>{blocked=new Set(urls);failing=false;gate=new Promise(resolve=>{release=resolve;});};
+  const fail=urls=>{blocked=new Set(urls);failing=true;aborted.clear();};
+  const restore=()=>{release();blocked=new Set();failing=false;};
+  async function releaseAndSettle(label,urls){const done=page.waitForResponse(r=>urls.includes(r.url()));restore();await done;await page.waitForTimeout(400);await gone(label+' after the chunk arrived');}
+
+  phase=`${E} overlay chunks`;await page.evaluate(()=>sessionStorage.setItem('b1NoPrefetch','1'));
+  await gotoLeads();await page.waitForLoadState('networkidle');let taken=since();await openForm();await formReady();const formChunks=taken();
+  await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.locator('[role=dialog]').waitFor({state:'detached'});
+  await gotoLeads();await page.waitForLoadState('networkidle');taken=since();const [first,second]=await visibleCards();await openCard(first);await sheet().getByRole('heading',{name:'Historique'}).waitFor();const leadChunks=taken();await closeDrawer();
+  assert(formChunks.length>0&&leadChunks.length>0,`each overlay loads after the first paint ${JSON.stringify({formChunks,leadChunks})}`);
+  console.log(`${E} overlay chunks: form ${formChunks.length}, drawer ${leadChunks.length} (${leadChunks.filter(url=>!formChunks.includes(url)).length} drawer-only)`);
+  const leadOnly=leadChunks.filter(url=>!formChunks.includes(url));const leadBlock=leadOnly.length?leadOnly:leadChunks;
+  await page.evaluate(()=>sessionStorage.removeItem('b1NoPrefetch'));
+
+  // hold()/fail() come before each navigation: the idle prefetch would otherwise load the chunk first.
+  phase=`${E} delayed drawer · Escape`;hold(leadBlock);await gotoLeads();await openCard(first);await loading('Chargement de la fiche…');
+  await page.keyboard.press('Escape');await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onCard(first);await releaseAndSettle(phase,leadBlock);
+  phase=`${E} delayed drawer · Fermer`;hold(leadBlock);await gotoLeads();await openCard(second);await loading('Chargement de la fiche…');
+  await shell().getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onCard(second);await releaseAndSettle(phase,leadBlock);
+  phase=`${E} delayed drawer · Back`;hold(leadBlock);await gotoLeads();await openCard(first);await loading('Chargement de la fiche…');
+  await page.goBack();await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onCard(first);await releaseAndSettle(phase,leadBlock);
+  phase=`${E} delayed drawer · loads`;hold(leadBlock);await gotoLeads();await openCard(second);await loading('Chargement de la fiche…');restore();
+  await sheet().getByRole('heading',{name:'Historique'}).waitFor();assert.equal(await shell().count(),0,'the drawer replaces the shell');await focusIs(()=>!!document.activeElement?.closest('[role=dialog]'),'focus moves into the drawer');
+  await closeDrawer();await onCard(second);
+  phase=`${E} delayed deep link`;hold(leadBlock);await nav(`${app}/crm/leads?lead=${first}`);await loading('Chargement de la fiche…');restore();await sheet().getByRole('heading',{name:'Historique'}).waitFor();
+  await focusIs(()=>!!document.activeElement?.closest('[role=dialog]'),'focus moves into the deep-linked drawer');await closeDrawer();await onHeading();
+  phase=`${E} delayed deep link · Escape`;hold(leadBlock);await nav(`${app}/crm/leads?lead=${second}`);await loading('Chargement de la fiche…');
+  await page.keyboard.press('Escape');await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onHeading();await releaseAndSettle(phase,leadBlock);
+  // Client-side navigation away: Tâches → (sidebar) Opportunités → open → history back to Tâches.
+  phase=`${E} delayed drawer · navigate away`;hold(leadBlock);await nav(app+'/crm/today?bucket=overdue');await page.getByRole('heading',{name:'Tâches · Mon travail'}).waitFor();
+  {const link=page.locator('nav a[href="/crm/leads"]').first();if(!await link.isVisible())for(const button of await page.locator('nav button[aria-expanded=false]').all())await button.click();await link.click();}
+  await ready();await openCard(first);await loading('Chargement de la fiche…');
+  await page.evaluate(()=>history.go(-2));await page.waitForURL(url=>url.pathname==='/crm/today');await page.getByRole('heading',{name:'Tâches · Mon travail'}).waitFor();await gone(phase);await releaseAndSettle(phase,leadBlock);
+  assert.equal(new URL(page.url()).pathname,'/crm/today','still on the page navigated to');
+  phase=`${E} delayed form · Fermer`;hold(formChunks);await gotoLeads();await openForm();await loading('Chargement du formulaire…');
+  await shell().getByRole('button',{name:'Fermer',exact:true}).click();await gone(phase);await onAdd();await releaseAndSettle(phase,formChunks);
+  phase=`${E} delayed form · Escape → loads`;hold(formChunks);await gotoLeads();await openForm();await loading('Chargement du formulaire…');
+  await page.keyboard.press('Escape');await gone(phase);await onAdd();restore();await openForm();await formReady();
+  await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.locator('[role=dialog]').waitFor({state:'detached'});await onAdd();
+  console.log(`PASS ${E} delayed overlay chunks: an aria-busy loading dialog takes focus; Escape, Fermer, Back and navigating away cancel it with no late overlay; the ?lead= deep link opens after the chunk; focus returns to the card, Ajouter or the heading`);
+
+  phase=`${E} failed drawer · Réessayer`;fail(leadBlock);await gotoLeads();let same=await sameDocument();await openCard(first);await failed('Impossible d’ouvrir la fiche. Vérifiez la connexion et réessayez.');
+  assert(Math.max(0,...aborted.values())>=3,`${phase}: the import is retried before the message ${JSON.stringify([...aborted.values()])}`);
+  restore();await shell().getByRole('button',{name:'Réessayer',exact:true}).click();await sheet().getByRole('heading',{name:'Historique'}).waitFor();await same(phase);
+  await closeDrawer();await onCard(first);
+  phase=`${E} failed drawer · Fermer`;fail(leadBlock);await gotoLeads();await openCard(second);await failed('Impossible d’ouvrir la fiche. Vérifiez la connexion et réessayez.');
+  await shell().getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onCard(second);
+  // The board stays usable: another card fails the same way, then opens once the network returns.
+  await openCard(first);await failed('Impossible d’ouvrir la fiche. Vérifiez la connexion et réessayez.');await page.keyboard.press('Escape');await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase+' Escape');await onCard(first);
+  restore();await openCard(first);await sheet().getByRole('heading',{name:'Historique'}).waitFor();await closeDrawer();
+  phase=`${E} failed deep link`;fail(leadBlock);await nav(`${app}/crm/leads?lead=${second}`);await failed('Impossible d’ouvrir la fiche. Vérifiez la connexion et réessayez.');
+  await shell().getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await gone(phase);await onHeading();restore();
+  phase=`${E} failed form · Réessayer`;fail(formChunks);await gotoLeads();same=await sameDocument();await openForm();await failed('Impossible d’ouvrir le formulaire. Vérifiez la connexion et réessayez.');
+  restore();await shell().getByRole('button',{name:'Réessayer',exact:true}).click();await formReady();await same(phase);
+  await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.locator('[role=dialog]').waitFor({state:'detached'});await onAdd();
+  await context.close();
+  console.log(`PASS ${E} failed overlay chunks: retried, then a French message in the overlay only (board and heading stay); Réessayer recovers without a reload; Fermer/Escape close and clear ?lead=; focus returns`);
+  }
   await browser.close();browser=null;
  }
  assert.deepEqual(external,[],'no external requests');assert.deepEqual(pageErrors,[],'no browser errors');

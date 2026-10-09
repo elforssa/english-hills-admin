@@ -28,7 +28,8 @@ const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const submittedName = run + ' submitted', reviewName = run + ' review';
 const confirmedName = run + ' confirmed', multipleName = run + ' multiple', validatedName = run + ' validated legacy';
-let user, browser;
+let user, browser, pdfStudent;
+const portalUsers = [];
 try {
   const response = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
     headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/json' },
@@ -362,8 +363,127 @@ try {
   }
   assert.deepEqual(serverErrors, [], 'Local 5xx response during receptionist navigation');
   console.log('PASS own-account update, route redirects without sensitive preload and independent API denial');
+
+  // PA on-demand jsPDF: when its chunk cannot load, every receipt PDF caller shows one French
+  // toast (never webpack's message or the chunk URL), and once the network returns the next
+  // click produces the PDF in the same document. Chunks requested after a page settles are jsPDF's.
+  const pdfError = 'Impossible de préparer le PDF. Vérifiez la connexion et réessayez.';
+  pdfStudent = randomUUID();
+  for (const role of ['parent', 'student']) {
+    const portalEmail = `${run}-${role}@example.invalid`;
+    const created = await fetch(base + '/auth/v1/admin/users', { method: 'POST',
+      headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: portalEmail, password, email_confirm: true }) });
+    assert.equal(created.status, 200); portalUsers.push({ id: (await created.json()).id, email: portalEmail, role });
+  }
+  const [parentUser, studentUser] = portalUsers;
+  sql(`update public.profiles set role='parent' where id='${parentUser.id}'; update public.profiles set role='student' where id='${studentUser.id}';
+    insert into public.students(id,full_name,status,email,parent_email) values('${pdfStudent}','${run} pdf','Enrolled','${studentUser.email}','${parentUser.email}');`);
+  const pdfReceipt = JSON.parse(sql(`begin; alter table public.receipts disable trigger on_receipt_created;
+    select set_config('request.jwt.claim.sub','${user}',true); set local role authenticated;
+    select public.create_charge_payment(jsonb_build_object('student_id','${pdfStudent}','session_type','Other','service_detail','Synthetic PDF loader','school_year','2026/2027','gross_amount',100,'payment_amount',40,'payment_date',current_date,'payment_method','Espèces','idempotency_key','${randomUUID()}'));
+    reset role; alter table public.receipts enable trigger on_receipt_created; commit;`).split('\n').at(-1)).receipt_id;
+  const receiptNumber = sql(`select receipt_number from public.receipts where id='${pdfReceipt}'`);
+  assert(receiptNumber, 'synthetic receipt number');
+  async function failingChunks(target, label) {
+    const pageErrors = [], attempts = new Map(); let failing = false;
+    target.on('pageerror', error => pageErrors.push(error.message));
+    await target.route('**/_next/static/chunks/**', route => {
+      if (!failing) return route.fallback();
+      attempts.set(route.request().url(), (attempts.get(route.request().url()) || 0) + 1);
+      return route.abort('failed');
+    });
+    const toasts = target.locator('[data-sonner-toast]');
+    return {
+      // One caller's click while the chunk fails: retried, then exactly one French toast.
+      async fail(name, click) {
+        await target.waitForLoadState('networkidle'); await toasts.first().waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
+        assert.equal(await toasts.count(), 0, `${label} ${name}: no toast before the click`);
+        attempts.clear(); failing = true; await target.evaluate(() => { window.__pdfSameDocument = true; });
+        await click();
+        await toasts.filter({ hasText: pdfError }).first().waitFor();
+        await target.waitForTimeout(600);
+        assert.equal(await toasts.count(), 1, `${label} ${name}: exactly one toast`);
+        const text = await toasts.first().innerText();
+        assert(text.includes(pdfError) && !/Loading|chunk|_next|ChunkLoadError|Impossible de générer/i.test(text), `${label} ${name}: French loader message only (${text})`);
+        assert(Math.max(0, ...attempts.values()) >= 3, `${label} ${name}: the chunk is retried (${JSON.stringify([...attempts.values()])})`);
+      },
+      // The network is back: the next click works in the same document.
+      async recover() { failing = false; },
+      async done() {
+        assert.equal(await target.evaluate(() => window.__pdfSameDocument), true, `${label}: recovered without a reload`);
+        assert.deepEqual(pageErrors, [], `${label}: no unhandled browser error`);
+        await target.unroute('**/_next/static/chunks/**');
+      },
+    };
+  }
+  const download = async (target, click, pattern, label) => {
+    const [file] = await Promise.all([target.waitForEvent('download'), click()]);
+    assert.match(file.suggestedFilename(), pattern, `${label}: PDF downloaded`);
+  };
+
+  await page.goto(app + `/receipts/${pdfReceipt}/print`);
+  await page.getByRole('button', { name: 'PDF A5', exact: true }).waitFor();
+  let pdf = await failingChunks(page, 'print page');
+  await pdf.fail('PDF A5', () => page.getByRole('button', { name: 'PDF A5', exact: true }).click());
+  await pdf.fail('Imprimer A5', async () => {
+    const [preview] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Imprimer A5', exact: true }).click()]);
+    await preview.waitForEvent('close');
+  });
+  await pdf.recover();
+  await download(page, () => page.getByRole('button', { name: 'PDF A5', exact: true }).click(), new RegExp(`^recu-english-hills-${receiptNumber}\\.pdf$`), 'print page');
+  const [preview] = await Promise.all([page.waitForEvent('popup'), page.getByRole('button', { name: 'Imprimer A5', exact: true }).click()]);
+  await page.getByText('PDF A5 prêt', { exact: false }).waitFor(); await preview.close();
+  await pdf.done();
+
+  await page.goto(app + '/receipts');
+  await page.getByLabel('Rechercher les reçus').fill(receiptNumber);
+  await page.getByRole('button', { name: `Sélectionner le reçu ${receiptNumber}`, exact: true }).click();
+  pdf = await failingChunks(page, 'bulk');
+  await pdf.fail('PDF (1)', () => page.getByRole('button', { name: 'PDF (1)', exact: true }).click());
+  await pdf.recover();
+  await download(page, () => page.getByRole('button', { name: 'PDF (1)', exact: true }).click(), /^recus-english-hills-\d{4}-\d{2}-\d{2}\.pdf$/, 'bulk');
+  await pdf.done();
+
+  for (const [portalUser, landing, tab] of [[parentUser, '/parent-portal', 'tab'], [studentUser, '/student-portal', 'button']]) {
+    const portalContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await portalContext.route('**/*', route => ['127.0.0.1','localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+    const portal = await portalContext.newPage(); portal.setDefaultTimeout(30000);
+    await portal.goto(app + '/login'); await portal.waitForLoadState('networkidle');
+    await portal.waitForFunction(() => Object.keys(document.querySelector('#email') || {}).some(key => key.startsWith('__reactProps')));
+    await portal.getByLabel('Adresse email', { exact: true }).fill(portalUser.email);
+    await portal.getByLabel('Mot de passe', { exact: true }).fill(password);
+    await portal.getByRole('button', { name: 'Se connecter', exact: true }).click();
+    await portal.waitForURL(app + landing);
+    await portal.getByRole(tab, { name: /^Paiements/ }).click();
+    const listButton = portal.getByRole('button', { name: `Télécharger le reçu ${receiptNumber}`, exact: true });
+    await listButton.waitFor();
+    pdf = await failingChunks(portal, landing);
+    await pdf.fail('list', () => listButton.click());
+    await pdf.fail('preview', async () => {
+      await portal.getByRole('button', { name: receiptNumber, exact: true }).click();
+      await portal.getByRole('dialog').getByRole('button', { name: 'Télécharger le PDF', exact: true }).click();
+    });
+    await pdf.recover();
+    await download(portal, () => portal.getByRole('dialog').getByRole('button', { name: 'Télécharger le PDF', exact: true }).click(), new RegExp(`^recu-english-hills-${receiptNumber}\\.pdf$`), landing);
+    await pdf.done();
+    await portalContext.close();
+  }
+  console.log('PASS receipt PDF loader failure: print (PDF A5, Imprimer A5), bulk, parent and student portals (list and preview) each show one French toast after retries; the next click after the network returns downloads in the same document');
 } finally {
   if (browser) await browser.close();
+  if (pdfStudent) {
+    const portalIds = portalUsers.map(portalUser => `'${portalUser.id}'`).join(',') || 'null';
+    sql(`begin;
+    delete from public.financial_events where actor_id='${user}';
+    delete from public.financial_requests where actor_id='${user}';
+    delete from public.activity_log where actor_id in (${portalIds}) or target_id in (select id from public.receipts where student_id='${pdfStudent}') or target_id='${pdfStudent}';
+    delete from public.receipts where student_id='${pdfStudent}';
+    delete from public.charges where student_id='${pdfStudent}';
+    delete from public.students where id='${pdfStudent}';
+    delete from public.rate_limits where user_id in (${portalIds});
+    delete from auth.users where id in (${portalIds}); commit;`);
+  }
   if (user) sql(`begin;
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'

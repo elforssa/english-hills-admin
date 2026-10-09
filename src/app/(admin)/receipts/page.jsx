@@ -9,7 +9,7 @@ import { Plus, Search, Download, CheckSquare, Square } from 'lucide-react';
 import Pagination from '@/components/ui/pagination';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
-import { buildReceiptPDF, loadJsPDF, loadReceiptLogo } from '@/lib/receiptPdf';
+import { RECEIPT_PDF_ERROR, buildReceiptPDF, loadJsPDF, loadReceiptLogo, showReceiptPdfError } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { RECEIPT_PAPER_FORMAT, receiptServiceSummary } from '@/lib/receiptPresentation';
 import { toast } from 'sonner';
@@ -65,8 +65,9 @@ export default function Receipts() {
       const doc = new jsPDF({ unit: 'mm', format: RECEIPT_PAPER_FORMAT });
       rows.forEach((receipt, index) => { if (index) doc.addPage(RECEIPT_PAPER_FORMAT, 'portrait'); buildReceiptPDF(doc, receipt, { logoData }); });
       doc.save(`recus-english-hills-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch {
-      toast.error('Impossible de générer tous les reçus sélectionnés. Réessayez.');
+    } catch (error) {
+      if (error?.message === RECEIPT_PDF_ERROR) showReceiptPdfError();
+      else toast.error('Impossible de générer tous les reçus sélectionnés. Réessayez.');
     } finally {
       setGenerating(false);
     }
