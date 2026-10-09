@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/test-script-portability.mjs && node scripts/test-local-feature-branch.mjs && node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-premium-retirement-absence.mjs && node scripts/test-enrollment-workflow.mjs && npm run test:inspector-monitor && npm run test:css-toolchain && npm run test:ui-foundation",
+    "test": "node scripts/test-script-portability.mjs && node scripts/test-local-feature-branch.mjs && node scripts/test-audit-pure.mjs && node scripts/test-attendance-session.mjs && node scripts/test-pagination.mjs && node scripts/test-receipt-client-regressions.mjs && node scripts/test-premium-retirement-absence.mjs && node scripts/test-enrollment-workflow.mjs && npm run test:inspector-monitor && npm run test:css-toolchain && npm run test:ui-foundation && node scripts/test-rum-scrub.mjs",
     "test:crm-intake": "node scripts/test-crm-meta-reconciliation.mjs && node scripts/test-crm-meta-reconciliation-repair.mjs && node scripts/test-crm-phase8.mjs && node scripts/test-crm-phase9.mjs && node scripts/test-crm-intake-scheduler.mjs",
     "test:crm-reconciliation-repair-local": "node scripts/test-crm-meta-reconciliation-repair-local.mjs",
     "test:crm-lifecycle": "node scripts/test-crm-phase10.mjs && node scripts/test-crm-batch2.mjs && node scripts/test-crm-r4-advisory.mjs",
@@ -27,7 +27,9 @@
     "test:crm-opportunities-browser": "node scripts/test-crm-opportunities-browser.mjs && node scripts/test-crm-phase4-browser.mjs && node scripts/test-crm-phase5-browser.mjs && node scripts/test-crm-phase6-browser.mjs && node scripts/test-crm-rcc-a1-browser.mjs && node scripts/test-crm-rcc-a2-browser.mjs && node scripts/test-crm-rcc-b1-browser.mjs",
     "test:css-toolchain": "node scripts/test-css-toolchain.mjs",
     "test:ui-foundation": "node scripts/test-ui-foundation.mjs",
-    "test:ui-foundation-browser": "node scripts/test-ui-foundation-browser.mjs"
+    "test:ui-foundation-browser": "node scripts/test-ui-foundation-browser.mjs",
+    "perf:baseline": "node scripts/perf-baseline-browser.mjs",
+    "perf:bundle": "node scripts/perf-bundle-report.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.2",
@@ -62,6 +64,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@tanstack/react-query": "^5.84.1",
+    "@vercel/speed-insights": "2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
