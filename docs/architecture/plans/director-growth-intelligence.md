@@ -1,6 +1,6 @@
 # Director CRM & Growth Intelligence — Outcome A: live Meta ad spend in the director report
 
-Revision **DGI-A-r2**, 2026-10-09. **Tier 3** (external provider API, secrets and credentials, a scheduler, Production activation). **Status: PROPOSED — architecture only; nothing is approved, implemented, merged, deployed or activated by this document.** Owner: Maroine. Baseline `origin/main` at authoring: `b141183d67c8a541f6b1c099f8a6f3a6b4cf3b9f` (PR #119 merge). Architecture branch: `claude/director-growth-intelligence-meta-665c6f`, PR #127.
+Revision **DGI-A-r2**, 2026-10-09. **Tier 3** (external provider API, secrets and credentials, a scheduler, Production activation). **Status: APPROVED FOR IMPLEMENTATION (2026-10-09, Maroine), revision DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`, following the independent reviewer's READY FOR FINAL REVIEW on that exact head (after CHANGES REQUIRED on r1 `62328b1d…`). Not implemented, merged, deployed or activated.** The approval covers implementation only; merge, every Production read, migration deployment, credential issuance and storage, Vercel secrets and the live gate, Vault values, cron activation, Meta configuration, enabling live sync and the backfill each still need separate explicit owner approval (see the [approval record](#approval-record)). Owner: Maroine. Baseline `origin/main` at authoring: `b141183d67c8a541f6b1c099f8a6f3a6b4cf3b9f` (PR #119 merge). Architecture branch: `claude/director-growth-intelligence-meta-665c6f`, PR #127. Planned, implemented, merged, deployed and Production-verified are distinct states.
 
 **Revision history.** DGI-A-r1 (head `62328b1d51b6c81044dc9f7ebb7f140075ccd2c8`) received CHANGES REQUIRED from the independent review. DGI-A-r2 applies its findings without changing the open owner decisions or the scope: B1 `crm_request_insights_sync` (and `crm_retry_insights_sync`) join the cumulative replace; I1 identity or mode changes require no queued run; I2 the enqueue RPC takes the connection row lock; I3 the rolling window defaults to 28 days; I4 a server live gate `CRM_META_INSIGHTS_LIVE_ENABLED`; I5 the Vault invoker pins the exact Production URL; I6 a claim needs at least 45 s remaining; I7 the Phase 12 security matrix is credited and extended, and the Phase 11 branch guards are named; I8 ADR-006 follows the ADR-001 to 005 structure; plus the requested test gaps.
 
@@ -286,57 +286,69 @@ Untouched: `vercel.json`, `src/middleware.js`, `src/lib/roleAccess.mjs`, every l
 
 ## Owner decisions required
 
-1. **Credential identity.**
+All six were answered by Maroine on 2026-10-09 against revision DGI-A-r2 (see the [approval record](#approval-record)). The option text is kept as history; the resolution is stated under each item. Only the backfill start date (decision 2) remains open, and it blocks only release step R7.
+
+1. **Credential identity.** — **RESOLVED: Option A** (dedicated read-only System User, token reference `CRM_META_INSIGHTS_TOKEN_EH_KAL`).
    - **Question:** which Meta identity issues the Insights token?
    - **Option A:** a dedicated System User in the existing C2 app (or, if the C2 chooser does not offer `ads_read`, a Business app that does), assigned only the KAL ad account with the read-only "View performance" task, one token with `ads_read` only, stored as `CRM_META_INSIGHTS_TOKEN_EH_KAL`.
    - **Option B:** reuse `EH Lifecycle R4 Employee`: assign KAL to it and issue a second token (`ads_read`) under the Insights reference.
    - **Consequences:** A keeps S1's isolation (no unrelated ad-account access on the lifecycle identity; an identity-wide revoke on either side never affects the other) at the cost of one more System User (Limited tier allows one system user plus one admin system user per app, so if the C2 app already holds its one Employee the Insights user needs the admin slot or another app). B is faster but couples the two credentials and amends an S1 invariant, which S1 says returns to Gate A.
    - **Recommendation:** A.
    - **Blocking:** blocks R1 (credential) and activation; does not block implementation of code and migration.
-2. **Backfill start date.**
+2. **Backfill start date.** — **RESOLVED: Option A**, the Rentrée campaign start date to be stated by the owner. **The date has not been supplied yet and stays open**; it blocks only release step R7, with Production read 3 as the lower-bound check.
    - **Question:** from which account date should the Rentrée backfill start, and should earlier spend be included?
    - **Option A:** the campaign start date you state (for example the first Rentrée ad set start).
    - **Option B:** the earliest date with Meta leads in the CRM (from Production read 3).
    - **Consequences:** the report shows spend only for covered dates; leads acquired before the backfill start show "—" for spend.
    - **Recommendation:** A, with B as the lower bound check.
    - **Blocking:** blocks R7 only.
-3. **Currency.**
+3. **Currency.** — **RESOLVED: Option A.** Spend and CAC in USD, ROAS hidden with an explanation; no conversion is planned.
    - **Question:** leave ROAS hidden, or plan a conversion?
    - **Option A:** keep ROAS hidden with the explanation; CPL/CPQL/CAC in USD.
    - **Option B:** a separate later outcome adding a stored daily or monthly USD→MAD rate with ROAS marked "estimated".
    - **Consequences:** A is truthful and simple; B needs a rate source, storage and a product rule for estimated ratios.
    - **Recommendation:** A now; B only if you want ROAS on this page later.
    - **Blocking:** not blocking.
-4. **Configuration surface.**
+4. **Configuration surface.** — **RESOLVED: Option A**, a director panel on `/crm/analytics`.
    - **Question:** who enters the account configuration?
    - **Option A:** a director panel on `/crm/analytics` using the existing `crm_configure_insights` RPC (the switch, the account fields and the refresh settings).
    - **Option B:** the operator configures the connection by SQL at release; the page shows only the live switch.
    - **Consequences:** A gives you self-service correction before first publish and keeps the operator out of routine changes; B is a smaller UI change but every correction becomes a Production SQL step.
    - **Recommendation:** A.
    - **Blocking:** decide before implementation (UI scope).
-5. **Automatic retry of transient failures.**
+5. **Automatic retry of transient failures.** — **RESOLVED: Option A**, bounded retry for transient failures.
    - **Question:** should rate limits, provider outages, network errors and timeouts retry automatically?
    - **Option A:** bounded automatic retry (3 attempts, 30 min then 2 h) with director retry for terminal failures, as in D5.
    - **Option B:** director-only retry for every failure, as the 089 contract reads today.
    - **Consequences:** A keeps spend current without the director watching the page; B is simpler but a single rate-limit response during the night leaves the morning report stale.
    - **Recommendation:** A.
    - **Blocking:** decide before implementation.
-6. **Fallback trigger.**
+6. **Fallback trigger.** — **RESOLVED: Option A**, as written in [Scope](#scope-and-non-goals).
    - **Question:** do you accept the fallback trigger in [Scope](#scope-and-non-goals) (App Review required, or no validated token within ten working days, or `provider_auth` after assignment)?
    - **Option A:** accept as written.
    - **Option B:** state a different deadline or condition.
    - **Recommendation:** A.
    - **Blocking:** not blocking.
 
+## Approval record
+
+**Approval record.** Approver: **Maroine**. Date of answers: **2026-10-09**. Answers recorded against plan revision DGI-A-r2 (head `d19cdf69083e545dac559fa8f0a50f5f4370d451`): **1** Option A, a dedicated read-only System User with token reference `CRM_META_INSIGHTS_TOKEN_EH_KAL`; **2** Option A, the Rentrée campaign start date to be stated by the owner, **not yet supplied, open**, blocking only release step R7 with Production read 3 as the lower-bound check; **3** Option A, spend and CAC in USD, ROAS hidden with an explanation, no conversion planned; **4** Option A, a director panel on `/crm/analytics`; **5** Option A, bounded retry for transient failures; **6** Option A, the fallback trigger as written in Scope.
+
+**Plan approval (Maroine, 2026-10-09): APPROVED FOR IMPLEMENTATION.** Approved revision **DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`** (base `b141183d67c8a541f6b1c099f8a6f3a6b4cf3b9f`), following the independent reviewer's READY FOR FINAL REVIEW on that exact head. This approval record is a documentation-only commit on top of that head; it changes no design text, scope or invariant. Answers as recorded above.
+
+**Scope of approval.** Approves **implementation of Outcome A only**: the application code, the one forward migration (next free number at implementation), the tests and the documentation, on a dedicated branch with its own PR, CI and independent review. **Each of the following still needs its own explicit owner approval:** merging any implementation PR; every Production read, including the seven [proposed reads](#production-reads-proposed-not-run); deploying the migration; issuing or storing the Meta token; the Vercel secrets and the `CRM_META_INSIGHTS_LIVE_ENABLED` gate; the Vault values; cron activation; Meta configuration; enabling live sync; and the backfill. Nothing is implemented, merged, deployed or activated by this record.
+
+**Reviewer clarifications carried into the contract** (see [implementer items](#reviewer-clarifications-implementer-items)): `live_not_available` in the closed code list of the replaced `crm_fail_insights_sync`; D8's backfill timing aligned with the scheduler; the Phase 12 branch guard extended to `claude/` branches.
+
 ## IMPLEMENTATION CONTRACT
 
 ### Scope
 
-Implement D1–D9 exactly as written, for one ad account, in one implementation PR on a dedicated branch from current `origin/main`, after owner approval of this revision and decisions 4 and 5. Decision 1 governs the separate credential step, not the code.
+Implement D1–D9 exactly as written, for one ad account, in one implementation PR on a dedicated branch from current `origin/main`, under the [approval record](#approval-record) (DGI-A-r2 at `d19cdf69083e545dac559fa8f0a50f5f4370d451`; decisions 1, 3, 4, 5 and 6 resolved as Option A). Decision 1 governs the separate credential step, not the code.
 
 ### Prerequisites
 
-- Owner approval recorded in this plan (date, revision, exact options).
+- Owner approval recorded in this plan: DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`, answers of 2026-10-09 as in the [approval record](#approval-record). The backfill start date (decision 2) is still open; it does not block implementation, only release step R7.
 - Fresh `origin/main`; reconcile with PRs #120–#124 if merged (migration number, `vercel.json`, `queries.js`, `CrmWorkspace.jsx`).
 - Local Supabase with ledger ≥ 113; the next free migration number confirmed from the ledger and open PRs.
 - No Production access, secret, token or data.
@@ -360,6 +372,14 @@ Exactly the [expected modules](#expected-modules). Database objects: column `crm
 ### Acceptance / tests
 
 All suites in [Test strategy](#test-strategy) pass locally and in CI for the exact head SHA, including the extended Phase 12 security matrix, the stateful 113 upgrade rehearsal, the token-absence checks, the enqueue-versus-request race, the pending-run identity block, the live 202 on the process route and the reclaim-path gating; `npm test`, `npm run lint`, `npm run build`, `npm run test:middleware`, `npm run test:navigation` pass; `supabase migration up --local` applies the new migration on a 113 database and the Phase 11 SQL/concurrency scripts pass against it; `git diff --check`, link and secret checks pass.
+
+### Reviewer clarifications (implementer items)
+
+Recorded from the independent review of DGI-A-r2 and approved with it; they refine the contract without changing the design:
+
+1. **Closed code list.** The replaced `crm_fail_insights_sync` adds `live_not_available` to its closed `p_code` list (D5 already classes it as terminal); the worker maps a closed live gate to that code.
+2. **Backfill timing (D8).** The scheduler claims a run only with at least 45 s remaining, so in practice one block is processed per 30-minute tick: N backfill blocks take roughly N × 30 minutes (two when a block finishes within about 10 s). A 28-day rolling refresh costs about 4 to 8 Graph calls (account metadata, three object edges, one or more insight pages), not more; the same estimate applies to a 31-day block. Treat these as the authoritative statements where D3 or D8 reads otherwise.
+3. **Branch guard.** Extend the branch guard in `scripts/test-crm-phase12-security.mjs` to accept `claude/` branches as well as `codex/` (or a GitHub Actions pull request), and apply the same guard to the Phase 11 browser and concurrency scripts.
 
 ### Stop conditions
 

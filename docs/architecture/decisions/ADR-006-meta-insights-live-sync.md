@@ -2,11 +2,11 @@
 
 ## Status
 
-**Proposed** (2026-10-09), pending owner acceptance of [Director CRM & Growth Intelligence — Outcome A](../plans/director-growth-intelligence.md), revision DGI-A-r2. Not implemented, merged, deployed or activated. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation and activation evidence.
+**Accepted** (owner Maroine, 2026-10-09): approved for implementation with [Director CRM & Growth Intelligence — Outcome A](../plans/director-growth-intelligence.md#approval-record), revision DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`, after the independent reviewer's READY FOR FINAL REVIEW on that head. Owner answers: decisions 1, 3, 4, 5 and 6 Option A; decision 2 (backfill start date) open and blocking only the backfill release step. Not implemented, merged, deployed or activated; every Production step keeps its own approval. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation and activation evidence.
 
 ## Date
 
-2026-10-09 (r2 after independent review of r1).
+2026-10-09 (r2 after independent review of r1; accepted the same day).
 
 ## Context
 
@@ -48,4 +48,4 @@ Migrations 089/090 and the Phase 11 adapter implement Meta Insights storage, an 
 
 ## Implementation status
 
-None. The plan's IMPLEMENTATION CONTRACT governs implementation after owner approval; migration number is the next free one at implementation; Production activation steps R0–R8 are each separately approved.
+**Not implemented.** Implementation is approved under the plan's IMPLEMENTATION CONTRACT (approval record of 2026-10-09) but has not started; migration number is the next free one at implementation; merge, Production reads, credential, secrets, gate, Vault, cron activation, configuration, live sync and backfill (steps R0–R8) are each separately approved.
