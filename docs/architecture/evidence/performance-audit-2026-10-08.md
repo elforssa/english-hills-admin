@@ -72,7 +72,7 @@ Measured with `npm run perf:bundle`; first-load JS is gzip-compressed and report
   - Wrapping the helpers as `(select f())` alone gave no consistent speed-up.
   - Adding a `(select get_my_role()) = 'teacher'` guard in front of the six teacher-helper policies cut the non-teacher students read from about 3.8 s to about 4 ms.
   - There were 0 visible-row differences over 476 role × table comparisons.
-  - This is the migration-114 architecture (separate PR).
+  - This is the RLS role-evaluation migration architecture (separate PR #124; the number is assigned at implementation, provisionally 115).
 - **Advisor counts (2026-10-08):**
   - unindexed foreign keys: 102;
   - `auth_rls_initplan`: 10;

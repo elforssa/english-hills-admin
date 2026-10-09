@@ -1,5 +1,5 @@
 {
-  "comment": "First-load JS in decimal kB (gzip), checked by `node scripts/perf-bundle-report.mjs --check` after `npm run build`. Ceiling = Phase-0 baseline (2026-10-08, main 857b159) plus about 2% headroom: a regression guard. Target = performance plan goal; lower a ceiling only when a change has delivered the reduction.",
+  "comment": "First-load JS in decimal kB (gzip), checked manually (not by CI) by `node scripts/perf-bundle-report.mjs --check` right after `npm run build` on the same tree. Ceiling = Phase-0 baseline (2026-10-08, main 857b159) plus about 2% headroom: a regression guard. Target = performance plan goal; lower a ceiling only when a change has delivered the reduction.",
   "sharedKB": { "baseline": 185.2, "ceiling": 189, "target": 150 },
   "routes": {
     "/login": { "baseline": 253.1, "ceiling": 258, "target": 220 },

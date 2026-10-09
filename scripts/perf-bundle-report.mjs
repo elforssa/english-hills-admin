@@ -2,6 +2,7 @@
 // First load = root main files + the route's app chunks, gzip-compressed, as `next build` reports.
 // `--check` compares against scripts/perf-budget.json ceilings (no-regression guard) and exits 1
 // on any excess. Targets in the same file are goals for later phases and are reported, not enforced.
+// Manual check: CI does not run it, and it does not confirm that .next was built from the current tree.
 import { readFileSync, existsSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';

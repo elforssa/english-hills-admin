@@ -107,6 +107,18 @@ Owner answers to the plan's questions, recorded **2026-10-08** (approver Maroine
 
 Outcome and evidence: [Release A release record](../architecture/evidence/premium-retirement-release-a-production-2026-10-09.md).
 
+## Performance plan P-r1 — APPROVED (2026-10-08)
+
+Plan: [performance plan](../architecture/plans/performance-r1.md), revision P-r1. The plan records the approval date and scope but no exact approved head SHA. On **2026-10-08** the owner approved:
+
+- **P0** measurement (baseline harness, bundle report and budget, Speed Insights with its privacy filter);
+- **PA** lighter first load and **PB** no redundant reads, one PR each;
+- the **`dub1`** Vercel Functions region change, as a separate Tier-3 configuration PR.
+
+The owner also decided: **Speed Insights** for real-user monitoring, with Sentry remaining errors-only; **no Supabase compute upgrade**; CRM polling **stays at 60 s**, visible tab only; **`getClaims()` in middleware is deferred**. For the session-context and RLS role-evaluation migrations, the approval covers architecture documents only and the work stops for owner review; before the session-context migration the owner requires proof that its pending-role rule is identical to the current `apply_pending_role` for every role and that its failure states never fail open. Enabling Speed Insights in the Vercel project and the region change remain Production configuration actions with their own release approval.
+
+**OPEN — deterministic SQLSTATE `40001` retry loop (not decided; not blocking for the performance plan).** About 40 functions raise `40001` for stale-version or conflict conditions; reached through PostgREST, such a request retries in-process, which caused the historical 391M-call loop. Option A: a separate Tier-3 outcome moving deterministic conflicts to a non-retryable SQLSTATE while preserving the browser contract for uncertain failures. Option B: accept the risk. **Recommendation recorded in the plan: A.** See [Owner decisions required](../architecture/plans/performance-r1.md#owner-decisions-required).
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
