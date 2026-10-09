@@ -1,6 +1,8 @@
-# RLS role evaluation — migration 114 (architecture, revision R-r1)
+# RLS role evaluation — migration 115, provisional (architecture, revision R-r1)
 
 **Status: PROPOSED — architecture only, awaiting owner review. Not implemented, not approved for implementation.** Tier 3 (RLS). This is Phase 3 of the performance plan P-r1 (PR #119); evidence: [performance audit](https://github.com/elforssa/english-hills-admin/blob/perf/phase0-measurement/docs/architecture/evidence/performance-audit-2026-10-08.md). Baseline: `origin/main` at the time of writing; migration ledger 001–112.
+
+**Migration number is provisional.** This design was first written as migration 114. Production has since taken 113 (Premium retirement Release A, PR #125), and the session-context design (PR #121) now provisionally takes 114, so this revision calls it 115. The real number is whichever is next free in `supabase/migrations` on `origin/main` when the migration file is written; the Premium retirement plan also names 114 provisionally for its Release B. Renumbering changes nothing in the design.
 
 # Owner summary
 
@@ -8,7 +10,7 @@
 
 Reading the students list (and similar tables) asks the database, for **every row**, whether the reader is a teacher linked to that student. It asks this even for directors, admins and the receptionist, for whom the answer is always "no".
 
-Migration 114 rewrites policy expressions so that:
+Migration 115 rewrites policy expressions so that:
 
 1. the role helpers are evaluated once per query instead of once per row;
 2. the expensive teacher check runs only when the reader actually is a teacher.
@@ -37,7 +39,7 @@ None, apart from speed.
 
 ## Database impact
 
-Migration 114 runs `ALTER POLICY … USING (…) WITH CHECK (…)` on about 150 public policies. It changes no data, table, function or grant.
+Migration 115 runs `ALTER POLICY … USING (…) WITH CHECK (…)` on about 150 public policies. It changes no data, table, function or grant.
 
 ## Important security decisions
 
@@ -120,9 +122,9 @@ The container ran under x86 emulation, so absolute times are inflated. Only the 
 
 **Files:**
 
-- `supabase/migrations/114_rls_role_evaluation.sql`, generated as above;
+- `supabase/migrations/115_rls_role_evaluation.sql`, generated as above;
 - `scripts/generate-rls-role-evaluation.mjs` (generator, deterministic output);
-- `scripts/rollback/114_rls_role_evaluation_restore.sql`, a forward-applicable restore of the original expressions.
+- `scripts/rollback/115_rls_role_evaluation_restore.sql`, a forward-applicable restore of the original expressions.
 
 **Required local tests:**
 
@@ -134,7 +136,7 @@ The container ran under x86 emulation, so absolute times are inflated. Only the 
 
 **Rollout:**
 
-1. Apply 114 outside centre hours, as a migration-first release with no app change.
+1. Apply 115 outside centre hours, as a migration-first release with no app change.
 2. Verify the policy count and kinds against the pre-release snapshot.
 3. Run a rolled-back role probe.
 4. Check that `pg_stat_statements` shows the students read mean falling.
@@ -156,7 +158,7 @@ The container ran under x86 emulation, so absolute times are inflated. Only the 
 
 - **Prerequisites:**
   - owner approval of this revision and D1/D2;
-  - the latest migration rechecked on `origin/main` (113 may be allocated first; renumber if needed);
+  - the latest migration rechecked on `origin/main` (114 may be allocated first; renumber if needed);
   - the generator run against a database at the latest ledger.
 - **Invariants:**
   - expressions are semantically unchanged by construction;
