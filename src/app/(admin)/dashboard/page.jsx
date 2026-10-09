@@ -6,7 +6,7 @@ import { financeReadResult, failedRead } from '@/lib/ui/readResults.mjs';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { entities } from '@/lib/entities';
+import { entities, reportError } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
 import { PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
@@ -15,11 +15,17 @@ import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
 
-async function countRows(query) {
-  const { count, error } = await query;
-  if (error) throw error;
-  if (!Number.isSafeInteger(count) || count < 0) throw new Error('Incomplete count response');
-  return count;
+// A failed count reports like the entity reads it replaces (console + error toast).
+async function countRows(entityName, query) {
+  try {
+    const { count, error } = await query;
+    if (error) throw error;
+    if (!Number.isSafeInteger(count) || count < 0) throw new Error('Incomplete count response');
+    return count;
+  } catch (error) {
+    reportError('count', entityName, error);
+    throw error;
+  }
 }
 
 export default function Dashboard() {
@@ -74,12 +80,12 @@ export default function Dashboard() {
     const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
     const sb = getBrowserClient();
     Promise.all([
-      countRows(sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),
-      countRows(sb.from('teachers').select('id', { count: 'exact', head: true })),
-      countRows(sb.from('groups').select('id', { count: 'exact', head: true })),
+      countRows('Student', sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),
+      countRows('Teacher', sb.from('teachers').select('id', { count: 'exact', head: true })),
+      countRows('Group', sb.from('groups').select('id', { count: 'exact', head: true })),
       entities.Receipt.list('-created_date', 5),
-      countRows(sb.from('enrollments').select('id', { count: 'exact', head: true }).in('status', PENDING_PRE_ENROLLMENT_STATUSES)),
-      countRows(sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
+      countRows('Enrollment', sb.from('enrollments').select('id', { count: 'exact', head: true }).in('status', PENDING_PRE_ENROLLMENT_STATUSES)),
+      countRows('PlacementTest', sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
       getBrowserClient().rpc('get_finance_charge_summary'),
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
     ]).then(([students, teachers, groups, receipts, enrollmentsPending, testsPlanifies, financeResult, monthlyResult]) => {

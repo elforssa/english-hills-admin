@@ -98,7 +98,7 @@ function sanitize(data, { allowId = false } = {}) {
   return rest;
 }
 
-function reportError(operation, entityName, error) {
+export function reportError(operation, entityName, error) {
   const msg = `${entityName}.${operation} failed: ${error.message || 'unknown error'}`;
   // eslint-disable-next-line no-console
   console.error(msg, error);

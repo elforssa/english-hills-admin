@@ -29,7 +29,8 @@ export default function LifecycleOperations() {
   const deliveries = useCrmRead('crm_list_external_deliveries', { p_limit: 50, p_offset: 0 }, role === 'director');
   const gate = useQuery({ queryKey: ['crm', 'lifecycle-server-gate'], queryFn: async () => {
     const response = await fetch('/api/internal/crm/lifecycle/process', { cache: 'no-store' });
-    if (!response.ok) throw new Error('status_unavailable');
+    // The status lets the read retry policy tell a gateway failure from an answer.
+    if (!response.ok) throw Object.assign(new Error('status_unavailable'), { status: response.status });
     return response.json();
   }, enabled: role === 'director', staleTime: 15000 });
   const [busy, setBusy] = useState('');
