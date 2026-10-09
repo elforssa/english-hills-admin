@@ -50,6 +50,12 @@ RCC-A2 (migration 112; deployed and Production verified on 2026-10-07):
 
 A charge is an agreement; a nonzero payment issues a receipt. Zero payment may create a charge but no receipt or payment-driven enrollment. Collected CRM revenue derives from actual linked payment/void events, not quotes, charge totals or a status change. Preserve idempotency and append-only financial history. See [084](../../supabase/migrations/084_crm_enrollment_and_conversion.sql), [085](../../supabase/migrations/085_crm_revenue_attribution.sql), and [receipt model](../receipt-financial-model.md).
 
+## Yearly without Formule — Premium retirement
+
+Premium is a cancelled product (owner decisions of 2026-10-08). Every Yearly student is a Yearly student: no screen, receipt, PDF, e-mail, export or report shows a "Formule" or presents Standard/Premium as a choice, and new activity never creates a record containing `Premium`. One owner-accepted exception: a new receipt on an undated non-legacy Yearly charge copies that charge's own text.
+
+The `plan_type` columns on `students`, `charges` and `receipts` (and the student-list `p_plan` parameter) are **inert**: nothing reads them for display; new charges get the fixed value `Standard` because the existing constraint requires a value for Yearly, and new receipts get NULL. They are kept rather than dropped (owner decision Q2). Issued receipts and settled or voided charges keep their stored text (Q1). The workshop module's database objects remain until Release B (planned, not approved). Contract: [receipt model](../receipt-financial-model.md#formule-retirement-113-current-contract); release evidence in [CURRENT_STATE](CURRENT_STATE.md).
+
 ## People, opportunities and academics
 
 Contact, lead/prospect, and learner/student are distinct. A parent/contact can represent multiple learners and separate program opportunities. Shared phone alone is insufficient to merge siblings, attach a student or reuse an enrollment. Ambiguity requires review; never infer a child's name from the contact's name.

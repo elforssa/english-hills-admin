@@ -3,8 +3,9 @@
 ## Model
 
 - `charges` is the fee agreement: student, optional enrollment, catalog
-  session, service/period, Yearly formula, optional level, gross price, fixed
-  discount, and optional due date.
+  session, service/period, optional level, gross price, fixed discount, and
+  optional due date. Its `plan_type` column is inert since migration 113 (see
+  [Formule retirement](#formule-retirement-113-current-contract)).
 - `receipts` is both the individual payment and the issued receipt. One
   non-zero payment creates one immutable row with identity, service, amount,
   prior-paid, and balance snapshots. A zero-payment request creates only the
@@ -95,8 +96,8 @@ separate operational checks; successful reconciliation does not establish either
 New agreements store the selected school year (UI catalogue: 2026/2027). Receipts
 snapshot that year; existing agreements without a known year remain undated.
 The security-invoker balance view appends school_year without reordering existing
-columns. Yearly requires an explicit Standard/Premium formula; other sessions
-cannot use Premium. Email delivery is opt-in; an unrequested recipient is ignored
+columns. ~~Yearly requires an explicit Standard/Premium formula; other sessions
+cannot use Premium.~~ *(Retired by migration 113; see below.)* Email delivery is opt-in; an unrequested recipient is ignored
 in both request normalization and receipt creation.
 
 Client receipts use one A5 portrait page. Internal notes and cancellation reasons
@@ -114,3 +115,26 @@ an existing balance, and clearing state on new-learner mode. A temporary local
 synthetic receipt (EH-2026-00039) remains for review. No production data or real
 email was used. Native PDF tab inspection is restricted by browser automation;
 the generated PDF itself was rendered and visually inspected separately.
+
+### Formule retirement (113; current contract)
+
+Migration `113_premium_retirement_finance_contract.sql` redefined only
+`create_charge_payment_financial(jsonb)` (applied in Production 2026-10-08 UTC; see the
+[release record](architecture/evidence/premium-retirement-release-a-production-2026-10-09.md) and the
+[plan](architecture/plans/premium-retirement.md#d1--finance-contract-release-a-migration-113)):
+
+- The payload `plan_type` is accepted and ignored for charge and receipt data. For a
+  request that creates a new Yearly charge, the supplied value still feeds the request
+  fingerprint exactly as migration 096 did, so a request committed before 113 replays
+  with its original receipt (owner decision Q7, option A).
+- A new Yearly charge stores `plan_type = 'Standard'` (required by the unchanged
+  `charges_yearly_formula_check`) and the description `Yearly · <school year>`.
+- Every new receipt stores `plan_type` NULL. A receipt on a dated non-legacy Yearly
+  charge builds `Yearly · <school year>`; a receipt on an undated non-legacy Yearly
+  charge, a legacy charge or a non-Yearly charge copies the charge's own text.
+- Numbering, amounts, discounts, balances, idempotency, events, e-mail opt-in and
+  grants are unchanged. The receipt e-mail (Edge Function `sendReceiptEmail` v19)
+  has no Formule row.
+- Stored text of issued receipts and settled or voided charges is left as it was
+  (owner decision Q1). The plan word was removed from the 10 open non-legacy Yearly
+  charge descriptions by the separately approved cleanup step on 2026-10-09 UTC.
