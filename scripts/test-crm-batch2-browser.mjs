@@ -13,9 +13,22 @@ const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatM
   return match?[[match[1],match[2].trim().replace(/^['"]|['"]$/g,'')]]:[];
 }));
 assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,'http://127.0.0.1:54321');
-const sql=query=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{
-  input:query,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},
-}).trim();
+// Fail fast instead of stalling CI: bound each blocking SQL call and the whole run.
+const sqlTimeoutMs=120_000,runTimeoutMs=10*60_000;
+setTimeout(()=>{
+  console.error(`FAIL CRM lifecycle browser suite stalled: no completion within ${runTimeoutMs/60_000} minutes`);
+  process.exit(1);
+},runTimeoutMs).unref();
+const sql=query=>{
+  try{
+    return execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{
+      input:query,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},timeout:sqlTimeoutMs,
+    }).trim();
+  }catch(error){
+    if(error.code==='ETIMEDOUT') throw new Error(`SQL stalled for over ${sqlTimeoutMs/1000} s (lock wait or open transaction): ${query.slice(0,200)}`);
+    throw error;
+  }
+};
 // H3-04 makes the verified registry badge available without opening any send gate.
 sql(readFileSync('scripts/test-crm-h3-04-manifest.sql','utf8'));
 const app='http://localhost:3101';

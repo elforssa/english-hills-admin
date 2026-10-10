@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getMyTeacher } from '@/lib/teacher-directory';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
+import { useAuth } from '@/context/AuthContext';
 import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -394,6 +395,7 @@ const STATUS_CONFIG = {
 const ICONS = { 'Présent': CheckCircle, 'Absent': XCircle, 'Retard': Clock, 'Justifié': AlertCircle };
 
 export default function TeacherPortal() {
+  const { user: sessionUser } = useAuth();
   const [user, setUser] = useState(null);
   const [teacher, setTeacher] = useState(null);
   const [groups, setGroups] = useState([]);
@@ -424,7 +426,7 @@ export default function TeacherPortal() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    auth.me().then(async (u) => {
+    Promise.resolve(sessionUser).then(async (u) => {
       setUser(u);
       const me = await getMyTeacher();
       setTeacher(me);
@@ -459,6 +461,9 @@ export default function TeacherPortal() {
       }
       setLoading(false);
     }).catch(() => setLoading(false));
+  // Identity comes from AuthContext, resolved by the admin layout before this page
+  // renders; this load runs once on mount, as before.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup).map(e => e.student_id);

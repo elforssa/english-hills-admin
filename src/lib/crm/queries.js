@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { shouldRetryRead } from '@/lib/queryRetry.mjs';
 export async function crmRpc(name, args) {
   const {
     data,
@@ -21,9 +22,9 @@ export function useCrmRead(name, args = {}, enabled = true) {
     queryFn: () => crmRpc(name, args),
     enabled: enabled && !!user && ['receptionist', 'admin', 'director'].includes(role),
     staleTime: 15000,
-    retry: 1,
+    retry: shouldRetryRead,
     refetchOnWindowFocus: true,
-    refetchInterval: ['crm_get_today','crm_get_opportunities','crm_get_work_queue','crm_get_admissions_calendar'].includes(name) ? 60000 : false
+    refetchInterval: ['crm_get_opportunities','crm_get_work_queue','crm_get_admissions_calendar'].includes(name) ? 60000 : false
   });
 }
 export function useCrmRefresh() {

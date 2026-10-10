@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ReceptionistAccount } from '@/components/students/ReceptionistOperations';
 
 import { useEffect, useState } from 'react';
-import { entities, auth, users } from '@/lib/entities';
+import { entities, users } from '@/lib/entities';
 import { Building2, Users, UserPlus, Edit2, Check, X, Save, CalendarDays, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -376,16 +376,10 @@ function Settings() {
   // app_config row id backing the center info, once loaded from the DB.
   const [centerConfigId, setCenterConfigId] = useState(null);
 
-  useEffect(() => {
-    auth.me()
-      .then((u) => {
-        setCurrentUser(u);
-      })
-      .catch((err) => {
-        // eslint-disable-next-line no-console
-        console.error('[settings] auth.me() failed:', err);
-      });
-  }, []);
+  // Identity comes from AuthContext, resolved by the admin layout before this page
+  // renders; it is used here only for role-dependent tabs and forms.
+  const { user: sessionUser } = useAuth();
+  useEffect(() => { setCurrentUser(sessionUser); }, [sessionUser]);
 
   // Center info is stored in app_config (key 'center_info') so edits propagate
   // across devices and users. localStorage is only a cache for instant paint.

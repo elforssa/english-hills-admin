@@ -1,6 +1,7 @@
 // Shared definitions for the pre-registration queue and placement reports.
+export const PENDING_PRE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review'];
 export function isPendingPreEnrollment(enrollment) {
-  return ['Submitted', 'Under Review'].includes(enrollment.status);
+  return PENDING_PRE_ENROLLMENT_STATUSES.includes(enrollment.status);
 }
 export function isPreEnrollment(enrollment) {
   return ['Submitted', 'Under Review', 'Rejected', 'Trial'].includes(enrollment.status);
