@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted** (owner Maroine, 2026-10-09): approved for implementation with [Director CRM & Growth Intelligence — Outcome A](../plans/director-growth-intelligence.md#approval-record), revision DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`, after the independent reviewer's READY FOR FINAL REVIEW on that head. Owner answers: decisions 1, 3, 4, 5 and 6 Option A; decision 2 (backfill start date) open and blocking only the backfill release step. Not implemented, merged, deployed or activated; every Production step keeps its own approval. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation and activation evidence.
+**Accepted** (owner Maroine, 2026-10-09): approved for implementation with [Director CRM & Growth Intelligence — Outcome A](../plans/director-growth-intelligence.md#approval-record), revision DGI-A-r2 at exact head `d19cdf69083e545dac559fa8f0a50f5f4370d451`, after the independent reviewer's READY FOR FINAL REVIEW on that head. Owner answers: decisions 1, 3, 4, 5 and 6 Option A; decision 2 (backfill) later closed with no backfill. Implemented and activated in Production on 2026-10-10 (see [Implementation status](#implementation-status)). [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation and activation evidence.
 
 ## Date
 
@@ -48,4 +48,6 @@ Migrations 089/090 and the Phase 11 adapter implement Meta Insights storage, an 
 
 ## Implementation status
 
-**Implemented, awaiting independent review** (2026-10-09) on branch `claude/dgi-a-meta-insights-live-sync` with migration `114_crm_meta_insights_live_sync.sql`; see the plan's [implementation record](../plans/director-growth-intelligence.md#implementation-record). Not merged, deployed or activated; merge, Production reads, credential, secrets, gate, Vault, cron activation, configuration, live sync and backfill (steps R0–R8) are each separately approved.
+**Implemented and activated in Production** (2026-10-10). PR #129 (migration `114_crm_meta_insights_live_sync.sql`) merged as `27822227596bf1315ba483d47c4f2f9c6583d1d1`; the migration was released, `crm-insights-primary` activated and the first live run completed for one ad account in USD; see the plan's [implementation record](../plans/director-growth-intelligence.md#implementation-record) and [closeout record](../plans/director-growth-intelligence.md#closeout-record-r8), and [CURRENT_STATE](../../ai/CURRENT_STATE.md#dgi-a-live-meta-insights-sync-production-closeout--2026-10-10) for the evidence.
+
+**Implementation note.** The decision held unchanged through release. Two points from operation: (1) per decision 6, CAC is shown in USD but reads “–” until leads carry a Meta campaign ID, which is later Director CRM scope (Outcome B), not a change to this decision; (2) the dedicated Insights System User was kept separate from S1 as decided, but it retains leftover “View insights and Test app” access on the app EH Lifecycle R4 C2, which the owner chose to leave. No historical backfill was run.
