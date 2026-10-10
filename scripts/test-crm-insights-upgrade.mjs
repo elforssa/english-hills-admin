@@ -1,11 +1,13 @@
 // Local synthetic 113→114 stateful upgrade (DGI-A-r2). Run after
 // `supabase db reset --local --version 113 --no-seed`: builds Insights state under the
-// 089 definitions, applies 114 with `supabase migration up --local`, then proves the
+// 089 definitions, applies the 114 file directly (`supabase migration up` would also
+// apply 115 and later, as the older rehearsals handle it), then proves the
 // backfilled column, the preserved snapshot, the retryable partial run, the inactive job
 // and an unchanged catalog apart from the enumerated objects.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 const sql=input=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024}).trim();
 const last=output=>output.split('\n').at(-1);
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'113');
@@ -40,9 +42,9 @@ const data=()=>Object.fromEntries(tables.map(table=>{assert(/^[a-z_0-9]+$/.test(
 const replacedAcl=()=>sql(`select string_agg(p.oid::regprocedure::text||'='||p.proacl::text,',' order by p.oid::regprocedure::text) from pg_proc p where p.pronamespace='public'::regnamespace and p.proname in (${replaced.map(n=>`'${n}'`).join(',')})`);
 const before=catalog(),beforeData=data(),beforeAcl=replacedAcl();
 for(const name of added)assert(!(name in before.functions),`${name} absent before 114`);
-// Apply exactly the reviewed forward migration through the CLI.
-execFileSync('supabase',['migration','up','--local'],{stdio:'pipe'});
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'114');
+// Apply exactly the reviewed forward migration file (the ledger stays at 113 here).
+sql(readFileSync('supabase/migrations/114_crm_meta_insights_live_sync.sql','utf8'));
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'113');
 const after=catalog();
 for(const name of added)assert(name in after.functions,`${name} created`);
 for(const name of added)delete after.functions[name];

@@ -56,6 +56,31 @@ for (const [status, payload, code] of [[429, {}, 'rate_limit'], [500, {}, 'provi
 await assert.rejects(graphGet({ apiVersion: 'v99.0', token: 'fake', id: '2', fields: 'id', fetchImpl: async () => { throw Error('network with secret'); } }), e => e.code === 'network');
 const partial = await retrieveLead(job, 'fake-token', async url => url.pathname.endsWith('/2') ? Response.json(lead) : Response.json({}, { status: 403 }));
 assert.equal(normalizeLead(job, partial, mapping).attribution.attribution_status, 'partial');
+// DGI-B D1: the ad-lookup outcome is recorded as a fixed code; the hierarchy source is
+// informational; campaign_id still never comes from field_data.
+assert.equal(retrieved.ad_lookup_error, null);
+assert.equal(normalized.attribution.hierarchy_source, 'provider');assert.equal(normalized.attribution.hierarchy_error_code, null);
+assert.equal(partial.ad_lookup_error, 'provider_auth');assert.equal(partial.ad, null);
+{
+ const attribution = normalizeLead(job, partial, mapping).attribution;
+ assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.hierarchy_error_code, 'provider_auth');
+ assert.equal(attribution.campaign_id, null);assert.equal(attribution.adset_id, null);assert.equal(attribution.ad_id, '4');
+}
+for (const [respond, code] of [[() => Response.json({ error: { code: 190, message: 'SECRET BODY' } }, { status: 400 }), 'provider_auth'], [() => Response.json({}, { status: 429 }), 'rate_limit'],
+ [() => Response.json({}, { status: 503 }), 'provider_unavailable'], [() => { throw Error('network with SECRET BODY'); }, 'network'], [() => Response.json({ id: '9', name: 'Other ad' }), 'invalid_provider_data']]) {
+ const outcome = await retrieveLead(job, 'fake-token', async url => url.pathname.endsWith('/2') ? Response.json(lead) : respond());
+ assert.equal(outcome.ad_lookup_error, code);assert.equal(outcome.ad, null);
+ const attribution = normalizeLead(job, outcome, mapping).attribution;
+ assert.equal(attribution.hierarchy_error_code, code);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.attribution_status, 'partial');
+ assert(!JSON.stringify(attribution).includes('SECRET BODY'), 'error codes never carry a body');
+}
+{
+ const organic = await retrieveLead(job, 'fake-token', async url => { assert(url.pathname.endsWith('/2'), 'no ad lookup without ad_id'); return Response.json({ ...lead, ad_id: undefined }); });
+ assert.equal(organic.ad_lookup_error, null);
+ const attribution = normalizeLead(job, organic, mapping).attribution;
+ assert.equal(attribution.ad_id, null);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.hierarchy_error_code, null);
+}
+assert.equal(normalizeLead(job, { lead, ad: null }, mapping).attribution.hierarchy_error_code, null, 'older retrieved shape stays valid');
 let finalized = 0, failures = [];
 const rpc = async (name, args) => {
  if (name === 'crm_claim_meta_jobs') return [job];

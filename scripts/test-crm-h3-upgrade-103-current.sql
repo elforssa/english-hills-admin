@@ -4,10 +4,16 @@ begin;
 create function pg_temp.ok(v boolean,label text) returns void language plpgsql as $$ begin if v is not true then raise exception 'FAIL: %',label;end if;end $$;
 create function pg_temp.denied(q text,code text default '42501') returns void language plpgsql as $$ begin begin execute q;exception when others then if sqlstate=code then return;end if;raise exception 'Expected %, got %: %',code,sqlstate,sqlerrm;end;raise exception 'Unexpected success: %',q;end $$;
 set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';
-select pg_temp.ok((select max(version::integer)=114 from supabase_migrations.schema_migrations),'upgraded to current 114');
-do $$declare t text;got jsonb;begin
+select pg_temp.ok((select max(version::integer)=115 from supabase_migrations.schema_migrations),'upgraded to current 115');
+-- Migration 115 (DGI-B B1) adds the nullable columns hierarchy_source and
+-- hierarchy_error_code to crm_submission_attribution with no backfill. The 103 snapshot
+-- predates them, so the comparison drops exactly those two keys after proving they are
+-- NULL on every row; every other column and table must still match byte for byte.
+select pg_temp.ok((select count(*)=0 from public.crm_submission_attribution where hierarchy_source is not null or hierarchy_error_code is not null),'115 columns NULL on every pre-existing attribution row');
+do $$declare t text;got jsonb;row_expr text;begin
  for t in select k from public.h3_upgrade_snapshot where k<>'acl' loop
-  execute format('select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),''[]'') from public.%I t where %s',t,case when t='crm_lifecycle_provider_contracts' then 'id <> ''7cf9833e-4f77-4335-b1ec-c047d9353f54''' else 'true' end) into got;
+  row_expr:=case when t='crm_submission_attribution' then 'to_jsonb(t)-''hierarchy_source''-''hierarchy_error_code''' else 'to_jsonb(t)' end;
+  execute format('select coalesce(jsonb_agg(%1$s order by (%1$s)::text),''[]'') from public.%2$I t where %3$s',row_expr,t,case when t='crm_lifecycle_provider_contracts' then 'id <> ''7cf9833e-4f77-4335-b1ec-c047d9353f54''' else 'true' end) into got;
   perform pg_temp.ok(got=(select data from public.h3_upgrade_snapshot where k=t),'migration leaves all inventory unchanged: '||t);
  end loop;
 end $$;
