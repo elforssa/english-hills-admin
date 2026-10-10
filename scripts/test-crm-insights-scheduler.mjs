@@ -20,7 +20,8 @@ const graph = async (url, options) => {
   return respond({ data: [row] });
 };
 const counts = body => Object.keys(body).sort().join(',');
-const countKeys = 'completed,deferred,enqueued,failed,ok,processed';
+const countKeys = 'completed,deferred,enqueued,enriched,failed,ok,processed';
+const noEnrichment = { eligible: 0, resolved: 0, unresolved: 0 };
 let checks = 0;
 
 // A queue stub with SKIP LOCKED semantics: a claimed run is invisible to other claims.
@@ -34,6 +35,7 @@ function queue(size, { enqueued = 0 } = {}) {
     if (name === 'crm_claim_insights_sync') return pending.shift() || null;
     if (name === 'crm_finish_insights_sync') { assert.equal(args.p_data.currency, 'USD'); return null; }
     if (name === 'crm_fail_insights_sync') return null;
+    if (name === 'crm_enrich_meta_attribution') { assert.deepEqual(args, { p_limit: 200 }); return { eligible: 0, resolved: 0, unresolved: 0, expired: 0 }; }
     throw new Error(`unexpected ${name}`);
   };
   return { rpc, log };
@@ -52,7 +54,7 @@ assert.equal(noServerToken.status, 401); checks++;
 for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...baseEnv, CRM_META_INSIGHTS_LIVE_ENABLED: 'TRUE' }]]) {
   const result = await runScheduledInsights(request(`Bearer ${token}`), { env, liveGate, rpc: async name => assert.fail(`closed gate called ${name}`), fetchImpl: async () => assert.fail('closed gate fetched') });
   assert.equal(result.status, 200); const body = await result.json();
-  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0 }); checks++;
+  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0, enriched: noEnrichment }); checks++;
 }
 
 // 3. Open gate: enqueue once, at most five runs per tick, counts only.
@@ -61,8 +63,10 @@ for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...ba
   const result = await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc, fetchImpl: graph });
   assert.equal(result.status, 200); assert.equal(result.headers.get('cache-control'), 'no-store');
   const text = await result.clone().text(); const body = await result.json();
-  assert.equal(counts(body), countKeys); assert.deepEqual(body, { ok: true, enqueued: 1, processed: 5, completed: 5, failed: 0, deferred: 0 });
+  assert.equal(counts(body), countKeys); assert.deepEqual(body, { ok: true, enqueued: 1, processed: 5, completed: 5, failed: 0, deferred: 0, enriched: noEnrichment });
   assert.equal(log.filter(name => name === 'crm_enqueue_insights_refresh').length, 1); assert.equal(log.filter(name => name === 'crm_claim_insights_sync').length, 5);
+  // DGI-B D4: exactly one attribution sweep per tick, after the claims loop.
+  assert.equal(log.filter(name => name === 'crm_enrich_meta_attribution').length, 1); assert.equal(log.at(-1), 'crm_enrich_meta_attribution');
   for (const secret of [token, providerToken, 'CRM_META_INSIGHTS_TOKEN', 'access_token', 'run-', 'lease-', '1100']) assert(!text.includes(secret), `response leaks ${secret}`);
   checks += 3;
 }
@@ -72,7 +76,7 @@ for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...ba
   const { rpc, log } = queue(3);
   let clock = 1_000_000; const now = () => { const value = clock; clock += 10_001; return value; };
   const body = await (await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc, fetchImpl: graph, now })).json();
-  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0 });
+  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0, enriched: noEnrichment });
   assert.equal(log.filter(name => name === 'crm_claim_insights_sync').length, 0, 'no claim when the budget is spent'); checks++;
 }
 {
@@ -99,7 +103,7 @@ for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...ba
   const pending = [{ id: 'a', lease_token: 'l', date_from: '2026-01-01', date_to: '2026-01-01', attempt_count: 3, config }, { id: 'b', lease_token: 'l', date_from: '2026-01-01', date_to: '2026-01-01', attempt_count: 1, config }];
   const rpc = async name => name === 'crm_claim_insights_sync' ? pending.shift() || null : name === 'crm_enqueue_insights_refresh' ? 0 : null;
   const body = await (await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc, fetchImpl: async () => new Response('{}', { status: 500 }) })).json();
-  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 2, completed: 0, failed: 1, deferred: 1 });
+  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 2, completed: 0, failed: 1, deferred: 1, enriched: noEnrichment });
   const broken = await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc: async () => { throw new Error(`storage ${token} ${providerToken}`); }, fetchImpl: graph });
   assert.equal(broken.status, 503); const text = await broken.text(); assert.deepEqual(JSON.parse(text), { error: 'Worker unavailable' });
   assert(!text.includes(token) && !text.includes(providerToken)); checks += 2;
@@ -111,6 +115,24 @@ for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...ba
   const bodies = await Promise.all([0, 1].map(async () => (await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc, fetchImpl: graph })).json()));
   assert.equal(bodies.reduce((sum, body) => sum + body.completed, 0), 1);
   assert.equal(log.filter(name => name === 'crm_finish_insights_sync').length, 1); checks++;
+}
+
+// 6b. DGI-B sweep: counts only from the RPC, skipped under 5 s of budget, never fails the tick.
+{
+  const seen = [];
+  const rpc = async (name, args) => { seen.push(name); if (name === 'crm_enqueue_insights_refresh') return 0; if (name === 'crm_claim_insights_sync') return null; if (name === 'crm_enrich_meta_attribution') { assert.deepEqual(args, { p_limit: 200 }); return { eligible: 3, resolved: 2, unresolved: 1, expired: 4, submission_id: 'leak-attempt' }; } throw new Error(name); };
+  const body = await (await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc, fetchImpl: graph })).json();
+  assert.deepEqual(body, { ok: true, enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0, enriched: { eligible: 3, resolved: 2, unresolved: 1 } });
+  assert.deepEqual(seen, ['crm_enqueue_insights_refresh', 'crm_claim_insights_sync', 'crm_enrich_meta_attribution']); checks++;
+  // Under 5 s left after the claims loop: no sweep this tick.
+  const starved = []; const start = Date.now(); const ticks = [0, 51_000]; let index = 0;
+  const late = await (await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc: async name => { starved.push(name); return name === 'crm_enqueue_insights_refresh' ? 0 : null; }, fetchImpl: graph, now: () => start + ticks[Math.min(index++, ticks.length - 1)] })).json();
+  assert.deepEqual(late.enriched, noEnrichment); assert(!starved.includes('crm_enrich_meta_attribution'), 'no sweep without budget'); checks++;
+  // A sweep error is swallowed: the tick still answers 200 with zero enrichment counts.
+  const broken = await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc: async name => { if (name === 'crm_enrich_meta_attribution') throw new Error(`sweep ${token}`); return name === 'crm_enqueue_insights_refresh' ? 0 : null; }, fetchImpl: graph });
+  assert.equal(broken.status, 200); const text = await broken.text(); assert.deepEqual(JSON.parse(text).enriched, noEnrichment); assert(!text.includes(token)); checks++;
+  // Closed gate: never swept.
+  await runScheduledInsights(request(`Bearer ${token}`), { env: baseEnv, liveGate: true, rpc: async name => assert.fail(`closed gate called ${name}`), fetchImpl: graph }); checks++;
 }
 
 // 7. The route wires the dedicated bearer, the server gate and the platform fetch.

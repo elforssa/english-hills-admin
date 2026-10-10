@@ -47,17 +47,19 @@ export async function retrieveLead(job, token, fetchImpl) {
   // used by this adapter enter the protected acquisition snapshot.
   const core = { id: lead.id, form_id: lead.form_id, created_time: lead.created_time, field_data: lead.field_data };
   if (providerId(lead.ad_id)) core.ad_id = lead.ad_id;
-  let ad = null;
+  let ad = null, ad_lookup_error = null;
   if (core.ad_id) {
+    // Optional metadata must never block operational intake. Only the fixed MetaError
+    // code of a failed lookup is kept (DGI-B D1); never a provider message or body.
     try { ad = await graphGet({ ...base, id: core.ad_id, fields: 'id,name,campaign{id,name},adset{id,name}' }); }
-    catch { /* Optional metadata must never block operational intake. */ }
-    if (ad?.id !== core.ad_id) ad = null;
+    catch (error) { ad_lookup_error = error instanceof MetaError ? error.code : 'network'; }
+    if (ad?.id !== core.ad_id) { if (ad !== null) ad_lookup_error = ad_lookup_error || 'invalid_provider_data'; ad = null; }
   }
-  return { lead: core, ad };
+  return { lead: core, ad, ad_lookup_error };
 }
 export function normalizeLead(job, retrieved, mapping) {
   if (!mapping) throw new MetaError('missing_mapping');
-  const { lead, ad } = retrieved;
+  const { lead, ad, ad_lookup_error = null } = retrieved;
   const { core_fields: core, form_answers: answers } = normalizeForm(lead.field_data, mapping);
   const campaign = providerId(ad?.campaign?.id) ? ad.campaign : null;
   const adset = providerId(ad?.adset?.id) ? ad.adset : null;
@@ -67,6 +69,9 @@ export function normalizeLead(job, retrieved, mapping) {
     ad_id: lead.ad_id || null, ad_name_snapshot: text(ad?.name), campaign_id: campaign?.id || null,
     campaign_name_snapshot: text(campaign?.name), adset_id: adset?.id || null, adset_name_snapshot: text(adset?.name),
     platform: null, attribution_status: campaign && adset && text(ad?.name) && text(campaign.name) && text(adset.name) && mapping.form_name ? 'complete' : 'partial',
+    // DGI-B D1: informational only; the report's trusted predicate never reads them.
+    hierarchy_source: campaign && adset ? 'provider' : null,
+    hierarchy_error_code: typeof ad_lookup_error === 'string' && /^[a-z_]{1,40}$/.test(ad_lookup_error) ? ad_lookup_error : null,
     raw_payload: { ...lead, field_data: lead.field_data.filter(f => safeKey(f.name)) }
   };
   return { core_fields: core, form_answers: answers, attribution, occurred_at: new Date(lead.created_time).toISOString(),
