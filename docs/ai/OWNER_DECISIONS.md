@@ -119,6 +119,24 @@ The owner also decided: **Speed Insights** for real-user monitoring, with Sentry
 
 **OPEN — deterministic SQLSTATE `40001` retry loop (not decided; not blocking for the performance plan).** About 40 functions raise `40001` for stale-version or conflict conditions; reached through PostgREST, such a request retries in-process, which caused the historical 391M-call loop. Option A: a separate Tier-3 outcome moving deterministic conflicts to a non-retryable SQLSTATE while preserving the browser contract for uncertain failures. Option B: accept the risk. **Recommendation recorded in the plan: A.** See [Owner decisions required](../architecture/plans/performance-r1.md#owner-decisions-required).
 
+## DGI-A backfill — APPROVED: no backfill (2026-10-10)
+
+Plan: [DGI-A-r2](../architecture/plans/director-growth-intelligence.md) (release step R7, plan decision 2). Decided by the owner (Maroine) on **2026-10-10**:
+
+- **No June backfill was run.** The default 28-day rolling window is sufficient.
+- Ad spend from before CRM lead tracking began (June 2026) stays in Google Sheets and is not imported.
+- Plan decision 2 (backfill start date) is closed without a date. Any future backfill is a new owner decision.
+
+Evidence: [DGI-A closeout](CURRENT_STATE.md#dgi-a-live-meta-insights-sync-production-closeout--2026-10-10).
+
+## DGI-A Meta access cleanup — APPROVED: leave in place (2026-10-10)
+
+Plan: [DGI-A-r2](../architecture/plans/director-growth-intelligence.md). Decided by the owner (Maroine) on **2026-10-10**:
+
+- The Insights System User's leftover **“View insights and Test app”** access on the app **EH Lifecycle R4 C2** is intentionally left in place. No cleanup is scheduled.
+
+**OPEN — System User token expiry (not verified).** The Insights System User token is believed to be non-expiring, but this was not verified. Check the token's expiry in Meta Business Settings **before early December 2026**. If it is a default 60-day token, it would expire about **2026-12-09**, and the live sync would then fail with a provider-auth error. Rotation steps are in the [DGI-A closeout](CURRENT_STATE.md#dgi-a-live-meta-insights-sync-production-closeout--2026-10-10).
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

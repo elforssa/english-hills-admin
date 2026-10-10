@@ -163,15 +163,15 @@ Details: [release record](../architecture/evidence/rcc-a2-production-2026-10-07.
 - **Connection:** live mode, enabled, for the KAL ad account; currency USD; account timezone Europe/Paris; 28-day rolling window; 6-hour refresh interval; token reference name `CRM_META_INSIGHTS_TOKEN_EH_KAL`. The account ID and every secret value are deliberately not recorded.
 - **First live run:** completed 2026-10-10 15:00 Europe/Paris on attempt 1 of 3, covering account dates 2026-09-13 to 2026-10-10.
 - **Ads Manager comparison:** spend for 2026-10-01 to 2026-10-10 matches Ads Manager within 0.03 USD.
-- **Backfill (release step R7):** none, by owner decision. Spend from before CRM lead tracking began (June 2026) stays in Google Sheets; plan decision 2 (backfill start date) is closed without a date.
+- **Backfill (release step R7):** none, by owner decision. Spend from before CRM lead tracking began (June 2026) stays in Google Sheets; plan decision 2 (backfill start date) is closed without a date. Owner decision: [DGI-A backfill](OWNER_DECISIONS.md#dgi-a-backfill--approved-no-backfill-2026-10-10).
 - **Rollback:** `select cron.alter_job(3, active => false);` stops the scheduler, or the director switches the connection off in `/crm/analytics` (no Meta call or publish; published snapshots stay visible). The plan's [rollout and recovery strategy](../architecture/plans/director-growth-intelligence.md#rollout-and-recovery-strategy) lists the remaining options.
-- **Token rotation:** the Insights System User token is expected not to expire. To rotate, replace the Vercel Production Secret `CRM_META_INSIGHTS_TOKEN_EH_KAL` and redeploy; for a suspected compromise follow the plan's credential-incident procedure (keep live sync off, revoke at Meta first).
+- **Token rotation:** the Insights System User token is expected not to expire, but its expiry is **not verified**; check it in Meta Business Settings before early December 2026 (a default 60-day token would expire about 2026-12-09, and sync would fail with a provider-auth error), tracked as an open item in [OWNER_DECISIONS](OWNER_DECISIONS.md#dgi-a-meta-access-cleanup--approved-leave-in-place-2026-10-10). To rotate, replace the Vercel Production Secret `CRM_META_INSIGHTS_TOKEN_EH_KAL` and redeploy; for a suspected compromise follow the plan's credential-incident procedure (keep live sync off, revoke at Meta first).
 - **Not recorded here:** the migration 114 ledger MD5 and catalog diff, the Vercel deployment IDs of the merge and of the live-gate redeploy, and `net._http_response` statuses.
 
 Known items and follow-ups:
 
 - **CAC shows “–”** until leads carry a Meta campaign ID. Current Meta leads sit under “Meta - attribution inconnue”, so spend cannot be divided by enrolments per campaign. Lead-level campaign attribution is Outcome B scope (not yet planned).
-- **Leftover Meta access:** the Insights System User still has “View insights and Test app” access on the app EH Lifecycle R4 C2. The owner decided on 2026-10-10 to leave it in place.
+- **Leftover Meta access:** the Insights System User still has “View insights and Test app” access on the app EH Lifecycle R4 C2. The owner decided on 2026-10-10 to leave it in place ([owner decision](OWNER_DECISIONS.md#dgi-a-meta-access-cleanup--approved-leave-in-place-2026-10-10)).
 - **Migration numbering:** parked architecture PRs #121 (`performance-session-context-114.md`) and #124 (`performance-rls-initplan-115.md`) carry provisional numbers 114 and 115; 114 is now taken by DGI-A, so both must be renumbered from the ledger and open PRs when restarted. Premium retirement Release B's provisional 114 renumbers likewise.
 
 ## Next meaningful outcomes
