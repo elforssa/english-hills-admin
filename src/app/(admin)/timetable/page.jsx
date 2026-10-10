@@ -4,7 +4,8 @@ import ContextLink from '@/components/ContextLink';
 import PersonLink from '@/components/PersonLink';
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
+import { useAuth } from '@/context/AuthContext';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const COLORS = [
@@ -17,6 +18,7 @@ const COLORS = [
 ];
 
 export default function Timetable() {
+  const { user: sessionUser } = useAuth();
   const [groups, setGroups] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export default function Timetable() {
     Promise.all([
       entities.Group.listAll('name'),
       getTeacherDirectory(),
-      auth.me().catch(() => null),
+      Promise.resolve(sessionUser),
       getMyTeacher(),
     ]).then(([g, t, u, me]) => {
       setGroups(g);
@@ -50,6 +52,9 @@ export default function Timetable() {
       }
       setLoading(false);
     }).catch(() => { setLoadError('Impossible de charger l’emploi du temps. Réessayez en actualisant la page.'); setLoading(false); });
+  // Identity comes from AuthContext, resolved by the admin layout before this page
+  // renders; this load runs once on mount, as before.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';
