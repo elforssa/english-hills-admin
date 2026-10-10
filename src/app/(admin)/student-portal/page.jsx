@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
-import { entities, auth, integrations } from '@/lib/entities';
+import { entities, integrations } from '@/lib/entities';
+import { useAuth } from '@/context/AuthContext';
 import { Bell, Upload, Download, FileDown } from 'lucide-react';
 import { openStoredFile as openFile } from '@/lib/storage';
 import { exportToCsv } from '@/utils/exportCsv';
@@ -44,6 +45,7 @@ const KOLB_COLORS = {
 };
 
 export default function StudentPortal() {
+  const { user: sessionUser } = useAuth();
   const [user, setUser] = useState(null);
   const [student, setStudent] = useState(null);
   const [attendance, setAttendance] = useState([]);
@@ -71,7 +73,7 @@ export default function StudentPortal() {
       .catch(() => {});
 
   useEffect(() => {
-    auth.me().then(async (u) => {
+    Promise.resolve(sessionUser).then(async (u) => {
       setUser(u);
       const matches = await entities.Student.filter({ email: u?.email }, 'full_name', 2);
       const me = matches[0];
@@ -100,6 +102,9 @@ export default function StudentPortal() {
       getOfficeRecipient().then(setOffice).catch(() => {});
       setLoading(false);
     }).catch(() => setLoading(false));
+  // Identity comes from AuthContext, resolved by the admin layout before this page
+  // renders; this load runs once on mount, as before.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mark notifications read when the tab is opened, then clear the badge.

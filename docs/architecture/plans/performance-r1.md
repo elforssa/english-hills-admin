@@ -135,16 +135,25 @@ For the session-context and RLS role-evaluation migrations (numbered 113 and 114
 ### PB — no redundant reads
 
 - **Scope:**
-  - replace `auth.me()` with `useAuth()` (the same stored-profile identity already resolved by `AuthContext`) on the seven pages;
+  - replace `auth.me()` with `useAuth()` (the same stored-profile identity already resolved by `AuthContext`) on six pages: dashboard, settings, timetable, and the parent, student and teacher portals. Communications, counted as a seventh page when this was approved, keeps `auth.me()`, because it runs only inside submit handlers, not at page load;
   - dashboard counts use `count: 'exact', head: true` with the same filters;
-  - query retries retry only network or gateway failures, up to 3 times with backoff, never 4xx/PGRST/SQLSTATE errors and never mutations;
+  - read retries follow an allowlist. Up to 3 retries with backoff apply only to:
+    - a fetch `TypeError` or network-error message;
+    - offline;
+    - timeouts;
+    - gateway 502/503/504;
+    - the pagination "Dataset changed" error.
+
+    Every other read failure keeps main's single retry. That covers coded answers (SQLSTATE, `PGRST…`) and answers without a code (401, 403, 404, 409, 429, 500). Mutations are never retried;
   - remove `crm_get_today` from the poll list.
+- **Deviation from the approved wording (PR #123):** the approved scope said read retries apply "never" to 4xx, PGRST or SQLSTATE errors. As implemented, those answers keep the one retry main already had: they retry exactly as on main, and only the allowlisted transient failures retry more. This is deliberate.
 - **Invariants:**
   - the role used for page decisions is the stored profile role;
   - RLS applies unchanged, because head counts run under the same policies;
   - dashboard numbers are equal before and after on a fixture;
   - middleware is unchanged.
 - **Acceptance:** dashboard loses the 2 sequential identity calls and 4 full-table reads, and the browser suites pass.
+- **Measured (independent review of PR #123 at `a92c194`):** identity requests per page load go from 6–8 to 4. A second `GET /auth/v1/user` is present on both builds and is outside PB.
 - **Rollback:** revert the PR.
 
 ### PR — region alignment

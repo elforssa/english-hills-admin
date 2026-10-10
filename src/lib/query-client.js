@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { shouldRetryRead } from './queryRetry.mjs';
 
 // School data (students, groups, attendance, receipts) doesn't change minute
 // by minute. Five-minute stale time keeps the UI snappy on tab switches
@@ -9,7 +10,7 @@ export const queryClientInstance = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
+      retry: shouldRetryRead,
       staleTime: FIVE_MINUTES,
       gcTime: 10 * 60 * 1000,
     },

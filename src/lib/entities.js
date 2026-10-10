@@ -98,12 +98,13 @@ function sanitize(data, { allowId = false } = {}) {
   return rest;
 }
 
-function reportError(operation, entityName, error) {
+export function reportError(operation, entityName, error) {
   const msg = `${entityName}.${operation} failed: ${error.message || 'unknown error'}`;
   // eslint-disable-next-line no-console
   console.error(msg, error);
   if (typeof window !== 'undefined') {
-    toast.error(msg);
+    // One toast per message: read retries must not stack identical errors.
+    toast.error(msg, { id: msg });
   }
 }
 

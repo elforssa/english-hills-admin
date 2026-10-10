@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
-import { entities, auth } from '@/lib/entities';
+import { entities } from '@/lib/entities';
+import { useAuth } from '@/context/AuthContext';
 import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { openStoredFile as openFile } from '@/lib/storage';
@@ -36,6 +37,7 @@ const NOTIF_TYPE_LABELS = {
 };
 
 export default function ParentPortal() {
+  const { user: sessionUser } = useAuth();
   const [user, setUser] = useState(null);
   const [students, setStudents] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -59,7 +61,7 @@ export default function ParentPortal() {
   useEffect(() => {
     (async () => {
       try {
-        const u = await auth.me();
+        const u = sessionUser;
         setUser(u);
         const [parentRows, studentRows] = await Promise.all([
           entities.Student.filter({ parent_email: u?.email }, 'full_name'),
@@ -89,6 +91,9 @@ export default function ParentPortal() {
         setLoading(false);
       }
     })();
+  // Identity comes from AuthContext, resolved by the admin layout before this page
+  // renders; this load runs once on mount, as before.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
