@@ -1,6 +1,6 @@
 # Director CRM & Growth Intelligence — Outcome B: campaign attribution, CPL/CPQL/CAC and the funnel by program
 
-Revision **DGI-B-r1**, 2026-10-10. **Tier 3** (conversion/attribution integrity, a migration that enriches existing Production attribution rows going forward, the external-provider intake path, a service-role worker). **Status: PROPOSED — architecture only, not approved, nothing implemented, no migration applied, no Production write.** Owner: Maroine. Baseline `origin/main` at authoring: `86d2e5b` (PR #131 merge, DGI-A closeout). Architecture branch: `claude/dgi-b-architecture-477947`. Parent plan: [Outcome A (shipped)](director-growth-intelligence.md). Planned, implemented, merged, deployed and Production-verified are distinct states.
+Revision **DGI-B-r1**, 2026-10-10. **Tier 3** (conversion/attribution integrity, a migration that enriches existing Production attribution rows going forward, the external-provider intake path, a service-role worker). **Status: PROPOSED — architecture only; owner decisions 1–8 recorded 2026-10-10 (all Option A), implementation NOT yet approved, independent review pending; nothing implemented, no migration applied, no Production write.** Owner: Maroine. Baseline `origin/main` at authoring: `86d2e5b` (PR #131 merge, DGI-A closeout). Architecture branch: `claude/dgi-b-architecture-477947`. Parent plan: [Outcome A (shipped)](director-growth-intelligence.md). Planned, implemented, merged, deployed and Production-verified are distinct states.
 
 Owner decisions already taken for B (restated from the commission, not re-asked): CPL, CPQL and CAC by campaign with the funnel beside them; the funnel split by program read from existing CRM data; attribution fixed **going forward only**, old leads stay "attribution inconnue"; extend `/crm/analytics`, no new page, no goal tracker; spend and ratios in USD, revenue in MAD, no ROAS, no conversion; follow-up health is Outcome C.
 
@@ -308,36 +308,40 @@ Untouched: `src/middleware.js`, `src/lib/roleAccess.mjs`, every lifecycle, finan
 
 ## Owner decisions required
 
-1. **Definition of "contacté".**
+All eight were answered by Maroine on 2026-10-10 against revision DGI-B-r1, each as recommended (see the [approval record](#approval-record)). The option text is kept as history; the resolution is stated under each item. No decision remains open.
+
+1. **Definition of "contacté".** — **RESOLVED: Option A** (`contact_attempted`, `conversation_recorded`, `whatsapp_sent` or `whatsapp_conversation`; `reached` shown as a secondary number).
    - **Question:** which evidence makes a lead "contacted" in the funnel?
    - **Option A:** any outreach evidence: `contact_attempted`, `conversation_recorded`, `whatsapp_sent` or `whatsapp_conversation` (the lead left NEW; matches "Contact en cours").
    - **Option B:** only a reached conversation (`conversation_recorded`, `whatsapp_conversation`).
    - **Consequences:** A measures staff reaction and shows a higher count; B measures reach and makes "contacté" ≈ "engagé". The plan returns both (`contacted`, `reached`) and the funnel stage uses the chosen one.
    - **Recommendation:** A, with `reached` shown as a secondary number.
    - **Blocking:** decide before B2 implementation.
-2. **CAC denominator.**
+2. **CAC denominator.** — **RESOLVED: Option A** (trusted converted; `converted_paid` shown beside it).
    - **Question:** divide spend by trusted conversions or by conversions with a collected payment?
    - **Option A:** trusted converted (enrollment Confirmed/Validated), today's definition; `converted_paid` shown beside it.
    - **Option B:** `converted_paid` (at least one positive receipt by cutoff).
    - **Consequences:** A follows the product rule that payment and conversion are separate facts and is stable; B is stricter but makes CAC depend on receipt timing and on the cutoff.
    - **Recommendation:** A.
    - **Blocking:** decide before B2.
-3. **Program dimension.**
+3. **Program dimension.** — **RESOLVED: Option A** (accept `session_type`; ship the view with the "one form = one program" caveat).
    - **Question:** accept `session_type` as the program split, knowing that Meta leads currently inherit the form's default (one form → one program)?
    - **Option A:** accept; show the caveat line; map a program question or split forms per program later (configuration, no code).
    - **Option B:** defer the program view until forms carry a program question.
    - **Consequences:** A ships the view now and becomes informative as soon as forms differ; B avoids a one-row program table for a while.
    - **Recommendation:** A.
    - **Blocking:** decide before B2.
-4. **No historical resolution — confirm.** The data already allows resolving the 41 existing leads (all 4 ad IDs are in the snapshot). The commission says old leads stay unknown. **Option A:** confirm: eligibility starts at `started_at`, reporting never resolves older leads. **Option B:** a separately approved one-time resolution of the existing rows (a reviewed data step, not part of B1). **Recommendation:** A as commissioned; B only if the owner wants October's CAC. **Blocking:** not blocking (A is the design).
-5. **Blended CPL.** **Option A:** no "all spend / all leads" figure (recommended; it would attribute Meta spend to website/manual leads). **Option B:** add a clearly labelled "CPL global" card. **Blocking:** not blocking.
-6. **Provider lookup repair and token tests.** **Option A:** do nothing further; rely on the in-database resolver (recommended for B1). **Option B:** separately approve the three reads in Q2 and, if the intake token can read ad nodes, keep the provider lookup as the first source; if not, consider (as its own decision) using the Insights token for the ad lookup, which ADR-006 currently keeps separate. **Blocking:** not blocking.
-7. **Release split.** **Option A:** B1 then B2 as two PRs/migrations (recommended; B1 is the integrity change, B2 is reporting). **Option B:** one combined release. **Blocking:** decide before implementation.
-8. **Pending label wording and the suppression line** — final French wording at implementation unless the owner states it now. Not blocking.
+4. **No historical resolution — confirm.** — **RESOLVED: Option A** (eligibility starts at `started_at`; old leads, including the current Yearly Leads cohort of 2026-09-28 to 2026-10-09, stay "attribution inconnue"). The data already allows resolving the 41 existing leads (all 4 ad IDs are in the snapshot). The commission says old leads stay unknown. **Option A:** confirm: eligibility starts at `started_at`, reporting never resolves older leads. **Option B:** a separately approved one-time resolution of the existing rows (a reviewed data step, not part of B1). **Recommendation:** A as commissioned; B only if the owner wants October's CAC. **Blocking:** not blocking (A is the design).
+5. **Blended CPL.** — **RESOLVED: Option A** (no "all spend / all leads" figure). **Option A:** no "all spend / all leads" figure (recommended; it would attribute Meta spend to website/manual leads). **Option B:** add a clearly labelled "CPL global" card. **Blocking:** not blocking.
+6. **Provider lookup repair and token tests.** — **RESOLVED: Option A** (no token tests; rely on the in-database resolver). **Option A:** do nothing further; rely on the in-database resolver (recommended for B1). **Option B:** separately approve the three reads in Q2 and, if the intake token can read ad nodes, keep the provider lookup as the first source; if not, consider (as its own decision) using the Insights token for the ad lookup, which ADR-006 currently keeps separate. **Blocking:** not blocking.
+7. **Release split.** — **RESOLVED: Option A** (B1 attribution, then B2 funnel and program view, as two PRs and two migrations). **Option A:** B1 then B2 as two PRs/migrations (recommended; B1 is the integrity change, B2 is reporting). **Option B:** one combined release. **Blocking:** decide before implementation.
+8. **Pending label wording and the suppression line** — **RESOLVED:** left to implementation (final French wording chosen by the implementer). Not blocking.
 
 ## Approval record
 
-None. Revision DGI-B-r1 is proposed; no owner approval, independent review, implementation, merge, deployment or Production mutation has occurred.
+**Owner decisions recorded.** Approver of the decisions: **Maroine**. Date of answers: **2026-10-10**. Answers recorded against plan revision DGI-B-r1 at head `38930feff0115e872f0ab43be580de6600461d13` (base `86d2e5b10b55ed3bd937868b2b1e04ed18398bae`), all as recommended: **1** Option A (contacté = any outreach evidence, `reached` secondary); **2** Option A (CAC over trusted converted, `converted_paid` beside it); **3** Option A (`session_type` as the program dimension with the one-form-one-program caveat); **4** Option A (no historical resolution; the 2026-09-28 to 2026-10-09 Yearly Leads cohort stays "attribution inconnue"); **5** Option A (no blended CPL); **6** Option A (no token tests, in-database resolver only); **7** Option A (B1 then B2, two PRs and two migrations); **8** wording left to implementation. This record is a documentation-only commit on top of that head; it changes no design text, scope or invariant.
+
+**Plan approval: NOT YET APPROVED FOR IMPLEMENTATION.** Independent review of the plan is pending. Recording the decisions does not approve implementation, merge, any migration, the enrichment switch or any Production read or mutation; each still requires its own explicit owner approval under the [rollout](#rollout-and-recovery-strategy) table.
 
 ## IMPLEMENTATION CONTRACT
 
@@ -347,7 +351,7 @@ Implement B1 (D1–D7) and, after decisions 1–3 and 7, B2 (D8–D11), each on 
 
 ### Prerequisites
 
-Owner approval of this revision with the answers to decisions 1–3 and 7 recorded in [Approval record](#approval-record); baseline `origin/main` fetched; next free migration numbers read from the ledger and `supabase/migrations`; local Supabase at 114; no Production access.
+Owner approval of this revision for implementation recorded in the [Approval record](#approval-record) (the eight decisions are already recorded there, all Option A); baseline `origin/main` fetched; next free migration numbers read from the ledger and `supabase/migrations`; local Supabase at 114; no Production access.
 
 ### Object / module manifest
 
@@ -370,7 +374,7 @@ Everything in [Test strategy](#test-strategy) passes locally and in CI for the e
 
 ### Stop conditions
 
-Stop and report (no workaround) if: the ledger or `supabase/migrations` shows a number other than expected (allocate from the ledger, never renumber others' files); the protection trigger would have to change; a resolver hit would require reading any token or calling Meta; the cohort change would attribute spend to a non-`trusted_meta` row; the intake connection and the Insights connection are different rows in a local fixture that the design cannot serve (document the limit); any owner decision 1–3/7 is unanswered at B2 start; CI cannot be scheduled.
+Stop and report (no workaround) if: the ledger or `supabase/migrations` shows a number other than expected (allocate from the ledger, never renumber others' files); the protection trigger would have to change; a resolver hit would require reading any token or calling Meta; the cohort change would attribute spend to a non-`trusted_meta` row; the intake connection and the Insights connection are different rows in a local fixture that the design cannot serve (document the limit); the recorded answer to any decision 1–3/7 is withdrawn or changed before B2 start; CI cannot be scheduled.
 
 ### Docs / status reporting
 

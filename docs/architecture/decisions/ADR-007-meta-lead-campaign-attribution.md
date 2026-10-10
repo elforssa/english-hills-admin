@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-10-10) with [Director CRM & Growth Intelligence — Outcome B](../plans/director-growth-intelligence-b.md), revision DGI-B-r1. Not accepted, not implemented. Owner acceptance is recorded in the plan's approval record; [CURRENT_STATE](../../ai/CURRENT_STATE.md) will own implementation and activation evidence.
+**Proposed** (2026-10-10) with [Director CRM & Growth Intelligence — Outcome B](../plans/director-growth-intelligence-b.md), revision DGI-B-r1. Not accepted, not implemented. The owner recorded the plan's eight decisions (all as recommended) on 2026-10-10 without approving implementation; acceptance will be recorded in the plan's [approval record](../plans/director-growth-intelligence-b.md#approval-record); [CURRENT_STATE](../../ai/CURRENT_STATE.md) will own implementation and activation evidence.
 
 ## Date
 
