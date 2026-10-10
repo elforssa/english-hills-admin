@@ -13,9 +13,22 @@ const env = Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').fl
 }));
 const base = 'http://127.0.0.1:54321', app = 'http://localhost:3101';
 assert.equal(env.NEXT_PUBLIC_SUPABASE_URL, base);
-const sql = statement => execFileSync('docker', ['exec','-i','supabase_db_hills-admin-next',
-  'psql','-X','-qAt','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],
-  { input: statement, encoding: 'utf8' }).trim();
+// Fail fast instead of stalling CI: bound each blocking SQL call and the whole run.
+const sqlTimeoutMs = 120_000, runTimeoutMs = 10 * 60_000;
+setTimeout(() => {
+  console.error(`FAIL receptionist browser suite stalled: no completion within ${runTimeoutMs / 60_000} minutes`);
+  process.exit(1);
+}, runTimeoutMs).unref();
+const sql = statement => {
+  try {
+    return execFileSync('docker', ['exec','-i','supabase_db_hills-admin-next',
+      'psql','-X','-qAt','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],
+      { input: statement, encoding: 'utf8', timeout: sqlTimeoutMs }).trim();
+  } catch (error) {
+    if (error.code === 'ETIMEDOUT') throw new Error(`SQL stalled for over ${sqlTimeoutMs / 1000} s (lock wait or open transaction): ${statement.slice(0, 200)}`);
+    throw error;
+  }
+};
 const run = 'receptionist-browser-' + randomUUID(), email = run + '@example.invalid';
 const password = randomBytes(24).toString('base64url');
 const student = randomUUID(), group = randomUUID();
