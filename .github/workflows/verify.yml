@@ -68,6 +68,7 @@ jobs:
       - run: npm test
       - run: npm run test:crm-intake
       - run: npm run test:crm-lifecycle
+      - run: npm run test:crm-insights
       - run: npm run test:navigation
       - run: npm run test:crm-opportunities
       - run: npm run test:crm-work-calendar
@@ -144,6 +145,11 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-premium-retirement-upgrade-113-current.sql
           bash scripts/test-premium-retirement-open-charges.sh
           supabase db reset --local --no-seed
+      - name: Insights live sync stateful 113 to 114 upgrade
+        run: |
+          supabase db reset --local --version 113 --no-seed
+          node scripts/test-crm-insights-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -196,6 +202,7 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a1.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a2.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
       - name: Advisory D2 scope, safety and retention acceptance
         env:
           PGPASSWORD: postgres
@@ -218,6 +225,7 @@ jobs:
           python3 scripts/test-crm-phase6-concurrency.py
           python3 scripts/test-crm-rcc-a2-concurrency.py
           python3 scripts/test-crm-phase10-concurrency.py
+          python3 scripts/test-crm-phase11-concurrency.py
           node scripts/test-crm-phase12-security.mjs
       - name: Synthetic database and API role suites
         run: |
@@ -235,6 +243,7 @@ jobs:
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
           npm run test:crm-lifecycle-browser
+          node scripts/test-crm-phase11-browser.mjs
           npm run test:crm-opportunities-browser
           npm run test:crm-work-calendar-browser
       - name: CRM revision-4 isolated concurrency

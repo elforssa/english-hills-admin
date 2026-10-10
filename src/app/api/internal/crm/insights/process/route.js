@@ -1,7 +1,7 @@
 import 'server-only';
 import { getServerClient } from '@/lib/supabase';
 export const runtime = 'nodejs';
-// Queue only. Processing is available solely to the injected fixture harness.
+// Queue only. The scheduler processes queued runs (/api/cron/crm-insights).
 export async function POST(request) {
   const client = await getServerClient();
   const { data: { user } } = await client.auth.getUser();
@@ -27,5 +27,5 @@ export async function POST(request) {
   } catch { return Response.json({ error: 'Invalid request' }, { status: 400 }); }
   const { data, error } = await client.rpc('crm_request_insights_sync', { p_connection: body.connection, p_request: body.request, p_from: body.from ?? null, p_to: body.to ?? null });
   if (error) return Response.json({ error: 'Synchronization unavailable' }, { status: 409 });
-  return Response.json({ run_id: data, live_sync_enabled: false }, { status: 202 });
+  return Response.json({ run_id: data }, { status: 202 });
 }

@@ -41,8 +41,10 @@ async function sidebarResize(){
  await page.setViewportSize({width:768,height:1024});await navigate(app+'/students');await studentsTableKeyboard();
  const trigger=page.getByRole('button',{name:'Ouvrir le menu',exact:true,includeHidden:true}),menu=page.getByRole('dialog',{name:'Menu de navigation',exact:true});
  await trigger.click();await menu.waitFor();assert(await page.locator('#main-content').evaluate(el=>el.inert));
- await page.setViewportSize({width:1440,height:900});
- // CSS hides the menu at 1440 before the media-query change unmounts it; wait for the real unmount, then assert synchronously.
+ await page.setViewportSize({width:1440,height:900});await menu.waitFor({state:'detached'});
+ // CSS (lg:hidden) hides the menu at 1440 before the min-width listener unmounts it a frame later and clears
+ // inert in that same commit. Wait for the real unmount (by role, including hidden, and by id), then assert synchronously.
+ await page.getByRole('dialog',{name:'Menu de navigation',exact:true,includeHidden:true}).waitFor({state:'detached'});
  await page.locator('#mobile-sidebar').waitFor({state:'detached'});
  assert(!(await page.locator('#main-content').evaluate(el=>el.inert)),'desktop main content is not inert');
  assert(!(await trigger.evaluate(el=>document.activeElement===el)),'desktop resize does not focus a hidden trigger');

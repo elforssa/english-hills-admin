@@ -10,6 +10,8 @@ Migration 095 makes Supabase Cron the primary trigger. The stable `crm-intake-pr
 
 The GitHub Actions workflow remains at its existing five-minute cadence as a backup. Both triggers use the same dedicated scheduler bearer and endpoint. Concurrent calls are safe: reconciliation claims use a 55-second lease, ingestion claims use `FOR UPDATE SKIP LOCKED` and leases, and each provider event has a unique queue identity. The scheduler regression test invokes the route twice concurrently and proves that one queued job finalizes once.
 
+The Meta Insights scheduler (`GET /api/cron/crm-insights`, job `crm-insights-primary`, migration 114) reuses this Vault → pg_cron → `pg_net` pattern with its own bearer `CRM_META_INSIGHTS_SCHEDULER_TOKEN`, Vault names `crm_insights_scheduler_url`/`crm_insights_scheduler_token`, an invoker that accepts only the exact Production URL, a 30-minute schedule and no GitHub backup. Its job is created inactive. See the [Insights scheduler contract](crm-meta-insights.md#scheduler).
+
 ## Vault configuration
 
 The migration contains no endpoint or token value. The private database invoker reads exactly these Vault names at run time:
