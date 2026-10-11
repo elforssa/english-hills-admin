@@ -21,7 +21,7 @@ const cases=[
  ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_list_pending_lifecycle_stops',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],
  // Harmless arguments: the director passes authorization and reaches the not-found/ineligible check.
  ['crm_configure_insights',{p_connection:nil,p_version:1,p_data:{}},'director','40001'],['crm_request_insights_sync',{p_connection:nil,p_request:nil},'director','22023'],['crm_retry_insights_sync',{p_run:nil},'director','22023'],
- ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],['crm_enqueue_insights_refresh',{},'service'],
+ ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],['crm_enqueue_insights_refresh',{},'service'],['crm_enrich_meta_attribution',{p_limit:1},'service'],
 ];
 try {
  for(const role of roles){

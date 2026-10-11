@@ -56,6 +56,50 @@ for (const [status, payload, code] of [[429, {}, 'rate_limit'], [500, {}, 'provi
 await assert.rejects(graphGet({ apiVersion: 'v99.0', token: 'fake', id: '2', fields: 'id', fetchImpl: async () => { throw Error('network with secret'); } }), e => e.code === 'network');
 const partial = await retrieveLead(job, 'fake-token', async url => url.pathname.endsWith('/2') ? Response.json(lead) : Response.json({}, { status: 403 }));
 assert.equal(normalizeLead(job, partial, mapping).attribution.attribution_status, 'partial');
+// DGI-B D1: the ad-lookup outcome is recorded as a fixed code; the hierarchy source is
+// informational; campaign_id still never comes from field_data.
+assert.equal(retrieved.ad_lookup_error, null);
+assert.equal(normalized.attribution.hierarchy_source, 'provider');assert.equal(normalized.attribution.hierarchy_error_code, null);
+assert.equal(partial.ad_lookup_error, 'provider_auth');assert.equal(partial.ad, null);
+{
+ const attribution = normalizeLead(job, partial, mapping).attribution;
+ assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.hierarchy_error_code, 'provider_auth');
+ assert.equal(attribution.campaign_id, null);assert.equal(attribution.adset_id, null);assert.equal(attribution.ad_id, '4');
+}
+for (const [respond, code] of [[() => Response.json({ error: { code: 190, message: 'SECRET BODY' } }, { status: 400 }), 'provider_auth'], [() => Response.json({}, { status: 429 }), 'rate_limit'],
+ [() => Response.json({}, { status: 503 }), 'provider_unavailable'], [() => { throw Error('network with SECRET BODY'); }, 'network'], [() => Response.json({ id: '9', name: 'Other ad' }), 'invalid_provider_data']]) {
+ const outcome = await retrieveLead(job, 'fake-token', async url => url.pathname.endsWith('/2') ? Response.json(lead) : respond());
+ assert.equal(outcome.ad_lookup_error, code);assert.equal(outcome.ad, null);
+ const attribution = normalizeLead(job, outcome, mapping).attribution;
+ assert.equal(attribution.hierarchy_error_code, code);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.attribution_status, 'partial');
+ assert(!JSON.stringify(attribution).includes('SECRET BODY'), 'error codes never carry a body');
+}
+{
+ const organic = await retrieveLead(job, 'fake-token', async url => { assert(url.pathname.endsWith('/2'), 'no ad lookup without ad_id'); return Response.json({ ...lead, ad_id: undefined }); });
+ assert.equal(organic.ad_lookup_error, null);
+ const attribution = normalizeLead(job, organic, mapping).attribution;
+ assert.equal(attribution.ad_id, null);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.hierarchy_error_code, null);
+}
+assert.equal(normalizeLead(job, { lead, ad: null }, mapping).attribution.hierarchy_error_code, null, 'older retrieved shape stays valid');
+// A MetaError code outside the finalizer's six-code allowlist travels as null, both from
+// retrieveLead and through normalizeLead, and the lead itself is still accepted.
+{
+ const unknown = await retrieveLead(job, 'fake-token', async url => { if (url.pathname.endsWith('/2')) return Response.json(lead); throw new MetaError('missing_secret'); });
+ assert.equal(unknown.ad_lookup_error, null);assert.equal(unknown.ad, null);assert.equal(unknown.lead.id, '2');
+ const attribution = normalizeLead(job, unknown, mapping).attribution;
+ assert.equal(attribution.hierarchy_error_code, null);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.attribution_status, 'partial');assert.equal(attribution.ad_id, '4');
+ for (const code of ['missing_mapping', 'storage_unavailable', 'oversized', 'live_not_available', 'x'.repeat(41)]) {
+  assert.equal(normalizeLead(job, { lead, ad: null, ad_lookup_error: code }, mapping).attribution.hierarchy_error_code, null, `${code} never reaches the payload`);
+ }
+ let finalizedUnknown = 0;
+ await processMetaJobs({ rpc: async (name, args) => {
+  if (name === 'crm_claim_meta_jobs') return [job];
+  if (name === 'crm_get_meta_job_mapping') return mapping;
+  if (name === 'crm_finalize_meta_job') { finalizedUnknown++; assert.equal(args.p_data.attribution.hierarchy_error_code, null); return { status: 'done' }; }
+  throw Error(name);
+ }, env: { CRM_META_PAGE_TOKEN_TEST: 'fake-token' }, fetchImpl: async url => { if (url.pathname.endsWith('/2')) return Response.json(lead); throw new MetaError('missing_secret'); } });
+ assert.equal(finalizedUnknown, 1, 'unknown lookup code does not block intake');
+}
 let finalized = 0, failures = [];
 const rpc = async (name, args) => {
  if (name === 'crm_claim_meta_jobs') return [job];

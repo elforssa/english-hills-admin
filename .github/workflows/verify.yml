@@ -150,6 +150,11 @@ jobs:
           supabase db reset --local --version 113 --no-seed
           node scripts/test-crm-insights-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: DGI-B attribution stateful 114 to 115 upgrade
+        run: |
+          supabase db reset --local --version 114 --no-seed
+          node scripts/test-crm-dgi-b-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -203,6 +208,7 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a1.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a2.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
       - name: Advisory D2 scope, safety and retention acceptance
         env:
           PGPASSWORD: postgres

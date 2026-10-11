@@ -10,7 +10,7 @@ export async function runScheduledInsights(request, { env, rpc, fetchImpl, liveG
   const token = env.CRM_META_INSIGHTS_SCHEDULER_TOKEN;
   if (!token || !secretEquals(request.headers.get('authorization'), `Bearer ${token}`)) return json({ error: 'Unauthorized' }, 401);
   const deadline = now() + 55000;
-  const counts = { enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0 };
+  const counts = { enqueued: 0, processed: 0, completed: 0, failed: 0, deferred: 0, enriched: { eligible: 0, resolved: 0, unresolved: 0 } };
   // Server live gate (S1 invariant 7): when closed, nothing is enqueued, claimed or fetched.
   if (!liveGate || env.CRM_META_INSIGHTS_LIVE_ENABLED !== 'true' || typeof fetchImpl !== 'function') return json({ ok: true, ...counts });
   try {
@@ -25,6 +25,14 @@ export async function runScheduledInsights(request, { env, rpc, fetchImpl, liveG
       if (outcome.status === 'completed') counts.completed += 1;
       else if (outcome.status === 'failed' || outcome.status === 'partial') counts.failed += 1;
       else counts.deferred += 1;
+    }
+    // DGI-B D4: one bounded in-database attribution sweep per tick, after the claims loop,
+    // only with at least 5 s of budget left. Counts only; a sweep error never fails the tick.
+    if (deadline - now() >= 5000) {
+      try {
+        const enriched = await rpc('crm_enrich_meta_attribution', { p_limit: 200 });
+        for (const key of Object.keys(counts.enriched)) counts.enriched[key] = Number.isSafeInteger(enriched?.[key]) ? enriched[key] : 0;
+      } catch { /* The next tick sweeps again; nothing else depends on it. */ }
     }
     return json({ ok: true, ...counts });
   } catch {
