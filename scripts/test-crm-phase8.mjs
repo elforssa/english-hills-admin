@@ -81,6 +81,25 @@ for (const [respond, code] of [[() => Response.json({ error: { code: 190, messag
  assert.equal(attribution.ad_id, null);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.hierarchy_error_code, null);
 }
 assert.equal(normalizeLead(job, { lead, ad: null }, mapping).attribution.hierarchy_error_code, null, 'older retrieved shape stays valid');
+// A MetaError code outside the finalizer's six-code allowlist travels as null, both from
+// retrieveLead and through normalizeLead, and the lead itself is still accepted.
+{
+ const unknown = await retrieveLead(job, 'fake-token', async url => { if (url.pathname.endsWith('/2')) return Response.json(lead); throw new MetaError('missing_secret'); });
+ assert.equal(unknown.ad_lookup_error, null);assert.equal(unknown.ad, null);assert.equal(unknown.lead.id, '2');
+ const attribution = normalizeLead(job, unknown, mapping).attribution;
+ assert.equal(attribution.hierarchy_error_code, null);assert.equal(attribution.hierarchy_source, null);assert.equal(attribution.attribution_status, 'partial');assert.equal(attribution.ad_id, '4');
+ for (const code of ['missing_mapping', 'storage_unavailable', 'oversized', 'live_not_available', 'x'.repeat(41)]) {
+  assert.equal(normalizeLead(job, { lead, ad: null, ad_lookup_error: code }, mapping).attribution.hierarchy_error_code, null, `${code} never reaches the payload`);
+ }
+ let finalizedUnknown = 0;
+ await processMetaJobs({ rpc: async (name, args) => {
+  if (name === 'crm_claim_meta_jobs') return [job];
+  if (name === 'crm_get_meta_job_mapping') return mapping;
+  if (name === 'crm_finalize_meta_job') { finalizedUnknown++; assert.equal(args.p_data.attribution.hierarchy_error_code, null); return { status: 'done' }; }
+  throw Error(name);
+ }, env: { CRM_META_PAGE_TOKEN_TEST: 'fake-token' }, fetchImpl: async url => { if (url.pathname.endsWith('/2')) return Response.json(lead); throw new MetaError('missing_secret'); } });
+ assert.equal(finalizedUnknown, 1, 'unknown lookup code does not block intake');
+}
 let finalized = 0, failures = [];
 const rpc = async (name, args) => {
  if (name === 'crm_claim_meta_jobs') return [job];

@@ -131,8 +131,25 @@ for (const [liveGate, env] of [[false, openEnv], [true, baseEnv], [true, { ...ba
   // A sweep error is swallowed: the tick still answers 200 with zero enrichment counts.
   const broken = await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc: async name => { if (name === 'crm_enrich_meta_attribution') throw new Error(`sweep ${token}`); return name === 'crm_enqueue_insights_refresh' ? 0 : null; }, fetchImpl: graph });
   assert.equal(broken.status, 200); const text = await broken.text(); assert.deepEqual(JSON.parse(text).enriched, noEnrichment); assert(!text.includes(token)); checks++;
-  // Closed gate: never swept.
-  await runScheduledInsights(request(`Bearer ${token}`), { env: baseEnv, liveGate: true, rpc: async name => assert.fail(`closed gate called ${name}`), fetchImpl: graph }); checks++;
+  // Open gate: exactly one sweep per tick, recorded by name.
+  const perTick = [];
+  const countingRpc = async name => { perTick.push(name); return name === 'crm_enqueue_insights_refresh' ? 0 : name === 'crm_enrich_meta_attribution' ? { eligible: 0, resolved: 0, unresolved: 0, expired: 0 } : null; };
+  for (let tick = 0; tick < 2; tick += 1) {
+    perTick.length = 0;
+    assert.equal((await runScheduledInsights(request(`Bearer ${token}`), { env: openEnv, liveGate: true, rpc: countingRpc, fetchImpl: graph })).status, 200);
+    assert.deepEqual(perTick.filter(name => name === 'crm_enrich_meta_attribution'), ['crm_enrich_meta_attribution'], `tick ${tick} sweeps exactly once`);
+  }
+  checks++;
+  // Closed gate (server gate off, route gate off, or no fetch): every RPC call is recorded
+  // and the sweep call list must be empty; a sweep before the gate would fail here.
+  for (const [liveGate, env, fetchImpl] of [[true, baseEnv, graph], [false, openEnv, graph], [true, { ...baseEnv, CRM_META_INSIGHTS_LIVE_ENABLED: 'TRUE' }, graph], [true, openEnv, undefined]]) {
+    const closedCalls = [];
+    const result = await runScheduledInsights(request(`Bearer ${token}`), { env, liveGate, rpc: async name => { closedCalls.push(name); return null; }, fetchImpl });
+    assert.equal(result.status, 200);
+    assert.deepEqual(closedCalls.filter(name => name === 'crm_enrich_meta_attribution'), [], 'closed gate never sweeps');
+    assert.deepEqual(closedCalls, [], 'closed gate makes no RPC call at all');
+    checks++;
+  }
 }
 
 // 7. The route wires the dedicated bearer, the server gate and the platform fetch.

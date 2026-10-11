@@ -1,6 +1,8 @@
 import { MetaError, boundedBody, providerId } from './protocol.mjs';
 import { normalizeForm, safeKey } from '../intake/form.mjs';
 const text = (value, max = 200) => typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : null;
+// Exactly the ad-lookup outcome codes crm_finalize_meta_job (migration 115) accepts.
+const AD_LOOKUP_ERROR_CODES = new Set(['provider_auth', 'rate_limit', 'provider_unavailable', 'network', 'timeout', 'invalid_provider_data']);
 export async function graphGet({ apiVersion, token, id, edge, fields, after, limit, fetchImpl = fetch }) {
   if (!/^v[0-9]{1,3}\.0$/.test(apiVersion) || !providerId(id) || (edge !== undefined && edge !== 'leads')) throw new MetaError('invalid_provider_data');
   const url = new URL(`https://graph.facebook.com/${apiVersion}/${id}${edge === 'leads' ? '/leads' : ''}`);
@@ -49,11 +51,13 @@ export async function retrieveLead(job, token, fetchImpl) {
   if (providerId(lead.ad_id)) core.ad_id = lead.ad_id;
   let ad = null, ad_lookup_error = null;
   if (core.ad_id) {
-    // Optional metadata must never block operational intake. Only the fixed MetaError
-    // code of a failed lookup is kept (DGI-B D1); never a provider message or body.
+    // Optional metadata must never block operational intake. Only a fixed lookup code
+    // from the finalizer's allowlist is kept (DGI-B D1); any other code becomes null and
+    // never a provider message or body.
     try { ad = await graphGet({ ...base, id: core.ad_id, fields: 'id,name,campaign{id,name},adset{id,name}' }); }
     catch (error) { ad_lookup_error = error instanceof MetaError ? error.code : 'network'; }
     if (ad?.id !== core.ad_id) { if (ad !== null) ad_lookup_error = ad_lookup_error || 'invalid_provider_data'; ad = null; }
+    if (!AD_LOOKUP_ERROR_CODES.has(ad_lookup_error)) ad_lookup_error = null;
   }
   return { lead: core, ad, ad_lookup_error };
 }
@@ -71,7 +75,7 @@ export function normalizeLead(job, retrieved, mapping) {
     platform: null, attribution_status: campaign && adset && text(ad?.name) && text(campaign.name) && text(adset.name) && mapping.form_name ? 'complete' : 'partial',
     // DGI-B D1: informational only; the report's trusted predicate never reads them.
     hierarchy_source: campaign && adset ? 'provider' : null,
-    hierarchy_error_code: typeof ad_lookup_error === 'string' && /^[a-z_]{1,40}$/.test(ad_lookup_error) ? ad_lookup_error : null,
+    hierarchy_error_code: AD_LOOKUP_ERROR_CODES.has(ad_lookup_error) ? ad_lookup_error : null,
     raw_payload: { ...lead, field_data: lead.field_data.filter(f => safeKey(f.name)) }
   };
   return { core_fields: core, form_answers: answers, attribution, occurred_at: new Date(lead.created_time).toISOString(),
