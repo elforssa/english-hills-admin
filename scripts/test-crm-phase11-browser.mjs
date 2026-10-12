@@ -33,7 +33,7 @@ try {
  browser=await chromium.launch({headless:true});
  for(const user of users){
   const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.route('**/*',r=>['localhost','127.0.0.1'].includes(new URL(r.request().url()).hostname)?r.continue():r.abort());
-  const page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let analyticsQueries=0;page.on('request',r=>{if(/crm_get_marketing_cohort|crm_insights_diagnostics/.test(r.url()))analyticsQueries++;});
+  const page=await context.newPage();page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));let analyticsQueries=0;const cohortBodies=[];page.on('request',r=>{if(/crm_get_marketing_cohort|crm_insights_diagnostics/.test(r.url()))analyticsQueries++;if(/rpc\/crm_get_marketing_cohort/.test(r.url())&&r.method()==='POST')cohortBodies.push(JSON.parse(r.postData()||'{}'));});
   // The scheduler endpoint authenticates only its own bearer, never a browser session.
   for(const headers of [{},{Authorization:'Bearer wrong'}]){const cron=await page.request.get(`${app}/api/cron/crm-insights`,{headers});assert.equal(cron.status(),401);assert.deepEqual(await cron.json(),{error:'Unauthorized'});}
   await page.goto(`${app}/login`);await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(u=>!u.pathname.startsWith('/login'));
@@ -47,6 +47,35 @@ try {
    // MAD mock account: ROAS stays visible and the live state is off.
    await expect(page.getByTestId('insights-live-state')).toContainText('désactivée');await expect(page.locator('thead th',{hasText:/^ROAS$/})).toHaveCount(1);
    await page.screenshot({path:join(tmpdir(), 'hills-phase11-analytics-desktop.png'),fullPage:true});
+   // DGI-B B2: funnel block, Contactés column, Programme grouping and filter, suppression line.
+   await expect(page.getByTestId('marketing-funnel')).toBeVisible();await expect(page.getByTestId('funnel-leads')).toContainText('0');
+   for(const key of ['contacted','qualified','booked_leads','attended_leads','converted'])await expect(page.getByTestId(`funnel-rate-${key}`)).toHaveText('—');
+   await expect(page.getByTestId('funnel-overall')).toHaveText('—');
+   const headers=(await page.locator('thead th').allTextContents()).map(t=>t.trim());assert.equal(headers[headers.indexOf('Prospects')+1],'Contactés');assert.equal(headers.filter(h=>h==='Contactés').length,1);
+   await expect(page.getByTestId('spend-suppressed')).toHaveCount(0);
+   assert(cohortBodies.length>0&&cohortBodies.every(b=>!('p_session_type' in b)),'default view keeps the previous call shape');
+   await page.getByLabel('Programme',{exact:true}).selectOption('Yearly');
+   await expect(page.getByTestId('spend-suppressed')).toHaveText('Dépenses non ventilées par programme : les coûts Meta sont connus par campagne, pas par programme. Dépenses, CPL, CPQL et CAC sont donc indisponibles dans cette vue.');
+   await expect(page.getByTestId('program-caveat')).toBeVisible();await expect(page.getByText('Aucune acquisition ni dépense pour cette sélection.',{exact:true})).toBeVisible();
+   await expect(page.locator('div.grid > div',{hasText:'Dépenses Meta'})).toContainText('—');
+   assert.equal(cohortBodies.at(-1).p_session_type,'Yearly');
+   await page.getByLabel('Programme',{exact:true}).selectOption('none');await expect(page.getByTestId('spend-suppressed')).toBeVisible();assert.equal(cohortBodies.at(-1).p_session_type,'none');
+   await page.getByLabel('Programme',{exact:true}).selectOption('');await expect(page.getByRole('button',{name:'Anglais annuel',exact:true})).toBeVisible();await expect(page.getByTestId('spend-suppressed')).toHaveCount(0);
+   await page.getByLabel('Regrouper par').selectOption('program');await expect(page.getByRole('heading',{name:'Performance par programme'})).toBeVisible();
+   await expect(page.getByTestId('spend-suppressed')).toBeVisible();assert.equal(cohortBodies.at(-1).p_level,'program');assert(!('p_session_type' in cohortBodies.at(-1)));
+   await page.getByLabel('Regrouper par').selectOption('campaign');await page.getByRole('button',{name:'Anglais annuel',exact:true}).waitFor();
+   // Rendering of non-zero counts: the real RPC answer is fetched and only its counts are
+   // replaced in the browser (no CRM lead is written to the shared local database).
+   await page.route('**/rest/v1/rpc/crm_get_marketing_cohort**',async route=>{const response=await route.fetch();const real=await response.json();
+    const row=(bucket,name,leads,contacted)=>({bucket,object_key:null,attribution_kind:'unattributed',channel:'meta_instant_form',name,objective:null,historical_names:null,spend:null,leads,contacted,reached:0,engaged:0,qualified:0,tests_booked:0,tests_attended:0,booked_leads:0,attended_leads:0,results:0,converted:0,converted_paid:0,review_required:0,revenue:0,cpl:null,cpql:null,cac:null,roas:null,impressions:null,clicks:null,link_clicks:null});
+    await route.fulfill({response,json:{...real,total:real.total+2,summary:{...real.summary,leads:10,contacted:6,reached:4,qualified:3,booked_leads:0,attended_leads:0,converted:0,converted_paid:0,pending_leads:2,unattributed_leads:10},rows:[...real.rows,row('pending:meta_instant_form','Meta · attribution en attente',2,1),row('unknown:meta_instant_form','Meta · attribution inconnue',8,5)]}});});
+   await page.getByRole('button',{name:'Actualiser',exact:true}).click();await expect(page.getByTestId('funnel-leads')).toContainText('10');
+   await expect(page.getByTestId('funnel-rate-contacted')).toHaveText(/^60\s%$/);await expect(page.getByTestId('funnel-rate-qualified')).toHaveText(/^50\s%$/);await expect(page.getByTestId('funnel-rate-booked_leads')).toHaveText(/^0\s%$/);
+   await expect(page.getByTestId('funnel-rate-attended_leads')).toHaveText('—');await expect(page.getByTestId('funnel-rate-converted')).toHaveText('—');await expect(page.getByTestId('funnel-overall')).toHaveText(/^0\s%$/);await expect(page.getByTestId('funnel-converted-paid')).toHaveText('0');
+   await expect(page.getByTestId('funnel-contacted')).toContainText('dont joints : 4');
+   await expect(page.locator('tbody')).toContainText('Meta · attribution en attente');await expect(page.locator('tbody')).toContainText('Meta · attribution inconnue');await expect(page.getByTestId('attribution-pending')).toBeVisible();
+   await expect(page.locator('tbody tr',{hasText:'Meta · attribution inconnue'}).locator('td').nth(headers.indexOf('Contactés'))).toHaveText('5');
+   await page.unroute('**/rest/v1/rpc/crm_get_marketing_cohort**');await page.getByRole('button',{name:'Actualiser',exact:true}).click();await expect(page.getByTestId('funnel-leads')).toContainText('0');await expect(page.locator('tbody')).not.toContainText('attribution en attente');
    await page.getByRole('button',{name:'Anglais annuel',exact:true}).click();await page.getByRole('button',{name:'Parents Casablanca',exact:true}).click();await expect(page.locator('tbody')).toContainText('Parler avec confiance');
    await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(tmpdir(), 'hills-phase11-analytics-mobile.png'),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
    await page.getByLabel('Regrouper par').selectOption('adset');await page.getByRole('button',{name:'Parents Casablanca',exact:true}).click();await expect(page.locator('tbody')).toContainText('Parler avec confiance');
@@ -94,7 +123,7 @@ try {
   }
   assert.deepEqual(errors,[]);await context.close();
  }
- console.log('PASS Phase11 director desktop/mobile analytics, drilldown, no unavailable-as-zero, admin/receptionist route/query/API denial and origin protection; DGI-A live state, ROAS replacement, failure label, retry, refresh, backfill blocks, live 202, configuration switch and scheduler 401 for every role');
+ console.log('PASS Phase11 director desktop/mobile analytics, DGI-B B2 funnel block, Contactés column, Programme grouping/filter, suppression line and call shape, drilldown, no unavailable-as-zero, admin/receptionist route/query/API denial and origin protection; DGI-A live state, ROAS replacement, failure label, retry, refresh, backfill blocks, live 202, configuration switch and scheduler 401 for every role');
 }finally{
  await browser?.close();sql(`begin;delete from crm_meta_daily_insights where connection_id in ('${connection}','${live}');delete from crm_meta_objects where connection_id in ('${connection}','${live}');delete from crm_meta_sync_runs where connection_id in ('${connection}','${live}');delete from crm_integration_connections where id in ('${connection}','${live}');commit;`);
  for(const u of users){
