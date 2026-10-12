@@ -137,6 +137,23 @@ Plan: [DGI-A-r2](../architecture/plans/director-growth-intelligence.md). Decided
 
 **OPEN — System User token expiry (not verified).** The Insights System User token is believed to be non-expiring, but this was not verified. Check the token's expiry in Meta Business Settings **before early December 2026**. If it is a default 60-day token, it would expire about **2026-12-09**, and the live sync would then fail with a provider-auth error. Rotation steps are in the [DGI-A closeout](CURRENT_STATE.md#dgi-a-live-meta-insights-sync-production-closeout--2026-10-10).
 
+## DGI-B — decisions 1–8 (2026-10-10) and receptionist CRM access (2026-10-12)
+
+Plan: [DGI-B-r1](../architecture/plans/director-growth-intelligence-b.md), [approval record](../architecture/plans/director-growth-intelligence-b.md#approval-record). Decided by the owner (Maroine) on **2026-10-10**, all as recommended:
+
+1. **Contacté** = any outreach evidence (`contact_attempted`, `conversation_recorded`, `whatsapp_sent`, `whatsapp_conversation`); `reached` shown as a secondary number.
+2. **CAC denominator** = trusted converted; `converted_paid` shown beside it.
+3. **Program dimension** = `session_type`, with the one-form-one-program caveat.
+4. **No historical resolution:** old leads, including the 2026-09-28 to 2026-10-09 Yearly Leads cohort, stay "attribution inconnue".
+5. **No blended CPL.**
+6. **No token tests:** the in-database resolver only.
+7. **Release split:** B1 then B2, two PRs and two migrations.
+8. **Wording** of the pending label and suppression line left to implementation.
+
+Implementation approvals: B1 on 2026-10-10, B2 on 2026-10-12 (recorded in the plan). Release evidence: [DGI-B closeout](CURRENT_STATE.md#dgi-b-production-closeout--2026-10-12).
+
+**Owner statement (2026-10-12):** the receptionist has **not yet been given CRM access**. Until contacts are logged in the CRM, the funnel's Contactés stage and any follow-up measure read zero.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
