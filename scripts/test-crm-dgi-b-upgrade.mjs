@@ -1,7 +1,8 @@
 // Local synthetic 114→115 stateful upgrade (DGI-B-r1 Release B1). Run after
 // `supabase db reset --local --version 114 --no-seed`: builds Meta intake and Insights
 // state under the 114 definitions (a connection with reconciliation enabled, a mapping,
-// three attribution rows and a full object chain), applies 115 through the CLI, then
+// three attribution rows and a full object chain), applies the 115 file directly
+// (`supabase migration up` would also apply 116 and later), then
 // proves the two columns are NULL on every existing row, the replaced constraint still
 // accepts the stored settings, no row was rewritten, only the enumerated bodies and new
 // objects differ, every grant/policy/trigger is unchanged, the switch is off until a
@@ -9,6 +10,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 const sql=input=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'},maxBuffer:50*1024*1024}).trim();
 const last=output=>output.split('\n').at(-1);
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'114');
@@ -58,9 +60,9 @@ const replacedAcl=()=>sql(`select string_agg(p.oid::regprocedure::text||'='||p.p
 const before=catalog(),beforeData=data(),beforeAcl=replacedAcl();
 for(const name of added)assert(!(name in before.functions),`${name} absent before 115`);
 assert(!('crm_submission_attribution.hierarchy_source' in before.columns));
-// Apply exactly the reviewed forward migration through the CLI (115 is the last file).
-execFileSync('supabase',['migration','up','--local'],{stdio:'pipe'});
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'115');
+// Apply exactly the reviewed forward migration file (the ledger stays at 114 here).
+sql(readFileSync('supabase/migrations/115_crm_meta_attribution_hierarchy.sql','utf8'));
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'114');
 const after=catalog();
 for(const name of added){assert(name in after.functions,`${name} created`);delete after.functions[name];}
 const constraints=after.constraints;after.constraints=Object.fromEntries(Object.entries(constraints).filter(([key])=>!key.startsWith('crm_submission_attribution.crm_submission_attribution_hierarchy_')));
