@@ -349,6 +349,8 @@ All eight were answered by Maroine on 2026-10-10 against revision DGI-B-r1, each
 
 **Plan approval: B2 APPROVED FOR IMPLEMENTATION.** On 2026-10-12 the owner (Maroine) approved revision DGI-B-r1 for the implementation of Release B2 (D8–D11), with decisions 1–3, 5, 7 and 8 as recorded above. This approval covers implementation on a PR branch with local tests; merge, migration B2 in Production and any Production read or mutation each still require their own explicit owner approval under the [rollout](#rollout-and-recovery-strategy) table.
 
+**ADR-007 accepted.** [ADR-007](../decisions/ADR-007-meta-lead-campaign-attribution.md) is recorded as Accepted on the strength of the two approvals above; this record does not state an exact approved head for them.
+
 ## Implementation record (B1)
 
 - **Date:** 2026-10-11. **Branch:** `claude/dgi-b-release-b1-c3eed6` from `origin/main` `ecd7264e8d4a7cce054a970d7458efca78f61284`. **Migration:** `115_crm_meta_attribution_hierarchy.sql` (115 allocated from the Production ledger 001–114 and the local files at implementation; PRs #121 and #124 untouched). At implementation time: implemented, not reviewed, not merged, not released. **Later:** PR #133, reviewed head `45326291d8c05173342d2efaf551515188995846` after one CI-fix commit (`76d94a2…`) and one review-fix commit (`4532629…`), squash-merged as `396b755235d691ff699f29604330f6ced96db612` on 2026-10-11; released per the [release record](#release-record-production-2026-10-11-to-2026-10-12).
