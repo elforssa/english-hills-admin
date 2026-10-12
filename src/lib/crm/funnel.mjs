@@ -2,6 +2,9 @@
 // cohort RPC returns; nothing is stored. A stage rate is unavailable (null) when the
 // previous stage is 0 or a count is missing (an older RPC without the funnel fields),
 // never 0; a genuine 0 is returned when the stage is 0 and the previous one is not.
+// Stages are not nested (a lead can be qualified without a recorded contact and enrolled
+// without a placement test), so a stage can exceed the previous one: that rate is also
+// unavailable, never a percentage above 100 %.
 export const FUNNEL_STAGES = [
   ['leads', 'Prospects'],
   ['contacted', 'Contactés'],
@@ -12,7 +15,7 @@ export const FUNNEL_STAGES = [
 ];
 
 const count = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
-export const ratio = (numerator, denominator) => (numerator == null || denominator == null || denominator === 0 ? null : numerator / denominator);
+export const ratio = (numerator, denominator) => (numerator == null || denominator == null || denominator === 0 || numerator > denominator ? null : numerator / denominator);
 
 export function funnelStages(summary) {
   let previous = null;

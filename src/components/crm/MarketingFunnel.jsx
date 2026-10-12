@@ -22,6 +22,6 @@ export default function MarketingFunnel({ summary }) {
         {stage.key === 'converted' && <p className="text-[11px] text-slate-500">dont payés : <span className="tabular-nums" data-testid="funnel-converted-paid">{number(summary?.converted_paid)}</span></p>}
       </li>)}
     </ol>
-    <p className="mt-2 text-[11px] leading-4 text-slate-500">Chaque étape compte un prospect une seule fois, quels que soient les événements répétés. Contactés : tentative d’appel, conversation ou message WhatsApp ; joints : conversation enregistrée. Un prospect peut être qualifié sans contact préalable. « — » : étape précédente vide.</p>
+    <p className="mt-2 text-[11px] leading-4 text-slate-500">Chaque étape compte un prospect une seule fois, quels que soient les événements répétés. Contactés : tentative d’appel, conversation ou message WhatsApp ; joints : conversation enregistrée ou conversation WhatsApp. Une étape peut dépasser la précédente : un prospect peut être qualifié sans contact enregistré, et une inscription n’exige pas de test de niveau. « — » : étape précédente vide ou dépassée.</p>
   </section>;
 }

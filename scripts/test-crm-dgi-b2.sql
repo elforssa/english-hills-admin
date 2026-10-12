@@ -33,9 +33,9 @@ insert into crm_meta_daily_insights(connection_id,sync_run_id,insight_date,accou
 insert into crm_meta_objects(connection_id,account_id,object_type,external_id,current_name,objective) values(pg_temp.conn(),'1160','campaign','116101','Annuel B2','OUTCOME_LEADS'),(pg_temp.conn(),'1160','campaign','116201','Gratuit B2','OUTCOME_LEADS'),(pg_temp.conn(),'1160','campaign','116301','Notoriété B2','OUTCOME_AWARENESS');
 
 -- Leads, all acquired 2026-03-01 12:00Z. session_type comes from the submission core fields.
-create function pg_temp.intake(k0 text,channel text,campaign text,session text) returns uuid language plpgsql as $$ declare s uuid;l uuid;begin
+create function pg_temp.intake(k0 text,channel text,campaign text,session text,at_time timestamptz default '2026-03-01 12:00Z') returns uuid language plpgsql as $$ declare s uuid;l uuid;begin
  insert into crm_submissions(channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,payload_hash,form_mapping_id)
- values(channel,'2026-03-01 12:00Z','2026-03-01 12:00Z','server',jsonb_build_object('contact_name','B2 parent '||k0,'phone','06116'||lpad((ascii(right(k0,1))%100)::text,5,'0'),'learner_name','B2 child '||k0,'program_interest_text','Annual')||case when session is null then '{}'::jsonb else jsonb_build_object('session_type',session) end,
+ values(channel,at_time,at_time,'server',jsonb_build_object('contact_name','B2 parent '||k0,'phone','06116'||lpad((ascii(right(k0,1))%100)::text,5,'0'),'learner_name','B2 child '||k0,'program_interest_text','Annual')||case when session is null then '{}'::jsonb else jsonb_build_object('session_type',session) end,
   '[]','Fixture','needs_review',encode(sha256(convert_to(k0,'UTF8')),'hex'),case when channel='meta_instant_form' then (select (v->>'id')::uuid from fx where k='mapping') end) returning id into s;
  insert into crm_submission_attribution(submission_id,provider,campaign_id,adset_id,ad_id,attribution_status)
  values(s,case when channel='meta_instant_form' then 'meta' else 'website' end,campaign,campaign||'2',campaign||'3','partial');
@@ -55,7 +55,7 @@ select pg_temp.intake('L8','meta_instant_form',null,'Yearly');
 select pg_temp.ok((select count(*) filter(where session_type='Yearly')=4 and count(*) filter(where session_type is null)=2 from crm_leads where id in (select (v#>>'{}')::uuid from fx where k like 'L_')),'session_type fixtures');
 
 -- L1: every outreach kind, repeated (one acquisition-window attempt for the cutoff case),
--- qualified twice, two linked placement tests (one attended, edited again later).
+-- qualified twice, two linked placement tests, both attended (the first edited again later).
 select pg_temp.ev('L1','contact_attempted','2026-03-01 15:00Z');select pg_temp.ev('L1','contact_attempted');
 select pg_temp.ev('L1','conversation_recorded');select pg_temp.ev('L1','conversation_recorded');select pg_temp.ev('L1','whatsapp_sent');
 select pg_temp.ev('L1','lead_qualified');select pg_temp.ev('L1','lead_qualified');
@@ -63,6 +63,7 @@ insert into placement_tests(student_name,date_test,heure,status,crm_lead_id) val
 update placement_tests set status='Passé' where crm_lead_id=pg_temp.lead('L1');
 update placement_tests set notes='Edited twice' where crm_lead_id=pg_temp.lead('L1');
 insert into placement_tests(student_name,date_test,heure,status,crm_lead_id) values('B2 child L1',current_date+6,'11:00','Planifié',pg_temp.lead('L1'));
+update placement_tests set status='Passé' where crm_lead_id=pg_temp.lead('L1') and status='Planifié';
 -- L3: qualified at a walk-in without any outreach evidence.
 select pg_temp.ev('L3','lead_qualified');
 -- L5: an unanswered WhatsApp (contacted, not reached). L8: a WhatsApp conversation.
@@ -102,8 +103,9 @@ select pg_temp.ok(pg_temp.s('leads')='7','distinct canonical first-touch leads; 
 select pg_temp.ok(pg_temp.s('contacted')='5','contacted: attempt, conversation or WhatsApp, each lead once (L1 L2 L4 L5 L8)');
 select pg_temp.ok(pg_temp.s('reached')='4','reached: recorded conversation only (L1 L2 L4 L8; L5 WhatsApp sent is not reached)');
 select pg_temp.ok(pg_temp.s('qualified')='4','qualified counted once despite repeats, and without contact (L3)');
-select pg_temp.ok(pg_temp.s('tests_booked')='2' and pg_temp.s('tests_attended')='1','existing test columns keep counting distinct linked tests');
-select pg_temp.ok(pg_temp.s('booked_leads')='1' and pg_temp.s('attended_leads')='1','funnel test stages count the lead once');
+select pg_temp.ok(pg_temp.s('tests_booked')='2' and pg_temp.s('tests_attended')='2','existing test columns keep counting distinct linked tests');
+select pg_temp.ok(pg_temp.s('booked_leads')='1','booked_leads counts leads, not tests');
+select pg_temp.ok(pg_temp.s('attended_leads')='1','attended_leads counts leads, not tests (L1 attended two tests)');
 select pg_temp.ok(pg_temp.s('converted')='2' and pg_temp.s('converted_paid')='1','converted_paid needs collected revenue; a voided receipt is converted, not paid');
 select pg_temp.ok((pg_temp.s('revenue'))::numeric=500,'revenue unchanged');
 select pg_temp.ok(pg_temp.s('attributed_leads')='4' and pg_temp.s('attributed_contacted')='3' and pg_temp.s('attributed_qualified')='4' and pg_temp.s('attributed_converted')='2' and pg_temp.s('unattributed_leads')='3' and pg_temp.s('pending_leads')='0','Meta-only denominators include attributed_contacted');
@@ -153,6 +155,43 @@ select pg_temp.denied($q$select pg_temp.report('campaign','yearly')$q$,'22023');
 select pg_temp.denied($q$select pg_temp.report('campaign','')$q$,'22023');
 select pg_temp.denied($q$select pg_temp.report('programme')$q$,'22023');
 
+-- ===== Paid before confirmation (D8): converted_paid needs a trusted conversion =====
+-- L10, acquired 2026-03-05 (outside the main window): money is recorded through the
+-- trusted finance path before the enrollment is confirmed, so the lead has attributed
+-- revenue but no conversion. CAC and converted_paid both require the conversion.
+select pg_temp.intake('L10','meta_instant_form','116101','Yearly','2026-03-05 12:00Z');
+do $$ declare l uuid:=pg_temp.lead('L10');r jsonb;s uuid;e uuid;receipt uuid;c uuid;begin
+ perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','Qualified','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
+ r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child L10','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'B2 child L10','2014-05-10'),'confirm_new',true));
+ s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
+ r:=create_charge_payment_financial(jsonb_build_object('student_id',s,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',700,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ receipt:=(r->>'receipt_id')::uuid;c:=(r->>'charge_id')::uuid;
+ update receipts set enrollment_id=e where id=receipt;update charges set enrollment_id=e where id=c;
+ perform crm_reconcile_revenue_batch(100);set constraints all immediate;set constraints all deferred;
+ perform pg_temp.ok((select coalesce(sum(amount_delta),0)=700 from crm_revenue_entries where lead_id=l) and (select conversion_activity_id is null and status<>'CONVERTED' from crm_leads where id=l) and (select status not in ('Confirmed','Validated') from enrollments where id=e),'fixture: L10 paid 700 MAD, enrollment not confirmed, not converted');
+end $$;
+create function pg_temp.paid() returns jsonb language sql as $$ select crm_get_marketing_cohort('2026-03-05','2026-03-05',null,pg_temp.conn())->'summary' $$;
+select pg_temp.ok(pg_temp.paid()->>'leads'='1' and (pg_temp.paid()->>'revenue')::numeric=700,'paid unconfirmed lead: revenue is counted');
+select pg_temp.ok(pg_temp.paid()->>'converted'='0','paid unconfirmed lead: converted does not count it');
+select pg_temp.ok(pg_temp.paid()->>'converted_paid'='0','paid unconfirmed lead: converted_paid requires the trusted conversion (D8)');
+
+-- ===== Pending Meta lead at program level (D6 + D9) =====
+-- L11 is acquired now with an ad ID and no campaign after the director switch is on, so
+-- it is pending. At program level its row is program:Yearly, and the summary must still
+-- count it in pending_leads (read per lead, never from the program bucket).
+select crm_save_meta_connection('{"connection_key":"dgi-b2-test","page_id":"116001","api_version":"v99.0","attribution_enrichment":{"enabled":true}}',pg_temp.conn(),(select version from crm_integration_connections where id=pg_temp.conn()));
+do $$ declare s uuid;at timestamptz:=clock_timestamp();begin
+ insert into crm_submissions(channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,payload_hash,form_mapping_id)
+ values('meta_instant_form',at,at,'provider','{"contact_name":"B2 parent L11","phone":"0611600111","learner_name":"B2 child L11","program_interest_text":"Annual","session_type":"Yearly"}','[]','Fixture','needs_review',encode(sha256(convert_to('L11','UTF8')),'hex'),(select (v->>'id')::uuid from fx where k='mapping')) returning id into s;
+ insert into crm_submission_attribution(submission_id,provider,external_submission_id,external_scope,page_id,form_id,ad_id,provider_created_at,attribution_status,raw_payload)
+ values(s,'meta','116011','page:116001','116001','116002','116903',at,'partial','{}');
+ insert into fx values('L11',to_jsonb(crm_security.accept_external_submission(s)));
+end $$;
+create function pg_temp.today(lev text) returns jsonb language sql as $$ select crm_get_marketing_cohort(current_date-1,current_date+1,null,pg_temp.conn(),lev) $$;
+select pg_temp.ok(pg_temp.row_of(pg_temp.today('campaign'),'pending:meta_instant_form')->>'leads'='1' and pg_temp.today('campaign')->'summary'->>'pending_leads'='1','fixture: L11 is pending at campaign level');
+select pg_temp.ok(pg_temp.row_of(pg_temp.today('program'),'program:Yearly')->>'leads'='1' and pg_temp.row_of(pg_temp.today('program'),'pending:meta_instant_form') is null,'program level buckets the pending lead by program');
+select pg_temp.ok(pg_temp.today('program')->'summary'->>'pending_leads'='1' and pg_temp.today('program')->'summary'->>'unattributed_leads'='1' and pg_temp.today('program')->'summary'->>'attributed_leads'='0','pending_leads at program level counts the pending lead');
+
 -- ===== Signature, previous page call shape, grants and roles =====
 select pg_temp.ok(to_regprocedure('public.crm_get_marketing_cohort(date,date,date,uuid,text,text,text,text,text,integer,integer)') is null and (select count(*)=1 from pg_proc where proname='crm_get_marketing_cohort'),'the 11-parameter signature is dropped; one function remains');
 select pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.crm_get_marketing_cohort(date,date,date,uuid,text,text,text,text,text,integer,integer,text)'::regprocedure),'security definer with a fixed search path');
@@ -168,4 +207,4 @@ do $$ declare i int;begin
 end $$;
 select pg_temp.ok((select tgenabled='O' from pg_trigger where tgname='crm_attribution_immutable'),'attribution protection trigger untouched');
 rollback;
-\echo PASS DGI-B B2 SQL: funnel counts, repeats, cutoff, merged leads, program level and filter, NULL-versus-zero, signature, grants and roles
+\echo PASS DGI-B B2 SQL: funnel counts, repeats, cutoff, merged leads, paid before confirmation, pending at program level, program level and filter, NULL-versus-zero, signature, grants and roles

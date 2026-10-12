@@ -133,5 +133,14 @@ assert.deepEqual(stages.map(s=>s.rate),[null,null,null,null,null,null]);
 assert.deepEqual(funnelStages(undefined).map(s=>s.count),[null,null,null,null,null,null]);
 assert.equal(funnelStages({leads:'3',contacted:'3'})[1].rate,1,'numeric strings from JSON numerics are accepted');
 assert.equal(ratio(0,0),null);assert.equal(ratio(0,5),0);assert.equal(ratio(null,5),null);
+// A stage larger than the previous one (enrolled without a placement test, qualified
+// without a recorded contact) never shows a percentage above 100 %.
+stages=funnelStages({leads:7,contacted:5,qualified:4,booked_leads:1,attended_leads:1,converted:2});
+assert.deepEqual(stages.map(s=>s.rate),[null,5/7,0.8,0.25,1,null],'Inscrits 2 after Tests passés 1 is unavailable, not 200 %');
+stages=funnelStages({leads:5,contacted:1,qualified:3,booked_leads:2,attended_leads:2,converted:1});
+assert.deepEqual(stages.map(s=>s.rate),[null,0.2,null,2/3,1,0.5],'Qualifiés above Contactés is unavailable');
+for(const summary of [{leads:1,contacted:3,qualified:9,booked_leads:4,attended_leads:8,converted:9},{leads:0,contacted:2,qualified:0,booked_leads:3,attended_leads:0,converted:5}])
+ for(const stage of funnelStages(summary))assert(stage.rate===null||(stage.rate>=0&&stage.rate<=1),`rate ${stage.key} stays within 0..100 %`);
+assert.equal(ratio(2,1),null);assert.equal(ratio(1,1),1);assert.equal(overallRate({leads:1,converted:2}),null,'overall rate never above 100 %');
 assert.deepEqual(PROGRAMS,['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other'],'the closed session_type list of migration 078');
 console.log(`PASS Phase 11 provider validation, pagination, async, sanitized errors, partial isolation, worker and role routing (${checks} mock requests); live transport, gate, deadline, error mapping and real-fetch stub (${liveRequests} live requests)`);
