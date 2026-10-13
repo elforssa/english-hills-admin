@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID, createHmac } from 'node:crypto';
-import { visitorIp, VISITOR_HEADER } from '../src/lib/crm/website/endpoint.mjs';
-import { inquiryPost, inquiryOptions } from '../src/lib/crm/website/endpoint.mjs';
+import { inquiryPost, inquiryOptions, visitorIp, VISITOR_HEADER } from '../src/lib/crm/website/endpoint.mjs';
 import { sanitizeAttribution } from '../src/lib/crm/website/attribution.mjs';
 import { prepareWebsiteInquiry, captureWebsiteAttribution } from '../src/lib/crm/website/client.mjs';
 import { normalizeWebsite } from '../src/lib/crm/website/normalize.mjs';
@@ -105,12 +104,16 @@ try {
  assert.equal(visitorKey, rateKeyOf('203.0.113.9'));assert.notEqual(visitorKey, egressKey);
  assert.equal(await probe(undefined), egressKey);
  assert.equal(await probe(sign(), env), egressKey);
- assert.equal(await probe(sign(), { ...env, CRM_WEBSITE_PROXY_SECRET: 'too-short' }), egressKey);
+ // Secret minimum is 32 characters: a 31-character secret is unconfigured even when both sides use it.
+ const short = 'x'.repeat(31), exact = 'x'.repeat(32);
+ assert.equal(await probe(sign({ secret: short }), { ...env, CRM_WEBSITE_PROXY_SECRET: short }), egressKey);
+ assert.equal(await probe(sign({ secret: exact }), { ...env, CRM_WEBSITE_PROXY_SECRET: exact }), visitorKey);
  const now = Math.floor(Date.now() / 1000);
+ const reasonOf = (header, e = venv) => visitorIp(new Request('http://localhost', { headers: header === undefined ? {} : { [VISITOR_HEADER]: header } }), data.request_key, e).reason;
  const valid = sign(); const [, ts, ipb64, sig] = valid.split('.');
  const fallbacks = {
   badSignature: sign({ secret: 'another-synthetic-proxy-secret-0123456789' }),
-  stalePast: sign({ ts: now - 301 }), staleFuture: sign({ ts: now + 301 }),
+  stalePast: sign({ ts: now - 360 }), staleFuture: sign({ ts: now + 360 }),
   otherRequestKey: sign({ key: randomUUID() }),
   threeParts: `v1.${ts}.${ipb64}`, fiveParts: `${valid}.x`, wrongVersion: `v2.${ts}.${ipb64}.${sig}`,
   emptyTs: `v1..${ipb64}.${sig}`, emptyIp: `v1.${ts}..${sig}`, emptySig: `v1.${ts}.${ipb64}.`, dots: '...',
@@ -120,12 +123,23 @@ try {
   longIp: sign({ ip: '1'.repeat(46) }), badIpChars: sign({ ip: '203.0.113.9<script>' }), ipWithSpace: sign({ ip: '203.0.113.9 ' }), ipNewline: sign({ ip: '203.0.113.9\n' }),
  };
  for (const [name, header] of Object.entries(fallbacks)) assert.equal(await probe(header), egressKey, `fallback expected: ${name}`);
- assert.equal(await probe(sign({ ts: now - 299 })), visitorKey);
+ assert.equal(await probe(sign({ ts: now - 240 })), visitorKey);
+ // Exact window boundaries are pinned with the pure helper's clock argument (no wall-clock flake).
+ const at = (header, nowSeconds, e = venv) => visitorIp(new Request('http://localhost', { headers: { [VISITOR_HEADER]: header } }), data.request_key, e, nowSeconds * 1000).reason;
+ const T = 1_800_000_000;
+ assert.equal(at(sign({ ts: T }), T + 300), 'ok');assert.equal(at(sign({ ts: T }), T - 300), 'ok');
+ assert.equal(at(sign({ ts: T }), T + 301), 'stale');assert.equal(at(sign({ ts: T }), T - 301), 'stale');
+ assert.equal(at(sign({ ts: T, secret: short }), T, { ...env, CRM_WEBSITE_PROXY_SECRET: short }), 'unconfigured');
+ assert.equal(at(sign({ ts: T, secret: exact }), T, { ...env, CRM_WEBSITE_PROXY_SECRET: exact }), 'ok');
+ // Non-canonical signature: flipping the last character's spare bits decodes to the same bytes but is rejected.
+ const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+ const flipped = `${valid.slice(0, -1)}${alphabet[alphabet.indexOf(valid.at(-1)) ^ 1]}`;
+ assert.deepEqual(Buffer.from(flipped.split('.')[3], 'base64url'), Buffer.from(sig, 'base64url'));
+ assert.equal(reasonOf(flipped), 'invalid');assert.equal(await probe(flipped), egressKey);
  for (const ip of ['198.51.100.7', '2001:db8::1', '::ffff:203.0.113.10']) {
   const result = visitorIp(new Request('http://localhost', { headers: { [VISITOR_HEADER]: sign({ ip }) } }), data.request_key, venv);
   assert.deepEqual(result, { reason: 'ok', ip });assert.equal(await probe(sign({ ip })), rateKeyOf(ip));
  }
- const reasonOf = (header, e = venv) => visitorIp(new Request('http://localhost', { headers: header === undefined ? {} : { [VISITOR_HEADER]: header } }), data.request_key, e).reason;
  assert.equal(reasonOf(undefined), 'missing');assert.equal(reasonOf(sign(), env), 'unconfigured');
  assert.equal(reasonOf(fallbacks.stalePast), 'stale');assert.equal(reasonOf(fallbacks.badSignature), 'invalid');assert.equal(reasonOf(fallbacks.oversize), 'invalid');
  assert.equal(visitorIp({ headers: { get() { throw Error('boom'); } } }, data.request_key, venv).reason, 'invalid');
@@ -135,6 +149,13 @@ try {
  assert.equal(warnings.length, 2);assert(warnings.every(w => w.includes('[crm-inquiry] visitor_rejected')));
  assert(warnings[0].includes('"stale"') && warnings[1].includes('"invalid"'));
  warnings.length = 0;await probe(sign());await probe(undefined);assert.equal(warnings.length, 0);
+ // A header that arrives while the admin secret is unset or short warns exactly once as unconfigured.
+ for (const e of [env, { ...env, CRM_WEBSITE_PROXY_SECRET: short }]) {
+  warnings.length = 0;await probe(sign(), e);
+  assert.equal(warnings.length, 1);assert(warnings[0].includes('[crm-inquiry] visitor_rejected') && warnings[0].includes('"unconfigured"'));
+  for (const leak of ['192.0.2', '203.0.113', 'v1.', 'Sara', '0612345678']) assert(!warnings[0].includes(leak));
+  assert.deepEqual(Object.keys(JSON.parse(warnings[0])[1]), ['site', 'form', 'visitor']);
+ }
  // 429 warns and reports a Sentry warning, never with the IP, header or contact data.
  rate = false;warnings.length = 0;sentry.length = 0;
  for (const header of [sign(), undefined]) {

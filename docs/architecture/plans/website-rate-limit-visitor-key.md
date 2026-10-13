@@ -11,12 +11,23 @@ Status: **APPROVED WITH CHANGES** (owner, 2026-10-13); Tier 3. Admin implementat
 ### Binding review changes (applied)
 
 1. Header name `x-eh-visitor-token`, so the existing Sentry `PII_KEY` "token" fragment redacts it. Value `v1.<ts>.<ipb64>.<sig>`; signed string `v1.<ts>.<ipb64>.<request_key>`; HMAC-SHA256 with `CRM_WEBSITE_PROXY_SECRET` (≥32 chars); `ts` window ±300 s; unpadded base64url for `ipb64` and `sig` (a 32-byte signature is exactly 43 characters).
-2. `visitorIp()` is total: it never throws; every defect returns a reason (`missing` / `unconfigured` / `invalid` / `stale`) and the existing egress-IP expression is used. The raw header is capped at 256 bytes before parsing; part shapes are validated (decimal `ts`, base64url `ipb64`, 43-character base64url `sig`); lengths are checked before `timingSafeEqual`; the decoded IP must match `^[0-9A-Fa-f:.]{1,45}$`; the `.slice(0,128)` stays. A malformed header never causes 503 and never skips the limiter.
+2. `visitorIp()` is total: it never throws; every defect returns a reason (`missing` / `unconfigured` / `invalid` / `stale`) and the existing egress-IP expression is used. The raw header is capped at 256 characters before parsing (header values are byte strings, so also 256 bytes); part shapes are validated (decimal `ts`, base64url `ipb64`, 43-character base64url `sig`); lengths are checked before `timingSafeEqual`; the signature must be canonical (re-encoding the decoded bytes reproduces it exactly, so spare-bit variants are rejected); the decoded IP must match `^[0-9A-Fa-f:.]{1,45}$`; the `.slice(0,128)` stays. A malformed header never causes 503 and never skips the limiter.
 3. `Access-Control-Allow-Headers` in the OPTIONS handler is **not** extended (the header is server-to-server only).
-4. Logging: `console.warn('[crm-inquiry] visitor_rejected', { site, form, visitor })` on every `invalid`/`stale` result and `console.warn('[crm-inquiry] rate_limited', { site, form, visitor })` on every 429. Never the header, the IP or contact data. On 429 also a Sentry `captureMessage` at level `warning` with tags `site`/`form`/`visitor`, through the existing scrubber; the scrub regression asserts `x-eh-visitor-token` is redacted.
+4. Logging: `console.warn('[crm-inquiry] visitor_rejected', { site, form, visitor })` on every result where a header is present but not accepted (`unconfigured`, `invalid`, `stale`; amended by the code review of `1d676bd` to include `unconfigured`) and `console.warn('[crm-inquiry] rate_limited', { site, form, visitor })` on every 429. Never the header, the IP or contact data. On 429 also a Sentry `captureMessage` at level `warning` with tags `site`/`form`/`visitor`, through the existing scrubber; the scrub regression asserts `x-eh-visitor-token` is redacted.
 5. Tests in `scripts/test-crm-phase9.mjs` (fake secrets only) cover the full fallback matrix in §5.1 as amended below.
 6. Documentation: website contract, `.env.example` (both secrets), this plan, OWNER_DECISIONS, SECURITY_RULES, ARCHITECTURE and CURRENT_STATE (website intake live; shared-egress defect).
 7. The Production probe procedure is replaced by [§5.3 as amended](#53-amended-production-probe-procedure-binding).
+8. Release secret handling, for **both** Vercel projects: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy. This supersedes §3.3/§3.4 wording.
+
+Independent code review of PR #136 at `1d676bd` (READY WITH CHANGES) added: deterministic window tests (exact ±300/±301 boundaries pinned through the helper's clock argument), a 31- vs 32-character secret test, the `unconfigured` warning, the canonical-signature check, the release wording in item 8 and the residual-risk list below.
+
+### Accepted residual risks
+
+- **Loss of the accidental global ceiling.** Today's shared egress bucket incidentally capped the whole site at roughly 10/hour per egress IP. Per-visitor keys remove that, so Turnstile is the only control against distributed senders. The operator must confirm by name that `TURNSTILE_SECRET_KEY` exists in the admin Production environment before the probe and before activation. A site-wide ceiling is Option D (parked).
+- **IPv6 /64 rotation.** One IPv6 client can rotate addresses within its /64 and get a fresh bucket per address. Follow-up on the admin side together with Option D; not implemented here.
+- **Carrier-grade NAT sharing.** Mobile visitors behind one NAT address share a bucket (as in the original design).
+- **Sentry volume on 429s.** Each 429 sends one Sentry warning with no throttle. The owner is to confirm Sentry spike protection; no throttle is implemented here.
+- **Proxy-secret leak and rotation.** Anyone holding the secret can sign arbitrary IPs to spread load over buckets (still subject to Origin, honeypot and Turnstile). Single secret, no `_PREVIOUS` fallback: rotating means a short window where headers come back `invalid`, warn and fall back to the egress key, never failing intake.
 
 ### ADR
 
@@ -66,6 +77,8 @@ Applied to a request made from the website's Vercel Function to the admin's Verc
 
 ### 2.1 Signed header contract (shared between repos)
 
+> Superseded in part by the [approval record](#approval-record): the header is capped at 256 characters, the decoded IP must match `^[0-9A-Fa-f:.]{1,45}$` (not "1..128 chars"), the signature must be canonical, and `unconfigured` headers also warn.
+
 - Header name: `x-eh-visitor-token`. Sent only by the website proxy, only on the server-to-server call.
 - Value: `v1.<ts>.<ipb64>.<sig>` where
   - `ts` = Unix seconds at signing (decimal),
@@ -83,6 +96,8 @@ Applied to a request made from the website's Vercel Function to the admin's Verc
 ## 3. Exact change list, secrets, rollout, rollback (design question 3)
 
 ### 3.1 Admin repo (`hills-admin-next`)
+
+> Superseded in part by the [approval record](#approval-record): warnings fire for every present-but-rejected header (`unconfigured`/`invalid`/`stale`) and every 429; the Sentry warning on 429 is required, not optional; `.env.example` gains both secrets.
 
 | File | Change |
 | --- | --- |
@@ -120,9 +135,9 @@ Preview environments: leave the secret unset on Preview in both projects so Prev
 
 1. Owner approves this plan (Tier 3 gate 1).
 2. Admin PR (implementation + tests + docs) → independent review of the exact head SHA → owner release approval → merge/deploy. Safe alone: with no secret configured the code path is inert.
-3. Owner sets `CRM_WEBSITE_PROXY_SECRET` on the admin Production project; redeploy (env change needs a new deployment on Vercel). Still inert: no header arrives.
+3. Owner, on the admin Vercel project: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy (an env change needs a new deployment on Vercel). Still inert: no header arrives.
 4. Website PR → review → merge/deploy. Still inert until its secret exists.
-5. Owner sets the same secret on the eh-website Production project; redeploy. Header now flows.
+5. Owner, on the eh-website Vercel project, with the same value: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy. Header now flows.
 6. Production proof per §5.3 (two probes, zero leads). Record in CURRENT_STATE.
 7. Documentation closeout.
 

@@ -45,13 +45,15 @@ export function visitorIp(request, requestKey, env, now = Date.now()) {
     if (raw === null || raw === '') return { reason: 'missing' };
     const secret = env?.CRM_WEBSITE_PROXY_SECRET;
     if (typeof secret !== 'string' || secret.length < 32) return { reason: 'unconfigured' };
+    // Header values are byte strings (one character per byte), so this caps bytes.
     if (raw.length > 256 || typeof requestKey !== 'string') return { reason: 'invalid' };
     const parts = raw.split('.');
     if (parts.length !== 4 || parts[0] !== 'v1' || !/^[0-9]{1,12}$/.test(parts[1]) || !B64URL.test(parts[2]) || !/^[A-Za-z0-9_-]{43}$/.test(parts[3])) return { reason: 'invalid' };
     if (Math.abs(Math.floor(now / 1000) - Number(parts[1])) > 300) return { reason: 'stale' };
     const expected = createHmac('sha256', secret).update(`v1.${parts[1]}.${parts[2]}.${requestKey}`).digest();
     const given = Buffer.from(parts[3], 'base64url');
-    if (given.length !== expected.length || !timingSafeEqual(given, expected)) return { reason: 'invalid' };
+    // Canonical encoding only: the decoder ignores the last character's spare bits.
+    if (given.length !== expected.length || given.toString('base64url') !== parts[3] || !timingSafeEqual(given, expected)) return { reason: 'invalid' };
     const ip = Buffer.from(parts[2], 'base64url').toString('utf8');
     if (!/^[0-9A-Fa-f:.]{1,45}$/.test(ip)) return { reason: 'invalid' };
     return { reason: 'ok', ip };
@@ -81,7 +83,7 @@ export async function inquiryPost(request, { rpc, env, fetchImpl = fetch, captur
     // short-lived limiter. Without a valid visitor header this is the proxy's egress IP.
     const visitor = visitorIp(request, data.request_key, env);
     const tags = { site: data.site_key, form: data.form_key, visitor: visitor.reason };
-    if (visitor.reason === 'invalid' || visitor.reason === 'stale') warn('visitor_rejected', tags);
+    if (visitor.reason !== 'ok' && visitor.reason !== 'missing') warn('visitor_rejected', tags);
     const ip = (visitor.ip || request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown').slice(0, 128);
     const rateKey = createHmac('sha256', env.CRM_WEBSITE_RATE_LIMIT_SECRET).update(ip).digest('hex');
     if (!await rpc('crm_check_website_rate_limit', { p_key: rateKey })) {

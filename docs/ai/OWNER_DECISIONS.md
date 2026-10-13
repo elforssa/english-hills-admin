@@ -160,12 +160,12 @@ Plan: [website-rate-limit-visitor-key](../architecture/plans/website-rate-limit-
 
 - **Option E APPROVED:** the website proxy signs the visitor IP in `x-eh-visitor-token`; the CRM verifies it and otherwise falls back to today's key. No migration.
 - **Option D PARKED:** a site-wide ceiling with per-visitor buckets (needs a migration and limit numbers).
-- **Sentry warning on 429: yes** (warning level, tags `site`/`form`/`visitor` only).
+- **Sentry warning on 429: yes** (warning level, tags `site`/`form`/`visitor` only). Runtime warn lines fire on every 429 and on every present-but-rejected visitor header (`unconfigured`/`invalid`/`stale`), carrying only site, form and reason. Owner to confirm Sentry spike protection (accepted residual risk).
 - **WhatsApp CTA on the website's rate-limit message: yes**, through the existing `/contact-camp` redirect (website repository change).
 - **Pre-fix probe: yes**, run under the amended probe procedure with separate operator authorization.
 - **One shared secret** (`CRM_WEBSITE_PROXY_SECRET`) now; **rotation** support (`_PREVIOUS` fallback) is a later decision.
 
-Merge, secret configuration, website change, deployment and Production probes each still need their separate approvals.
+Release secret handling for both Vercel projects: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy. Merge, secret configuration, website change, deployment and Production probes each still need their separate approvals.
 
 ## Deferred backlog after RCC-r1
 
