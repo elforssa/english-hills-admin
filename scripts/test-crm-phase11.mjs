@@ -3,6 +3,7 @@ import http from 'node:http';
 import { fetchInsights, fetchInsightsFixture } from '../src/lib/crm/insights/adapter.mjs';
 import { processInsights, processInsightsFixture } from '../src/lib/crm/insights/worker.mjs';
 import { isDirectorAnalyticsPath, isDirectorLifecyclePath, loginDestination } from '../src/lib/roleAccess.mjs';
+import { FUNNEL_STAGES, PROGRAMS, funnelStages, overallRate, ratio } from '../src/lib/crm/funnel.mjs';
 const config={mode:'mock',account_id:'1100',currency:'MAD',timezone:'Africa/Casablanca',api_version:'v99.0',secret_ref:'CRM_META_INSIGHTS_TOKEN_FIXTURE'};
 const row={account_id:'1100',campaign_id:'1101',adset_id:'1102',ad_id:'1103',ad_name:'Fixture',date_start:'2026-01-01',date_stop:'2026-01-01',spend:'12.345678',impressions:'90',reach:'80',clicks:'4',inline_link_clicks:'2',actions:[{action_type:'lead',value:'99',ignored:'secret'}]};
 const args={config,from:'2026-01-01',to:'2026-01-02',token:'fixture-secret'};
@@ -117,4 +118,29 @@ try{
  seen.length=0;big='redirect';await assert.rejects(fetchInsights({...liveArgs,fetchImpl:realFetch}),/invalid_data/);assert(!seen.some(s=>s.url==='/elsewhere'),'redirect never followed');
  seen.length=0;big=true;await assert.rejects(fetchInsights({...liveArgs,fetchImpl:realFetch}),/limit_exceeded/);
 }finally{stub.close();}
+// ---- DGI-B D10/D11 funnel rates: derived from counts, never stored; zero denominators unavailable.
+assert.deepEqual(FUNNEL_STAGES.map(s=>s[0]),['leads','contacted','qualified','booked_leads','attended_leads','converted']);
+assert.deepEqual(FUNNEL_STAGES.map(s=>s[1]),['Prospects','Contactés','Qualifiés','Tests réservés','Tests passés','Inscrits']);
+let stages=funnelStages({leads:10,contacted:6,qualified:3,booked_leads:0,attended_leads:0,converted:0});
+assert.deepEqual(stages.map(s=>s.count),[10,6,3,0,0,0]);
+assert.deepEqual(stages.map(s=>s.rate),[null,0.6,0.5,0,null,null],'stage rate is NULL when the previous stage is 0 and a genuine 0 otherwise');
+assert.equal(overallRate({leads:10,converted:0}),0);assert.equal(overallRate({leads:0,converted:0}),null);assert.equal(overallRate({leads:4,converted:1}),0.25);
+stages=funnelStages({leads:2,contacted:0,qualified:1,booked_leads:1,attended_leads:1,converted:1});
+assert.deepEqual(stages.map(s=>s.rate),[null,0,null,1,1,1],'qualified without contacted: the rate after an empty stage is unavailable');
+stages=funnelStages({leads:5,qualified:2,converted:1});
+assert.deepEqual(stages.map(s=>s.count),[5,null,2,null,null,1],'a missing count (previous RPC) is unavailable, never 0');
+assert.deepEqual(stages.map(s=>s.rate),[null,null,null,null,null,null]);
+assert.deepEqual(funnelStages(undefined).map(s=>s.count),[null,null,null,null,null,null]);
+assert.equal(funnelStages({leads:'3',contacted:'3'})[1].rate,1,'numeric strings from JSON numerics are accepted');
+assert.equal(ratio(0,0),null);assert.equal(ratio(0,5),0);assert.equal(ratio(null,5),null);
+// A stage larger than the previous one (enrolled without a placement test, qualified
+// without a recorded contact) never shows a percentage above 100 %.
+stages=funnelStages({leads:7,contacted:5,qualified:4,booked_leads:1,attended_leads:1,converted:2});
+assert.deepEqual(stages.map(s=>s.rate),[null,5/7,0.8,0.25,1,null],'Inscrits 2 after Tests passés 1 is unavailable, not 200 %');
+stages=funnelStages({leads:5,contacted:1,qualified:3,booked_leads:2,attended_leads:2,converted:1});
+assert.deepEqual(stages.map(s=>s.rate),[null,0.2,null,2/3,1,0.5],'Qualifiés above Contactés is unavailable');
+for(const summary of [{leads:1,contacted:3,qualified:9,booked_leads:4,attended_leads:8,converted:9},{leads:0,contacted:2,qualified:0,booked_leads:3,attended_leads:0,converted:5}])
+ for(const stage of funnelStages(summary))assert(stage.rate===null||(stage.rate>=0&&stage.rate<=1),`rate ${stage.key} stays within 0..100 %`);
+assert.equal(ratio(2,1),null);assert.equal(ratio(1,1),1);assert.equal(overallRate({leads:1,converted:2}),null,'overall rate never above 100 %');
+assert.deepEqual(PROGRAMS,['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other'],'the closed session_type list of migration 078');
 console.log(`PASS Phase 11 provider validation, pagination, async, sanitized errors, partial isolation, worker and role routing (${checks} mock requests); live transport, gate, deadline, error mapping and real-fetch stub (${liveRequests} live requests)`);

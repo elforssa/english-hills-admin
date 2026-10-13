@@ -137,6 +137,42 @@ Plan: [DGI-A-r2](../architecture/plans/director-growth-intelligence.md). Decided
 
 **OPEN — System User token expiry (not verified).** The Insights System User token is believed to be non-expiring, but this was not verified. Check the token's expiry in Meta Business Settings **before early December 2026**. If it is a default 60-day token, it would expire about **2026-12-09**, and the live sync would then fail with a provider-auth error. Rotation steps are in the [DGI-A closeout](CURRENT_STATE.md#dgi-a-live-meta-insights-sync-production-closeout--2026-10-10).
 
+## DGI-B — decisions 1–8 (2026-10-10) and receptionist CRM access (2026-10-12)
+
+Plan: [DGI-B-r1](../architecture/plans/director-growth-intelligence-b.md), [approval record](../architecture/plans/director-growth-intelligence-b.md#approval-record). Decided by the owner (Maroine) on **2026-10-10**, all as recommended:
+
+1. **Contacté** = any outreach evidence (`contact_attempted`, `conversation_recorded`, `whatsapp_sent`, `whatsapp_conversation`); `reached` shown as a secondary number.
+2. **CAC denominator** = trusted converted; `converted_paid` shown beside it.
+3. **Program dimension** = `session_type`, with the one-form-one-program caveat.
+4. **No historical resolution:** old leads, including the 2026-09-28 to 2026-10-09 Yearly Leads cohort, stay "attribution inconnue".
+5. **No blended CPL.**
+6. **No token tests:** the in-database resolver only.
+7. **Release split:** B1 then B2, two PRs and two migrations.
+8. **Wording** of the pending label and suppression line left to implementation.
+
+Implementation approvals: B1 on 2026-10-10, B2 on 2026-10-12 (recorded in the plan). Release evidence: [DGI-B closeout](CURRENT_STATE.md#dgi-b-production-closeout--2026-10-12).
+
+**Owner statement (2026-10-12):** the receptionist has **not yet been given CRM access**. Until contacts are logged in the CRM, the funnel's Contactés stage and any follow-up measure read zero.
+
+## Website inquiry rate limiter keyed on the visitor — APPROVED
+
+Plan: [website-rate-limit-visitor-key](../architecture/plans/website-rate-limit-visitor-key.md#approval-record). Approved by the owner on **2026-10-13** ("approve rate-limit plan with changes"), Tier 3, after an independent review verdict of READY WITH CHANGES whose changes are binding.
+
+- **Option E APPROVED:** the website proxy signs the visitor IP in `x-eh-visitor-token`; the CRM verifies it and otherwise falls back to today's key. No migration.
+- **Option D PARKED:** a site-wide ceiling with per-visitor buckets (needs a migration and limit numbers).
+- **Sentry warning on 429: yes** (warning level, tags `site`/`form`/`visitor` only). Runtime warn lines fire on every 429 and on every present-but-rejected visitor header (`unconfigured`/`invalid`/`stale`), carrying only site, form and reason. Owner to confirm Sentry spike protection (accepted residual risk).
+- **WhatsApp CTA on the website's rate-limit message: yes**, through the existing `/contact-camp` redirect (website repository change).
+- **Pre-fix probe: yes**, run under the amended probe procedure with separate operator authorization.
+- **One shared secret** (`CRM_WEBSITE_PROXY_SECRET`) now; **rotation** support (`_PREVIOUS` fallback) is a later decision.
+
+Release secret handling for both Vercel projects: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy. Merge, secret configuration, website change, deployment and Production probes each still need their separate approvals.
+
+**Released 2026-10-13** (admin PR #136, website elforssa/eh-website#10). The owner accepted the Production check wording “A equals C observed in Production. A second distinct network was not available.” Evidence: [closeout](CURRENT_STATE.md#website-limiter-visitor-key-and-parent-form-mapping-production-closeout--2026-10-13). Option D, secret rotation, IPv6 /64 keying and WhatsApp redirect source tagging remain unapproved follow-ups.
+
+## Parent website form: learner optional — LIVE (2026-10-13)
+
+The website parent form `campaign_parent_lead_v1` does not ask for a learner name, so the lead's name is the parent. Mapping version 2 (id `c2ce1875-3d99-45af-a86b-8663160a5cb6`) was published with `learner_policy = 'optional'`, effective 2026-10-13 13:53:18 UTC. Parent v1 and the adult form's v1 mapping are unchanged. This is a mapping data version, not a migration. Evidence: [closeout](CURRENT_STATE.md#website-limiter-visitor-key-and-parent-form-mapping-production-closeout--2026-10-13).
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

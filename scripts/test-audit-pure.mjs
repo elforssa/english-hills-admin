@@ -12,7 +12,7 @@ const event = scrubEvent({
   request: {
     url: 'https://school.example/route?access_token=secret#refresh_token=other',
     query_string: 'access_token=secret', data: { password: 'secret' },
-    headers: { Authorization: 'Bearer secret', COOKIE: 'sb-access=secret', 'X-Api-Key': 'secret' },
+    headers: { Authorization: 'Bearer secret', COOKIE: 'sb-access=secret', 'X-Api-Key': 'secret', 'x-eh-visitor-token': 'v1.1700000000.MjAzLjAuMTEzLjk.secret' },
   },
   extra: { redirectUrl: 'https://school.example/callback?code=secret#token', nested: { phone: '0612345678' } },
   contexts: { trace: { sessionToken: 'secret' } },
@@ -24,6 +24,8 @@ for (const secret of ['secret', 'refresh_token', 'child@example.invalid', '06123
 assert.equal(event.request.url, 'https://school.example/route');
 assert.equal(event.extra.redirectUrl, 'https://school.example/callback');
 assert.equal(event.request.headers.Authorization, '[redacted]');
+assert.equal(event.request.headers['x-eh-visitor-token'], '[redacted]');
+assert(!serialized.includes('MjAzLjAuMTEzLjk'), 'Telemetry retained the signed visitor IP');
 
 const crumb = scrubBreadcrumb({
   message: 'student@example.invalid',
