@@ -167,6 +167,12 @@ Plan: [website-rate-limit-visitor-key](../architecture/plans/website-rate-limit-
 
 Release secret handling for both Vercel projects: set `CRM_WEBSITE_PROXY_SECRET` for Production only, uncheck Preview and Development, then redeploy. Merge, secret configuration, website change, deployment and Production probes each still need their separate approvals.
 
+**Released 2026-10-13** (admin PR #136, website elforssa/eh-website#10). The owner accepted the Production check wording “A equals C observed in Production. A second distinct network was not available.” Evidence: [closeout](CURRENT_STATE.md#website-limiter-visitor-key-and-parent-form-mapping-production-closeout--2026-10-13). Option D, secret rotation, IPv6 /64 keying and WhatsApp redirect source tagging remain unapproved follow-ups.
+
+## Parent website form: learner optional — LIVE (2026-10-13)
+
+The website parent form `campaign_parent_lead_v1` does not ask for a learner name, so the lead's name is the parent. Mapping version 2 (id `c2ce1875-3d99-45af-a86b-8663160a5cb6`) was published with `learner_policy = 'optional'`, effective 2026-10-13 13:53:18 UTC. Parent v1 and the adult form's v1 mapping are unchanged. This is a mapping data version, not a migration. Evidence: [closeout](CURRENT_STATE.md#website-limiter-visitor-key-and-parent-form-mapping-production-closeout--2026-10-13).
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
