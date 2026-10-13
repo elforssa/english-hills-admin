@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { safeKey } from '../intake/form.mjs';
 import { boundedBody } from '../meta/protocol.mjs';
 import { attributionKeys, sanitizeAttribution } from './attribution.mjs';
@@ -33,7 +33,32 @@ function challengeKey(secret, value) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 const success = { success: true, message: 'Merci. Votre demande a bien été reçue.' };
-export async function inquiryPost(request, { rpc, env, fetchImpl = fetch }) {
+// Vercel overwrites client address headers, so x-real-ip here is the website
+// proxy's egress IP. The proxy carries the visitor IP in a signed header bound to
+// the request_key. Total by contract: any defect returns a reason, never throws,
+// and the caller falls back to the egress-IP key. Never log the header or the IP.
+export const VISITOR_HEADER = 'x-eh-visitor-token';
+const B64URL = /^[A-Za-z0-9_-]+$/;
+export function visitorIp(request, requestKey, env, now = Date.now()) {
+  try {
+    const raw = request.headers.get(VISITOR_HEADER);
+    if (raw === null || raw === '') return { reason: 'missing' };
+    const secret = env?.CRM_WEBSITE_PROXY_SECRET;
+    if (typeof secret !== 'string' || secret.length < 32) return { reason: 'unconfigured' };
+    if (raw.length > 256 || typeof requestKey !== 'string') return { reason: 'invalid' };
+    const parts = raw.split('.');
+    if (parts.length !== 4 || parts[0] !== 'v1' || !/^[0-9]{1,12}$/.test(parts[1]) || !B64URL.test(parts[2]) || !/^[A-Za-z0-9_-]{43}$/.test(parts[3])) return { reason: 'invalid' };
+    if (Math.abs(Math.floor(now / 1000) - Number(parts[1])) > 300) return { reason: 'stale' };
+    const expected = createHmac('sha256', secret).update(`v1.${parts[1]}.${parts[2]}.${requestKey}`).digest();
+    const given = Buffer.from(parts[3], 'base64url');
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) return { reason: 'invalid' };
+    const ip = Buffer.from(parts[2], 'base64url').toString('utf8');
+    if (!/^[0-9A-Fa-f:.]{1,45}$/.test(ip)) return { reason: 'invalid' };
+    return { reason: 'ok', ip };
+  } catch { return { reason: 'invalid' }; }
+}
+function warn(event, fields) { try { console.warn(`[crm-inquiry] ${event}`, fields); } catch { /* logging never blocks intake */ } }
+export async function inquiryPost(request, { rpc, env, fetchImpl = fetch, captureWarning }) {
   let origin;
   const reply = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', Vary: 'Origin', ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}), ...(status === 429 ? { 'Retry-After': '3600' } : {}) } });
   try {
@@ -53,10 +78,17 @@ export async function inquiryPost(request, { rpc, env, fetchImpl = fetch }) {
     origin = suppliedOrigin;
     if (!env.CRM_WEBSITE_RATE_LIMIT_SECRET) return reply({ error: 'Service indisponible. Réessayez plus tard.' }, 503);
     // IP exists only in memory. Persist only a keyed pseudonym in the existing
-    // short-lived limiter. Production must use a proxy that overwrites this header.
-    const ip = (request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown').slice(0, 128);
+    // short-lived limiter. Without a valid visitor header this is the proxy's egress IP.
+    const visitor = visitorIp(request, data.request_key, env);
+    const tags = { site: data.site_key, form: data.form_key, visitor: visitor.reason };
+    if (visitor.reason === 'invalid' || visitor.reason === 'stale') warn('visitor_rejected', tags);
+    const ip = (visitor.ip || request.headers.get('x-real-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown').slice(0, 128);
     const rateKey = createHmac('sha256', env.CRM_WEBSITE_RATE_LIMIT_SECRET).update(ip).digest('hex');
-    if (!await rpc('crm_check_website_rate_limit', { p_key: rateKey })) return reply({ error: 'Trop de demandes. Réessayez dans une heure.' }, 429);
+    if (!await rpc('crm_check_website_rate_limit', { p_key: rateKey })) {
+      warn('rate_limited', tags);
+      try { captureWarning?.('[crm-inquiry] rate_limited', tags); } catch { /* telemetry never blocks intake */ }
+      return reply({ error: 'Trop de demandes. Réessayez dans une heure.' }, 429);
+    }
     if (data.honeypot) return reply({ error: 'Demande invalide.' }, 400);
     const payload = { form_key: data.form_key, contact: data.contact, answers: Object.fromEntries(Object.entries(data.answers).filter(([key]) => safeKey(key))), attribution: sanitizeAttribution(data.attribution), consent: true };
     if (payload.attribution.landing_page && new URL(payload.attribution.landing_page).origin !== origin) return reply({ error: 'Page de provenance invalide.' }, 400);

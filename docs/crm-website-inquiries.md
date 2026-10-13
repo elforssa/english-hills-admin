@@ -36,9 +36,22 @@ This means durably received, not fully resolved. Missing policy/mapping never ma
 
 Generate one UUID per attempt and retain the prepared payload for retries. Reuse the same UUID and accepted business payload after a network failure. Changed business data with the same site/form/UUID conflicts (409). Challenge tokens and honeypot are transport controls, not part of the stored business hash. JSON object key order does not affect the database hash. No contact/child fields are stored in browser storage by the helper.
 
-The endpoint uses the existing `anon_rate_limits` table through a new service-only function with a fixed 10 requests/hour limit. Existing registration rate functions are unchanged. `CRM_WEBSITE_RATE_LIMIT_SECRET` must be a strong server-only secret. Only an HMAC pseudonym of the proxy-provided IP is stored, never the IP or headers. Old website limiter entries are removed after the one-hour window when the limiter runs. A missing IP shares a conservative unknown-address bucket.
+The endpoint uses the existing `anon_rate_limits` table through a new service-only function with a fixed 10 requests/hour limit. Existing registration rate functions are unchanged. `CRM_WEBSITE_RATE_LIMIT_SECRET` must be a strong server-only secret. Only an HMAC pseudonym of the limiter IP (see below) is stored, never the IP or headers. Old website limiter entries are removed after the one-hour window when the limiter runs. A missing IP shares a conservative unknown-address bucket.
 
-Deploy only behind the trusted Vercel/edge proxy that overwrites client address headers; do not expose an origin that trusts client-supplied `x-real-ip`/`x-forwarded-for`. Origin policy is a browser boundary, not authentication or a bot defense by itself.
+Correction (2026-10-13): Vercel overwrites `x-forwarded-for`/`x-real-ip` on every inbound request and does not forward external values. The website calls this endpoint server-to-server from its own Vercel Function, so without the signed header below the CRM sees the **website proxy's dynamic egress IP**, not the visitor's, and unrelated visitors share one 10-per-hour bucket. Never trust client-supplied `x-real-ip`/`x-forwarded-for` on any origin. Origin policy is a browser boundary, not authentication or a bot defense by itself.
+
+### Visitor key header
+
+The website proxy may send `x-eh-visitor-token: v1.<ts>.<ipb64>.<sig>` on its server-to-server call ([plan](architecture/plans/website-rate-limit-visitor-key.md)):
+
+- `ts`: Unix seconds at signing (decimal); accepted within ±300 s of the CRM clock.
+- `ipb64`: unpadded base64url of the visitor IP the website read from its own inbound Vercel headers. The decoded value must match `^[0-9A-Fa-f:.]{1,45}$` (IPv4, IPv6, IPv4-mapped IPv6).
+- `sig`: unpadded base64url (43 characters) of `HMAC-SHA256(CRM_WEBSITE_PROXY_SECRET, "v1.<ts>.<ipb64>.<request_key>")`, where `request_key` is the body's UUID, so a captured header cannot be reused for a different submission.
+- Whole header at most 256 bytes.
+
+When `CRM_WEBSITE_PROXY_SECRET` (server-only, at least 32 characters, distinct from `CRM_WEBSITE_RATE_LIMIT_SECRET` and the website's receipt secret) is configured and the header verifies, the limiter keys on `HMAC(CRM_WEBSITE_RATE_LIMIT_SECRET, visitor IP)`. Any defect (header absent, secret unset or short, bad shape, stale `ts`, bad signature, invalid IP) falls back silently to the egress-IP key: the request is never rejected or 503'd because of the header and the limiter always runs. The header is not added to CORS `Access-Control-Allow-Headers`; browsers never send it.
+
+Observability: `[crm-inquiry] visitor_rejected` warns on every `invalid`/`stale` header and `[crm-inquiry] rate_limited` warns on every 429, each with only `site`, `form` and the `visitor` reason (`ok`/`missing`/`unconfigured`/`invalid`/`stale`). A 429 also sends a Sentry warning with the same tags. Neither the header, the IP nor contact data is logged; the Sentry scrubber redacts the header by its `token` name fragment. Leave the secret unset on Preview environments. Rotation is a later decision; today one shared secret must be set to the same value on both Vercel Production projects.
 
 If `TURNSTILE_SECRET_KEY` is configured, server verification is mandatory. The external widget must use action `crm_inquiry`; response hostname must match the configured origin. No visitor IP is sent to Cloudflare. Verification uses bounded responses and an eight-second timeout. Challenge idempotency is bound to site/form/request/payload/token, so replaying a challenge for different data is not authorized. A previously durable identical request is acknowledged without consuming another challenge.
 

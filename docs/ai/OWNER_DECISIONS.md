@@ -154,6 +154,19 @@ Implementation approvals: B1 on 2026-10-10, B2 on 2026-10-12 (recorded in the pl
 
 **Owner statement (2026-10-12):** the receptionist has **not yet been given CRM access**. Until contacts are logged in the CRM, the funnel's Contactés stage and any follow-up measure read zero.
 
+## Website inquiry rate limiter keyed on the visitor — APPROVED
+
+Plan: [website-rate-limit-visitor-key](../architecture/plans/website-rate-limit-visitor-key.md#approval-record). Approved by the owner on **2026-10-13** ("approve rate-limit plan with changes"), Tier 3, after an independent review verdict of READY WITH CHANGES whose changes are binding.
+
+- **Option E APPROVED:** the website proxy signs the visitor IP in `x-eh-visitor-token`; the CRM verifies it and otherwise falls back to today's key. No migration.
+- **Option D PARKED:** a site-wide ceiling with per-visitor buckets (needs a migration and limit numbers).
+- **Sentry warning on 429: yes** (warning level, tags `site`/`form`/`visitor` only).
+- **WhatsApp CTA on the website's rate-limit message: yes**, through the existing `/contact-camp` redirect (website repository change).
+- **Pre-fix probe: yes**, run under the amended probe procedure with separate operator authorization.
+- **One shared secret** (`CRM_WEBSITE_PROXY_SECRET`) now; **rotation** support (`_PREVIOUS` fallback) is a later decision.
+
+Merge, secret configuration, website change, deployment and Production probes each still need their separate approvals.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

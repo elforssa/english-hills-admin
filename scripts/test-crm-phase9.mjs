@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac } from 'node:crypto';
+import { visitorIp, VISITOR_HEADER } from '../src/lib/crm/website/endpoint.mjs';
 import { inquiryPost, inquiryOptions } from '../src/lib/crm/website/endpoint.mjs';
 import { sanitizeAttribution } from '../src/lib/crm/website/attribution.mjs';
 import { prepareWebsiteInquiry, captureWebsiteAttribution } from '../src/lib/crm/website/client.mjs';
@@ -74,4 +75,80 @@ const first=captureWebsiteAttribution({browser,consent:true,now:1000});browser.l
 assert(!JSON.stringify(first).includes('private'));assert(!JSON.stringify(first).includes('secret'));
 assert.equal(captureWebsiteAttribution({browser,consent:true,now:2000000}).landing_page,'https://school.example/contact');
 const prepared=prepareWebsiteInquiry({...data,attribution:first});assert(prepared.request_key);assert.equal(prepareWebsiteInquiry(data,prepared.request_key).request_key,prepared.request_key);
-console.log('PASS Phase 9 endpoint, CORS, limits, Turnstile binding, privacy, mappings, shared worker and client attribution fixtures');
+// Signed visitor header: limiter keys on the visitor, falls back to x-real-ip on any defect, never 503s.
+const proxySecret = 'synthetic-proxy-secret-0123456789abcdef';
+const venv = { ...env, CRM_WEBSITE_PROXY_SECRET: proxySecret };
+const rateKeyOf = ip => createHmac('sha256', env.CRM_WEBSITE_RATE_LIMIT_SECRET).update(ip).digest('hex');
+const sign = ({ ip = '203.0.113.9', key = data.request_key, ts = Math.floor(Date.now() / 1000), secret = proxySecret } = {}) => {
+ const ipb64 = Buffer.from(ip, 'utf8').toString('base64url');
+ return `v1.${ts}.${ipb64}.${createHmac('sha256', secret).update(`v1.${ts}.${ipb64}.${key}`).digest('base64url')}`;
+};
+assert.equal(VISITOR_HEADER, 'x-eh-visitor-token');
+const seenKeys = [];
+const capture = async (name, args) => {
+ if (name === 'crm_check_website_rate_limit') { seenKeys.push(args.p_key); assert.match(args.p_key, /^[0-9a-f]{64}$/);
+  for (const raw of ['192.0.2', '203.0.113', '2001:db8', 'ffff']) assert(!JSON.stringify(args).includes(raw)); return rate; }
+ for (const raw of ['192.0.2.1', '203.0.113.9', '2001:db8']) assert(!JSON.stringify(args ?? {}).includes(raw));
+ return rpc(name, args);
+};
+const warnings = [];const realWarn = console.warn;
+console.warn = (...line) => { warnings.push(JSON.stringify(line)); };
+const sentry = [];
+const probe = async (header, envOverride = venv) => {
+ seenKeys.length = 0;
+ const r = await run(data, { rpc: capture, env: envOverride, captureWarning: (m, t) => sentry.push([m, t]) }, header === undefined ? {} : { [VISITOR_HEADER]: header });
+ assert.notEqual(r.status, 503); assert.equal(seenKeys.length, 1, 'limiter must always run'); return seenKeys[0];
+};
+try {
+ const egressKey = rateKeyOf('192.0.2.1');
+ const visitorKey = await probe(sign());
+ assert.equal(visitorKey, rateKeyOf('203.0.113.9'));assert.notEqual(visitorKey, egressKey);
+ assert.equal(await probe(undefined), egressKey);
+ assert.equal(await probe(sign(), env), egressKey);
+ assert.equal(await probe(sign(), { ...env, CRM_WEBSITE_PROXY_SECRET: 'too-short' }), egressKey);
+ const now = Math.floor(Date.now() / 1000);
+ const valid = sign(); const [, ts, ipb64, sig] = valid.split('.');
+ const fallbacks = {
+  badSignature: sign({ secret: 'another-synthetic-proxy-secret-0123456789' }),
+  stalePast: sign({ ts: now - 301 }), staleFuture: sign({ ts: now + 301 }),
+  otherRequestKey: sign({ key: randomUUID() }),
+  threeParts: `v1.${ts}.${ipb64}`, fiveParts: `${valid}.x`, wrongVersion: `v2.${ts}.${ipb64}.${sig}`,
+  emptyTs: `v1..${ipb64}.${sig}`, emptyIp: `v1.${ts}..${sig}`, emptySig: `v1.${ts}.${ipb64}.`, dots: '...',
+  nonBase64Ip: `v1.${ts}.${ipb64}+/=.${sig}`, nonBase64Sig: `v1.${ts}.${ipb64}.${sig.slice(0, 42)}+`, paddedSig: `${valid}=`,
+  shortSig: `v1.${ts}.${ipb64}.${sig.slice(0, 42)}`, longSig: `v1.${ts}.${ipb64}.${sig}A`,
+  oversize: `v1.${ts}.${'A'.repeat(300)}.${sig}`, nonNumericTs: `v1.12ab.${ipb64}.${sig}`, negativeTs: `v1.-${ts}.${ipb64}.${sig}`,
+  longIp: sign({ ip: '1'.repeat(46) }), badIpChars: sign({ ip: '203.0.113.9<script>' }), ipWithSpace: sign({ ip: '203.0.113.9 ' }), ipNewline: sign({ ip: '203.0.113.9\n' }),
+ };
+ for (const [name, header] of Object.entries(fallbacks)) assert.equal(await probe(header), egressKey, `fallback expected: ${name}`);
+ assert.equal(await probe(sign({ ts: now - 299 })), visitorKey);
+ for (const ip of ['198.51.100.7', '2001:db8::1', '::ffff:203.0.113.10']) {
+  const result = visitorIp(new Request('http://localhost', { headers: { [VISITOR_HEADER]: sign({ ip }) } }), data.request_key, venv);
+  assert.deepEqual(result, { reason: 'ok', ip });assert.equal(await probe(sign({ ip })), rateKeyOf(ip));
+ }
+ const reasonOf = (header, e = venv) => visitorIp(new Request('http://localhost', { headers: header === undefined ? {} : { [VISITOR_HEADER]: header } }), data.request_key, e).reason;
+ assert.equal(reasonOf(undefined), 'missing');assert.equal(reasonOf(sign(), env), 'unconfigured');
+ assert.equal(reasonOf(fallbacks.stalePast), 'stale');assert.equal(reasonOf(fallbacks.badSignature), 'invalid');assert.equal(reasonOf(fallbacks.oversize), 'invalid');
+ assert.equal(visitorIp({ headers: { get() { throw Error('boom'); } } }, data.request_key, venv).reason, 'invalid');
+ assert.equal(visitorIp(new Request('http://localhost', { headers: { [VISITOR_HEADER]: sign() } }), undefined, venv).reason, 'invalid');
+ // Every invalid/stale result warns with only site, form and reason.
+ warnings.length = 0;await probe(fallbacks.stalePast);await probe(fallbacks.badSignature);
+ assert.equal(warnings.length, 2);assert(warnings.every(w => w.includes('[crm-inquiry] visitor_rejected')));
+ assert(warnings[0].includes('"stale"') && warnings[1].includes('"invalid"'));
+ warnings.length = 0;await probe(sign());await probe(undefined);assert.equal(warnings.length, 0);
+ // 429 warns and reports a Sentry warning, never with the IP, header or contact data.
+ rate = false;warnings.length = 0;sentry.length = 0;
+ for (const header of [sign(), undefined]) {
+  seenKeys.length = 0;
+  const limited = await run(data, { rpc: capture, env: venv, captureWarning: (m, t) => sentry.push([m, t]) }, header === undefined ? {} : { [VISITOR_HEADER]: header });
+  assert.equal(limited.status, 429);
+ }
+ assert.equal((await run(data, { rpc: capture, env: venv, captureWarning: () => { throw Error('sentry down'); } }, { [VISITOR_HEADER]: sign() })).status, 429);
+ rate = true;
+ assert.equal(warnings.filter(w => w.includes('[crm-inquiry] rate_limited')).length, 3);
+ assert.deepEqual(sentry, [['[crm-inquiry] rate_limited', { site: 'school', form: 'annual', visitor: 'ok' }], ['[crm-inquiry] rate_limited', { site: 'school', form: 'annual', visitor: 'missing' }]]);
+ const logged = JSON.stringify([warnings, sentry]);
+ for (const leak of ['192.0.2', '203.0.113', 'v1.', 'Sara', '0612345678', proxySecret]) assert(!logged.includes(leak), `log leaked ${leak}`);
+} finally { console.warn = realWarn; }
+// Preflight is unchanged: the visitor header is server-to-server only and never CORS-allowed.
+assert.equal((await inquiryOptions(new Request('http://localhost',{method:'OPTIONS',headers:{Origin:'https://school.example','Access-Control-Request-Method':'POST'}}),rpc)).headers.get('Access-Control-Allow-Headers'),'Content-Type');
+console.log('PASS Phase 9 endpoint, CORS, limits, signed visitor key, Turnstile binding, privacy, mappings, shared worker and client attribution fixtures');
