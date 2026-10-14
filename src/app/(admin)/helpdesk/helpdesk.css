@@ -124,3 +124,4 @@
 @media (min-width:900px){.hd .lb img{width:auto;max-width:min(1700px,100%)}}
 @media (max-width:640px){.hd .ui, .hd .menu{white-space:normal}.hd .scn{padding-inline:14px}}.hd .part, .hd .scn { scroll-margin-top: 16px; }
 .hd ul.tight, .hd td ul { list-style: disc; }
+.hd .lb { overscroll-behavior: contain; }

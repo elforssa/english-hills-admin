@@ -3,6 +3,7 @@ import Image from 'next/image';
 // Static French guide for the reception team, served at /helpdesk.
 // Source of truth for the content: this file. Screenshots live in public/helpdesk (synthetic data only).
 // Keep button and menu names exactly as they appear on screen; scripts/test-helpdesk-content.mjs checks anchors and images.
+// The screenshots in public/helpdesk are public static files (no login needed to fetch them): they must contain synthetic data only.
 export default function GuideContent() {
   return (
     <>
@@ -132,7 +133,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Inscrire un prospect qualifié</td>
-<td>Fiche du prospect › <span className="ui">Commencer l’inscription</span></td>
+<td>Fiche du prospect › <span className="ui">Commencer l&apos;inscription</span></td>
 <td><a href="#s6">Scénario 6</a></td>
 </tr>
 <tr>
@@ -508,7 +509,7 @@ export default function GuideContent() {
 </li>
 </ol>
 <div className="callout warn">
-<strong>«&nbsp;Marquer comme fait&nbsp;» ne fait que fermer la tâche</strong><p>Cela ne réserve pas de test, ne commence pas d’inscription et ne change pas l’étape. Pour avancer, utilisez les boutons de la fiche&nbsp;: <span className="ui">Réserver un test</span> ou <span className="ui">Commencer l’inscription</span>.</p>
+<strong>«&nbsp;Marquer comme fait&nbsp;» ne fait que fermer la tâche</strong><p>Cela ne réserve pas de test, ne commence pas d’inscription et ne change pas l’étape. Pour avancer, utilisez les boutons de la fiche&nbsp;: <span className="ui">Réserver un test</span> ou <span className="ui">Commencer l&apos;inscription</span>.</p>
 </div>
 <p>Pour décaler une visite&nbsp;: <span className="ui">Replanifier</span>, nouvelle date et heure. Pour la supprimer&nbsp;: <span className="ui">Annuler l’action</span> dans la fiche (un motif et une nouvelle prochaine action sont demandés). Le bouton <span className="ui">Annuler</span> n’existe pas sur les lignes de la page Tâches.</p>
 </article>
@@ -520,13 +521,13 @@ export default function GuideContent() {
 </header>
 <ol className="flow">
 <li><b>Prospect Qualifié</b><small>le projet est qualifié</small></li>
-<li><b>Pré-inscription</b><small>«&nbsp;Commencer l’inscription&nbsp;»&nbsp;: le prospect reste Qualifié</small></li>
+<li><b>Pré-inscription</b><small>«&nbsp;Commencer l&apos;inscription&nbsp;»&nbsp;: le prospect reste Qualifié</small></li>
 <li><b>Paiement</b><small>«&nbsp;Nouveau reçu&nbsp;»&nbsp;: inscription confirmée</small></li>
 <li><b>Groupe affecté</b><small>«&nbsp;Groupe à affecter&nbsp;»&nbsp;: inscription validée</small></li>
 </ol>
 <h4>Temps 1&nbsp;: créer la pré-inscription</h4>
 <ol className="steps">
-<li><p>Dans la fiche, section <b>Inscription</b>, cliquez sur <span className="ui">Commencer l’inscription</span>. Le bouton n’existe que pour un prospect <span className="st st-qual">Qualifié</span> sans inscription.</p>
+<li><p>Dans la fiche, section <b>Inscription</b>, cliquez sur <span className="ui">Commencer l&apos;inscription</span>. Le bouton n’existe que pour un prospect <span className="st st-qual">Qualifié</span> sans inscription.</p>
 </li>
 <li><p><b>Étape 1/3, Apprenant.</b> Saisissez le <span className="ui">Nom de l’apprenant</span> et, si vous la connaissez, la date de naissance (pas dans le futur). La plateforme cherche les apprenants déjà connus&nbsp;: <span className="ui">Utiliser cet apprenant</span> s’il s’agit de lui, sinon <span className="ui">Créer un nouvel apprenant</span> et cochez «&nbsp;J’ai vérifié les correspondances&nbsp;: il s’agit d’un autre apprenant&nbsp;».</p>
 </li>
@@ -536,7 +537,7 @@ export default function GuideContent() {
 </li>
 </ol>
 <figure className="fig narrow">
-<Image src="/helpdesk/s08-enroll.jpg" width={1700} height={1075} alt="Fenêtre Commencer l’inscription, étape 2 sur 3" unoptimized tabIndex={0} role="button" /><figcaption>Étape 2 sur 3 de la fenêtre <span className="ui">Commencer l’inscription</span>.</figcaption>
+<Image src="/helpdesk/s08-enroll.jpg" width={1700} height={1075} alt="Fenêtre Commencer l&apos;inscription, étape 2 sur 3" unoptimized tabIndex={0} role="button" /><figcaption>Étape 2 sur 3 de la fenêtre <span className="ui">Commencer l&apos;inscription</span>.</figcaption>
 <ol className="legend">
 <li><span className="ui">Programme</span>&nbsp;: «&nbsp;Programme annuel&nbsp;», «&nbsp;Adultes&nbsp;», «&nbsp;Stage d’été&nbsp;»…</li>
 <li><span className="ui">Niveau proposé</span>&nbsp;: «&nbsp;À définir&nbsp;» si le test n’a pas eu lieu.</li>
@@ -546,7 +547,7 @@ export default function GuideContent() {
 </figure>
 <h4>Temps 2&nbsp;: encaisser et confirmer</h4>
 <ol className="steps">
-<li><p>Dans la fiche, cliquez sur <span className="ui">Continuer l’inscription</span>&nbsp;: la fiche de l’apprenant s’ouvre avec l’inscription mise en évidence («&nbsp;Inscription liée au prospect CRM&nbsp;»).</p>
+<li><p>Dans la fiche, cliquez sur <span className="ui">Continuer l&apos;inscription</span>&nbsp;: la fiche de l’apprenant s’ouvre avec l’inscription mise en évidence («&nbsp;Inscription liée au prospect CRM&nbsp;»).</p>
 </li>
 <li><p>Dans la section <b>Paiements</b>, cliquez sur <span className="ui">Nouveau reçu</span>.</p>
 </li>
@@ -560,8 +561,8 @@ export default function GuideContent() {
 </li>
 </ol>
 <figure className="fig narrow">
-<Image src="/helpdesk/s09-receipt-existing.jpg" width={1700} height={1563} alt="Formulaire de paiement avec l’inscription à rattacher, le prix et le montant payé" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li><span className="ui">Inscription à rattacher</span>&nbsp;: l’inscription créée depuis le prospect. Les statuts sont en anglais dans cette liste (Submitted = Soumise).</li>
+<Image src="/helpdesk/s09-receipt-existing.jpg" width={1700} height={1563} alt="Formulaire de paiement avec l’inscription à rattacher « Inscription CRM · Submitted », le prix et le montant payé" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Inscription à rattacher</span>&nbsp;: choisissez la ligne qui commence par «&nbsp;Inscription CRM&nbsp;·&nbsp;». C’est l’inscription créée depuis le prospect, et c’est ce choix qui le convertit. Les statuts sont en anglais dans cette liste (Submitted = Soumise).</li>
 <li><span className="ui">Prix brut convenu</span>&nbsp;: saisi à chaque nouvel engagement, il n’y a pas de tarif par défaut.</li>
 <li><span className="ui">Montant payé aujourd’hui</span>&nbsp;: il ne peut pas dépasser le solde.</li>
 <li><span className="ui">Envoyer aussi le reçu par email</span>&nbsp;: facultatif, désactivé par défaut.</li>
@@ -1208,7 +1209,7 @@ export default function GuideContent() {
 <p>C’est voulu&nbsp;: la pré-inscription ne confirme rien. Le prospect passe en «&nbsp;Inscription confirmée&nbsp;» quand un paiement est enregistré sur son inscription (scénario 6).</p>
 </details>
 <details className="faq">
-<summary>Le bouton «&nbsp;Commencer l’inscription&nbsp;» n’apparaît pas</summary>
+<summary>Le bouton «&nbsp;Commencer l&apos;inscription&nbsp;» n’apparaît pas</summary>
 <p>Il n’existe que pour un prospect «&nbsp;Qualifié&nbsp;» sans inscription. La fiche indique la raison en dessous&nbsp;: «&nbsp;Qualifiez le projet avant de commencer une inscription&nbsp;», ou «&nbsp;Rouvrez le prospect…&nbsp;» s’il est clôturé.</p>
 </details>
 <details className="faq">
@@ -1306,7 +1307,7 @@ export default function GuideContent() {
 <div className="card mini">
 <h4>Inscrire</h4>
 <ul className="tight">
-<li><span className="ui">Commencer l’inscription</span>&nbsp;: le prospect reste Qualifié.</li>
+<li><span className="ui">Commencer l&apos;inscription</span>&nbsp;: le prospect reste Qualifié.</li>
 <li><span className="ui">Nouveau reçu</span>&nbsp;: choisir «&nbsp;Inscription CRM…&nbsp;».</li>
 <li>Paiement &gt; 0&nbsp;: inscription confirmée.</li>
 <li>Ensuite&nbsp;: <span className="ui">Groupe à affecter</span>.</li>

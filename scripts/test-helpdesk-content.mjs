@@ -42,6 +42,16 @@ for (const [name, source] of [['GuideContent.jsx', guide], ['HelpdeskNav.jsx', n
 }
 assert(!/example\.invalid|service_role|password\s*[:=]/i.test(guide), 'guide must not contain demo credentials or accounts');
 assert(!/@import|fonts\.googleapis/.test(read('helpdesk.css')), 'platform CSP only allows its own fonts');
+// Every rule of the guide stylesheet stays under .hd (or its scroll wrapper .hd-scroll) so it cannot restyle other pages.
+const { default: postcss } = await import('postcss');
+let scoped = 0;
+postcss.parse(read('helpdesk.css')).walkRules(rule => {
+  for (const selector of rule.selectors) {
+    assert(/^\.hd(?:-scroll)?(?![\w-])/.test(selector.trim()), `unscoped selector in helpdesk.css: ${selector}`);
+    scoped++;
+  }
+});
+assert(scoped > 50, 'helpdesk.css looks empty');
 
 // 4. The page stays read-only and loads no data.
 assert(!/supabase|fetch\(|useQuery|rpc\(/i.test(page + guide + nav + read('ImageZoom.jsx')), 'help page must not load data');
