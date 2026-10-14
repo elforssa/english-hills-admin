@@ -20,6 +20,7 @@ const capabilityRoles = Object.freeze({
   canRecordAttendance: operations,
   canEditTeacherOperationalFields: operations,
   canManageStudentDocuments: operations,
+  canViewHelp: operations,
   canViewFinanceAnalytics: management,
   canManageUsers: management,
   canManageSystemSettings: management,
@@ -51,6 +52,7 @@ const exact = new Map([
   ['/assessments', 'canManageAcademics'],
   ['/receipts', 'canManageFinanceOperations'], ['/receipts/new', 'canManageFinanceOperations'],
   ['/teachers', 'canManageTeacherOperations'], ['/settings', 'canManageOwnAccount'],
+  ['/helpdesk', 'canViewHelp'],
 ]);
 const detail = [
   [new RegExp(`^/students/${UUID}(?:/edit)?$`, 'i'), 'canManageStudents'],

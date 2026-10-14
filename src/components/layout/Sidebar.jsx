@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
   LogOut, ChevronDown, ChevronRight, Shield, Menu, X,
-  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History, RadioTower,
+  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History, RadioTower, LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
@@ -93,6 +93,7 @@ const NAV = [
   { href: '/teacher-portal', label: 'Mon espace enseignant', icon: GraduationCap, roles: ['teacher'] },
   { href: '/parent-portal', label: 'Espace Parents', icon: Users, roles: ['parent'] },
   { href: '/student-portal', label: 'Mon espace apprenant', icon: BookOpen, roles: ['student'] },
+  { href: '/helpdesk', label: 'Aide', icon: LifeBuoy, roles: OPERATIONS },
   { href: '/settings', label: 'Mon compte', icon: Shield, roles: ['receptionist'] },
   { href: '/settings', label: 'Paramètres', icon: Shield, roles: ADMIN },
   { href: '/inscription', label: 'Formulaire public', icon: UserPlus, roles: ADMIN },

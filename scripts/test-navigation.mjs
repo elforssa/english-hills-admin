@@ -35,7 +35,7 @@ for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestinat
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
 for (const path of ['/crm/today', '/crm/leads', '/students', '/students-directory', '/students/new',
   '/enrollments', '/settings', '/placement-tests', '/groups', '/timetable', '/attendance',
-  '/assessments', '/receipts', '/receipts/new', '/teachers',
+  '/assessments', '/receipts', '/receipts/new', '/teachers', '/helpdesk',
   '/students/00000000-0000-0000-0000-000000000001',
   '/students/00000000-0000-0000-0000-000000000001/edit',
   '/groups/00000000-0000-0000-0000-000000000001',
@@ -49,7 +49,7 @@ for (const path of ['/finance', '/students/import', '/students/00000000-0000-000
   '/teachers/new', '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
   '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',
-  '/students/%2fetc', '/groups/not-a-uuid', '/crm/today/anything', '/crm/leads/anything',
+  '/students/%2fetc', '/groups/not-a-uuid', '/crm/today/anything', '/crm/leads/anything', '/helpdesk/anything',
   'https://example.invalid/crm/today', 'javascript:alert(1)', '//example.com', '/\\example.com']) {
   assert.equal(loginDestination('receptionist', path), '/crm/leads');
 }
@@ -57,6 +57,9 @@ for (const role of ['director', 'admin', 'receptionist']) {
   for (const capability of ['canManageStudents','canManageGroups','canManageFinanceOperations','canManageTeacherOperations'])
     assert.equal(hasCapability(role, capability), true);
 }
+// The reception guide is read-only help for operations staff; family, teacher and unknown roles never reach it.
+for (const role of ['director', 'admin', 'receptionist']) assert.equal(hasCapability(role, 'canViewHelp'), true);
+for (const role of ['teacher', 'parent', 'student', 'pending', null]) assert.equal(hasCapability(role, 'canViewHelp'), false);
 for (const role of ['teacher','parent','student','pending',null]) {
   for (const capability of ['canManageStudents','canManageFinanceOperations','canManageTeacherOperations'])
     assert.equal(hasCapability(role, capability), false);
