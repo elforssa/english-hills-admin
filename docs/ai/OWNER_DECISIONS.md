@@ -173,6 +173,15 @@ Release secret handling for both Vercel projects: set `CRM_WEBSITE_PROXY_SECRET`
 
 The website parent form `campaign_parent_lead_v1` does not ask for a learner name, so the lead's name is the parent. Mapping version 2 (id `c2ce1875-3d99-45af-a86b-8663160a5cb6`) was published with `learner_policy = 'optional'`, effective 2026-10-13 13:53:18 UTC. Parent v1 and the adult form's v1 mapping are unchanged. This is a mapping data version, not a migration. Evidence: [closeout](CURRENT_STATE.md#website-limiter-visitor-key-and-parent-form-mapping-production-closeout--2026-10-13).
 
+## Staff help guide — APPROVED (2026-10-14)
+
+Owner decisions on the in-platform reception guide at `/helpdesk` ([closeout](CURRENT_STATE.md#staff-help-guide-production-closeout--2026-10-14)); implemented and deployed per CURRENT_STATE, which owns that evidence.
+
+- **Format:** an in-platform page, French, written for the receptionist (“vous”), scenario-first with a short screen-by-screen reference and screenshots on key screens only. It replaces the earlier shareable page and a PDF (about 40 pages was judged too long).
+- **Audience:** director and admin, as well as the receptionist, see the **Aide** menu entry and can open the page. Teacher, parent, student and unknown roles cannot.
+- **Screenshots:** the 19 screenshots under `public/helpdesk` may remain public static files; they must contain synthetic data only. Serving them behind login is an optional follow-up.
+- **Not stated by the owner:** calling hours and who to contact (the guide says “la direction”), and a separate restatement of the risk tier (the reviewer's Tier 3-by-category classification stood; the owner approved the merge after the independent re-review).
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
