@@ -15,13 +15,17 @@ const ids = [...guide.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
 assert.equal(new Set(ids).size, ids.length, 'duplicate ids in GuideContent.jsx');
 for (const [, target] of guide.matchAll(/href="#([^"]+)"/g)) assert(ids.includes(target), `broken in-page link #${target}`);
 const tocIds = [...nav.matchAll(/\{ id: '([^']+)'/g)].map(m => m[1]);
-assert(tocIds.length >= 15, 'contents list looks incomplete');
+assert(tocIds.length >= 29, 'contents list looks incomplete');
 for (const id of tocIds) assert(ids.includes(id), `contents entry without a section: ${id}`);
-for (let n = 1; n <= 12; n++) assert(tocIds.includes(`s${n}`), `scenario ${n} missing from the contents list`);
+// Part 1 (prospects) is C1-C7, part 2 (daily use) is Q1-Q14, plus the shared error scenario.
+for (const [prefix, count] of [['c', 7], ['q', 14]]) {
+  for (let n = 1; n <= count; n++) assert(tocIds.includes(`${prefix}${n}`), `scenario ${prefix.toUpperCase()}${n} missing from the contents list`);
+}
+for (const id of ['crm', 'quotidien', 'err']) assert(tocIds.includes(id) || ids.includes(id), `part ${id} missing from the guide`);
 
 // 2. Screenshots: every referenced file exists, has alt text and dimensions, and none is orphaned or oversized.
 const refs = [...guide.matchAll(/<Image\b[^>]*\/>/g)].map(m => m[0]);
-assert(refs.length >= 15, 'screenshots missing');
+assert(refs.length >= 30, 'screenshots missing');
 assert(!/<img\b/.test(guide), 'use next/image for screenshots');
 const used = new Set();
 for (const tag of refs) {

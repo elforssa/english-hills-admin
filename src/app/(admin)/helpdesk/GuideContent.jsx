@@ -10,16 +10,34 @@ export default function GuideContent() {
 <header className="hero">
 <p className="eyebrow">English Hills · Espace Accueil</p>
 <h1>Guide Accueil</h1>
-<p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects, enregistrer les appels, organiser les tests, inscrire, encaisser et prendre les présences.</p>
+<p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 1.0</li>
-<li>12 octobre 2026</li>
+<li>Version 2.0</li>
+<li>16 octobre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
 </ul>
 <div className="callout info" style={{ marginTop: '22px' }}>
-<strong>Comment lire ce guide</strong><p>Les noms de boutons et de menus sont écrits comme à l’écran, dans un cadre&nbsp;: <span className="ui">Enregistrer</span>. Les scénarios suivent la vie réelle d’un prospect, de l’appel au paiement. Les parties «&nbsp;Référence&nbsp;» servent à retrouver un écran ou un mot précis.</p>
+<strong>Comment lire ce guide</strong><p>Le guide a <b>deux parties</b>, comme votre travail. Les noms de boutons et de menus sont écrits comme à l’écran, dans un cadre&nbsp;: <span className="ui">Enregistrer</span>. Chaque scénario part d’une situation réelle et indique le chemin, étape par étape. Les parties «&nbsp;Référence&nbsp;» servent à retrouver un écran ou un mot précis.</p>
 <p>Ce guide décrit votre espace uniquement. Si un écran ne ressemble plus à une capture, la plateforme a évolué&nbsp;: signalez-le à la direction.</p>
+</div>
+<div className="cols" style={{ marginTop: '18px' }}>
+<div className="card">
+<h4>Partie 1 · Prospects (CRM)</h4>
+<p>Vous passez ici l’essentiel de votre temps&nbsp;: de la première demande à l’inscription payée.</p>
+<ul className="tight">
+<li><a href="#c1">C1</a> Un nouveau prospect · <a href="#c2">C2</a> J’appelle · <a href="#c3">C3</a> Le parent a répondu</li>
+<li><a href="#c4">C4</a> Test de niveau · <a href="#c5">C5</a> Visite · <a href="#c6">C6</a> Inscrire · <a href="#c7">C7</a> Clôturer</li>
+</ul>
+</div>
+<div className="card">
+<h4>Partie 2 · Au quotidien</h4>
+<p>Dès que la personne est inscrite, ou se présente au guichet&nbsp;: dossiers, paiements, groupes, présences, enseignants.</p>
+<ul className="tight">
+<li><a href="#q1">Q1–Q2</a> Apprenants et dossiers · <a href="#q3">Q3–Q7</a> Paiements, reçus, pré-inscriptions</li>
+<li><a href="#q8">Q8–Q10</a> Groupes · <a href="#q11">Q11</a> Présences · <a href="#q12">Q12–Q13</a> Enseignants et horaires · <a href="#q14">Q14</a> Rentrée et fin de mois</li>
+</ul>
+</div>
 </div>
 </header>
 <section className="part" id="prise-en-main">
@@ -74,22 +92,22 @@ export default function GuideContent() {
 <tr>
 <td><b>Apprenants</b></td>
 <td><span className="menu">Annuaire</span><br /><span className="menu">Liste des apprenants</span><br /><span className="menu">Ajouter un apprenant</span></td>
-<td>Retrouver un apprenant, voir son solde, lui affecter un groupe.</td>
+<td>Retrouver un apprenant, créer ou compléter un dossier, voir son solde, lui affecter un groupe.</td>
 </tr>
 <tr>
 <td><b>Académique</b></td>
 <td><span className="menu">Groupes &amp; niveaux</span><br /><span className="menu">Présences</span><br /><span className="menu">Emploi du temps</span><br /><span className="menu">Notes &amp; bulletins</span></td>
-<td>Gérer les groupes, prendre les présences, consulter horaires et notes.</td>
+<td>Créer et modifier les groupes, prendre les présences, consulter horaires et notes.</td>
 </tr>
 <tr>
 <td><b>Finance</b></td>
 <td><span className="menu">Nouveau reçu</span> (page «&nbsp;Encaisser un paiement&nbsp;»)<br /><span className="menu">Tous les reçus</span> (page «&nbsp;Reçus de paiement&nbsp;»)</td>
-<td>Encaisser, imprimer, retrouver un reçu.</td>
+<td>Encaisser, imprimer, retrouver, renvoyer un reçu.</td>
 </tr>
 <tr>
 <td><b>Enseignants</b></td>
 <td><span className="menu">Liste des enseignants</span></td>
-<td>Coordonnées, niveaux et certifications. Jamais les salaires.</td>
+<td>Coordonnées, niveaux et certifications (vous pouvez les modifier). Jamais les salaires.</td>
 </tr>
 <tr>
 <td><b>Mon compte</b></td>
@@ -100,7 +118,9 @@ export default function GuideContent() {
 </table>
 </div>
 <p>Certains titres de page diffèrent du nom dans le menu, comme indiqué ci-dessus. C’est normal.</p>
+<p><b>Les deux parties se répondent.</b> Un prospect payé devient un apprenant&nbsp;: la partie 1 s’arrête au paiement (<a href="#c6">C6</a>), la partie 2 continue avec le groupe, les présences et le suivi des paiements. Les menus <span className="menu">CRM</span>, <span className="menu">Tests de niveau</span> et <span className="menu">Calendrier</span> relèvent de la partie 1&nbsp;; <span className="menu">Apprenants</span>, <span className="menu">Inscriptions</span>, <span className="menu">Académique</span>, <span className="menu">Finance</span> et <span className="menu">Enseignants</span> de la partie 2.</p>
 <h3 id="jeveux">Je veux… où dois-je aller&nbsp;?</h3>
+<h4>Prospects (partie 1)</h4>
 <div className="scroll">
 <table>
 <thead>
@@ -112,59 +132,123 @@ export default function GuideContent() {
 </thead>
 <tbody>
 <tr>
-<td>Noter le résultat d’un appel</td>
-<td><span className="menu">Tâches</span> ou la fiche du prospect</td>
-<td><a href="#s2">Scénario 2</a></td>
-</tr>
-<tr>
 <td>Ajouter un prospect qui vient d’appeler ou de passer</td>
 <td><span className="menu">Opportunités</span> › <span className="ui">Ajouter un prospect</span></td>
-<td><a href="#s1">Scénario 1</a></td>
+<td><a href="#c1">Scénario C1</a></td>
+</tr>
+<tr>
+<td>Noter le résultat d’un appel</td>
+<td><span className="menu">Tâches</span> ou la fiche du prospect</td>
+<td><a href="#c2">Scénario C2</a></td>
 </tr>
 <tr>
 <td>Réserver un test de niveau pour un prospect</td>
 <td>Fiche du prospect › <span className="ui">Réserver un test</span></td>
-<td><a href="#s4">Scénario 4</a></td>
+<td><a href="#c4">Scénario C4</a></td>
 </tr>
 <tr>
 <td>Voir les tests et visites de la semaine</td>
 <td><span className="menu">Admissions</span> › <span className="menu">Calendrier</span></td>
-<td><a href="#s4">Scénario 4</a></td>
+<td><a href="#c4">Scénario C4</a></td>
 </tr>
 <tr>
 <td>Inscrire un prospect qualifié</td>
 <td>Fiche du prospect › <span className="ui">Commencer l&apos;inscription</span></td>
-<td><a href="#s6">Scénario 6</a></td>
+<td><a href="#c6">Scénario C6</a></td>
+</tr>
+<tr>
+<td>Clôturer ou rouvrir un prospect</td>
+<td>Fiche du prospect › <span className="ui">Autres actions</span></td>
+<td><a href="#c7">Scénario C7</a></td>
+</tr>
+</tbody>
+</table>
+</div>
+<h4>Au quotidien (partie 2)</h4>
+<div className="scroll">
+<table>
+<thead>
+<tr>
+<th>Je veux</th>
+<th>Je vais dans</th>
+<th>Détail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Retrouver un apprenant, même avec son téléphone</td>
+<td><span className="menu">Apprenants</span> › <span className="menu">Annuaire</span></td>
+<td><a href="#q1">Scénario Q1</a></td>
+</tr>
+<tr>
+<td>Créer un dossier, le compléter, ajouter un document</td>
+<td><span className="menu">Ajouter un apprenant</span> · fiche › <span className="ui">Modifier</span></td>
+<td><a href="#q2">Scénario Q2</a></td>
 </tr>
 <tr>
 <td>Encaisser pour quelqu’un qui se présente au guichet</td>
 <td><span className="menu">Finance</span> › <span className="menu">Nouveau reçu</span></td>
-<td><a href="#s7">Scénario 7</a></td>
+<td><a href="#q3">Scénario Q3</a></td>
 </tr>
 <tr>
 <td>Encaisser la suite d’un paiement</td>
 <td>Fiche de l’apprenant › <span className="ui">Encaisser</span></td>
-<td><a href="#s8">Scénario 8</a></td>
+<td><a href="#q4">Scénario Q4</a></td>
+</tr>
+<tr>
+<td>Voir qui n’a pas fini de payer</td>
+<td><span className="menu">Liste des apprenants</span> › <span className="ui">Plus de filtres</span> › <span className="ui">Filtrer par paiement</span></td>
+<td><a href="#q5">Scénario Q5</a></td>
+</tr>
+<tr>
+<td>Retrouver un reçu, le réimprimer, le renvoyer</td>
+<td><span className="menu">Finance</span> › <span className="menu">Tous les reçus</span></td>
+<td><a href="#q6">Scénario Q6</a></td>
+</tr>
+<tr>
+<td>Préparer ou suivre une pré-inscription</td>
+<td><span className="menu">Admissions</span> › <span className="menu">Inscriptions</span></td>
+<td><a href="#q7">Scénario Q7</a></td>
+</tr>
+<tr>
+<td>Créer un groupe, changer son enseignant, son horaire ou sa salle</td>
+<td><span className="menu">Académique</span> › <span className="menu">Groupes &amp; niveaux</span></td>
+<td><a href="#q8">Scénario Q8</a></td>
 </tr>
 <tr>
 <td>Mettre un apprenant dans un groupe</td>
-<td><span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span> › <span className="ui">Groupe à affecter</span></td>
-<td><a href="#s9">Scénario 9</a></td>
+<td><span className="menu">Liste des apprenants</span> › <span className="ui">Groupe à affecter</span></td>
+<td><a href="#q9">Scénario Q9</a></td>
 </tr>
 <tr>
-<td>Noter les absents</td>
+<td>Changer un apprenant de groupe, ou le retirer d’un groupe</td>
+<td>Fiche › <span className="ui">Modifier l’inscription</span> · page du groupe › <span className="ui">Retirer</span></td>
+<td><a href="#q10">Scénario Q10</a></td>
+</tr>
+<tr>
+<td>Noter les absents, retrouver une ancienne séance</td>
 <td><span className="menu">Académique</span> › <span className="menu">Présences</span></td>
-<td><a href="#s10">Scénario 10</a></td>
+<td><a href="#q11">Scénario Q11</a></td>
 </tr>
 <tr>
-<td>Retrouver un reçu ou le réimprimer</td>
-<td><span className="menu">Finance</span> › <span className="menu">Tous les reçus</span></td>
-<td><a href="#ecrans">Écran par écran</a></td>
+<td>Consulter ou corriger la fiche d’un enseignant</td>
+<td><span className="menu">Enseignants</span> › <span className="menu">Liste des enseignants</span></td>
+<td><a href="#q12">Scénario Q12</a></td>
 </tr>
 <tr>
-<td>Chercher un apprenant par son numéro de téléphone</td>
-<td><span className="menu">Apprenants</span> › <span className="menu">Annuaire</span></td>
-<td><a href="#coince">Quand ça coince</a></td>
+<td>Ajouter un nouvel enseignant</td>
+<td>Pas dans votre espace&nbsp;: à demander à la direction</td>
+<td><a href="#q12">Scénario Q12</a></td>
+</tr>
+<tr>
+<td>Savoir quel groupe a cours quand, avec qui et dans quelle salle</td>
+<td><span className="menu">Académique</span> › <span className="menu">Emploi du temps</span></td>
+<td><a href="#q13">Scénario Q13</a></td>
+</tr>
+<tr>
+<td>Préparer la rentrée ou faire le point de fin de mois</td>
+<td>Plusieurs écrans</td>
+<td><a href="#q14">Scénario Q14</a></td>
 </tr>
 </tbody>
 </table>
@@ -193,7 +277,7 @@ export default function GuideContent() {
 <section className="part" id="journee">
 <header>
 <h2>Une journée type</h2>
-<p>Une routine simple pour ne rien laisser passer.</p>
+<p>Une routine simple pour ne rien laisser passer. Pour la rentrée et la fin de mois, voir <a href="#q14">Q14</a>.</p>
 </header>
 <figure className="fig">
 <Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches · Mon travail avec les filtres, les onglets En retard, Aujourd’hui, Demain, À venir, et deux tâches" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin.</figcaption>
@@ -216,7 +300,7 @@ export default function GuideContent() {
 </li>
 <li><p>Ouvrez <span className="menu">Admissions</span> › <span className="menu">Calendrier</span> en vue <span className="ui">Jour</span>&nbsp;: tests et visites attendus.</p>
 </li>
-<li><p>En bas de <span className="menu">Tâches</span>, la section <b>À vérifier</b> apparaît s’il y a des demandes ambiguës à examiner (<a href="#s1">scénario 1</a>).</p>
+<li><p>En bas de <span className="menu">Tâches</span>, la section <b>À vérifier</b> apparaît s’il y a des demandes ambiguës à examiner (<a href="#c1">scénario C1</a>).</p>
 </li>
 </ol>
 </div>
@@ -224,10 +308,11 @@ export default function GuideContent() {
 <h4>Pendant la journée</h4>
 <ul className="tight">
 <li>Notez chaque appel juste après l’avoir passé.</li>
-<li>Une personne se présente&nbsp;: <a href="#s7">scénario 7</a>.</li>
+<li>Une personne se présente&nbsp;: <a href="#q3">scénario Q3</a>.</li>
 <li>Chaque paiement donne un reçu à imprimer.</li>
-<li>Chaque nouvelle inscription payée attend un groupe&nbsp;: <a href="#s9">scénario 9</a>.</li>
-<li>Un parent demande un test ou une visite&nbsp;: <a href="#s4">scénarios 4</a> et <a href="#s5">5</a>.</li>
+<li>Chaque nouvelle inscription payée attend un groupe&nbsp;: <a href="#q9">scénario Q9</a>.</li>
+<li>Un parent demande un test ou une visite&nbsp;: <a href="#c4">scénarios C4</a> et <a href="#c5">C5</a>.</li>
+<li>Une famille veut un reçu, un solde ou un horaire&nbsp;: <a href="#q6">Q6</a>, <a href="#q5">Q5</a>, <a href="#q13">Q13</a>.</li>
 </ul>
 </div>
 <div className="card">
@@ -241,19 +326,19 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<section className="part" id="scenarios">
+<section className="part" id="crm">
 <header>
-<h2>Les scénarios</h2>
-<p>Du premier contact à l’inscription, puis les situations du guichet. Les scénarios 1 à 6 suivent la vie d’un prospect.</p>
+<h2>Partie 1 · Prospects (CRM)</h2>
+<p>Un prospect est une personne qui n’est pas encore inscrite. Vous la suivez, étape par étape, jusqu’à son inscription payée&nbsp;: C1 à C7 suivent cette vie. Une fois le paiement enregistré, tout continue dans la <a href="#quotidien">partie 2</a>.</p>
 </header>
-<article className="scn" id="s1">
+<article className="scn" id="c1">
 <header className="scn-head">
-<p className="kicker">Scénario 1</p>
+<p className="kicker">Scénario C1</p>
 <h3>Un nouveau prospect arrive</h3>
 <p className="when">Une demande est reçue par un formulaire, ou une personne appelle ou passe sans formulaire.</p>
 </header>
 <h4>Cas A&nbsp;: la demande vient d’un formulaire (Meta, site web)</h4>
-<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec une tâche <b>Premier contact</b>. Rien à saisir&nbsp;: appelez-le (<a href="#s2">scénario 2</a>).</p>
+<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec une tâche <b>Premier contact</b>. Rien à saisir&nbsp;: appelez-le (<a href="#c2">scénario C2</a>).</p>
 <p>Si la plateforme hésite sur l’identité de la personne (même téléphone, plusieurs candidats), la demande n’est pas créée toute seule. Elle attend en bas de la page <span className="menu">Tâches</span>, dans <b>À vérifier</b>&nbsp;:</p>
 <ol className="steps">
 <li><p>Ouvrez la demande et lisez les informations. Vérifiez avec la personne si besoin.</p>
@@ -298,9 +383,9 @@ export default function GuideContent() {
 <strong>Si vous ne le faites pas</strong><p>Le prospect existe et sa tâche aussi, mais vous les trouverez avec <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span>. Si votre équipe se répartit les prospects autrement, suivez la consigne de la direction.</p>
 </div>
 </article>
-<article className="scn" id="s2">
+<article className="scn" id="c2">
 <header className="scn-head">
-<p className="kicker">Scénario 2</p>
+<p className="kicker">Scénario C2</p>
 <h3>J’appelle un prospect</h3>
 <p className="when">Une tâche <b>Premier contact</b>, <b>Appel de suivi</b> ou <b>Rappel</b> est à faire.</p>
 </header>
@@ -347,7 +432,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="ui">Conversation avec le parent</span></td>
-<td><p>La personne a répondu. Un second champ apparaît&nbsp;: <span className="ui">Résultat de l’échange</span>. Voir le <a href="#s3">scénario 3</a>.</p>
+<td><p>La personne a répondu. Un second champ apparaît&nbsp;: <span className="ui">Résultat de l’échange</span>. Voir le <a href="#c3">scénario C3</a>.</p>
 </td>
 </tr>
 </tbody>
@@ -355,14 +440,14 @@ export default function GuideContent() {
 </div>
 <div className="callout info">
 <strong>Le cycle de 5 appels</strong><p>La règle prévue&nbsp;: deux appels le premier jour, un le deuxième, un le quatrième, un le sixième. La plateforme planifie les appels à votre place et respecte un délai minimum entre deux appels ratés. Si vous voyez «&nbsp;Le délai minimum entre deux appels n’est pas encore écoulé&nbsp;», attendez avant d’enregistrer un autre appel raté.</p>
-<p>Après le 5ᵉ appel raté, la plateforme n’en planifie plus et indique «&nbsp;Séquence automatique terminée&nbsp;». <b>Le prospect n’est pas clôturé</b>&nbsp;: à vous de décider. Vous pouvez <span className="ui">Prévoir un autre appel</span> ou <span className="ui">Clôturer&nbsp;: injoignable</span> (<a href="#s11">scénario 11</a>).</p>
+<p>Après le 5ᵉ appel raté, la plateforme n’en planifie plus et indique «&nbsp;Séquence automatique terminée&nbsp;». <b>Le prospect n’est pas clôturé</b>&nbsp;: à vous de décider. Vous pouvez <span className="ui">Prévoir un autre appel</span> ou <span className="ui">Clôturer&nbsp;: injoignable</span> (<a href="#c7">scénario C7</a>).</p>
 </div>
 <h4>Appeler depuis le tableau ou la liste</h4>
 <p>Dans <span className="menu">Opportunités</span>, déposer une carte sur une autre colonne n’enregistre rien&nbsp;: cela ouvre seulement la bonne fenêtre. L’étape change uniquement quand vous enregistrez un résultat, et c’est la plateforme qui la calcule.</p>
 </article>
-<article className="scn" id="s3">
+<article className="scn" id="c3">
 <header className="scn-head">
-<p className="kicker">Scénario 3</p>
+<p className="kicker">Scénario C3</p>
 <h3>Le parent a répondu&nbsp;: le résultat de l’échange</h3>
 <p className="when">Vous avez eu une vraie conversation, par téléphone, par WhatsApp ou au centre.</p>
 </header>
@@ -388,12 +473,12 @@ export default function GuideContent() {
 <tr>
 <td><span className="ui">Souhaite passer un test de niveau</span></td>
 <td><span className="st st-qual">Qualifié</span></td>
-<td><b>Préparer un test de niveau</b> (rappel interne). <b>Cela ne réserve aucun test</b>&nbsp;: voir <a href="#s4">scénario 4</a>.</td>
+<td><b>Préparer un test de niveau</b> (rappel interne). <b>Cela ne réserve aucun test</b>&nbsp;: voir <a href="#c4">scénario C4</a>.</td>
 </tr>
 <tr>
 <td><span className="ui">Souhaite visiter le centre</span></td>
 <td><span className="st st-qual">Qualifié</span></td>
-<td><b>Visite au centre</b>, avec date et heure précises (rendez-vous convenu). <a href="#s5">Scénario 5</a>.</td>
+<td><b>Visite au centre</b>, avec date et heure précises (rendez-vous convenu). <a href="#c5">Scénario C5</a>.</td>
 </tr>
 <tr>
 <td><span className="ui">Prêt à avancer vers l’inscription</span></td>
@@ -444,9 +529,9 @@ export default function GuideContent() {
 <strong>WhatsApp «&nbsp;Message envoyé&nbsp;»</strong><p>Dans <span className="ui">WhatsApp</span>, le choix <span className="ui">Message envoyé</span> ajoute seulement une ligne à l’historique. Il ne change ni l’étape ni la prochaine action, et il ne termine pas une tâche «&nbsp;Suivi WhatsApp&nbsp;».</p>
 </div>
 </article>
-<article className="scn" id="s4">
+<article className="scn" id="c4">
 <header className="scn-head">
-<p className="kicker">Scénario 4</p>
+<p className="kicker">Scénario C4</p>
 <h3>Réserver un test de niveau</h3>
 <p className="when">Un prospect <span className="st st-qual">Qualifié</span> veut passer un test.</p>
 </header>
@@ -492,9 +577,9 @@ export default function GuideContent() {
 </ul>
 </div>
 </article>
-<article className="scn" id="s5">
+<article className="scn" id="c5">
 <header className="scn-head">
-<p className="kicker">Scénario 5</p>
+<p className="kicker">Scénario C5</p>
 <h3>Organiser une visite au centre</h3>
 <p className="when">Le parent veut venir voir le centre.</p>
 </header>
@@ -513,9 +598,9 @@ export default function GuideContent() {
 </div>
 <p>Pour décaler une visite&nbsp;: <span className="ui">Replanifier</span>, nouvelle date et heure. Pour la supprimer&nbsp;: <span className="ui">Annuler l’action</span> dans la fiche (un motif et une nouvelle prochaine action sont demandés). Le bouton <span className="ui">Annuler</span> n’existe pas sur les lignes de la page Tâches.</p>
 </article>
-<article className="scn" id="s6">
+<article className="scn" id="c6">
 <header className="scn-head">
-<p className="kicker">Scénario 6</p>
+<p className="kicker">Scénario C6</p>
 <h3>Inscrire un prospect&nbsp;: de la fiche au paiement</h3>
 <p className="when">Le prospect est <span className="st st-qual">Qualifié</span> et veut s’inscrire. Il y a deux temps&nbsp;: créer la pré-inscription, puis encaisser.</p>
 </header>
@@ -557,7 +642,7 @@ export default function GuideContent() {
 </li>
 <li><p>Le message «&nbsp;Paiement enregistré. Apprenant inscrit — groupe à affecter.&nbsp;» s’affiche et le reçu s’ouvre. Le prospect passe en <span className="st st-conv">Inscription confirmée</span> et ses tâches sont fermées.</p>
 </li>
-<li><p>Terminez par l’affectation du groupe&nbsp;: <a href="#s9">scénario 9</a>.</p>
+<li><p>Terminez par l’affectation du groupe&nbsp;: <a href="#q9">scénario Q9</a>.</p>
 </li>
 </ol>
 <figure className="fig narrow">
@@ -575,182 +660,9 @@ export default function GuideContent() {
 <strong>Ne vous arrêtez pas à «&nbsp;Créer la pré-inscription&nbsp;»</strong><p>Tant qu’il n’y a pas de paiement, le prospect n’est pas converti&nbsp;: il reste <span className="st st-qual">Qualifié</span> et la tâche <b>Finaliser l’inscription</b> reste ouverte pour vous le rappeler. La terminer avec <span className="ui">Marquer comme fait</span> ne confirme rien.</p>
 </div>
 </article>
-<article className="scn" id="s7">
+<article className="scn" id="c7">
 <header className="scn-head">
-<p className="kicker">Scénario 7</p>
-<h3>Un visiteur se présente au guichet</h3>
-<p className="when">Une personne arrive sans avoir été contactée par les formulaires. Pas besoin de créer un faux prospect.</p>
-</header>
-<div className="scroll">
-<table>
-<thead>
-<tr>
-<th>Situation</th>
-<th>Que faire</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Elle demande des informations, sans s’inscrire aujourd’hui</td>
-<td><span className="menu">Opportunités</span> › <span className="ui">Ajouter un prospect</span>, <span className="ui">Origine</span> «&nbsp;Visite au centre&nbsp;». Elle suit ensuite le parcours normal.</td>
-</tr>
-<tr>
-<td>Elle s’inscrit et paie aujourd’hui</td>
-<td><span className="menu">Finance</span> › <span className="menu">Nouveau reçu</span> › <span className="ui">Nouvel apprenant</span>. Détail ci-dessous.</td>
-</tr>
-<tr>
-<td>Elle s’inscrit mais paiera plus tard</td>
-<td>Même écran, <span className="ui">Montant payé aujourd’hui</span> à <b>0</b>&nbsp;: seul l’engagement est enregistré, sans reçu, et l’inscription n’est pas confirmée.</td>
-</tr>
-<tr>
-<td>L’apprenant est déjà connu (ancien élève, frère ou sœur)</td>
-<td><span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span>, pour ne pas créer de doublon.</td>
-</tr>
-<tr>
-<td>Vous voulez seulement créer le dossier, sans paiement</td>
-<td><span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span>. Cherchez-le d’abord dans l’Annuaire&nbsp;: ce formulaire ne détecte aucun doublon.</td>
-</tr>
-</tbody>
-</table>
-</div>
-<h4>S’inscrire et payer aujourd’hui</h4>
-<ol className="steps">
-<li><p>Ouvrez <span className="menu">Finance</span> › <span className="menu">Nouveau reçu</span>. Commencez par <span className="ui">Rechercher un apprenant</span> pour vérifier qu’il n’existe pas déjà.</p>
-</li>
-<li><p>S’il n’existe pas, cliquez sur l’onglet <span className="ui">Nouvel apprenant</span> et saisissez le <span className="ui">Nom complet</span>. C’est le seul champ obligatoire&nbsp;: téléphone et emails sont facultatifs mais précieux.</p>
-</li>
-<li><p>Regardez le bloc <b>Dossiers ressemblants</b> qui s’affiche. Si c’est la même personne, cliquez sur le dossier. Sinon continuez&nbsp;: un homonyme est autorisé. Un téléphone déjà utilisé affiche seulement un avertissement (une famille peut partager un numéro).</p>
-</li>
-<li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>.</p>
-</li>
-<li><p><b>Étape 3.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> et l’<span className="ui">Échéance</span> si besoin, le <span className="ui">Montant payé aujourd’hui</span>, la date et le <span className="ui">Mode de paiement</span> (Espèces par défaut, Carte bancaire, Virement, Chèque).</p>
-</li>
-<li><p>Cliquez sur <span className="ui">Enregistrer et générer le reçu</span>. Le message «&nbsp;Apprenant inscrit — groupe à affecter&nbsp;» s’affiche et le reçu s’ouvre.</p>
-</li>
-<li><p>Imprimez avec <span className="ui">Imprimer A5</span> ou téléchargez avec <span className="ui">PDF A5</span>, puis passez au <a href="#s9">scénario 9</a> pour le groupe.</p>
-</li>
-</ol>
-<figure className="fig narrow">
-<Image src="/helpdesk/s10-receipt-new.jpg" width={1700} height={1075} alt="Formulaire Encaisser un paiement avec l’onglet Nouvel apprenant et le bloc Dossiers ressemblants" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li>L’onglet <span className="ui">Nouvel apprenant</span>.</li>
-<li><span className="ui">Nom complet</span>&nbsp;: tapez-le en entier pour déclencher la recherche de doublons.</li>
-<li><b>Dossiers ressemblants</b>&nbsp;: cliquez sur le bon dossier si la personne existe déjà.</li>
-</ol>
-</figure>
-<figure className="fig narrow">
-<Image src="/helpdesk/s11b-receipt.jpg" width={1700} height={1075} alt="Reçu de paiement avec le détail du prix, du montant payé et du solde restant" unoptimized tabIndex={0} role="button" /><figcaption>Le reçu, avec <span className="ui">PDF A5</span> et <span className="ui">Imprimer A5</span> en haut.</figcaption>
-</figure>
-<div className="callout info">
-<strong>Imprimer</strong><p>Le reçu est au format A5. Dans le lecteur PDF qui s’ouvre, choisissez A5 et l’échelle réelle (100 %).</p>
-</div>
-<div className="callout warn">
-<strong>Terminez ensuite le dossier</strong><p>Un apprenant créé depuis le reçu n’a que son nom et ses contacts. Complétez la date de naissance et la catégorie depuis sa fiche (<span className="ui">Modifier</span>).</p>
-</div>
-<div className="callout stop">
-<strong>Ne saisissez pas deux fois</strong><p>Un nouveau formulaire enregistre toujours un nouveau reçu. Si un message dit «&nbsp;Ce paiement a peut-être déjà été enregistré&nbsp;», ouvrez d’abord la liste des reçus de l’apprenant et vérifiez avant de recommencer.</p>
-</div>
-</article>
-<article className="scn" id="s8">
-<header className="scn-head">
-<p className="kicker">Scénario 8</p>
-<h3>Encaisser un acompte ou un solde</h3>
-<p className="when">L’apprenant existe et a déjà un engagement avec un reste à payer.</p>
-</header>
-<figure className="fig">
-<Image src="/helpdesk/s12-student-file.jpg" width={1700} height={1625} alt="Fiche d’un apprenant avec la situation des paiements et les inscriptions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche de l’apprenant&nbsp;: ses paiements en cours et ses inscriptions.</figcaption>
-<ol className="legend">
-<li><b>Situation des paiements</b>&nbsp;: le solde actuel de chaque engagement.</li>
-<li><b>Inscriptions et groupes</b>&nbsp;: l’état de chaque inscription.</li>
-<li><span className="ui">Nouvelle pré-inscription</span>&nbsp;: pour préparer une inscription à la main.</li>
-<li><span className="ui">Encaisser</span>&nbsp;: ouvre le formulaire de paiement déjà rempli pour cet engagement.</li>
-</ol>
-</figure>
-<ol className="steps">
-<li><p>Ouvrez la fiche de l’apprenant, puis cliquez sur <span className="ui">Encaisser</span> à côté de l’engagement. Ou&nbsp;: <span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span> › <span className="ui">Choisir un engagement</span>.</p>
-</li>
-<li><p>Les conditions de l’engagement sont verrouillées. Vous voyez <b>Prix net</b>, <b>Déjà payé</b> et <b>Solde</b>.</p>
-</li>
-<li><p>Saisissez le montant payé aujourd’hui, qui ne peut pas dépasser le solde (sinon&nbsp;: «&nbsp;Le paiement dépasse le solde de … MAD&nbsp;»), puis <span className="ui">Enregistrer et générer le reçu</span>.</p>
-</li>
-</ol>
-<p>Chaque paiement donne un nouveau reçu. Les reçus précédents ne changent jamais&nbsp;: le «&nbsp;restant historique&nbsp;» est le solde à la date de chaque reçu, alors que «&nbsp;Situation des paiements&nbsp;» montre le solde d’aujourd’hui.</p>
-<p>Les états de paiement&nbsp;: <b>Soldé</b>, <b>Acompte versé</b>, <b>En attente</b> (rien de payé, échéance pas dépassée), <b>En retard</b> (échéance dépassée), <b>Aucun engagement</b>.</p>
-</article>
-<article className="scn" id="s9">
-<header className="scn-head">
-<p className="kicker">Scénario 9</p>
-<h3>Affecter un groupe</h3>
-<p className="when">Un apprenant est inscrit mais n’a pas encore de groupe («&nbsp;Inscrit — groupe à affecter&nbsp;»).</p>
-</header>
-<ol className="steps">
-<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span>. Cliquez sur <span className="ui">Plus de filtres</span> puis choisissez <span className="ui">Groupe à affecter</span> dans «&nbsp;Filtrer par affectation de groupe&nbsp;».</p>
-</li>
-<li><p>Dans la colonne <b>Groupe</b>, cliquez sur le lien bleu <span className="ui">Groupe à affecter · …</span> de la personne.</p>
-</li>
-<li><p>Dans la fenêtre <b>Affecter un groupe</b>, vérifiez le niveau et choisissez le <span className="ui">Groupe</span>. Seuls les groupes de la même session et du même niveau sont proposés.</p>
-</li>
-<li><p>Cliquez sur <span className="ui">Enregistrer</span> («&nbsp;Mis à jour&nbsp;»). L’inscription passe à <b>Inscription validée</b>.</p>
-</li>
-</ol>
-<figure className="fig narrow">
-<Image src="/helpdesk/s13-students-filter.jpg" width={1700} height={1075} alt="Liste des apprenants filtrée sur Groupe à affecter" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li><span className="ui">Plus de filtres</span> donne accès au filtre d’affectation.</li>
-<li>Le lien <span className="ui">Groupe à affecter · …</span> ouvre la fenêtre d’affectation.</li>
-</ol>
-</figure>
-<figure className="fig narrow">
-<Image src="/helpdesk/s14-assign.jpg" width={1700} height={1075} alt="Fenêtre Affecter un groupe avec le niveau et le groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li><span className="ui">Niveau de cette inscription</span>.</li>
-<li><span className="ui">Groupe</span>&nbsp;: filtré par session et niveau.</li>
-<li><span className="ui">Enregistrer</span>.</li>
-</ol>
-</figure>
-<div className="callout info">
-<strong>Bon à savoir</strong><ul className="tight">
-<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
-<li>Pas de niveau sur le dossier&nbsp;? La plateforme vous demande de créer une pré-inscription avec un niveau depuis la fiche apprenant.</li>
-<li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
-<li>Pour sortir quelqu’un d’un groupe&nbsp;: page du groupe › <span className="ui">Retirer</span>. Une inscription validée redevient «&nbsp;Inscrit — groupe à affecter&nbsp;».</li>
-<li>La capacité d’un groupe est indicative&nbsp;: un groupe «&nbsp;complet&nbsp;» accepte quand même un nouvel apprenant.</li>
-</ul>
-</div>
-</article>
-<article className="scn" id="s10">
-<header className="scn-head">
-<p className="kicker">Scénario 10</p>
-<h3>Prendre les présences</h3>
-<p className="when">À chaque séance, pour chaque groupe.</p>
-</header>
-<ol className="steps">
-<li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Présences</span>.</p>
-</li>
-<li><p>Choisissez le <span className="ui">Groupe</span>. La <span className="ui">Date de séance</span> est celle d’aujourd’hui.</p>
-</li>
-<li><p>Pour chaque apprenant, cliquez sur <span className="ui">Absent</span>, <span className="ui">Retard</span> ou <span className="ui">Justifié</span> si besoin.</p>
-</li>
-<li><p>Cliquez sur <span className="ui">Enregistrer les présences</span>. Un message confirme «&nbsp;Présences enregistrées&nbsp;».</p>
-</li>
-</ol>
-<figure className="fig narrow">
-<Image src="/helpdesk/s15-attendance.jpg" width={1700} height={1075} alt="Page Gestion des présences avec deux apprenants" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li><span className="ui">Groupe</span>.</li>
-<li><span className="ui">Date de séance</span>.</li>
-<li>Le compteur du haut ne compte que les apprenants que vous avez cliqués.</li>
-<li><span className="ui">Enregistrer les présences</span>.</li>
-</ol>
-</figure>
-<div className="callout stop">
-<strong>Tout le monde est «&nbsp;Présent&nbsp;» par défaut</strong><p>Un apprenant que vous n’avez pas touché est affiché «&nbsp;Présent&nbsp;», et <span className="ui">Enregistrer les présences</span> l’enregistre comme présent. Le compteur «&nbsp;0 présents&nbsp;» en haut de page est trompeur tant que vous n’avez rien cliqué. Vérifiez les absents avant d’enregistrer.</p>
-</div>
-<ul className="tight">
-<li>Vous pouvez rouvrir une date passée (bouton <span className="ui">Historique</span>) et la corriger&nbsp;: il n’y a pas de verrouillage.</li>
-<li>Un apprenant «&nbsp;Inscrit — groupe à affecter&nbsp;» n’apparaît pas&nbsp;: seuls les apprenants du groupe sont listés.</li>
-<li><span className="ui">Export CSV</span> télécharge la liste de la séance.</li>
-</ul>
-</article>
-<article className="scn" id="s11">
-<header className="scn-head">
-<p className="kicker">Scénario 11</p>
+<p className="kicker">Scénario C7</p>
 <h3>Clôturer ou rouvrir un prospect</h3>
 <p className="when">Le suivi est terminé sans inscription, ou un prospect clôturé redevient actif.</p>
 </header>
@@ -787,9 +699,556 @@ export default function GuideContent() {
 <li>Un prospect <span className="st st-conv">Inscription confirmée</span> ne peut plus être rouvert ni modifié depuis cet écran.</li>
 </ul>
 </article>
-<article className="scn" id="s12">
+</section>
+<section className="part" id="quotidien">
+<header>
+<h2>Partie 2 · Au quotidien</h2>
+<p>Les personnes inscrites, ou qui se présentent au guichet&nbsp;: leur dossier, leurs paiements, leur groupe, leurs présences, et les enseignants. Ces scénarios s’utilisent chaque jour, dans n’importe quel ordre.</p>
+</header>
+<article className="scn" id="q1">
 <header className="scn-head">
-<p className="kicker">Scénario 12</p>
+<p className="kicker">Scénario Q1</p>
+<h3>Retrouver un apprenant</h3>
+<p className="when">Quelqu’un appelle ou se présente pour un apprenant déjà connu, ou vous voulez vérifier qu’il n’existe pas avant d’en créer un.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Annuaire</span>.</p>
+</li>
+<li><p>Tapez dans la barre de recherche le <b>nom</b>, l’<b>email</b> ou le <b>numéro de téléphone</b>. La liste se réduit à mesure que vous tapez.</p>
+</li>
+<li><p>Pour affiner, utilisez <span className="ui">Toutes les sessions</span>, <span className="ui">Tous les niveaux</span>, <span className="ui">Tous les statuts</span> et <span className="ui">Toutes catégories</span>. <span className="ui">Grille</span> et <span className="ui">Liste</span> changent seulement l’affichage.</p>
+</li>
+<li><p>Cliquez sur la carte de la personne pour ouvrir sa <b>fiche</b> (niveau, solde, paiements, inscriptions, groupe).</p>
+</li>
+</ol>
+<figure className="fig">
+<Image src="/helpdesk/q01-annuaire.jpg" width={1700} height={1075} alt="Annuaire des apprenants avec une recherche par numéro de téléphone et la carte d’un apprenant" unoptimized tabIndex={0} role="button" /><figcaption>L’Annuaire, ici avec une recherche par numéro de téléphone.</figcaption>
+<ol className="legend">
+<li>La recherche accepte le nom, l’email et le <b>téléphone</b>.</li>
+<li>La carte indique la catégorie, le groupe, le téléphone et le statut du dossier. Un clic ouvre la fiche.</li>
+</ol>
+</figure>
+<div className="callout info">
+<strong>Annuaire ou Liste des apprenants&nbsp;?</strong><p>Utilisez l’<b>Annuaire</b> pour retrouver quelqu’un, surtout par son téléphone. Utilisez la <b>Liste des apprenants</b> pour travailler&nbsp;: paiement, groupe à affecter, filtres. Sa recherche porte sur le nom et l’email, pas sur le téléphone.</p>
+</div>
+<p>Les statuts s’affichent en anglais (Enrolled, Prospect…)&nbsp;: la traduction est dans le <a href="#comprendre">glossaire</a>.</p>
+</article>
+<article className="scn" id="q2">
+<header className="scn-head">
+<p className="kicker">Scénario Q2</p>
+<h3>Créer ou compléter un dossier</h3>
+<p className="when">Un nouvel apprenant sans paiement, un dossier incomplet, ou un document à ajouter.</p>
+</header>
+<h4>Créer un dossier</h4>
+<ol className="steps">
+<li><p><b>Cherchez d’abord</b> dans l’<span className="menu">Annuaire</span> (<a href="#q1">Q1</a>)&nbsp;: ce formulaire ne détecte aucun doublon.</p>
+</li>
+<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span>. Seul le <span className="ui">Nom complet</span> est obligatoire&nbsp;; remplissez le reste si vous le savez&nbsp;: <span className="ui">Date de naissance</span>, <span className="ui">Téléphone</span>, <span className="ui">Email apprenant</span>, <span className="ui">Email parent</span>, <span className="ui">Catégorie d’âge</span>, <span className="ui">Session</span>, <span className="ui">Niveau</span>, <span className="ui">Source</span>.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span>. Le message «&nbsp;Apprenant créé&nbsp;» s’affiche et la fiche s’ouvre. Le dossier n’a <b>ni inscription ni groupe</b>&nbsp;: pour inscrire, voir <a href="#q7">Q7</a> (pré-inscription) ou <a href="#q3">Q3</a> (paiement).</p>
+</li>
+</ol>
+<div className="callout stop">
+<strong>Ne cliquez pas deux fois</strong><p>Après une erreur ou une coupure, un nouvel envoi peut créer un second apprenant. Regardez d’abord dans l’Annuaire avant de recommencer.</p>
+</div>
+<h4>Compléter ou corriger un dossier</h4>
+<ol className="steps">
+<li><p>Ouvrez la fiche de l’apprenant (<a href="#q1">Q1</a>) et cliquez sur <span className="ui">Modifier</span>, en haut à droite.</p>
+</li>
+<li><p>Corrigez le nom, la date de naissance, le téléphone, la catégorie d’âge ou les notes, puis <span className="ui">Enregistrer</span> («&nbsp;Apprenant mis à jour&nbsp;»). Vous pouvez aussi ajouter une <span className="ui">Photo</span> (JPEG ou PNG).</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q02-modifier-apprenant.jpg" width={1700} height={1075} alt="Formulaire Modifier l’apprenant avec la photo, le nom complet, les emails en lecture seule et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Photo</span>&nbsp;: JPEG ou PNG.</li>
+<li><span className="ui">Nom complet</span>&nbsp;: le seul champ obligatoire.</li>
+<li><span className="ui">Email apprenant</span> et <span className="ui">Email parent</span>&nbsp;: en <b>lecture seule</b> quand vous modifiez un dossier. Ces adresses servent à la connexion des familles&nbsp;: demandez à la direction pour les changer.</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<p>La session et le niveau ne se changent pas ici&nbsp;: le formulaire le rappelle. Pour déplacer l’apprenant, voir <a href="#q10">Q10</a>.</p>
+<h4>Ajouter un document</h4>
+<p>Les documents se déposent sur l’<b>inscription</b>, dans la section <b>Inscriptions et groupes</b> de la fiche&nbsp;: cliquez sur <span className="ui">Ajouter un document</span> sous l’inscription concernée. Formats acceptés&nbsp;: JPEG, PNG ou PDF, 10&nbsp;Mo au plus.</p>
+<figure className="fig">
+<Image src="/helpdesk/q02b-fiche-inscriptions.jpg" width={1700} height={1475} alt="Fiche d’un apprenant avec la section Inscriptions et groupes, les boutons Nouvelle pré-inscription, Modifier l’inscription et Ajouter un document" unoptimized tabIndex={0} role="button" /><figcaption>La fiche d’un apprenant, section <b>Inscriptions et groupes</b>.</figcaption>
+<ol className="legend">
+<li><span className="ui">Nouvelle pré-inscription</span>&nbsp;: prépare une inscription à la main (<a href="#q7">Q7</a>).</li>
+<li><span className="ui">Modifier l’inscription</span>&nbsp;: change le groupe ou le niveau de cette inscription (<a href="#q10">Q10</a>).</li>
+<li><span className="ui">Ajouter un document</span>&nbsp;: joint un fichier à cette inscription.</li>
+</ol>
+</figure>
+</article>
+<article className="scn" id="q3">
+<header className="scn-head">
+<p className="kicker">Scénario Q3</p>
+<h3>Un visiteur se présente au guichet</h3>
+<p className="when">Une personne arrive sans avoir été contactée par les formulaires. Pas besoin de créer un faux prospect.</p>
+</header>
+<div className="scroll">
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Que faire</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Elle demande des informations, sans s’inscrire aujourd’hui</td>
+<td><span className="menu">Opportunités</span> › <span className="ui">Ajouter un prospect</span>, <span className="ui">Origine</span> «&nbsp;Visite au centre&nbsp;». Elle suit ensuite le parcours normal.</td>
+</tr>
+<tr>
+<td>Elle s’inscrit et paie aujourd’hui</td>
+<td><span className="menu">Finance</span> › <span className="menu">Nouveau reçu</span> › <span className="ui">Nouvel apprenant</span>. Détail ci-dessous.</td>
+</tr>
+<tr>
+<td>Elle s’inscrit mais paiera plus tard</td>
+<td>Même écran, <span className="ui">Montant payé aujourd’hui</span> à <b>0</b>&nbsp;: seul l’engagement est enregistré, sans reçu, et l’inscription n’est pas confirmée.</td>
+</tr>
+<tr>
+<td>L’apprenant est déjà connu (ancien élève, frère ou sœur)</td>
+<td><span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span>, pour ne pas créer de doublon.</td>
+</tr>
+<tr>
+<td>Vous voulez seulement créer le dossier, sans paiement</td>
+<td><span className="menu">Apprenants</span> › <span className="menu">Ajouter un apprenant</span> (<a href="#q2">Q2</a>). Cherchez-le d’abord dans l’Annuaire&nbsp;: ce formulaire ne détecte aucun doublon.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h4>S’inscrire et payer aujourd’hui</h4>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Finance</span> › <span className="menu">Nouveau reçu</span>. Commencez par <span className="ui">Rechercher un apprenant</span> pour vérifier qu’il n’existe pas déjà.</p>
+</li>
+<li><p>S’il n’existe pas, cliquez sur l’onglet <span className="ui">Nouvel apprenant</span> et saisissez le <span className="ui">Nom complet</span>. C’est le seul champ obligatoire&nbsp;: téléphone et emails sont facultatifs mais précieux.</p>
+</li>
+<li><p>Regardez le bloc <b>Dossiers ressemblants</b> qui s’affiche. Si c’est la même personne, cliquez sur le dossier. Sinon continuez&nbsp;: un homonyme est autorisé. Un téléphone déjà utilisé affiche seulement un avertissement (une famille peut partager un numéro).</p>
+</li>
+<li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>.</p>
+</li>
+<li><p><b>Étape 3.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> et l’<span className="ui">Échéance</span> si besoin, le <span className="ui">Montant payé aujourd’hui</span>, la date et le <span className="ui">Mode de paiement</span> (Espèces par défaut, Carte bancaire, Virement, Chèque).</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer et générer le reçu</span>. Le message «&nbsp;Apprenant inscrit — groupe à affecter&nbsp;» s’affiche et le reçu s’ouvre.</p>
+</li>
+<li><p>Imprimez avec <span className="ui">Imprimer A5</span> ou téléchargez avec <span className="ui">PDF A5</span>, puis passez au <a href="#q9">scénario Q9</a> pour le groupe.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/s10-receipt-new.jpg" width={1700} height={1075} alt="Formulaire Encaisser un paiement avec l’onglet Nouvel apprenant et le bloc Dossiers ressemblants" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>L’onglet <span className="ui">Nouvel apprenant</span>.</li>
+<li><span className="ui">Nom complet</span>&nbsp;: tapez-le en entier pour déclencher la recherche de doublons.</li>
+<li><b>Dossiers ressemblants</b>&nbsp;: cliquez sur le bon dossier si la personne existe déjà.</li>
+</ol>
+</figure>
+<figure className="fig narrow">
+<Image src="/helpdesk/s11b-receipt.jpg" width={1700} height={1075} alt="Reçu de paiement avec le détail du prix, du montant payé et du solde restant" unoptimized tabIndex={0} role="button" /><figcaption>Le reçu, avec <span className="ui">PDF A5</span> et <span className="ui">Imprimer A5</span> en haut.</figcaption>
+</figure>
+<div className="callout info">
+<strong>Imprimer</strong><p>Le reçu est au format A5. Dans le lecteur PDF qui s’ouvre, choisissez A5 et l’échelle réelle (100 %).</p>
+</div>
+<div className="callout warn">
+<strong>Terminez ensuite le dossier</strong><p>Un apprenant créé depuis le reçu n’a que son nom et ses contacts. Complétez la date de naissance et la catégorie depuis sa fiche (<span className="ui">Modifier</span>, <a href="#q2">Q2</a>).</p>
+</div>
+<div className="callout stop">
+<strong>Ne saisissez pas deux fois</strong><p>Un nouveau formulaire enregistre toujours un nouveau reçu. Si un message dit «&nbsp;Ce paiement a peut-être déjà été enregistré&nbsp;», ouvrez d’abord la liste des reçus de l’apprenant et vérifiez avant de recommencer.</p>
+</div>
+</article>
+<article className="scn" id="q4">
+<header className="scn-head">
+<p className="kicker">Scénario Q4</p>
+<h3>Encaisser un acompte ou un solde</h3>
+<p className="when">L’apprenant existe et a déjà un engagement avec un reste à payer.</p>
+</header>
+<figure className="fig">
+<Image src="/helpdesk/s12-student-file.jpg" width={1700} height={1625} alt="Fiche d’un apprenant avec la situation des paiements et les inscriptions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche de l’apprenant&nbsp;: ses paiements en cours et ses inscriptions.</figcaption>
+<ol className="legend">
+<li><b>Situation des paiements</b>&nbsp;: le solde actuel de chaque engagement.</li>
+<li><b>Inscriptions et groupes</b>&nbsp;: l’état de chaque inscription.</li>
+<li><span className="ui">Nouvelle pré-inscription</span>&nbsp;: pour préparer une inscription à la main.</li>
+<li><span className="ui">Encaisser</span>&nbsp;: ouvre le formulaire de paiement déjà rempli pour cet engagement.</li>
+</ol>
+</figure>
+<ol className="steps">
+<li><p>Ouvrez la fiche de l’apprenant, puis cliquez sur <span className="ui">Encaisser</span> à côté de l’engagement. Ou&nbsp;: <span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span> › <span className="ui">Choisir un engagement</span>.</p>
+</li>
+<li><p>Les conditions de l’engagement sont verrouillées. Vous voyez <b>Prix net</b>, <b>Déjà payé</b> et <b>Solde</b>.</p>
+</li>
+<li><p>Saisissez le montant payé aujourd’hui, qui ne peut pas dépasser le solde (sinon&nbsp;: «&nbsp;Le paiement dépasse le solde de … MAD&nbsp;»), puis <span className="ui">Enregistrer et générer le reçu</span>.</p>
+</li>
+</ol>
+<p>Chaque paiement donne un nouveau reçu. Les reçus précédents ne changent jamais&nbsp;: le «&nbsp;restant historique&nbsp;» est le solde à la date de chaque reçu, alors que «&nbsp;Situation des paiements&nbsp;» montre le solde d’aujourd’hui.</p>
+<p>Pour retrouver ensuite le reçu ou la liste des impayés&nbsp;: <a href="#q6">Q6</a> et <a href="#q5">Q5</a>.</p>
+<p>Les états de paiement&nbsp;: <b>Soldé</b>, <b>Acompte versé</b>, <b>En attente</b> (rien de payé, échéance pas dépassée), <b>En retard</b> (échéance dépassée), <b>Aucun engagement</b>.</p>
+</article>
+<article className="scn" id="q5">
+<header className="scn-head">
+<p className="kicker">Scénario Q5</p>
+<h3>Suivre les impayés</h3>
+<p className="when">Vous voulez savoir qui n’a pas encore tout payé, par exemple avant d’appeler les familles.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span>, puis cliquez sur <span className="ui">Plus de filtres</span>.</p>
+</li>
+<li><p>Dans <span className="ui">Filtrer par paiement</span>, choisissez ce que vous cherchez&nbsp;: <span className="ui">Reste à payer (tous)</span> pour tous ceux qui doivent encore de l’argent, <span className="ui">En retard</span> pour l’échéance dépassée, ou <span className="ui">Acompte versé</span>, <span className="ui">En attente</span>, <span className="ui">Soldé</span>, <span className="ui">Aucun engagement</span>.</p>
+</li>
+<li><p>La colonne <b>Paiement</b> donne l’état et le <b>solde restant actuel</b> en MAD. Le téléphone est dans la ligne&nbsp;: vous pouvez appeler la famille.</p>
+</li>
+<li><p>Cliquez sur le nom pour ouvrir la fiche, puis sur <span className="ui">Encaisser</span> quand la famille paie (<a href="#q4">Q4</a>).</p>
+</li>
+</ol>
+<figure className="fig">
+<Image src="/helpdesk/q05-impayes.jpg" width={1700} height={1075} alt="Liste des apprenants filtrée sur Reste à payer avec deux apprenants en acompte versé et leur solde restant" unoptimized tabIndex={0} role="button" /><figcaption>La liste filtrée sur <span className="ui">Reste à payer (tous)</span>.</figcaption>
+<ol className="legend">
+<li><span className="ui">Plus de filtres</span>&nbsp;: le chiffre à côté indique le nombre de filtres actifs.</li>
+<li><span className="ui">Filtrer par paiement</span>.</li>
+<li>L’état du paiement et le solde restant actuel de chaque apprenant.</li>
+</ol>
+</figure>
+<div className="callout info">
+<strong>Bon à savoir</strong><ul className="tight">
+<li>Les filtres se cumulent&nbsp;: ajoutez une session, un niveau ou une catégorie pour réduire la liste. <span className="ui">Effacer les filtres</span> remet tout à zéro.</li>
+<li>Par défaut, seuls les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;» sont listés&nbsp;: choisissez <span className="ui">Tous les statuts</span> pour voir les autres.</li>
+<li>Le solde affiché est celui d’aujourd’hui. Un reçu garde le solde de sa date (<a href="#q4">Q4</a>).</li>
+</ul>
+</div>
+</article>
+<article className="scn" id="q6">
+<header className="scn-head">
+<p className="kicker">Scénario Q6</p>
+<h3>Retrouver, imprimer ou renvoyer un reçu</h3>
+<p className="when">Un parent demande une copie, le reçu n’est pas arrivé par email, ou vous préparez plusieurs reçus à la fois.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Finance</span> › <span className="menu">Tous les reçus</span>. Les reçus sont classés du plus récent au plus ancien.</p>
+</li>
+<li><p>Cherchez par <b>nom d’apprenant</b> ou par <b>numéro de reçu</b> (de la forme EH-2026-…).</p>
+</li>
+<li><p>Cliquez sur le numéro du reçu pour l’ouvrir. En haut, <span className="ui">PDF A5</span> le télécharge et <span className="ui">Imprimer A5</span> l’imprime. Si l’envoi par email avait échoué, <span className="ui">Réessayer l’email</span> apparaît.</p>
+</li>
+<li><p>Pour plusieurs reçus à la fois, cochez les lignes (la case de l’en-tête sélectionne tout), puis cliquez sur <span className="ui">PDF (N)</span>&nbsp;: un seul fichier est téléchargé.</p>
+</li>
+</ol>
+<figure className="fig">
+<Image src="/helpdesk/q06-recus.jpg" width={1700} height={1075} alt="Page Reçus de paiement avec la recherche, la case de sélection, le bouton PDF (2) et le bouton Encaisser" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tous les reçus</span>, avec deux reçus sélectionnés.</figcaption>
+<ol className="legend">
+<li>Recherche par nom ou numéro de reçu.</li>
+<li>La case de l’en-tête coche ou décoche toutes les lignes.</li>
+<li><span className="ui">PDF (N)</span>&nbsp;: télécharge les reçus cochés, N est leur nombre.</li>
+<li><span className="ui">Encaisser</span>&nbsp;: ouvre le formulaire de paiement (<a href="#q3">Q3</a> et <a href="#q4">Q4</a>).</li>
+</ol>
+</figure>
+<div className="callout warn">
+<strong>Un reçu ne se modifie pas</strong><p>Un reçu annulé est marqué «&nbsp;Annulé&nbsp;» dans la liste. Pour corriger un montant, un nom ou un mode de paiement, il faut que la direction annule le paiement&nbsp;: voir <a href="#err">J’ai fait une erreur</a>. Pour imprimer, choisissez A5 et l’échelle réelle (100&nbsp;%).</p>
+</div>
+</article>
+<article className="scn" id="q7">
+<header className="scn-head">
+<p className="kicker">Scénario Q7</p>
+<h3>Gérer les pré-inscriptions</h3>
+<p className="when">Vous préparez ou suivez une inscription qui n’est pas encore payée, sans passer par un prospect.</p>
+</header>
+<p>La page <span className="menu">Admissions</span> › <span className="menu">Inscriptions</span> (titre «&nbsp;Pré-inscriptions&nbsp;») liste les pré-inscriptions en attente. Une pré-inscription <b>n’engage rien</b>&nbsp;: l’inscription n’est confirmée que par un paiement (<a href="#q3">Q3</a>, <a href="#q4">Q4</a>).</p>
+<figure className="fig">
+<Image src="/helpdesk/q07-preinscriptions.jpg" width={1700} height={1075} alt="Page Pré-inscriptions avec le filtre de statut, le bouton Nouvelle inscription et la colonne Statut" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>Le filtre du haut montre par défaut les pré-inscriptions <b>En attente</b>&nbsp;; changez-le pour en voir d’autres.</li>
+<li><span className="ui">Nouvelle inscription</span>&nbsp;: crée une pré-inscription.</li>
+<li>Le statut, affiché en anglais&nbsp;: Submitted (soumise), Under Review (en cours d’examen), Trial (essai), Rejected (refusée).</li>
+</ol>
+</figure>
+<h4>Créer une pré-inscription</h4>
+<ol className="steps">
+<li><p>L’apprenant doit déjà avoir un dossier&nbsp;: sinon créez-le d’abord (<a href="#q2">Q2</a>).</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Nouvelle inscription</span>. Choisissez la <span className="ui">Session</span> et l’<span className="ui">Apprenant</span>&nbsp;: un encadré bleu rappelle son téléphone, sa catégorie et son statut.</p>
+</li>
+<li><p>Précisez le <span className="ui">Niveau de cette inscription</span> («&nbsp;À définir lors de l’affectation&nbsp;» si le test n’a pas eu lieu) et, si vous le connaissez, le <span className="ui">Groupe</span>. Seuls les groupes de la même session et du même niveau sont proposés.</p>
+</li>
+<li><p>Choisissez le <span className="ui">Statut</span> (<b>Submitted</b>, <b>Under Review</b> ou <b>Trial</b>), vérifiez la <span className="ui">Date</span>, ajoutez des <span className="ui">Notes</span> si besoin, puis <span className="ui">Enregistrer</span>.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q07b-preinscription-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouvelle pré-inscription avec la session, l’apprenant, le niveau, le groupe et le statut" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Session</span>&nbsp;; l’année scolaire est proposée automatiquement.</li>
+<li><span className="ui">Apprenant</span>&nbsp;: choisissez-le dans la liste.</li>
+<li><span className="ui">Groupe</span>&nbsp;: facultatif («&nbsp;Choisir un groupe&nbsp;»). Un statut <b>Trial</b> exige un groupe.</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<p>On peut aussi créer une pré-inscription depuis la fiche de l’apprenant (<span className="ui">Nouvelle pré-inscription</span>, <a href="#q2">Q2</a>), ou depuis la fiche d’un prospect (<a href="#c6">C6</a>). Pour modifier une pré-inscription, cliquez sur l’icône de modification à droite de la ligne.</p>
+<div className="callout warn">
+<strong>Valider ou refuser&nbsp;: pas chez vous</strong><p>Vous ne pouvez ni valider, ni refuser, ni supprimer une pré-inscription. De votre côté, la confirmation passe par le <b>paiement</b>&nbsp;; ensuite il reste à affecter le groupe (<a href="#q9">Q9</a>).</p>
+</div>
+</article>
+<article className="scn" id="q8">
+<header className="scn-head">
+<p className="kicker">Scénario Q8</p>
+<h3>Créer ou modifier un groupe, lui donner un enseignant</h3>
+<p className="when">Un nouveau groupe ouvre, ou l’enseignant, l’horaire, la salle ou la capacité d’un groupe change.</p>
+</header>
+<h4>Créer un groupe</h4>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Groupes &amp; niveaux</span>, puis cliquez sur <span className="ui">Nouveau groupe</span>.</p>
+</li>
+<li><p>Saisissez le <span className="ui">Nom du groupe</span> (obligatoire). Il n’y a pas de règle imposée&nbsp;; suivez l’usage de l’équipe, par exemple «&nbsp;Child 2 · Samedi après-midi&nbsp;».</p>
+</li>
+<li><p>Choisissez la <span className="ui">Session</span> puis le <span className="ui">Niveau</span> (la liste des niveaux dépend de la session) et la <span className="ui">Catégorie</span>.</p>
+</li>
+<li><p><b>Choisissez l’<span className="ui">Enseignant</span></b>&nbsp;: c’est le champ qui <b>lie le groupe à son enseignant</b>, et il est obligatoire.</p>
+</li>
+<li><p>Renseignez la <span className="ui">Salle</span>, les <span className="ui">Jours</span> (par exemple «&nbsp;Lun, Mer, Ven&nbsp;»), l’<span className="ui">Horaire</span> (par exemple «&nbsp;18h – 19h30&nbsp;»), la <span className="ui">Capacité max</span> et le <span className="ui">Terme</span>.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span>&nbsp;: le message «&nbsp;Groupe créé&nbsp;» s’affiche.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Nom du groupe</span>&nbsp;: obligatoire.</li>
+<li><span className="ui">Enseignant</span>&nbsp;: obligatoire. Il choisit parmi les enseignants existants.</li>
+<li><span className="ui">Jours</span>&nbsp;: du texte libre, mais l’<b>Emploi du temps</b> s’en sert (écrivez Lun, Mar, Mer, Jeu, Ven, Sam, Dim).</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<h4>Modifier un groupe, changer d’enseignant</h4>
+<p>Dans la liste, cliquez sur l’icône de modification à droite de la ligne du groupe. La fenêtre «&nbsp;Modifier le groupe&nbsp;» s’ouvre&nbsp;: changez l’<span className="ui">Enseignant</span>, l’horaire, la salle ou la capacité, puis <span className="ui">Enregistrer</span> («&nbsp;Groupe mis à jour&nbsp;»). La page du groupe (clic sur son nom) montre ses apprenants (<a href="#q10">Q10</a>).</p>
+<div className="callout info">
+<strong>Bon à savoir</strong><ul className="tight">
+<li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant se demande à la direction (<a href="#q12">Q12</a>).</li>
+<li>La capacité est indicative&nbsp;: un groupe «&nbsp;complet&nbsp;» accepte quand même un nouvel apprenant.</li>
+<li>Vous ne pouvez pas supprimer un groupe&nbsp;: demandez à la direction.</li>
+<li>Après avoir créé ou changé les jours, vérifiez le résultat dans l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>).</li>
+</ul>
+</div>
+</article>
+<article className="scn" id="q9">
+<header className="scn-head">
+<p className="kicker">Scénario Q9</p>
+<h3>Affecter un groupe</h3>
+<p className="when">Un apprenant est inscrit mais n’a pas encore de groupe («&nbsp;Inscrit — groupe à affecter&nbsp;»).</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Apprenants</span> › <span className="menu">Liste des apprenants</span>. Cliquez sur <span className="ui">Plus de filtres</span> puis choisissez <span className="ui">Groupe à affecter</span> dans «&nbsp;Filtrer par affectation de groupe&nbsp;».</p>
+</li>
+<li><p>Dans la colonne <b>Groupe</b>, cliquez sur le lien bleu <span className="ui">Groupe à affecter · …</span> de la personne.</p>
+</li>
+<li><p>Dans la fenêtre <b>Affecter un groupe</b>, vérifiez le niveau et choisissez le <span className="ui">Groupe</span>. Seuls les groupes de la même session et du même niveau sont proposés.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span> («&nbsp;Mis à jour&nbsp;»). L’inscription passe à <b>Inscription validée</b>.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/s13-students-filter.jpg" width={1700} height={1075} alt="Liste des apprenants filtrée sur Groupe à affecter" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Plus de filtres</span> donne accès au filtre d’affectation.</li>
+<li>Le lien <span className="ui">Groupe à affecter · …</span> ouvre la fenêtre d’affectation.</li>
+</ol>
+</figure>
+<figure className="fig narrow">
+<Image src="/helpdesk/s14-assign.jpg" width={1700} height={1075} alt="Fenêtre Affecter un groupe avec le niveau et le groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Niveau de cette inscription</span>.</li>
+<li><span className="ui">Groupe</span>&nbsp;: filtré par session et niveau.</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<div className="callout info">
+<strong>Bon à savoir</strong><ul className="tight">
+<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
+<li>Pas de niveau sur le dossier&nbsp;? La plateforme vous demande de créer une pré-inscription avec un niveau depuis la fiche apprenant.</li>
+<li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
+<li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
+<li>La capacité d’un groupe est indicative&nbsp;: un groupe «&nbsp;complet&nbsp;» accepte quand même un nouvel apprenant. Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
+</ul>
+</div>
+</article>
+<article className="scn" id="q10">
+<header className="scn-head">
+<p className="kicker">Scénario Q10</p>
+<h3>Changer un apprenant de groupe, ou le retirer</h3>
+<p className="when">Un apprenant change de créneau, ou quitte son groupe.</p>
+</header>
+<h4>Le changer de groupe</h4>
+<ol className="steps">
+<li><p>Ouvrez la fiche de l’apprenant (<a href="#q1">Q1</a>). Dans <b>Inscriptions et groupes</b>, cliquez sur <span className="ui">Modifier l’inscription</span> à côté de l’inscription concernée.</p>
+</li>
+<li><p>Dans la fenêtre <b>Affecter un groupe</b>, choisissez le nouveau <span className="ui">Groupe</span>. L’encadré vert rappelle l’horaire, le jour, la salle et la capacité.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span>.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q10-changer-groupe.jpg" width={1700} height={1075} alt="Fenêtre Affecter un groupe ouverte depuis la fiche d’un apprenant déjà inscrit, avec le choix du groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Groupe</span>&nbsp;: filtré par session et niveau de l’inscription.</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<h4>Le retirer d’un groupe</h4>
+<p>Ouvrez la page du groupe (<span className="menu">Groupes &amp; niveaux</span>, clic sur le nom) et cliquez sur <span className="ui">Retirer</span> à droite de l’apprenant. Une inscription validée redevient «&nbsp;Inscrit — groupe à affecter&nbsp;» (<a href="#q9">Q9</a>).</p>
+<figure className="fig narrow">
+<Image src="/helpdesk/q10b-page-groupe.jpg" width={1700} height={1075} alt="Page d’un groupe avec l’enseignant, le bouton Ajouter des apprenants et le bouton Retirer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>L’enseignant du groupe&nbsp;: un clic ouvre son profil.</li>
+<li><span className="ui">Ajouter des apprenants</span>&nbsp;: pour les apprenants qui n’ont pas encore de groupe.</li>
+<li><span className="ui">Retirer</span>&nbsp;: sort l’apprenant du groupe.</li>
+</ol>
+</figure>
+<div className="callout warn">
+<strong>Depuis la page du groupe, on n’ajoute pas quelqu’un qui a déjà un groupe</strong><p>Si vous essayez, la plateforme répond «&nbsp;Select an enrollment explicitly&nbsp;». Passez par la fiche de l’apprenant, <span className="ui">Modifier l’inscription</span>. Si vous hésitez, <span className="ui">Retirer</span> d’abord, puis affectez le nouveau groupe.</p>
+</div>
+</article>
+<article className="scn" id="q11">
+<header className="scn-head">
+<p className="kicker">Scénario Q11</p>
+<h3>Prendre les présences</h3>
+<p className="when">À chaque séance, pour chaque groupe.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Présences</span>.</p>
+</li>
+<li><p>Choisissez le <span className="ui">Groupe</span>. La <span className="ui">Date de séance</span> est celle d’aujourd’hui.</p>
+</li>
+<li><p>Pour chaque apprenant, cliquez sur <span className="ui">Absent</span>, <span className="ui">Retard</span> ou <span className="ui">Justifié</span> si besoin.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer les présences</span>. Un message confirme «&nbsp;Présences enregistrées&nbsp;».</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/s15-attendance.jpg" width={1700} height={1075} alt="Page Gestion des présences avec deux apprenants" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Groupe</span>.</li>
+<li><span className="ui">Date de séance</span>.</li>
+<li>Le compteur du haut ne compte que les apprenants que vous avez cliqués.</li>
+<li><span className="ui">Enregistrer les présences</span>.</li>
+</ol>
+</figure>
+<div className="callout stop">
+<strong>Tout le monde est «&nbsp;Présent&nbsp;» par défaut</strong><p>Un apprenant que vous n’avez pas touché est affiché «&nbsp;Présent&nbsp;», et <span className="ui">Enregistrer les présences</span> l’enregistre comme présent. Le compteur «&nbsp;0 présents&nbsp;» en haut de page est trompeur tant que vous n’avez rien cliqué. Vérifiez les absents avant d’enregistrer.</p>
+</div>
+<h4>Retrouver ou corriger une ancienne séance</h4>
+<ol className="steps">
+<li><p>Choisissez le <span className="ui">Groupe</span>, puis cliquez sur <span className="ui">Historique</span>. La liste des séances s’affiche, avec le nombre de présents et d’absents.</p>
+</li>
+<li><p>Cliquez sur la date de la séance pour la rouvrir, corrigez, puis <span className="ui">Enregistrer les présences</span>.</p>
+</li>
+<li><p><span className="ui">Saisie du jour</span> vous ramène à la saisie d’aujourd’hui.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q11-presences-historique.jpg" width={1700} height={1075} alt="Page Gestion des présences en mode historique avec la liste des séances d’un groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Saisie du jour</span>&nbsp;: retour à la saisie d’aujourd’hui.</li>
+<li>Une date de l’historique&nbsp;: un clic rouvre cette séance.</li>
+</ol>
+</figure>
+<ul className="tight">
+<li>Il n’y a pas de verrouillage&nbsp;: une date passée peut toujours être corrigée, par vous comme par n’importe qui. Soyez prudente.</li>
+<li>Un apprenant «&nbsp;Inscrit — groupe à affecter&nbsp;» n’apparaît pas&nbsp;: seuls les apprenants du groupe sont listés.</li>
+<li><span className="ui">Export CSV</span> télécharge la liste de la séance. Le point de fin de mois est décrit en <a href="#q14">Q14</a>.</li>
+</ul>
+</article>
+<article className="scn" id="q12">
+<header className="scn-head">
+<p className="kicker">Scénario Q12</p>
+<h3>Consulter ou corriger la fiche d’un enseignant</h3>
+<p className="when">Vous cherchez les coordonnées d’un enseignant, ou ses niveaux et ses certifications ont changé.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Enseignants</span> › <span className="menu">Liste des enseignants</span>. La recherche filtre la liste.</p>
+</li>
+<li><p>Chaque carte donne l’email, le téléphone et les niveaux. Cliquez sur le nom pour ouvrir le <b>profil</b>.</p>
+</li>
+<li><p>Pour corriger, cliquez sur <span className="ui">Modifier</span>. Dans «&nbsp;Modifier le profil enseignant&nbsp;», changez le <span className="ui">Nom complet</span>, le <span className="ui">Téléphone</span>, les <span className="ui">Certifications</span> (CELTA, DELTA, TKT, Licence, Master, Autre) et les <span className="ui">Niveaux autorisés</span>, puis <span className="ui">Enregistrer</span>.</p>
+</li>
+</ol>
+<figure className="fig narrow">
+<Image src="/helpdesk/q12-enseignants.jpg" width={1700} height={1075} alt="Liste des enseignants avec la recherche et trois cartes d’enseignants" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>La recherche par nom.</li>
+<li>Le nom de l’enseignant&nbsp;: un clic ouvre son profil.</li>
+</ol>
+</figure>
+<figure className="fig narrow">
+<Image src="/helpdesk/q12b-enseignant-modifier.jpg" width={1700} height={1075} alt="Formulaire Modifier le profil enseignant avec l’email en lecture seule, les certifications et les niveaux autorisés" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><span className="ui">Email</span>&nbsp;: en lecture seule.</li>
+<li><span className="ui">Certifications</span>&nbsp;: un clic active ou désactive.</li>
+<li><span className="ui">Niveaux autorisés</span>&nbsp;: les niveaux en bleu sont ceux que l’enseignant peut donner.</li>
+<li><span className="ui">Enregistrer</span>.</li>
+</ol>
+</figure>
+<div className="callout warn">
+<strong>Ajouter un enseignant&nbsp;: à demander à la direction</strong><p>Il n’y a pas de bouton <span className="ui">Ajouter</span> dans votre espace, ni d’accès aux contrats, salaires et congés. Quand un nouvel enseignant arrive, demandez à la direction de le créer&nbsp;; il apparaît ensuite dans la liste <span className="ui">Enseignant</span> d’un groupe, et vous pouvez le <b>lier à un groupe</b> comme dans <a href="#q8">Q8</a>.</p>
+</div>
+<p>Pour voir les groupes d’un enseignant, ouvrez l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>)&nbsp;: chaque groupe porte le nom de son enseignant.</p>
+</article>
+<article className="scn" id="q13">
+<header className="scn-head">
+<p className="kicker">Scénario Q13</p>
+<h3>Consulter l’emploi du temps et les notes</h3>
+<p className="when">Un parent demande quand et où a lieu le cours, ou vous cherchez les résultats d’une évaluation.</p>
+</header>
+<ol className="steps">
+<li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Emploi du temps</span>. La grille va du lundi au dimanche&nbsp;; chaque case est un groupe, avec son horaire, son enseignant et sa salle.</p>
+</li>
+<li><p>Pour ne voir qu’un terme, choisissez-le en haut à droite (<span className="ui">Tous les termes</span> par défaut).</p>
+</li>
+<li><p>Cliquez sur le nom d’un groupe pour ouvrir sa page (apprenants, enseignant).</p>
+</li>
+</ol>
+<figure className="fig">
+<Image src="/helpdesk/q13-emploi-du-temps.jpg" width={1700} height={1075} alt="Emploi du temps de la semaine avec les groupes de chaque jour, leur horaire, leur enseignant et leur salle" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>Le filtre par terme.</li>
+<li>Un groupe&nbsp;: un clic ouvre sa page.</li>
+</ol>
+</figure>
+<div className="callout info">
+<strong>En lecture seule</strong><p>L’emploi du temps ne se modifie pas ici. Un groupe apparaît les jours écrits dans son champ <span className="ui">Jours</span>&nbsp;; pour changer un horaire, modifiez le groupe (<a href="#q8">Q8</a>). Un groupe sans jours n’apparaît pas dans la grille.</p>
+</div>
+<p><span className="menu">Notes &amp; bulletins</span> est aussi en lecture seule&nbsp;: un tableau des évaluations (apprenant, terme, oral, écrit, finale). Vous ne saisissez pas de note et n’imprimez pas de bulletin&nbsp;: c’est réservé à la direction.</p>
+</article>
+<article className="scn" id="q14">
+<header className="scn-head">
+<p className="kicker">Scénario Q14</p>
+<h3>La rentrée et la fin de mois</h3>
+<p className="when">Deux moments où il faut tout vérifier. Chaque ligne renvoie au scénario qui détaille le geste.</p>
+</header>
+<div className="cols">
+<div className="card">
+<h4>À la rentrée</h4>
+<ol className="steps">
+<li><p><b>Enseignants</b>&nbsp;: chacun est dans la liste, avec ses niveaux et ses certifications à jour (<a href="#q12">Q12</a>). Un nouvel enseignant se demande à la direction.</p>
+</li>
+<li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité et terme (<a href="#q8">Q8</a>).</p>
+</li>
+<li><p><b>Emploi du temps</b>&nbsp;: relisez la grille, aucun groupe ne manque (<a href="#q13">Q13</a>).</p>
+</li>
+<li><p><b>Pré-inscriptions</b>&nbsp;: traitez celles qui sont en attente (<a href="#q7">Q7</a>), et complétez les dossiers (<a href="#q2">Q2</a>).</p>
+</li>
+<li><p><b>Paiements</b>&nbsp;: encaissez à mesure (<a href="#q3">Q3</a>, <a href="#q4">Q4</a>).</p>
+</li>
+<li><p><b>Groupes à affecter</b>&nbsp;: la liste doit tomber à zéro (<a href="#q9">Q9</a>).</p>
+</li>
+</ol>
+</div>
+<div className="card">
+<h4>Chaque semaine</h4>
+<ul className="tight">
+<li>Impayés&nbsp;: <span className="ui">Reste à payer (tous)</span> (<a href="#q5">Q5</a>).</li>
+<li>Pré-inscriptions encore en attente (<a href="#q7">Q7</a>).</li>
+<li>Prospects sans prochaine action (<a href="#journee">journée type</a>).</li>
+</ul>
+</div>
+<div className="card">
+<h4>En fin de mois</h4>
+<ul className="tight">
+<li><b>Présences</b>&nbsp;: pour chaque groupe, ouvrez l’<span className="ui">Historique</span> et vérifiez qu’aucune séance ne manque (<a href="#q11">Q11</a>)&nbsp;; <span className="ui">Export CSV</span> si on vous le demande.</li>
+<li><b>Impayés</b>&nbsp;: filtre <span className="ui">En retard</span>, puis appelez les familles (<a href="#q5">Q5</a>).</li>
+<li><b>Reçus</b>&nbsp;: relisez <span className="menu">Tous les reçus</span> du mois (<a href="#q6">Q6</a>).</li>
+<li><b>Dossiers</b>&nbsp;: aucun apprenant ne reste «&nbsp;Groupe à affecter&nbsp;» (<a href="#q9">Q9</a>).</li>
+</ul>
+</div>
+</div>
+</article>
+</section>
+<section className="part" id="partout">
+<header>
+<h2>Dans les deux parties</h2>
+</header>
+<article className="scn" id="err">
+<header className="scn-head">
+<p className="kicker">Dans les deux parties</p>
 <h3>J’ai fait une erreur</h3>
 <p className="when">Selon l’erreur, vous corrigez seule ou vous demandez à la direction.</p>
 </header>
@@ -821,12 +1280,22 @@ export default function GuideContent() {
 <tr>
 <td>Faute dans le nom, le téléphone ou les notes d’un apprenant</td>
 <td>Vous</td>
-<td>Fiche › <span className="ui">Modifier</span>.</td>
+<td>Fiche › <span className="ui">Modifier</span> (<a href="#q2">Q2</a>).</td>
 </tr>
 <tr>
 <td>Mauvais groupe</td>
 <td>Vous</td>
-<td>Page du groupe › <span className="ui">Retirer</span>, puis réaffectez.</td>
+<td>Fiche › <span className="ui">Modifier l’inscription</span> (<a href="#q10">Q10</a>), ou page du groupe › <span className="ui">Retirer</span>, puis réaffectez.</td>
+</tr>
+<tr>
+<td>Mauvais enseignant, mauvaise salle, mauvais horaire sur un groupe</td>
+<td>Vous</td>
+<td><span className="menu">Groupes &amp; niveaux</span> › icône de modification (<a href="#q8">Q8</a>).</td>
+</tr>
+<tr>
+<td>Pré-inscription créée par erreur</td>
+<td><b>La direction</b></td>
+<td>Vous ne pouvez pas la supprimer. Tant qu’elle n’est pas payée, elle n’engage rien.</td>
 </tr>
 <tr>
 <td>Mauvais montant, mauvais apprenant, mauvais prix, mauvais mode de paiement sur un reçu</td>
@@ -854,6 +1323,11 @@ export default function GuideContent() {
 <td>Réservé aux responsables.</td>
 </tr>
 <tr>
+<td>Ajouter ou archiver un enseignant</td>
+<td><b>La direction</b></td>
+<td>Pas de bouton dans votre espace (<a href="#q12">Q12</a>).</td>
+</tr>
+<tr>
 <td>Test de niveau à annuler</td>
 <td>Personne pour l’instant</td>
 <td>La plateforme ne gère pas l’annulation. Reprogrammez ou saisissez le résultat.</td>
@@ -869,6 +1343,7 @@ export default function GuideContent() {
 <h2>Écran par écran</h2>
 <p>Chaque écran de votre menu, en quelques lignes&nbsp;: à quoi il sert, les boutons qui comptent et les pièges.</p>
 </header>
+<h3>Partie 1 · Prospects (CRM)</h3>
 <div className="cols">
 <div className="card">
 <h4>Opportunités</h4>
@@ -901,9 +1376,12 @@ export default function GuideContent() {
 <h4>Calendrier</h4>
 <p>Tests «&nbsp;Planifié&nbsp;» et visites au centre ouvertes, jour par jour. Pas de glisser-déposer, pas de création depuis le calendrier.</p>
 </div>
+</div>
+<h3>Partie 2 · Au quotidien</h3>
+<div className="cols">
 <div className="card">
 <h4>Inscriptions</h4>
-<p>Page «&nbsp;Pré-inscriptions&nbsp;»&nbsp;: seulement les pré-inscriptions (Submitted, Under Review, Trial, Rejected). Les inscriptions confirmées ou validées n’y figurent pas.</p>
+<p>Voir <a href="#q7">Q7</a>. Page «&nbsp;Pré-inscriptions&nbsp;»&nbsp;: seulement les pré-inscriptions (Submitted, Under Review, Trial, Rejected). Les inscriptions confirmées ou validées n’y figurent pas.</p>
 <ul className="tight">
 <li><span className="ui">Nouvelle inscription</span>&nbsp;: statut limité à Submitted, Under Review ou Trial. Une inscription «&nbsp;Trial&nbsp;» exige un groupe.</li>
 <li>Pas de valider, refuser ni supprimer.</li>
@@ -912,7 +1390,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Annuaire</h4>
-<p>Cartes ou liste de tous les apprenants. <b>C’est le seul écran où la recherche trouve aussi un numéro de téléphone</b>, avec le nom et l’email. Sans pagination ni boutons d’action.</p>
+<p>Voir <a href="#q1">Q1</a>. Cartes ou liste de tous les apprenants. <b>C’est le seul écran où la recherche trouve aussi un numéro de téléphone</b>, avec le nom et l’email. Sans pagination ni boutons d’action.</p>
 </div>
 <div className="card">
 <h4>Liste des apprenants</h4>
@@ -941,18 +1419,18 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Groupes &amp; niveaux</h4>
-<p>Liste des groupes (session, niveau, enseignant, horaire, salle, terme). Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant.</p>
-<p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span>.</p>
+<p>Liste des groupes (session, niveau, enseignant, horaire, salle, terme). Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant (<a href="#q8">Q8</a>).</p>
+<p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span> (<a href="#q10">Q10</a>).</p>
 <figure className="fig" style={{ marginBottom: '10px' }}>
 <Image src="/helpdesk/s17-groups.jpg" width={1700} height={1075} alt="Liste des groupes et niveaux" unoptimized tabIndex={0} role="button" /></figure>
 </div>
 <div className="card">
 <h4>Présences</h4>
-<p>Voir <a href="#s10">scénario 10</a>. Vous pouvez saisir pour n’importe quel groupe.</p>
+<p>Voir <a href="#q11">scénario Q11</a>. Vous pouvez saisir pour n’importe quel groupe.</p>
 </div>
 <div className="card">
 <h4>Emploi du temps</h4>
-<p>Grille de la semaine, en lecture seule. Un groupe apparaît les jours écrits dans son champ «&nbsp;Jours&nbsp;» (Lun, Mar, Mer…). Pour changer un horaire, modifiez le groupe.</p>
+<p>Voir <a href="#q13">Q13</a>. Grille de la semaine, en lecture seule. Un groupe apparaît les jours écrits dans son champ «&nbsp;Jours&nbsp;» (Lun, Mar, Mer…). Pour changer un horaire, modifiez le groupe.</p>
 </div>
 <div className="card">
 <h4>Notes &amp; bulletins</h4>
@@ -960,11 +1438,11 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Nouveau reçu</h4>
-<p>Page «&nbsp;Encaisser un paiement&nbsp;» en trois étapes&nbsp;: apprenant, solde existant ou nouvelle session, paiement. Voir les <a href="#s6">scénarios 6</a>, <a href="#s7">7</a> et <a href="#s8">8</a>.</p>
+<p>Page «&nbsp;Encaisser un paiement&nbsp;» en trois étapes&nbsp;: apprenant, solde existant ou nouvelle session, paiement. Voir les <a href="#c6">scénarios C6</a>, <a href="#q3">Q3</a> et <a href="#q4">Q4</a>.</p>
 </div>
 <div className="card">
 <h4>Tous les reçus</h4>
-<p>Page «&nbsp;Reçus de paiement&nbsp;», du plus récent au plus ancien, 25 par page. Recherche par nom ou numéro de reçu. Cochez des reçus puis <span className="ui">PDF (N)</span> pour les télécharger ensemble. Le bouton <span className="ui">Encaisser</span> ouvre le formulaire.</p>
+<p>Page «&nbsp;Reçus de paiement&nbsp;», du plus récent au plus ancien, 25 par page. Recherche par nom ou numéro de reçu. Cochez des reçus puis <span className="ui">PDF (N)</span> pour les télécharger ensemble (<a href="#q6">Q6</a>). Le bouton <span className="ui">Encaisser</span> ouvre le formulaire.</p>
 <ul className="tight">
 <li>Un reçu annulé est marqué «&nbsp;Annulé&nbsp;».</li>
 <li>Sur un reçu&nbsp;: <span className="ui">PDF A5</span>, <span className="ui">Imprimer A5</span> et, si l’envoi par email a échoué, <span className="ui">Réessayer l’email</span>.</li>
@@ -975,7 +1453,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Enseignants</h4>
-<p>Liste, profil et modification limitée&nbsp;: nom, téléphone, certifications et niveaux autorisés. L’email est en lecture seule. Aucun salaire ni contrat.</p>
+<p>Liste, profil et modification limitée&nbsp;: nom, téléphone, certifications et niveaux autorisés. L’email est en lecture seule. Aucun salaire ni contrat, et pas d’ajout d’enseignant (<a href="#q12">Q12</a>).</p>
 </div>
 <div className="card">
 <h4>Mon compte</h4>
@@ -1181,6 +1659,10 @@ export default function GuideContent() {
 <td>Quelqu’un a modifié la même fiche en même temps. Rechargez la page et refaites la modification.</td>
 </tr>
 <tr>
+<td>«&nbsp;Select an enrollment explicitly&nbsp;»</td>
+<td>Vous avez essayé d’ajouter à un groupe, depuis la page du groupe, quelqu’un qui en a déjà un. Ouvrez sa fiche › <span className="ui">Modifier l’inscription</span> (<a href="#q10">Q10</a>).</td>
+</tr>
+<tr>
 <td>«&nbsp;Forbidden&nbsp;»</td>
 <td>Vous n’avez pas le droit de faire cette action. Demandez à la direction.</td>
 </tr>
@@ -1206,7 +1688,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Le prospect est resté «&nbsp;Qualifié&nbsp;» alors que j’ai créé son inscription</summary>
-<p>C’est voulu&nbsp;: la pré-inscription ne confirme rien. Le prospect passe en «&nbsp;Inscription confirmée&nbsp;» quand un paiement est enregistré sur son inscription (scénario 6).</p>
+<p>C’est voulu&nbsp;: la pré-inscription ne confirme rien. Le prospect passe en «&nbsp;Inscription confirmée&nbsp;» quand un paiement est enregistré sur son inscription (<a href="#c6">scénario C6</a>).</p>
 </details>
 <details className="faq">
 <summary>Le bouton «&nbsp;Commencer l&apos;inscription&nbsp;» n’apparaît pas</summary>
@@ -1265,7 +1747,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Enseignants</td>
-<td>Contrats, salaires, congés, ajout d’un enseignant.</td>
+<td>Contrats, salaires, congés, ajout ou archivage d’un enseignant.</td>
 </tr>
 <tr>
 <td>Prospects</td>
@@ -1323,6 +1805,30 @@ export default function GuideContent() {
 </ul>
 </div>
 <div className="card mini">
+<h4>Un apprenant</h4>
+<ul className="tight">
+<li>Chercher dans l’<span className="menu">Annuaire</span>, même par téléphone.</li>
+<li>Compléter&nbsp;: fiche › <span className="ui">Modifier</span>. Emails&nbsp;: direction.</li>
+<li>Changer de groupe&nbsp;: <span className="ui">Modifier l’inscription</span>.</li>
+</ul>
+</div>
+<div className="card mini">
+<h4>Groupes et enseignants</h4>
+<ul className="tight">
+<li><span className="ui">Nouveau groupe</span>&nbsp;: l’enseignant est obligatoire.</li>
+<li><span className="ui">Jours</span> alimente l’emploi du temps.</li>
+<li>Nouvel enseignant&nbsp;: direction.</li>
+</ul>
+</div>
+<div className="card mini">
+<h4>Impayés et reçus</h4>
+<ul className="tight">
+<li><span className="ui">Filtrer par paiement</span> dans la liste.</li>
+<li><span className="menu">Tous les reçus</span>&nbsp;: <span className="ui">PDF (N)</span> pour plusieurs.</li>
+<li>Un reçu ne se modifie pas.</li>
+</ul>
+</div>
+<div className="card mini">
 <h4>Présences</h4>
 <ul className="tight">
 <li>Tout le monde est «&nbsp;Présent&nbsp;» par défaut.</li>
@@ -1341,7 +1847,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 1.0, 12 octobre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.0, 16 octobre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );
