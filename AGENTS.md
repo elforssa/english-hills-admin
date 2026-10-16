@@ -18,6 +18,7 @@ Code, cumulative migrations and runtime evidence establish implementation. Histo
 - Preserve status/task/activity separation and trusted conversion/financial boundaries in the product rules.
 - Do not weaken authorization, RLS, integrity checks or tests to make a change pass. Diagnose and fix ordinary local failures autonomously.
 - Never use `git add .` or `git add -A`. Stage explicit paths, inspect the staged diff and preserve unrelated user work.
+- Create parallel git worktrees only under `.claude/worktrees/<name>` inside this repository (git-ignored), never on the Desktop or as siblings such as `../<name>`. After a worktree's PR merges, confirm it has no uncommitted or unpushed work and run `git worktree remove <path>` followed by `git worktree prune`; never force-remove a worktree holding unpushed commits.
 
 ## Verification and maintenance
 
