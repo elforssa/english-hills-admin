@@ -180,6 +180,8 @@ Owner decisions on the in-platform reception guide at `/helpdesk` ([closeout](CU
 - **Format:** an in-platform page, French, written for the receptionist (“vous”), scenario-first with a short screen-by-screen reference and screenshots on key screens only. It replaces the earlier shareable page and a PDF (about 40 pages was judged too long).
 - **Audience:** director and admin, as well as the receptionist, see the **Aide** menu entry and can open the page. Teacher, parent, student and unknown roles cannot.
 - **Screenshots:** the 19 screenshots under `public/helpdesk` may remain public static files; they must contain synthetic data only. Serving them behind login is an optional follow-up.
+- **Whole platform (2026-10-16):** the guide covers the whole reception portal, not only the CRM, in two clearly separated parts: Prospects (CRM) and Au quotidien (apprenants, paiements, groupes, présences, enseignants), plus a shared scenario for mistakes ([closeout](CURRENT_STATE.md#staff-help-guide-whole-platform-closeout--2026-10-16)).
+- **Prices and conventions (2026-10-16):** the owner chose **not** to state prices or conventions (for example the usual annual fee) in the guide for now.
 - **Not stated by the owner:** calling hours and who to contact (the guide says “la direction”), and a separate restatement of the risk tier (the reviewer's Tier 3-by-category classification stood; the owner approved the merge after the independent re-review).
 
 ## Deferred backlog after RCC-r1
