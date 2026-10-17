@@ -193,6 +193,8 @@ On **2026-10-17** the owner (Maroine) unparked Outcome 5, online learning, **for
 - **No migration number is reserved.** The plan records the Production ledger (001–116) and the parked provisional numbers (architecture PRs #121 and #124, Premium retirement Release B) and leaves the real number to the implementation task.
 - This decision changes no other roadmap item: Director CRM & Growth Intelligence remains the current major outcome, and H3/H4 remain not activated.
 - Next gate: independent review of the architecture PR, then the owner's approval of an exact plan revision, before any implementation task is opened.
+- **Q2 — CRM path: option C (2026-10-17).** CRM leads are enrolled into online groups through reception and the CRM exactly as today. No change to CRM functions, constraints or Meta mappings in the pilot. Leads keep the existing programme list, and the programme view attributes online enrolments to the lead's own programme. **Flagged by the architecture task (OL-r2):** `crm_start_enrollment` (migration 112) refuses any programme outside its hard-coded list before it looks at the group, and only the enrolment it links converts the lead, so the CRM path reaches an online group only if that one array gains the two online values. The plan asks the owner to confirm C with that single function change (C1) or to choose C without it (C2: online enrolment from the learner file only, no lead conversion); see [plan Q2](../architecture/plans/online-learning.md#owner-decisions-required).
+- **Review status:** OL-r1 (head `c403c82…`) received CHANGES REQUIRED from the independent review on 2026-10-17; OL-r2 applies the findings and awaits re-review.
 
 ## Deferred backlog after RCC-r1
 

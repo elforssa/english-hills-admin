@@ -2,7 +2,7 @@
 
 ## Status
 
-**PROPOSED** (2026-10-17, revision OL-r1 of the [online learning plan](../plans/online-learning.md)). Not approved, not implemented, not deployed. The owner records acceptance in the plan's approval record; this ADR's status changes only with that record and later with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
+**PROPOSED** (2026-10-17, revision OL-r2 of the [online learning plan](../plans/online-learning.md); OL-r1 received CHANGES REQUIRED from the independent review and the findings are applied). Not approved, not implemented, not deployed. The owner records acceptance in the plan's approval record; this ADR's status changes only with that record and later with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
 
 ## Date
 
@@ -19,14 +19,15 @@ The owner unparked online learning for architecture on 2026-10-17 ([decision](..
 3. **The teacher boundary is structural.** An online group never carries `groups.teacher_id`; the online teacher is recorded on the course and the lesson and reads rosters only through projection RPCs returning first name + initial, level and attendance. The existing teacher rules therefore grant an online teacher nothing.
 4. **Joining is a server-issued, per-person, per-lesson pass.** A SECURITY DEFINER RPC checks role, learner link, enrolment or guest row, lesson state, join window, capacity and child consent, logs the pass, and the server mints the provider token from it; no durable room address exists for participants.
 5. **The provider sits behind an adapter and a live gate.** One embedded, brandable room per course from a provider chosen by a phone-and-desktop test; the secret is a Vercel Production Secret referenced by name; the provider receives only a display label, a role, an expiry and an opaque reference; its join data is evidence, never attendance.
-6. **Capacity and consent are database rules**, not UI hints: a trigger on enrolments and the guest command enforce seats; a consent row gates every child's room.
+6. **Capacity and consent are database rules**, not UI hints: a trigger on enrolments at group assignment (for any non-Rejected status, never inside a status transition such as payment-driven confirmation) and the guest command enforce seats; a consent row gates every child's room.
 
 ## Consequences
 
 - One additive migration touching five vocabulary constraints and adding the `online_*` tables, a private `online_security` schema and narrow RPCs; new routes wired consistently in middleware, client guard, policy map and sidebar.
 - Link secrecy and display-name immutability depend on the provider; they are acceptance tests (T-P1–T-P6 in the plan), and a provider that fails them is rejected.
 - The in-person teacher portal's existing exposure of a teacher's own learners' e-mails is not fixed by this decision and stays a separate item.
-- The CRM funnel learns the online programmes only if the owner chooses to extend its vocabulary (plan Q2).
+- The CRM keeps its programme list, constraints, Meta mappings and cohort function (owner decision Q2 = option C, 2026-10-17): a lead is enrolled into an online group through the existing CRM path and the programme view attributes that enrolment to the lead's own programme. Because `crm_start_enrollment` hard-codes the accepted programmes, that path works only if its array gains the two online values; the plan proposes exactly that one-line change, re-created from the function's cumulative body, and asks the owner to confirm it (plan Q2, C1).
+- A pass is scoped to a lesson by time, not by room: one room serves a course, passes expire at lesson end plus grace, lessons of a course never overlap, and open passes are revoked on cancellation, guest removal and course close. The activation route, the lesson-action routes, the join route and the webhook route are gated; the fake provider is refused in Production.
 - No scheduler, recording, homework, materials, WhatsApp automation, online payment or mobile app is implied.
 
 ## Alternatives considered
