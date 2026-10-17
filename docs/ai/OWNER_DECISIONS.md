@@ -184,6 +184,18 @@ Owner decisions on the in-platform reception guide at `/helpdesk` ([closeout](CU
 - **Prices and conventions (2026-10-16):** the owner chose **not** to state prices or conventions (for example the usual annual fee) in the guide for now.
 - **Not stated by the owner:** calling hours and who to contact (the guide says “la direction”), and a separate restatement of the risk tier (the reviewer's Tier 3-by-category classification stood; the owner approved the merge after the independent re-review).
 
+## Online learning — UNPARKED FOR ARCHITECTURE (2026-10-17)
+
+On **2026-10-17** the owner (Maroine) unparked Outcome 5, online learning, **for architecture only**. It had been PARKED UNTIL NEXT MONTH under the 2026-10-08 roadmap decision below. Plan: [online learning](../architecture/plans/online-learning.md) (Tier 3; proposed, not approved).
+
+- The commission is an architecture document written from the owner's brief `claude/online-learning-brief.md` held in the claude.ai Project “Language center”. Every repository fact in the brief is checked against a freshly fetched `origin/main`; conflicts are flagged in the plan, never resolved silently.
+- **Not approved by this decision:** implementation, any migration, any video or meeting provider account, credential or secret, any Production read, configuration or data change, and any portal exposure to parents or students. Each needs the owner's separate explicit approval after the plan is reviewed.
+- **No migration number is reserved.** The plan records the Production ledger (001–116) and the parked provisional numbers (architecture PRs #121 and #124, Premium retirement Release B) and leaves the real number to the implementation task.
+- This decision changes no other roadmap item: Director CRM & Growth Intelligence remains the current major outcome, and H3/H4 remain not activated.
+- Next gate: independent review of the architecture PR, then the owner's approval of an exact plan revision, before any implementation task is opened.
+- **Q2 — CRM path: option C (2026-10-17).** CRM leads are enrolled into online groups through reception and the CRM exactly as today. No change to CRM functions, constraints or Meta mappings in the pilot. Leads keep the existing programme list, and the programme view attributes online enrolments to the lead's own programme. **Flagged by the architecture task (OL-r2):** `crm_start_enrollment` (migration 112) refuses any programme outside its hard-coded list before it looks at the group, and only the enrolment it links converts the lead, so the CRM path reaches an online group only if that one array gains the two online values. The plan asks the owner to confirm C with that single function change (C1) or to choose C without it (C2: online enrolment from the learner file only, no lead conversion); see [plan Q2](../architecture/plans/online-learning.md#owner-decisions-required).
+- **Review status:** OL-r1 (head `c403c82…`) received CHANGES REQUIRED from the independent review on 2026-10-17; OL-r2 applies the findings and awaits re-review.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
@@ -200,5 +212,5 @@ Preserved, none approved or scheduled. Each needs its own architecture and owner
 
 | Item | State | Note |
 | --- | --- | --- |
-| Outcome 5 / online learning | **PARKED UNTIL NEXT MONTH** | Still MISSING ARCHITECTURE per [ARCHITECTURE](ARCHITECTURE.md#architecture-gaps). |
+| Outcome 5 / online learning | **UNPARKED FOR ARCHITECTURE (2026-10-17)** | Architecture only; implementation, migrations and providers not approved. See [Online learning — unparked for architecture](#online-learning--unparked-for-architecture-2026-10-17). Still MISSING ARCHITECTURE per [ARCHITECTURE](ARCHITECTURE.md#architecture-gaps) until a plan revision is approved. |
 | H3/H4 Meta lifecycle work | Separate; **not activated; not ahead of Director CRM & Growth Intelligence unless separately authorized** | Follows its own contracts and gates; see [CURRENT_STATE](CURRENT_STATE.md#next-meaningful-outcomes). |
