@@ -2,7 +2,7 @@
 
 ## Status
 
-**PROPOSED** (2026-10-17, revision OL-r2 of the [online learning plan](../plans/online-learning.md); OL-r1 received CHANGES REQUIRED from the independent review and the findings are applied). Not approved, not implemented, not deployed. The owner records acceptance in the plan's approval record; this ADR's status changes only with that record and later with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
+**PROPOSED** (revision OL-r3, 2026-10-18, of the [online learning plan](../plans/online-learning.md); OL-r1 received CHANGES REQUIRED from the independent review, OL-r2 applied the findings, OL-r3 records the owner's Q2 = C1 confirmation). Not approved, not implemented, not deployed. The owner records acceptance in the plan's approval record; this ADR's status changes only with that record and later with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
 
 ## Date
 
@@ -26,7 +26,7 @@ The owner unparked online learning for architecture on 2026-10-17 ([decision](..
 - One additive migration touching five vocabulary constraints and adding the `online_*` tables, a private `online_security` schema and narrow RPCs; new routes wired consistently in middleware, client guard, policy map and sidebar.
 - Link secrecy and display-name immutability depend on the provider; they are acceptance tests (T-P1–T-P6 in the plan), and a provider that fails them is rejected.
 - The in-person teacher portal's existing exposure of a teacher's own learners' e-mails is not fixed by this decision and stays a separate item.
-- The CRM keeps its programme list, constraints, Meta mappings and cohort function (owner decision Q2 = option C, 2026-10-17): a lead is enrolled into an online group through the existing CRM path and the programme view attributes that enrolment to the lead's own programme. Because `crm_start_enrollment` hard-codes the accepted programmes, that path works only if its array gains the two online values; the plan proposes exactly that one-line change, re-created from the function's cumulative body, and asks the owner to confirm it (plan Q2, C1).
+- The CRM keeps its programme list, constraints, Meta mappings and cohort function (owner decision Q2 = option C, 2026-10-17): a lead is enrolled into an online group through the existing CRM path and the programme view attributes that enrolment to the lead's own programme. Because `crm_start_enrollment` hard-codes the accepted programmes, that path works only if its array gains the two online values; the owner confirmed on 2026-10-18 (plan Q2 = C1) exactly that one-line change, re-created from the function's 112 body, with a proof that nothing else in the function changed; no other CRM function, constraint, lead field, Meta mapping or funnel object changes.
 - A pass is scoped to a lesson by time, not by room: one room serves a course, passes expire at lesson end plus grace, lessons of a course never overlap, and open passes are revoked on cancellation, guest removal and course close. The activation route, the lesson-action routes, the join route and the webhook route are gated; the fake provider is refused in Production.
 - No scheduler, recording, homework, materials, WhatsApp automation, online payment or mobile app is implied.
 
