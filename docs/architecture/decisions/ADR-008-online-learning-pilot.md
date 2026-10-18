@@ -2,7 +2,7 @@
 
 ## Status
 
-**PROPOSED** (revision OL-r4, 2026-10-18, of the [online learning plan](../plans/online-learning.md); OL-r1 received CHANGES REQUIRED from the independent review, OL-r2 applied the findings, OL-r3 recorded the owner's Q2 = C1 confirmation, and OL-r4 applies the re-review findings B3 and I5–I7: the migration-096 reception commands, the public form, three missing tests and the student-form placement path). Not approved, not implemented, not deployed. The owner records acceptance in the plan's approval record; this ADR's status changes only with that record and later with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
+**APPROVED FOR IMPLEMENTATION PLANNING** (Maroine, 2026-10-18, with plan revision OL-r4 at exact head `4545cc82aa4d6dc0358b103bc9512ee09867e399`, after the independent re-review verdict READY FOR FINAL REVIEW; the verbatim approval and the answers Q1–Q16 are in the plan's [approval record](../plans/online-learning.md#approval-record). The revision history: OL-r1 received CHANGES REQUIRED from the independent review, OL-r2 applied the findings, OL-r3 recorded the owner's Q2 = C1 confirmation, and OL-r4 applies the re-review findings B3 and I5–I7: the migration-096 reception commands, the public form, three missing tests and the student-form placement path). Not implemented, not deployed; the approval covers the architecture only, and implementation, a migration number, a provider account, the merge of PR #144 and every Production step each need the owner's separate approval. This ADR's status changes next only with release evidence in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
 
 ## Date
 
