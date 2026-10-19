@@ -211,6 +211,8 @@ Preserved, none approved or scheduled. Each needs its own architecture and owner
 - Director correction tool for wrongly linked learners.
 - Nouvelle pré-inscription duplicate-risk behavior (no D8).
 - Possible sidebar icon-rail / intermediate sidebar, as a future UI Foundation outcome.
+- Orphan Auth account blocks re-invitation (found 2026-10-14): deleting a profile leaves its `auth.users` row, so `prepare_role_invitation` (profile-only lookup) queues the role, Auth `inviteUserByEmail` returns `422 email_exists`, the invite route shows the generic "Envoi non confirmé" error, and `apply_pending_role` cannot apply the role because no profile exists. Candidate fixes: map `email_exists` to a clear message in `src/app/api/admin/invite/route.js`, and remove or reconcile the Auth account when a profile is deleted. One such account existed in Production; the immediate workaround is deleting it in Supabase Auth and re-inviting.
+- `/inscription-compte` falls back to the browser's existing session when the invite link is invalid (found 2026-10-14): a superseded or expired link redirects with `#error=…&error_code=otp_expired` and no tokens, so the page skips sign-out and shows the signed-in inviter's email (read-only) instead of the expired state. Candidate fix: treat an `error`/`error_code` hash or query as `expired`, and do not offer activation to an already-active account. Related: invite emails landed in Gmail spam; check custom SMTP with SPF/DKIM/DMARC on the sending domain.
 
 ## Other roadmap decisions
 
