@@ -8,7 +8,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
-import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME } from './lib/roleAccess.mjs';
+import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME, isOnlineRoomPath, familyCanAccess } from './lib/roleAccess.mjs';
 
 // Paths that are reachable without a session.
 const PUBLIC_PATHS = new Set([
@@ -140,7 +140,7 @@ export async function middleware(request) {
   }
 
   if (role === 'teacher') {
-    if (matchesAny(pathname, TEACHER_ROUTES)) return response;
+    if (matchesAny(pathname, TEACHER_ROUTES) || isOnlineRoomPath(pathname)) return response;
     const url = request.nextUrl.clone();
     url.pathname = '/teacher-portal';
     url.search = '';
@@ -148,7 +148,7 @@ export async function middleware(request) {
   }
 
   if (role === 'parent') {
-    if (pathname === '/parent-portal' || pathname === '/settings') return response;
+    if (familyCanAccess('parent', pathname)) return response;
     const url = request.nextUrl.clone();
     url.pathname = '/parent-portal';
     url.search = '';
@@ -156,7 +156,7 @@ export async function middleware(request) {
   }
 
   if (role === 'student') {
-    if (pathname === '/student-portal' || pathname === '/settings') return response;
+    if (familyCanAccess('student', pathname)) return response;
     const url = request.nextUrl.clone();
     url.pathname = '/student-portal';
     url.search = '';

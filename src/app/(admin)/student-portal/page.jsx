@@ -5,7 +5,8 @@ import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, integrations } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
-import { Bell, Upload, Download, FileDown } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, Upload, Download, FileDown, Video } from 'lucide-react';
 import { openStoredFile as openFile } from '@/lib/storage';
 import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
@@ -203,12 +204,15 @@ export default function StudentPortal() {
           <h1 className="text-2xl font-bold">Mon espace</h1>
           <p className="text-muted-foreground text-sm mt-1">Bienvenue, {user?.full_name}</p>
         </div>
-        <button
-          onClick={exportBilan}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted self-start"
-        >
-          <Download size={14} /> Télécharger mon bilan
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/student-portal/online" className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted self-start"><Video size={14} /> Cours en ligne</Link>
+          <button
+            onClick={exportBilan}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted self-start"
+          >
+            <Download size={14} /> Télécharger mon bilan
+          </button>
+        </div>
       </div>
 
       {announcements.length > 0 && (

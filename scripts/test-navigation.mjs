@@ -77,5 +77,34 @@ assert.equal(hasCapability('admin', 'canCorrectFinance'), false);
 assert.equal(hasCapability('director', 'unknown'), false);
 console.log('PASS receptionist login destinations and exact operational route boundaries');
 
+// Online learning (plan OL-r4 D13): operations run lessons, management sets up courses,
+// one exact room form for every operational role, a portal online section for families.
+const { isOnlineRoomPath, familyCanAccess } = await import('../src/lib/roleAccess.mjs');
+const lessonId = '00000000-0000-4000-8000-000000000501';
+for (const role of ['director', 'admin', 'receptionist']) assert.equal(hasCapability(role, 'canManageOnlineLessons'), true);
+for (const role of ['director', 'admin']) assert.equal(hasCapability(role, 'canManageOnlineCourses'), true);
+for (const role of ['receptionist', 'teacher', 'parent', 'student', 'pending', null]) assert.equal(hasCapability(role, 'canManageOnlineCourses'), false);
+for (const role of ['teacher', 'parent', 'student', 'pending', null]) assert.equal(hasCapability(role, 'canManageOnlineLessons'), false);
+for (const path of ['/online', `/online/${studentId}`, `/online/room/${lessonId}`]) {
+  assert.equal(receptionistCanAccess(path), true, path); assert.equal(loginDestination('receptionist', path), path);
+}
+for (const path of ['/online/room', '/online/room/not-a-uuid', `/online/room/${lessonId}/x`, `/online/${studentId}/edit`, '/online/new', '/teacher-portal/online', '/parent-portal/online', '/student-portal/online']) {
+  assert.equal(receptionistCanAccess(path), false, path); assert.equal(loginDestination('receptionist', path), '/crm/leads');
+}
+assert.equal(isOnlineRoomPath(`/online/room/${lessonId}`), true);
+for (const path of ['/online/room', `/online/room/${lessonId}/`, `/online/room/${lessonId}x`, `//online/room/${lessonId}`, '/online', null]) assert.equal(isOnlineRoomPath(path), false);
+assert.equal(familyCanAccess('parent', '/parent-portal/online'), true);
+assert.equal(familyCanAccess('student', '/student-portal/online'), true);
+assert.equal(familyCanAccess('parent', `/online/room/${lessonId}`), true);
+assert.equal(familyCanAccess('student', '/parent-portal/online'), false);
+assert.equal(familyCanAccess('parent', '/parent-portal/online/x'), false);
+assert.equal(familyCanAccess('teacher', `/online/room/${lessonId}`), false, 'teachers use their own allowlist');
+assert.equal(familyCanAccess('pending', `/online/room/${lessonId}`), false);
+assert.equal(familyCanAccess(undefined, '/settings'), false);
+assert.equal(safeReturnTo('/online'), '/online');
+assert.equal(safeReturnTo(`/online/${studentId}?returnTo=%2Fonline`), `/online/${studentId}?returnTo=%2Fonline`);
+assert.equal(safeReturnTo(`/online/room/${lessonId}`), '/students', 'the room is never a return target');
+console.log('PASS online learning route policy: capabilities, exact room form, family sections');
+
 assert.equal(safeReturnTo('/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001'), '/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001');
 assert.equal(safeReturnTo('/crm/leads/anything'), '/students');

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import Image from 'next/image';
 import { CheckCircle, ArrowLeft } from 'lucide-react';
-import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { PUBLIC_SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
 const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
@@ -206,7 +206,7 @@ export default function PublicEnrollment() {
               <div>
                 <label htmlFor="session_type" className={labelClass}>Session *</label>
                 <select id="session_type" className={inputClass} value={form.session_type} onChange={e => setForm(f => ({ ...f, session_type: e.target.value, niveau_cefr: '' }))} required>
-                  {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
+                  {PUBLIC_SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
                 </select>
               </div>
               <div>

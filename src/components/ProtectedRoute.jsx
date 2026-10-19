@@ -9,8 +9,9 @@
 //   • admin / director                  → access granted to any path
 //   • teacher                           → access granted to TEACHER_ROUTES;
 //                                         anything else → /teacher-portal
-//   • parent / student                  → access granted to their portal +
-//                                         /settings; anything else → portal
+//   • parent / student                  → access granted to their portal, its
+//                                         online section, /settings and the
+//                                         lesson room; anything else → portal
 //   • unknown role                      → /unauthorized
 //
 // Optional `allowedRoles` prop short-circuits the global map: when supplied,
@@ -23,7 +24,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME } from '@/lib/roleAccess.mjs';
+import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME, isOnlineRoomPath, familyCanAccess } from '@/lib/roleAccess.mjs';
 
 const TEACHER_ROUTES = [
   '/teacher-portal', '/attendance', '/assessments', '/portfolios',
@@ -74,17 +75,17 @@ export default function ProtectedRoute({ children, allowedRoles }) {
 
     // Teacher
     if (role === 'teacher') {
-      return matchesAny(pathname, TEACHER_ROUTES) ? null : '/teacher-portal';
+      return matchesAny(pathname, TEACHER_ROUTES) || isOnlineRoomPath(pathname) ? null : '/teacher-portal';
     }
 
-    // Parent — portal + settings only
+    // Parent — portal, its online section, settings and the lesson room
     if (role === 'parent') {
-      return pathname === '/parent-portal' || pathname === '/settings' ? null : '/parent-portal';
+      return familyCanAccess('parent', pathname) ? null : '/parent-portal';
     }
 
-    // Student — portal + settings only
+    // Student — portal, its online section, settings and the lesson room
     if (role === 'student') {
-      return pathname === '/student-portal' || pathname === '/settings' ? null : '/student-portal';
+      return familyCanAccess('student', pathname) ? null : '/student-portal';
     }
 
     // Unknown role
