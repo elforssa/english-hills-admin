@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { getMyTeacher } from '@/lib/teacher-directory';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
-import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell } from 'lucide-react';
+import Link from 'next/link';
+import { Users, CheckCircle, XCircle, Clock, AlertCircle, Plus, Edit, Trash2, Bell, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -539,6 +540,7 @@ export default function TeacherPortal() {
         <div>
           <h1 className="text-2xl font-bold">Espace Enseignant</h1>
           <p className="text-muted-foreground text-sm mt-1">Bienvenue, {user?.full_name}</p>
+          <Link href="/teacher-portal/online" className="mt-2 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"><Video size={14} /> Mes cours en ligne</Link>
         </div>
         {wasDirector && (
           <a

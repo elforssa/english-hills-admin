@@ -3,7 +3,7 @@
 // server, then checks HTTP role gates and ProtectedRoute in Chromium. No database,
 // production credentials, emails or storage are used.
 import assert from 'node:assert/strict';
-import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME } from '../src/lib/roleAccess.mjs';
+import { receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME, isOnlineRoomPath, familyCanAccess } from '../src/lib/roleAccess.mjs';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
@@ -24,14 +24,17 @@ const key = 'middleware-local-test';
 let checks = 0;
 const roles = ['anonymous', 'missing', 'pending', 'unknown', 'teacher', 'parent', 'student', 'admin', 'director', 'receptionist'];
 const teacherPaths = ['/teacher-portal', '/attendance', '/assessments', '/portfolios', '/learning-assessments', '/groups', '/timetable', '/dashboard', '/', '/settings'];
+// Online learning (plan OL-r4 D13): one exact room form for every operational role, a
+// portal online section for parents and students; nothing else is widened.
+const onlineRoom = /^\/online\/room\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function expected(role, path) {
   if (role === 'anonymous') return '/login';
   if (['missing', 'pending', 'unknown'].includes(role)) return '/unauthorized';
   if (role === 'admin' && ((path === '/crm/analytics' || path.startsWith('/crm/analytics/')) || isDirectorLifecyclePath(path))) return '/dashboard';
   if (['admin', 'director'].includes(role)) return null;
   if (role === 'receptionist') return receptionistCanAccess(path) ? null : '/crm/leads';
-  if (role === 'teacher') return teacherPaths.some(p => path === p || path.startsWith(p + '/')) ? null : '/teacher-portal';
-  return path === '/' + role + '-portal' || path === '/settings' ? null : '/' + role + '-portal';
+  if (role === 'teacher') return teacherPaths.some(p => path === p || path.startsWith(p + '/')) || onlineRoom.test(path) ? null : '/teacher-portal';
+  return path === '/' + role + '-portal' || path === '/' + role + '-portal/online' || path === '/settings' || onlineRoom.test(path) ? null : '/' + role + '-portal';
 }
 function pages(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory()
@@ -86,6 +89,20 @@ for (const path of ['/_vercel', '/_vercelx', '/_vercel-admin/dashboard', '/stude
 }
 console.log('PASS middleware exempts only the /_vercel/ platform prefix');
 
+// Online sub-path, look-alike and malformed forms that must stay closed (or open) exactly as expected().
+const ROOM = '/online/room/00000000-0000-4000-8000-000000000001';
+const onlineDenials = ['/online', '/online/00000000-0000-4000-8000-000000000001', ROOM, '/online/room', '/online/room/not-a-uuid',
+  ROOM + '/x', '/online/00000000-0000-4000-8000-000000000001/edit', '/parent-portal/online/x', '/student-portal/online/x',
+  '/teacher-portal/online', '/teacher-portal/online/00000000-0000-4000-8000-000000000001', '/online-room', '/onlinex'];
+for (const role of ['teacher', 'parent', 'student']) {
+  assert.equal(expected(role, '/online'), '/' + role + '-portal'); assert.equal(expected(role, ROOM), null);
+  assert.equal(expected(role, '/online/room/not-a-uuid'), '/' + role + '-portal'); checks++;
+}
+assert.equal(expected('parent', '/student-portal/online'), '/parent-portal'); assert.equal(expected('student', '/parent-portal/online'), '/student-portal');
+assert.equal(expected('pending', ROOM), '/unauthorized'); assert.equal(expected('anonymous', ROOM), '/login');
+assert.equal(expected('receptionist', ROOM), null); assert.equal(expected('receptionist', '/online/room/x'), '/crm/leads');
+checks += 6;
+
 // Execute the unmodified middleware body with only its Auth dependency replaced.
 const middlewareSource = readFileSync(new URL('src/middleware.js', root), 'utf8')
   .replace(/^import .*;\n/gm, '').replace('export async function middleware', 'async function middleware')
@@ -104,8 +121,8 @@ for (const role of roles) {
     } },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role === 'missing' ? null : { role } }) }) }) }),
   });
-  const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', 'isDirectorAnalyticsPath', 'isDirectorLifecyclePath', 'ROLE_HOME', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME);
-  for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite']) {
+  const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', 'isDirectorAnalyticsPath', 'isDirectorLifecyclePath', 'ROLE_HOME', 'isOnlineRoomPath', 'familyCanAccess', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME, isOnlineRoomPath, familyCanAccess);
+  for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite', ...onlineDenials]) {
     const r = await middleware(new NextRequest(app + path));
     for (const cookie of cookies) {
       const actual = r.cookies.get(cookie.name);

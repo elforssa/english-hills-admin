@@ -21,6 +21,9 @@ const capabilityRoles = Object.freeze({
   canEditTeacherOperationalFields: operations,
   canManageStudentDocuments: operations,
   canViewHelp: operations,
+  // Online learning (plan OL-r4 D13): operations run lessons; management sets up courses.
+  canManageOnlineLessons: operations,
+  canManageOnlineCourses: management,
   canViewFinanceAnalytics: management,
   canManageUsers: management,
   canManageSystemSettings: management,
@@ -52,13 +55,15 @@ const exact = new Map([
   ['/assessments', 'canManageAcademics'],
   ['/receipts', 'canManageFinanceOperations'], ['/receipts/new', 'canManageFinanceOperations'],
   ['/teachers', 'canManageTeacherOperations'], ['/settings', 'canManageOwnAccount'],
-  ['/helpdesk', 'canViewHelp'],
+  ['/helpdesk', 'canViewHelp'], ['/online', 'canManageOnlineLessons'],
 ]);
 const detail = [
   [new RegExp(`^/students/${UUID}(?:/edit)?$`, 'i'), 'canManageStudents'],
   [new RegExp(`^/groups/${UUID}$`, 'i'), 'canManageGroups'],
   [new RegExp(`^/teachers/${UUID}(?:/edit)?$`, 'i'), 'canManageTeacherOperations'],
   [new RegExp(`^/receipts/${UUID}/print$`, 'i'), 'canManageFinanceOperations'],
+  [new RegExp(`^/online/${UUID}$`, 'i'), 'canManageOnlineLessons'],
+  [new RegExp(`^/online/room/${UUID}$`, 'i'), 'canManageOnlineLessons'],
 ];
 
 export function normalizeRoutePath(path) {
@@ -75,6 +80,22 @@ export function receptionistCanAccess(path) {
 }
 
 export const RECEPTIONIST_ROUTES = Object.freeze([...exact.keys()]);
+
+// The shared lesson room is reachable by every operational role; the join route and
+// online_issue_join decide eligibility. Only the exact /online/room/<uuid> form matches.
+const ONLINE_ROOM = new RegExp(`^/online/room/${UUID}$`, 'i');
+export function isOnlineRoomPath(path) {
+  return typeof path === 'string' && ONLINE_ROOM.test(path);
+}
+
+// Parent and student allowlists: their portal, its online section, settings and the room.
+const FAMILY_ROUTES = Object.freeze({
+  parent: ['/parent-portal', '/parent-portal/online', '/settings'],
+  student: ['/student-portal', '/student-portal/online', '/settings'],
+});
+export function familyCanAccess(role, path) {
+  return (FAMILY_ROUTES[role] || []).includes(path) || (Boolean(FAMILY_ROUTES[role]) && isOnlineRoomPath(path));
+}
 
 export function isDirectorAnalyticsPath(path) {
   return path === '/crm/analytics' || path?.startsWith('/crm/analytics/');

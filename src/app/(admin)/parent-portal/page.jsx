@@ -5,7 +5,8 @@ import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
-import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare } from 'lucide-react';
+import Link from 'next/link';
+import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare, Video } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { openStoredFile as openFile } from '@/lib/storage';
 import { downloadReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
@@ -226,6 +227,7 @@ export default function ParentPortal() {
         <div>
           <h1 className="text-2xl font-bold">Espace Parents</h1>
           <p className="text-muted-foreground text-sm mt-1">Bienvenue, {user?.full_name}</p>
+          <Link href="/parent-portal/online" className="mt-2 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"><Video size={14} /> Cours en ligne</Link>
         </div>
         {selectedStudent && (
           <button

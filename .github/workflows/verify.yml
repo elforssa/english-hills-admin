@@ -160,6 +160,13 @@ jobs:
           supabase db reset --local --version 115 --no-seed
           node scripts/test-crm-dgi-b2-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Online learning stateful 116 to 117 upgrade in both workshop-removal landing orders
+        run: |
+          supabase db reset --local --version 116 --no-seed
+          node scripts/test-online-learning-upgrade.mjs online-first
+          supabase db reset --local --version 116 --no-seed
+          node scripts/test-online-learning-upgrade.mjs release-b-first
+          supabase db reset --local --no-seed
       - name: Synthetic 097 to current upgrade
         run: |
           supabase db reset --local --version 097 --no-seed
@@ -215,6 +222,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-online-learning.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
       - name: Advisory D2 scope, safety and retention acceptance
         env:
@@ -259,6 +267,7 @@ jobs:
           node scripts/test-crm-phase11-browser.mjs
           npm run test:crm-opportunities-browser
           npm run test:crm-work-calendar-browser
+          node scripts/test-online-learning-browser.mjs
       - name: CRM revision-4 isolated concurrency
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
       - name: Advisory R4 forced sharing-stop race matrix

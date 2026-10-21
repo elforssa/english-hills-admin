@@ -10,7 +10,7 @@ import { Plus, Edit, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
@@ -22,6 +22,9 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
   const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: '2025-2026' });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // An online group never carries a group teacher (migration 117): the teacher,
+  // schedule and capacity are set on the online course page.
+  const online = isOnlineSessionType(form.session_type);
   const changeSession = (sessionType) => {
     const [firstLevel] = getLevelsForSession(sessionType);
     setForm(f => ({
@@ -29,12 +32,13 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
       session_type: sessionType,
       niveau: firstLevel,
       ...(sessionType === 'Adults' ? { categorie: 'Adultes' } : {}),
+      ...(isOnlineSessionType(sessionType) ? { teacher_id: '', salle: '' } : {}),
     }));
   };
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
     const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
-      niveau: form.niveau, teacher_id: form.teacher_id || null, salle: form.salle || null,
+      niveau: form.niveau, teacher_id: online ? null : form.teacher_id || null, salle: online ? null : form.salle || null,
       jours: form.jours || null, horaire: form.horaire || null, capacite_max: form.capacite_max,
       terme: form.terme || null, annee: form.annee || null, categorie: form.categorie || null };
     if (receptionist) {
@@ -72,6 +76,10 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
                 {['Enfants','Ados','Adultes','Business','Particulier','Préparation aux examens'].map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
+            {online ? <p className="col-span-2 rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+              Cours en ligne : l’enseignant, l’horaire hebdomadaire et la capacité se règlent sur la fiche du cours en ligne
+              {form.id ? <> (<ContextLink href={`/online/${form.id}`} className="underline">ouvrir la fiche</ContextLink>)</> : ' après la création du groupe'}.
+            </p> : <>
             <div><label className={labelClass}>Enseignant *</label>
               <select className={inputClass} value={form.teacher_id || ''} onChange={e => set('teacher_id', e.target.value)} required>
                 <option value="">— Choisir —</option>
@@ -81,6 +89,7 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
             <div><label className={labelClass}>Salle</label><input className={inputClass} value={form.salle || ''} onChange={e => set('salle', e.target.value)} /></div>
             <div><label className={labelClass}>Jours</label><input className={inputClass} placeholder="Lun, Mer, Ven" value={form.jours || ''} onChange={e => set('jours', e.target.value)} /></div>
             <div><label className={labelClass}>Horaire</label><input className={inputClass} placeholder="18h – 19h30" value={form.horaire || ''} onChange={e => set('horaire', e.target.value)} /></div>
+            </>}
             <div><label className={labelClass}>Capacité max</label><input type="number" className={inputClass} value={form.capacite_max} onChange={e => set('capacite_max', parseInt(e.target.value))} /></div>
             <div><label className={labelClass}>Terme</label>
               <select className={inputClass} value={form.terme} onChange={e => set('terme', e.target.value)}>

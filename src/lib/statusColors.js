@@ -42,6 +42,20 @@ export const SESSION_TYPE_COLORS = {
   'One-to-One':           'bg-rose-100   text-rose-700',
   'Mise à niveau':        'bg-cyan-100   text-cyan-700',
   'Other':                 'bg-gray-100   text-gray-600',
+  'Online':               'bg-sky-100    text-sky-700',
+  'Online One-to-One':    'bg-sky-100    text-sky-800',
+};
+
+export const ONLINE_LESSON_STATUS_COLORS = {
+  scheduled: 'bg-blue-50 text-blue-800',
+  cancelled: 'bg-red-50 text-red-800',
+  completed: 'bg-emerald-50 text-emerald-800',
+};
+
+export const ONLINE_COURSE_STATUS_COLORS = {
+  draft: 'bg-amber-50 text-amber-900',
+  active: 'bg-emerald-50 text-emerald-800',
+  closed: 'bg-slate-100 text-slate-700',
 };
 
 export const PAYROLL_STATUS_COLORS = {

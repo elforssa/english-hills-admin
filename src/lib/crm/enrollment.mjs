@@ -10,7 +10,8 @@ export const ENROLLMENT_STATUS = {
 export const PROGRAMS = {
   Yearly: 'Programme annuel', Adults: 'Adultes', 'Summer Camp': 'Stage d’été',
   'Communication Junior': 'Communication junior', 'Communication Adult': 'Communication adultes',
-  'One-to-One': 'Cours individuel', 'Mise à niveau': 'Mise à niveau', Other: 'Autre programme'
+  'One-to-One': 'Cours individuel', 'Mise à niveau': 'Mise à niveau', Other: 'Autre programme',
+  Online: 'Cours en ligne', 'Online One-to-One': 'Cours individuel en ligne'
 };
 export function enrollmentSchoolYear(now = new Date()) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: 'numeric' }).formatToParts(now).map(p => [p.type, p.value]));

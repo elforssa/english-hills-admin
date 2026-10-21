@@ -2,7 +2,8 @@
 // `supabase db reset --local --version 115 --no-seed` with the local-only .env.local:
 // builds director-report state under the 115 definitions (a Meta connection, mapping,
 // completed spend snapshot, three accepted leads with an outreach event), records the
-// 115 cohort answers and the previous page's REST call, applies 116 through the CLI,
+// 115 cohort answers and the previous page's REST call, applies the 116 file directly
+// (`supabase migration up` would also apply 117 and later; the ledger stays at 115),
 // then proves: only the cohort signature changed (old dropped, v2 created with the same
 // owner, security definer, search path and grants), no row was rewritten, every 115
 // answer is reproduced by v2 with only the documented keys added, and the release
@@ -75,9 +76,9 @@ const data=()=>Object.fromEntries(tables.map(table=>{assert(/^[a-z_0-9]+$/.test(
 const signature=name=>sql(`select coalesce((select jsonb_build_array(prosecdef,provolatile,proconfig,proowner::regrole::text,proacl::text)::text from pg_proc where oid=to_regprocedure('${name}')),'absent')`);
 const beforeCatalog=catalog(),beforeData=data(),oldSignature=signature(OLD);
 assert.notEqual(oldSignature,'absent');assert.equal(signature(NEW),'absent');
-// Apply exactly the reviewed forward migration through the CLI (116 is the last file).
-execFileSync('supabase',['migration','up','--local'],{stdio:'pipe'});
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'116');
+// Apply exactly the reviewed forward migration file (the ledger stays at 115 here).
+sql(readFileSync('supabase/migrations/116_crm_marketing_funnel_program.sql','utf8'));
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'),'115');
 assert.deepEqual(catalog(),beforeCatalog,'only the cohort function changed; every other body, grant, policy, trigger, index, constraint, column and job is unchanged');
 assert.deepEqual(data(),beforeData,'no existing row rewritten');
 assert.equal(signature(OLD),'absent','the 11-parameter signature is dropped');

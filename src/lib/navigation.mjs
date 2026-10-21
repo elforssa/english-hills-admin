@@ -3,10 +3,10 @@ const RETURN_SCREENS = new Set([
   '/crm/leads', '/crm/today', '/students', '/students-directory', '/teachers', '/receipts', '/dashboard', '/finance',
   '/attendance', '/assessments', '/payroll', '/dismissal', '/enrollments',
   '/timetable', '/groups', '/learning-assessments',
-  '/leave-requests', '/placement-tests', '/certificates', '/portfolios', '/activity-log',
+  '/leave-requests', '/placement-tests', '/certificates', '/portfolios', '/activity-log', '/online',
 ]);
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const PROFILE = new RegExp(`^/(students|teachers|groups)/${UUID}$`, 'i');
+const PROFILE = new RegExp(`^/(students|teachers|groups|online)/${UUID}$`, 'i');
 const RECEIPT_PREVIEW = new RegExp(`^/receipts/${UUID}/print$`, 'i');
 
 function isSafeDestination(value, depth = 0) {
