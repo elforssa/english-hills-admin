@@ -1,8 +1,9 @@
--- Online learning pilot (migration 117, plan OL-r4): synthetic local fixtures, fully
+-- Online learning pilot (migrations 117 and 118, plan OL-r4 / OL-r6): synthetic local fixtures, fully
 -- rolled back. Covers the vocabulary, the three triggers, course/pattern/lesson
 -- commands, capacity on every assignment path, consent, the join matrix (role x
 -- window x status), passes and revocation, the teacher boundary, the staff role
--- matrix, the receptionist (096) and CRM (112) paths and anonymous denial.
+-- matrix, the cross-role denial suite (review of PR #145), the receptionist (096) and
+-- CRM (112) paths and anonymous denial.
 \set ON_ERROR_STOP on
 begin;
 alter table public.receipts disable trigger on_receipt_created;
@@ -481,7 +482,14 @@ select pg_temp.ok(pg_temp.join_reason(8, 501) = 'online.lesson_cancelled', 'no r
 select pg_temp.act(8);
 select public.online_issue_join(pg_temp.id(507));
 select pg_temp.act(1);
-select pg_temp.ok((public.online_close_course(pg_temp.id(301), pg_temp.course_version(pg_temp.id(301))))->>'room_ref' = 'fake-room-' || right(pg_temp.id(301)::text, 4), 'close returns the room to management');
+select pg_temp.ok((select r ? 'revoked' and not (r ? 'room_ref') and not (r ? 'provider') and r::text not like '%fake-room-%'
+  from public.online_close_course(pg_temp.id(301), pg_temp.course_version(pg_temp.id(301))) r), 'close returns no room reference or provider (N1, 118)');
+select pg_temp.fails(format('select public.online_resolve_room(%L)', pg_temp.id(301)), '42501');
+set local role service_role;
+select pg_temp.ok((public.online_resolve_room(pg_temp.id(301)))->>'room_ref' = 'fake-room-' || right(pg_temp.id(301)::text, 4)
+  and (public.online_resolve_room(pg_temp.id(301)))->>'provider' = 'fake' and (public.online_resolve_room(pg_temp.id(301)))->>'status' = 'closed',
+  'the service role resolves the closed course''s room for the route');
+select pg_temp.fails(format('select public.online_resolve_room(%L)', pg_temp.id(304)), '22023', 'online.not_found');
 select pg_temp.owner();
 select pg_temp.ok(not exists (select 1 from public.online_join_tokens t join public.online_lessons l on l.id = t.lesson_id
   where l.group_id = pg_temp.id(301) and t.revoked_at is null and t.expires_at > now()), 'course close revokes open passes');
@@ -701,6 +709,100 @@ select pg_temp.ok((select status from public.crm_leads where id = (select lead f
   'confirmation converts through the unchanged 084 path');
 
 -- ---------------------------------------------------------------------------
+-- Cross-role denial suite (independent review of PR #145, folded in by the
+-- real-provider PR): teacher, parent and student calls to staff-only and
+-- other-role functions raise 42501 and write nothing; the online-only teacher
+-- reads no learner, enrolment, notice, pass or event row; the 071 helper and
+-- can_message_recipient refuse; the staff course reads carry no room reference.
+-- ---------------------------------------------------------------------------
+create temp table ol_cross_snapshot as select
+  (select md5(string_agg(to_jsonb(c)::text, '' order by c.group_id)) from public.online_courses c) courses,
+  (select md5(string_agg(to_jsonb(l)::text, '' order by l.id)) from public.online_lessons l) lessons,
+  (select md5(string_agg(to_jsonb(g)::text, '' order by g.id)) from public.online_lesson_guests g) guests,
+  (select md5(string_agg(to_jsonb(c)::text, '' order by c.id)) from public.online_consents c) consents,
+  (select md5(string_agg(to_jsonb(a)::text, '' order by a.lesson_id, a.student_id)) from public.online_attendance a) attendance,
+  (select count(*) from public.online_join_tokens) tokens,
+  (select count(*) from public.notifications) notices;
+select pg_temp.open_to_api('ol_cross_snapshot');
+do $$ declare who integer; call_text text; staff text[] := array[
+    format($f$public.online_save_course(%L, null, '{}')$f$, pg_temp.id(306)),
+    format($f$public.online_save_pattern(%L, '[]', null, 1)$f$, pg_temp.id(306)),
+    format($f$public.online_update_lesson(%L, 1, '{}', 'this')$f$, pg_temp.id(503)),
+    format($f$public.online_set_lesson_teacher(%L, 1, %L)$f$, pg_temp.id(503), pg_temp.id(102)),
+    format($f$public.online_cancel_lesson(%L, 1, 'x', 'this')$f$, pg_temp.id(503)),
+    format($f$public.online_add_guest(%L, %L, 'trial')$f$, pg_temp.id(503), pg_temp.id(205)),
+    format($f$public.online_remove_guest(%L)$f$, gen_random_uuid()),
+    format($f$public.online_record_consent(%L)$f$, pg_temp.id(206)),
+    format($f$public.online_revoke_consent(%L)$f$, pg_temp.id(206)),
+    format($f$public.online_activate_course(%L, 1, 'fake', 'fake-room-z')$f$, pg_temp.id(308)),
+    format($f$public.online_close_course(%L, 1)$f$, pg_temp.id(306)),
+    'public.online_list_courses()',
+    format($f$public.online_get_course(%L)$f$, pg_temp.id(301)),
+    'public.online_teacher_lesson_counts(current_date)'];
+begin
+  foreach who in array array[4, 7, 8] loop
+    perform pg_temp.act(who);
+    foreach call_text in array staff loop
+      perform pg_temp.fails('select ' || call_text, '42501', 'online.forbidden');
+    end loop;
+    -- Other-role functions: a teacher is not a learner or a parent, and the reverse.
+    if who <> 8 then perform pg_temp.fails('select public.online_list_lessons_for_me()', '42501', 'online.forbidden'); end if;
+    if who <> 7 then perform pg_temp.fails('select public.online_list_lessons_for_my_children()', '42501', 'online.forbidden'); end if;
+    if who <> 4 then
+      perform pg_temp.fails('select public.online_list_my_lessons()', '42501', 'online.forbidden');
+      perform pg_temp.fails(format('select public.online_get_lesson_roster(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
+      perform pg_temp.fails(format($f$select public.online_save_attendance(%L, 1, '[]')$f$, pg_temp.id(503)), '42501', 'online.forbidden');
+    end if;
+    -- Service-role-only functions are not callable by any signed-in role.
+    perform pg_temp.fails(format('select public.online_resolve_join(%L)', gen_random_uuid()), '42501');
+    perform pg_temp.fails(format($f$select public.online_record_join_event(%L, 'joined', now())$f$, gen_random_uuid()), '42501');
+    perform pg_temp.fails(format('select public.online_resolve_room(%L)', pg_temp.id(301)), '42501');
+    -- Direct table writes through the API role are refused.
+    perform pg_temp.fails(format($f$insert into public.online_lesson_guests(lesson_id, student_id, kind, added_by) values (%L, %L, 'trial', %L)$f$,
+      pg_temp.id(503), pg_temp.id(205), pg_temp.id(who)), '42501');
+    perform pg_temp.fails(format($f$update public.online_courses set status = 'closed' where group_id = %L$f$, pg_temp.id(306)), '42501');
+    perform pg_temp.fails(format($f$delete from public.online_lessons where id = %L$f$, pg_temp.id(503)), '42501');
+  end loop;
+  perform pg_temp.owner();
+end $$;
+select pg_temp.ok((select courses from ol_cross_snapshot) = (select md5(string_agg(to_jsonb(c)::text, '' order by c.group_id)) from public.online_courses c)
+  and (select lessons from ol_cross_snapshot) = (select md5(string_agg(to_jsonb(l)::text, '' order by l.id)) from public.online_lessons l)
+  and (select guests from ol_cross_snapshot) is not distinct from (select md5(string_agg(to_jsonb(g)::text, '' order by g.id)) from public.online_lesson_guests g)
+  and (select consents from ol_cross_snapshot) = (select md5(string_agg(to_jsonb(c)::text, '' order by c.id)) from public.online_consents c)
+  and (select attendance from ol_cross_snapshot) = (select md5(string_agg(to_jsonb(a)::text, '' order by a.lesson_id, a.student_id)) from public.online_attendance a)
+  and (select tokens from ol_cross_snapshot) = (select count(*) from public.online_join_tokens)
+  and (select notices from ol_cross_snapshot) = (select count(*) from public.notifications), 'cross-role denials wrote nothing');
+-- The online-only teacher (user 4, course teacher of 301) reads nothing beyond the projection.
+select pg_temp.act(4);
+select pg_temp.ok((select count(*) from public.students) = 0 and (select count(*) from public.enrollments) = 0
+  and (select count(*) from public.notifications) = 0 and (select count(*) from public.messages) = 0
+  and (select count(*) from public.online_lesson_guests) = 0 and (select count(*) from public.online_consents) = 0,
+  'online-only teacher reads no learner, enrolment, notice, message, guest or consent row');
+select pg_temp.fails('select count(*) from public.online_join_tokens', '42501');
+select pg_temp.fails('select count(*) from public.online_join_events', '42501');
+select pg_temp.ok(public.teacher_can_see_student(pg_temp.id(201)) is not true and public.teacher_can_see_student(pg_temp.id(202)) is not true
+  and public.teacher_can_see_student(pg_temp.id(206)) is not true, '071 helper grants the online teacher no learner');
+select pg_temp.ok(public.can_message_recipient('ol-user-8@example.test') is not true and public.can_message_recipient('l202@example.test') is not true
+  and public.can_message_recipient('ol-user-7@example.test') is not true, 'online teacher can message no learner or parent address');
+select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_my_lessons()) l where l::text like '%fake-room-%' or l ? 'room_ref' or l ? 'provider_room_ref') = 0,
+  'teacher lesson list carries no room reference');
+-- Parent and student projections carry no room reference either.
+select pg_temp.act(7);
+select pg_temp.ok(public.online_list_lessons_for_my_children()::text not like '%fake-room-%', 'parent lesson list carries no room reference');
+select pg_temp.act(8);
+select pg_temp.ok(public.online_list_lessons_for_me()::text not like '%fake-room-%', 'student lesson list carries no room reference');
+-- Staff course reads: the room reference stays on the server (invariant 3, N1).
+select pg_temp.act(1);
+select pg_temp.ok(public.online_list_courses()::text not like '%fake-room-%' and public.online_get_course(pg_temp.id(301))::text not like '%fake-room-%'
+  and public.online_get_course(pg_temp.id(301), pg_temp.id(507))::text not like '%fake-room-%'
+  and not (public.online_get_course(pg_temp.id(301))->'course' ? 'provider_room_ref') and not (public.online_get_course(pg_temp.id(301))->'course' ? 'room_ref')
+  and (public.online_get_course(pg_temp.id(301))->'course'->>'room_ready')::boolean, 'staff course reads expose readiness, never the room reference');
+select pg_temp.act(3);
+select pg_temp.ok(public.online_list_courses()::text not like '%fake-room-%' and public.online_get_course(pg_temp.id(301))::text not like '%fake-room-%',
+  'receptionist course reads carry no room reference');
+select pg_temp.owner();
+
+-- ---------------------------------------------------------------------------
 -- Anonymous denial and the catalog boundary.
 -- ---------------------------------------------------------------------------
 select pg_temp.act(null);
@@ -722,7 +824,7 @@ select pg_temp.owner();
 select pg_temp.ok(not exists (select 1 from pg_proc p where p.pronamespace = 'online_security'::regnamespace
   and (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee <> p.proowner))), 'no API role executes a private helper');
 select pg_temp.ok((select count(*) from pg_proc p, aclexplode(p.proacl) a where p.pronamespace = 'public'::regnamespace
-  and p.proname like 'online\_%' and a.grantee = 'service_role'::regrole) = 2, 'two service-role-only functions');
+  and p.proname like 'online\_%' and a.grantee = 'service_role'::regrole) = 3, 'three service-role-only functions (resolve_join, record_join_event, resolve_room)');
 select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where (n.nspname = 'online_security' or (n.nspname = 'public' and p.proname like 'online\_%'))
     and (p.prosrc ilike '%prem' || 'ium%' or not p.proconfig @> array['search_path=pg_catalog, pg_temp'])),

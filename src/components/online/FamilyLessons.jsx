@@ -25,6 +25,8 @@ export default function FamilyLessons({ title, query, showLearner = false, backH
       <ul className="space-y-3">
         {lessons.map(lesson => {
           const state = joinWindowState(lesson, now);
+          // A plain anchor: the room path carries its own security headers, so entering it
+          // must be a full document navigation, never a client-side transition (OL-r6 A6).
           const href = `/online/room/${lesson.id}${showLearner ? `?student=${lesson.student_id}` : ''}`;
           return (
             <li key={`${lesson.id}:${lesson.student_id}`} className="rounded-xl border bg-card p-4">
@@ -40,7 +42,7 @@ export default function FamilyLessons({ title, query, showLearner = false, backH
                 {state === 'cancelled'
                   ? <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-800"><CalendarX2 size={14} /> Annulé</span>
                   : state === 'open'
-                    ? <Button asChild size="lg" className="min-h-11 w-full sm:w-auto"><Link href={href}><Video /> Rejoindre le cours</Link></Button>
+                    ? <Button asChild size="lg" className="min-h-11 w-full sm:w-auto"><a href={href} data-room-entry><Video /> Rejoindre le cours</a></Button>
                     : <Button size="lg" className="min-h-11 w-full sm:w-auto" disabled>
                         <Video /> {state === 'upcoming' ? `Ouvre à ${casablancaTime(lesson.join_opens_at)}` : 'Terminé'}
                       </Button>}

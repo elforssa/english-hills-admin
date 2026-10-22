@@ -5,7 +5,9 @@
 // join window), then checks: an adult joins from the student portal on a 390 px viewport
 // and on desktop; a parent joins for a child; the join button is disabled outside the
 // window; the teacher marks attendance and writes the report; no response carries the
-// provider room reference. Removes only this run's fixtures.
+// provider room reference; entering the room from the portal and leaving it through
+// Quitter are full document navigations and the two documents carry their own headers
+// (OL-r6 A6, B1). Removes only this run's fixtures.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
@@ -113,12 +115,39 @@ try {
   await disabled.first().waitFor();
   assert.equal(await disabled.first().isDisabled(), true, 'join disabled outside the window');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal scroll at 390 px');
-  await openCard.first().getByRole('link', { name: 'Rejoindre le cours' }).click();
+  // Hard navigation into the room: a marker set on the portal document must not survive,
+  // and the room document must carry the room-only headers (OL-r6 A6, B1).
+  const portalHeaders = (await page.goto(app + '/student-portal/online')).headers();
+  assert.equal(portalHeaders['permissions-policy'], 'camera=(), microphone=(), geolocation=()', 'portal document keeps the global Permissions-Policy');
+  assert.ok(!portalHeaders['content-security-policy'].includes('zoom.us'), 'portal CSP has no Zoom host');
+  await openCard.first().waitFor();
+  await page.evaluate(() => { window.__eh_spa_marker = 'portal'; });
+  const [roomResponse] = await Promise.all([
+    page.waitForResponse(r => r.request().isNavigationRequest() && r.url().includes(`/online/room/${ids.open}`)),
+    openCard.first().getByRole('link', { name: 'Rejoindre le cours' }).click(),
+  ]);
   await page.waitForURL(new RegExp(`/online/room/${ids.open}$`));
+  assert.equal(await page.evaluate(() => window.__eh_spa_marker), undefined, 'entering the room is a full document navigation');
+  assert.equal(await page.evaluate(() => performance.getEntriesByType('navigation')[0]?.type), 'navigate', 'a new navigation entry');
+  assert.equal(roomResponse.headers()['permissions-policy'], 'camera=(self), microphone=(self), geolocation=()', 'room document allows camera and microphone');
+  assert.ok(roomResponse.headers()['content-security-policy'].includes('https://source.zoom.us') && roomResponse.headers()['content-security-policy'].includes("'wasm-unsafe-eval'"), 'room CSP admits the Zoom hosts');
+  assert.ok(!roomResponse.headers()['content-security-policy'].includes('telemetry'), 'room CSP never lists the telemetry host');
+  assert.equal(roomResponse.headers()['cross-origin-embedder-policy'], undefined, 'no COEP in the pilot');
   await page.getByText('Salle de cours (fournisseur de test)').waitFor();
   await page.getByText('Amal B.', { exact: true }).waitFor();
   assert.ok(!(await page.content()).includes('fake-room-'), 'no room reference in the page');
-  console.log('PASS adult learner joins from the student portal on a 390 px viewport; later lesson disabled');
+  console.log('PASS adult learner joins from the student portal on a 390 px viewport; later lesson disabled; hard navigation in with room-only headers');
+  // Hard navigation out through Quitter: back to the portal document with the global headers.
+  await page.evaluate(() => { window.__eh_spa_marker = 'room'; });
+  const [backResponse] = await Promise.all([
+    page.waitForResponse(r => r.request().isNavigationRequest() && r.url().endsWith('/student-portal/online')),
+    page.getByTestId('room-leave').click(),
+  ]);
+  await page.waitForURL(app + '/student-portal/online');
+  assert.equal(await page.evaluate(() => window.__eh_spa_marker), undefined, 'leaving the room is a full document navigation');
+  assert.equal(backResponse.headers()['permissions-policy'], 'camera=(), microphone=(), geolocation=()', 'portal document after Quitter keeps the global headers');
+  assert.ok(!backResponse.headers()['content-security-policy'].includes('zoom.us'));
+  console.log('PASS Quitter leaves the room with a full document navigation back to the portal');
 
   // Adult learner, desktop.
   const desktop = await browser.newContext({ ...contextOptions, viewport: { width: 1280, height: 800 } });

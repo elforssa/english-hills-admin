@@ -55,7 +55,7 @@ export async function handleJoin({ body, env, getUserClient, getServiceClient, g
   let minted;
   try {
     minted = await gate.adapter.mintJoinToken({ roomRef: room.room_ref, displayName: providerDisplayName(room.display_label),
-      role: room.provider_role, expiresAt: room.expires_at, participantRef: pass.jti });
+      role: room.provider_role, expiresAt: room.expires_at, participantRef: pass.jti, lessonRef: body.lesson });
   } catch {
     return refuse('provider_error');
   }
@@ -66,7 +66,7 @@ export async function handleJoin({ body, env, getUserClient, getServiceClient, g
 }
 
 // POST /api/online/courses/activate|close { group, version } — management only.
-export async function handleCourseAction({ action, body, env, getUserClient, getProvider }) {
+export async function handleCourseAction({ action, body, env, getUserClient, getServiceClient, getProvider }) {
   if (!['activate', 'close'].includes(action)) return refuse('not_found');
   const gate = openGate(env, getProvider);
   if (gate.failure) return gate.failure;
@@ -86,12 +86,15 @@ export async function handleCourseAction({ action, body, env, getUserClient, get
     }
     return { status: 200, body: { status: data.status, version: data.version } };
   }
-  // Close the course first: every pass is revoked even if the provider call fails.
+  // Close the course first: every pass is revoked even if the provider call fails. The
+  // opaque room reference never reaches the caller (review fix N1): it is resolved here
+  // as the service role, after the close, and handed to the adapter only.
   const { data, error } = await who.client.rpc('online_close_course', { p_group: body.group, p_expected_version: body.version });
   if (error) return fromDatabase(error);
   let providerClosed = false;
-  if (data.room_ref && data.provider === gate.adapter.id) {
-    try { await gate.adapter.closeRoom(data.room_ref); providerClosed = true; } catch { providerClosed = false; }
+  const { data: room } = await getServiceClient().rpc('online_resolve_room', { p_group: body.group });
+  if (room?.room_ref && room.provider === gate.adapter.id) {
+    try { await gate.adapter.closeRoom(room.room_ref); providerClosed = true; } catch { providerClosed = false; }
   }
   return { status: 200, body: { status: data.status, version: data.version, revoked: data.revoked, provider_closed: providerClosed } };
 }
@@ -146,6 +149,9 @@ export async function handleWebhook({ provider, rawBody, headers, env, getServic
   try { verified = await adapter.verifyWebhook({ rawBody, headers, secret: env.ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET }); }
   catch { verified = { ok: false }; }
   if (!verified?.ok) return { status: 401, body: { reason: 'forbidden' } };
+  // Zoom's endpoint validation challenge (OL-r6 A3): answered only after the signature
+  // and timestamp checks above, and it writes nothing.
+  if (verified.challenge) return { status: 200, body: { plainToken: verified.challenge.plainToken, encryptedToken: verified.challenge.encryptedToken } };
   const service = getServiceClient();
   let recorded = 0;
   for (const event of verified.events || []) {

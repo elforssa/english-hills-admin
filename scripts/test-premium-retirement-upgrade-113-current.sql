@@ -5,10 +5,10 @@ begin;
 
 do $$
 begin
- -- `supabase migration up` also applies every later migration; 117 is the current ceiling.
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 117
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('113','114','115','116','117')) <> 5 then
-  raise exception 'Expected migrations 113 through 117 after upgrade';
+ -- `supabase migration up` also applies every later migration; 118 is the current ceiling.
+ if (select max(version::integer) from supabase_migrations.schema_migrations) <> 118
+  or (select count(*) from supabase_migrations.schema_migrations where version in ('113','114','115','116','117','118')) <> 6 then
+  raise exception 'Expected migrations 113 through 118 after upgrade';
  end if;
  -- The migration rewrote no row.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id

@@ -190,7 +190,7 @@ function LessonDetail({ groupId, lessonId, run, busy }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-semibold">{civilDate(lesson.local_date)} · {lesson.local_time}–{lesson.local_end_time} · {lesson.teacher_name}</p>
-        {lesson.status !== 'cancelled' && <Button asChild size="sm" variant="outline"><Link href={`/online/room/${lesson.id}`}><Video /> Salle</Link></Button>}
+        {lesson.status !== 'cancelled' && <Button asChild size="sm" variant="outline"><a href={`/online/room/${lesson.id}`} data-room-entry><Video /> Salle</a></Button>}
       </div>
       {lesson.report && <p className="rounded-md bg-muted/50 p-3 text-sm">Compte rendu : {lesson.report}</p>}
       <div className="divide-y overflow-hidden rounded-lg border">

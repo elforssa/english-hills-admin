@@ -53,7 +53,7 @@ export default function TeacherOnlineLesson() {
             <h1 className="text-2xl font-bold">{data.lesson.course_name}</h1>
             <p className="text-sm text-muted-foreground">{civilDate(data.lesson.local_date)} · {data.lesson.local_time}–{data.lesson.local_end_time}{data.lesson.status === 'cancelled' ? ' · Annulé' : ''}</p>
           </div>
-          {data.lesson.i_am_host && data.lesson.status !== 'cancelled' && <Button asChild className="min-h-11"><Link href={`/online/room/${id}`}><Video /> Ouvrir la salle</Link></Button>}
+          {data.lesson.i_am_host && data.lesson.status !== 'cancelled' && <Button asChild className="min-h-11"><a href={`/online/room/${id}`} data-room-entry><Video /> Ouvrir la salle</a></Button>}
         </div>
         <div className="mt-6 divide-y overflow-hidden rounded-xl border bg-card">
           {data.roster.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">Aucun apprenant pour ce cours.</p>}

@@ -22,3 +22,6 @@ next-env.d.ts
 .bin/
 .claude/
 supabase/.temp/
+
+# Local Zoom acceptance report (scripts/test-online-zoom-acceptance.mjs); never committed
+scripts/.zoom-acceptance-report.json
