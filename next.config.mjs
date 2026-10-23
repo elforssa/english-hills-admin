@@ -48,14 +48,17 @@ const csp = [
 // Online lesson room (/online/room/<lesson>; plan online-learning.md, OL-r6 decisions
 // A6 and A7). Only this path may use the camera and microphone and reach the Zoom
 // Video SDK: its workers and WebAssembly come from source.zoom.us, the ring tone from
-// st1.zoom.us, signalling and media from zoom.us hosts over https and wss. The hosts are
-// listed explicitly rather than as *.zoom.us so that the toolkit's telemetry host
-// (us.telemetry.zoom.us) is refused by the browser (A7-block); the acceptance run
-// records the hosts a session actually uses and this list follows it. The entry sits
-// after the catch-all on purpose: Next.js applies both and the later value wins for
-// the same header name. Entering and leaving the room are full document navigations.
+// st1.zoom.us, signalling and media from zoom.us hosts over https and wss. A7-record:
+// the acceptance run of 2026-10-23 showed that Zoom chooses regional signalling hosts
+// per session (rwc<region>.<region>.zoom.us) and pings them over https before the
+// websocket opens, so an explicit host list cannot be enumerated and broke the join;
+// connect-src therefore admits *.zoom.us, which also admits the toolkit's telemetry
+// host (us.telemetry.zoom.us). No telemetry id is ever set, and the acceptance run
+// records what that telemetry carries. The entry sits after the catch-all on purpose:
+// Next.js applies both and the later value wins for the same header name. Entering
+// and leaving the room are full document navigations.
 export const ZOOM_SCRIPT_HOSTS = ['https://source.zoom.us'];
-export const ZOOM_CONNECT_HOSTS = ['https://zoom.us', 'https://source.zoom.us', 'https://st1.zoom.us', 'wss://*.zoom.us'];
+export const ZOOM_CONNECT_HOSTS = ['https://zoom.us', 'https://*.zoom.us', 'wss://*.zoom.us'];
 export const ZOOM_MEDIA_HOSTS = ['https://st1.zoom.us'];
 const roomCsp = csp.split('; ').map(directive => {
   if (directive.startsWith('script-src ')) return `${directive} 'wasm-unsafe-eval' ${ZOOM_SCRIPT_HOSTS.join(' ')}`;

@@ -74,6 +74,7 @@ function Room() {
   }, [state.phase, id, student]);
 
   const onLeft = useCallback(() => leaveRoom(back), [back]);
+  const onError = useCallback(() => setState({ phase: 'refused', reason: 'provider_error' }), []);
   // An automatic leave shows its reason for a moment, then returns to the portal by a
   // full document navigation, so the room-only headers never outlive the room (A6).
   useEffect(() => {
@@ -84,7 +85,7 @@ function Room() {
   const message = state.reason ? (ONLINE_REASON_TEXT[state.reason] || onlineErrorText({ reason: state.reason })) : null;
   const room = state.phase === 'in_room' && (
     state.provider === 'fake' && state.embed?.kind === 'fake' ? <FakeRoom embed={state.embed} />
-      : state.provider === 'zoom-video' && state.embed?.kind === 'zoom-video' ? <ZoomRoom embed={state.embed} onLeft={onLeft} />
+      : state.provider === 'zoom-video' && state.embed?.kind === 'zoom-video' ? <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} />
         : <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.provider_invalid}</p>);
   return (
     <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-4xl flex-col gap-4 p-3 sm:p-6">

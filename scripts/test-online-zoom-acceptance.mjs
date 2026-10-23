@@ -20,12 +20,10 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { createZoomVideoProvider, signZoomJwt, zoomSessionName } from '../src/lib/online/provider/zoom-video.mjs';
 
-const require = createRequire(import.meta.url);
 const file = existsSync('.env.local') ? Object.fromEntries(readFileSync('.env.local', 'utf8').split('\n').flatMap(line => {
   const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
   return m ? [[m[1], m[2].trim().replace(/^['"]|['"]$/g, '')]] : [];
@@ -45,16 +43,19 @@ const inMinutes = n => new Date(Date.now() + n * 60000).toISOString();
 const mint = (lessonRef, role, ref, minutes = 70) => zoom.mintJoinToken({ roomRef: run, displayName: `${role === 'host' ? 'Host' : 'Learner'} ${ref.slice(0, 4)}`,
   role, expiresAt: inMinutes(minutes), participantRef: ref, lessonRef });
 const uuid = () => `00000000-0000-4000-8000-${randomBytes(6).toString('hex')}`;
-setTimeout(() => { console.error('FAIL zoom acceptance stalled'); process.exit(1); }, 10 * 60_000).unref();
+setTimeout(() => { console.error('FAIL zoom acceptance stalled'); process.exit(1); }, (process.env.OL_ZOOM_WAIT_EXPIRY === '1' ? 45 : 8) * 60_000).unref();
 
 // A tiny same-origin page that loads the SDK from node_modules and exposes join/leave/rename/remove.
-const sdkPath = require.resolve('@zoom/videosdk/dist/index.umd.js');
-const sdkLib = require.resolve('@zoom/videosdk/package.json').replace(/package\.json$/, 'dist/lib');
+// The SDK's exports map hides its files from require.resolve, so they are located by path.
+const sdkDist = new URL('../node_modules/@zoom/videosdk/dist/', import.meta.url);
+const sdkPath = new URL('index.umd.js', sdkDist), sdkLib = new URL('lib', sdkDist).pathname;
+assert.ok(existsSync(sdkPath) && existsSync(sdkLib), '@zoom/videosdk dist files present');
 const html = `<!doctype html><meta charset="utf-8"><title>zoom acceptance</title><script src="/sdk.js"></script><script>
 const client = window.WebVideoSDK.default.createClient();
 let ready = null;
-window.zoomReady = () => ready || (ready = client.init('en-US', '/lib', { patchJsMedia: true, leaveOnPageUnload: true }));
-window.zoomJoin = async (topic, token, name) => { await window.zoomReady(); try { await client.join(topic, token, name); return { ok: true, userId: client.getCurrentUserInfo()?.userId }; }
+window.zoomReady = () => ready || (ready = client.init('en-US', 'Global', { patchJsMedia: true, leaveOnPageUnload: true }));
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ type: 'TIMEOUT', reason: 'no answer within ' + ms + ' ms' }), ms))]);
+window.zoomJoin = async (topic, token, name) => { try { await withTimeout(window.zoomReady(), 60000); await withTimeout(client.join(topic, token, name), 90000); return { ok: true, userId: client.getCurrentUserInfo()?.userId }; }
   catch (e) { return { ok: false, type: e?.type, reason: e?.reason, code: e?.errorCode ?? e?.code ?? null, message: String(e?.message || e) }; } };
 window.zoomLeave = async (end) => { try { await client.leave(!!end); return { ok: true }; } catch (e) { return { ok: false, reason: e?.reason, code: e?.errorCode }; } };
 window.zoomRename = async (name, userId) => { try { await client.changeName(name, userId); return { ok: true }; } catch (e) { return { ok: false, type: e?.type, reason: e?.reason, code: e?.errorCode ?? null }; } };
@@ -79,7 +80,7 @@ const server = createServer((req, res) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 
-const report = { run: new Date().toISOString(), sessionA, sessionB, results: {}, hosts: new Set(), telemetryRequests: [], detailedLogRequests: [], notes: [] };
+const report = { run: new Date().toISOString(), sessionA, sessionB, results: {}, hosts: new Set(), telemetryRequests: [], detailedLogRequests: [], console: [], failedRequests: [], notes: [] };
 const browser = await chromium.launch({ headless: true, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
 const contexts = [];
 async function participant(label) {
@@ -91,11 +92,13 @@ async function participant(label) {
     if (host.endsWith('zoom.us') || host.endsWith('zoom.com')) {
       report.hosts.add(host);
       if (host.includes('telemetry')) report.telemetryRequests.push({ label, host, path: new URL(request.url()).pathname, method: request.method(), at: new Date().toISOString() });
-      if (/log|report|lapl/i.test(new URL(request.url()).pathname) && !host.includes('telemetry')) report.detailedLogRequests.push({ label, host, path: new URL(request.url()).pathname, method: request.method(), at: new Date().toISOString() });
+      if ((/log|report|lapl/i.test(new URL(request.url()).pathname) || /log/i.test(host)) && !host.includes('telemetry')) report.detailedLogRequests.push({ label, host, path: new URL(request.url()).pathname, method: request.method(), at: new Date().toISOString() });
     }
   });
+  page.on('console', message => { if (['error', 'warning'].includes(message.type())) report.console.push({ label, type: message.type(), text: message.text().slice(0, 300) }); });
+  page.on('requestfailed', request => report.failedRequests.push({ label, url: request.url().split('?')[0].slice(0, 200), error: request.failure()?.errorText }));
+  page.on('response', response => { if (response.status() >= 400) report.failedRequests.push({ label, url: response.url().split('?')[0].slice(0, 200), status: response.status() }); });
   await page.goto(origin + '/');
-  await page.evaluate(() => window.zoomReady());
   return page;
 }
 const join = (page, topic, token, name) => page.evaluate(([t, k, n]) => window.zoomJoin(t, k, n), [topic, token, name]);
@@ -118,6 +121,7 @@ try {
   // Host joins lesson A's session; learner joins; T-P2 learner's lesson-A token refused on lesson B's session.
   const host = await participant('host');
   const hostJoin = await join(host, sessionA, hostToken.token, hostToken.embed.displayName);
+  if (!hostJoin.ok) report.notes.push({ hostJoin, failedRequests: report.failedRequests.slice(-10), console: report.console.slice(-10) });
   assert.ok(hostJoin.ok, `host join failed: ${JSON.stringify(hostJoin)}`);
   const learner = await participant('learner');
   const learnerJoin = await join(learner, sessionA, learnerToken.token, learnerToken.embed.displayName);
@@ -174,6 +178,8 @@ try {
   report.hosts = [...report.hosts].sort();
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
   console.log('Zoom hosts contacted:', report.hosts.join(', '));
-  console.log(`Telemetry requests: ${report.telemetryRequests.length}; log-like requests: ${report.detailedLogRequests.length}; report written to ${reportPath}`);
+  console.log(`Telemetry requests: ${report.telemetryRequests.length}; log-like requests: ${report.detailedLogRequests.length}; console errors/warnings: ${report.console.length}; failed requests: ${report.failedRequests.length}; report written to ${reportPath}`);
+  if (report.failedRequests.length) console.log('Failed requests (first 8):', JSON.stringify(report.failedRequests.slice(0, 8)));
+  if (report.console.length) console.log('Console (first 8):', JSON.stringify(report.console.slice(0, 8)));
   console.log('Note: this run is routed from the implementer\'s network; the Morocco-routed capture (A7) is the R4 run.');
 }
