@@ -139,3 +139,41 @@ The API probes were POSTs with a dummy JSON body (no session). The gate is check
 2. The deployed source is evidenced by the GitHub deployment record and by the new room-path headers on the production domain, not by a Vercel inspect of the alias.
 3. The independent review verdict is the owner's relay; it is not posted on the PR.
 4. The probes are anonymous; they prove refusal before authentication, not each role's in-app view.
+
+## After R2′: R3 and R4 Phase A (2026-10-23)
+
+The sections above are the R0′–R2′ snapshot and are left as they were at R2′. This section records what happened afterwards on the same day.
+
+### R3 — owner action
+
+- `ONLINE_VIDEO_PROVIDER` was set by the owner's guide through the Vercel connector on the owner's instruction.
+- `ONLINE_VIDEO_PROVIDER_API_KEY` and `ONLINE_VIDEO_PROVIDER_API_SECRET` were set by the owner.
+- All three are Production only and Sensitive, and are recorded here by name only. No release session read them.
+- `ONLINE_LEARNING_LIVE_ENABLED` and `ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET` are not set, so no Zoom event subscription exists.
+- The Zoom account is on a trial (20 credits, ending in 365 days); the owner will set up pay-as-you-go before R5.
+
+### R4 Phase A — Production redeploy with the live switch off
+
+| Item | Value |
+| --- | --- |
+| Approval | Owner, 2026-10-23: Phase A only (redeploy with the switch off, then READY and probe checks, then stop) |
+| Redeploy | Triggered by the owner's guide on the owner's instruction at about 15:00 UTC: Vercel deployment `dpl_GdDJFv7npFHpPP1VikaFC2wUM4sN`, same commit `43be8fa0…`, `source: redeploy` (as reported by the guide; the release session's Vercel connector returns 404 for this team) |
+| Serving build | The Next build ID in the `/login` page changed from `JazM5AwgL1e1fP8koh8Y6` to `ZWLNDoUqYvBLO1GXvPxZj` at 15:04:05 UTC; three further requests all returned the new build. The R3 variables are therefore in effect. |
+| GitHub deployments | No new `Production` record: a dashboard redeploy does not create one |
+
+Anonymous probes of `admin.english-hills.com` at 15:04:20 UTC, the same set as at R2′:
+
+- `POST` to the five `/api/online/*` routes: 503 `{"reason":"gate_closed"}`. The gate is checked before the provider, so the loaded Zoom variables change nothing while the switch is off.
+- `POST /api/webhooks/online/fake` and `/api/webhooks/online/zoom-video` (an event body and a validation challenge): 404 `{"reason":"not_found"}`.
+- `GET` on the join route and the Zoom webhook: 405.
+- The seven online pages: 307 to `/login`. The room path keeps its own `Permissions-Policy` and Zoom CSP; `/login` keeps camera and microphone off.
+- `/login`, `/inscription`: 200; `/`, `/students`, `/crm`, `/finance`, `/receipts`, `/enrollments`, `/groups`: 307 to `/login`.
+- Supabase Postgres and API gateway logs 14:50–15:06 UTC: no error.
+
+### Mid-session token expiry (T-P3, recorded) — local run
+
+Approved by the owner as D3. Run on 2026-10-23 at 15:04:50–15:07:00 UTC with `OL_ZOOM_WAIT_EXPIRY=1 scripts/test-online-zoom-acceptance.mjs`, using the developer credentials of the same Zoom Video SDK app as Production (the owner's answer to D3; values never printed). The report is kept outside the repository.
+
+- A participant joined at 15:05:24 UTC with a token whose `exp` was about 10 seconds after issue (the script back-dates `iat`, so no 30-minute wait is needed). Ninety seconds later it was still in the session (`isInMeeting: true`) with no disconnect event. **Zoom checks the token only at join.**
+- Access therefore ends through the platform: the room page re-reads `online_check_join` every 30 seconds and leaves at lesson end plus grace, and no pass is issued after that. The residual case, a client that ignores the page and stays until the session empties or the host removes it, is the one accepted with A1 (plan Z2).
+- The same run repeated T-P1, T-P2 and T-P3 at join (PASS), T-P4 (self-rename succeeded: the accepted gap) and T-P7 (rejoin after removal refused, 3009). It was US-routed; the Morocco-routed A7 capture belongs to the R4 test lesson.
