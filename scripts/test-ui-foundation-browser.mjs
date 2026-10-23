@@ -53,7 +53,11 @@ async function sidebarResize(){
  await page.waitForURL(u=>u.searchParams.get('q')==='absent');await search.fill('');await page.waitForURL(u=>!u.searchParams.has('q'));
  await page.setViewportSize({width:768,height:1024});assert.equal(await trigger.getAttribute('aria-expanded'),'false');
  await trigger.click();await menu.waitFor();await page.keyboard.press('Escape');await menu.waitFor({state:'detached'});
- assert(!(await page.locator('#main-content').evaluate(el=>el.inert)));assert(await trigger.evaluate(el=>document.activeElement===el),'normal close restores visible trigger focus');
+ assert(!(await page.locator('#main-content').evaluate(el=>el.inert)));
+ // The trigger regains focus in the close effect, a frame after the dialog unmounts; wait for that exact
+ // condition rather than sampling it once (same assertion, no longer racing the commit).
+ await trigger.evaluate(el=>new Promise((resolve,reject)=>{const started=Date.now();(function check(){if(document.activeElement===el)return resolve();if(Date.now()-started>2000)return reject(new Error('normal close restores visible trigger focus'));requestAnimationFrame(check);})();}));
+ assert(await trigger.evaluate(el=>document.activeElement===el),'normal close restores visible trigger focus');
  await trigger.click();await menu.waitFor();await page.mouse.click(700,500);await menu.waitFor({state:'detached'});
  assert(!(await page.locator('#main-content').evaluate(el=>el.inert)),'backdrop close clears inert');
  await trigger.click();await menu.waitFor();await menu.getByRole('button',{name:'CRM',exact:true}).click();await menu.getByRole('link',{name:'Opportunités',exact:true}).click();await menu.waitFor({state:'detached'});

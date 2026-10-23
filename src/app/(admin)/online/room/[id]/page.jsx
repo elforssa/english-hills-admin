@@ -2,9 +2,12 @@
 
 // The one lesson room for every role (D6), phone-first. It asks the gated join route
 // for a short-lived pass, mounts the provider's embedded room and re-checks the lesson
-// every 30 seconds, leaving as soon as the participant no longer qualifies.
+// every 30 seconds, leaving as soon as the participant no longer qualifies. This path
+// carries its own security headers (camera, microphone and the Zoom hosts; OL-r6 A6),
+// so every way in and out is a full document navigation: plain anchors in, and
+// window.location.assign out (Quitter, the toolkit's leave button, an ended lesson).
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Video, LogOut, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +17,12 @@ import { ONLINE_REASON_TEXT, onlineErrorText } from '@/lib/online/reasons.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BACK = { student: '/student-portal/online', parent: '/parent-portal/online', teacher: '/teacher-portal/online' };
+const ZoomRoom = dynamic(() => import('@/components/online/ZoomRoom'), { ssr: false,
+  loading: () => <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Chargement de la salle…</p> });
+
+function leaveRoom(href) {
+  window.location.assign(href);
+}
 
 function FakeRoom({ embed }) {
   return (
@@ -33,6 +42,7 @@ function Room() {
   const { role } = useAuth();
   const [state, setState] = useState({ phase: 'joining' });
   const valid = UUID.test(id || '') && (!student || UUID.test(student));
+  const back = BACK[role] || '/online';
 
   const join = useCallback(async () => {
     setState({ phase: 'joining' });
@@ -63,19 +73,29 @@ function Room() {
     return () => clearInterval(timer);
   }, [state.phase, id, student]);
 
-  const back = BACK[role] || '/online';
+  const onLeft = useCallback(() => leaveRoom(back), [back]);
+  const onError = useCallback(() => setState({ phase: 'refused', reason: 'provider_error' }), []);
+  // An automatic leave shows its reason for a moment, then returns to the portal by a
+  // full document navigation, so the room-only headers never outlive the room (A6).
+  useEffect(() => {
+    if (state.phase !== 'left') return undefined;
+    const timer = setTimeout(() => leaveRoom(back), 6000);
+    return () => clearTimeout(timer);
+  }, [state.phase, back]);
   const message = state.reason ? (ONLINE_REASON_TEXT[state.reason] || onlineErrorText({ reason: state.reason })) : null;
+  const room = state.phase === 'in_room' && (
+    state.provider === 'fake' && state.embed?.kind === 'fake' ? <FakeRoom embed={state.embed} />
+      : state.provider === 'zoom-video' && state.embed?.kind === 'zoom-video' ? <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} />
+        : <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.provider_invalid}</p>);
   return (
     <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-4xl flex-col gap-4 p-3 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold sm:text-xl">Cours en ligne</h1>
-        <Button asChild variant="outline" size="sm"><Link href={back}><LogOut /> Quitter</Link></Button>
+        <Button asChild variant="outline" size="sm"><a href={back} data-testid="room-leave"><LogOut /> Quitter</a></Button>
       </div>
       {!valid && <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.not_found}</p>}
       {valid && state.phase === 'joining' && <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Ouverture de la salle…</p>}
-      {state.phase === 'in_room' && (state.provider === 'fake' && state.embed?.kind === 'fake'
-        ? <FakeRoom embed={state.embed} />
-        : <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.provider_invalid}</p>)}
+      {room}
       {(state.phase === 'refused' || state.phase === 'left') && (
         <div className="space-y-3 rounded-lg border bg-card p-6">
           <p className="text-sm">{state.phase === 'left' ? 'Vous avez quitté la salle. ' : ''}{message}</p>

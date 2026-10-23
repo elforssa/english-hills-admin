@@ -42,7 +42,7 @@ export default function TeacherOnlineLessons() {
                 </div>
                 <div className="flex w-full flex-col gap-2 sm:w-auto">
                   {lesson.i_am_host && lesson.status !== 'cancelled' && (room === 'open'
-                    ? <Button asChild className="min-h-11"><Link href={`/online/room/${lesson.id}`}><Video /> Ouvrir la salle</Link></Button>
+                    ? <Button asChild className="min-h-11"><a href={`/online/room/${lesson.id}`} data-room-entry><Video /> Ouvrir la salle</a></Button>
                     : <Button className="min-h-11" disabled><Video /> {room === 'upcoming' ? `Salle à ${casablancaTime(lesson.host_opens_at)}` : 'Salle fermée'}</Button>)}
                   {lesson.roster_open && <Button asChild variant="outline" className="min-h-11"><Link href={`/teacher-portal/online/${lesson.id}`}><ClipboardCheck /> Présences</Link></Button>}
                 </div>

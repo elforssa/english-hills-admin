@@ -45,6 +45,31 @@ const csp = [
   isProd && !isLocalSupabase ? 'upgrade-insecure-requests' : '',
 ].filter(Boolean).join('; ');
 
+// Online lesson room (/online/room/<lesson>; plan online-learning.md, OL-r6 decisions
+// A6 and A7). Only this path may use the camera and microphone and reach the Zoom
+// Video SDK: its workers and WebAssembly come from source.zoom.us, the ring tone from
+// st1.zoom.us, signalling and media from zoom.us hosts over https and wss. A7-record:
+// the acceptance run of 2026-10-23 showed that Zoom chooses regional signalling hosts
+// per session (rwc<region>.<region>.zoom.us) and pings them over https before the
+// websocket opens, so an explicit host list cannot be enumerated and broke the join;
+// connect-src therefore admits *.zoom.us, which also admits the toolkit's telemetry
+// host (us.telemetry.zoom.us). No telemetry id is ever set, and the acceptance run
+// records what that telemetry carries. The entry sits after the catch-all on purpose:
+// Next.js applies both and the later value wins for the same header name. Entering
+// and leaving the room are full document navigations.
+export const ZOOM_SCRIPT_HOSTS = ['https://source.zoom.us'];
+export const ZOOM_CONNECT_HOSTS = ['https://zoom.us', 'https://*.zoom.us', 'wss://*.zoom.us'];
+export const ZOOM_MEDIA_HOSTS = ['https://st1.zoom.us'];
+const roomCsp = csp.split('; ').map(directive => {
+  if (directive.startsWith('script-src ')) return `${directive} 'wasm-unsafe-eval' ${ZOOM_SCRIPT_HOSTS.join(' ')}`;
+  if (directive.startsWith('connect-src ')) return `${directive} ${ZOOM_CONNECT_HOSTS.join(' ')}`;
+  if (directive.startsWith('worker-src ')) return `${directive} ${ZOOM_SCRIPT_HOSTS.join(' ')}`;
+  if (directive.startsWith('media-src ')) return `${directive} ${ZOOM_MEDIA_HOSTS.join(' ')}`;
+  return directive;
+}).join('; ');
+export const ROOM_PERMISSIONS_POLICY = 'camera=(self), microphone=(self), geolocation=()';
+export const GLOBAL_PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=()';
+
 const nextConfig = {
   reactStrictMode: true,
   async headers() {
@@ -57,9 +82,17 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Permissions-Policy', value: GLOBAL_PERMISSIONS_POLICY },
           // HSTS — only meaningful over HTTPS, harmless on http://localhost.
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+        ],
+      },
+      {
+        // After the catch-all: the room page alone gets camera, microphone and the Zoom hosts.
+        source: '/online/room/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: roomCsp },
+          { key: 'Permissions-Policy', value: ROOM_PERMISSIONS_POLICY },
         ],
       },
     ];
