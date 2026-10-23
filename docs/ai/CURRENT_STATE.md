@@ -244,7 +244,8 @@ Open items:
 
 Open items:
 
-- **Next release steps (each needs the owner's approval):** R3 Zoom account and Vercel secrets, R4 provider acceptance on a test course (T-P5 deferred), R5 gate on, R6 pilot course, R7 pilot run, R8 closeout.
+- **R3 (owner, 2026-10-23, as reported by the owner; names only):** `ONLINE_VIDEO_PROVIDER`, `ONLINE_VIDEO_PROVIDER_API_KEY` and `ONLINE_VIDEO_PROVIDER_API_SECRET` set in Vercel, Production only, Sensitive; `ONLINE_LEARNING_LIVE_ENABLED` and the webhook secret not set. Zoom trial (20 credits); pay-as-you-go before R5. Not yet deployed: the variables take effect on the next Production deployment. See the plan's [release record](../architecture/plans/online-learning.md#release-record-r0r2-zoom-adapter).
+- **Next release steps (each needs the owner's approval):** R4 provider acceptance on a test course (T-P5 deferred), R5 gate on, R6 pilot course, R7 pilot run, R8 closeout.
 - **Security backlog (not approved or scheduled):** the Vercel side finding recorded in the plan's [R0–R2 release record](../architecture/plans/online-learning.md#release-record-r0r2).
 
 ## Online learning pilot R0–R2 Production closeout — 2026-10-21
