@@ -274,6 +274,16 @@ Plan: [payment corrections and receipts](../architecture/plans/payment-correctio
 - **Revision PCR-r2 (2026-10-24):** the independent review's corrections, within these answers (no answer changes; [details](../architecture/plans/payment-corrections-receipts.md#review-corrections-pcr-r2)). Coordinator decision recorded there: Plan E governs the order of the payment checks, which are not reordered; Plan D defers to it. Q1's automatic clear applies only when every review since the last clear came from a payment cancellation. A fresh re-review is required.
 - **Not approved by this decision:** any merge, migration, deployment or data step; E-1, E-2, E-3 and D1–D3 each need their own approval.
 
+## Portal readiness — teachers and families (Batch F) — PRF-r1 APPROVED, Q6 = C, PRF-r2 AWAITS RE-APPROVAL (2026-10-24)
+
+Plan: [portal readiness](../architecture/plans/portal-readiness.md#approval-record), revision PRF-r1 at head `ba94ad3` (Tier 3). Owner approval 2026-10-24 15:53 (UTC+08:00), chat with Claude relayed by the coordinating session, verbatim: "all recomended and for E6 paper numbers dont exist".
+
+- **Q1 A:** teachers see the class list only. **Q2 A:** teachers do not delete academic records; director/admin delete, all logged. **Q3 A:** explicit staff-approved family links. **Q4 A:** director and admin invite, link and revoke; reception read-only. **Q5 A:** centre relay, no address shown.
+- **Q7 A:** staff remarks hidden from families. **Q8 A:** student accounts for Adults and Teens only. **Q9 A:** clear the placeholder address from the 33 files.
+- **Q6 C (2026-10-24, 16:16 Asia/Shanghai):** owner's words, verbatim except `@` written `[at]` (the repository CI blocks literal e-mail addresses): "f6: contact[at]english-hills.com". A dedicated centre login with role admin on the shared office mailbox receives "Accueil English Hills" portal messages (D7).
+- **Re-approval needed (PRF-r2):** the independent review of head `e90f8f1` returned CHANGES REQUIRED; revision PRF-r2 applies it and needs a fresh re-review and the owner's re-approval at its exact head SHA before implementation starts. The answers above carry over unless the owner changes them.
+- **Not approved by this decision:** a migration number, the merge, the migration, the cleanup, the deployment, the pilot and any invitation; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
