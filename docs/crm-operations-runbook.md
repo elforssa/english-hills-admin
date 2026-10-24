@@ -55,6 +55,17 @@ await supabase.rpc('crm_configure_insights', {
 });
 ```
 
+Website form mapping (decision D8 of [LIR-r1](architecture/plans/lead-intake-reliability.md)): the panel shows website mappings read-only, so a new website form key is published with this director snippet. `w` is the website connection from `crm_get_meta_diagnostics` (`provider = 'website'`); the form key is lowercase (`^[a-z][a-z0-9_-]{0,63}$`) and the effective date must precede the first stuck inquiry.
+
+```js
+await supabase.rpc('crm_publish_website_form_mapping', {
+  p_connection: w.id,
+  p_data: { form_key: 'campaign_form_key', form_name: 'Campagne …',
+    field_map: { learner_name: 'child' }, default_session_type: 'Yearly',
+    learner_policy: 'optional', effective_from: '2026-10-01T00:00:00Z' }
+});
+```
+
 Refresh connection/version between independent writes. If no lifecycle/Insights configuration exists it is already off: do not create fake metadata just to disable it. Disabling a shared Meta destination also holds website lifecycle delivery routed there. Inbound, outbound and Insights settings are separate; changing inbound alone is not an outbound kill switch. Stop each relevant invocation schedule explicitly. Removing CRM wake-up secrets, if separately approved, must target only `crm_meta_worker_url` / `crm_meta_worker_token`; do not remove receipt/email secrets or disable shared pg_net/database triggers.
 
 Recovery order: hold the affected feature/workers; inspect last committed migration and lease/config states; preserve accepted jobs, immutable submissions, activities, revenue and attempts; deploy a reviewed forward repair; resume a small explicit eligible retry and observe. Never drop CRM tables, reset migration history, delete captured leads, reset attempt counts, edit first touch or manufacture financial/conversion evidence. An app rollback is conditional once CRM-linked enrollments exist: an old payment form may omit the explicit enrollment and be safely rejected. Prefer a current-app repair to weakening that safeguard. The new app cannot run on schema 076.
@@ -63,8 +74,11 @@ Recovery order: hold the affected feature/workers; inspect last committed migrat
 
 | Issue | Owner / inspect | Safe action | Do not do |
 |---|---|---|---|
-| Meta/shared job blocked or retries rising | Director + operator; `crm_get_meta_diagnostics` and sanitized code/lease | Fix cause, then eligible `crm_retry_meta_job(p_job)` and bounded worker invocation | Do not acknowledge storage failure as accepted; no direct status/lease updates |
-| Unknown form / missing mapping | Director; connection, form key and immutable mapping versions | Publish a reviewed mapping with correct effective dates; retry retained eligible job | Do not guess a form or alter original attribution |
+| GitHub e-mail “CRM Intake Scheduler” failed (intake answered 424) | Director; *Analyse marketing → Réception des leads* (status line, *Leads à traiter*) | Read the job reason in the panel and follow the matching row below. A token problem goes to the operator; fixed within the 24-hour look-back, every lead is recovered automatically | The public run log prints one generic line only; never add codes, counts or IDs to it |
+| Meta/shared job blocked or retries rising | Director + operator; *Réception des leads* or `crm_get_meta_diagnostics` and sanitized code/lease | Fix cause, then **Réessayer** in the panel (`crm_retry_meta_job(p_job)`); the job-kick trigger processes it at once | Do not acknowledge storage failure as accepted; no direct status/lease updates |
+| Unknown form / missing mapping (Meta) | Director; *Réception des leads → Formulaires importés* | **Publier** the form; a first version keeps the proposed effective date (30 days back), so it precedes the stuck leads; then **Réessayer** | Do not guess a form or alter original attribution |
+| Website form key unknown (website `missing_mapping`) | Director; the panel lists website mappings read-only | Publish the website mapping with the operator snippet below (`crm_publish_website_form_mapping`, effective date before the stuck inquiry), then **Réessayer** the job in the panel | Do not reject or delete the stored inquiry; do not reuse a Meta form ID |
+| Dead job (8 attempts or invalid data) | Director; *Leads à traiter* row marked non réessayable | Recover the lead from Meta's Leads Center (or the website inquiry) and enter it by hand | No direct status or attempt-count update |
 | No active follow-up policy | Director; policy read and job diagnostic | Bootstrap approved real hours using rollout procedure; retry | Do not invent always-open scheduling or discard accepted inquiries |
 | Ambiguous intake / family shared phone | Receptionist for operational review; director for protected evidence | Review learner/program/contact candidates and use explicit resolver; preserve separate siblings/programs | Do not merge on phone alone or delete unresolved submissions |
 | Lifecycle blocked / suppressed / unknown result | Director + operator; `crm_list_external_deliveries` and attempts | Inspect consent, destination, mode, lease and stable event ID. Retry only if explicit RPC permits it | No bulk replay, new event IDs or claim that an ambiguous timeout means provider rejection |
@@ -75,6 +89,29 @@ Recovery order: hold the affected feature/workers; inspect last committed migrat
 | Migration error / lock timeout | Release operator | Stop sequence, inspect transaction and ledger; resolve lock cause and forward-complete only reviewed unapplied file | No blanket rerun, ledger repair to skip work, destructive rollback or unreviewed SQL |
 
 Queue retry limits and immutable payload rules are detailed in the linked integration contracts. A retry RPC denial is a safety boundary, not an invitation to bypass it with owner SQL. Unhandled business decisions go to the director/product owner.
+
+## Campaign launch checklist
+
+From [LIR-r1 P1-C](architecture/plans/lead-intake-reliability.md#p1-c--campaign-launch-checklist-pr-1a-copied-into-crm-operations-runbookmd). The director panel is *Analyse marketing → Réception des leads* on `/crm/analytics`.
+
+**Before the ads go live (the day before):**
+
+1. In Ads Manager, note the Instant Form used by **every** ad of the campaign (ad → *Formulaire instantané* → form ID). A duplicated form has a new ID.
+2. In *Réception des leads*, check each form ID. If it is not listed as Actif, use **Publier un formulaire Meta**: copy the closest existing form, set name, session type, program and learner policy, and keep the proposed effective date (30 days back for a new form).
+3. Confirm the status line shows the **24 h** look-back (R-LB done), and that *Leads à traiter* is empty.
+4. Send **one test lead** on each new form with Meta's Lead Ads Testing Tool. Within about 15 minutes it must appear as a new opportunity with name and phone filled in. Close it as lost with the reason "test". If fields are empty, the form's questions differ: publish a new version with the right keys.
+5. Once only: confirm that GitHub e-mails you about failed workflows (GitHub → Settings → Notifications → Actions). Optionally run *CRM Intake Scheduler* manually with `alert_test` checked and check that the failure e-mail arrives; that run calls nothing.
+
+**While the campaign runs (twice a day for the first three days, then daily):**
+
+6. Compare yesterday's form leads in Ads Manager with yesterday's Meta leads in *Analyse marketing* (Source = Formulaire Meta, both dates set to yesterday).
+7. *Leads à traiter* must be empty, and the spend line must not be red.
+
+**If a GitHub failure e-mail arrives:** open the panel and follow the [incident rows](#incident-handling). Beyond 24 hours, or with more than 50 leads waiting, export the missing leads from Meta's Leads Center and enter them by hand.
+
+**After the campaign:** leave the mapping active while the form exists in Meta, because late leads still arrive. **Arrêter l'import** only when the form is archived. It retires every unretired version of the form, one call each; if a call fails the form shows *Partiellement arrêté* and **Terminer l'arrêt** finishes it. A stopped form is resumed only by publishing a new version.
+
+The GitHub backup runs only about 5–6 times a day: a 424 e-mail can arrive hours after the fault. The 24-hour look-back is what keeps a fault fixed within a day from losing leads.
 
 ## Meta live activation — separate approval required
 

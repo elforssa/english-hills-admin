@@ -32,3 +32,19 @@ export const overallRate = (summary) => ratio(count(summary?.converted), count(s
 // session_type is the only program field (one Meta form = one program until a program
 // question is mapped). 'none' selects leads without a session type.
 export const PROGRAMS = ['Yearly', 'Adults', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau', 'Other'];
+
+// LIR-r1 P1-D. Spend before the campaign attribution switch has no attributed leads,
+// so CPL, CPQL and CAC are hidden when the range starts before the attribution day
+// (or attribution never started). Otherwise the ratios are flagged as partial when
+// fetched rows hold Meta leads without attribution, or when rows were truncated;
+// the count is taken from the fetched rows only.
+const UNATTRIBUTED_META_BUCKETS = ['pending:meta_instant_form', 'unknown:meta_instant_form'];
+export function ratioGuard({ from, attributionDay, rows = [], total = 0 }) {
+  if (!attributionDay || !from || from < attributionDay) {
+    return { hidden: true, attributionDay: attributionDay || null, partial: false, unattributed: 0, truncated: false };
+  }
+  const unattributed = rows.filter(row => UNATTRIBUTED_META_BUCKETS.includes(row.bucket))
+    .reduce((sum, row) => sum + (count(row.leads) || 0), 0);
+  const truncated = Number(total) > rows.length;
+  return { hidden: false, attributionDay, partial: unattributed > 0 || truncated, unattributed, truncated };
+}

@@ -2,11 +2,18 @@ name: CRM Intake Scheduler
 
 # Backup trigger. Supabase pg_cron is the primary five-minute scheduler; both
 # invoke the same idempotent, bounded endpoint with the same dedicated bearer.
+# GitHub runs this schedule only about 5-6 times a day, not every five minutes.
+# Run logs are public: every message below is a fixed generic line.
 
 on:
   schedule:
     - cron: '2-57/5 * * * *'
   workflow_dispatch:
+    inputs:
+      alert_test:
+        description: 'Fail without calling the endpoint, to check the failure e-mail'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,18 +27,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Alert test
+        if: ${{ inputs.alert_test }}
+        run: |
+          echo 'Alert test'
+          exit 1
       - name: Invoke protected CRM intake worker
+        if: ${{ !inputs.alert_test }}
         env:
           CRM_INTAKE_SCHEDULER_TOKEN: ${{ secrets.CRM_INTAKE_SCHEDULER_TOKEN }}
         run: |
           set -euo pipefail
           test -n "${CRM_INTAKE_SCHEDULER_TOKEN}"
+          # curl runs without its fail option: the HTTP status is branched on below. --retry still
+          # retries transient 408/429/5xx; 424 (intake problem) is not retried.
+          rc=0
           http_status="$(curl \
             --proto '=https' \
             --tlsv1.2 \
             --silent \
             --show-error \
-            --fail \
             --output /dev/null \
             --connect-timeout 10 \
             --max-time 70 \
@@ -41,8 +56,13 @@ jobs:
             --retry-max-time 160 \
             --write-out '%{http_code}' \
             --header "Authorization: Bearer ${CRM_INTAKE_SCHEDULER_TOKEN}" \
-            'https://admin.english-hills.com/api/cron/crm-intake')"
+            'https://admin.english-hills.com/api/cron/crm-intake')" || rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo 'CRM intake scheduler request failed before an HTTP status was received.' >&2
+            exit 1
+          fi
           case "${http_status}" in
             2??) ;;
+            424) echo 'CRM intake reported a lead-intake problem. Open Analyse marketing > Réception des leads.' >&2; exit 1 ;;
             *) echo 'CRM intake scheduler returned a non-2xx status.' >&2; exit 1 ;;
           esac
