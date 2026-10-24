@@ -259,6 +259,9 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
 - **D6:** the data clean-up is approved as described, with Ancien apprenant; counts are re-read on the day and any difference goes back to the owner.
 - **Not approved by this decision:** the merge, either migration, the clean-up run (R4 needs its own release approval of the exact numbers) and every deployment.
 - **D8 A (2026-10-24, 16:16 Asia/Shanghai; EGC-r2, added after independent review):** owner's words, verbatim: "d8: A". Closing an online course (`online_close_course`) ends the course's enrollments, so a learner can take another online course in the same school year; option B (exempting online programmes from the one-live-enrollment rule) is rejected. The review corrections also add one clean-up row (C1b: a Yearly enrollment without school year gets 2026/2027), shown to the owner with the D6 counts.
+## Payment corrections and receipts (Batch E) — PLANNED / NOT APPROVED (2026-10-24)
+
+Plan: [payment corrections and receipts](../architecture/plans/payment-corrections-receipts.md), revision PCR-r1 (proposed, Tier 3). **OPEN — owner decisions Q1–Q9:** CRM flag when a cancelled payment leaves a confirmed enrollment unpaid (Q1); discount reason (Q2) and reception discount cap (Q3); payment-date limits (Q4); whether a small reception deposit confirms an enrollment (Q5); numbering of the 54 receipts imported on 2026-09-13 (Q6); year and series of receipt numbers (Q7); legacy rounding (Q8); payroll switched off until the accountant validates the rules (Q9). Recommendations are in the plan; none is approved.
 
 ## Deferred backlog after RCC-r1
 
