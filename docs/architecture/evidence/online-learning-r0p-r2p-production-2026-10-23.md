@@ -159,7 +159,7 @@ The sections above are the R0′–R2′ snapshot and are left as they were at R
 | Approval | Owner, 2026-10-23: Phase A only (redeploy with the switch off, then READY and probe checks, then stop) |
 | Redeploy | Triggered by the owner's guide on the owner's instruction at about 15:00 UTC: Vercel deployment `dpl_GdDJFv7npFHpPP1VikaFC2wUM4sN`, same commit `43be8fa0…`, `source: redeploy` (as reported by the guide; the release session's Vercel connector returns 404 for this team) |
 | Serving build | The Next build ID in the `/login` page changed from `JazM5AwgL1e1fP8koh8Y6` to `ZWLNDoUqYvBLO1GXvPxZj` at 15:04:05 UTC; three further requests all returned the new build. The R3 variables are therefore in effect. |
-| GitHub deployments | No new `Production` record: a dashboard redeploy does not create one |
+| GitHub deployment status | Independent evidence of the redeploy: GitHub `Production` deployment `7273254192` (commit `43be8fa0…`) received a second `success` status at 15:00:58 UTC, "Deployment has completed", pointing to a new host `english-hills-admin-1j8e69n1j-…` (the first, at 08:01:10 UTC, pointed to `…-8zylixssg-…`). The redeploy added a status to the existing deployment record rather than a new record. |
 
 Anonymous probes of `admin.english-hills.com` at 15:04:20 UTC, the same set as at R2′:
 
@@ -175,5 +175,5 @@ Anonymous probes of `admin.english-hills.com` at 15:04:20 UTC, the same set as a
 Approved by the owner as D3. Run on 2026-10-23 at 15:04:50–15:07:00 UTC with `OL_ZOOM_WAIT_EXPIRY=1 scripts/test-online-zoom-acceptance.mjs`, using the developer credentials of the same Zoom Video SDK app as Production (the owner's answer to D3; values never printed). The report is kept outside the repository.
 
 - A participant joined at 15:05:24 UTC with a token whose `exp` was about 10 seconds after issue (the script back-dates `iat`, so no 30-minute wait is needed). Ninety seconds later it was still in the session (`isInMeeting: true`) with no disconnect event. **Zoom checks the token only at join.**
-- Access therefore ends through the platform: the room page re-reads `online_check_join` every 30 seconds and leaves at lesson end plus grace, and no pass is issued after that. The residual case, a client that ignores the page and stays until the session empties or the host removes it, is the one accepted with A1 (plan Z2).
+- Access therefore ends through the platform: the room page re-reads `online_check_join` every 30 seconds and leaves at lesson end plus grace, and no pass is issued after that. The residual case, a client that ignores the page and stays until the session empties or the host removes it, is covered by the A1/Z2 mitigation; staying connected after `exp` was UNVERIFIED in Z2 and is now observed.
 - The same run repeated T-P1, T-P2 and T-P3 at join (PASS), T-P4 (self-rename succeeded: the accepted gap) and T-P7 (rejoin after removal refused, 3009). It was US-routed; the Morocco-routed A7 capture belongs to the R4 test lesson.
