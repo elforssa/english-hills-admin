@@ -1,6 +1,6 @@
 # Lead intake reliability — no silent lead loss, no-code form launch, honest ratios, prospect data retention
 
-Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, D1–D8 as recommended, plan head `aa68632`; see the [approval record](#approval-record)). Each migration, data change, scheduled-job activation, Production configuration step (including R-LB) and deployment still needs its own explicit owner approval. Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
+Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, D1–D8 as recommended, plan head `aa68632`; see the [approval record](#approval-record)), with the independent review's corrections applied inside the approved architecture ([review corrections](#review-corrections-2026-10-24-after-the-approval)). Each migration, data change, scheduled-job activation, Production configuration step (including R-LB) and deployment still needs its own explicit owner approval. Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
 
 **Risk tier.** Phase 1 is **Tier 3** (it changes the intake scheduler's response, a scheduler/cron surface, and adds director controls over the intake configuration; PR 1b adds a migration and a scheduled check). Phase 2 items are tiered one by one in [Phasing](#phasing-and-tiers); every Production step (migration, configuration, scheduled job, data change) is Tier 3 whatever the tier of its code change. The [separate Production operation](#production-operation-r-lb-widen-the-meta-look-back-to-24-hours) is Tier 3.
 
@@ -59,7 +59,7 @@ Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner,
 # Baseline and evidence limits
 
 - Repository: `origin/main` `ba009b4`; this branch has no other change.
-- Latest cumulative definitions read: `crm_save_meta_connection` (115), `crm_get_meta_diagnostics` (115), `crm_publish_meta_form_mapping` (094), `crm_retire_meta_form_mapping` and `crm_retry_meta_job` and `crm_fail_meta_job` (086), `crm_claim_meta_reconciliation` (094), `crm_enqueue_meta_reconciled` and `crm_finish_meta_reconciliation` (105), `crm_get_meta_job_mapping` (086), `crm_get_marketing_cohort` (116), `crm_security.protect_mapping` (086), `crm_security.protect_attribution` (078), `crm_security.protect_enrollment_link` (084), `check_anon_rate_limit` (066), `crm_security.require_reader` (079), `crm_security.lifecycle_barrier` (103).
+- Latest cumulative definitions read: `crm_save_meta_connection` (115), `crm_get_meta_diagnostics` (115), `crm_publish_meta_form_mapping`, `crm_retire_meta_form_mapping` and `crm_publish_website_form_mapping` (103: the 094/086/093 bodies plus `crm_security.lifecycle_barrier(true)`), `crm_retry_meta_job` and `crm_fail_meta_job` (086), `crm_claim_meta_reconciliation` (094), `crm_claim_ingestion_jobs` (094), `crm_enqueue_meta_reconciled` and `crm_finish_meta_reconciliation` (105), `crm_get_meta_job_mapping` (087), `crm_finalize_meta_job` (115) and `crm_finalize_website_job` (087), `crm_insights_diagnostics` (114), `crm_get_marketing_cohort` (116), `crm_cleanup_lifecycle_retention` (103), `crm_security.protect_mapping` (086), `crm_security.protect_attribution` (078), `crm_security.protect_enrollment_link` (084), `check_anon_rate_limit` (066), `crm_security.require_reader` (079), `crm_security.lifecycle_barrier` (103).
 - Code read: [scheduler](../../../src/lib/crm/intake/scheduler.mjs), [reconciler](../../../src/lib/crm/meta/reconcile.mjs), [shared worker](../../../src/lib/crm/intake/worker.mjs), [Meta adapter](../../../src/lib/crm/meta/adapter.mjs), [Insights scheduler](../../../src/lib/crm/insights/scheduler.mjs), [backup workflow](../../../.github/workflows/crm-intake-scheduler.yml), [analytics page](../../../src/components/crm/MarketingAnalytics.jsx), [Insights panels](../../../src/components/crm/MarketingInsightsPanels.jsx), [route gating](../../../src/lib/roleAccess.mjs), [scheduler tests](../../../scripts/test-crm-intake-scheduler.mjs).
 - Production reads, 2026-10-24, through the Supabase MCP `execute_sql` on `hopcezradkhrixwwswxn`: three `select` statements, counts and dates only. They selected no name, phone, e-mail, token, secret reference, page ID or ad-account ID:
   1. Meta Insights lead actions by type: `onsite_conversion.lead_grouped` = 356 between 2026-09-13 and 2026-10-09; `lead` = 357 between 2026-09-13 and 2026-10-13.
@@ -77,9 +77,9 @@ Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner,
 | Failure signal | `reconcile` stores `last_error_code` in `crm_meta_reconciliation_state` (no grant to `authenticated` or `service_role`, no RPC reads it). The scheduler catches everything and answers **200 `ok:true`**. pg_cron logs "succeeded" whatever the HTTP result. | Poll failures are invisible. |
 | GitHub backup | `curl --fail`, `--retry 2` (retries 408/429/5xx), exits 1 on any non-2xx. **Actual cadence about 5.5 runs a day**, not every 5 minutes. ADR-002 and [crm-intake-scheduler.md](../../crm-intake-scheduler.md) both say "five-minute backup"; that contradicts the run history and is corrected at implementation. | GitHub turns a non-2xx into an e-mail, but only on the calls it makes itself. |
 | Who processes jobs | Most jobs are processed by the `crm_meta_job_kick` trigger, which calls `/api/internal/crm/meta/process`, not by the scheduler. | Job failures rarely pass through the scheduler's response. |
-| Stuck jobs | `crm_fail_meta_job` sets `blocked` for `missing_secret`, `provider_auth`, `missing_mapping`, `missing_policy` and `connection_disabled`, and `dead` for `invalid_provider_data`, `invalid_mapping`, `attempts_exhausted` or after 8 attempts. `crm_retry_meta_job(p_job)` (director, `authenticated` grant) re-queues `blocked`/`retry` jobs with `attempt_count < 8`. Nothing in `src` calls it. | A director can re-run stuck jobs, but has no screen to do it. |
-| Form mappings | `crm_claim_meta_reconciliation` only polls forms with an effective, unretired `meta_instant_form` mapping. `crm_publish_meta_form_mapping(p_connection, p_data)` (director) appends version n+1 and accepts `effective_from`. It does not check that the connection is a Meta connection, so the caller must pass the Meta connection. `crm_retire_meta_form_mapping(p_mapping)` (director) is irreversible; the immutability trigger allows only setting `retired_at` once. Neither is called from `src`. | A new Instant Form is never polled until someone runs a raw RPC. |
-| Mapping date trap | `crm_get_meta_job_mapping` picks the version with `effective_from <= lead created_time`. With none, the job blocks on `missing_mapping`. | A first mapping dated "now" makes the leads already submitted on that form get stuck. They are recovered only by publishing a back-dated version and retrying. |
+| Stuck jobs | `crm_finalize_meta_job` (115) and `crm_finalize_website_job` (087) block a job themselves for `missing_policy` and `connection_disabled` and return `{status:'blocked'}`, which the worker records as an outcome **without** `error_code`. A job that reaches 8 attempts becomes `dead` either with its last retry code (`timeout`, `network`, …) or, inside `crm_claim_ingestion_jobs`, as `attempts_exhausted`, and is never returned as an outcome. `crm_fail_meta_job` sets `blocked` for `missing_secret`, `provider_auth`, `missing_mapping`, `missing_policy` and `connection_disabled`, and `dead` for `invalid_provider_data`, `invalid_mapping`, `attempts_exhausted` or after 8 attempts. `crm_retry_meta_job(p_job)` (director, `authenticated` grant) re-queues `blocked`/`retry` jobs with `attempt_count < 8`. Nothing in `src` calls it. | A director can re-run stuck jobs, but has no screen to do it. |
+| Form mappings | `crm_claim_meta_reconciliation` only polls forms with an effective, unretired `meta_instant_form` mapping. `crm_publish_meta_form_mapping(p_connection, p_data)` (director) appends version n+1 and accepts `effective_from`. It does not check that the connection is a Meta connection, so the caller must pass the Meta connection. `crm_retire_meta_form_mapping(p_mapping)` (director) retires **one version row** and is irreversible; the immutability trigger allows only setting `retired_at` once. **Publishing a new version does not retire earlier versions**: Production's only Meta form has 2 versions, both unretired. The claim keeps polling a form while *any* version is effective and unretired. Neither RPC is called from `src`. | A new Instant Form is never polled until someone runs a raw RPC. Stopping a form means retiring every unretired version; retiring only the latest keeps polling while new leads block on `missing_mapping`. |
+| Mapping date trap | `crm_get_meta_job_mapping` (087) picks the latest version with `effective_from <= lead created_time`; if there is none, or that version is retired at or before the lead's time, it returns null and the job blocks on `missing_mapping`. | A first mapping dated "now" makes the leads already submitted on that form get stuck. They are recovered only by publishing a back-dated version and retrying. |
 | Look-back setting | `crm_save_meta_connection` (115, director, `lifecycle_barrier(true)`) accepts `meta_reconciliation.lookback_minutes` 10–1440. It keeps `started_at` while reconciliation stays on, merges settings keys, and **overwrites the `account_id`, `api_version` and `access_token_secret_ref` columns with the values in `p_data`** (`api_version` is `NOT NULL` by constraint). | Widening is a supported operation, but it must send every current field. |
 | Enqueue idempotency | Unique `(connection_id, event_kind, external_key)`; a lead seen again is counted as `existing` and not reprocessed. | A wider window cannot duplicate leads. |
 | Insights freshness | `crm-insights-primary` runs `*/30` and has no backup trigger and no alert. `crm_insights_diagnostics` (director) returns `last_completed_at` per connection. One Vercel 500 at 03:30 UTC on 2026-10-24 went unnoticed. | Stale spend is visible only to someone who opens the page. |
@@ -157,25 +157,33 @@ where c.provider = 'meta' and c.settings #>> '{meta_reconciliation,enabled}' = '
 
 Expected today: `directors` 1, one row, `webhook_enabled` false, `recon_enabled` true, `lookback` 60, `attr_enabled` true.
 
-**Step 1 — the change (one transaction).** The values are copied from the row itself and never printed.
+**Step 1 — the change (one transaction).** The values are copied from the row itself and never printed. The `DO` block raises, and so rolls the whole change back, unless exactly one row was changed to 1440; in the SQL editor the script runs as one unit, so there is no interactive rollback decision.
 
 ```sql
-begin;
-select set_config('request.jwt.claims',
-  json_build_object('sub', (select id from public.profiles where role = 'director'), 'role', 'authenticated')::text, true);
-select public.crm_save_meta_connection(
-         jsonb_build_object(
-           'connection_key', c.connection_key, 'page_id', c.page_id, 'account_id', c.account_id,
-           'api_version', c.api_version, 'access_token_secret_ref', c.access_token_secret_ref,
-           'meta_reconciliation', jsonb_build_object('enabled', true, 'lookback_minutes', 1440)),
-         c.id, c.version) #>> '{settings,meta_reconciliation,lookback_minutes}' as new_lookback
-from public.crm_integration_connections c
-where c.provider = 'meta' and c.settings #>> '{meta_reconciliation,enabled}' = 'true';
--- Expect exactly one row with new_lookback = 1440. Otherwise: rollback.
-commit;
+do $$
+declare c public.crm_integration_connections; directors integer; result jsonb; n integer := 0;
+begin
+  select count(*) into directors from public.profiles where role = 'director';
+  if directors <> 1 then raise exception 'R-LB: expected exactly one director, found %', directors; end if;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', (select id from public.profiles where role = 'director'), 'role', 'authenticated')::text, true);
+  for c in select * from public.crm_integration_connections
+           where provider = 'meta' and settings #>> '{meta_reconciliation,enabled}' = 'true' loop
+    n := n + 1;
+    result := public.crm_save_meta_connection(
+      jsonb_build_object(
+        'connection_key', c.connection_key, 'page_id', c.page_id, 'account_id', c.account_id,
+        'api_version', c.api_version, 'access_token_secret_ref', c.access_token_secret_ref,
+        'meta_reconciliation', jsonb_build_object('enabled', true, 'lookback_minutes', 1440)),
+      c.id, c.version);
+    if result #>> '{settings,meta_reconciliation,lookback_minutes}' is distinct from '1440' then
+      raise exception 'R-LB: look-back not 1440 after save'; end if;
+  end loop;
+  if n <> 1 then raise exception 'R-LB: expected exactly one enabled Meta connection, found %', n; end if;
+end $$;
 ```
 
-`enabled` (the webhook) and `attribution_enrichment` are left out on purpose: the command keeps both. If the call fails with `40001` (stale version, or a lifecycle barrier conflict), `rollback`, rerun step 0, and retry once. Never invent a version.
+`enabled` (the webhook) and `attribution_enrichment` are left out on purpose: the command keeps both. If the block fails (any raise, or `40001` for a stale version or a lifecycle barrier conflict), nothing was changed: rerun step 0 and retry once. Never invent a version.
 
 **Step 2 — verification right after.** Rerun the step 0 query. Expected: `version` = previous + 1; `lookback` = 1440; `recon_started_at`, `attr_enabled`, `attr_started_at`, `webhook_enabled`, `identity_md5` and `insights_md5` **identical** to step 0. Any other difference means: stop, and run the rollback below.
 
@@ -188,10 +196,12 @@ select count(*) as state_rows,
 from public.crm_meta_reconciliation_state;                      -- expect errors 0, last_pass within 15 min
 select status, count(*) from public.crm_ingestion_jobs group by 1;  -- expect no blocked/dead; done may grow
 select status_code, count(*) from net._http_response
- where created > now() - interval '1 hour' group by 1;          -- expect only 200
+ where created > now() - interval '1 hour' group by 1;          -- see note below
 ```
 
-**Rollback.** Same as step 1 with `'lookback_minutes', 60`, after rerunning step 0 for the current version. Nothing else needs undoing: leads found because of the wider window are genuine and are deduplicated.
+`net._http_response` mixes the replies of the intake cron, the Insights cron and the job-kick calls, without the URL. Expect the same picture as before the change: mostly 200, and no new non-2xx pattern. An isolated Insights 500 (one was present on 2026-10-24) is not attributable to R-LB. After PR 1a, 424 rows mean a real intake problem.
+
+**Rollback.** The same block with 60 instead of 1440 (in the payload and in the check), after rerunning step 0. Nothing else needs undoing: leads found because of the wider window are genuine and are deduplicated.
 
 **Expected effect.** Each pass reads up to 2 pages instead of usually 1; no new leads are expected, because the counts show none missing. Record the result in CURRENT_STATE with the step 0 and step 2 values (no identifiers).
 
@@ -203,11 +213,13 @@ select status_code, count(*) from net._http_response
 - In [`runScheduledIntake`](../../../src/lib/crm/intake/scheduler.mjs):
   - `BENIGN_POLL = {reconciliation_lease_lost, reconciliation_disabled, reconciliation_form_inactive}`.
   - `ALERT_JOB = {missing_secret, provider_auth, missing_mapping, missing_policy, connection_disabled, invalid_provider_data, invalid_mapping, attempts_exhausted}`, the codes that block or kill a job.
-  - `alert = (discovery.failed > 0 && !BENIGN_POLL.has(discovery.code)) || outcomes.some(o => ALERT_JOB.has(o.error_code))`.
+  - `alert = (discovery.failed > 0 && !BENIGN_POLL.has(discovery.code)) || outcomes.some(o => o.status === 'blocked' || ALERT_JOB.has(o.error_code))`. The `status === 'blocked'` term catches `missing_policy` and `connection_disabled`, which the finalizers block themselves and return as a success-shaped outcome.
+  - **Not caught by P1-A:** a job that dies after 8 attempts (with its retry code, or as `attempts_exhausted` inside the claim) is never returned as an outcome. Only PR 1b (`jobs_dead`) reports it.
+  - **Transient poll codes** (`rate_limit`, `timeout`, `network`, `provider_unavailable`) alert immediately in Phase 1. Occasional single false e-mails are expected and accepted: with GitHub seeing only about 5–6 calls a day, they are rare. Phase 2b's `last_success_at` lets PR 1b's rule be tightened so these codes alert only when no pass has succeeded for 30 minutes (plan constant `TRANSIENT_GRACE_MIN = 30`); the permanent codes keep alerting at once.
   - Response: when `alert`, **HTTP 424** with `{ ok:false, alert:true, processed, succeeded, failed, reconciliation:{forms,discovered,enqueued,failed} }`; otherwise exactly today's 200 body. The `code` field never appears in the body. 401 and 503 are unchanged.
   - 424 is chosen because curl's `--retry` does not retry it, so the workflow does not trigger three extra passes.
 - [Workflow](../../../.github/workflows/crm-intake-scheduler.yml):
-  - On 424, print the generic line `CRM intake reported a lead-intake problem. Open Analyse marketing > Réception des leads.` and exit 1. Other non-2xx keep today's message.
+  - **Script shape.** Today the step runs under `set -euo pipefail` with `curl --fail` inside a command substitution, so curl exits 22 on any HTTP error and the script stops before its `case`: only curl's own message prints. The step drops `--fail` (keeping `--show-error`, the timeouts and `--retry`, which still retries transient 5xx), captures curl's exit code with `rc=0; http_status="$(curl … --write-out '%{http_code}' …)" || rc=$?`, then branches: `rc != 0` (network or timeout) → exit 1 with the existing message; `2??` → success; `424` → print the generic line `CRM intake reported a lead-intake problem. Open Analyse marketing > Réception des leads.` and exit 1; any other status → today's non-2xx message and exit 1. The health step (PR 1b) uses the same shape.
   - Add a `workflow_dispatch` boolean input `alert_test`. When true, the job prints `Alert test` and exits 1 **without calling the endpoint**, so the owner can confirm the failure e-mail arrives.
   - The cron line, permissions and concurrency stay unchanged, so that `elforssa` remains the actor of scheduled runs.
 - pg_cron is unaffected: it ignores the status, and `net._http_response` now shows 424 rows for the same events.
@@ -221,7 +233,7 @@ A collapsible section on `/crm/analytics`, which is already director-only in mid
    - The number of jobs to handle (blocked, retry or dead) among the latest 100.
    - Spend sync freshness: "Dépenses Meta : dernière synchronisation complète il y a X h". It turns red when Insights is enabled and the last completion is older than 2 × `refresh_interval_hours`, or missing.
    - PR 1a states plainly that a failed poll is not visible here; the GitHub e-mail reports it until PR 1b.
-2. **Formulaires importés.** Meta mappings are grouped by `form_key`, using the latest version. Each shows form name, version, Active/Retired, `effective_from`, session type and learner policy (required/optional). Website mappings are listed read-only.
+2. **Formulaires importés.** Meta mappings are grouped by `form_key`. A form is **Active** when at least one of its versions is effective (`effective_from <= now`) and unretired (`retired_at` null or later than now), exactly the claim predicate; **Planifié** when its only unretired versions start in the future; **Arrêté** when every version is retired. The row shows the latest version's form name, version number, `effective_from`, session type and learner policy (required/optional). Website mappings are listed read-only.
 3. **Publier un formulaire Meta** (dialog). Fields:
    - Meta form ID: digits only, 1–32 characters.
    - Name: up to 200 characters.
@@ -232,8 +244,8 @@ A collapsible section on `/crm/analytics`, which is already director-only in mid
      - For a form with no version yet, the default is publication time − 30 days. It can be edited but not set earlier than 90 days back, Meta's lead retention.
      - For a new version of an existing form, the default is publication time, and the date must be later than the latest version's `effective_from`. The UI enforces this, because the database does not.
 
-   The payload holds only the keys the RPC accepts, and `p_connection` is always the Meta connection (`provider = 'meta'`). A confirmation shows the summary. Errors are shown in French: `22023` → "Champs refusés : vérifiez l'identifiant et les champs"; `42501` → "Réservé à la direction".
-4. **Arrêter l'import** (retire). The confirmation reads: "Les nouveaux leads de ce formulaire ne seront plus importés. Action définitive : pour reprendre, publiez une nouvelle version." It calls `crm_retire_meta_form_mapping(p_mapping)` on the active latest version.
+   The payload holds only the keys the RPC accepts, and `p_connection` is always the Meta connection (`provider = 'meta'`). A confirmation shows the summary. Errors are shown in French: `22023` → "Champs refusés : vérifiez l'identifiant et les champs"; `42501` → "Réservé à la direction"; `40001` (version or lifecycle-barrier conflict; the 103 bodies take `lifecycle_barrier(true)`) → "Actualisez puis réessayez", with no automatic retry.
+4. **Arrêter l'import** (retire). The confirmation reads: "Les nouveaux leads de ce formulaire ne seront plus importés. Action définitive : pour reprendre, publiez une nouvelle version." It calls `crm_retire_meta_form_mapping(p_mapping)` **for every unretired version of that `form_key`**, one call per version (each call is atomic per version). After any error it refetches; while at least one version remains unretired, the form shows **Partiellement arrêté** with a button to finish. No new RPC; an atomic `crm_retire_meta_form` may be added in 2g.
 5. **Leads à traiter.** Lists jobs with status `blocked`, `retry` or `dead` among the latest 100 (labelled so), with channel (from the job's connection), received time, status, attempts and a French label of `last_error_code`. **Réessayer** appears for `blocked`/`retry` with `attempt_count < 8` and calls `crm_retry_meta_job(p_job)`; the existing kick trigger processes the job at once. A `missing_mapping` row carries the hint "publiez le formulaire avec une date d'effet antérieure au lead, puis réessayez". `dead` rows say "non réessayable : récupérez le lead dans l'Espace prospects Meta (Leads Center) et saisissez-le à la main".
 6. **Checklist** reminder: a four-line French summary of P1-C, linking to the runbook section.
 
@@ -254,7 +266,7 @@ The panel never shows tokens, secret references, lead fields or page/account IDs
 6. Compare yesterday's form leads in Ads Manager with yesterday's Meta leads in *Analyse marketing*, using Source = Formulaire Meta and the date set to yesterday. PR 1b automates this comparison.
 7. *Leads à traiter* must be empty, and the spend sync fresh.
 
-**If a GitHub failure e-mail arrives:** open the panel. A token problem (`provider_auth`, `missing_secret`) goes to the operator, following the runbook's "Expired/missing token" row; fix it within 24 hours and every lead is recovered automatically. A `missing_mapping` row means: publish the form, then **Réessayer**. Beyond 24 hours, or more than 50 leads waiting, export the missing leads from Meta's Leads Center and enter them by hand, until Phase 2b.
+**If a GitHub failure e-mail arrives:** open the panel. A token problem (`provider_auth`, `missing_secret`) goes to the operator, following the runbook's "Expired/missing token" row; fix it within 24 hours and every lead is recovered automatically. A Meta `missing_mapping` row means: publish the form, then **Réessayer**. A **website** `missing_mapping` row (decision D8) means the website sent a form key the CRM does not know: the panel lists website mappings read-only, so the director publishes the website mapping with the existing `crm_publish_website_form_mapping` RPC through the runbook's operator snippet (new runbook row, see below), then presses **Réessayer** on the job. Beyond 24 hours, or more than 50 leads waiting, export the missing leads from Meta's Leads Center and enter them by hand, until Phase 2b.
 
 **After the campaign:** leave the mapping active while the form exists in Meta, because late leads still arrive. Retire it only when the form is archived.
 
@@ -282,7 +294,7 @@ The analytics page reads `settings.attribution_enrichment.started_at` from the M
 - `jobs`: per channel (`meta`, `website`), `blocked_recent` and `dead_recent` (`updated_at > now() − 7 days`), `pending_stuck` (`pending`/`retry` with `created_at < now() − 30 min`), and the plain totals.
 - `insights`: per Meta connection with Insights configured, `enabled` (live mode and enabled), `last_completed_at`, and `stale`, meaning enabled with `last_completed_at` missing or older than 2 × `refresh_interval_hours`.
 - `lead_gap`, for the Meta connection that has both reconciliation and Insights:
-  - `window_days`: the last 3 complete account-timezone days, D−3 to D−1, keeping only days whose completed Insights rows were fetched at least 3 hours after the day ended.
+  - `window_days`: the last 3 complete account-timezone days, D−3 to D−1, keeping only days **covered by a completed sync run** (`crm_meta_sync_runs.status = 'completed'`, `date_from <= day <= date_to`) whose `completed_at` is at least 3 hours after that day ended. Day selection uses run completion, not row `fetched_at`, because a day with no spend has a completed run but no Insights rows; such a day counts as `meta_reported` 0.
   - `meta_reported`: the sum of `onsite_conversion.lead_grouped` over those days, from completed runs.
   - `crm_received`: Meta attribution rows on that connection's page whose `provider_created_at`, in the account time zone, falls in those days.
   - `gap = meta_reported − crm_received`.
@@ -294,7 +306,7 @@ The analytics page reads `settings.attribution_enrichment.started_at` from the M
   - `insights_stale`;
   - `meta_leads_missing` when `gap >= 2` (plan constant `LEAD_GAP_ALERT`).
 
-  Only Meta > CRM counts: organic or test leads make the CRM side higher, which is never an alert. Three-day sums absorb the day-boundary skew of Meta's reporting date.
+  Only Meta > CRM counts: organic or test leads make the CRM side higher, which is never an alert. Three-day sums absorb the day-boundary skew of Meta's reporting date. **Known limit:** the comparison is per connection, not per form, so organic or test leads on an imported form can mask an equal number of ad leads missing on an unpublished form. The launch checklist's test lead and daily comparison remain the per-form check.
 
 **Route `GET /api/cron/crm-health`:**
 
@@ -302,7 +314,7 @@ The analytics page reads `settings.attribution_enrichment.started_at` from the M
 - It calls the RPC through the service-role client and returns `{ ok, alert }`: no counts, no reasons, because the body is not needed by the caller. 200 when there is no alert, **424** when there is one, 503 on storage error, 401 on a wrong bearer.
 - It does nothing else.
 
-**Workflow:** a second step, `if: always()`, calls the health route with the same curl options and prints the generic line on non-2xx. A run then fails if intake **or** health fails.
+**Workflow:** a second step, `if: always()`, calls the health route with the same script shape as P1-A (no `--fail`, exit code captured, branch on `%{http_code}`) and prints the generic line on 424 or any other non-2xx. A run then fails if intake **or** health fails.
 
 **Panel:** the status line calls `crm_get_intake_health()` as director. It shows a red banner per reason in French, the last pass time, the failing code label, and the Meta-versus-CRM lead counts of the last 3 complete days.
 
@@ -312,7 +324,7 @@ The analytics page reads `settings.attribution_enrichment.started_at` from the M
 
 Each item is its own PR, architecture-approved by this plan once its owner decision is recorded. Each has its own migration release approval.
 
-- **2b — per-form catch-up (ADR-002 amendment, proposed below).**
+- **2b — per-form catch-up (ADR-002 amendment, accepted below).**
   - Add nullable columns `covered_until timestamptz`, `catchup_before timestamptz` and `last_success_at timestamptz` to `crm_meta_reconciliation_state`.
   - Lower bound = `greatest(started_at, earliest active mapping effective_from for the form, covered_until − 10 min, now − 28 days)` (plan constant `CATCHUP_MAX_DAYS = 28`), with `lookback_minutes` kept as the minimum re-scan.
   - At most 4 pages × 25 per pass. If the pass stops before the lower bound, it records `catchup_before` (the oldest `created_time` seen) and becomes due again in 1 minute. The next pass resumes with Graph `filtering` on `time_created LESS_THAN catchup_before`.
@@ -336,7 +348,10 @@ Each item is its own PR, architecture-approved by this plan once its owner decis
   - Conversion, revenue and enrollment rows are untouched. Tier 3.
 - **2f — retention (D7).**
   - A daily pg_cron job calls `crm_security.apply_crm_retention()`, in batches of 500, returning counts:
-    - (a) redact `crm_submission_attribution` rows older than the approved raw-copy period, using the existing terminal redaction transition. It excludes any row the lifecycle functions could still need (the implementer derives the exact predicate from 099/102–104; **stop** if it cannot be stated). Redaction also sets `retention_until`.
+    - (a) redact `crm_submission_attribution` rows older than the approved raw-copy period, using the existing terminal redaction transition. It excludes any row the lifecycle functions could still need (the implementer derives the exact predicate from 099/102–104; **stop** if it cannot be stated).
+      - **Ordering against `protect_attribution` (078):** the redaction update may change only `raw_payload`, `fbclid`, `fbc`, `fbp`, `consent_evidence` and `redacted_at`, and a redacted row is terminal. So `retention_until` is set in an **earlier, separate update**, which the trigger allows while the column is still NULL (fill-only enrichment), for example at capture or on the job's first pass. It is never set by the redaction update itself; if that ordering cannot be met, `retention_until` is left NULL and the policy is enforced by the job alone.
+      - **Lifecycle impact:** any `redacted_at` makes the lifecycle functions (099, 103) return `identity_redacted` for that submission, Meta rows included, even though `lead_id` survives. D7(a)'s 90 days is therefore a **hard cutoff for lifecycle events** on that lead: none can be sent after it. This must be restated when lifecycle activation (H4) is planned.
+      - **Alignment with 103:** `crm_cleanup_lifecycle_retention` (103) already erases delivery payloads 30 days after terminal state and attempt diagnostics after 90 days. 2f uses the same batch pattern (`p_limit`, `for update skip locked`, counts returned), never redacts a row with a non-terminal lifecycle delivery, and runs after that cleanup in the same daily job.
     - (b) erase website job payloads past the same period, `done` jobs only: a new `payload_erased_at` column, payload replaced by `{}`, `payload_hash` kept so idempotent replays still detect conflicts.
     - (c) delete `anon_rate_limits` rows older than 1 hour, globally.
     - (d) delete `cron.job_run_details` rows older than 14 days.
@@ -348,21 +363,21 @@ Each item is its own PR, architecture-approved by this plan once its owner decis
 
 **Parked, not designed here:** an e-mail alert to the director from the application (D2 = B); form discovery from Meta; lead-level anonymisation (D7 rule only).
 
-## Proposed ADR-002 amendment
+## ADR-002 amendment (accepted)
 
-[ADR-002](../decisions/ADR-002-meta-intake-and-reconciliation.md#proposed-amendment--lead-intake-reliability-lir-r1-2026-10-24) receives a **proposed** amendment:
+[ADR-002](../decisions/ADR-002-meta-intake-and-reconciliation.md#accepted-amendment--lead-intake-reliability-lir-r1-2026-10-24) carries the amendment, **accepted** with the owner's approval of this plan (2026-10-24):
 
-- (1) the intake scheduler signals real failures with a non-2xx status, and the health check, not the schedule firing, proves intake works;
+- (1) the intake scheduler signals real failures with a non-2xx status, and the health check, not the schedule firing, proves intake works. A job that dies after 8 attempts is reported only by PR 1b, not by P1-A;
 - (2) Phase 2b replaces the pure rolling window with a per-form high-water mark bounded by the activation watermark, the mapping's effective date and 28 days;
 - (3) the GitHub backup's real cadence is recorded.
 
-It becomes accepted only with the owner's approval of this plan.
+Accepted as architecture only; each implementation and Production step keeps its own approval gate.
 
 # Security boundaries
 
 - Director-only everywhere new. P1-B uses only RPCs that already enforce `require_reader(true)`. The health RPC enforces director or `service_role`. `/crm/analytics` is already gated by role in middleware and `loginDestination`.
 - No new grant to `anon`; no new table grant; RLS is unchanged.
-- No token, secret reference, page/account ID, form answer or contact field enters an API response, a workflow log or the health output. The workflow logs, which are public, print fixed generic lines only.
+- No token, secret reference, page/account ID, form answer or contact field is **displayed** in the panel, **logged** in a workflow or returned by the scheduler or the health route/RPC. The workflow logs, which are public, print fixed generic lines only. Note: `crm_get_meta_diagnostics` already returns full connection rows (including `page_id`, `account_id`, the secret *reference* name and `insights_settings`) to the director's browser today; this is director-only and unchanged, and the panel must not render those fields.
 - The health route reuses the intake bearer for a read-only call; no new secret. The bearer stays server-side and in GitHub secrets.
 - Scheduler responses stay counts-only plus one boolean.
 - Mapping immutability, attribution immutability, the conversion rules and the enqueue identity are untouched. 2e is the only exception to a protection trigger: narrow, audited, director-only.
@@ -382,7 +397,7 @@ It becomes accepted only with the owner's approval of this plan.
 - `scripts/test-crm-intake-scheduler.mjs` gains these cases:
   - poll codes `provider_auth`, `missing_secret`, `rate_limit`, `storage_unavailable` and a thrown reconcile → 424 with `ok:false, alert:true`, no `code` in the body, key allowlist;
   - `reconciliation_lease_lost`, `reconciliation_disabled`, `reconciliation_form_inactive` → 200;
-  - a job outcome with each `ALERT_JOB` code → 424, a `retry` code → 200 (the existing case stays);
+  - a job outcome with each `ALERT_JOB` code → 424, an outcome `{status:'blocked'}` without `error_code` → 424, a `retry` code → 200 (the existing case stays);
   - 401 and 503 unchanged; concurrent invocation still finalizes once.
 - `scripts/test-crm-meta-reconciliation.mjs`: `code` is returned for every error path and is `null` on success.
 - A new `scripts/test-crm-intake-admin.mjs` (pure) covers:
@@ -394,12 +409,13 @@ It becomes accepted only with the owner's approval of this plan.
 - A new `scripts/test-crm-intake-admin-local.mjs` (local Supabase, CI local-database lane) runs the real RPCs as a synthetic director:
   - publishing with a back-dated `effective_from` makes the claim include the form;
   - a seeded `blocked`/`missing_mapping` job retried after that publication finalizes once;
-  - retiring stops claims;
+  - a form with **two unretired versions**: *Arrêter l'import* retires both, after which there is no claim and a lead for that form creates no `missing_mapping` job; retiring only one version leaves the form Active and claimed (the regression that motivated the fix);
+  - a seeded blocked **website** job retried with `crm_retry_meta_job` after its website mapping is published finalizes once;
   - receptionist/admin/anon calls are refused (`42501`).
 - Browser:
   - the director sees the panel, publishes, retires and retries, with the RPC called with the exact payload;
   - receptionist and admin cannot reach `/crm/analytics` (existing navigation/middleware suites).
-- A workflow static assertion: the 424 branch, the `alert_test` input that does not call the endpoint, and cron/permissions unchanged.
+- A workflow test that runs the step's script with a **stubbed `curl`** on `PATH` (no network) for HTTP 200, 424, 503 and a curl failure (exit 7): exit 0 only for 200; the generic 424 line printed for 424; today's non-2xx message for 503; the network message for exit 7. Plus a static assertion: the `alert_test` input exits 1 without calling curl, and cron/permissions/concurrency are unchanged.
 - `npm run lint`, `npm run build`, `npm test`, `test:crm-intake`, `test:crm-insights`, navigation and middleware suites. The `.github/**` change puts the PR in the full CI lane.
 
 **PR 1b**
@@ -408,11 +424,11 @@ It becomes accepted only with the owner's approval of this plan.
   - grants: anon, receptionist and admin are denied; director and `service_role` are allowed;
   - each reason fires on a synthetic fixture and is silent without it;
   - benign poll codes are ignored;
-  - `lead_gap` uses account-timezone days, excludes incomplete days, never alerts when CRM > Meta, and alerts at gap 2 but not 1;
+  - `lead_gap` uses account-timezone days; selects days by completed sync-run coverage (a covered day with no Insights rows counts as 0); excludes days not yet covered 3 h after their end; never alerts when CRM > Meta; alerts at gap 2 but not 1; and a fixture shows organic leads on one form masking a gap on another (documented limit, no alert);
   - an output key allowlist proves there are no PII keys;
   - upgrade rehearsal from 118.
 - Route tests: 401, 200, 424, 503; body exactly `{ok, alert}`.
-- A workflow assertion for the second step.
+- The stubbed-`curl` workflow test extended to the health step.
 - A panel browser check of the banners.
 
 **Phase 2**
@@ -420,7 +436,7 @@ It becomes accepted only with the owner's approval of this plan.
 - 2b: Graph fixtures for multi-pass catch-up, resume, a lost lease mid catch-up, the 28-day bound, the started_at floor and a back-dated new form; the 105 conflict suite still passes.
 - 2d: mixed attributed/unattributed cohort fixtures, including the mutation tests used for B2.
 - 2e: allowed/refused transitions, idempotency, the trigger exception closed outside the command.
-- 2f: the redaction predicate against lifecycle fixtures, batch bounds, the job created inactive.
+- 2f: the redaction predicate against lifecycle fixtures; `retention_until` set in a separate earlier update and the redaction update accepted by `protect_attribution`, while a combined update is refused; lifecycle returns `identity_redacted` after redaction (fixture); batch bounds; the job created inactive.
 
 # Rollout and recovery
 
@@ -442,7 +458,7 @@ Each step needs its own explicit owner approval; this plan grants none.
   - Changed: `src/lib/crm/intake/scheduler.mjs`, `src/lib/crm/meta/reconcile.mjs`, `.github/workflows/crm-intake-scheduler.yml`, `src/components/crm/MarketingAnalytics.jsx`.
   - New: `src/components/crm/LeadIntakePanel.jsx`, `src/lib/crm/intakeAdmin.mjs`, and the ratio-guard helper, in `src/lib/crm/funnel.mjs` or a new module.
   - Tests: listed above; `package.json` script wiring.
-  - Docs: [crm-operations-runbook.md](../../crm-operations-runbook.md) (checklist section, incident rows), [crm-intake-scheduler.md](../../crm-intake-scheduler.md) (424, real GitHub cadence), [crm-meta-reconciliation.md](../../crm-meta-reconciliation.md) (back-dating the first mapping), FEATURE_INDEX.
+  - Docs: [crm-operations-runbook.md](../../crm-operations-runbook.md) (checklist section, incident rows, and a new row "Website form key unknown": the director publishes the website mapping with `crm_publish_website_form_mapping` through an operator snippet, then retries the job from the panel), [crm-intake-scheduler.md](../../crm-intake-scheduler.md) (424, real GitHub cadence), [crm-meta-reconciliation.md](../../crm-meta-reconciliation.md) (back-dating the first mapping), FEATURE_INDEX.
 - **PR 1b:**
   - New: `supabase/migrations/XXX_crm_lead_intake_health.sql`, `src/app/api/cron/crm-health/route.js`, `src/lib/crm/intake/health.mjs`.
   - Changed: the workflow step and the panel status.
@@ -530,6 +546,25 @@ Moroccan law 09-08 (CNDP) requires keeping personal data no longer than needed. 
   - D8 = **B** (keep today's behaviour: stored, shown as a stuck lead, alerted, re-run after publication).
 - **Scope of this approval:** architecture approval for implementation of this plan only. It does not approve any merge, migration, data change, scheduled-job activation, Production configuration (including R-LB) or deployment; each needs its own explicit owner approval under [Rollout and recovery](#rollout-and-recovery).
 
+## Review corrections (2026-10-24, after the approval)
+
+The independent review of PR #156 at `652fbe5` returned CHANGES REQUIRED. The fixes below stay inside the approved architecture: no new RPC and no new owner decision. The approval above (revision LIR-r1 at `aa68632`) stands, together with these corrections:
+
+- **B1:** a form is Active when any version is effective and unretired (the claim predicate). *Arrêter l'import* retires every unretired version, one existing RPC call per version, showing *Partiellement arrêté* until none remain. Recorded that publishing does not retire earlier versions (Production's form has 2 unretired versions). Multi-version local test added.
+- **I1:** P1-A also alerts on outcomes with `status = 'blocked'` (`missing_policy`, `connection_disabled`). Recorded in the plan and in ADR-002 that dead-after-8-attempts is caught only by PR 1b.
+- **I2:** the workflow script drops `--fail`, captures curl's exit code and branches on the HTTP status, so the generic 424 line can print. Tested with a stubbed `curl`; the same for the health step.
+- **I3:** 2f sets `retention_until` in an earlier separate update (`protect_attribution` ordering); recorded that redaction makes the lifecycle return `identity_redacted` (D7(a) is a hard lifecycle cutoff); aligned with `crm_cleanup_lifecycle_retention` (103).
+- **Minor:**
+  - latest definitions corrected (087 for `crm_get_meta_job_mapping`; 103 for the publish/retire RPCs; `crm_insights_diagnostics` 114 listed);
+  - R-LB is a `DO` block that raises unless exactly one row becomes 1440;
+  - `net._http_response` scope note;
+  - security wording ("displayed / logged");
+  - runbook row for publishing a website mapping (D8);
+  - transient poll codes: noise accepted in Phase 1, grace rule `TRANSIENT_GRACE_MIN` after 2b;
+  - remaining "proposed" wording aligned with the accepted status;
+  - `lead_gap` selects days by sync-run completion, and its per-connection limit is documented;
+  - the test gaps listed by the review were added.
+
 ## IMPLEMENTATION CONTRACT
 
 ### Scope
@@ -560,7 +595,7 @@ Moroccan law 09-08 (CNDP) requires keeping personal data no longer than needed. 
 ### Invariants
 
 1. Scheduler and health responses carry counts, booleans and nothing else. Workflow logs print fixed generic lines only. No lead field, token, secret reference, page/account/form ID or error code reaches a public log.
-2. The intake endpoint answers 424 only for the non-benign poll codes and the `ALERT_JOB` codes defined above; every other path keeps today's status and body.
+2. The intake endpoint answers 424 only for the non-benign poll codes, an outcome with `status = 'blocked'`, and the `ALERT_JOB` codes defined above; every other path keeps today's status and body. A *Arrêter l'import* action retires every unretired version of the form; a form is Active exactly when the claim predicate would poll it.
 3. P1-B calls only `crm_get_meta_diagnostics`, `crm_publish_meta_form_mapping` (Meta connection only, allowed keys only), `crm_retire_meta_form_mapping` and `crm_retry_meta_job`. No new RPC, no direct table access, no route-gate change.
 4. A first mapping version defaults to publication − 30 days (floor − 90 days). A later version must be later than the latest existing version.
 5. Mapping and attribution immutability, enqueue identity, conversion and revenue rules are unchanged in Phase 1.
@@ -589,6 +624,6 @@ Stop and report, without a workaround, if any of these is true:
 ### Docs / status reporting
 
 - At implementation: the runbook, scheduler, reconciliation and FEATURE_INDEX docs as listed. SECURITY_RULES gets the health RPC and route (1b) and the detach command (2e). PRODUCT_RULES gets the retention rule once D7 is decided (2f), and the "first mapping is back-dated" rule (1a).
-- ADR-002: the proposed amendment becomes accepted on approval.
+- ADR-002: the amendment is accepted (2026-10-24); record implementation evidence there at closeout.
 - CURRENT_STATE: only dated Production evidence after each release, including the R-LB result.
 - Hand off under the AGENTS.md implementation handoff with branch, exact head SHA, PR, tier, migration filename, tests and CI reference. The author never issues a review verdict.
