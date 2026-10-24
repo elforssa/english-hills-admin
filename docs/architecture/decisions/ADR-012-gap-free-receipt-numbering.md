@@ -15,8 +15,8 @@ Receipt numbers (`EH-YYYY-NNNNN`) come from `receipt_number_seq` in a BEFORE INS
 ## Decision
 
 1. Numbers come from a one-row-per-series counter table updated inside the receipt's own transaction (`update … returning`). A rollback releases the number; the row lock serialises receipt-issuing transactions until commit.
-2. A caller cannot supply a number. An issued number can never change, and a receipt can never be hard-deleted or truncated, for any role; cancellation is a void or soft delete that keeps the number.
-3. One continuous counter across years; the year prefix comes from the Casablanca issue date (proposed default, owner decision Q7 in the plan). Width grows beyond five digits instead of truncating.
+2. A caller cannot supply a number. An issued number can never change, and a receipt can never be hard-deleted or truncated, for any role including `service_role`; cancellation is a void or soft delete that keeps the number. Two narrow exceptions (the one-off historical numbering and local test cleanup) need a transaction-local setting and an owner-level session user (`postgres` or `supabase_admin`), which no API request can provide.
+3. One continuous counter across years; the year prefix comes from the Casablanca date of `clock_timestamp()` read after the counter update, so years follow number order (owner decision Q7 = A). Width grows beyond five digits instead of truncating.
 4. Historical unnumbered receipts are numbered once, by an approved data step, in a series the owner chooses; then `receipt_number` is required.
 5. Existing gaps are never filled by renumbering; they are explained in a register for the accountant.
 

@@ -271,6 +271,7 @@ Plan: [payment corrections and receipts](../architecture/plans/payment-correctio
 - **Q6 B:** paper receipt numbers do not exist; the 54 receipts imported on 2026-09-13 get a separate historical series `EH-HIST-2026-0001` to `0054`, in payment-date order.
 - **Q7 A:** year of issue (Casablanca), one continuous counter. **Q8 A:** logged correction of the 17 legacy agreements.
 - **Q9:** payslip creation is switched off now (E-1); the accountant's validation is mandatory and the system refuses payslips until it is recorded.
+- **Revision PCR-r2 (2026-10-24):** the independent review's corrections, within these answers (no answer changes; [details](../architecture/plans/payment-corrections-receipts.md#review-corrections-pcr-r2)). Coordinator decision recorded there: Plan E governs the order of the payment checks, which are not reordered; Plan D defers to it. Q1's automatic clear applies only when every review since the last clear came from a payment cancellation. A fresh re-review is required.
 - **Not approved by this decision:** any merge, migration, deployment or data step; E-1, E-2, E-3 and D1–D3 each need their own approval.
 
 ## Deferred backlog after RCC-r1
