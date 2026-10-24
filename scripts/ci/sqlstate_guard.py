@@ -4,15 +4,14 @@ PostgREST releases before 16 treat SQLSTATE 40001 (serialization_failure) raised
 by an RPC as transient and re-run the transaction inside the server. A conflict
 that is deterministic (a stale version stays stale) therefore never returns and
 loops at about 100 transactions per second until PostgREST restarts. Migration
-105 moved reconciliation off 40001 for this reason; the remaining raises are an
-open owner decision.
+105 moved reconciliation off 40001 for this reason.
 
-Existing raises in migrations 001-118 are frozen in BASELINE below. A migration
-fails this check when it holds more matches than its baseline (zero for any new
-file). Comments, `exception when serialization_failure` handlers and
-`when sqlstate '40001'` handlers are not raises and are ignored. A reviewed
-genuine serialization retry can be allowed with a same-line comment
-`-- ci-allow-40001: <reason>`.
+Policy (ADR-009, Plan C): zero tolerance for new 40001 raises, with no per-line
+exceptions. Existing raises in migrations 001-118 are frozen per file in
+BASELINE below; a migration fails this check when it holds more matches than
+its baseline (zero for any new file). Comments, `exception when
+serialization_failure` handlers and `when sqlstate '40001'` handlers are not
+raises and are ignored.
 """
 import argparse
 from pathlib import Path
@@ -43,7 +42,6 @@ BASELINE = {
     '117_online_learning_pilot.sql': 7,
 }
 
-ALLOW = re.compile(r'--\s*ci-allow-40001:\s*\S')
 # Any literal 40001 (errcode = '40001', raise sqlstate '40001', helper
 # arguments such as fail('stale', '40001', ...)) or a raise by condition name.
 RAISES = re.compile(
@@ -61,12 +59,9 @@ def strip_comments(text):
 
 
 def raises(text):
-    """Return the 1-based line numbers of each non-allowed 40001 raise."""
-    raw = text.split('\n')
+    """Return the 1-based line numbers of each 40001 raise."""
     hits = []
     for number, code in enumerate(strip_comments(text), 1):
-        if ALLOW.search(raw[number - 1]):
-            continue
         code = HANDLER.sub('', code)
         hits.extend(number for _ in RAISES.finditer(code))
     return hits
@@ -92,8 +87,7 @@ def main():
         for error in errors:
             print('  ' + error, file=sys.stderr)
         print('Raise stale/conflict errors with a non-retryable code (for example PT409, or P0001 with a HINT) '
-              'and map it in the browser. For a reviewed genuine serialization retry, add '
-              "'-- ci-allow-40001: <reason>' on that line.", file=sys.stderr)
+              'and map it in the browser. New 40001 raises are not allowed (ADR-009).', file=sys.stderr)
         return 1
     print('No new SQLSTATE 40001 raises in migrations')
     return 0

@@ -351,6 +351,7 @@ jobs:
 
       # Browser shards: build once, then serve the build to the API and browser suites.
       - name: Build and start the local app
+        id: app
         if: matrix.browsers
         run: |
           npm run build
@@ -363,32 +364,34 @@ jobs:
 
       # Shard browser-security: role, family-isolation, storage and finance suites.
       # Batch 4B needs empty storage and Batch 2 needs zero directors, so they run first.
+      # Each suite creates and removes its own fixtures, so the suites still run after
+      # an earlier one fails (the job still fails); one run reports every failure.
       - name: Batch 4B storage inventory and backfill tooling
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch4b-storage.mjs
       - name: Batch 2 role transitions, last-director guard and races
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch2-security.mjs --app
       - name: Batch 1 profile, pending-role and soft-delete matrix
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch1-security.mjs --app
       - name: Batch 3A payroll, attendance and invitation API roles
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch3a-security.mjs --app
       - name: Batch 3B parent ownership and family isolation
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch3b-security.mjs
       - name: Batch 4A storage API denials and receipt delivery state
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch4a-security.mjs
       - name: Batch 4C storage authorization enforcement
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch4c-storage-enforcement.mjs
       - name: Receptionist storage permissions
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-receptionist-storage.mjs
       - name: Receipt deletion browser flow
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: |
           # This suite targets port 3017; serve the same build there.
           npm run start -- --hostname 127.0.0.1 --port 3017 > /tmp/hills-next-3017.log 2>&1 &
@@ -399,7 +402,7 @@ jobs:
           curl -fsS http://127.0.0.1:3017/login > /dev/null
           node scripts/test-receipt-deletion-browser.mjs
       - name: Large data, receptionist and online learning browser suites
-        if: matrix.shard == 'browser-security'
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: |
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs

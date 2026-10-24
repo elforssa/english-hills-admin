@@ -30,21 +30,21 @@ class SqlstateGuardTests(unittest.TestCase):
             "raise exception 'stale' using errcode = 'serialization_failure';",
             "raise serialization_failure using message = 'stale';",
             "raise exception serialization_failure;",
-            "if stale then raise exception 'x' using errcode='40001'; end if; -- ci-allow-40001:",
+            "if stale then raise exception 'x' using errcode='40001'; end if;",
+            "raise exception 'retry' using errcode='40001'; -- ci-allow-40001: no per-line exceptions",
         ):
             with self.subTest(body=body):
                 errors = guard.check(fixture({'119_new.sql': body + '\n'}))
                 self.assertEqual(len(errors), 1)
                 self.assertIn('119_new.sql', errors[0])
 
-    def test_non_raises_and_reviewed_exceptions_pass(self):
+    def test_non_raises_pass(self):
         for body in (
             "-- this used to raise errcode='40001'",
             "/* errcode='40001'\n   still a comment */ select 1;",
             "exception when serialization_failure then return null;",
             "exception when sqlstate '40001' then perform pg_sleep(0);",
             "raise exception 'stale' using errcode='PT409', hint='refresh';",
-            "raise exception 'retry' using errcode='40001'; -- ci-allow-40001: true serializable retry",
             "select 140001, 'x40001y';",
         ):
             with self.subTest(body=body):

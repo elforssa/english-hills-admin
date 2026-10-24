@@ -65,7 +65,7 @@ Batch A (2026-10-24 audit COD-4, COD-5, COD-9, REL-1) keeps the lanes and gate m
 - A concurrency group per PR so a newer push cancels the older run. Main pushes use their commit SHA as the group and are never cancelled.
 - `local-database` runs as a `fail-fast: false` matrix of six shards on separate runners: three groups of upgrade rehearsals, rollback-only SQL plus database races, and two browser/API shards that each build and serve the app. Every rehearsal already ended by resetting to current migrations, so no step depended on another's state; order inside a shard is unchanged. The `required` gate still reads one `local-database` result, which is `success` only when every shard succeeds.
 - The previously unwired payment, receipt-deletion, role, family-isolation and storage suites run in those shards.
-- The app job rejects a migration that adds a new SQLSTATE `40001` raise beyond the frozen 001–118 baseline ([guard](../../../scripts/ci/sqlstate_guard.py)).
+- The app job rejects a migration that adds a new SQLSTATE `40001` raise beyond the frozen per-file 001–118 baseline ([guard](../../../scripts/ci/sqlstate_guard.py)). New raises have zero tolerance with no per-line exceptions (ADR-009, Plan C).
 - Database steps run through [run-step.sh](../../../scripts/ci/run-step.sh), which repeats the last output lines of a failed step as an error annotation.
 
 [Classifier regressions](../../../scripts/ci/test_verify.py) check these workflow properties.

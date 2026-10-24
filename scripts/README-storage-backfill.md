@@ -2,7 +2,7 @@
 
 This is operator tooling, not an application API. No migrations, storage
 policies, object contents/keys, or application reference columns are changed.
-Run on `codex-migration` with local Supabase at `http://127.0.0.1:54321`, Docker,
+Run on a feature branch (never `main`) with local Supabase at `http://127.0.0.1:54321`, Docker,
 the Supabase CLI, and migration 045 already installed. Do not run concurrently
 with the security suites or other fixture writers.
 
