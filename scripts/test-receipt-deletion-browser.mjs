@@ -67,7 +67,15 @@ try {
   await browser?.close();
   if (userId) {
     sql(`delete from public.financial_events where actor_id='${userId}'; delete from public.financial_requests where actor_id='${userId}'; delete from public.receipts where student_id='${studentId}'; delete from public.charges where student_id='${studentId}'; delete from public.enrollments where student_id='${studentId}'; delete from public.students where id='${studentId}';`);
-    const { error } = await db.auth.admin.deleteUser(userId);
-    if (error) throw error;
+    // Owner-only teardown, as in the batch security suites: on a disposable CI
+    // database this synthetic director is the only director, and the
+    // last-director guard (migration 042) correctly refuses to delete it.
+    sql(`begin; lock table public.profiles in access exclusive mode;
+      alter table public.profiles disable trigger role_security_guard;
+      delete from public.activity_log where actor_id='${userId}';
+      delete from auth.users where id='${userId}';
+      alter table public.profiles enable trigger role_security_guard;
+      update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');
+      commit;`);
   }
 }

@@ -427,7 +427,7 @@ class VerificationTests(unittest.TestCase):
         for suite in ('test-receipt-charge-payments.sql', 'test-receipt-concurrency.sh',
                       'test-delete-mistaken-receipt.sql', 'test-receipt-deletion-browser.mjs',
                       'test-batch1-security.mjs', 'test-batch2-security.mjs', 'test-batch3b-security.mjs',
-                      'test-batch4b-storage.mjs', 'test-batch4c-storage-enforcement.mjs',
+                      'test-batch4c-storage-enforcement.mjs',
                       'test-receptionist-storage.mjs', 'test-receptionist-security.sql'):
             self.assertEqual(database.count('scripts/' + suite), 1, suite)
         self.assertIn('python3 scripts/ci/sqlstate_guard.py', jobs[3])

@@ -3,7 +3,6 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classify, digest, humanReport, uuid } from './storage-inventory.mjs';
-import { assertLocalFeatureBranch } from './assert-local-feature-branch.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 export const LOCAL_URL = 'http://127.0.0.1:54321';
@@ -36,11 +35,7 @@ export function options(args) {
 }
 
 export function localContext(opts = {}) {
-  // Same branch rule as the other local suites (never main/master; detached
-  // checkouts only in pull-request CI). Locality is enforced below: the target
-  // and .env.local URL must be the loopback LOCAL_URL, Docker must be a local
-  // Unix socket, and SQL runs only inside the local Supabase DB container.
-  assertLocalFeatureBranch(root);
+  if (execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim() !== 'codex-migration') throw new Error('Requires codex-migration');
   const dockerHost = process.env.DOCKER_HOST || JSON.parse(execFileSync('docker', ['context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }));
   if (typeof dockerHost !== 'string' || !dockerHost.startsWith('unix://')) throw new Error('Requires a local Unix-socket Docker engine');
   const env = {};

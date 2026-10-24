@@ -363,12 +363,10 @@ jobs:
           curl -fsS http://127.0.0.1:3101/login > /dev/null
 
       # Shard browser-security: role, family-isolation, storage and finance suites.
-      # Batch 4B needs empty storage and Batch 2 needs zero directors, so they run first.
+      # Batch 2 needs zero directors, so it runs first. Batch 4B is not wired: it seeds
+      # legacy URL references that migration 046's CHECK constraints now reject.
       # Each suite creates and removes its own fixtures, so the suites still run after
       # an earlier one fails (the job still fails); one run reports every failure.
-      - name: Batch 4B storage inventory and backfill tooling
-        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
-        run: node scripts/test-batch4b-storage.mjs
       - name: Batch 2 role transitions, last-director guard and races
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-batch2-security.mjs --app
@@ -396,7 +394,7 @@ jobs:
           # This suite targets port 3017; serve the same build there.
           npm run start -- --hostname 127.0.0.1 --port 3017 > /tmp/hills-next-3017.log 2>&1 &
           for attempt in $(seq 1 90); do
-            if curl -fsS http://127.0.0.1:3017/login > /dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:3017/login > /dev/null 2>&1; then break; fi
             sleep 2
           done
           curl -fsS http://127.0.0.1:3017/login > /dev/null

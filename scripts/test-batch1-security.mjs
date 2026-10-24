@@ -44,7 +44,9 @@ async function request(actor, path, method = 'GET', body, extraHeaders = {}) {
     apikey: actor?.service ? env.SUPABASE_SERVICE_ROLE_KEY : env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     'Content-Type': 'application/json', ...extraHeaders,
   };
-  if (actor?.token) headers.Authorization = `Bearer ${actor.token}`;
+  // The local API gateway needs the service key as a bearer too (as in Batch 3A/4A).
+  if (actor?.service) headers.Authorization = `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`;
+  else if (actor?.token) headers.Authorization = `Bearer ${actor.token}`;
   const response = await fetch(base + path, {
     method, headers, redirect: 'error', signal: AbortSignal.timeout(15000),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
