@@ -10,7 +10,7 @@ const RATE_LIMITS = [
 ];
 
 const Schema = z.object({
-  userId: z.string().uuid(),
+  userId: z.guid(),
   role: z.enum(ASSIGNABLE_ROLES),
 });
 

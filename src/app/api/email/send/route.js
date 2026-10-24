@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 import { sendEmail } from '@/lib/email';
+import { readBoundedJson } from '@/lib/boundedJson.mjs';
 
 // Cap on recipients per request — defends against a compromised account
 // fanning a single call out to the whole address book.
@@ -29,6 +30,9 @@ const RATE_LIMITS = [
   { scope: 'email_send:hour',   max: 100, windowSeconds: 60 * 60 },
 ];
 
+// Fits a 200 000-character message plus the other fields; larger bodies are refused unread.
+const BODY_LIMIT = 1024 * 1024;
+
 const emailField = z.string().trim().email();
 
 const SendEmailSchema = z.object({
@@ -40,7 +44,7 @@ const SendEmailSchema = z.object({
   body:      z.string().min(1).max(200_000),
   html:      z.boolean().optional(),
   reply_to:  emailField.optional(),
-  message_id: z.string().uuid().optional(),
+  message_id: z.guid().optional(),
 });
 
 export async function POST(request) {
@@ -78,22 +82,15 @@ export async function POST(request) {
     }
   }
 
-  let raw;
-  try {
-    raw = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  const raw = await readBoundedJson(request, BODY_LIMIT);
+  if (raw.status) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: raw.status });
   }
 
-  const parsed = SendEmailSchema.safeParse(raw);
+  // Fixed message: validation issues are not echoed back.
+  const parsed = SendEmailSchema.safeParse(raw.data);
   if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: 'Invalid request payload',
-        details: parsed.error.flatten(),
-      },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Invalid request payload' }, { status: 400 });
   }
 
   const { to, subject, body, html, message_id } = parsed.data;

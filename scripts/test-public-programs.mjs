@@ -30,6 +30,6 @@ const page = readFileSync(new URL('../src/app/inscription/page.jsx', import.meta
 const route = readFileSync(new URL('../src/app/api/public/inscription/route.js', import.meta.url), 'utf8');
 assert.match(page, /PUBLIC_SESSION_TYPES\.map/);
 assert.doesNotMatch(page.replaceAll('PUBLIC_SESSION_TYPES', ''), /SESSION_TYPES/);
-assert.match(route, /import \{ InscriptionSchema \} from '@\/lib\/publicInscription\.mjs'/);
+assert.match(route, /import \{ InscriptionSchema\b[^}]*\} from '@\/lib\/publicInscription\.mjs'/);
 assert.doesNotMatch(route, /SESSION_TYPES/);
 console.log('PASS public programme subset: online types refused by the public form and API, accepted by staff screens');

@@ -83,7 +83,7 @@ const StudentRow = z.object({
   const session = data.session_type || 'Yearly';
   if (data.niveau_cefr && !getLevelsForSession(session).includes(data.niveau_cefr)) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['niveau_cefr'],
       message: `Niveau incompatible avec la session ${session}`,
     });

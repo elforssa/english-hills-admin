@@ -50,7 +50,7 @@ function calcPayroll(teacher, heures) {
 const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 const Schema = z.object({
-  teacher_id: z.string().uuid(),
+  teacher_id: z.guid(),
   mois:       z.enum(MONTHS),
   annee:      z.string().regex(/^\d{4}$/),
   heures:     z.number().min(0).max(400),

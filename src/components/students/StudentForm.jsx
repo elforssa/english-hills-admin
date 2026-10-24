@@ -40,7 +40,7 @@ const StudentSchema = z.object({
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
   referral_source: z.enum(SOURCES).optional().or(z.literal('')),
   status:         z.enum(STATUSES).optional().or(z.literal('')),
-  groupe_id:      z.string().uuid().optional().or(z.literal('')),
+  groupe_id:      z.guid().optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
 });
