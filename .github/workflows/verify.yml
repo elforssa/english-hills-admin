@@ -201,6 +201,11 @@ jobs:
         run: npm run test:crm-h3-04-local
       - name: Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance
         run: npm run test:crm-reconciliation-repair-local
+      - name: Lead intake director panel RPC acceptance
+        run: |
+          supabase db reset --local --no-seed
+          npm run test:crm-intake-admin-local
+          supabase db reset --local --no-seed
       - name: Rollback-only migration regression
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
@@ -268,6 +273,7 @@ jobs:
           npm run test:crm-opportunities-browser
           npm run test:crm-work-calendar-browser
           node scripts/test-online-learning-browser.mjs
+          npm run test:crm-intake-admin-browser
       - name: CRM revision-4 isolated concurrency
         run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
       - name: Advisory R4 forced sharing-stop race matrix

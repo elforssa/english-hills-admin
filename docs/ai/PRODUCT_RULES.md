@@ -62,6 +62,8 @@ Contact, lead/prospect, and learner/student are distinct. A parent/contact can r
 
 Immutable form mappings decide whether learner identity is required or optional. An optional unnamed inquiry can be actionable with corroborated contact and program; age ranges remain form answers, not invented integer ages. [Mapping policy](../crm-mapping-learner-policy.md).
 
+A new Meta form's first mapping version is back-dated (by default 30 days before publication, never more than 90), so leads submitted before publication are imported instead of blocking; a later version must start after the latest one. Stopping a form's import retires every unretired version. Owner decision D4 of [LIR-r1](../architecture/plans/lead-intake-reliability.md); [publishing and stopping](../crm-meta-reconciliation.md#publishing-and-stopping-a-form).
+
 Enrollment and group session/level must agree. Confirmed enrollment without a group is valid and awaits placement; assigning a group yields Validated. Removing a group preserves confirmed enrollment and historical attendance. See [enrollment workflow](../../scripts/README-enrollment-workflow.md).
 
 First acquisition touch is immutable; later submissions update latest touch without rewriting attribution. Manual prospects and website inquiries must not be represented as fake Meta acquisitions.
