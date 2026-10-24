@@ -137,7 +137,7 @@ do $$ declare l uuid; r jsonb; d jsonb; e uuid; s uuid; other uuid; before_stude
  l:=pg_temp.qualified();candidate:=public.crm_find_student_candidates(l,'Phase6 learner','2014-05-10');
  perform pg_temp.ok((candidate->>'total')::int>0,'same-name different DOB is a candidate requiring choice');
  d:=pg_temp.start_data(l);insert into students(full_name,status) values('Phase6 learner','Prospect');
- perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d),'40001');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d),'PT409');
  -- Archived records and mismatched enrollment identities are denied.
  update students set deleted_at=now() where id=other;
  d:=pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',other);

@@ -181,6 +181,9 @@ jobs:
           rm /tmp/hills-supabase-status.env
           test "$(wc -l < .env.local)" -eq 3
           grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
+      # Every shard: ADR-009 zero rule on the cumulative catalog after the fresh replay.
+      - name: ADR-009 catalog zero rule on the fresh replay
+        run: psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-sqlstate-catalog.sql
 
       # Shard upgrades-from-097-to-105: CRM revision-4, H3 and reconciliation rehearsals.
       - name: Synthetic 097 to current upgrade
@@ -291,6 +294,11 @@ jobs:
           node scripts/test-online-learning-upgrade.mjs online-first
           supabase db reset --local --version 116 --no-seed
           node scripts/test-online-learning-upgrade.mjs release-b-first
+          supabase db reset --local --no-seed
+      - name: Conflicts without retry 118 to 119 mechanical upgrade, catalog zero rule and real HTTP acceptance
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          npm run test:conflicts-local
           supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.

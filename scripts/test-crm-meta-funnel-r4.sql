@@ -210,7 +210,7 @@ create temp table qc_qualified as select x.* from jsonb_to_recordset(crm_securit
  join public.crm_external_deliveries d on d.id=x.id where d.lead_id=(select id from fx where k='qualified_converted') and d.event_kind='qualified';
 select public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.payload(d)) from public.crm_external_deliveries d join qc_qualified c on c.id=d.id;
 select public.crm_begin_external_attempt(d.id,d.lease_token) from public.crm_external_deliveries d join qc_qualified c on c.id=d.id;
-select pg_temp.denied(format('select public.crm_begin_external_attempt(%L,%L)',(select id from qc_qualified),(select lease_token from qc_qualified)),'40001');
+select pg_temp.denied(format('select public.crm_begin_external_attempt(%L,%L)',(select id from qc_qualified),(select lease_token from qc_qualified)),'PT409');
 select public.crm_finish_external_attempt(d.id,d.lease_token,'{"outcome":"unknown","error_code":"network"}') from public.crm_external_deliveries d join qc_qualified c on c.id=d.id;
 create temp table qc_converted as select x.* from jsonb_to_recordset(crm_security.claim_lifecycle_deliveries(100,true)) x(id uuid,lease_token uuid)
  join public.crm_external_deliveries d on d.id=x.id where d.lead_id=(select id from fx where k='qualified_converted') and d.event_kind='converted';

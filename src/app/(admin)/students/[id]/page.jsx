@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { entities, integrations } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { useAuth } from '@/context/AuthContext';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -115,7 +116,11 @@ function StudentDetail() {
       if (error) throw error;
       toast.success('Document ajouté');
       setReload(value => value + 1);
-    } catch (error) { toast.error(error.message); }
+    } catch (error) {
+      // Changed in the meantime (ADR-009): reload the record for review.
+      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); setReload(value => value + 1); }
+      else toast.error(error.message);
+    }
   };
 
   const sameScope = loadedScope === scope;

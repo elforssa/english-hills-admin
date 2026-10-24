@@ -108,7 +108,7 @@ begin
  perform pg_temp.act('record_whatsapp',l,'{"kind":"whatsapp_sent"}');
  perform pg_temp.ok((select status='NEW' and crm_security.failed_count(crm_leads)=0 from public.crm_leads where id=l),'notes/messages do not engage or count');
  perform pg_temp.ok((select count(*) from public.crm_tasks where lead_id=l)=tasks,'notes/messages do not change tasks');
- perform pg_temp.denied(format('select pg_temp.act(''add_note'',%L,''{"note":"stale","expected_version":1}'')',l),'40001');
+ perform pg_temp.denied(format('select pg_temp.act(''add_note'',%L,''{"note":"stale","expected_version":1}'')',l),'PT409');
  perform pg_temp.denied(format('select pg_temp.act(''add_note'',%L,''{"note":"forged","status":"CONVERTED"}'')',l));
 end $$;
 \echo PASS manual intake, shared phone, no center records, idempotency, stale versions and non-counting actions
@@ -182,7 +182,7 @@ do $$ declare l uuid:=pg_temp.intake(); t public.crm_tasks%rowtype; r jsonb; k u
  select * into t from public.crm_tasks where lead_id=l and status='open';
  perform pg_temp.act('schedule_task',l,jsonb_build_object('task_id',t.id,'task',jsonb_build_object('due_at',now()+interval '2 days')));
  perform pg_temp.ok((select version=t.version+1 and status='open' from public.crm_tasks where id=t.id),'reschedule preserves task');
- perform pg_temp.denied(format('select pg_temp.act(''schedule_task'',%L,%L::jsonb)',l,jsonb_build_object('task_id',t.id,'expected_task_version',t.version,'task',jsonb_build_object('due_at',now()+interval '3 days'))),'40001');
+ perform pg_temp.denied(format('select pg_temp.act(''schedule_task'',%L,%L::jsonb)',l,jsonb_build_object('task_id',t.id,'expected_task_version',t.version,'task',jsonb_build_object('due_at',now()+interval '3 days'))),'PT409');
  perform pg_temp.denied(format('select pg_temp.act(''complete_task'',%L,%L::jsonb)',l,jsonb_build_object('task_id',t.id,'outcome','done')));
  perform pg_temp.denied(format('select pg_temp.act(''cancel_task'',%L,%L::jsonb)',l,jsonb_build_object('task_id',t.id,'reason','No next task')));
  perform pg_temp.act('cancel_task',l,jsonb_build_object('task_id',t.id,'reason','Switch channel','next_task',pg_temp.next_task('whatsapp_followup')));
@@ -191,7 +191,7 @@ do $$ declare l uuid:=pg_temp.intake(); t public.crm_tasks%rowtype; r jsonb; k u
  data:=jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),'task_id',t.id,'expected_task_version',(select version from public.crm_tasks where id=t.id),'outcome','message sent','next_task',pg_temp.next_task());
  r:=public.crm_complete_task(k,data);
  perform pg_temp.ok(public.crm_complete_task(k,data)=r,'completed task replay exact');
- perform pg_temp.denied(format('select public.crm_complete_task(gen_random_uuid(),%L::jsonb)',data),'40001');
+ perform pg_temp.denied(format('select public.crm_complete_task(gen_random_uuid(),%L::jsonb)',data),'PT409');
  perform pg_temp.denied(format('select public.crm_complete_task(%L,%L::jsonb)',k,data||'{"outcome":"different"}'));
  perform pg_temp.ok((select completion_activity_id is not null and status='completed' from public.crm_tasks where id=t.id),'completion evidence');
 end $$;

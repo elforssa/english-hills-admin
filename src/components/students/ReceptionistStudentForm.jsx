@@ -8,6 +8,8 @@ import { getBrowserClient } from '@/lib/supabase';
 import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import StorageImage from '@/components/StorageImage';
 import { ArrowLeft } from 'lucide-react';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
+import { createLearnerIdentity, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '@/lib/studentCreate.mjs';
 
 const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary';
 const categories = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
@@ -24,14 +26,19 @@ export default function ReceptionistStudentForm() {
   const [original, setOriginal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // REL-4: one learner id from the first send to a confirmed success.
+  const [newStudentId] = useState(() => createLearnerIdentity());
   const set = (field, value) => setForm(v => ({ ...v, [field]: value }));
+  const show = student => {
+    setOriginal(student);
+    setForm(Object.fromEntries(Object.keys(initial).map(key => [key, student[key] ?? initial[key]])));
+  };
+  const load = () => entities.Student.filter({ id }).then(([student]) => { if (student) show(student); });
   useEffect(() => {
     if (!isEdit) return;
     let active = true;
     entities.Student.filter({ id }).then(([student]) => {
-      if (!active || !student) return;
-      setOriginal(student);
-      setForm(Object.fromEntries(Object.keys(initial).map(key => [key, student[key] ?? initial[key]])));
+      if (active && student) show(student);
     }).catch(err => toast.error(err.message));
     return () => { active = false; };
   }, [id, isEdit]);
@@ -59,12 +66,32 @@ export default function ReceptionistStudentForm() {
       niveau_cefr: form.niveau_cefr || null, referral_source: form.referral_source || null,
       photo_url: form.photo_url || null,
     };
-    const studentId = id || crypto.randomUUID();
+    const studentId = id || newStudentId.current();
     const { error } = await getBrowserClient().rpc('save_receptionist_student', {
       p_student: studentId, p_expected_updated_at: isEdit ? original?.updated_at : null, p_changes: changes,
     });
     setSaving(false);
+    if (error && isEdit && isRecordConflict(error)) {
+      // Changed in the meantime (ADR-009): reload the latest record for review.
+      toast.error(recordConflictMessage());
+      await load().catch(() => {});
+      return;
+    }
+    if (error && !isEdit && isReceptionistIdentityConflict(error)) {
+      // An earlier send of this learner committed; the receptionist read hides a deleted
+      // one, and a failed read keeps the id for an exact resend.
+      const conflict = await resolveReceptionistIdentityConflict(async () => {
+        const { data, error: readError } = await getBrowserClient().from('students').select('id').eq('id', studentId);
+        if (readError) throw readError;
+        return data;
+      });
+      newStudentId.settle(conflict.status);
+      toast.error(conflict.message);
+      if (conflict.status === 'already_created') router.push(`/students/${studentId}`);
+      return;
+    }
     if (error) { toast.error(error.message); return; }
+    if (!isEdit) newStudentId.settle('created');
     toast.success(isEdit ? 'Apprenant mis à jour' : 'Apprenant créé');
     router.push(`/students/${studentId}`);
   };

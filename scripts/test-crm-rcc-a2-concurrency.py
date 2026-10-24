@@ -134,7 +134,7 @@ try:
     assert named(name) == '1', 'exactly one learner after the race'
     print('PASS completed-first race: the second request is rejected before any insert', flush=True)
 
-    # (c) Held intent lock: unchanged 40001 message plus enrollment_in_progress, and the
+    # (c) Held intent lock: PT409 with the unchanged message plus enrollment_in_progress, and the
     # lock taken inside RCC-A2's local block is still held by its transaction.
     held = student('A2 race intent')
     first, second = lead('A2 race intent one'), lead('A2 race intent two')
@@ -142,7 +142,7 @@ try:
         return {'lead_id': identifier, 'expected_version': int(value(f"select version from public.crm_leads where id='{identifier}'")), 'student_choice': 'existing', 'student_id': held, 'session_type': 'Yearly', 'school_year': '2026/2027'}
     holder = Holder(f"select public.crm_start_enrollment('{uuid.uuid4()}',{quote(json.dumps(existing_payload(first)))}::jsonb);")
     blocked = call('start_enrollment', str(uuid.uuid4()), existing_payload(second))
-    assert (blocked.get('code'), blocked.get('message'), blocked.get('reason')) == ('40001', 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.', 'enrollment_in_progress'), blocked
+    assert (blocked.get('code'), blocked.get('message'), blocked.get('reason')) == ('PT409', 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.', 'enrollment_in_progress'), blocked
     payment = value(f"begin;select pg_try_advisory_xact_lock_shared(hashtextextended('crm:enrollment-intent:'||'{held}',0));rollback;")
     assert payment == 'f', 'a concurrent payment still fails fast while the enrollment transaction is open'
     holder.finish()

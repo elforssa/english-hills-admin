@@ -4,6 +4,8 @@
 
 **ACCEPTED** (Maroine, 2026-10-24) with the owner's approval of the [conflicts-without-retry-loops plan](../plans/conflicts-without-retry-loops.md#approval-record), revision NRC-r1 at head `7c98b35` (D1–D6 all A). Not implemented; implementation, migration and release each need separate approval. If a parallel architecture PR claims ADR-009 first, this record is renumbered at merge without changing its content.
 
+**Implementation (2026-10-24):** implemented on branch `feat/conflicts-without-retry-loops` by migration `119_conflicts_without_retry.sql`, the shared `src/lib/conflictErrors.mjs` and the CI checks ([implementation record](../plans/conflicts-without-retry-loops.md#implementation-record)). Not merged or deployed; 119 is not applied to Production.
+
 ## Date
 
 2026-10-24.

@@ -11,7 +11,9 @@ exceptions. Existing raises in migrations 001-118 are frozen per file in
 BASELINE below; a migration fails this check when it holds more matches than
 its baseline (zero for any new file). Comments, `exception when
 serialization_failure` handlers and `when sqlstate '40001'` handlers are not
-raises and are ignored.
+raises and are ignored. The remaining raises in the frozen baseline are redefined
+by the Batch C migration 119 (ADR-009), and the catalog zero rule
+(scripts/test-sqlstate-catalog.sql) proves none remains; no new raise is allowed.
 """
 import argparse
 from pathlib import Path

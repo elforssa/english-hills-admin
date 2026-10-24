@@ -18,6 +18,7 @@ import { queryReadState, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, progra
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { money } from '@/lib/receiptFinance';
@@ -73,7 +74,12 @@ export default function StudentsPage() {
         if (error) throw error;
         await queryClient.invalidateQueries({ queryKey: ['Student'] });
       } else await update.mutateAsync({ id: student.id, data });
-    } catch (error) { if (role === 'receptionist') toast.error(error.message); }
+    } catch (error) {
+      if (role !== 'receptionist') return;
+      // Changed in the meantime (ADR-009): reload the list for review.
+      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); await queryClient.invalidateQueries({ queryKey: ['Student'] }); }
+      else toast.error(error.message);
+    }
   };
   const patchStudent = (student, field, value) => patchStudentFields(student, { [field]: value === '' ? null : value });
 
@@ -409,7 +415,11 @@ function DossierGroupPlacement({ student, groups, onClose, onSave }) {
       if (error) throw error;
       toast.success('Groupe affecté');
       onSave();
-    } catch (error) { toast.error(error.message); }
+    } catch (error) {
+      // Changed in the meantime (ADR-009): close and reload the list for review.
+      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); }
+      else toast.error(error.message);
+    }
     finally { setSaving(false); }
   };
 

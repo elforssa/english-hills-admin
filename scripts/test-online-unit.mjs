@@ -61,6 +61,7 @@ assert.equal(onlineReason('online.drop_table'), null);
 assert.equal(onlineReason('crm_enrollment.capacity'), null);
 assert.equal(onlineErrorText({ hint: 'online.consent_missing', message: 'raw server text' }), ONLINE_REASON_TEXT.consent_missing);
 assert.ok(!onlineErrorText({ message: 'raw server text' }).includes('raw'));
+for (const code of ['PT409', '40001']) assert.equal(onlineErrorText({ code, message: 'raw server text' }), ONLINE_REASON_TEXT.stale, code);
 
 // Handlers with injected clients.
 const SECRET = 'test-provider-secret-value-0001';
@@ -145,7 +146,7 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   assert.deepEqual(result, { status: 200, body: { status: 'active', version: 2 } }); assert.equal(created, 1);
   assert.match(user.calls[0][1].p_room_ref, /^fake-room-/); assert.equal(user.calls[0][1].p_provider, 'fake'); noSecret(result);
   let closed = 0;
-  const stale = userClient({ role: 'director', rpc: { online_activate_course: () => ({ data: null, error: { code: '40001', hint: 'online.stale' } }) } });
+  const stale = userClient({ role: 'director', rpc: { online_activate_course: () => ({ data: null, error: { code: 'PT409', hint: 'online.stale' } }) } });
   const refused = await handleCourseAction({ action: 'activate', body: { group: GROUP, version: 1 }, env: LIVE, getUserClient: async () => stale.client,
     getProvider: () => ({ ...fake, closeRoom: async () => { closed += 1; } }) });
   assert.deepEqual(refused, { status: 409, body: { reason: 'stale' } }); assert.equal(closed, 1);
@@ -163,9 +164,12 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   const mismatch = await handleCourseAction({ action: 'close', body: { group: GROUP, version: 2 }, env: LIVE, getUserClient: async () => userClient({ role: 'admin', rpc: { online_close_course: () => ({ data: { status: 'closed', version: 3, revoked: 0 }, error: null }) } }).client,
     getServiceClient: () => otherProvider.client, getProvider });
   assert.deepEqual(mismatch.body, { status: 'closed', version: 3, revoked: 0, provider_closed: false }); assert.deepEqual(roomsClosed, []);
-  const refusedClose = await handleCourseAction({ action: 'close', body: { group: GROUP, version: 9 }, env: LIVE, getUserClient: async () => userClient({ role: 'admin', rpc: { online_close_course: () => ({ data: null, error: { code: '40001' } }) } }).client,
-    getServiceClient: () => { throw new Error('must not resolve after a refused close'); }, getProvider });
-  assert.deepEqual(refusedClose, { status: 409, body: { reason: 'stale' } });
+  // A hint-less record conflict (PT409, or the legacy code before migration 119) is still stale.
+  for (const code of ['PT409', '40001']) {
+    const refusedClose = await handleCourseAction({ action: 'close', body: { group: GROUP, version: 9 }, env: LIVE, getUserClient: async () => userClient({ role: 'admin', rpc: { online_close_course: () => ({ data: null, error: { code } }) } }).client,
+      getServiceClient: () => { throw new Error('must not resolve after a refused close'); }, getProvider });
+    assert.deepEqual(refusedClose, { status: 409, body: { reason: 'stale' } });
+  }
 }
 
 // Lesson actions: gate, roles, and e-mails sent server-side to addresses never returned.

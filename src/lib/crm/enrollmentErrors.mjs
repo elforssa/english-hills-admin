@@ -2,6 +2,7 @@
 // message unchanged and adds a closed crm_enrollment.* HINT; the browser maps
 // only known reasons and never renders raw server text, hints or identifiers.
 import { commandError } from './presentation.mjs';
+import { isRecordConflict } from '../conflictErrors.mjs';
 
 // submit: true, false (blocked for this dialog) or 'until-change' (blocked until
 // the receptionist changes the selection). recovery drives the dialog response.
@@ -63,14 +64,15 @@ export function enrollmentFailure(error) {
   if (!isDefiniteRejection(error)) return { definite: false, reason: null, message: UNCERTAIN_MESSAGE, step: null, field: null, submit: true, recovery: 'uncertain' };
   const reason = enrollmentReason(error), known = ENROLLMENT_REASONS[reason];
   if (known) return { definite: true, reason, ...known };
-  if (error.code === '40001') return { definite: true, reason, message: commandError(error), step: null, field: null, submit: true, recovery: 'refresh' };
+  if (isRecordConflict(error)) return { definite: true, reason, message: commandError(error), step: null, field: null, submit: true, recovery: 'refresh' };
   if (error.code === '42501' && !reason) return { definite: true, reason, message: commandError(error), step: null, field: null, submit: true, recovery: 'correct' };
   const legacy = reason ? null : commandError(error);
   return { definite: true, reason, message: legacy && ![LEGACY_GENERIC, UNCERTAIN_MESSAGE].includes(legacy) ? legacy : DEFINITE_GENERIC_MESSAGE,
     step: null, field: null, submit: true, recovery: 'correct' };
 }
-// Existing request-key contract: 22023/42501/40001 discard; other SQLSTATEs and
-// uncertain outcomes retain it for an exact same-key resend.
+// Existing request-key contract: 22023/42501 and a record conflict (PT409 or the
+// legacy code) discard; other SQLSTATEs and uncertain outcomes retain it for an
+// exact same-key resend.
 export function discardsRequestKey(error) {
-  return ['22023', '42501', '40001'].includes(error?.code);
+  return ['22023', '42501'].includes(error?.code) || isRecordConflict(error);
 }

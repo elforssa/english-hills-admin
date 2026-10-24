@@ -236,7 +236,7 @@ create temp table reclaimed as select x.* from jsonb_to_recordset(public.crm_cla
 select pg_temp.ok((select r.id=o.id and r.lease_token is distinct from o.lease_token and d.attempt_count=0
   from reclaimed r join old_lease o on o.id=r.id join public.crm_external_deliveries d on d.id=r.id),
   'an unstarted expired lease is safely reclaimed with a new fence token');
-select pg_temp.denied(format('select public.crm_begin_external_attempt(%L,%L)',(select id from old_lease),(select lease_token from old_lease)),'40001');
+select pg_temp.denied(format('select public.crm_begin_external_attempt(%L,%L)',(select id from old_lease),(select lease_token from old_lease)),'PT409');
 select pg_temp.denied($q$select public.crm_prepare_external_delivery(d.id,d.lease_token,
   jsonb_set(pg_temp.live_payload(d),'{data,0,user_data,em}',to_jsonb(repeat('a',64)))) from public.crm_external_deliveries d join reclaimed r on r.id=d.id$q$,'22023');
 select public.crm_prepare_external_delivery(d.id,d.lease_token,pg_temp.live_payload(d)) from public.crm_external_deliveries d join reclaimed r on r.id=d.id;
@@ -333,7 +333,7 @@ select pg_temp.ok((select (result->>'terminated')::integer=0 and (result->>'payl
  'retention cleanup is idempotent');
 
 select pg_temp.actor(1);
-select pg_temp.denied(format('select public.crm_retire_lifecycle_policy(%L,0)',(select id from fixture_policy)),'40001');
+select pg_temp.denied(format('select public.crm_retire_lifecycle_policy(%L,0)',(select id from fixture_policy)),'PT409');
 select public.crm_retire_lifecycle_policy((select id from fixture_policy),1);
 select pg_temp.ok((select retired_at is not null and retired_by='8c000000-0000-0000-0000-000000000001'
   from public.crm_lifecycle_eligibility_policies where id=(select id from fixture_policy)),

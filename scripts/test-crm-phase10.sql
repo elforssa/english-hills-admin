@@ -64,7 +64,7 @@ select crm_prepare_external_delivery(id,lease_token,pg_temp.payload(d)) from crm
 select pg_temp.denied($q$select crm_prepare_external_delivery(id,lease_token,jsonb_set(pg_temp.payload(d),'{data,0,user_data,learner_age}','12')) from crm_external_deliveries d$q$,'22023');
 select pg_temp.denied($q$select crm_prepare_external_delivery(id,lease_token,jsonb_set(pg_temp.payload(d),'{data,0,user_data,em}',jsonb_build_array(repeat('b',64)))) from crm_external_deliveries d$q$,'22023');
 select crm_begin_external_attempt(id,lease_token) from crm_external_deliveries;
-select pg_temp.denied($q$select crm_begin_external_attempt(id,lease_token) from crm_external_deliveries$q$,'40001');
+select pg_temp.denied($q$select crm_begin_external_attempt(id,lease_token) from crm_external_deliveries$q$,'PT409');
 select crm_finish_external_attempt(id,lease_token,'{"outcome":"unknown","error_code":"timeout"}') from crm_external_deliveries;
 select pg_temp.ok((select status='unknown' and next_attempt_at>now() and attempt_count=1 from crm_external_deliveries),'uncertainty visible with bounded retry');
 select pg_temp.denied($q$update crm_external_delivery_attempts set error_code='changed'$q$);

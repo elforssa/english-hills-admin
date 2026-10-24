@@ -166,7 +166,7 @@ Documentation versus reality: [docs/crm-meta-insights.md](../../crm-meta-insight
 | Rate limit detail | Fixed backoff above. Reading `estimated_time_to_regain_access` is an optional refinement, not required for acceptance. |
 | Uncertain publish (RPC call timed out or returned no result) | No status write. The lease expires after 10 minutes; a later claim re-fetches and re-publishes. If the earlier publish had actually committed, the run is already `completed` and is never re-claimed. Replay is safe because publishing is an idempotent full-range replace. **No automatic uncertain replay** of a different kind exists: nothing is marked succeeded or failed without evidence. |
 | Overlapping requests | Unchanged: same request key and range returns the same run; a different range with the same key conflicts; overlapping active ranges serialise. |
-| Lease loss | Unchanged: `finish`/`fail` with a stale lease raise `40001` and write nothing. |
+| Lease loss | Unchanged: `finish`/`fail` with a stale lease raise `PT409` (`40001` before migration 119, [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md)) and write nothing. |
 
 ### D6 — Reporting and page behaviour with USD spend and MAD revenue
 
@@ -403,7 +403,7 @@ Update [docs/crm-meta-insights.md](../../crm-meta-insights.md) for the live cont
 2. **Automatic retry is live-only.** D5's transient backoff applies to runs whose frozen mode is `live`; mock runs keep the 089 failure contract, so the invariant "mock mode behaviour and existing tests keep passing" holds unchanged.
 3. **Mock default window.** `refresh_days` defaults to 28 for live and stays 7 for mock (089 behaviour); `refresh_interval_hours` defaults to 6 for both.
 4. **Claim response** adds `attempt_count`, so the worker can count a transient failure as deferred rather than failed. Signatures and grants are unchanged.
-5. **Error codes.** An identity or mode change blocked by a queued run raises `40001` (retry later); one blocked by a completed run raises `22023` (reconciliation needed).
+5. **Error codes.** An identity or mode change blocked by a queued run raises `PT409` (`40001` before migration 119, [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md)) (retry later); one blocked by a completed run raises `22023` (reconciliation needed).
 6. **Adapter mapping.** Graph error codes in the response body are read before the HTTP status, because Meta can return throttling code 4 with HTTP 403; a redirect rejected by the platform fetch maps to `invalid_data`.
 7. **Configuration panel** reads the Meta connection list and its `version` from the existing director-only `crm_get_meta_diagnostics`, so `crm_insights_diagnostics` gains only the D9 fields. The panel pre-fills API version `v25.0` (on 2026-10-09 Meta's Marketing API table lists v25.0 as latest; v26.0 appears only in the Graph API table) and the reference name `CRM_META_INSIGHTS_TOKEN_EH_KAL`; both are editable and validated by the RPC.
 8. **Enqueue interval.** "No run created within `refresh_interval_hours`" counts every run of the connection, as written, so a backfill submission also postpones the next automatic refresh by up to one interval.

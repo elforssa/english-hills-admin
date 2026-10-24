@@ -103,6 +103,10 @@ Meta Insights has reporting/snapshot architecture, fixture processing and, from 
 
 [Email](../../src/lib/email.js) uses server-side Resend via authenticated routes and receipt workflows; local development disables external email. WhatsApp links/activity recording are not proof of an automated WhatsApp provider integration. Provider readiness must be established separately from UI availability.
 
+## Record conflicts
+
+Deliberate conflicts (stale version, lost lease, busy lock, translated deadlock) raise `PT409`, never the retryable `40001` ([ADR-009](../architecture/decisions/ADR-009-conflicts-never-retryable.md)); the browser reads them only through `src/lib/conflictErrors.mjs`. CI enforces it on new migration files, on `src/` and on the cumulative catalog. Implemented by migration 119 on the Batch C branch ([plan NRC-r2](../architecture/plans/conflicts-without-retry-loops.md#implementation-record)); not merged or deployed.
+
 ## Infrastructure and security
 
 [Session clients](../../src/lib/supabase.js) and the [server-only privileged client](../../src/lib/supabase-admin.js) have different authority. Secrets resolve transiently on the server, never from database payloads or browser bundles. SECURITY DEFINER RPCs require explicit actor/role validation, fixed search paths and restricted grants. Storage access uses the asset registry and authorized signing/finalization rather than public dossier URLs.
