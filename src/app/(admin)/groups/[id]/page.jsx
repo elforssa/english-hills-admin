@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQueryClient } from '@tanstack/react-query';
@@ -91,7 +92,9 @@ export default function GroupDetail() {
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch (error) {
-      toast.error(error.message);
+      // Changed in the meantime (ADR-009): reload the members for review.
+      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); refreshMemberships(); }
+      else toast.error(error.message);
     } finally {
       setBusyId(null);
     }
@@ -109,6 +112,7 @@ export default function GroupDetail() {
           p_student_updated_at: s.updated_at, p_enrollment_updated_at: matching[0]?.updated_at || null,
         })
         : await getBrowserClient().rpc('remove_student_group', { p_student: s.id, p_group: id });
+      if (error && isRecordConflict(error)) { toast.error(recordConflictMessage()); refreshMemberships(); return; }
       if (error) { toast.error(error.message); return; }
       refreshMemberships();
       toast.success(`${s.full_name} retiré(e) du groupe`);

@@ -140,8 +140,8 @@ do $$ declare k text; answer jsonb; l uuid; newer uuid; older uuid; r jsonb; r2 
  select count(*) into before_count from public.crm_activities where lead_id=l;
  perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d));
  perform pg_temp.ok((select status='NEW' and version=1 from public.crm_leads where id=l) and before_count=(select count(*) from public.crm_activities where lead_id=l) and (select status='open' from public.crm_tasks where id=task),'failed decision rolls back task, evidence and lifecycle');
- perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d||'{"expected_version":999}'),'40001');
- perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d||'{"expected_task_version":999}'),'40001');
+ perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d||'{"expected_version":999}'),'PT409');
+ perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d||'{"expected_task_version":999}'),'PT409');
  for i in 4..7 loop
   perform pg_temp.actor(i);perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d),'42501');
  end loop;

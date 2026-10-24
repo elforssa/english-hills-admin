@@ -1,3 +1,5 @@
+import { isRecordConflict } from '../conflictErrors.mjs';
+
 export const STATUS = {
   NEW: 'Nouveau',
   CONTACTING: 'Contact en cours',
@@ -212,7 +214,7 @@ export function casablancaInstant(value) {
   return new Date(guess).toISOString();
 }
 export function commandError(error) {
-  if (error?.code === '40001') return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
+  if (isRecordConflict(error)) return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';
   if (error?.code === '42501') return 'Vous n’avez pas accès à cette action.';
   const message = error?.message || '';
   if (/Existing enrollment status requires review/i.test(message)) return 'Une inscription existe sans statut. Demandez à l’administration de la vérifier avant de poursuivre.';

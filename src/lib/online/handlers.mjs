@@ -5,6 +5,7 @@
 // no room reference and no secret ever reaches a response.
 import { onlineGate } from './gate.mjs';
 import { onlineReason } from './reasons.mjs';
+import { isRecordConflict } from '../conflictErrors.mjs';
 import { providerDisplayName } from './label.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -18,8 +19,8 @@ const STATUS = {
 const refuse = reason => ({ status: STATUS[reason] || 400, body: { reason } });
 const isUuid = value => typeof value === 'string' && UUID.test(value);
 const isVersion = value => Number.isSafeInteger(value) && value > 0;
-// A database refusal carries online.<reason> (or the stale SQLSTATE); anything else is generic.
-const fromDatabase = error => refuse(onlineReason(error?.hint) || (error?.code === '40001' ? 'stale' : 'invalid_input'));
+// A database refusal carries online.<reason> (or a record-conflict SQLSTATE); anything else is generic.
+const fromDatabase = error => refuse(onlineReason(error?.hint) || (isRecordConflict(error) ? 'stale' : 'invalid_input'));
 
 async function caller(getUserClient, roles) {
   const client = await getUserClient();

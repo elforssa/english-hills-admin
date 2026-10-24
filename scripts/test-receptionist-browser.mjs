@@ -311,6 +311,22 @@ try {
   await page.getByRole('heading', { name: 'Modifier l’apprenant' }).waitFor();
   assert.equal(await page.getByRole('textbox', { name: 'Email apprenant' }).getAttribute('readonly'), '');
   assert.equal(await page.getByRole('combobox', { name: 'Groupe assigné' }).count(), 0);
+  // ADR-009: an edit made stale by a second session answers at once with the French
+  // conflict text (never the raw "Student unavailable or stale") and reloads the record.
+  await page.getByRole('textbox', { name: 'Téléphone' }).fill('0600000111');
+  sql(`update public.students set telephone='0600000222',updated_at=now() where id='${readyStudent}'`);
+  const staleSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_student'));
+  const staleStart = Date.now();
+  await page.getByRole('button', { name: 'Enregistrer' }).click();
+  const staleResponse = await staleSave;
+  assert.equal(staleResponse.status(), 409); assert.equal((await staleResponse.json()).code, 'PT409');
+  await page.getByText('Cette fiche a été modifiée entre-temps. Les informations sont actualisées : vérifiez puis recommencez.').waitFor();
+  assert(Date.now() - staleStart < 5000, 'conflict shown at once');
+  assert.equal(await page.getByText('Student unavailable or stale').count(), 0);
+  await page.waitForFunction(() => [...document.querySelectorAll('input')].some(input => input.value === '0600000222'));
+  assert.equal(await page.getByRole('textbox', { name: 'Téléphone' }).inputValue(), '0600000222', 'record reloaded');
+  assert(page.url().endsWith(`/students/${readyStudent}/edit`));
+  console.log('PASS stale receptionist edit: HTTP 409 PT409 at once, French conflict text, latest record reloaded');
   await page.goto(app + '/students/new');
   await page.getByRole('heading', { name: 'Ajouter un apprenant' }).waitFor();
   await page.getByRole('combobox', { name: 'Session' }).waitFor();

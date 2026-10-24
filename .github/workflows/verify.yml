@@ -110,6 +110,8 @@ jobs:
           rm /tmp/hills-supabase-status.env
           test "$(wc -l < .env.local)" -eq 3
           grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
+      - name: ADR-009 catalog zero rule on the fresh replay
+        run: psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-sqlstate-catalog.sql
       - name: Opportunities stateful 106 upgrade and bounded read acceptance
         run: |
           supabase db reset --local --version 106 --no-seed
@@ -201,6 +203,10 @@ jobs:
         run: npm run test:crm-h3-04-local
       - name: Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance
         run: npm run test:crm-reconciliation-repair-local
+      - name: Conflicts without retry 118 to 119 mechanical upgrade, catalog zero rule and real HTTP acceptance
+        run: |
+          npm run test:conflicts-local
+          supabase db reset --local --no-seed
       - name: Rollback-only migration regression
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql

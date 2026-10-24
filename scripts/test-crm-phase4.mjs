@@ -9,7 +9,7 @@ assert.throws(()=>casablancaInstant('invalid'));
 let ids=0;const first=retryKey(null,'note',{expected_version:1,note:'Hello'},()=>String(++ids));
 assert.equal(retryKey(first,'note',{expected_version:1,note:'Hello'},()=>String(++ids)),first);
 assert.notEqual(retryKey(first,'note',{expected_version:2,note:'Hello'},()=>String(++ids)).key,first.key);
-assert.match(commandError({code:'40001',message:'private sql details'}),/actualisées/);
+for(const code of ['PT409','40001'])assert.match(commandError({code,message:'private sql details'}),/actualisées/);
 assert.match(commandError({code:'22023',message:'No effective follow-up policy; ask a director to publish one'}),/directeur/);
 assert.doesNotMatch(commandError({message:'secret table internals'}),/secret|internals/);
 const files=['CrmWorkspace.jsx','LeadDetailSheet.jsx','CrmActionDialog.jsx'];

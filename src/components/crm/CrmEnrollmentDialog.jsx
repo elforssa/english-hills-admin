@@ -7,6 +7,7 @@ import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import { retryKey, casablancaInstant } from '@/lib/crm/presentation.mjs';
 import { ENROLLMENT_STATUS, PROGRAMS, enrollmentSchoolYear } from '@/lib/crm/enrollment.mjs';
 import { ENROLLMENT_REASONS, discardsRequestKey, enrollmentFailure } from '@/lib/crm/enrollmentErrors.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { birthDateReason, casablancaNowInput, casablancaToday, enrollmentSuccess, followupNotice, followupReason, submitReason } from '@/lib/crm/enrollmentActions.mjs';
 import { Pager, ReadState } from './CrmShared';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
@@ -95,13 +96,13 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
       if (discardsRequestKey(err)) pending.current = null;
       if (next.submit === false) setBlocked({ intent: null });else if (next.submit === 'until-change') setBlocked({ intent });
       let target = next.step || (!next.reason && ['22023', '42501'].includes(err.code) ? 2 : null);
-      if (next.recovery === 'discovered' || err.code === '40001' || next.recovery === 'linked') {
+      if (next.recovery === 'discovered' || isRecordConflict(err) || next.recovery === 'linked') {
         const latest = await crmRpc('crm_get_workspace_detail', { p_lead: lead.id }).catch(() => null);
         if (latest?.enrollment) { setResult({ data: { lead: latest, enrollment: latest.enrollment }, origin: 'discovered' });await refresh();return; }
         if (latest) setVersion(latest.version);
         if (next.recovery === 'linked') await refetchContext();
         else if (next.recovery === 'enrollments') { await enrollments.refetch();setForm(f => ({ ...f, enrollment: null })); }
-        else if (err.code === '40001' && next.recovery !== 'retry') {
+        else if (isRecordConflict(err) && next.recovery !== 'retry') {
           if (!linked) await candidates.refetch();if (form.choice === 'existing') await enrollments.refetch();
           setForm(f => linkedActive ? { ...f, enrollment: null } : { ...f, choice: '', student: null, enrollment: null, confirmNew: false });target = 1;
         }

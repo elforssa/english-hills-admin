@@ -28,7 +28,7 @@ select set_config('request.jwt.claim.sub','',true);select set_config('request.jw
 insert into fx values('claim',public.crm_claim_meta_jobs());
 select pg_temp.ok(jsonb_array_length((select v from fx where k='claim'))=1,'claim once');
 select pg_temp.ok(public.crm_claim_meta_jobs()='[]','active lease excluded');
-select pg_temp.denied($q$select public.crm_fail_meta_job((select id from crm_ingestion_jobs),gen_random_uuid(),'network')$q$,'40001');
+select pg_temp.denied($q$select public.crm_fail_meta_job((select id from crm_ingestion_jobs),gen_random_uuid(),'network')$q$,'PT409');
 create function pg_temp.payload(external_id text,learner text default 'Adam',program text default 'Annual English',happened timestamptz default now()) returns jsonb language sql as $$
  select jsonb_build_object('occurred_at',happened,'core_fields',jsonb_build_object('contact_name','Sara','phone','0612345678','learner_name',learner,'program_interest_text',program,'session_type','Yearly'),
  'form_answers','[{"key":"parent","label":"Parent","value":"Sara","value_type":"string","label_source":"mapping"}]'::jsonb,'source_label','Meta • Programme annuel',
@@ -128,7 +128,7 @@ do $$ declare s uuid;result jsonb;request uuid:=gen_random_uuid();begin
  select id into s from crm_submissions where match_status='needs_review' order by received_at,id limit 1;
  result:=public.crm_resolve_meta_intake(request,s,'new','{"contact_name":"Verified guardian","learner_name":"Verified child","program_interest_text":"Annual"}');
  perform pg_temp.ok(public.crm_resolve_meta_intake(request,s,'new','{"contact_name":"Verified guardian","learner_name":"Verified child","program_interest_text":"Annual"}')=result,'operational resolution idempotent');
- perform pg_temp.denied(format('select public.crm_resolve_meta_intake(gen_random_uuid(),%L,''reject'')',s),'40001');
+ perform pg_temp.denied(format('select public.crm_resolve_meta_intake(gen_random_uuid(),%L,''reject'')',s),'PT409');
 end $$;
 select pg_temp.ok(not exists(select 1 from pg_class where relname in ('crm_integration_connections','crm_ingestion_jobs','crm_form_mappings') and not relrowsecurity),'RLS enabled');
 select pg_temp.ok(not exists(select 1 from information_schema.role_table_grants where table_name in ('crm_integration_connections','crm_ingestion_jobs','crm_form_mappings') and grantee in ('anon','authenticated','service_role')),'no direct table grants');

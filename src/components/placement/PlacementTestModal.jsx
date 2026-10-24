@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 import { crmRpc, useCrmRefresh } from '@/lib/crm/queries';
 import { retryKey, commandError } from '@/lib/crm/presentation.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -124,7 +125,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
     } catch (err) {
       if (linked) {
         setError(commandError(err));
-        if (err?.code === '40001') {
+        if (isRecordConflict(err)) {
           const latest = await crmRpc(booking ? 'crm_get_workspace_detail' : 'crm_get_placement', booking ? { p_lead: crmLead.id } : { p_test: test.id }).catch(() => null);
           if (latest) setExpected({ lead: latest.version, task: latest.confirm_placement_task, updated: latest.updated_at });
           request.current = null;

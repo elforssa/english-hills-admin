@@ -14,6 +14,7 @@ import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType } f
 import PersonLink from '@/components/PersonLink';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -46,6 +47,8 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
         p_group: form.id || crypto.randomUUID(), p_expected_updated_at: form.id ? form.updated_at : null,
         p_changes: payload,
       });
+      // Changed in the meantime (ADR-009): close and reload the list for review.
+      if (error && isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); return; }
       if (error) { toast.error(error.message); setSaving(false); return; }
       toast.success(form.id ? 'Groupe mis à jour' : 'Groupe créé');
     } else if (form.id) { await entities.Group.update(form.id, payload); toast.success('Groupe mis à jour'); }

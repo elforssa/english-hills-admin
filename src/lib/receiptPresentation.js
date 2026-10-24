@@ -1,3 +1,5 @@
+import { isRecordConflict } from './conflictErrors.mjs';
+
 export const SCHOOL_YEAR_START_MONTH = 9;
 const schoolClock = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Casablanca', year: 'numeric', month: 'numeric' });
 const schoolDateParts = Object.fromEntries(schoolClock.formatToParts(new Date()).map(part => [part.type, part.value]));
@@ -31,9 +33,15 @@ export function receiptServiceSummary(receipt) {
 // Any idempotency conflict (owner decision Q7) gets one receptionist-facing message.
 export const PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE = "Ce paiement a peut-être déjà été enregistré. Ne le saisissez pas une deuxième fois : ouvrez la liste des reçus de l'élève et vérifiez d'abord.";
 
+const PAYMENT_BUSY_SERVER_MESSAGE = 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.';
+export const PAYMENT_BUSY_MESSAGE = 'Un paiement ou une inscription est en cours pour cet apprenant. Actualisez puis réessayez.';
+
 export function paymentErrorMessage(error) {
   const message = String(error?.message || '');
   if (message.startsWith('Idempotency key conflict')) return PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE;
+  // A record conflict (PT409, ADR-009) stored nothing: the known busy text is
+  // already French; any other conflict gets the same busy guidance.
+  if (isRecordConflict(error) && message !== PAYMENT_BUSY_SERVER_MESSAGE) return PAYMENT_BUSY_MESSAGE;
   return message || 'Impossible d’enregistrer le paiement.';
 }
 

@@ -4,7 +4,7 @@ begin;
 create function pg_temp.ok(v boolean,label text) returns void language plpgsql as $$ begin if v is not true then raise exception 'FAIL: %',label;end if;end $$;
 create function pg_temp.denied(q text,code text default '42501') returns void language plpgsql as $$ begin begin execute q;exception when others then if sqlstate=code then return;end if;raise exception 'Expected %, got %: %',code,sqlstate,sqlerrm;end;raise exception 'Unexpected success: %',q;end $$;
 set local request.jwt.claim.role='service_role';set local request.jwt.claim.sub='';
-select pg_temp.ok((select max(version::integer)=118 from supabase_migrations.schema_migrations),'upgraded to current 118');
+select pg_temp.ok((select max(version::integer)=119 from supabase_migrations.schema_migrations),'upgraded to current 119');
 -- Migration 115 (DGI-B B1) adds the nullable columns hierarchy_source and
 -- hierarchy_error_code to crm_submission_attribution with no backfill. The 103 snapshot
 -- predates them, so the comparison drops exactly those two keys after proving they are

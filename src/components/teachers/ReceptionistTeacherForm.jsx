@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getBrowserClient } from '@/lib/supabase';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { getTeacherOperations } from '@/lib/teacher-directory';
 import { ADULT_LEVELS, LEGACY_LEVELS, YEARLY_LEVELS } from '@/lib/academicPrograms';
 
@@ -17,13 +18,15 @@ export default function ReceptionistTeacherForm() {
   const [form, setForm] = useState({ full_name: '', telephone: '', certifications: [], niveaux_autorises: [] });
   const [saving, setSaving] = useState(false);
 
+  const show = teacher => {
+    setOriginal(teacher || null);
+    if (teacher) setForm({ full_name: teacher.full_name, telephone: teacher.telephone || '',
+      certifications: teacher.certifications || [], niveaux_autorises: teacher.niveaux_autorises || [] });
+  };
   useEffect(() => {
     let active = true;
     getTeacherOperations({ id }).then(([teacher]) => {
-      if (!active) return;
-      setOriginal(teacher || null);
-      if (teacher) setForm({ full_name: teacher.full_name, telephone: teacher.telephone || '',
-        certifications: teacher.certifications || [], niveaux_autorises: teacher.niveaux_autorises || [] });
+      if (active) show(teacher);
     }).catch(err => toast.error(err.message));
     return () => { active = false; };
   }, [id]);
@@ -38,6 +41,12 @@ export default function ReceptionistTeacherForm() {
       p_teacher: id, p_expected_updated_at: original.updated_at, p_changes: form,
     });
     setSaving(false);
+    if (error && isRecordConflict(error)) {
+      // Changed in the meantime (ADR-009): reload the latest profile for review.
+      toast.error(recordConflictMessage());
+      await getTeacherOperations({ id }).then(([teacher]) => show(teacher)).catch(() => {});
+      return;
+    }
     if (error) { toast.error(error.message); return; }
     toast.success('Enseignant mis à jour');
     router.push(`/teachers/${id}`);

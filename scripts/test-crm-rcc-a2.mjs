@@ -32,7 +32,7 @@ assert.equal(ENROLLMENT_REASONS.learner_already_linked.message, ENROLLMENT_REASO
 assert(!Object.values(ENROLLMENT_REASONS).some(r => /paiement/.test(r.message) && r !== ENROLLMENT_REASONS.enrollment_in_progress), 'only the intent-lock text mentions payment');
 
 // Definite rejection only when a SQLSTATE proves the rollback.
-for (const code of ['22023','40001','42501','P0001','23514','22P02']) assert.equal(isDefiniteRejection({ code }), true, code);
+for (const code of ['22023','PT409','40001','42501','P0001','23514','22P02']) assert.equal(isDefiniteRejection({ code }), true, code);
 for (const code of ['PGRST202','PGRST301','','502','5000',undefined,null,22023]) assert.equal(isDefiniteRejection({ code }), false, String(code));
 assert.equal(isDefiniteRejection(null), false);assert.equal(isDefiniteRejection(new TypeError('Failed to fetch')), false);
 assert.equal(enrollmentReason({ code: '22023', hint: 'crm_enrollment.birth_date_future' }), 'birth_date_future');
@@ -44,25 +44,25 @@ assert.equal(enrollmentReason({ code: '22023', hint: 'Some other hint' }), null)
 const SCENARIOS = {
   request_invalid: ['22023','Valid bounded enrollment request required'], request_conflict: ['22023','Request key payload conflict'],
   lead_unavailable: ['22023','Qualified unlinked lead required'], lead_already_enrolled: ['22023','Qualified unlinked lead required'], lead_not_qualified: ['22023','Qualified unlinked lead required'],
-  lead_changed: ['40001','Stale lead version; refresh and retry'], program_invalid: ['22023','Invalid enrollment program or school year'],
+  lead_changed: ['PT409','Stale lead version; refresh and retry'], program_invalid: ['22023','Invalid enrollment program or school year'],
   school_year_invalid: ['22023','Invalid enrollment program or school year'], notes_too_long: ['22023','Invalid enrollment program or school year'],
   initial_status_not_permitted: ['42501','Only pre-confirmation enrollment initiation is permitted'], learner_already_linked: ['22023','Invalid new learner'],
   learner_link_mismatch: ['22023','Student unavailable or inconsistent'], linked_learner_unavailable: ['22023','Student unavailable or inconsistent'],
   learner_unavailable: ['22023','Student unavailable or inconsistent'], learner_choice_required: ['22023','Explicit student choice required'],
   learner_name_invalid: ['22023','Invalid new learner'], birth_date_future: ['22023','Invalid new learner'], birth_date_invalid: ['22023','Invalid enrollment fields or incompatible group'],
-  candidates_changed: ['40001','Student candidates changed; review again'], new_learner_confirmation_required: ['22023','Explicit new learner decision required'],
+  candidates_changed: ['PT409','Student candidates changed; review again'], new_learner_confirmation_required: ['22023','Explicit new learner decision required'],
   enrollment_incompatible: ['22023','Enrollment unavailable or incompatible'], enrollment_already_linked: ['22023','Enrollment unavailable or incompatible'],
-  enrollment_group_incompatible: ['22023','Enrollment group must match session and level'], enrollment_changed: ['40001','Stale enrollment; refresh and retry'],
+  enrollment_group_incompatible: ['22023','Enrollment group must match session and level'], enrollment_changed: ['PT409','Stale enrollment; refresh and retry'],
   existing_enrollment_needs_review: ['22023','Existing enrollment status requires review'], existing_enrollment_requires_selection: ['22023','Existing enrollment requires explicit selection'],
   existing_enrollment_linked_elsewhere: ['22023','Existing enrollment requires explicit selection'], group_incompatible: ['22023','Enrollment group must match session and level'],
   level_invalid: ['22023','Invalid level for selected program'], trial_requires_group: ['22023','Invalid enrollment fields or incompatible group'],
   followup_invalid: ['22023','Invalid enrollment fields or incompatible group'], followup_in_past: ['22023','Valid future task required'],
   owner_not_operational: ['22023','Assignee must be operational staff'], followup_policy_unavailable: ['22023','Policy has no available calling window'],
-  enrollment_in_progress: ['40001','Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.'], concurrent_change: ['40001','Concurrent enrollment change; refresh and retry'],
+  enrollment_in_progress: ['PT409','Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.'], concurrent_change: ['PT409','Concurrent enrollment change; refresh and retry'],
   record_rejected: ['22023','Invalid enrollment fields or incompatible group']
 };
 assert.deepEqual(Object.keys(SCENARIOS).sort(), [...PLAN, ...FALLBACK_REASONS].sort());
-const raw = /crm_enrollment|Invalid|Qualified|Student|Enrollment|Policy|Assignee|Stale|Request|Valid|Explicit|Concurrent|22023|40001|42501|[0-9a-f]{8}-/;
+const raw = /crm_enrollment|Invalid|Qualified|Student|Enrollment|Policy|Assignee|Stale|Request|Valid|Explicit|Concurrent|22023|PT409|40001|42501|[0-9a-f]{8}-/;
 for (const [reason, [code, message]] of Object.entries(SCENARIOS)) {
   const error = { code, message, details: 'lead a2000000-0000-0000-0000-000000000003', hint: `crm_enrollment.${reason}` };
   const failure = enrollmentFailure(error);
@@ -70,10 +70,14 @@ for (const [reason, [code, message]] of Object.entries(SCENARIOS)) {
   if (ENROLLMENT_REASONS[reason]) assert.equal(failure.message, ENROLLMENT_REASONS[reason].message, reason);
   // Old frontend + new database: the legacy matcher ignores the additive hint.
   assert.equal(commandError(error), commandError({ code, message }), `${reason}: legacy text unchanged by the hint`);
+  // Database before migration 119: the legacy conflict code maps exactly like PT409.
+  if (code === 'PT409') assert.deepEqual(enrollmentFailure({ ...error, code: '40001' }), failure, `${reason}: legacy code`);
 }
 assert.equal(enrollmentFailure({ code: '22023', message: 'Request key payload conflict', hint: 'crm_enrollment.request_conflict' }).message, DEFINITE_GENERIC_MESSAGE);
-assert.equal(enrollmentFailure({ code: '40001', message: 'Stale lead version; refresh and retry', hint: 'crm_enrollment.lead_changed' }).message, commandError({ code: '40001' }), 'lead_changed keeps today\'s text');
-assert.equal(enrollmentFailure({ code: '40001', message: 'Stale lead version; refresh and retry', hint: 'crm_enrollment.lead_changed' }).recovery, 'refresh');
+for (const code of ['PT409', '40001']) {
+  assert.equal(enrollmentFailure({ code, message: 'Stale lead version; refresh and retry', hint: 'crm_enrollment.lead_changed' }).message, commandError({ code }), 'lead_changed keeps today\'s text');
+  assert.equal(enrollmentFailure({ code, message: 'Stale lead version; refresh and retry', hint: 'crm_enrollment.lead_changed' }).recovery, 'refresh');
+}
 
 // New frontend + old database: no hint uses the legacy matcher, then the definite generic text.
 const noHint = (code, message) => enrollmentFailure({ code, message });
@@ -82,7 +86,7 @@ assert.equal(noHint('22023', 'Invalid new learner').message, DEFINITE_GENERIC_ME
 assert.equal(noHint('22023', 'Valid future task required').message, DEFINITE_GENERIC_MESSAGE);
 assert.equal(enrollmentFailure({ code: '22023', message: 'Invalid new learner', hint: 'crm_enrollment.something_new' }).message, DEFINITE_GENERIC_MESSAGE, 'unknown hint falls back');
 assert.equal(noHint('42501', 'CRM access denied').message, 'Vous n’avez pas accès à cette action.');
-assert.equal(noHint('40001', 'Whatever').recovery, 'refresh');
+for (const code of ['PT409', '40001']) assert.equal(noHint(code, 'Whatever').recovery, 'refresh', code);
 assert.equal(noHint('P0001', 'internal detail a2000000-0000-0000-0000-000000000003').message, DEFINITE_GENERIC_MESSAGE);
 // Uncertain outcomes never claim that nothing was saved, and keep the key.
 for (const error of [{ code: '', message: 'TypeError: Failed to fetch' }, { code: 'PGRST301', message: 'JWT' }, { message: 'Bad Gateway', status: 502 }, null]) {
@@ -91,7 +95,7 @@ for (const error of [{ code: '', message: 'TypeError: Failed to fetch' }, { code
   assert.equal(discardsRequestKey(error), false, 'uncertain retains the request key');
 }
 assert(DEFINITE_GENERIC_MESSAGE.includes('rien n’a été enregistré'));
-for (const code of ['22023','42501','40001']) assert.equal(discardsRequestKey({ code }), true);
+for (const code of ['22023','42501','PT409','40001']) assert.equal(discardsRequestKey({ code }), true, code);
 assert.equal(discardsRequestKey({ code: '23514' }), false, 'other SQLSTATEs keep today\'s retained key');
 
 // Casablanca civil bounds with fixed clocks around Casablanca midnight. The instants

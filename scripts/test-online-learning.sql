@@ -149,7 +149,7 @@ select pg_temp.fails(format($$select public.online_save_course(%L, null, '{"teac
   pg_temp.id(306), pg_temp.id(101)), '23505', 'online.course_exists');
 select pg_temp.fails(format($$select public.online_save_course(%L, 1, '{"term_end":"2099-01-01"}')$$, pg_temp.id(306)), '22023', 'online.term_invalid');
 select pg_temp.fails(format($$select public.online_save_course(%L, 1, '{"capacity":13}')$$, pg_temp.id(306)), '22023', 'online.invalid_input');
-select pg_temp.fails(format($$select public.online_save_course(%L, 7, '{"capacity":8}')$$, pg_temp.id(306)), '40001', 'online.stale');
+select pg_temp.fails(format($$select public.online_save_course(%L, 7, '{"capacity":8}')$$, pg_temp.id(306)), 'PT409', 'online.stale');
 select pg_temp.owner();
 -- A group with a course keeps an online programme; online to online is allowed.
 select pg_temp.fails(format($$update public.groups set session_type = 'Yearly', niveau = 'Child 1' where id = %L$$, pg_temp.id(308)),
@@ -409,7 +409,7 @@ select pg_temp.ok((public.online_save_attendance(pg_temp.id(501), pg_temp.lesson
 select pg_temp.ok((public.online_save_attendance(pg_temp.id(504), pg_temp.lesson_version(pg_temp.id(504)),
   jsonb_build_array(jsonb_build_object('student_id', pg_temp.id(201), 'status', 'Absent')), 'Révisions.'))->>'status' = 'completed',
   'attendance after the start completes the lesson');
-select pg_temp.fails(format($$select public.online_save_attendance(%L, 1, '[]')$$, pg_temp.id(501)), '40001', 'online.stale');
+select pg_temp.fails(format($$select public.online_save_attendance(%L, 1, '[]')$$, pg_temp.id(501)), 'PT409', 'online.stale');
 select pg_temp.ok((public.online_get_lesson_roster(pg_temp.id(501))->'roster') @> jsonb_build_array(jsonb_build_object(
   'student_id', pg_temp.id(201), 'attendance_status', 'Présent', 'attendance_note', 'Bien')), 'roster shows the teacher''s own note');
 select pg_temp.owner();
@@ -557,7 +557,7 @@ select pg_temp.fails(format($$select public.online_update_lesson(%L, %s, %L, 'th
   'start_time', '20:00')), '23514', 'online.lesson_overlap');
 select pg_temp.fails(format($$select public.online_update_lesson(%L, %s, '{"date":"2000-01-01"}', 'this')$$,
   (select ids[2] from ol_wed), pg_temp.lesson_version((select ids[2] from ol_wed))), '23514', 'online.lesson_past');
-select pg_temp.fails(format($$select public.online_update_lesson(%L, 99, '{"minutes":60}', 'this')$$, (select ids[2] from ol_wed)), '40001', 'online.stale');
+select pg_temp.fails(format($$select public.online_update_lesson(%L, 99, '{"minutes":60}', 'this')$$, (select ids[2] from ol_wed)), 'PT409', 'online.stale');
 -- Following cancellation: this and every later scheduled lesson of the course.
 select pg_temp.ok((public.online_cancel_lesson((select ids[3] from ol_wed), pg_temp.lesson_version((select ids[3] from ol_wed)), 'Fin anticipée', 'following'))->>'cancelled'
   = (select n::text from ol_following) and (select n from ol_following) > 1, 'following cancellation');
