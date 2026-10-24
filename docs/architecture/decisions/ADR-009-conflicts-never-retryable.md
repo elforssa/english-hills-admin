@@ -18,7 +18,8 @@ PostgREST before version 16 re-runs a transaction without limit when PostgreSQL 
 2. A genuine serialization failure raised by PostgreSQL itself is left untouched; no catch-all handler converts real database errors.
 3. Staff are never subjected to a silent server-side replay of their action: a conflict always returns to the browser, which refreshes and asks the person to check and resend.
 4. The browser treats `PT409` and the legacy `40001` alike as a record conflict, so app and database can be released in either order.
-5. CI enforces rule 1 on the cumulative catalog.
+5. CI enforces rule 1 on the cumulative catalog and on every new migration file, with no escape comment.
+6. Every batch follows this rule, including new commands from other plans (for example a stale-version refusal keeps its own closed hint but uses `PT409`).
 
 ## Consequences
 

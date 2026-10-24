@@ -2,7 +2,7 @@
 
 ## What will change
 
-**Status: APPROVED FOR IMPLEMENTATION — revision NRC-r1, 2026-10-24, approved by the owner on 2026-10-24 at plan head `7c98b35` with D1–D6 all A ([approval record](#approval-record)). Tier 3. Nothing is implemented, merged or deployed; the migration, merge, deployment and every Production step each still need their own explicit owner approval.** This plan is Batch C of the read-only platform audit of 2026-10-24 (findings REL-1 and REL-4; the audit report is kept with the owner's project documents, outside this repository). It proposes the answer to the open owner decision on the [deterministic `40001` retry loop](../../ai/OWNER_DECISIONS.md#performance-plan-p-r1--approved-2026-10-08).
+**Status: APPROVED FOR IMPLEMENTATION — revision NRC-r1, 2026-10-24, approved by the owner on 2026-10-24 at plan head `7c98b35` with D1–D6 all A ([approval record](#approval-record)). **Current text: revision NRC-r2 (2026-10-24), NRC-r1 plus the independent review's text corrections, no design change ([review corrections](#review-corrections-nrc-r2)); a fresh re-review of the NRC-r2 head is required.** Tier 3. Nothing is implemented, merged or deployed; the migration, merge, deployment and every Production step each still need their own explicit owner approval.** This plan is Batch C of the read-only platform audit of 2026-10-24 (findings REL-1 and REL-4; the audit report is kept with the owner's project documents, outside this repository). It proposes the answer to the open owner decision on the [deterministic `40001` retry loop](../../ai/OWNER_DECISIONS.md#performance-plan-p-r1--approved-2026-10-08).
 
 Two problems, one outcome: **a save never hangs and never creates a second copy.**
 
@@ -29,7 +29,7 @@ Small. The CRM dialogs (actions, enrollment, placement test) already show a "ref
 
 ## Database impact
 
-One forward migration, `XXX_conflicts_without_retry.sql` (number chosen just before merge). It re-creates the 43 affected functions from their **latest** definitions, changing only `errcode='40001'` to `errcode='PT409'` (72 places), the one online helper argument `'40001'` to `'PT409'`, and the one handler in `crm_start_enrollment` that catches the old code. No table, column, index, policy, trigger, data, grant or schedule changes. REL-4 needs no migration.
+One forward migration, `XXX_conflicts_without_retry.sql` (number chosen just before merge). It re-creates the 43 affected functions from their **latest** definitions, changing only the 72 `'40001'` literals to `'PT409'` (70 `errcode` clauses plus the `'40001'` argument in the 2 online helpers) and the one handler in `crm_start_enrollment` that catches the old code. No table, column, index, policy, trigger, data, grant or schedule changes. REL-4 needs no migration.
 
 ## Important security decisions
 
@@ -41,7 +41,7 @@ One forward migration, `XXX_conflicts_without_retry.sql` (number chosen just bef
 
 - **First check the PostgREST version** (Supabase Dashboard → Settings → Infrastructure). If it is 16 or later, the hang cannot happen today and this batch becomes defence in depth (decision D1).
 - **43 functions in one migration, including payment (`create_charge_payment`) and enrollment (`crm_start_enrollment`).** The change is mechanical and is proven mechanical by a test that compares each new body with the old one, but it touches finance and conversion code, hence Tier 3.
-- **Overlap with other batches.** Batches D and E will also redefine some of these functions. Whichever merges second must start from the other's definition; the CI guard stops anyone from bringing `40001` back.
+- **Overlap with other batches.** Batches D and E will also redefine some of these functions, Batch D adds new stale-version errors, and Batch B adds director screens that read this error code. [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md) governs all of them: conflicts are `PT409` and the browser reads them through one shared check ([details](#overlap-with-other-batches)). Whichever merges second must start from the other's definition; the CI guard stops anyone from bringing `40001` back.
 - **Online learning.** Its approved plan says "`40001` on a stale version". This plan changes that line for the two online helpers (decision D4).
 - **During the release window**, if the database is migrated before the app is deployed, staff can briefly see a less helpful message, never a hang. The plan deploys the app first to avoid even that.
 
@@ -57,7 +57,7 @@ One forward migration, `XXX_conflicts_without_retry.sql` (number chosen just bef
 
 ## Why `40001` hangs and the other codes do not
 
-PostgREST before version 16 runs each request inside a transaction wrapper that re-runs the whole transaction when PostgreSQL reports SQLSTATE `40001` (serialization_failure), with no retry limit (upstream issue #3673, fixed by PR #4222 in PostgREST 16; Supabase troubleshooting guide "SQLSTATE 40001 … causes infinite retries"). A real serialization failure eventually succeeds on retry. A `40001` that a function raises on purpose because a version is stale fails identically on every retry. The `authenticated` 8 s `statement_timeout` does not help: each retry is a new short statement. `PT409` is a PostgREST custom-status code: PostgREST answers HTTP 409 with `{code:'PT409', message, details, hint}` and does not retry it.
+PostgREST before version 16 runs each request inside a transaction wrapper that re-runs the whole transaction when PostgreSQL reports SQLSTATE `40001` (serialization_failure), with no retry limit (upstream issue #3673 and fix PR #4222; the Supabase troubleshooting guide "SQLSTATE 40001 (serialization_failure) in an RPC function causes infinite retries" states that PostgREST 14 is affected and the fix is in PostgREST 16). A real serialization failure eventually succeeds on retry. A `40001` that a function raises on purpose because a version is stale fails identically on every retry. The `authenticated` 8 s `statement_timeout` does not help: each retry is a new short statement. `PT409` is a PostgREST custom-status code: PostgREST answers HTTP 409 with `{code:'PT409', message, details, hint}` and does not retry it.
 
 ## Inventory (Production, 2026-10-24)
 
@@ -72,20 +72,20 @@ Classes of raise:
 - **B — busy.** Another payment, enrollment or Insights run holds the lock or slot. Transient: a retry eventually passes, but PostgREST would spin about 100 times a second until then and then **silently replay a staff action** that the design wants the person to re-check ([outcome-3 rule](completed/outcome-3-receptionist-workspace.md): never auto-replay stale business intent).
 - **C — concurrency translation.** A caught `deadlock_detected` (`40P01`) or `unique_violation` (`23505`) re-raised as `40001`. Transient, but the retry re-runs the version checks, which then fail deterministically (a loop today) or silently replays the action.
 
-**Totals: V 30, S 14, L 13, I 2 (59 deterministic); B 6, C 7 (13 transient). None of the 72 is a genuine serialization failure.** PostgreSQL itself can raise a genuine `40001` only under REPEATABLE READ or SERIALIZABLE, which nothing here uses. The plan leaves any engine-raised `40001` untouched (no catch-all), so a future genuine one keeps its meaning.
+**Totals: V 30, S 14, L 13, I 2 (59 deterministic); B 6, C 7 (13 transient). None of the 72 is a genuine serialization failure.** PostgreSQL itself raises a genuine `40001` under REPEATABLE READ or SERIALIZABLE, which nothing here uses, and on a hot standby for recovery conflicts at any isolation level (the case in issue #3673); these functions write, so they run on the primary. The plan leaves any engine-raised `40001` untouched (no catch-all), so a future genuine one keeps its meaning.
 
 Access: **auth** = `authenticated` may execute (browser-reachable); **svc** = `service_role` only (server workers); **internal** = helper with no client grant, reached through the callers listed. "Latest" = the newest migration on main that defines the function; "md5" = prefix of Production `md5(prosrc)`, for drift detection.
 
 | # | Function | Access | Latest | md5 | Sites | Classes |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `crm_security.accept_external_submission` | internal (via `crm_resolve_meta_intake`, Meta/website intake resolution) | 103 | `ef6719fac721` | 3 | S S S |
+| 1 | `crm_security.accept_external_submission` | internal (via `crm_resolve_meta_intake` ← `crm_resolve_external_intake`; and via `crm_security.resolve_external_submission` from the svc `crm_finalize_meta_job` / `crm_finalize_website_job`) | 103 | `ef6719fac721` | 3 | S S S |
 | 2 | `crm_security.command` | internal (via 14 CRM command RPCs, below) | 111 | `f22a288ccd9d` | 5 | V S V S C |
 | 3 | `crm_security.finish_task` | internal (via `command`, placement, decision, enrollment) | 080 | `29ff62274451` | 1 | S |
 | 4 | `crm_security.lifecycle_barrier` | internal (via lifecycle, mapping and connection RPCs) | 103 | `676538a400f9` | 2 | I I |
 | 5 | `crm_security.lifecycle_lock_delivery` | internal (via delivery worker RPCs, `crm_retry_external_delivery`) | 103 | `02c6c9a459c6` | 1 | S |
 | 6 | `crm_security.lock_enrollment_intent` | internal (via `crm_start_enrollment`) | 084 | `bd6aed9ffd6c` | 1 | B |
-| 7 | `online_security.course_for_update` | internal (via 8 `online_*` RPCs) | 117 | `272f526ce2a7` | 1 | V |
-| 8 | `online_security.lesson_for_update` | internal (via 8 `online_*` RPCs) | 117 | `32e50dd4fd05` | 1 | V |
+| 7 | `online_security.course_for_update` | internal (via 4 course RPCs: `online_activate_course`, `online_close_course`, `online_save_course`, `online_save_pattern`) | 117 | `272f526ce2a7` | 1 | V |
+| 8 | `online_security.lesson_for_update` | internal (via 4 lesson RPCs: `online_cancel_lesson`, `online_save_attendance`, `online_set_lesson_teacher`, `online_update_lesson`) | 117 | `32e50dd4fd05` | 1 | V |
 | 9 | `append_receptionist_enrollment_document` | auth | 096 | `67a6a8e0fefb` | 1 | V |
 | 10 | `assign_receptionist_student_group` | auth | 096 | `41de4d0d7950` | 2 | V V |
 | 11 | `create_charge_payment` | auth, svc | 096 | `1eb9803e55f3` | 1 | B |
@@ -108,7 +108,7 @@ Access: **auth** = `authenticated` may execute (browser-reachable); **svc** = `s
 | 28 | `crm_publish_lifecycle_policy` | auth | 103 | `f0625edf73a8` | 1 | V |
 | 29 | `crm_record_conversation_decision` | auth | 111 | `8954fc9c7393` | 3 | V V C |
 | 30 | `crm_request_insights_sync` | auth (called by the Insights server route) | 114 | `a5d610f09502` | 1 | B |
-| 31 | `crm_resolve_meta_intake` | auth | 103 | `61ba12ff216e` | 3 | S V V |
+| 31 | `crm_resolve_meta_intake` | auth (the UI reaches it through `crm_resolve_external_intake`) | 103 | `61ba12ff216e` | 3 | S V V |
 | 32 | `crm_retire_lifecycle_policy` | auth | 103 | `86cd7355248e` | 1 | V |
 | 33 | `crm_retry_insights_sync` | auth | 114 | `b944b7afa1fa` | 1 | B |
 | 34 | `crm_save_meta_connection` | auth | 115 | `9b1e7e823bbc` | 1 | V |
@@ -124,20 +124,20 @@ Access: **auth** = `authenticated` may execute (browser-reachable); **svc** = `s
 
 Functions 9–43 are in `public`. All 43 are PL/pgSQL, owned by `postgres`, `search_path=pg_catalog, pg_temp`; all `public` ones are `SECURITY DEFINER`.
 
-**Reached through the helpers (fixed by fixing the helper, no redefinition):** the 14 `authenticated` CRM commands `crm_add_note`, `crm_cancel_task`, `crm_close_lost`, `crm_close_not_qualified`, `crm_complete_task`, `crm_create_followup_policy`, `crm_create_manual_lead`, `crm_qualify_lead`, `crm_reassign`, `crm_record_call_outcome`, `crm_record_conversation`, `crm_record_whatsapp`, `crm_reopen_lead`, `crm_schedule_task` (via `command`); the `authenticated` lifecycle and mapping RPCs `crm_bind_pending_lifecycle_stop`, `crm_publish_meta_form_mapping`, `crm_publish_website_form_mapping`, `crm_retire_meta_form_mapping`, `crm_reconcile_external_deliveries`, `crm_revoke_lifecycle_evidence`, `crm_stop_lifecycle_sharing`, `crm_retry_external_delivery` (via the barrier or the delivery lock); and the 8 `online_*` RPCs. In total about 53 browser-reachable entry points can return one of these refusals.
+**Reached through the helpers (fixed by fixing the helper, no redefinition):** the 14 `authenticated` CRM commands `crm_add_note`, `crm_cancel_task`, `crm_close_lost`, `crm_close_not_qualified`, `crm_complete_task`, `crm_create_followup_policy`, `crm_create_manual_lead`, `crm_qualify_lead`, `crm_reassign`, `crm_record_call_outcome`, `crm_record_conversation`, `crm_record_whatsapp`, `crm_reopen_lead`, `crm_schedule_task` (via `command`); the `authenticated` lifecycle and mapping RPCs `crm_bind_pending_lifecycle_stop`, `crm_publish_meta_form_mapping`, `crm_publish_website_form_mapping`, `crm_retire_meta_form_mapping`, `crm_reconcile_external_deliveries`, `crm_revoke_lifecycle_evidence`, `crm_stop_lifecycle_sharing`, `crm_retry_external_delivery` (via the barrier or the delivery lock); `crm_resolve_external_intake` (the intake review screen's entry to `crm_resolve_meta_intake`); and the 8 `online_*` RPCs listed in rows 7–8 (Production, 2026-10-24: `online_add_guest` does not call either helper). In total about 54 browser-reachable entry points can return one of these refusals.
 
 ## Scope and non-goals
 
 In scope: the 43 functions above (decision D4 confirms the 2 online helpers and the 3 Premium functions); the browser and server code that reads the old code; student-creation idempotency in the receptionist form, the staff form and the CSV import; a CI guard; tests; the runbook line.
 
-Not in scope: any change to a version check, lock, message, hint, validation, grant or RLS policy; the PostgREST version upgrade itself (an owner dashboard action); a soft duplicate-person check (decision D5); the admin routes `update-role` and `invite`, which already map an engine `40001`/`40P01` to HTTP 409 and call none of these functions; the online module's release steps; Batches D and E's own changes to overlapping functions.
+Not in scope: any change to a version check, lock, message, hint, validation, grant or RLS policy; the PostgREST version upgrade itself (an owner dashboard action); a soft duplicate-person check (decision D5); the admin routes `update-role` and `invite`, which already map an engine `40001`/`40P01` to HTTP 409 and call none of these functions; the online module's release steps; Batches B, D and E's own changes (see [overlap](#overlap-with-other-batches)).
 
 ## Design
 
 ### SQL contract
 
-1. Every `using errcode='40001'` in the 43 latest bodies becomes `using errcode='PT409'`. Message, `hint` and position stay byte-identical.
-2. In both online helpers, `online_security.fail('stale', '40001', …)` becomes `online_security.fail('stale', 'PT409', …)`. `online_security.fail` itself is unchanged (it passes the code through and adds the `online.<reason>` hint).
+1. Every one of the 70 `errcode` clauses with `'40001'` in the latest bodies becomes `'PT409'`, keeping its exact spacing (most read `errcode='40001'`; `crm_retire_lifecycle_policy` reads `errcode = '40001'`). The substitution and its test match `errcode\s*=\s*'40001'`, never one fixed spelling. Message, `hint` and position stay byte-identical.
+2. In both online helpers (the other 2 of the 72 literals), `online_security.fail('stale', '40001', …)` becomes `online_security.fail('stale', 'PT409', …)`. `online_security.fail` itself is unchanged (it passes the code through and adds the `online.<reason>` hint).
 3. In `crm_start_enrollment`, `exception when serialization_failure then` (around `lock_enrollment_intent`) becomes `exception when sqlstate 'PT409' then`. The message comparison, the re-raise with hint `crm_enrollment.enrollment_in_progress` and the trailing `raise;` stay.
 4. Nothing else changes in any body. Signatures, argument names, defaults, return types, volatility, `SECURITY DEFINER`, `search_path`, owner and ACL stay identical (`create or replace` keeps the owner and ACL).
 
@@ -163,7 +163,8 @@ Surfaces:
 | `src/lib/online/reasons.mjs`, `src/lib/online/handlers.mjs` | Hint first; `40001` fallback → `stale` | Fallback uses `isRecordConflict`. |
 | Receptionist forms: `ReceptionistStudentForm.jsx`, `ReceptionistTeacherForm.jsx`, `(admin)/groups/page.jsx`, `(admin)/groups/[id]/page.jsx`, `(admin)/students/page.jsx`, `(admin)/students/[id]/page.jsx` | `toast.error(error.message)` shows raw English ("Student unavailable or stale") | On `isRecordConflict`: toast `recordConflictMessage()` and refetch the affected record/list (invalidate its query). Other errors keep today's handling. |
 | Receipts: `paymentErrorMessage` in `src/lib/receiptPresentation.js` | Shows the server message (the busy message is already French) | Unchanged text for the known busy message; any other `isRecordConflict` → the busy text "Un paiement ou une inscription est en cours pour cet apprenant. Actualisez puis réessayez." The idempotency key is kept (a definite rejection stored nothing). |
-| `LifecycleOperations.jsx`, `MarketingInsightsPanels.jsx` | Generic French "actualisez" text in `catch` | No change. |
+| `LifecycleOperations.jsx`, `MarketingInsightsPanels.jsx`, `src/components/crm/CrmIntakeReview.jsx` (`crm_resolve_external_intake`) | Generic French "actualisez" text in `catch` | No change. |
+| Server: `src/lib/crm/lifecycle/server.js`, `src/lib/crm/insights/server.js` | Any RPC error → a generic sanitized error (for example `storage_unavailable`) | No change; the code is not read. |
 | Server: `metaRpcError` in [protocol.mjs](../../../src/lib/crm/meta/protocol.mjs) | Exact migration-105 `PT409` tuples; anything else → `storage_unavailable` | No change: an unknown `PT409` from a worker RPC (classes L/S) maps to `storage_unavailable`, exactly as `40001` does today. Add a test proving that. |
 | Reads: `src/lib/queryRetry.mjs` | `PT409` already "answered" (one retry) | No change. |
 | [CRM operations runbook](../../crm-operations-runbook.md) | "A `40001` means refresh/review" | "A `PT409` (legacy `40001`) means refresh/review." |
@@ -177,9 +178,9 @@ Verified current state: `save_receptionist_student` (096) is already idempotent 
 Design:
 
 1. **One identity per new learner, created once.** Each create form holds a stable id from [stableIdempotencyKey.mjs](../../../src/lib/stableIdempotencyKey.mjs) in a `useRef`, created on mount and kept until a confirmed success. It does not change when the staff member edits the form after an uncertain failure.
-2. **Receptionist form:** sends that id to `save_receptionist_student` (no SQL change). On `23505` with message `Student create identity conflict`, it shows "Cet apprenant a déjà été créé lors d'un envoi précédent. Ouvrez sa fiche pour le modifier." and opens `/students/<id>`.
-3. **Admin/director form and import:** a new helper `createStudentOnce(id, payload)` in `src/lib/studentCreate.mjs` inserts with the given id (allowed: `authenticated` has INSERT on `students.id`; RLS "students admin insert" applies unchanged). On `23505` naming `students_pkey` it reads the row by id: if it exists and is not deleted, the result is `{row, replayed: true}` (and, when the stored name or birth date differs from the payload, the same "déjà créé" message and link as point 2); otherwise the error is rethrown. Random ids make a foreign collision practically impossible, so a primary-key conflict on our own id can only mean our earlier send committed.
-4. **CSV import page:** assigns each parsed row a random id at parse time; keeps a per-row status (`pending`, `imported`, `failed` with a safe reason); the Import button sends only `pending` and `failed` rows; after every row is imported it shows "Import terminé" and is disabled until a new file is chosen; the summary lists failed rows by CSV line number. The row logic lives in a pure module `src/lib/studentImport.mjs` so it can be unit-tested. Choosing a new file starts a new import with new ids (a deliberate re-import of the same file is a human double entry, decision D5).
+2. **Receptionist form:** sends that id to `save_receptionist_student` (no SQL change). On `23505` with message `Student create identity conflict`, it reads `/students/<id>` with the receptionist's normal read. If the learner is readable, it shows "Cet apprenant a déjà été créé lors d'un envoi précédent. Ouvrez sa fiche pour le modifier." and opens the record. If not (the 096 replay also refuses a soft-deleted row, and `receptionist_student_read` hides deleted rows), it shows "Cet apprenant a déjà été créé puis supprimé. Demandez à l'administration de le restaurer." with no link.
+3. **Admin/director form and import:** a new helper `createStudentOnce(id, payload)` in `src/lib/studentCreate.mjs` inserts with the given id (allowed: `authenticated` has INSERT on `students.id`; RLS "students admin insert" applies unchanged). On `23505` naming `students_pkey` it reads the row by id: if it exists and is not deleted, the result is `{row, replayed: true}` (and, when the stored name or birth date differs from the payload, the same "déjà créé" message and link as point 2); if it exists but is soft-deleted, the "créé puis supprimé" message of point 2 with no link; otherwise the error is rethrown. Random ids make a foreign collision practically impossible, so a primary-key conflict on our own id can only mean our earlier send committed.
+4. **CSV import page:** gives each parsed row a deterministic id: a UUID (version-5 layout) built from SHA-256 of a fixed namespace (`english-hills/student-import/v1`), the SHA-256 of the exact file text and the CSV line number. Re-choosing the same file, even after a tab reload in the middle of an import, therefore gives the same ids, and the rows that already went in are replays, not duplicates. The id derives from a hash of the whole file, so it reveals nothing practical about one learner. The page also keeps a per-row status (`pending`, `imported`, `failed` with a safe reason); the Import button sends only `pending` and `failed` rows; after every row is imported it shows "Import terminé" and is disabled until a new file is chosen; the summary lists failed rows by CSV line number. The row logic lives in a pure module `src/lib/studentImport.mjs` so it can be unit-tested. **Residual, stated:** a file that was edited in any way has a different hash, so all its rows get new ids and unchanged rows would be created again; the page warns before importing that only an identical file is recognised. Catching the same person in a different file is the soft duplicate check deferred by decision D5. A row whose deterministic id belongs to a soft-deleted learner is reported as "créé puis supprimé" for that line.
 
 No migration, no change to `entities.js` defaults for other tables.
 
@@ -188,16 +189,24 @@ No migration, no change to `entities.js` defaults for other tables.
 - **One forward migration**, `supabase/migrations/XXX_conflicts_without_retry.sql`, number allocated just before merge from the ledger and open PRs. Migrations 001–118 stay byte-for-byte unchanged.
 - **Built from the latest cumulative definitions, never an earlier snapshot.** The implementer resets a local database to the current ledger, takes `pg_get_functiondef` for each of the 43 functions (as migration 113 did), first proves each local `md5(prosrc)` prefix equals the Production prefix in the inventory (any difference stops the work: drift), applies the three substitutions above, and commits the resulting static SQL. No dynamic `DO` block that rewrites `pg_proc` at migration time: the reviewed file must be the exact SQL that runs.
 - **Atomic:** the migration runs in one transaction, so `lock_enrollment_intent` and the `crm_start_enrollment` handler change together.
-- **If another batch lands first** (D, E, Premium Release B, online), rebuild from the new latest definitions and re-prove; a function dropped by Premium Release B leaves the list.
+- **If another batch lands first** (B, D, E, Premium Release B, online), rebuild from the new latest definitions and re-prove; a function dropped by Premium Release B leaves the list.
+
+### Overlap with other batches
+
+[ADR-009](../decisions/ADR-009-conflicts-never-retryable.md) (accepted with this plan) governs every batch: a deliberate conflict is `PT409`, and the browser recognises it through `isRecordConflict`.
+
+- **Batch D, enrollment and group consistency (PR #154).** Its draft raises new stale-version errors as SQLSTATE `55000` with hint `egc.stale`. `isRecordConflict` would not recognise `55000`, so receptionists would see raw text. Under ADR-009, Batch D raises them as `PT409` with the same hint `egc.stale` (the coordinator has asked Batch D to switch). D's French mapping can keep keying on the hint. D also redefines some inventory functions: whichever of C and D merges second rebuilds from the other's definition.
+- **Batch B, lead intake reliability (PR #156).** Its new director screens map `40001` from `crm_save_meta_connection` and the form-mapping RPCs (which take `lifecycle_barrier(true)`) to "Actualisez puis réessayez". After this batch those RPCs return `PT409`. Batch B maps through `isRecordConflict` (if C merges first) or keeps its `40001` branch and C's implementation switches it to `isRecordConflict` (if B merges first). Either way, no automatic retry.
+- **Batch E, payment corrections.** It may redefine `create_charge_payment`; same rebuild rule, and its busy-lock refusal stays `PT409`.
+- **Batch A, CI (PR #155).** Owns the migration guard; see [CI guard](#ci-guard).
 
 ### CI guard
 
-Two checks, both in the existing `full` lane:
+Batch A's [PR #155](https://github.com/elforssa/english-hills-admin/pull/155) adds `scripts/ci/sqlstate_guard.py`. It freezes the existing `40001` literals per immutable migration file (a `BASELINE` of counts for migrations 080–117) and fails any migration file that holds more than its baseline. A new file has a baseline of zero. Coordinator decision (2026-10-24): #155 drops its `-- ci-allow-40001: <reason>` escape comment, so the guard has zero tolerance for new files, as ADR-009 rule 1 requires. This batch therefore:
 
-1. **Catalog check (local-database job, after migrations apply):** zero functions in application schemas (`public`, `crm_security`, `online_security`, `operational_security`, `storage_security` and any other non-extension schema) whose `prosrc` contains `'40001'` or `serialization_failure`. This covers the cumulative state, including a later function that re-introduces the code.
-2. **Static check (fast, `npm test`):** no migration numbered after this one, and no file under `src/`, contains `'40001'` outside `src/lib/conflictErrors.mjs` (where the legacy code is accepted on read only) and the two admin routes `update-role` and `invite` (which map engine-raised `40001`/`40P01` to HTTP 409 and are out of scope). Historical migrations are immutable and excluded by number.
-
-Batch A of the audit plans "a guard against new `40001` raises". If it lands first with an allowlist of today's 43 functions, this batch empties that allowlist and turns it into the zero rule above instead of adding a second guard.
+1. **Keeps #155's migration scan unchanged.** It already proves that this batch's migration and every later one contain no `40001` raise. This batch adds no second migration scan. Its only edit to that file is the docstring sentence "the remaining raises are an open owner decision", which becomes "the remaining raises in the frozen baseline are redefined by the Batch C migration (ADR-009); no new raise is allowed". If #155 still carries the escape when this batch is implemented, the implementation removes it.
+2. **Adds a `src/` scan** (fast, in the app job): no file under `src/` contains the literal `'40001'` outside `src/lib/conflictErrors.mjs` (where the legacy code is accepted on read only) and the two admin routes `update-role` and `invite` (which map engine-raised `40001`/`40P01` to HTTP 409 and are out of scope).
+3. **Adds a catalog check** (local-database job, after migrations apply): zero functions in application schemas (`public`, `crm_security`, `online_security`, `operational_security`, `storage_security` and any other non-extension schema) whose `prosrc` contains `'40001'` or `serialization_failure`. This is the zero rule on the cumulative state: it overrides the file baselines, which only describe history, and it also catches a raise brought back through a function that the file scan cannot see as new.
 
 ## Security boundaries
 
@@ -209,13 +218,13 @@ Local Supabase only (`http://127.0.0.1:54321`), synthetic data, external email d
 
 | Test | What it proves |
 | --- | --- |
-| **Mechanical-diff test** (SQL, CI upgrade job: reset to the previous ledger, snapshot, apply) | For each of the 43 functions: new `prosrc` equals old `prosrc` with exactly the three substitutions; owner, ACL, `prosecdef`, `proconfig`, argument names/types/defaults and return type unchanged; no other function's body changed. |
-| **Former-`40001` paths return at once over real HTTP** (new `scripts/test-no-retry-conflicts-local.mjs`, modelled on `test-crm-meta-reconciliation-repair-local.mjs`) | For every `auth` function in the inventory, at least one stale case through supabase-js as a synthetic local staff user (receptionist or director as each function requires), plus representative indirect callers (`crm_complete_task` via `command`, an `online_*` command), plus the `svc` worker RPCs with a stale lease as `service_role`: response in under 2 s (the call is aborted and the test fails at 5 s), HTTP 409, `code 'PT409'`, today's exact message and hint, no row changed. After a 3-second quiet period, `pg_stat_database.xact_rollback` grew by no more than the number of calls plus a small margin, and no `authenticator` backend is still active. A normal successful call afterwards proves the server still serves requests. The test records the local PostgREST version; on the CI stack (Supabase CLI 2.116.0, PostgREST 14.5, which does retry `40001`), a prompt answer is the proof that the code is no longer retried. No deliberate `40001` storm is reproduced. |
+| **Mechanical-diff test** (SQL, CI upgrade job: reset to the previous ledger, snapshot, apply) | For each of the 43 functions: new `prosrc` equals old `prosrc` after a whitespace-tolerant substitution of `'40001'` by `'PT409'` (matched as `errcode\s*=\s*'40001'` and as the `fail('stale', '40001'` argument), with exactly 70 + 2 literal changes in total plus the one handler change; owner, ACL, `prosecdef`, `proconfig`, argument names/types/defaults and return type unchanged; no other function's body changed. |
+| **Former-`40001` paths return at once over real HTTP** (new `scripts/test-no-retry-conflicts-local.mjs`, modelled on `test-crm-meta-reconciliation-repair-local.mjs`) | For every `auth` function in the inventory, at least one stale case through supabase-js as a synthetic local staff user (receptionist or director as each function requires), plus representative indirect callers (`crm_complete_task` via `command`; `crm_resolve_external_intake` via `crm_resolve_meta_intake`; one online course RPC, `online_save_course`, and one online lesson RPC, `online_update_lesson`, with a local synthetic course), plus the `svc` worker RPCs with a stale lease as `service_role`: response in under 2 s (the call is aborted and the test fails at 5 s), HTTP 409, `code 'PT409'`, today's exact message and hint, no row changed. After a 3-second quiet period, `pg_stat_database.xact_rollback` grew by no more than the number of calls plus a small margin, and no `authenticator` backend is still active. A normal successful call afterwards proves the server still serves requests. The test records the local PostgREST version; on the CI stack (Supabase CLI 2.116.0, PostgREST 14.5, which does retry `40001`), a prompt answer is the proof that the code is no longer retried. No deliberate `40001` storm is reproduced. |
 | **Busy and concurrency paths** (extend `scripts/test-crm-rcc-a2-concurrency.py` and the phase-6 concurrency test) | A held enrollment-intent lock gives `PT409` + `crm_enrollment.enrollment_in_progress` at once, for `crm_start_enrollment` and `create_charge_payment`; a forced deadlock or unique violation in placement/enrollment gives `PT409` with today's message and hint. |
 | **Existing suites updated** | Every SQL/JS/Python test that asserts `40001` for these paths (about 24 files, for example `test-crm-rcc-a2.*`, `test-crm-phase3/4/5/6/8/10/11.sql`, `test-online-learning.sql`, `test-online-unit.mjs`, `test-crm-phase12-security.mjs`, `test-query-retry.mjs`) asserts `PT409`. JS mapper tests assert both `PT409` and legacy `40001`. The browser "no raw text" regex adds `PT409`. |
 | **JS unit** | `conflictErrors.mjs`; enrollment mapper (refresh and key discard on both codes); `commandError`; online fallback; `paymentErrorMessage`; receptionist message mapping; `metaRpcError` maps an unknown `PT409` exactly as `40001` today. |
-| **REL-4 unit and local DB** | `createStudentOnce`: success; `23505 students_pkey` → read-back replay; differing stored fields → "déjà créé"; uncertain failure keeps the id. `studentImport.mjs`: ids fixed per row; second click sends only failed rows; completed import locked; failed rows listed by line. Local DB: two inserts with the same id give one row; `save_receptionist_student` same-id replay returns the same row. One browser test: a receptionist edit made stale by a second session shows the French conflict text and reloads. |
-| **CI guard regression** | The catalog check fails on a temporary local function containing `'40001'`; the static check fails on a fixture string. |
+| **REL-4 unit and local DB** | `createStudentOnce`: success; `23505 students_pkey` → read-back replay; differing stored fields → "déjà créé"; uncertain failure keeps the id. `studentImport.mjs`: deterministic row ids (same file text and line → same id; any edit → new ids); second click sends only failed rows; completed import locked; failed rows listed by line. Local DB: two inserts with the same id give one row; `save_receptionist_student` same-id replay returns the same row. One browser test: a receptionist edit made stale by a second session shows the French conflict text and reloads. |
+| **CI guard regression** | The catalog check fails on a temporary local function containing `'40001'`; the `src/` scan fails on a fixture string; #155's migration guard (its own regression) fails on a new migration with a `40001` raise, including one carrying a `-- ci-allow-40001` comment, and passes on this batch's migration. |
 
 ## Rollout, recovery and rollback
 
@@ -240,7 +249,7 @@ Recovery:
 
 ## Expected modules
 
-`supabase/migrations/XXX_conflicts_without_retry.sql`; `src/lib/conflictErrors.mjs` (new); `src/lib/studentCreate.mjs` (new); `src/lib/studentImport.mjs` (new); `src/lib/crm/enrollmentErrors.mjs`; `src/lib/crm/presentation.mjs`; `src/lib/online/reasons.mjs`; `src/lib/online/handlers.mjs`; `src/lib/receiptPresentation.js`; `src/components/crm/CrmActionDialog.jsx`; `src/components/crm/CrmEnrollmentDialog.jsx`; `src/components/placement/PlacementTestModal.jsx`; `src/components/students/ReceptionistStudentForm.jsx`; `src/components/students/StudentForm.jsx`; `src/components/teachers/ReceptionistTeacherForm.jsx`; the four `(admin)` pages named above plus `(admin)/students/import/page.jsx`; tests under `scripts/`; `package.json` and `.github/workflows/verify.yml` only to wire the new tests and the catalog check; docs listed in the contract.
+`supabase/migrations/XXX_conflicts_without_retry.sql`; `src/lib/conflictErrors.mjs` (new); `src/lib/studentCreate.mjs` (new); `src/lib/studentImport.mjs` (new); `src/lib/crm/enrollmentErrors.mjs`; `src/lib/crm/presentation.mjs`; `src/lib/online/reasons.mjs`; `src/lib/online/handlers.mjs`; `src/lib/receiptPresentation.js`; `src/components/crm/CrmActionDialog.jsx`; `src/components/crm/CrmEnrollmentDialog.jsx`; `src/components/placement/PlacementTestModal.jsx`; `src/components/students/ReceptionistStudentForm.jsx`; `src/components/students/StudentForm.jsx`; `src/components/teachers/ReceptionistTeacherForm.jsx`; the four `(admin)` pages named above plus `(admin)/students/import/page.jsx`; tests under `scripts/`; `package.json` and `.github/workflows/verify.yml` only to wire the new tests, the `src/` scan and the catalog check; the `scripts/ci/sqlstate_guard.py` docstring (and its escape comment, if #155 has not removed it); docs listed in the contract.
 
 ## Owner decisions required
 
@@ -262,7 +271,7 @@ Recovery:
 
 **D4 — Include the 2 online helpers and the 3 Premium functions (blocking for scope).**
 - A: include all five. B: leave the online helpers to the online-learning plan, and/or leave the Premium functions to Premium Release B.
-- Consequences: A gives a zero-`40001` rule that CI can enforce without exceptions, and amends one line of the approved online plan ("`40001` on a stale version" becomes `PT409`; its browser code already reads the `online.stale` hint first). The online functions are live with the switch off and will be reached by staff from R4. The Premium functions are still executable by staff even though no screen calls them; if Release B drops them first, they simply leave this list. B needs an allowlist in the CI guard and leaves the hazard in place until those plans act.
+- Consequences: A gives a zero-`40001` rule that CI can enforce without exceptions, and amends two lines of the approved online plan (its command rule and invariant 9: "`40001` on a stale version" becomes `PT409`; its browser code already reads the `online.stale` hint first). The online functions are live with the switch off and will be reached by staff from R4. The Premium functions are still executable by staff even though no screen calls them; if Release B drops them first, they simply leave this list. B needs an allowlist in the CI guard and leaves the hazard in place until those plans act.
 - **Recommendation: A.**
 
 **D5 — A soft duplicate-person check (not blocking).**
@@ -290,6 +299,20 @@ Recovery:
   - D6 = **A** (app first, then the migration in the same window).
 - **Scope of this approval:** architecture approval for implementation of this plan only. It does not approve the merge, the migration, the deployment, the optional probe or any other Production step; each needs its own explicit owner approval under [Rollout, recovery and rollback](#rollout-recovery-and-rollback).
 
+## Review corrections (NRC-r2)
+
+The independent review of PR #151 at head `0364322` returned CHANGES REQUIRED with no blocking finding and no design reopening. NRC-r2 applies its corrections as text only; the approved design, decisions D1–D6 and the approval record above are unchanged.
+
+- **I1:** the [CI guard](#ci-guard) now builds on PR #155's per-file baseline guard instead of a second migration scan; this batch adds only the `src/` scan and the catalog zero rule. Per coordinator decision, #155 drops its `-- ci-allow-40001` escape.
+- **I2:** new [overlap](#overlap-with-other-batches) section naming Batch D (#154, `55000`/`egc.stale` → `PT409` with the same hint) and Batch B (#156, director screens), with ADR-009 governing.
+- **M1:** literal arithmetic stated as 70 `errcode` clauses + 2 helper arguments + 1 handler; whitespace-tolerant substitution and test.
+- **M2:** online callers corrected (4 course, 4 lesson RPCs, checked in Production); `crm_resolve_external_intake` and the svc path to `accept_external_submission` added.
+- **M3:** `CrmIntakeReview.jsx`, `lifecycle/server.js`, `insights/server.js` added to the surface table as "no change".
+- **M4:** docs contract lists both online-plan lines and both DGI-A lines.
+- **M5:** hot-standby recovery conflicts named; "fixed in 16" cited to the Supabase guide.
+- **M6:** deterministic CSV row ids with the edited-file residual stated; a soft-deleted learner gets its own message without a link.
+- **Test gaps:** HTTP test adds `crm_resolve_external_intake` and one online course and one lesson RPC; guard regression covers the combination with #155.
+
 ## IMPLEMENTATION CONTRACT
 
 **Prerequisites.** Owner approval of this plan revision with answers to D1–D4 (D5, D6 default to the recommendation unless the owner says otherwise), recorded in this plan with the date and the approved head SHA. Batch 1 (CI unblock) merged so that full CI can pass. Fresh `origin/main`; migration number allocated just before merge; any batch merged since NRC-r1 that redefines an inventory function is folded in by rebuilding from its definition.
@@ -299,7 +322,7 @@ Recovery:
 **Object manifest.** The 43 functions in the inventory (fewer only if D4 = B or a function has been dropped by another release, recorded in the PR). No other database object.
 
 **Invariants.**
-1. After migration, no function in an application schema contains `'40001'` or `serialization_failure`; every former site raises `PT409` with the same message and hint.
+1. After migration, no function in an application schema contains `'40001'` or `serialization_failure`, and no new migration file contains a `40001` raise (no escape comment); every former site raises `PT409` with the same message and hint.
 2. Every new body equals the latest prior body with only the three substitutions; owner, ACL, `SECURITY DEFINER`, `search_path`, signature and return type unchanged.
 3. Each local pre-migration `md5(prosrc)` prefix equals the Production prefix in the inventory, proven before writing the migration. Any mismatch is a STOP.
 4. No new catch-all handler; engine errors keep their codes.
@@ -309,6 +332,6 @@ Recovery:
 
 **Acceptance.** All tests in the test strategy pass in required CI for the exact head; the HTTP test proves every `auth` inventory function answers a stale call with HTTP 409 `PT409` in under 2 s on the CI stack; the mechanical-diff test passes for all 43; the CI guard is active and its regression proves it fails on a reintroduced `40001`.
 
-**Stop conditions.** Production-vs-local body drift; a function in the inventory whose latest definition cannot be identified; a need to change any message, hint, check, lock, grant or policy; a test that would need a weakened assertion; a sibling batch's unmerged migration redefining the same function (coordinate, do not race); any Production action (all are release steps with separate approval).
+**Stop conditions.** Production-vs-local body drift; a literal count other than 70 `errcode` clauses + 2 `fail` arguments + 1 handler; a function in the inventory whose latest definition cannot be identified; a need to change any message, hint, check, lock, grant or policy; a test that would need a weakened assertion; a sibling batch's unmerged migration redefining the same function (coordinate, do not race); any Production action (all are release steps with separate approval).
 
-**Docs and status reporting.** Update the [CRM operations runbook](../../crm-operations-runbook.md) line on `40001`; [WORKFLOWS](../../ai/WORKFLOWS.md) and [ARCHITECTURE](../../ai/ARCHITECTURE.md) where they describe conflict handling; the online plan's stale-version line (if D4 = A); [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md) status; this plan's implementation record; CURRENT_STATE only at release closeout. Report with the AGENTS implementation handoff: branch, head SHA, PR, tier, migration filename, CI run, local tests (and that local-database suites ran only in CI), open decisions.
+**Docs and status reporting.** Update the [CRM operations runbook](../../crm-operations-runbook.md) line on `40001`; [WORKFLOWS](../../ai/WORKFLOWS.md) and [ARCHITECTURE](../../ai/ARCHITECTURE.md) where they describe conflict handling; the [online plan](online-learning.md) at its command rule ("SQLSTATE `40001` on a stale version") and its invariant 9; the [DGI-A plan](director-growth-intelligence.md) at its lease-loss row and its "Error codes" item (both say `40001`); the `scripts/ci/sqlstate_guard.py` docstring (see [CI guard](#ci-guard)); [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md) status; this plan's implementation record; CURRENT_STATE only at release closeout. Report with the AGENTS implementation handoff: branch, head SHA, PR, tier, migration filename, CI run, local tests (and that local-database suites ran only in CI), open decisions.
