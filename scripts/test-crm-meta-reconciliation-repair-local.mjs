@@ -189,7 +189,7 @@ try {
       return rpc(n, a);
     }, env: { CRM_META_PAGE_TOKEN_TEST: 'fake' }, fetchImpl: async () => Response.json({ data:
       [...events('95201'), ...events('95202')].map(e => ({ id: e.leadgen_id, form_id: e.form_id, created_time: new Date(e.created_time*1000).toISOString() })) }) });
-    assert.deepEqual(storageResult, { forms: 1, discovered: 0, enqueued: 0, failed: 1 });
+    assert.deepEqual(storageResult, { forms: 1, discovered: 0, enqueued: 0, failed: 1, code: 'storage_unavailable' });
     assert.equal(storageFinishes, 1); assert.equal(queue(), before[1]);
   } finally { sql('drop trigger crm_repair_fail_write on crm_ingestion_jobs;drop function public.crm_repair_fail_write()'); }
 
@@ -210,7 +210,8 @@ try {
     const result = await worker({ rpc: passRpc, env: { CRM_META_PAGE_TOKEN_TEST: 'fake' }, fetchImpl: async () => {
       graph++; return Response.json({ data: events('95301').map(e=>({ id: e.leadgen_id, form_id: e.form_id, created_time: new Date(e.created_time*1000).toISOString() })) });
     } });
-    assert.deepEqual(result, { forms: 1, discovered: 0, enqueued: 0, failed: 1 });
+    // The 104 fixture predates the alert code (LIR-r1); the current worker reports the lost lease.
+    assert.deepEqual(result, { forms: 1, discovered: 0, enqueued: 0, failed: 1, ...(worker === oldWorker ? {} : { code: 'reconciliation_lease_lost' }) });
     assert.deepEqual([claims, graph, enqueues, finishes], [1, 1, 1, worker === oldWorker ? 1 : 0]);
     assert(performance.now()-start < 2000);
   }
@@ -221,7 +222,7 @@ try {
   const normal = await reconcileMetaLeads({ rpc: (n,a) => n==='crm_claim_meta_reconciliation' ? Promise.resolve(normalForm) : rpc(n,a), env: { CRM_META_PAGE_TOKEN_TEST: 'fake' }, fetchImpl: async () => {
     successfulFetches++; return Response.json({ data: events('95302').map(e=>({ id:e.leadgen_id,form_id:e.form_id,created_time:new Date(e.created_time*1000).toISOString() })) });
   } });
-  assert.deepEqual(normal,{ forms:1,discovered:1,enqueued:1,failed:0 });assert.equal(successfulFetches,1);
+  assert.deepEqual(normal,{ forms:1,discovered:1,enqueued:1,failed:0,code:null });assert.equal(successfulFetches,1);
 
   // Quiescence after all conflict responses, not just a rolled-back counter.
   const quietCount = counts(); const quietOutbound = outbound;
