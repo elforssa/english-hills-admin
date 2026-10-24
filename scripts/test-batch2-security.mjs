@@ -46,7 +46,7 @@ async function request(actor, path, method='POST', body={}) {
   const res = await fetch(base + path, {
     method, redirect:'error', signal:AbortSignal.timeout(30000),
     headers:{ apikey:actor?.service ? env.SUPABASE_SERVICE_ROLE_KEY : env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      'Content-Type':'application/json', ...(actor?.token ? { Authorization:`Bearer ${actor.token}` } : {}) },
+      'Content-Type':'application/json', ...(actor?.service ? { Authorization:`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` } : actor?.token ? { Authorization:`Bearer ${actor.token}` } : {}) },
     ...(method === 'GET' ? {} : {body:JSON.stringify(body)}),
   });
   return { status:res.status, data:await res.json().catch(() => null), ok:res.ok };

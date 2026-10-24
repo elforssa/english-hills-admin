@@ -3,6 +3,7 @@ import contextlib
 import io
 import itertools
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -394,6 +395,42 @@ class VerificationTests(unittest.TestCase):
         self.assertNotIn('cache: npm', tooling_job)
         app_job = workflow.split('  app:\n')[1].split('  local-database:\n')[0]
         self.assertIn("if: always() && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))", app_job)
+
+    def test_workflow_hardening(self):
+        root = Path(__file__).resolve().parents[2]
+        workflow = (root / '.github/workflows/verify.yml').read_text()
+        self.assertIn('\npermissions:\n  contents: read\n', workflow)
+        self.assertNotIn('write', workflow.split('\njobs:\n')[0])
+        # Newer PR pushes cancel older runs; main pushes get a per-commit group.
+        self.assertIn("format('pr-{0}', github.event.pull_request.number) || github.sha }}", workflow)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", workflow)
+        jobs = re.split(r'\n  (?=[a-z-]+:\n)', '\n' + workflow.split('\njobs:\n')[1])[1:]
+        self.assertEqual([j.split(':')[0] for j in jobs], ['classify', 'docs', 'tooling', 'app', 'local-database', 'required'])
+        for job in jobs:
+            with self.subTest(job=job.split(':')[0]):
+                self.assertRegex(job, r'\n    timeout-minutes: \d+\n')
+        uses = re.findall(r'uses: (\S+)(.*)', workflow)
+        self.assertTrue(uses)
+        for action, comment in uses:
+            with self.subTest(action=action):
+                self.assertRegex(action, r'^[\w.-]+/[\w.-]+@[0-9a-f]{40}$')
+                self.assertRegex(comment, r'^ # v\d+\.\d+\.\d+$')
+        database = jobs[4]
+        self.assertIn('fail-fast: false', database)
+        self.assertIn('shell: bash scripts/ci/run-step.sh {0}', database)
+        shards = re.findall(r'- shard: (\S+)', database)
+        self.assertEqual(len(shards), len(set(shards)))
+        for shard in re.findall(r"matrix\.shard == '([^']+)'", database):
+            self.assertIn(shard, shards)
+        for shard in shards:
+            self.assertIn(f"matrix.shard == '{shard}'", database)
+        for suite in ('test-receipt-charge-payments.sql', 'test-receipt-concurrency.sh',
+                      'test-delete-mistaken-receipt.sql', 'test-receipt-deletion-browser.mjs',
+                      'test-batch1-security.mjs', 'test-batch2-security.mjs', 'test-batch3b-security.mjs',
+                      'test-batch4c-storage-enforcement.mjs',
+                      'test-receptionist-storage.mjs', 'test-receptionist-security.sql'):
+            self.assertEqual(database.count('scripts/' + suite), 1, suite)
+        self.assertIn('python3 scripts/ci/sqlstate_guard.py', jobs[3])
 
     def test_classifier_edge_cases_fail_closed(self):
         allowed = 'tools/meta-debugger-transport-monitor/manifest.json'
