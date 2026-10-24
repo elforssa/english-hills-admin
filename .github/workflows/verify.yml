@@ -143,6 +143,15 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # The local Supabase ports (supabase/config.toml: 54320-54329) sit inside Linux's
+      # ephemeral source-port range (32768-60999). An outbound connection, such as an
+      # npm or image download, can briefly hold one, and `supabase start` then fails
+      # with "address already in use" (seen for 54324 in run 40079089431). Reserving
+      # them keeps the kernel from handing them out as source ports.
+      - name: Reserve local Supabase ports from the ephemeral range
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+          test "$(cat /proc/sys/net/ipv4/ip_local_reserved_ports)" = 54320-54329
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
