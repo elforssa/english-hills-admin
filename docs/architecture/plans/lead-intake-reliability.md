@@ -1,6 +1,6 @@
 # Lead intake reliability — no silent lead loss, no-code form launch, honest ratios, prospect data retention
 
-Revision **LIR-r1**, 2026-10-24. **Status: PROPOSED — architecture only, not approved.** Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
+Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, D1–D8 as recommended, plan head `aa68632`; see the [approval record](#approval-record)). Each migration, data change, scheduled-job activation, Production configuration step (including R-LB) and deployment still needs its own explicit owner approval. Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
 
 **Risk tier.** Phase 1 is **Tier 3** (it changes the intake scheduler's response, a scheduler/cron surface, and adds director controls over the intake configuration; PR 1b adds a migration and a scheduled check). Phase 2 items are tiered one by one in [Phasing](#phasing-and-tiers); every Production step (migration, configuration, scheduled job, data change) is Tier 3 whatever the tier of its code change. The [separate Production operation](#production-operation-r-lb-widen-the-meta-look-back-to-24-hours) is Tier 3.
 
@@ -515,7 +515,20 @@ Moroccan law 09-08 (CNDP) requires keeping personal data no longer than needed. 
 
 # Approval record
 
-Not approved. To be filled with the owner's date, the exact options chosen for D1–D8, the approved revision and the exact head SHA of this plan.
+- **Date and time:** 2026-10-24 15:53 Asia/Shanghai (UTC+08:00), 07:53 UTC.
+- **Owner's words (verbatim):** "all recomended and for E6 paper numbers dont exist". The owner had been shown each plan's owner questions with the plan's recommended option; "all recomended" covers this plan (the E6 remark concerns the payment corrections plan only).
+- **Channel:** chat with Claude, relayed by the coordinating session.
+- **Approved revision:** LIR-r1 at exact head `aa68632` of branch `docs/plan-b-lead-intake-reliability` (PR #156).
+- **Options chosen:**
+  - D1 = **A** (ship the health check, PR 1b, in Phase 1; PR 1a merged first).
+  - D2 = **A** (GitHub failure e-mail to the `elforssa` account).
+  - D3 = **A** (widen the Meta look-back to 1440 minutes; R-LB itself is still run only with its own release approval).
+  - D4 = **A** (first mapping effective 30 days before publication by default, editable, at most 90).
+  - D5 = **A** (ratios use only spend dated on or after the attribution start; excluded spend and attributed share shown separately).
+  - D6 = **B** (director-only, audited **Détacher** command; workaround A documented in the staff guide meanwhile).
+  - D7 = (a) **A** 90 days after receipt; (b) the same period as (a); (c) **A** keyed hash, delete after 1 hour; (d) **A** anonymise 24 months after closure (later separate outcome).
+  - D8 = **B** (keep today's behaviour: stored, shown as a stuck lead, alerted, re-run after publication).
+- **Scope of this approval:** architecture approval for implementation of this plan only. It does not approve any merge, migration, data change, scheduled-job activation, Production configuration (including R-LB) or deployment; each needs its own explicit owner approval under [Rollout and recovery](#rollout-and-recovery).
 
 ## IMPLEMENTATION CONTRACT
 
