@@ -57,6 +57,19 @@ The docs job checks changed Markdown anywhere in every PR, including full/mixed 
 
 Main pushes retain the existing full app checks and no database job. Optimizing them would need a separately established push-range/deployment protection contract (including missing before-SHA fallback); PR routing is the scope here. No push/deployment confidence is inferred from PR workload reduction.
 
+## Workflow hardening and database shards
+
+Batch A (2026-10-24 audit COD-4, COD-5, COD-9, REL-1) keeps the lanes and gate matrix above unchanged and adds:
+
+- A read-only `contents: read` token for every job, third-party actions pinned to full commit SHAs with the version as a comment, and `timeout-minutes` on every job (classify/docs/required 5, tooling 10, app 25, each database shard 60).
+- A concurrency group per PR so a newer push cancels the older run. Main pushes use their commit SHA as the group and are never cancelled.
+- `local-database` runs as a `fail-fast: false` matrix of six shards on separate runners: three groups of upgrade rehearsals, rollback-only SQL plus database races, and two browser/API shards that each build and serve the app. Every rehearsal already ended by resetting to current migrations, so no step depended on another's state; order inside a shard is unchanged. The `required` gate still reads one `local-database` result, which is `success` only when every shard succeeds.
+- The previously unwired payment, receipt-deletion, role, family-isolation and storage suites run in those shards.
+- The app job rejects a migration that adds a new SQLSTATE `40001` raise beyond the frozen 001–118 baseline ([guard](../../../scripts/ci/sqlstate_guard.py)).
+- Database steps run through [run-step.sh](../../../scripts/ci/run-step.sh), which repeats the last output lines of a failed step as an error annotation.
+
+[Classifier regressions](../../../scripts/ci/test_verify.py) check these workflow properties.
+
 ## Provider and protection limits
 
 The repository assumes `required` is the single branch-protection aggregate. Live branch-protection adoption is not established by source and is not changed here. A separately required legacy app/database check could prevent fast-path merges; reconcile configuration with owner authorization rather than silently bypassing it.
