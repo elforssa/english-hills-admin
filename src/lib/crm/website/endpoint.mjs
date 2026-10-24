@@ -15,7 +15,7 @@ export function normalizePhone(raw) {
   return n;
 }
 const schema = z.object({
-  site_key: key, form_key: key, request_key: z.string().uuid(),
+  site_key: key, form_key: key, request_key: z.guid(),
   contact: z.object({ name: z.string().trim().min(1).max(200).optional(), phone: z.string().max(30).optional(),
     email: z.string().trim().email().max(254).optional(), whatsapp: z.string().max(30).optional() }).strict()
     .refine(c => !!normalizePhone(c.phone) || !!c.email),

@@ -5,13 +5,14 @@
 // No authentication required — enforced instead by:
 //   1. Origin / Referer check (CSRF-S12)
 //   2. IP-based rate limit via anon_rate_limits table (S10)
-//   3. Zod input validation
+//   3. Body size cap, then strict Zod validation with a fixed error message
 // =============================================================================
 
 import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
-import { InscriptionSchema } from '@/lib/publicInscription.mjs';
+import { InscriptionSchema, INSCRIPTION_BODY_LIMIT } from '@/lib/publicInscription.mjs';
+import { readBoundedJson } from '@/lib/boundedJson.mjs';
 
 // 5 submissions per IP per hour from the public form
 const RATE_LIMITS = [
@@ -99,14 +100,16 @@ export async function POST(request) {
   }
 
   // ── Parse + validate body ───────────────────────────────────────────────
-  let raw;
-  try { raw = await request.json(); }
-  catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
+  const body = await readBoundedJson(request, INSCRIPTION_BODY_LIMIT);
+  if (body.status) {
+    return NextResponse.json({ error: 'Demande invalide.' }, { status: body.status });
+  }
 
-  const parsed = InscriptionSchema.safeParse(raw);
+  // Fixed message: validation issues are never echoed to anonymous callers.
+  const parsed = InscriptionSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Invalid payload', details: parsed.error.flatten() },
+      { error: 'Vérifiez le formulaire puis réessayez.' },
       { status: 400 },
     );
   }
