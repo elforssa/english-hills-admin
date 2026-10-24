@@ -20,7 +20,7 @@ const errorLabels = {
 };
 const blank = { mode: 'live', account_id: '', currency: 'USD', timezone: 'Africa/Casablanca', api_version: 'v25.0', secret_ref: 'CRM_META_INSIGHTS_TOKEN_EH_KAL', refresh_days: 28, refresh_interval_hours: 6, enabled: false };
 
-function Collapsible({ title, testId, children }) {
+export function Collapsible({ title, testId, children }) {
   const [open, setOpen] = useState(false);
   return <section className="rounded-lg border border-slate-200 bg-white" data-testid={testId}>
     <button type="button" className="flex w-full items-center gap-2 px-4 py-3 text-left font-semibold text-slate-900" aria-expanded={open} onClick={() => setOpen(!open)}>

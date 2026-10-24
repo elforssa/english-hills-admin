@@ -224,6 +224,12 @@ jobs:
       - name: Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance
         if: matrix.shard == 'upgrades-from-097-to-105'
         run: npm run test:crm-reconciliation-repair-local
+      - name: Lead intake director panel RPC acceptance
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: |
+          supabase db reset --local --no-seed
+          npm run test:crm-intake-admin-local
+          supabase db reset --local --no-seed
 
       # Shard upgrades-from-106-to-111.
       - name: Opportunities stateful 106 upgrade and bounded read acceptance
@@ -435,6 +441,9 @@ jobs:
       - name: CRM work and calendar browser suites
         if: matrix.shard == 'browser-crm'
         run: npm run test:crm-work-calendar-browser
+      - name: Lead intake director panel browser suite
+        if: matrix.shard == 'browser-crm'
+        run: npm run test:crm-intake-admin-browser
   required:
     if: always()
     needs: [classify, docs, tooling, app, local-database]

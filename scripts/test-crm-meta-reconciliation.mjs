@@ -39,7 +39,7 @@ function harness({ forms = [form()], pages = [[lead('51')]], status = 200 } = {}
   return { rpc, fetchImpl, get graphCalls() { return graphCalls; }, cursorSeen, failures, jobs };
 }
 let h = harness();
-assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 1, discovered: 1, enqueued: 1, failed: 0 });
+assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 1, discovered: 1, enqueued: 1, failed: 0, code: null });
 assert.equal(h.jobs.size, 1);
 assert.equal(h.graphCalls, 1);
 h = harness({ forms: [form(), form()] });
@@ -47,7 +47,7 @@ await reconcileMetaLeads({ ...h, env });
 assert.equal((await reconcileMetaLeads({ ...h, env })).enqueued, 0);
 assert.equal(h.jobs.size, 1);
 h = harness({ forms: [] });
-assert.equal((await reconcileMetaLeads({ ...h, env })).forms, 0);
+assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 0, discovered: 0, enqueued: 0, failed: 0, code: null });
 assert.equal(h.graphCalls, 0);
 h = harness({ pages: [[lead('52', -30)]] });
 assert.equal((await reconcileMetaLeads({ ...h, env })).discovered, 0);
@@ -57,17 +57,19 @@ assert.equal((await reconcileMetaLeads({ ...h, env })).discovered, 26);
 assert.deepEqual(h.cursorSeen, [null, 'cursor+/=']);
 assert.equal(h.graphCalls, 2);
 h = harness({ status: 429 });
-assert.equal((await reconcileMetaLeads({ ...h, env })).failed, 1);
+assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 1, discovered: 0, enqueued: 0, failed: 1, code: 'rate_limit' });
 assert.deepEqual(h.failures, ['rate_limit']);
 h = harness({ status: 503 });
-assert.equal((await reconcileMetaLeads({ ...h, env })).failed, 1);
+assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 1, discovered: 0, enqueued: 0, failed: 1, code: 'provider_unavailable' });
 assert.deepEqual(h.failures, ['provider_unavailable']);
 h = harness({ pages: [[lead('invalid')]] });
-assert.equal((await reconcileMetaLeads({ ...h, env })).failed, 1);
+assert.deepEqual(await reconcileMetaLeads({ ...h, env }), { forms: 1, discovered: 0, enqueued: 0, failed: 1, code: 'invalid_provider_data' });
 assert.equal(h.jobs.size, 0);
 h = harness({ forms: [form('31'), form('32')], pages: [[lead('51', -2, 'wrong')], [lead('52', -2, '32')]] });
-assert.equal((await reconcileMetaLeads({ ...h, env })).failed, 1);
-assert.equal((await reconcileMetaLeads({ ...h, env })).enqueued, 1);
+assert.equal((await reconcileMetaLeads({ ...h, env })).code, 'invalid_provider_data');
+const isolated = await reconcileMetaLeads({ ...h, env });
+assert.equal(isolated.enqueued, 1);
+assert.equal(isolated.code, null);
 const normalized = normalizeForm([
   { name: 'travel', values: ["oui,_c'est_proche_de_chez_moi"] },
   { name: 'age', values: ['7-8'] },

@@ -6,10 +6,14 @@ import { useCrmRead } from '@/lib/crm/queries';
 import { Button } from '@/components/ui/button';
 import { InsightsConnectionPanel, InsightsSyncPanel } from '@/components/crm/MarketingInsightsPanels';
 import MarketingFunnel from '@/components/crm/MarketingFunnel';
-import { PROGRAMS } from '@/lib/crm/funnel.mjs';
+import LeadIntakePanel, { LeadIntakeStatus } from '@/components/crm/LeadIntakePanel';
+import { PROGRAMS, ratioGuard, ratioGuardNote } from '@/lib/crm/funnel.mjs';
+import { DIAGNOSTICS_PAGE, attributionDay, metaConnection } from '@/lib/crm/intakeAdmin.mjs';
 
 const number = (v) => v == null ? '—' : new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 2 }).format(v);
 const money = (v, currency) => v == null ? '—' : `${number(v)} ${currency || ''}`;
+const longDay = (day) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
+const shortDay = (day) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
 const timestamp = (v, timezone) => v ? new Intl.DateTimeFormat('fr-MA', { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone }).format(new Date(v)) : 'Jamais';
 const objectives = { OUTCOME_LEADS: 'Prospects', OUTCOME_AWARENESS: 'Notoriété', OUTCOME_TRAFFIC: 'Trafic', OUTCOME_ENGAGEMENT: 'Interactions', OUTCOME_SALES: 'Ventes', OUTCOME_APP_PROMOTION: 'Promotion d’application' };
 const input = 'mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm';
@@ -24,6 +28,8 @@ export default function MarketingAnalytics() {
   const connections = diagnostics.data?.connections || [];
   const selected = account || connections[0]?.id || null;
   const selectedConnection = connections.find(c => c.id === selected) || null;
+  const meta = useCrmRead('crm_get_meta_diagnostics', DIAGNOSTICS_PAGE, role === 'director');
+  const intakeConnection = metaConnection(meta.data?.connections);
   const valid = !!from && !!to && from <= to && (Date.parse(to) - Date.parse(from)) / 86400000 <= 365 && (!cutoff || cutoff >= from);
   const report = useCrmRead('crm_get_marketing_cohort', {
     p_from: from, p_to: to, p_cutoff_date: cutoff || null, p_connection: selected,
@@ -37,6 +43,9 @@ export default function MarketingAnalytics() {
   // Meta costs are known per campaign, never per program: the RPC returns NULL spend and
   // ratios on program rows and under the program filter, and says why.
   const spendSuppressed = !!data?.spend_suppressed_reason;
+  // P1-D: no CPL/CPQL/CAC for a range that starts before campaign attribution began.
+  const guard = ratioGuard({ from, attributionDay: attributionDay(intakeConnection, data?.timezone || selectedConnection?.timezone), rows: data?.rows || [], total: data?.total || 0 });
+  const ratio = (value) => guard.hidden ? '—' : money(value, data?.spend_currency);
   const refreshAll = () => Promise.all([report.refetch(), diagnostics.refetch()]);
   const reset = () => { setDrill([]); setOffset(0); };
   const change = (setter) => (e) => { setter(e.target.value); reset(); };
@@ -46,7 +55,7 @@ export default function MarketingAnalytics() {
   return <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6" data-testid="marketing-analytics">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Direction · Acquisition</p><h1 className="mt-1 text-2xl font-semibold text-slate-900">Analyse marketing</h1><p className="mt-1 text-sm text-slate-600">De l’acquisition aux encaissements, pour une même cohorte de prospects.</p></div>
-      <Button variant="outline" onClick={() => { report.refetch(); diagnostics.refetch(); }} disabled={!valid || report.isFetching}><RefreshCw className="mr-2 h-4 w-4" />Actualiser</Button>
+      <Button variant="outline" onClick={() => { report.refetch(); diagnostics.refetch(); meta.refetch(); }} disabled={!valid || report.isFetching}><RefreshCw className="mr-2 h-4 w-4" />Actualiser</Button>
     </header>
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -60,6 +69,8 @@ export default function MarketingAnalytics() {
       </div>
       {!valid && <p role="alert" className="mt-3 text-sm text-red-700">Choisissez une période de 366 jours maximum et une date de résultats postérieure au début.</p>}
     </div>
+    <LeadIntakeStatus meta={meta} insightsConnection={connections.find(c => c.id === intakeConnection?.id) || selectedConnection} />
+    <LeadIntakePanel meta={meta} />
     <InsightsConnectionPanel insights={diagnostics.data} onChanged={refreshAll} />
     <InsightsSyncPanel insights={diagnostics.data} connection={selectedConnection} onChanged={refreshAll} />
     {(report.isError || diagnostics.isError) && <p role="alert" className="rounded-lg border p-4 text-sm text-red-700">Analyse indisponible. Réessayez avec une période valide.</p>}
@@ -73,13 +84,15 @@ export default function MarketingAnalytics() {
         {data.sync_warning && <p className="font-semibold text-slate-900">Une actualisation est en attente ou a échoué. Les dernières dépenses complètes sont conservées.</p>}
         {spendSuppressed && <p className="font-semibold text-slate-900" data-testid="spend-suppressed">Dépenses non ventilées par programme : les coûts Meta sont connus par campagne, pas par programme. Dépenses, CPL, CPQL et CAC sont donc indisponibles dans cette vue.</p>}
         {spendSuppressed && <p data-testid="program-caveat">Programme = type de session du prospect. Pour un formulaire Meta sans question de programme, c’est la valeur par défaut du formulaire : un formulaire correspond alors à un programme.</p>}
+        {meta.isError && <p className="font-semibold text-slate-900" data-testid="ratios-hidden">Ratios masqués : réception des leads indisponible.</p>}
+        {meta.isSuccess && guard.hidden && <p className="font-semibold text-slate-900" data-testid="ratios-hidden">{guard.attributionDay ? `Ratios masqués : la période commence avant le début de l’attribution des campagnes (${longDay(guard.attributionDay)}). Les dépenses antérieures n’ont pas de prospects attribués.` : 'Ratios masqués : l’attribution des campagnes n’a pas commencé.'}{guard.attributionDay && <Button size="sm" variant="outline" className="ml-2" onClick={() => { setFrom(guard.attributionDay); if (to < guard.attributionDay) setTo(guard.attributionDay); reset(); }}>Commencer au {shortDay(guard.attributionDay)}</Button>}</p>}
         {!showRoas && <p className="font-semibold text-slate-900">ROAS masqué : les dépenses sont en {data.spend_currency} et les encaissements en MAD ; aucune conversion de devise n’est appliquée.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           ['Dépenses Meta', money(summary.spend, data.spend_currency)], ['Prospects acquis', number(summary.leads)], ['Qualifiés', number(summary.qualified)], ['Inscrits', number(summary.converted)],
-          ['Encaissements nets', money(summary.revenue, 'MAD')], ['CAC Meta attribué', money(summary.cac, data.spend_currency)], showRoas && ['ROAS Meta attribué', summary.roas == null ? '—' : `${number(summary.roas)}×`], ['Sans attribution Meta', number(summary.unattributed_leads)],
-        ].filter(Boolean).map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-white px-4 py-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</p></div>)}
+          ['Encaissements nets', money(summary.revenue, 'MAD')], ['CAC Meta attribué', ratio(summary.cac), ratioGuardNote(guard)], showRoas && ['ROAS Meta attribué', summary.roas == null ? '—' : `${number(summary.roas)}×`], ['Sans attribution Meta', number(summary.unattributed_leads)],
+        ].filter(Boolean).map(([label, value, note]) => <div key={label} className="rounded-lg border border-slate-200 bg-white px-4 py-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</p>{note && <p className="mt-1 text-[10px] text-slate-500" data-testid="ratios-partial">{note}</p>}</div>)}
       </div>
       <MarketingFunnel summary={summary} />
       <p className="text-xs leading-5 text-slate-500">Les totaux CRM incluent toutes les sources sélectionnées. Les ratios Meta utilisent uniquement les prospects attribués par identifiants Meta : {number(summary.attributed_leads)} acquis, {number(summary.attributed_contacted)} contactés, {number(summary.attributed_qualified)} qualifiés, {number(summary.attributed_converted)} inscrits et {money(summary.attributed_revenue, 'MAD')} encaissés. Les prospects web et manuels couvrent le centre entier ; aucune dépense ne leur est attribuée par nom de campagne.{summary.pending_leads > 0 && <span data-testid="attribution-pending"> {number(summary.pending_leads)} prospect{summary.pending_leads > 1 ? 's' : ''} Meta en attente de résolution d’attribution : la campagne sera renseignée après la prochaine synchronisation Insights.</span>}</p>
@@ -87,7 +100,7 @@ export default function MarketingAnalytics() {
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3"><h2 className="font-semibold text-slate-900">Performance par {({ campaign: 'campagne', adset: 'ensemble', ad: 'annonce', source: 'source', program: 'programme' })[level]}</h2>{drill.length > 0 && <Button size="sm" variant="ghost" onClick={() => { setDrill(drill.slice(0, -1)); setLevel(drill.at(-1).level); setOffset(0); }}><ArrowLeft className="mr-1 h-4 w-4" />Retour</Button>}{drill.map(d => <span key={d.id} className="text-xs text-slate-500">/ {d.name}</span>)}</div>
         <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr>{['Nom', 'Dépenses', ...columns.map(c => c[1]), 'Revenus MAD', 'CPL', 'CPQL', 'CAC', ...(showRoas ? ['ROAS'] : [])].map(c => <th key={c} className="whitespace-nowrap px-3 py-3 font-medium">{c}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.rows.map(row => <tr key={row.bucket}>
           <td className="min-w-52 px-3 py-3"><div className="font-medium text-slate-900">{row.attribution_kind === 'trusted_meta' && ['campaign','adset','ad'].includes(level) && !drill.some(d => d.level === 'ad') ? <button className="flex items-center gap-1 text-left hover:underline" onClick={() => descend(row)}>{row.name}<ChevronRight className="h-3 w-3 shrink-0" /></button> : row.name}</div>{row.objective && <p className="mt-1 text-[10px] text-slate-500" title="Objectif déclaré par Meta">Objectif Meta : {objectives[row.objective] || row.objective}</p>}{row.historical_names?.filter(n => n !== row.name).length > 0 && <details className="mt-1 text-[10px] text-slate-500"><summary>Noms à l’acquisition</summary>{row.historical_names.join(' · ')}</details>}{row.review_required > 0 && <p className="mt-1 text-[10px] text-slate-500">{row.review_required} conversion(s) à vérifier</p>}</td>
-          <td className="whitespace-nowrap px-3 py-3 tabular-nums">{money(row.spend, data.spend_currency)}</td>{columns.map(([key]) => <td key={key} className="px-3 py-3 tabular-nums">{number(row[key])}</td>)}<td className="px-3 py-3 tabular-nums">{number(row.revenue)}</td>{['cpl','cpql','cac'].map(key => <td key={key} className="px-3 py-3 tabular-nums">{money(row[key], data.spend_currency)}</td>)}{showRoas && <td className="px-3 py-3 tabular-nums">{row.roas == null ? '—' : `${number(row.roas)}×`}</td>}
+          <td className="whitespace-nowrap px-3 py-3 tabular-nums">{money(row.spend, data.spend_currency)}</td>{columns.map(([key]) => <td key={key} className="px-3 py-3 tabular-nums">{number(row[key])}</td>)}<td className="px-3 py-3 tabular-nums">{number(row.revenue)}</td>{['cpl','cpql','cac'].map(key => <td key={key} className="px-3 py-3 tabular-nums">{ratio(row[key])}</td>)}{showRoas && <td className="px-3 py-3 tabular-nums">{row.roas == null ? '—' : `${number(row.roas)}×`}</td>}
         </tr>)}</tbody></table></div>
         {!data.rows.length && <p className="p-8 text-center text-sm text-slate-500">Aucune acquisition ni dépense pour cette sélection.</p>}
         <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-slate-500"><span>{number(data.total)} lignes</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>Précédent</Button><Button size="sm" variant="outline" disabled={offset + 50 >= data.total} onClick={() => setOffset(offset + 50)}>Suivant</Button></div></div>

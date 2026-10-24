@@ -7,9 +7,10 @@ const MAX_PAGES = 2;
 
 export async function reconcileMetaLeads({ rpc, env, fetchImpl }) {
   // The database leases one due active form. A disabled configuration returns null,
-  // so the scheduler makes no Graph request or token lookup.
+  // so the scheduler makes no Graph request or token lookup. `code` is the fixed
+  // MetaError code of a failed pass, for the scheduler's alert rule only.
   const form = await rpc('crm_claim_meta_reconciliation');
-  if (!form) return { forms: 0, discovered: 0, enqueued: 0, failed: 0 };
+  if (!form) return { forms: 0, discovered: 0, enqueued: 0, failed: 0, code: null };
   let discovered = 0, enqueued = 0, errorCode = null;
   try {
     const ref = form.access_token_secret_ref;
@@ -53,7 +54,7 @@ export async function reconcileMetaLeads({ rpc, env, fetchImpl }) {
     errorCode = error instanceof MetaError ? error.code : 'storage_unavailable';
   }
   // Ownership loss ends this pass. Earlier committed batches remain counted.
-  if (errorCode === 'reconciliation_lease_lost') return { forms: 1, discovered, enqueued, failed: 1 };
+  if (errorCode === 'reconciliation_lease_lost') return { forms: 1, discovered, enqueued, failed: 1, code: errorCode };
   try {
     await rpc('crm_finish_meta_reconciliation', { p_connection: form.connection_id, p_form: form.form_key,
       p_lease: form.lease_token, p_error: errorCode });
@@ -61,5 +62,5 @@ export async function reconcileMetaLeads({ rpc, env, fetchImpl }) {
     errorCode = error instanceof MetaError && error.code === 'reconciliation_lease_lost'
       ? 'reconciliation_lease_lost' : 'storage_unavailable';
   }
-  return { forms: 1, discovered, enqueued, failed: errorCode ? 1 : 0 };
+  return { forms: 1, discovered, enqueued, failed: errorCode ? 1 : 0, code: errorCode };
 }

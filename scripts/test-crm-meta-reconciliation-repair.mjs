@@ -57,21 +57,24 @@ async function run({ losePage, enqueueError, finishError, fetchError, timeout, s
 }
 for (const losePage of [1, 2]) {
   const r = await run({ losePage });
-  assert.deepEqual(r.result, { forms: 1, discovered: (losePage - 1) * 25, enqueued: (losePage - 1) * 24, failed: 1 });
+  assert.deepEqual(r.result, { forms: 1, discovered: (losePage - 1) * 25, enqueued: (losePage - 1) * 24, failed: 1, code: 'reconciliation_lease_lost' });
   assert.equal(r.pages, losePage); assert.equal(r.calls.filter(([n]) => n === finish).length, 0);
 }
 for (const reason of ['reconciliation_disabled', 'reconciliation_form_inactive', 'storage_unavailable']) {
   for (const loseFinish of [false, true]) {
     const r = await run({ enqueueError: new MetaError(reason), finishError: loseFinish ? new MetaError('reconciliation_lease_lost') : undefined });
     assert.equal(r.pages, 1); assert.equal(r.result.failed, 1);
+    assert.equal(r.result.code, loseFinish ? 'reconciliation_lease_lost' : reason);
     assert.deepEqual(r.calls.filter(([n]) => n === finish).map(([, a]) => a.p_error), [reason]);
   }
 }
 for (const enqueueError of [new Error('RPC/network rejection'), { code: 'reconciliation_lease_lost' }]) {
   const r = await run({ enqueueError }); assert.equal(r.calls.at(-1)[1].p_error, 'storage_unavailable');
+  assert.equal(r.result.code, 'storage_unavailable');
 }
 for (const finishError of [new MetaError('reconciliation_lease_lost'), new Error('storage')]) {
-  const r = await run({ finishError }); assert.deepEqual(r.result, { forms: 1, discovered: 50, enqueued: 48, failed: 1 });
+  const r = await run({ finishError }); assert.deepEqual(r.result, { forms: 1, discovered: 50, enqueued: 48, failed: 1,
+    code: finishError instanceof MetaError ? 'reconciliation_lease_lost' : 'storage_unavailable' });
   assert.equal(r.calls.filter(([n]) => n === finish).length, 1);
 }
 for (const [options, reason] of [[{ status: 401 }, 'provider_auth'], [{ status: 429 }, 'rate_limit'],
@@ -82,6 +85,15 @@ for (const [options, reason] of [[{ status: 401 }, 'provider_auth'], [{ status: 
   assert.equal(r.calls.at(-1)[1].p_error, reason); assert.equal(r.result.failed, 1);
   assert.equal(r.calls.filter(([n]) => n === finish).length, 1);
 }
+for (const [options, reason] of [[{ status: 401 }, 'provider_auth'], [{ status: 429 }, 'rate_limit'],
+  [{ status: 503 }, 'provider_unavailable'], [{ fetchError: new Error('network') }, 'network'],
+  [{ timeout: true }, 'timeout'],
+  [{ missingSecret: true }, 'missing_secret'], [{ data: [lead(2), lead(1)] }, 'invalid_provider_data']]) {
+  // A finished pass reports the code it stored, for the scheduler's alert rule.
+  const r = await run(options);
+  assert.equal(r.result.code, reason); assert.equal(r.result.failed, 1);
+}
+assert.equal((await run({})).result.code, null);
 let limit;
 const response = await runScheduledIntake(new Request('http://local.test', { headers: { authorization: 'Bearer fake-scheduler' } }), {
   env, reconcile: async () => (await run({ losePage: 2 })).result,
