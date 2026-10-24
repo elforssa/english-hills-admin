@@ -132,7 +132,7 @@ for (const code of ['timeout', 'rate_limit', 'provider_unavailable', 'network', 
 assert.equal(jobErrorLabel(null), '—');
 assert.equal(jobErrorLabel('something_new'), 'Erreur inconnue');
 
-// RPC errors in French; 40001 asks for a manual refresh.
+// RPC errors in French; a record conflict (PT409, legacy 40001) asks for a manual refresh.
 assert.equal(rpcErrorMessage({ code: '22023' }), 'Champs refusés : vérifiez l’identifiant et les champs');
 assert.equal(rpcErrorMessage({ code: '42501' }), 'Réservé à la direction');
 assert.equal(rpcErrorMessage({ code: '40001' }), 'Actualisez puis réessayez');

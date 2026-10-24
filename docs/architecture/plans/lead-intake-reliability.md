@@ -183,7 +183,7 @@ begin
 end $$;
 ```
 
-`enabled` (the webhook) and `attribution_enrichment` are left out on purpose: the command keeps both. If the block fails (any raise, or `40001` for a stale version or a lifecycle barrier conflict), nothing was changed: rerun step 0 and retry once. Never invent a version.
+`enabled` (the webhook) and `attribution_enrichment` are left out on purpose: the command keeps both. If the block fails (any raise, or `PT409` (legacy `40001`) for a stale version or a lifecycle barrier conflict), nothing was changed: rerun step 0 and retry once. Never invent a version.
 
 **Step 2 — verification right after.** Rerun the step 0 query. Expected: `version` = previous + 1; `lookback` = 1440; `recon_started_at`, `attr_enabled`, `attr_started_at`, `webhook_enabled`, `identity_md5` and `insights_md5` **identical** to step 0. Any other difference means: stop, and run the rollback below.
 
@@ -244,7 +244,7 @@ A collapsible section on `/crm/analytics`, which is already director-only in mid
      - For a form with no version yet, the default is publication time − 30 days. It can be edited but not set earlier than 90 days back, Meta's lead retention.
      - For a new version of an existing form, the default is publication time, and the date must be later than the latest version's `effective_from`. The UI enforces this, because the database does not.
 
-   The payload holds only the keys the RPC accepts, and `p_connection` is always the Meta connection (`provider = 'meta'`). A confirmation shows the summary. Errors are shown in French: `22023` → "Champs refusés : vérifiez l'identifiant et les champs"; `42501` → "Réservé à la direction"; `40001` (version or lifecycle-barrier conflict; the 103 bodies take `lifecycle_barrier(true)`) → "Actualisez puis réessayez", with no automatic retry.
+   The payload holds only the keys the RPC accepts, and `p_connection` is always the Meta connection (`provider = 'meta'`). A confirmation shows the summary. Errors are shown in French: `22023` → "Champs refusés : vérifiez l'identifiant et les champs"; `42501` → "Réservé à la direction"; `PT409` (legacy `40001`) (version or lifecycle-barrier conflict; the 103 bodies take `lifecycle_barrier(true)`) → "Actualisez puis réessayez", with no automatic retry.
 4. **Arrêter l'import** (retire). The confirmation reads: "Les nouveaux leads de ce formulaire ne seront plus importés. Action définitive : pour reprendre, publiez une nouvelle version." It calls `crm_retire_meta_form_mapping(p_mapping)` **for every unretired version of that `form_key`**, one call per version (each call is atomic per version). After any error it refetches; while at least one version remains unretired, the form shows **Partiellement arrêté** with a button to finish. No new RPC; an atomic `crm_retire_meta_form` may be added in 2g.
 5. **Leads à traiter.** Lists jobs with status `blocked`, `retry` or `dead` among the latest 100 (labelled so), with channel (from the job's connection), received time, status, attempts and a French label of `last_error_code`. **Réessayer** appears for `blocked`/`retry` with `attempt_count < 8` and calls `crm_retry_meta_job(p_job)`; the existing kick trigger processes the job at once. A `missing_mapping` row carries the hint "publiez le formulaire avec une date d'effet antérieure au lead, puis réessayez". `dead` rows say "non réessayable : récupérez le lead dans l'Espace prospects Meta (Leads Center) et saisissez-le à la main".
 6. **Checklist** reminder: a four-line French summary of P1-C, linking to the runbook section.

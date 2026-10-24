@@ -3,6 +3,7 @@
 // crm_retire_meta_form_mapping and crm_retry_meta_job; nothing here talks to the
 // database, so the rules can be tested without a browser.
 import { PROGRAMS } from './funnel.mjs';
+import { isRecordConflict } from '../conflictErrors.mjs';
 
 const DAY = 86400000;
 export const FIRST_VERSION_BACKDATE_DAYS = 30;
@@ -196,22 +197,21 @@ export function jobChannel(job, connections = []) {
   return CHANNEL_LABELS[provider] || '—';
 }
 
-// French messages for the fixed SQLSTATEs of the director RPCs, by action. 40001 is a
-// stale version or a lifecycle barrier conflict (the 103 bodies take lifecycle_barrier);
-// PT409 is the same conflict once the barrier raises it (ADR-009). The director
-// refreshes and retries by hand; nothing is retried automatically. A 22023 from retire
-// or retry means the row already moved on, so the panel refetches the list.
+// French messages for the fixed SQLSTATEs of the director RPCs, by action. A record
+// conflict (a stale version or a lifecycle barrier conflict; the publish and retire
+// bodies take lifecycle_barrier) is read only through isRecordConflict (ADR-009). The
+// director refreshes and retries by hand; nothing is retried automatically. A 22023
+// from retire or retry means the row already moved on, so the panel refetches the list.
 const INVALID_BY_ACTION = {
   publish: 'Champs refusés : vérifiez l’identifiant et les champs',
   retire: 'Version déjà arrêtée : la liste est actualisée.',
   retry: 'Ce lead n’est plus réessayable : la liste est actualisée.',
 };
 export function rpcErrorMessage(error, action = 'publish') {
+  if (isRecordConflict(error)) return 'Actualisez puis réessayez';
   switch (error?.code) {
     case '22023': return INVALID_BY_ACTION[action] || INVALID_BY_ACTION.publish;
     case '42501': return 'Réservé à la direction';
-    case '40001':
-    case 'PT409': return 'Actualisez puis réessayez';
     default: return 'Action refusée. Actualisez puis réessayez.';
   }
 }

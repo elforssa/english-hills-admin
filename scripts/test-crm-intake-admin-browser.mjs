@@ -111,11 +111,11 @@ try {
     assert.deepEqual(calls.filter(c => c.name === 'crm_retire_meta_form_mapping').map(c => c.body), idsX.map(p_mapping => ({ p_mapping })));
     assert.equal(sql(`select count(*) from crm_form_mappings where form_key='${formX}' and retired_at is null`), '0');
 
-    // A 40001 on the second call stops the loop: Partiellement arrêté, then finished.
+    // A PT409 record conflict on the second call stops the loop: Partiellement arrêté, then finished.
     const idsY = mappingIds(formY);
     let failNext = true;
     await page.route('**/rest/v1/rpc/crm_retire_meta_form_mapping', async route => {
-      if (route.request().postDataJSON().p_mapping === idsY[1] && failNext) { failNext = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: '40001', message: 'Refresh', details: null, hint: null }) }); }
+      if (route.request().postDataJSON().p_mapping === idsY[1] && failNext) { failNext = false; return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'PT409', message: 'Refresh', details: null, hint: null }) }); }
       return route.continue();
     });
     await row(formY).getByRole('button', { name: 'Arrêter l’import' }).click();
@@ -163,7 +163,7 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
-  console.log('PASS director intake panel: status line, publish with the exact allowed payload and −30-day default, retire every version, 40001 partial stop finished later, retry/dead rows, ratio guard and partial note; admin/receptionist never reach it');
+  console.log('PASS director intake panel: status line, publish with the exact allowed payload and −30-day default, retire every version, PT409 partial stop finished later, retry/dead rows, ratio guard and partial note; admin/receptionist never reach it');
 } finally {
   await browser?.close();
   // Published mappings are immutable by trigger; this local cleanup bypasses triggers for synthetic rows only.
