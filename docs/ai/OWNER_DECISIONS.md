@@ -259,7 +259,7 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
 - **D6:** the data clean-up is approved as described, with Ancien apprenant; counts are re-read on the day and any difference goes back to the owner.
 - **Not approved by this decision:** the merge, either migration, the clean-up run (R4 needs its own release approval of the exact numbers) and every deployment.
 - **D8 A (2026-10-24, 16:16 Asia/Shanghai; EGC-r2, added after independent review):** owner's words, verbatim: "d8: A". Closing an online course (`online_close_course`) ends the course's enrollments, so a learner can take another online course in the same school year; option B (exempting online programmes from the one-live-enrollment rule) is rejected. The review corrections also add one clean-up row (C1b: a Yearly enrollment without school year gets 2026/2027), shown to the owner with the D6 counts.
-## Payment corrections and receipts (Batch E) — PLANNED / NOT APPROVED (2026-10-24)
+
 ## Payment corrections and receipts (Batch E) — APPROVED (2026-10-24)
 
 Plan: [payment corrections and receipts](../architecture/plans/payment-corrections-receipts.md#approval-record), revision PCR-r1 at head `a6cce4e` (Tier 3). Owner approval 2026-10-24 15:53 (UTC+08:00), chat with Claude relayed by the coordinating session, verbatim: "all recomended and for E6 paper numbers dont exist".
