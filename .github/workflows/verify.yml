@@ -3,13 +3,22 @@ on:
   pull_request:
   push:
     branches: [main]
+# Read-only token for every job; no job pushes, comments or deploys.
+permissions:
+  contents: read
+# A newer push to the same PR cancels the older run. Pushes to main use their own
+# commit SHA as the group, so main runs are never cancelled or queued.
+concurrency:
+  group: verify-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   classify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -25,8 +34,9 @@ jobs:
     needs: classify
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -39,9 +49,10 @@ jobs:
     needs: classify
     if: needs.classify.result == 'success' && needs.classify.outputs.mode == 'tooling'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       - name: Monitor behavior, manifest, inventory and static safety checks
@@ -50,6 +61,7 @@ jobs:
     needs: classify
     if: always() && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: local-ci-placeholder
@@ -59,8 +71,12 @@ jobs:
       SENTRY_DSN: ''
       SENTRY_AUTH_TOKEN: ''
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Reject new deterministic SQLSTATE 40001 raises in migrations (REL-1)
+        run: |
+          python3 scripts/ci/test_sqlstate_guard.py
+          python3 scripts/ci/sqlstate_guard.py
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
@@ -72,6 +88,14 @@ jobs:
       - run: npm run test:navigation
       - run: npm run test:crm-opportunities
       - run: npm run test:crm-work-calendar
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - run: npx playwright install --with-deps chromium
       - run: npm run test:middleware
       - run: npm run lint
@@ -79,11 +103,37 @@ jobs:
       - run: npm run test:audit-policy
       - run: npm audit --omit=dev --audit-level=moderate
       - run: npm run audit:policy
+  # The local-database suites run as parallel shards, each on its own runner with
+  # its own local Supabase. Every upgrade rehearsal already ends by resetting to
+  # the current migrations, so no step depended on state left by an earlier
+  # rehearsal. Steps run only in their shard; suites inside a shard keep the
+  # original sequential order. The matrix result (success only when every shard
+  # succeeds) is what the required gate reads as the local-database result.
   local-database:
+    name: local-database (${{ matrix.shard }})
     needs: classify
     if: always() && github.event_name == 'pull_request' && (needs.classify.result != 'success' || (needs.classify.outputs.mode != 'docs' && needs.classify.outputs.mode != 'policy' && needs.classify.outputs.mode != 'tooling'))
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: upgrades-from-097-to-105
+          - shard: upgrades-from-106-to-111
+          - shard: upgrades-from-112-to-116
+          - shard: sql-and-concurrency
+          - shard: browser-security
+            browsers: chromium
+            browser-cache: chromium
+          - shard: browser-crm
+            browsers: chromium webkit
+            browser-cache: chromium-webkit
+    defaults:
+      run:
+        shell: bash scripts/ci/run-step.sh {0}
     env:
+      CI_SHARD: ${{ matrix.shard }}
       DISABLE_EXTERNAL_EMAIL: 'true'
       NEXT_PUBLIC_SENTRY_DSN: ''
       SENTRY_DSN: ''
@@ -92,16 +142,37 @@ jobs:
       SUPABASE_TELEMETRY_DISABLED: '1'
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # The local Supabase ports (supabase/config.toml: 54320-54329) sit inside Linux's
+      # ephemeral source-port range (32768-60999). An outbound connection, such as an
+      # npm or image download, can briefly hold one, and `supabase start` then fails
+      # with "address already in use" (seen for 54324 in run 40079089431). Reserving
+      # them keeps the kernel from handing them out as source ports.
+      - name: Reserve local Supabase ports from the ephemeral range
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+          test "$(cat /proc/sys/net/ipv4/ip_local_reserved_ports)" = 54320-54329
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
           cache: npm
-      - uses: supabase/setup-cli@v2
+      - uses: supabase/setup-cli@afb1b15109756ea5cf9d8985a359d9095235ca2b # v2.1.2
         with:
           version: 2.116.0
       - run: npm ci
-      - run: npx playwright install --with-deps chromium webkit
+      - name: Resolve Playwright version
+        if: matrix.browsers
+        id: playwright
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        if: matrix.browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser-cache }}
+      - name: Install Playwright browsers and system dependencies
+        if: matrix.browsers
+        run: npx playwright install --with-deps ${{ matrix.browsers }}
       - run: supabase start
       - name: Configure local-only app credentials
         run: |
@@ -110,34 +181,84 @@ jobs:
           rm /tmp/hills-supabase-status.env
           test "$(wc -l < .env.local)" -eq 3
           grep -q '^NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"$' .env.local
+
+      # Shard upgrades-from-097-to-105: CRM revision-4, H3 and reconciliation rehearsals.
+      - name: Synthetic 097 to current upgrade
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: |
+          supabase db reset --local --version 097 --no-seed
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-upgrade-097.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-batch2-upgrade-current.sql
+          supabase db reset --local --no-seed
+      - name: Stateful 100 to revision-4 upgrade
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: |
+          supabase db reset --local --version 100 --no-seed
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-100-setup.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-upgrade-100-current.sql
+          supabase db reset --local --no-seed
+      - name: Closed 102 to advisory 103 upgrade
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: |
+          supabase db reset --local --version 102 --no-seed
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-102-setup.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-upgrade-102-current.sql
+          supabase db reset --local --no-seed
+      - name: Stateful 103 to H3-02 compatibility upgrade
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: |
+          supabase db reset --local --version 103 --no-seed
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-setup.sql
+          supabase migration up --local
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-current.sql
+          supabase db reset --local --no-seed
+      - name: H3-04 exact provider seed fresh, stateful upgrade, security and dormancy acceptance
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: npm run test:crm-h3-04-local
+      - name: Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance
+        if: matrix.shard == 'upgrades-from-097-to-105'
+        run: npm run test:crm-reconciliation-repair-local
+
+      # Shard upgrades-from-106-to-111.
       - name: Opportunities stateful 106 upgrade and bounded read acceptance
+        if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
           supabase db reset --local --version 106 --no-seed
           O3_UPGRADE_PORT=54322 node scripts/test-crm-opportunities-upgrade.mjs
           supabase db reset --local --no-seed
           npm run test:crm-opportunities-local
       - name: Work and Calendar stateful 107 upgrade and bounded read acceptance
+        if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
           supabase db reset --local --version 107 --no-seed
           node scripts/test-crm-work-calendar-upgrade.mjs
           supabase db reset --local --no-seed
           npm run test:crm-work-calendar-local
       - name: Receptionist UX stateful 108 upgrade
+        if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
           supabase db reset --local --version 108 --no-seed
           node scripts/test-crm-receptionist-ux-upgrade.mjs
           supabase db reset --local --no-seed
       - name: RCC-A1 stateful 110 upgrade
+        if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
           supabase db reset --local --version 110 --no-seed
           node scripts/test-crm-rcc-a1-upgrade.mjs
           supabase db reset --local --no-seed
       - name: RCC-A2 stateful 111 upgrade
+        if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
           supabase db reset --local --version 111 --no-seed
           node scripts/test-crm-rcc-a2-upgrade.mjs
           supabase db reset --local --no-seed
+
+      # Shard upgrades-from-112-to-116.
       - name: Premium retirement stateful 112 to 113 upgrade and open-charge text rehearsal
+        if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 112 --no-seed
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-premium-retirement-upgrade-112-setup.sql
@@ -146,62 +267,35 @@ jobs:
           bash scripts/test-premium-retirement-open-charges.sh
           supabase db reset --local --no-seed
       - name: Insights live sync stateful 113 to 114 upgrade
+        if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 113 --no-seed
           node scripts/test-crm-insights-upgrade.mjs
           supabase db reset --local --no-seed
       - name: DGI-B attribution stateful 114 to 115 upgrade
+        if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 114 --no-seed
           node scripts/test-crm-dgi-b-upgrade.mjs
           supabase db reset --local --no-seed
       - name: DGI-B funnel and program stateful 115 to 116 upgrade
+        if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 115 --no-seed
           node scripts/test-crm-dgi-b2-upgrade.mjs
           supabase db reset --local --no-seed
       - name: Online learning stateful 116 to 117 upgrade in both workshop-removal landing orders
+        if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 116 --no-seed
           node scripts/test-online-learning-upgrade.mjs online-first
           supabase db reset --local --version 116 --no-seed
           node scripts/test-online-learning-upgrade.mjs release-b-first
           supabase db reset --local --no-seed
-      - name: Synthetic 097 to current upgrade
-        run: |
-          supabase db reset --local --version 097 --no-seed
-          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-batch2-upgrade-097.sql
-          supabase migration up --local
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-batch2-upgrade-current.sql
-          supabase db reset --local --no-seed
-      - name: Stateful 100 to revision-4 upgrade
-        run: |
-          supabase db reset --local --version 100 --no-seed
-          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-100-setup.sql
-          supabase migration up --local
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-upgrade-100-current.sql
-          supabase db reset --local --no-seed
-      - name: Closed 102 to advisory 103 upgrade
-        run: |
-          supabase db reset --local --version 102 --no-seed
-          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-r4-upgrade-102-setup.sql
-          supabase migration up --local
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-upgrade-102-current.sql
-          supabase db reset --local --no-seed
-      - name: Stateful 103 to H3-02 compatibility upgrade
-        env:
-          PGPASSWORD: postgres
-        run: |
-          supabase db reset --local --version 103 --no-seed
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-setup.sql
-          supabase migration up --local
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-h3-upgrade-103-current.sql
-          supabase db reset --local --no-seed
-      - name: H3-04 exact provider seed fresh, stateful upgrade, security and dormancy acceptance
-        run: npm run test:crm-h3-04-local
-      - name: Reconciliation repair fresh, stateful upgrade, concurrency and real HTTP acceptance
-        run: npm run test:crm-reconciliation-repair-local
+
+      # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression
+        if: matrix.shard == 'sql-and-concurrency'
         run: |
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-audit-remediation.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-paid-enrollment.sql
@@ -224,9 +318,14 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-online-learning.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
+      - name: Payment, receipt deletion and receptionist rollback-only regression
+        if: matrix.shard == 'sql-and-concurrency'
+        run: |
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-receipt-charge-payments.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-delete-mistaken-receipt.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-receptionist-security.sql
       - name: Advisory D2 scope, safety and retention acceptance
-        env:
-          PGPASSWORD: postgres
+        if: matrix.shard == 'sql-and-concurrency'
         run: |
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-safety.sql
@@ -234,12 +333,12 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-exclusions.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-r4-advisory-review.sql
       - name: H3-02 strict exported-second acceptance in both D2 modes
-        env:
-          PGPASSWORD: postgres
+        if: matrix.shard == 'sql-and-concurrency'
         run: |
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v d2_requirement=required -f scripts/test-crm-r4-provider-time.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -v d2_requirement=advisory -f scripts/test-crm-r4-provider-time.sql
       - name: Lifecycle concurrency and CRM role matrix
+        if: matrix.shard == 'sql-and-concurrency'
         run: |
           python3 scripts/test-crm-phase4-concurrency.py
           python3 scripts/test-crm-phase5-concurrency.py
@@ -248,36 +347,93 @@ jobs:
           python3 scripts/test-crm-phase10-concurrency.py
           python3 scripts/test-crm-phase11-concurrency.py
           node scripts/test-crm-phase12-security.mjs
-      - name: Synthetic database and API role suites
+      - name: CRM revision-4 isolated concurrency
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
+      - name: Advisory R4 forced sharing-stop race matrix
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-crm-r4-advisory-concurrency.py
+      # Last in its shard: it keeps its synthetic director login after cleanup.
+      - name: Competing payments and duplicate idempotency key race
+        if: matrix.shard == 'sql-and-concurrency'
+        run: bash scripts/test-receipt-concurrency.sh
+
+      # Browser shards: build once, then serve the build to the API and browser suites.
+      - name: Build and start the local app
+        id: app
+        if: matrix.browsers
         run: |
           npm run build
           npm run start -- --hostname 127.0.0.1 --port 3101 > /tmp/hills-next.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 90); do
             if curl -fsS http://127.0.0.1:3101/login > /dev/null; then break; fi
             sleep 2
           done
           curl -fsS http://127.0.0.1:3101/login > /dev/null
-          node scripts/test-batch3a-security.mjs --app
-          node scripts/test-batch4a-security.mjs
+
+      # Shard browser-security: role, family-isolation, storage and finance suites.
+      # Batch 2 needs zero directors, so it runs first. Batch 4B is not wired: it seeds
+      # legacy URL references that migration 046's CHECK constraints now reject.
+      # Each suite creates and removes its own fixtures, so the suites still run after
+      # an earlier one fails (the job still fails); one run reports every failure.
+      - name: Batch 2 role transitions, last-director guard and races
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch2-security.mjs --app
+      - name: Batch 1 profile, pending-role and soft-delete matrix
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch1-security.mjs --app
+      - name: Batch 3A payroll, attendance and invitation API roles
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch3a-security.mjs --app
+      - name: Batch 3B parent ownership and family isolation
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch3b-security.mjs
+      - name: Batch 4A storage API denials and receipt delivery state
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch4a-security.mjs
+      - name: Batch 4C storage authorization enforcement
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-batch4c-storage-enforcement.mjs
+      - name: Receptionist storage permissions
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-receptionist-storage.mjs
+      - name: Receipt deletion browser flow
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: |
+          # This suite targets port 3017; serve the same build there.
+          npm run start -- --hostname 127.0.0.1 --port 3017 > /tmp/hills-next-3017.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3017/login > /dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:3017/login > /dev/null
+          node scripts/test-receipt-deletion-browser.mjs
+      - name: Large data, receptionist and online learning browser suites
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: |
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
+          node scripts/test-online-learning-browser.mjs
+
+      # Shard browser-crm.
+      - name: CRM lifecycle and phase 11 browser suites
+        if: matrix.shard == 'browser-crm'
+        run: |
           npm run test:crm-lifecycle-browser
           node scripts/test-crm-phase11-browser.mjs
-          npm run test:crm-opportunities-browser
-          npm run test:crm-work-calendar-browser
-          node scripts/test-online-learning-browser.mjs
-      - name: CRM revision-4 isolated concurrency
-        run: python3 scripts/test-crm-meta-funnel-r4-concurrency.py
-      - name: Advisory R4 forced sharing-stop race matrix
-        run: python3 scripts/test-crm-r4-advisory-concurrency.py
+      - name: CRM opportunities browser suites
+        if: matrix.shard == 'browser-crm'
+        run: npm run test:crm-opportunities-browser
+      - name: CRM work and calendar browser suites
+        if: matrix.shard == 'browser-crm'
+        run: npm run test:crm-work-calendar-browser
   required:
     if: always()
     needs: [classify, docs, tooling, app, local-database]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Require the selected verification path
         env:
           EVENT: ${{ github.event_name }}
