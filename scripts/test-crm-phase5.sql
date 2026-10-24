@@ -71,7 +71,7 @@ do $$ declare l uuid:=pg_temp.qualified(); req uuid:=gen_random_uuid(); d jsonb:
  req:=gen_random_uuid();r:=public.crm_update_placement_test(req,q);
  perform pg_temp.ok(public.crm_update_placement_test(req,q)=r,'placement edit exact replay');
  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',req,q||'{"notes":"changed"}'));
- perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q||'{"expected_updated_at":"1970-01-01T00:00:00Z"}'),'40001');
+ perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q||'{"expected_updated_at":"1970-01-01T00:00:00Z"}'),'PT409');
  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q||jsonb_build_object('crm_lead_id',l)));
  -- Ordinary generic edits must preserve and audit the same row.
  execute 'set local role authenticated';
@@ -129,8 +129,8 @@ do $$ declare l uuid; p uuid; r jsonb; state text; req uuid; d jsonb; student uu
  l:=pg_temp.intake();perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),pg_temp.booking(l)));
  perform pg_temp.act('record_conversation',l,jsonb_build_object('channel','phone','note','Conversation','next_task',pg_temp.next_task()));
  perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),pg_temp.booking(l)));
- l:=pg_temp.qualified();d:=pg_temp.booking(l);perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_version":999}'),'40001');
- perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_task_version":999}'),'40001');
+ l:=pg_temp.qualified();d:=pg_temp.booking(l);perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_version":999}'),'PT409');
+ perform pg_temp.denied(format('select public.crm_book_placement_test(%L,%L)',gen_random_uuid(),d||'{"expected_task_version":999}'),'PT409');
  -- Existing non-CRM tests retain default/result/edit/delete behavior.
  execute 'set local role authenticated';
  insert into public.placement_tests(student_name,date_test,niveau_recommande) values('Non CRM',current_date,'A1') returning id into p;

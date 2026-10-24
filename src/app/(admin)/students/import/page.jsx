@@ -9,23 +9,28 @@ import { importedStudentStatus } from '@/lib/enrollmentWorkflow.mjs';
 //   1. User pastes CSV text OR drops a .csv file. We parse client-side.
 //   2. Each row is normalised + validated. Errors stay in the preview so
 //      the admin can fix the file before committing.
-//   3. On "Importer", rows are inserted one-by-one through entities.Student
+//   3. On "Importer", rows are inserted one-by-one with createStudentOnce
 //      (so per-row errors are isolated and the rest of the batch still
-//      lands). On success we invalidate the Student query cache so the
-//      list page picks up the new rows immediately.
+//      lands). Each row's learner id is derived from the file text and its
+//      CSV line (REL-4): the same file re-sends the same ids, so rows that
+//      already went in are replays. Only pending and failed rows are sent; a
+//      finished import is locked until another file is chosen. On success we
+//      invalidate the Student query cache so the list page picks up the rows.
 //
 // Column mapping is fixed (case-insensitive header match) — see HEADER_MAP.
 // =============================================================================
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload, FileText, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { parseCsv } from '@/utils/parseCsv';
-import { useEntityCreate } from '@/lib/queries';
 import { entityKeys } from '@/lib/queries';
+import { getBrowserClient } from '@/lib/supabase';
+import { createStudentOnce } from '@/lib/studentCreate.mjs';
+import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 
 const CATEGORIES = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
@@ -148,10 +153,12 @@ export default function StudentImportPage() {
   const [csvText, setCsvText]     = useState('');
   const [importing, setImporting] = useState(false);
   const [progress, setProgress]   = useState({ done: 0, total: 0, failed: 0 });
+  // Row ids for the current text, and per-line import status (reset by a new text).
+  const [identity, setIdentity]   = useState(null);
+  const [statuses, setStatuses]   = useState({});
   const fileRef = useRef(null);
 
   const queryClient = useQueryClient();
-  const createStudent = useEntityCreate('Student');
 
   const parsed = useMemo(() => {
     if (!csvText.trim()) return null;
@@ -164,6 +171,19 @@ export default function StudentImportPage() {
       rows: validateRows(mapped),
     };
   }, [csvText]);
+
+  useEffect(() => {
+    setStatuses({});
+    setIdentity(null);
+    if (!parsed?.rows) return undefined;
+    let active = true;
+    rowIdentities(csvText, parsed.rows).then(ids => { if (active) setIdentity({ text: csvText, ids }); })
+      .catch(() => { if (active) toast.error('Identifiants d’import indisponibles dans ce navigateur.'); });
+    return () => { active = false; };
+  }, [csvText, parsed]);
+  const ready = identity?.text === csvText;
+  const finished = Boolean(parsed?.rows) && importFinished(parsed.rows, statuses);
+  const failures = failedLines(statuses);
 
   const stats = useMemo(() => {
     if (!parsed?.rows) return null;
@@ -187,30 +207,35 @@ export default function StudentImportPage() {
   }
 
   async function handleImport() {
-    if (!parsed?.rows || stats.valid === 0) return;
-    const valid = parsed.rows.filter(r => r.ok);
+    if (!parsed?.rows || stats.valid === 0 || !ready || finished) return;
+    const pending = rowsToSend(parsed.rows, statuses);
+    const client = getBrowserClient();
     setImporting(true);
-    setProgress({ done: 0, total: valid.length, failed: 0 });
+    setProgress({ done: 0, total: pending.length, failed: 0 });
 
     let done = 0;
     let failed = 0;
+    const next = { ...statuses };
     // Sequential rather than Promise.all so RLS / unique-constraint errors
     // don't take down the whole batch and so the progress bar advances.
-    for (const row of valid) {
+    for (const row of pending) {
+      const line = csvLine(row);
       try {
-        await createStudent.mutateAsync(row.data);
-      } catch {
-        failed += 1;
+        next[line] = rowStatus(await createStudentOnce(client, identity.ids[line], row.data));
+      } catch (error) {
+        next[line] = { state: 'failed', reason: importFailureReason(error) };
       }
+      if (next[line].state === 'failed') failed += 1;
       done += 1;
-      setProgress({ done, total: valid.length, failed });
+      setStatuses({ ...next });
+      setProgress({ done, total: pending.length, failed });
     }
 
     setImporting(false);
     queryClient.invalidateQueries({ queryKey: entityKeys.all('Student') });
 
     if (failed === 0) toast.success(`${done} apprenant(s) importé(s).`);
-    else toast.error(`${done - failed} importé(s), ${failed} échec(s).`);
+    else toast.error(`${done - failed} importé(s), ${failed} échec(s). Relancez l’import pour réessayer les lignes en échec.`);
   }
 
   const previewRows = parsed?.rows?.slice(0, 50) || [];
@@ -247,6 +272,7 @@ export default function StudentImportPage() {
             </ul>
             <button
               onClick={() => setCsvText(SAMPLE_CSV)}
+              disabled={importing}
               className="text-xs font-semibold underline mt-1"
               style={{ color: 'var(--brand)' }}
             >
@@ -263,10 +289,12 @@ export default function StudentImportPage() {
               type="file"
               accept=".csv,text/csv"
               className="text-xs w-full"
+              disabled={importing}
               onChange={e => handleFile(e.target.files?.[0])}
             />
             <button
               type="button"
+              disabled={importing}
               onClick={() => { setCsvText(''); if (fileRef.current) fileRef.current.value = ''; }}
               className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
@@ -283,6 +311,7 @@ export default function StudentImportPage() {
             <textarea
               value={csvText}
               onChange={e => setCsvText(e.target.value)}
+              readOnly={importing}
               placeholder="Collez votre CSV ici ou utilisez le champ Fichier."
               className="w-full h-44 font-mono text-xs border border-border rounded-md p-3 bg-white focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -334,16 +363,20 @@ export default function StudentImportPage() {
                     <tbody className="divide-y divide-border">
                       {previewRows.map(r => (
                         <tr key={r.idx} className={r.ok ? '' : 'bg-red-50'}>
-                          <td className="px-3 py-1.5 text-muted-foreground">{r.idx + 2}</td>
+                          <td className="px-3 py-1.5 text-muted-foreground">{csvLine(r)}</td>
                           <td className="px-3 py-1.5">{r.data.full_name || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.email || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.niveau_cefr || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.age_category || '—'}</td>
                           <td className="px-3 py-1.5">{r.data.status || '—'}</td>
                           <td className="px-3 py-1.5">
-                            {r.ok
-                              ? <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle size={11} /> OK</span>
-                              : <span className="text-red-700" title={r.errors?.join(' · ')}>{r.errors?.[0]}</span>}
+                            {!r.ok
+                              ? <span className="text-red-700" title={r.errors?.join(' · ')}>{r.errors?.[0]}</span>
+                              : statuses[csvLine(r)]?.state === 'imported'
+                                ? <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle size={11} /> Importé</span>
+                                : statuses[csvLine(r)]?.state === 'failed'
+                                  ? <span className="text-red-700">{statuses[csvLine(r)].reason}</span>
+                                  : <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle size={11} /> OK</span>}
                           </td>
                         </tr>
                       ))}
@@ -351,6 +384,17 @@ export default function StudentImportPage() {
                   </table>
                 </div>
               </div>
+
+              <p className="text-xs text-muted-foreground">{IDENTICAL_FILE_WARNING}</p>
+
+              {failures.length > 0 && !importing && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 text-xs text-red-700">
+                  <p className="font-semibold mb-1">Lignes en échec — relancez l’import pour les réessayer :</p>
+                  <ul className="space-y-0.5">
+                    {failures.map(f => <li key={f.line}>Ligne {f.line} : {f.reason}</li>)}
+                  </ul>
+                </div>
+              )}
 
               {importing && (
                 <div>
@@ -376,10 +420,12 @@ export default function StudentImportPage() {
                 </Link>
                 <button
                   onClick={handleImport}
-                  disabled={importing || stats.valid === 0}
+                  disabled={importing || stats.valid === 0 || !ready || finished}
                   className="px-5 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50"
                 >
-                  {importing ? 'Import…' : `Importer ${stats.valid} apprenant(s)`}
+                  {importing ? 'Import…' : finished ? IMPORT_FINISHED
+                    : failures.length > 0 ? `Réessayer ${rowsToSend(parsed.rows, statuses).length} ligne(s)`
+                      : `Importer ${stats.valid} apprenant(s)`}
                 </button>
               </div>
             </>

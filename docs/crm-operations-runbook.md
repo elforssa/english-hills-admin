@@ -16,7 +16,7 @@ After migrations, [crm-release-health.sql](../scripts/crm-release-health.sql) ru
 
 Disabling external integrations must leave manual CRM, placement, enrollment, finance and history available. The integrated Phase 12 test exercises manual work after all external settings are off. Disable affected schedulers first, then the connection/configuration; allow already running requests to finish or their leases to expire. A response already sent to a provider cannot be recalled. Do not claim a connection switch cancels an in-flight HTTP request.
 
-Use an authenticated **stored director role**, inspect the current connection and version, and preserve its identity. Execute only the chosen action after the applicable production approval. Check RPC errors before proceeding. A `40001` means refresh/review; do not blindly retry with an invented version. The following are operator snippets, not an application feature or an instruction to run them now:
+Use an authenticated **stored director role**, inspect the current connection and version, and preserve its identity. Execute only the chosen action after the applicable production approval. Check RPC errors before proceeding. A `PT409` (legacy `40001`, [ADR-009](architecture/decisions/ADR-009-conflicts-never-retryable.md)) means refresh/review; do not blindly retry with an invented version. The following are operator snippets, not an application feature or an instruction to run them now:
 
 ```js
 // c is the verified current connection record; fields below are metadata only.

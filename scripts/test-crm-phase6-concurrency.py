@@ -138,7 +138,7 @@ try:
     print('PASS simultaneous identical financial requests both succeed with one receipt/conversion',flush=True)
 
     # Force both overlap orders. The first transaction holds the shared lock;
-    # the competing operation must fail with 40001 rather than commit divergence.
+    # the competing operation must fail with PT409 rather than commit divergence.
     import time
     for winner in ('link','payment'):
         pending_lead,pending_version=qualified();new_student=str(uuid.uuid4());pending_enrollment=str(uuid.uuid4());extra_students.append(new_student)
@@ -151,11 +151,11 @@ try:
         while proc.stdout.readline().strip()!='LOCK_READY':
             if proc.poll() is not None:raise AssertionError('lock holder failed')
         if winner=='link':
-            loser=sql(f"begin;set local request.jwt.claim.sub='{actor}';select public.create_charge_payment({quote(json.dumps(money))}::jsonb);rollback;",False)
-            assert loser.returncode and 'paiement en cours' in loser.stderr,loser.stderr
+            loser=sql(f"\\set VERBOSITY verbose\nbegin;set local request.jwt.claim.sub='{actor}';select public.create_charge_payment({quote(json.dumps(money))}::jsonb);rollback;",False)
+            assert loser.returncode and 'ERROR:  PT409: ' in loser.stderr and 'paiement en cours' in loser.stderr,loser.stderr
         else:
-            loser=command('start_enrollment',str(uuid.uuid4()),link_data)
-            assert 'error' in loser and 'paiement en cours' in loser['error'],loser
+            loser=sql(f"\\set VERBOSITY verbose\nbegin;set local request.jwt.claim.sub={quote(actor)};set local role authenticated;select public.crm_start_enrollment({quote(str(uuid.uuid4()))}::uuid,{quote(json.dumps(link_data))}::jsonb);rollback;",False)
+            assert loser.returncode and 'ERROR:  PT409: ' in loser.stderr and 'paiement en cours' in loser.stderr and 'crm_enrollment.enrollment_in_progress' in loser.stderr,loser.stderr
         proc.stdin.write('rollback;\n');proc.stdin.close();proc.wait(timeout=10)
         assert proc.returncode==0,proc.stderr.read()
         assert sql(f"select count(*) from public.enrollments where student_id='{new_student}'").stdout.strip()=='1'

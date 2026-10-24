@@ -57,7 +57,7 @@ create function pg_temp.denied(statement text) returns void language plpgsql as 
  raise exception 'Expected permission denial: %',statement;
 end $$;
 create function pg_temp.invalid(statement text) returns void language plpgsql as $$ begin
- begin execute statement; exception when check_violation or invalid_parameter_value or serialization_failure then return; end;
+ begin execute statement; exception when check_violation or invalid_parameter_value or sqlstate 'PT409' then return; end;
  raise exception 'Expected validation rejection: %',statement;
 end $$;
 create function pg_temp.no_direct_write(table_name text, fixture_id uuid) returns void language plpgsql as $$

@@ -1,5 +1,7 @@
 // Closed online.<reason> vocabulary (migration 117 and the online routes) mapped to
 // French text. Pages render only this text, never raw server messages.
+import { isRecordConflict } from '../conflictErrors.mjs';
+
 export const ONLINE_REASON_TEXT = {
   gate_closed: 'Les cours en ligne ne sont pas encore ouverts.',
   provider_invalid: 'La salle de cours n’est pas disponible pour le moment.',
@@ -48,6 +50,6 @@ export function onlineReason(value) {
 export function onlineErrorText(error) {
   const reason = onlineReason(error?.hint) || onlineReason(error?.reason);
   if (reason) return ONLINE_REASON_TEXT[reason];
-  if (error?.code === '40001') return ONLINE_REASON_TEXT.stale;
+  if (isRecordConflict(error)) return ONLINE_REASON_TEXT.stale;
   return GENERIC;
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
-import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
 import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
@@ -34,6 +34,14 @@ for (const message of ['Idempotency key conflict: request contents changed.', 'I
 }
 assert.equal(paymentErrorMessage({ message: 'Payment exceeds the remaining balance of 10.00 MAD.' }), 'Payment exceeds the remaining balance of 10.00 MAD.');
 assert.equal(paymentErrorMessage({}), 'Impossible d’enregistrer le paiement.');
+// Record conflicts (ADR-009): the known busy text stays as is under both codes; any other
+// conflict gets the French busy guidance, never the raw server text.
+const busy = 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.';
+for (const code of ['PT409', '40001']) {
+  assert.equal(paymentErrorMessage({ code, message: busy }), busy, code);
+  assert.equal(paymentErrorMessage({ code, message: 'Student unavailable or stale' }), PAYMENT_BUSY_MESSAGE, code);
+}
+assert.equal(PAYMENT_BUSY_MESSAGE, 'Un paiement ou une inscription est en cours pour cet apprenant. Actualisez puis réessayez.');
 
 const yearlyStudentInAdults = { session_type: 'Yearly', niveau_cefr: 'Child 1' };
 const adultEnrollment = { session_type: 'Adults', level: 'Beginning 1' };

@@ -224,7 +224,7 @@ do $$ declare l uuid; r jsonb; r2 jsonb; d jsonb; req uuid; t uuid; task public.
  r2:=public.crm_record_conversation_decision(req,d);
  perform pg_temp.ok(r=r2 and (select count(*)=1 from public.crm_tasks where lead_id=l and status='open') and (select count(*)=1 from public.crm_command_requests where request_key=req),'exact replay is idempotent');
  perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',req,d||'{"note":"changed"}'));
- perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d),'40001');
+ perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d),'PT409');
  -- Non-operational roles remain denied.
  for i in 4..7 loop
   perform pg_temp.actor(i);perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),pg_temp.data(l,'{"decision":"lost","reason":"not_interested"}')),'42501');

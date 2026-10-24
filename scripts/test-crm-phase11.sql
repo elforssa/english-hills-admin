@@ -18,11 +18,11 @@ select pg_temp.ok(pg_temp.report()->>'spend_complete'='false' and pg_temp.report
 insert into fx values('request',to_jsonb(gen_random_uuid()));
 insert into fx values('run',to_jsonb(crm_request_insights_sync(pg_temp.conn(),(select (v#>>'{}')::uuid from fx where k='request'),'2026-01-01','2026-01-02')));
 select pg_temp.ok(crm_request_insights_sync(pg_temp.conn(),(select (v#>>'{}')::uuid from fx where k='request'),'2026-01-01','2026-01-02')=(select (v#>>'{}')::uuid from fx where k='run'),'idempotent request');
-select pg_temp.denied($q$select crm_request_insights_sync(pg_temp.conn(),gen_random_uuid(),'2026-01-02','2026-01-03')$q$,'40001');
+select pg_temp.denied($q$select crm_request_insights_sync(pg_temp.conn(),gen_random_uuid(),'2026-01-02','2026-01-03')$q$,'PT409');
 select pg_temp.actor(0);insert into fx values('claim',crm_claim_insights_sync());
 create function pg_temp.payload() returns jsonb language sql as $$ select '{"account_id":"1100","currency":"MAD","timezone":"Africa/Casablanca","objects":[{"type":"campaign","id":"101","name":"Current campaign A","objective":"OUTCOME_LEADS"},{"type":"campaign","id":"201","name":"Awareness B","objective":"OUTCOME_AWARENESS"}],"rows":[{"date":"2026-01-01","campaign_id":"101","adset_id":"102","ad_id":"103","spend":"100","reach":50,"clicks":10},{"date":"2026-01-02","campaign_id":"101","adset_id":"102","ad_id":"104","spend":"50","reach":40},{"date":"2026-01-01","campaign_id":"201","adset_id":"202","ad_id":"203","spend":"30"}]}'::jsonb $$;
 select crm_finish_insights_sync((v->>'id')::uuid,(v->>'lease_token')::uuid,pg_temp.payload()) from fx where k='claim';
-select pg_temp.denied($q$select crm_finish_insights_sync((v->>'id')::uuid,(v->>'lease_token')::uuid,pg_temp.payload()) from fx where k='claim'$q$,'40001');
+select pg_temp.denied($q$select crm_finish_insights_sync((v->>'id')::uuid,(v->>'lease_token')::uuid,pg_temp.payload()) from fx where k='claim'$q$,'PT409');
 select pg_temp.actor(1);
 select pg_temp.ok(pg_temp.report()->'summary'->>'spend'='180.000000' and pg_temp.report()->>'spend_complete'='true','ad/day additive spend');
 select pg_temp.ok(pg_temp.report()->'summary'->>'cpl' is null and pg_temp.report()->>'reach' is null,'zero denominator and non-additive reach unavailable');
@@ -136,13 +136,13 @@ select pg_temp.ok((select insights_settings->>'timezone'='Africa/Casablanca' and
 -- B1: the request RPC accepts live mode; a pending run blocks identity and mode changes.
 insert into fx values('a',to_jsonb(crm_request_insights_sync(pg_temp.live(),gen_random_uuid(),'2026-01-01','2026-01-02')));
 select pg_temp.ok((pg_temp.st('a')).config_snapshot->>'mode'='live' and (pg_temp.st('a')).next_attempt_at=now(),'live explicit request queued and immediately eligible');
-select pg_temp.denied($q$select pg_temp.configure('{"currency":"EUR"}')$q$,'40001');
-select pg_temp.denied($q$select pg_temp.configure('{"mode":"mock"}')$q$,'40001');
+select pg_temp.denied($q$select pg_temp.configure('{"currency":"EUR"}')$q$,'PT409');
+select pg_temp.denied($q$select pg_temp.configure('{"mode":"mock"}')$q$,'PT409');
 select pg_temp.configure('{"refresh_days":14,"api_version":"v26.0","enabled":false}');select pg_temp.configure();
 select pg_temp.ok((select insights_settings->>'refresh_days'='28' and insights_settings->>'api_version'='v25.0' from crm_integration_connections where id=pg_temp.live()),'non-identity fields stay editable with a queued run');
 select pg_temp.claim();
 select pg_temp.ok((select v->>'id'=pg_temp.run('a')::text and v->>'attempt_count'='1' and v->'config'->>'mode'='live' from fx where k='claim'),'live run claimed with its attempt count');
-select pg_temp.denied($q$select pg_temp.configure('{"timezone":"UTC"}')$q$,'40001');
+select pg_temp.denied($q$select pg_temp.configure('{"timezone":"UTC"}')$q$,'PT409');
 -- D5: transient live failures back off 30 minutes, then 2 hours, on both claim paths.
 select pg_temp.fail('rate_limit');
 select pg_temp.ok((pg_temp.st('a')).status='pending' and (pg_temp.st('a')).error_code='rate_limit' and (pg_temp.st('a')).next_attempt_at=now()+interval '30 minutes' and (pg_temp.st('a')).lease_token is null,'first transient failure deferred 30 minutes');
@@ -223,7 +223,7 @@ select pg_temp.ok((select date_to=(now() at time zone 'Africa/Casablanca')::date
 select pg_temp.ok((select count(*) from crm_meta_sync_runs where connection_id=pg_temp.conn())=(select n from before_enqueue),'mock connection never auto-enqueued');
 update crm_meta_sync_runs set created_at=created_at-interval '7 hours' where connection_id=pg_temp.live();
 select pg_temp.ok(pg_temp.enqueue()=0,'an overlapping pending run blocks the rolling refresh');
-select pg_temp.denied($q$select crm_request_insights_sync(pg_temp.live(),gen_random_uuid())$q$,'40001');
+select pg_temp.denied($q$select crm_request_insights_sync(pg_temp.live(),gen_random_uuid())$q$,'PT409');
 select pg_temp.claim();select pg_temp.fail('provider_auth');
 select pg_temp.configure('{"enabled":false}');
 update crm_meta_sync_runs set created_at=created_at-interval '7 hours' where connection_id=pg_temp.live();

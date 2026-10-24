@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { entities, integrations } from '@/lib/entities';
+import { entities, integrations, reportError } from '@/lib/entities';
+import { getBrowserClient } from '@/lib/supabase';
+import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
+import { createStudentOnce } from '@/lib/studentCreate.mjs';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
@@ -51,6 +54,9 @@ export default function StudentForm() {
   const router = useRouter();
   const qc = useQueryClient();
   const isEdit = Boolean(id);
+  // REL-4: one learner id from the first send to a confirmed success, so a retry
+  // after a lost answer replays the create instead of inserting a second learner.
+  const newStudentId = useRef(createStableIdempotencyKey());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -190,13 +196,20 @@ export default function StudentForm() {
         await entities.Student.update(id, payload);
         toast.success('Apprenant mis à jour');
       } else {
-        await entities.Student.create(payload);
+        const studentId = newStudentId.current();
+        const created = await createStudentOnce(getBrowserClient(), studentId, payload);
+        qc.invalidateQueries({ queryKey: ['Student'] });
+        if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
+        newStudentId.current = createStableIdempotencyKey();
+        if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
         toast.success('Apprenant créé');
       }
       qc.invalidateQueries({ queryKey: ['Student'] });
       router.push('/students');
-    } catch {
-      // entities.js already toasted — stay on the form for retry.
+    } catch (error) {
+      // entities.js already toasted an update failure; report a create failure the
+      // same way. Stay on the form for retry: a create keeps its learner id.
+      if (!isEdit) reportError('create', 'Student', error);
       setSaving(false);
     }
   };

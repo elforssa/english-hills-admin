@@ -227,7 +227,7 @@ try:
   barrier.wait(timeout=10);return tx(op[0],op[1],False)
  with futures.ThreadPoolExecutor(max_workers=len(operations)) as pool:
   for r in pool.map(mixed,operations):
-   if r.returncode:assert any(code in r.stderr for code in ('42501','22023','40001')),r.stderr
+   if r.returncode:assert any(code in r.stderr for code in ('42501','22023','PT409')),r.stderr
    assert '40P01' not in r.stderr and '55P03' not in r.stderr,r.stderr
  print('PASS barrier-controlled mixed begin/revoke/admission/prepare/retry/stop/evidence/claim/cleanup/identity batch',flush=True)
  # Stale isolation and shared->exclusive upgrade fail closed before mutation.

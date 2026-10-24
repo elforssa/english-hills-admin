@@ -108,7 +108,7 @@ do $$ declare l uuid:=pg_temp.lead(); n uuid:=pg_temp.raw_lead(); before jsonb:=
  perform pg_temp.rejects(d||jsonb_build_object('lead_id',gen_random_uuid()),'22023','Qualified unlinked lead required','lead_unavailable');
  perform pg_temp.rejects(pg_temp.new_data(n),'22023','Qualified unlinked lead required','lead_not_qualified');
  perform pg_temp.rejects(d||'{"lead_id":"not-a-uuid"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
- perform pg_temp.rejects(d||'{"expected_version":999}','40001','Stale lead version; refresh and retry','lead_changed');
+ perform pg_temp.rejects(d||'{"expected_version":999}','PT409','Stale lead version; refresh and retry','lead_changed');
  perform pg_temp.rejects(d||'{"session_type":"Bogus"}','22023','Invalid enrollment program or school year','program_invalid');
  perform pg_temp.rejects(d-'session_type','22023','Invalid enrollment program or school year','program_invalid');
  perform pg_temp.rejects(d||'{"school_year":"2026-2027"}','22023','Invalid enrollment program or school year','school_year_invalid');
@@ -120,7 +120,7 @@ do $$ declare l uuid:=pg_temp.lead(); n uuid:=pg_temp.raw_lead(); before jsonb:=
  perform pg_temp.rejects(d-'learner_name','22023','Invalid new learner','learner_name_invalid');
  perform pg_temp.rejects(d||jsonb_build_object('student_id',gen_random_uuid()),'22023','Invalid new learner','request_invalid');
  perform pg_temp.rejects(d||jsonb_build_object('enrollment_id',gen_random_uuid()),'22023','Invalid new learner','request_invalid');
- perform pg_temp.rejects(d||'{"candidate_review":"stale"}','40001','Student candidates changed; review again','candidates_changed');
+ perform pg_temp.rejects(d||'{"candidate_review":"stale"}','PT409','Student candidates changed; review again','candidates_changed');
  -- Error ordering: the historical winning message, now with its reason.
  perform pg_temp.rejects(d||'{"birth_date":"garbage","session_type":"Bogus"}','22023','Invalid enrollment fields or incompatible group','birth_date_invalid');
  perform pg_temp.rejects(d||'{"initial_status":"Trial","level":"Beginning 1"}','22023','Invalid level for selected program','level_invalid');
@@ -224,7 +224,7 @@ do $$ declare s uuid:=pg_temp.student('A2 enrolled'); e1 uuid; e2 uuid; rej uuid
  perform pg_temp.rejects(pg_temp.pick(b,s,gen_random_uuid()),'22023','Enrollment unavailable or incompatible','enrollment_incompatible');
  e2:=pg_temp.enrollment(s,'Under Review');
  perform pg_temp.rejects(pg_temp.existing_data(b,s),'22023','Existing enrollment requires explicit selection','existing_enrollment_requires_selection');
- perform pg_temp.rejects(pg_temp.pick(b,s,e2)||'{"expected_enrollment_updated_at":"2000-01-01T00:00:00Z"}','40001','Stale enrollment; refresh and retry','enrollment_changed');
+ perform pg_temp.rejects(pg_temp.pick(b,s,e2)||'{"expected_enrollment_updated_at":"2000-01-01T00:00:00Z"}','PT409','Stale enrollment; refresh and retry','enrollment_changed');
  perform pg_temp.rejects(pg_temp.pick(b,s,e2)||'{"expected_enrollment_updated_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
  -- An enrollment whose own group no longer matches it (session NULL bypasses the row trigger).
  insert into public.groups(name,session_type,niveau) values('A2 adults group','Adults','Beginning 1') returning id into g;
@@ -313,11 +313,11 @@ do $$ declare s uuid:=pg_temp.student('A2 confirmed'); e uuid; l uuid:=pg_temp.l
  perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED','director initiation does not convert');
 end $$;
 
--- Handler mapping: a unique violation still becomes 40001, now with a reason.
+-- Handler mapping: a unique violation still becomes PT409, now with a reason.
 do $$ declare s uuid:=pg_temp.student('A2 unique'); e uuid; l uuid:=pg_temp.lead(); begin
  e:=pg_temp.enrollment(s,'Submitted');
  insert into public.crm_activities(lead_id,occurred_at,actor_kind,event_type,source_key,body) values(l,now(),'system','note_added','enrollment-started:'||l||':'||e,'A2 synthetic collision');
- perform pg_temp.rejects(pg_temp.pick(l,s,e),'40001','Concurrent enrollment change; refresh and retry','concurrent_change');
+ perform pg_temp.rejects(pg_temp.pick(l,s,e),'PT409','Concurrent enrollment change; refresh and retry','concurrent_change');
 end $$;
 
 -- Security, authority and dormancy.

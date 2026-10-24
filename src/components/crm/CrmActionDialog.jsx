@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
 import { STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
+import { CONFLICT_CODE, isRecordConflict } from '@/lib/conflictErrors.mjs';
 const titles = {
   manual: 'Ajouter un prospect',
   call: 'Enregistrer le résultat de l’appel',
@@ -237,7 +238,7 @@ export default function CrmActionDialog({
               task: latestTask?.version
             });
             throw {
-              code: '40001'
+              code: CONFLICT_CODE
             };
           }
         }
@@ -257,7 +258,7 @@ export default function CrmActionDialog({
       toast.success('Enregistré');
     } catch (err) {
       setError(err instanceof Error && !err.code && /^Choisissez|^Cette heure/.test(err.message) ? err.message : commandError(err));
-      if (err?.code === '40001') {
+      if (isRecordConflict(err)) {
         const latest = await crmRpc('crm_get_workspace_detail', {
           p_lead: lead.id
         }).catch(() => null);
