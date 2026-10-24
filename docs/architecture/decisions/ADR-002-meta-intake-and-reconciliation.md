@@ -20,7 +20,7 @@ Webhook when available **and** bounded reconciliation enqueue the same canonical
 
 `crm_meta_reconciliation_state` stores per-connection/form due time, lease and sanitized error state. One due form is claimed per scheduler call; a 55-second lease fences overlap. Up to two pages of 25 IDs are examined, with opaque pagination cursors used only within that pass. Successful forms become due in ten minutes; rate limits back off fifteen minutes, other errors five. A high-volume form or many forms can outrun the lookback: monitor saturation/due state, do not assume gap-free historical recovery.
 
-Supabase pg_cron + pg_net is the primary five-minute trigger; GitHub Actions is a five-minute backup. Both call the same protected `/api/cron/crm-intake` with a dedicated scheduler bearer. The endpoint performs discovery then bounded shared ingestion (three jobs, or two on a discovery tick). Vault supplies primary URL/token; configuration is separate from repository code.
+Supabase pg_cron + pg_net is the primary five-minute trigger; GitHub Actions is a backup scheduled every five minutes that actually runs about five to six times a day (amendment item 3 below). Both call the same protected `/api/cron/crm-intake` with a dedicated scheduler bearer. The endpoint performs discovery then bounded shared ingestion (three jobs, or two on a discovery tick). Vault supplies primary URL/token; configuration is separate from repository code.
 
 ## Alternatives considered
 

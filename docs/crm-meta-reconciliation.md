@@ -16,6 +16,14 @@ Supabase `pg_cron` is the primary five-minute trigger for the authenticated `/ap
 
 The hard cap means an unusually high sustained volume above fifty leads per form per pass can outrun reconciliation's rolling lookback. A large number of active forms can also push a form's next claim beyond its nominal ten-minute due time because one form is polled per five-minute scheduler tick. Operational monitoring should compare discovered counts, Graph page saturation, and overdue form state; a deliberate, separately reviewed backfill would be required for a gap. The webhook remains primary once available.
 
+## Publishing and stopping a form
+
+Only forms with an effective, unretired `meta_instant_form` mapping are polled, and publishing a new version does not retire earlier ones. The director publishes, stops and retries from *Analyse marketing → Réception des leads* through the existing director RPCs ([LIR-r1 P1-B](architecture/plans/lead-intake-reliability.md#p1-b--director-panel-réception-des-leads-pr-1a)):
+
+- **First version of a new form: back-dated.** `crm_get_meta_job_mapping` picks the latest version effective at the lead's `created_time`; a first mapping dated at publication leaves earlier leads on that form blocked as `missing_mapping`. The panel therefore proposes publication − 30 days (editable, never earlier than 90 days, Meta's lead retention). A later version defaults to publication time and must be later than the latest version's effective date; the database does not enforce this, the panel does.
+- **Stopping a form** retires every unretired version, one `crm_retire_meta_form_mapping` call each (oldest first). Retiring only the newest version keeps the form polled while its new leads block on `missing_mapping`. Until no unretired version remains the panel shows *Partiellement arrêté*.
+- A blocked job is re-queued with `crm_retry_meta_job` (blocked/retry, fewer than 8 attempts); the job-kick trigger processes it at once.
+
 ## Mapping option labels
 
 Immutable Meta mapping versions may include `option_labels[question_key][raw_option] = human_label`. The normalized `form_answers.value` retains the exact provider value; optional `display_value` carries the mapped label to the receptionist review and lead-detail read models. Unconfigured values remain unchanged. Arbitrary questions remain flexible answers. Age ranges such as `7-8` remain answers and do not become integer `learner_age`.
