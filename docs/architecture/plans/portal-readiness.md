@@ -1,6 +1,6 @@
 # Portal readiness — teachers and families (Batch F)
 
-Revision **PRF-r2**, 2026-10-24: PRF-r1 plus the [review corrections](#review-corrections-prf-r2) for the independent review of head `e90f8f1` (CHANGES REQUIRED: B1, I1–I4, minor items and test gaps) and the owner's Q6 answer. **Status: PRF-r1 APPROVED** (owner, 2026-10-24, at plan head `ba94ad3`, Q1–Q5 and Q7–Q9 = A); **Q6 answered = C** (owner, 2026-10-24 16:16 Asia/Shanghai); **PRF-r2 awaits the independent re-review and the owner's re-approval at its exact head SHA** before implementation starts ([approval record](#approval-record)). The migration, the cleanup, the merge, the deployment and every Production step each still need their own explicit owner approval. **Tier 3** (authorization, RLS and grants on learner, finance and messaging tables; a new family-link model that decides cross-family visibility; invitation flow; e-mail sent from the centre's domain; existing Production rows touched by a separately approved cleanup). Nothing here is implemented, merged or deployed. Presence in the [plans index](README.md) is not approval.
+Revision **PRF-r2**, 2026-10-24: PRF-r1 plus the [review corrections](#review-corrections-prf-r2) for the independent review of head `e90f8f1` (CHANGES REQUIRED: B1, I1–I4, minor items and test gaps) and the owner's Q6 answer. **Status: PRF-r1 APPROVED** (owner, 2026-10-24, at plan head `ba94ad3`, Q1–Q5 and Q7–Q9 = A); **Q6 answered = C** (owner, 2026-10-24 16:16 Asia/Shanghai); **PRF-r2 APPROVED FOR IMPLEMENTATION** (owner re-approval 2026-10-24 16:36 Asia/Shanghai at head `7c231ed`, after the independent re-review returned READY FOR FINAL REVIEW; [approval record](#approval-record)). The migration, the cleanup, the merge, the deployment and every Production step each still need their own explicit owner approval. **Tier 3** (authorization, RLS and grants on learner, finance and messaging tables; a new family-link model that decides cross-family visibility; invitation flow; e-mail sent from the centre's domain; existing Production rows touched by a separately approved cleanup). Nothing here is implemented, merged or deployed. Presence in the [plans index](README.md) is not approval.
 
 Baseline: `origin/main` `ba009b4` (PR #149), read 2026-10-24. Production (project `hopcezradkhrixwwswxn`) checked **read-only** on 2026-10-24 with catalog queries (`pg_proc`, `pg_policies`, `information_schema`) and aggregate counts only; no personal value was read into this document. Source findings: the 2026-10-24 platform audit (Language center project doc `claude/platform-audit-2026-10-24-full.md`; where a verifier corrected a finding, the verifier's version is used).
 
@@ -392,7 +392,7 @@ Consequence: receptionists cannot read messages today (restrictive policy); chan
 | Revision | Date | Change |
 | --- | --- | --- |
 | PRF-r1 | 2026-10-24 | First proposal (architecture task, branch `docs/plan-f-portal-readiness`); approved by the owner at `ba94ad3` with Q6 pending. |
-| PRF-r2 | 2026-10-24 | [Review corrections](#review-corrections-prf-r2) for the independent review of head `e90f8f1` (CHANGES REQUIRED); Q6 answered = C; rebased on `main` after PRs #150, #151, #154 and #156. Re-review of head `4c9747c`: earlier findings fixed, one new finding N1, applied in the same revision (D4 `teacher_member`, D7b trigger accepts the learner's teacher and staff, fires on UPDATE too, T-48). Awaits re-review and re-approval. |
+| PRF-r2 | 2026-10-24 | [Review corrections](#review-corrections-prf-r2) for the independent review of head `e90f8f1` (CHANGES REQUIRED); Q6 answered = C; rebased on `main` after PRs #150, #151, #154 and #156. Re-review of head `4c9747c`: earlier findings fixed, one new finding N1, applied in the same revision (D4 `teacher_member`, D7b trigger accepts the learner's teacher and staff, fires on UPDATE too, T-48). Re-review of head `7c231ed`: READY FOR FINAL REVIEW. Owner re-approved at `7c231ed` (2026-10-24). |
 
 ## Review corrections (PRF-r2)
 
@@ -435,6 +435,7 @@ The owner approves an exact revision and head SHA after the independent review, 
   - Q7 = **A** (staff remarks on attendance and certificates hidden from families).
   - Q8 = **A** (student accounts only for Adults and Teens learners).
   - Q9 = **A** (clear the placeholder address from the 33 files; reception collects real addresses before inviting).
+- **Re-approval of PRF-r2:** 2026-10-24 16:36 Asia/Shanghai (UTC+08:00), 08:36 UTC; chat with Claude, relayed by the coordinating session. Owner's words (verbatim): "approve F and merge 152 and 153". Approved revision: **PRF-r2 at exact head `7c231ed4fa3e2d21af578a2828930d0e4ac44da3`** (re-reviewed content; rebased onto `main` after #152 with index rows combined), after the independent re-review of that head returned READY FOR FINAL REVIEW (CI run 40078566549 green). Answers Q1–Q9 as listed above, unchanged. This re-approval supersedes the PRF-r1 approval for implementation purposes and covers architecture approval for implementation only; the merge of this docs PR was approved in the same message. It does not approve a migration number, the migration, the cleanup, the deployment, the pilot or any invitation; each needs its own explicit owner approval.
 - **Scope of this approval:** architecture approval of PRF-r1 for implementation (D7 was held until Q6, now answered); superseded for implementation purposes by the re-approval PRF-r2 needs. It does not approve a migration number, the merge, the migration, the cleanup, the deployment, the pilot or any invitation; each needs its own explicit owner approval under [Rollout and recovery](#rollout-and-recovery).
 
 ## IMPLEMENTATION CONTRACT
@@ -445,7 +446,7 @@ Design D1–D14 (including D7b) of PRF-r2 with the owner's answers to Q1–Q9; n
 
 ### Prerequisites
 
-- The owner's re-approval of PRF-r2 (or a later reviewed revision) at its exact head SHA, recorded above; Q1–Q9 answered (done).
+- The owner's re-approval of PRF-r2 at its exact head SHA, recorded above (done: head `7c231ed`); Q1–Q9 answered (done).
 - Fresh `origin/main`; status of Plan D's M1/M2, Premium Release B, PR #124 and Batch A checked; the build order of D4 chosen accordingly.
 - Latest cumulative definitions of every object in the [migration strategy](#migration-strategy) read from the repository and compared with Production catalog evidence where available.
 - Local Supabase with synthetic data only; external e-mail disabled.
