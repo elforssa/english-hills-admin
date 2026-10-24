@@ -249,6 +249,17 @@ On **2026-10-17** the owner (Maroine) unparked Outcome 5, online learning, **for
 - **R4 preparation decisions (owner, 2026-10-23):** Phase A only approved (a Production redeploy with the live switch off, then READY and probe checks); D2 approved as proposed (test learners as lesson guests on `+r4` addresses, a test teacher, an adult course named «TEST R4 — ne pas utiliser», kept closed afterwards rather than deleted); D3: the Production SDK Key belongs to the same Zoom Video SDK app as the developer credentials, and the local mid-session expiry run is approved after Phase A (condition met: the run started at 15:04:50 UTC, after the Phase A probes at 15:04:20 UTC); D4: the owner's partner in Casablanca makes the Morocco-routed A7 capture; D5: the trial credits cover the test lesson. D1 (the switch-on window for the test lesson) is pending: the owner gives the date and Casablanca time before Phase B, and Phase C needs the owner's explicit approval at the time.
 - **Production redeploy, R4 Phase A (2026-10-23):** on the owner's instruction, the guide triggered a Production redeploy of `43be8fa0…` at about 15:00 UTC (Vercel deployment `dpl_GdDJFv7npFHpPP1VikaFC2wUM4sN`, `source: redeploy`); the new build `ZWLNDoUqYvBLO1GXvPxZj` serves since 15:04:05 UTC, so the R3 variables are in effect, with the live switch still off. Results: [R0′–R2′ release record](../architecture/evidence/online-learning-r0p-r2p-production-2026-10-23.md#after-r2-r3-and-r4-phase-a-2026-10-23).
 
+## Enrollment and group consistency (Batch D) — APPROVED (2026-10-24)
+
+Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-consistency.md#approval-record), revision EGC-r1 at head `50da715` (Tier 3). Owner approval 2026-10-24 15:53 (UTC+08:00), chat with Claude relayed by the coordinating session, verbatim: "all recomended and for E6 paper numbers dont exist".
+
+- **D1 A:** one group per programme per school year; a learner can be in two groups of different programmes.
+- **D2 B:** per-learner "Ancien apprenant" action plus a yearly director "Clôturer l'année scolaire"; management only; "Ancien apprenant" when completed, "Inactif" when stopped mid-way; neither counts as active.
+- **D3 A:** only a confirmed, validated or trial enrollment makes a learner Inscrit. **D4 A:** hard capacity for reception, logged director/admin override. **D5 A:** a conversion stays valid when the learner leaves. **D7 A:** no level change while a group has learners.
+- **D6:** the data clean-up is approved as described, with Ancien apprenant; counts are re-read on the day and any difference goes back to the owner.
+- **Not approved by this decision:** the merge, either migration, the clean-up run (R4 needs its own release approval of the exact numbers) and every deployment.
+- **D8 A (2026-10-24, 16:16 Asia/Shanghai; EGC-r2, added after independent review):** owner's words, verbatim: "d8: A". Closing an online course (`online_close_course`) ends the course's enrollments, so a learner can take another online course in the same school year; option B (exempting online programmes from the one-live-enrollment rule) is rejected. The review corrections also add one clean-up row (C1b: a Yearly enrollment without school year gets 2026/2027), shown to the owner with the D6 counts.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
