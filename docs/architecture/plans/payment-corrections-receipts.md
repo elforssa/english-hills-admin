@@ -1,6 +1,6 @@
 # Payment corrections, receipt numbering and finance guardrails (Batch E)
 
-**Status: PROPOSED — not approved.** Revision **PCR-r1**, 2026-10-24. Tier 3. Architecture only: no code, no migration applied, no Production write. Baseline `origin/main` `ba009b45062ecbbef7beff6abbebeb9492965945`. Source findings: the read-only platform audit of 2026-10-24, items FIN-1/DAT-5, FIN-2/DAT-4, FIN-3, FIN-4, FIN-5, FIN-6, FIN-7, FIN-8/REL-7, FIN-9, FIN-11, FIN-12, FIN-13 (where an independent verifier corrected a finding, the verifier's version is used). FIN-10 belongs to Batch D. Proposed decision record: [ADR-012](../decisions/ADR-012-gap-free-receipt-numbering.md).
+**Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, Q1–Q9 at plan head `a6cce4e`; see the [approval record](#approval-record)). Revision **PCR-r1**, 2026-10-24. Tier 3. Each migration, data step (D1–D3) and deployment still needs its own explicit owner approval. Nothing is implemented yet: no code, no migration applied, no Production write. Baseline `origin/main` `ba009b45062ecbbef7beff6abbebeb9492965945`. Source findings: the read-only platform audit of 2026-10-24, items FIN-1/DAT-5, FIN-2/DAT-4, FIN-3, FIN-4, FIN-5, FIN-6, FIN-7, FIN-8/REL-7, FIN-9, FIN-11, FIN-12, FIN-13 (where an independent verifier corrected a finding, the verifier's version is used). FIN-10 belongs to Batch D. Proposed decision record: [ADR-012](../decisions/ADR-012-gap-free-receipt-numbering.md).
 
 # Owner summary
 
@@ -261,6 +261,24 @@ Nothing in this plan changes without these answers; recommended options are prop
 ## Expected modules
 
 `supabase/migrations/XXX_finance_corrections_numbering_guardrails.sql`, `supabase/migrations/XXX_payroll_rules_and_guards.sql`, `supabase/manual/` (D1–D3 scripts and reverse scripts), `scripts/test-finance-batch-e.sql`, `scripts/test-receipt-concurrency.sh`, `scripts/test-receipt-client-regressions.mjs`, `scripts/test-receptionist-batch1.sql`, `scripts/test-premium-retirement-upgrade-113-current.sql`, `.github/workflows/verify.yml`, `src/components/receipts/ReceiptForm.jsx`, `src/app/(admin)/finance/page.jsx`, `src/app/(admin)/dashboard/page.jsx`, `src/app/(admin)/reports/page.jsx`, `src/app/(admin)/receipts/[id]/edit/page.jsx`, `src/app/(admin)/receipts/[id]/delete/page.jsx`, `src/app/(admin)/receipts/[id]/print/page.jsx`, `src/lib/receiptPdf.js`, `src/lib/receiptFinance.js`, `src/lib/payroll/calculate.mjs`, `src/app/api/admin/payroll/route.js` (+ `preview/route.js`), `src/app/(admin)/payroll/page.jsx`, the five REL-7 form files, and docs: [receipt model](../../receipt-financial-model.md), [PRODUCT_RULES](../../ai/PRODUCT_RULES.md#conversion-and-finance), [SECURITY_RULES](../../ai/SECURITY_RULES.md), [CURRENT_STATE](../../ai/CURRENT_STATE.md), ADR-012.
+
+## Approval record
+
+- **Date and time:** 2026-10-24 15:53 Asia/Shanghai (UTC+08:00), 07:53 UTC.
+- **Owner's words (verbatim):** "all recomended and for E6 paper numbers dont exist". The owner had been shown each plan's owner questions with the plan's recommended option. "all recomended" covers Q1–Q9; "E6" is this plan's Q6: paper receipt numbers do not exist, so the recommendation for that case (B) applies.
+- **Channel:** chat with Claude, relayed by the coordinating session.
+- **Approved revision:** PCR-r1 at exact head `a6cce4e` of branch `docs/plan-e-payment-corrections-receipts` (PR #152).
+- **Options chosen:**
+  - Q1 = **B** (flag the CRM conversion at once; clear it automatically only when a replacement payment is recorded on the same enrollment and the flag came from a payment cancellation).
+  - Q2 = **A** (discount reason from a short list: Fratrie, Ancien élève, Promotion/offre, Accord de la direction, Autre + text).
+  - Q3 = **B** (reception may give at most 10% without the director; admin and director keep no cap, reason still required).
+  - Q4 = **A** (never in the future; reception up to 7 days back; admin and director up to 31 days back).
+  - Q5 = **B with 10%** (a reception payment confirms the enrollment only when payments on that agreement reach at least 10% of the net price; below it the receipt is issued and the enrollment waits for the director).
+  - Q6 = **B** (paper numbers do not exist: a separate historical series `EH-HIST-2026-0001` to `EH-HIST-2026-0054`, in payment-date order).
+  - Q7 = **A** (year of issue, Casablanca; one continuous counter).
+  - Q8 = **A** (logged correction of the 17 legacy agreements; check the paper receipt of the 25 MAD case first).
+  - Q9 = **yes to both**: switch payslip creation off now (E-1) until the accountant validates; the accountant's validation is mandatory and the system refuses payslips until it is recorded.
+- **Scope of this approval:** architecture approval for implementation of E-1, E-2 and E-3 under this plan only. It does not approve any merge, migration, deployment or data step; E-1, E-2, E-3 and each of D1–D3 still need their own explicit owner approval under [Rollout and rollback](#rollout-and-rollback) and the [data cleanup plan](#data-cleanup-plan-not-run-each-step-needs-the-owners-explicit-approval).
 
 ## IMPLEMENTATION CONTRACT
 
