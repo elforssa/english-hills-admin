@@ -1,4 +1,4 @@
-# ADR-009: Gap-free, immutable receipt numbering
+# ADR-012: Gap-free, immutable receipt numbering
 
 ## Status
 
