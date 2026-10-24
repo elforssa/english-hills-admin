@@ -260,6 +260,20 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
 - **Not approved by this decision:** the merge, either migration, the clean-up run (R4 needs its own release approval of the exact numbers) and every deployment.
 - **D8 A (2026-10-24, 16:16 Asia/Shanghai; EGC-r2, added after independent review):** owner's words, verbatim: "d8: A". Closing an online course (`online_close_course`) ends the course's enrollments, so a learner can take another online course in the same school year; option B (exempting online programmes from the one-live-enrollment rule) is rejected. The review corrections also add one clean-up row (C1b: a Yearly enrollment without school year gets 2026/2027), shown to the owner with the D6 counts.
 
+## Payment corrections and receipts (Batch E) — APPROVED (2026-10-24)
+
+Plan: [payment corrections and receipts](../architecture/plans/payment-corrections-receipts.md#approval-record), revision PCR-r1 at head `a6cce4e` (Tier 3). Owner approval 2026-10-24 15:53 (UTC+08:00), chat with Claude relayed by the coordinating session, verbatim: "all recomended and for E6 paper numbers dont exist".
+
+- **Q1 B:** a cancelled payment that leaves a confirmed enrollment unpaid flags the CRM conversion at once; the flag clears automatically only when a replacement payment is recorded on the same enrollment.
+- **Q2 A:** a discount needs a reason from a short list. **Q3 B:** reception may discount at most 10% without the director.
+- **Q4 A:** payment date never in the future; reception up to 7 days back, admin and director up to 31.
+- **Q5 B with 10%:** a reception payment confirms an enrollment only from 10% of the net price.
+- **Q6 B:** paper receipt numbers do not exist; the 54 receipts imported on 2026-09-13 get a separate historical series `EH-HIST-2026-0001` to `0054`, in payment-date order.
+- **Q7 A:** year of issue (Casablanca), one continuous counter. **Q8 A:** logged correction of the 17 legacy agreements.
+- **Q9:** payslip creation is switched off now (E-1); the accountant's validation is mandatory and the system refuses payslips until it is recorded.
+- **Revision PCR-r2 (2026-10-24):** the independent review's corrections, within these answers (no answer changes; [details](../architecture/plans/payment-corrections-receipts.md#review-corrections-pcr-r2)). Coordinator decision recorded there: Plan E governs the order of the payment checks, which are not reordered; Plan D defers to it. Q1's automatic clear applies only when every review since the last clear came from a payment cancellation. A fresh re-review is required.
+- **Not approved by this decision:** any merge, migration, deployment or data step; E-1, E-2, E-3 and D1–D3 each need their own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
