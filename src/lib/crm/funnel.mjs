@@ -48,3 +48,11 @@ export function ratioGuard({ from, attributionDay, rows = [], total = 0 }) {
   const truncated = Number(total) > rows.length;
   return { hidden: false, attributionDay, partial: unattributed > 0 || truncated, unattributed, truncated };
 }
+
+// The note under the summary ratios, or null. Truncated rows with no unattributed
+// bucket among them say so, rather than "0 prospect sans attribution".
+export function ratioGuardNote(guard) {
+  if (guard.hidden || !guard.partial) return null;
+  if (!guard.unattributed) return 'partiel : couverture vérifiée sur les lignes affichées uniquement';
+  return `partiel : ${guard.unattributed} prospect${guard.unattributed > 1 ? 's' : ''} Meta sans attribution${guard.truncated ? ' (lignes affichées)' : ''}`;
+}

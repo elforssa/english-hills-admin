@@ -83,8 +83,10 @@ try {
     await dialog.getByLabel('Copier les réponses depuis').selectOption({ label: 'Rentrée X · v2' });
     await dialog.getByLabel('Type de session').selectOption('Adults');
     await expect(dialog.getByLabel('Champ phone')).toHaveValue('phone_number');
+    await expect(dialog.getByTestId('intake-effective-zone')).toContainText('heure de ce navigateur');
     await dialog.getByRole('button', { name: 'Vérifier' }).click();
     await expect(page.getByTestId('intake-publish-summary')).toContainText(`${formNew} · v1`);
+    await expect(page.getByTestId('intake-publish-summary')).toContainText('Date d’effet (heure de Casablanca)');
     const before = Date.now();
     await dialog.getByRole('button', { name: 'Publier', exact: true }).click();
     await expect(page.getByText('Formulaire publié', { exact: true }).first()).toBeVisible();
@@ -118,7 +120,7 @@ try {
     });
     await row(formY).getByRole('button', { name: 'Arrêter l’import' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Arrêter l’import' }).click();
-    await expect(page.getByText('Arrêt incomplet : Actualisez puis réessayez', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Arrêt incomplet. Actualisez puis réessayez', { exact: true }).first()).toBeVisible();
     await expect(row(formY).getByTestId('intake-form-status')).toHaveText('Partiellement arrêté');
     await expect(row(formY)).toContainText('encore importé');
     await row(formY).getByRole('button', { name: 'Terminer l’arrêt' }).click();

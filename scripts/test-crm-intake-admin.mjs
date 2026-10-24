@@ -4,7 +4,7 @@ import {
   defaultEffectiveFrom, effectiveFromError, formStatusLabel, groupMetaForms, jobChannel, jobErrorLabel, jobHint,
   jobsToHandle, metaConnection, pollingStatus, retirePlan, rpcErrorMessage, spendFreshness, websiteForms,
 } from '../src/lib/crm/intakeAdmin.mjs';
-import { ratioGuard } from '../src/lib/crm/funnel.mjs';
+import { ratioGuard, ratioGuardNote } from '../src/lib/crm/funnel.mjs';
 
 const DAY = 86400000;
 const now = Date.parse('2026-10-24T08:00:00Z');
@@ -136,6 +136,11 @@ assert.equal(jobErrorLabel('something_new'), 'Erreur inconnue');
 assert.equal(rpcErrorMessage({ code: '22023' }), 'Champs refusés : vérifiez l’identifiant et les champs');
 assert.equal(rpcErrorMessage({ code: '42501' }), 'Réservé à la direction');
 assert.equal(rpcErrorMessage({ code: '40001' }), 'Actualisez puis réessayez');
+assert.equal(rpcErrorMessage({ code: 'PT409' }, 'retire'), 'Actualisez puis réessayez', 'ADR-009 barrier conflict');
+assert.equal(rpcErrorMessage({ code: '22023' }, 'publish'), 'Champs refusés : vérifiez l’identifiant et les champs');
+assert.equal(rpcErrorMessage({ code: '22023' }, 'retire'), 'Version déjà arrêtée : la liste est actualisée.');
+assert.equal(rpcErrorMessage({ code: '22023' }, 'retry'), 'Ce lead n’est plus réessayable : la liste est actualisée.');
+assert.equal(rpcErrorMessage({ code: '42501' }, 'retry'), 'Réservé à la direction');
 assert.match(rpcErrorMessage({ code: '23505', message: 'duplicate key value violates crm_form_mappings' }), /^Action refusée/);
 assert(!rpcErrorMessage({ code: 'XX000', message: 'secret detail' }).includes('secret'));
 
@@ -150,8 +155,15 @@ assert.equal(spendFreshness(null, now), null);
 
 // Attribution day in the account time zone.
 assert.equal(attributionDay(meta, 'Africa/Casablanca'), '2026-10-12');
-assert.equal(attributionDay({ settings: { attribution_enrichment: { started_at: '2026-10-11T23:30:00Z' } } }, 'Africa/Casablanca'), '2026-10-12');
-assert.equal(attributionDay({ settings: { attribution_enrichment: { started_at: '2026-10-11T23:30:00Z' } } }, 'America/New_York'), '2026-10-11');
+// Day boundaries with fixed-offset zones (Etc/GMT-1 is UTC+1, Etc/GMT+4 is UTC−4): Morocco's
+// offset depends on the tzdata release (plain UTC+0 from 2026-09-20 since tzdata 2026c).
+const started = at => ({ settings: { attribution_enrichment: { started_at: at } } });
+assert.equal(attributionDay(started('2026-10-11T23:30:00Z'), 'Etc/GMT-1'), '2026-10-12');
+assert.equal(attributionDay(started('2026-10-11T22:59:59Z'), 'Etc/GMT-1'), '2026-10-11');
+assert.equal(attributionDay(started('2026-10-12T02:00:00Z'), 'Etc/GMT+4'), '2026-10-11');
+assert.equal(attributionDay(started('2026-10-12T04:00:00Z'), 'Etc/GMT+4'), '2026-10-12');
+assert.equal(attributionDay(started('2026-10-11T12:00:00Z'), 'Africa/Casablanca'), '2026-10-11');
+assert.equal(attributionDay(started('2026-10-11T12:00:00Z')), '2026-10-11', 'defaults to Africa/Casablanca');
 assert.equal(attributionDay({ settings: {} }), null);
 assert.equal(attributionDay(null), null);
 
@@ -169,5 +181,12 @@ assert.deepEqual(ratioGuard({ from: '2026-11-01', attributionDay: '2026-10-12',
 assert.deepEqual(ratioGuard({ from: '2026-11-01', attributionDay: '2026-10-12', rows: [row('meta:1', 5)], total: 60 }),
   { hidden: false, attributionDay: '2026-10-12', partial: true, unattributed: 0, truncated: true });
 assert.equal(ratioGuard({ from: '2026-11-01', attributionDay: '2026-10-12', rows: [row('pending:meta_instant_form', 0)], total: 1 }).partial, false);
+const note = (rows, total, from = '2026-11-01') => ratioGuardNote(ratioGuard({ from, attributionDay: '2026-10-12', rows, total }));
+assert.equal(note([row('pending:meta_instant_form', 2)], 1), 'partiel : 2 prospects Meta sans attribution');
+assert.equal(note([row('unknown:meta_instant_form', 1)], 1), 'partiel : 1 prospect Meta sans attribution');
+assert.equal(note([row('unknown:meta_instant_form', 3)], 60), 'partiel : 3 prospects Meta sans attribution (lignes affichées)');
+assert.equal(note([row('meta:1', 5)], 60), 'partiel : couverture vérifiée sur les lignes affichées uniquement', 'never "0 prospect"');
+assert.equal(note([row('meta:1', 5)], 1), null);
+assert.equal(note([row('pending:meta_instant_form', 2)], 1, '2026-10-01'), null, 'hidden ratios carry no note');
 
 console.log('PASS intake admin helpers: claim-predicate form state, every-version retire plan, allowed-keys Meta-only payload, D4 dates, retry predicate, French labels, spend freshness, attribution day and ratioGuard');

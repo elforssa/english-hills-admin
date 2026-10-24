@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { InsightsConnectionPanel, InsightsSyncPanel } from '@/components/crm/MarketingInsightsPanels';
 import MarketingFunnel from '@/components/crm/MarketingFunnel';
 import LeadIntakePanel, { LeadIntakeStatus } from '@/components/crm/LeadIntakePanel';
-import { PROGRAMS, ratioGuard } from '@/lib/crm/funnel.mjs';
+import { PROGRAMS, ratioGuard, ratioGuardNote } from '@/lib/crm/funnel.mjs';
 import { DIAGNOSTICS_PAGE, attributionDay, metaConnection } from '@/lib/crm/intakeAdmin.mjs';
 
 const number = (v) => v == null ? '—' : new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 2 }).format(v);
@@ -84,13 +84,14 @@ export default function MarketingAnalytics() {
         {data.sync_warning && <p className="font-semibold text-slate-900">Une actualisation est en attente ou a échoué. Les dernières dépenses complètes sont conservées.</p>}
         {spendSuppressed && <p className="font-semibold text-slate-900" data-testid="spend-suppressed">Dépenses non ventilées par programme : les coûts Meta sont connus par campagne, pas par programme. Dépenses, CPL, CPQL et CAC sont donc indisponibles dans cette vue.</p>}
         {spendSuppressed && <p data-testid="program-caveat">Programme = type de session du prospect. Pour un formulaire Meta sans question de programme, c’est la valeur par défaut du formulaire : un formulaire correspond alors à un programme.</p>}
+        {meta.isError && <p className="font-semibold text-slate-900" data-testid="ratios-hidden">Ratios masqués : réception des leads indisponible.</p>}
         {meta.isSuccess && guard.hidden && <p className="font-semibold text-slate-900" data-testid="ratios-hidden">{guard.attributionDay ? `Ratios masqués : la période commence avant le début de l’attribution des campagnes (${longDay(guard.attributionDay)}). Les dépenses antérieures n’ont pas de prospects attribués.` : 'Ratios masqués : l’attribution des campagnes n’a pas commencé.'}{guard.attributionDay && <Button size="sm" variant="outline" className="ml-2" onClick={() => { setFrom(guard.attributionDay); if (to < guard.attributionDay) setTo(guard.attributionDay); reset(); }}>Commencer au {shortDay(guard.attributionDay)}</Button>}</p>}
         {!showRoas && <p className="font-semibold text-slate-900">ROAS masqué : les dépenses sont en {data.spend_currency} et les encaissements en MAD ; aucune conversion de devise n’est appliquée.</p>}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           ['Dépenses Meta', money(summary.spend, data.spend_currency)], ['Prospects acquis', number(summary.leads)], ['Qualifiés', number(summary.qualified)], ['Inscrits', number(summary.converted)],
-          ['Encaissements nets', money(summary.revenue, 'MAD')], ['CAC Meta attribué', ratio(summary.cac), guard.partial && `partiel : ${number(guard.unattributed)} prospect${guard.unattributed > 1 ? 's' : ''} Meta sans attribution${guard.truncated ? ' (lignes affichées)' : ''}`], showRoas && ['ROAS Meta attribué', summary.roas == null ? '—' : `${number(summary.roas)}×`], ['Sans attribution Meta', number(summary.unattributed_leads)],
+          ['Encaissements nets', money(summary.revenue, 'MAD')], ['CAC Meta attribué', ratio(summary.cac), ratioGuardNote(guard)], showRoas && ['ROAS Meta attribué', summary.roas == null ? '—' : `${number(summary.roas)}×`], ['Sans attribution Meta', number(summary.unattributed_leads)],
         ].filter(Boolean).map(([label, value, note]) => <div key={label} className="rounded-lg border border-slate-200 bg-white px-4 py-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{value}</p>{note && <p className="mt-1 text-[10px] text-slate-500" data-testid="ratios-partial">{note}</p>}</div>)}
       </div>
       <MarketingFunnel summary={summary} />

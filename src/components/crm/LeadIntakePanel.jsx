@@ -23,6 +23,8 @@ const hours = n => new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 1 }).
 // <input type="datetime-local"> works in the browser's local time.
 const toLocalInput = iso => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 const fromLocalInput = value => (Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : '');
+// The browser's zone, named beside the date input; the summary shows Casablanca time.
+const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'navigateur';
 const json = value => JSON.stringify(value ?? {}, null, 1);
 const statusTone = { active: 'bg-emerald-50 text-emerald-800', scheduled: 'bg-sky-50 text-sky-800', stopped: 'bg-slate-100 text-slate-600', partial: 'bg-amber-50 text-amber-800' };
 
@@ -63,16 +65,21 @@ function IntakeTools({ meta }) {
     finally { setBusy(''); await meta.refetch(); }
   };
   const retire = form => act(`retire:${form.form_key}`, async () => {
+    // The plan comes from fresh diagnostics, never from the list on screen.
+    const fresh = await meta.refetch();
+    if (fresh.isError) { toast.error('Arrêt non effectué : réception des leads indisponible.'); return; }
+    const current = groupMetaForms(fresh.data?.mappings, metaConnection(fresh.data?.connections)?.id).find(f => f.form_key === form.form_key);
     let done = 0;
-    for (const id of retirePlan(form)) {
+    for (const id of current ? retirePlan(current) : []) {
       try { await crmRpc('crm_retire_meta_form_mapping', { p_mapping: id }); done += 1; }
-      catch (error) { toast.error(`Arrêt incomplet : ${rpcErrorMessage(error)}`); return; }
+      catch (error) { toast.error(`Arrêt incomplet. ${rpcErrorMessage(error, 'retire')}`); return; }
     }
+    if (!done) { toast.info('Aucune version à arrêter : la liste est actualisée.'); return; }
     toast.success(done > 1 ? `Import arrêté (${done} versions retirées)` : 'Import arrêté');
   });
   const retry = job => act(`retry:${job.id}`, async () => {
     try { await crmRpc('crm_retry_meta_job', { p_job: job.id }); toast.success('Nouvelle tentative demandée'); }
-    catch (error) { toast.error(`Nouvelle tentative refusée : ${rpcErrorMessage(error)}`); }
+    catch (error) { toast.error(`Nouvelle tentative refusée. ${rpcErrorMessage(error, 'retry')}`); }
   });
   return <div className="space-y-5 text-sm">
     <section>
@@ -124,7 +131,7 @@ function IntakeTools({ meta }) {
       onClose={() => setPublishing(null)}
       onPublish={payload => act('publish', async () => {
         try { await crmRpc('crm_publish_meta_form_mapping', payload); toast.success('Formulaire publié'); setPublishing(null); }
-        catch (error) { toast.error(rpcErrorMessage(error)); }
+        catch (error) { toast.error(rpcErrorMessage(error, 'publish')); }
       })} />}
     <AlertDialog open={!!retiring} onOpenChange={open => { if (!open) setRetiring(null); }}>
       <AlertDialogContent>
@@ -169,7 +176,7 @@ function PublishDialog({ connection, forms, initial, busy, onClose, onPublish })
           <label className="text-xs font-medium text-slate-600">Type de session<select aria-label="Type de session" className={input} value={draft.default_session_type || ''} onChange={set('default_session_type')}><option value="">—</option>{SESSION_TYPES.map(s => <option key={s} value={s}>{s}</option>)}</select></label>
           <label className="text-xs font-medium text-slate-600">Programme (texte)<input aria-label="Programme" className={input} maxLength={200} value={draft.default_program_interest_text || ''} onChange={set('default_program_interest_text')} /></label>
           <label className="text-xs font-medium text-slate-600">Apprenant<select aria-label="Apprenant" className={input} value={draft.learner_policy} onChange={set('learner_policy')}><option value="required">Obligatoire</option><option value="optional">Facultatif</option></select></label>
-          <label className="text-xs font-medium text-slate-600">Date d’effet<input aria-label="Date d’effet" type="datetime-local" className={input} value={toLocalInput(effectiveFrom)} onChange={e => setEffective(fromLocalInput(e.target.value))} /></label>
+          <label className="text-xs font-medium text-slate-600">Date d’effet <span className="font-normal text-slate-500" data-testid="intake-effective-zone">(heure de ce navigateur : {browserZone()})</span><input aria-label="Date d’effet" type="datetime-local" className={input} value={toLocalInput(effectiveFrom)} onChange={e => setEffective(fromLocalInput(e.target.value))} /></label>
         </div>
         <details className="rounded-md border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-semibold text-slate-700">Correspondance des champs (avancé)</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">{CANONICAL_KEYS.map(key => <label key={key} className="text-xs font-medium text-slate-600">{key}<input aria-label={`Champ ${key}`} className={input} maxLength={100} value={draft.field_map?.[key] || ''} onChange={e => setDraft({ ...draft, field_map: { ...draft.field_map, [key]: e.target.value } })} /></label>)}</div>
@@ -181,7 +188,7 @@ function PublishDialog({ connection, forms, initial, busy, onClose, onPublish })
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
           <dt className="text-slate-500">Formulaire</dt><dd className="font-mono">{data.form_key} · v{(versions.at(-1)?.version || 0) + 1}</dd>
           <dt className="text-slate-500">Nom</dt><dd>{data.form_name || '—'}</dd>
-          <dt className="text-slate-500">Date d’effet</dt><dd>{when(data.effective_from)}</dd>
+          <dt className="text-slate-500">Date d’effet (heure de Casablanca)</dt><dd>{when(data.effective_from)}</dd>
           <dt className="text-slate-500">Type de session</dt><dd>{data.default_session_type || '—'}</dd>
           <dt className="text-slate-500">Programme</dt><dd>{data.default_program_interest_text || '—'}</dd>
           <dt className="text-slate-500">Apprenant</dt><dd>{data.learner_policy === 'optional' ? 'Facultatif' : 'Obligatoire'}</dd>

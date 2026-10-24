@@ -43,8 +43,9 @@ try {
   const callLog = join(dir, 'calls');
   const curl = join(dir, 'curl');
   // The stub records its arguments, prints the stubbed status like --write-out
-  // and exits with the stubbed curl exit code.
-  writeFileSync(curl, `#!/usr/bin/env bash
+  // and exits with the stubbed curl exit code. PATH holds the stub directory only,
+  // so the real curl can never be reached; the step uses shell builtins otherwise.
+  writeFileSync(curl, `#!/bin/bash
 printf '%s\\n' "$*" >> "${callLog}"
 printf '%s' "\${STUB_STATUS}"
 exit "\${STUB_RC:-0}"
@@ -52,8 +53,8 @@ exit "\${STUB_RC:-0}"
   chmodSync(curl, 0o755);
   const run = (script, { status = '200', rc = '0' } = {}) => {
     rmSync(callLog, { force: true });
-    const result = spawnSync('bash', ['-c', script], {
-      env: { PATH: `${dir}:${process.env.PATH}`, CRM_INTAKE_SCHEDULER_TOKEN: token, STUB_STATUS: status, STUB_RC: rc },
+    const result = spawnSync('/bin/bash', ['-c', script], {
+      env: { PATH: dir, CRM_INTAKE_SCHEDULER_TOKEN: token, STUB_STATUS: status, STUB_RC: rc },
       encoding: 'utf8',
     });
     const calls = existsSync(callLog) ? readFileSync(callLog, 'utf8').trim().split('\n') : [];
@@ -69,30 +70,38 @@ exit "\${STUB_RC:-0}"
   assert(ok.calls[0].endsWith('https://admin.english-hills.com/api/cron/crm-intake'));
   assert(!ok.calls[0].includes('--fail'));
 
-  assert.equal(run(invoke, { status: '204' }).code, 0);
+  const noContent = run(invoke, { status: '204' });
+  assert.equal(noContent.code, 0);
+  assert.equal(noContent.calls.length, 1);
 
   const alert = run(invoke, { status: '424' });
   assert.equal(alert.code, 1);
   assert.equal(alert.output, 'CRM intake reported a lead-intake problem. Open Analyse marketing > Réception des leads.');
+  assert.equal(alert.calls.length, 1, '424 is not retried');
 
   for (const status of ['503', '401', '500', '302']) {
     const failed = run(invoke, { status });
     assert.equal(failed.code, 1);
     assert.equal(failed.output, 'CRM intake scheduler returned a non-2xx status.');
+    assert.equal(failed.calls.length, 1, `one stubbed call for ${status}`);
   }
 
   const network = run(invoke, { status: '000', rc: '7' });
   assert.equal(network.code, 1);
   assert.equal(network.output, 'CRM intake scheduler request failed before an HTTP status was received.');
+  assert.equal(network.calls.length, 1);
 
   const timeout = run(invoke, { status: '000', rc: '28' });
   assert.equal(timeout.code, 1);
   assert.equal(timeout.output, network.output);
+  assert.equal(timeout.calls.length, 1);
 
-  const missingToken = spawnSync('bash', ['-c', invoke], {
-    env: { PATH: `${dir}:${process.env.PATH}`, CRM_INTAKE_SCHEDULER_TOKEN: '', STUB_STATUS: '200' }, encoding: 'utf8',
+  rmSync(callLog, { force: true });
+  const missingToken = spawnSync('/bin/bash', ['-c', invoke], {
+    env: { PATH: dir, CRM_INTAKE_SCHEDULER_TOKEN: '', STUB_STATUS: '200' }, encoding: 'utf8',
   });
   assert.notEqual(missingToken.status, 0);
+  assert(!existsSync(callLog), 'no call without a token');
 
   const test = run(alertTest, { status: '200' });
   assert.equal(test.code, 1);

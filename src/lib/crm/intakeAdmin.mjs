@@ -196,14 +196,22 @@ export function jobChannel(job, connections = []) {
   return CHANNEL_LABELS[provider] || '—';
 }
 
-// French messages for the fixed SQLSTATEs of the director RPCs. 40001 is a stale
-// version or a lifecycle barrier conflict (the 103 bodies take lifecycle_barrier):
-// the director refreshes and retries by hand; nothing is retried automatically.
-export function rpcErrorMessage(error) {
+// French messages for the fixed SQLSTATEs of the director RPCs, by action. 40001 is a
+// stale version or a lifecycle barrier conflict (the 103 bodies take lifecycle_barrier);
+// PT409 is the same conflict once the barrier raises it (ADR-009). The director
+// refreshes and retries by hand; nothing is retried automatically. A 22023 from retire
+// or retry means the row already moved on, so the panel refetches the list.
+const INVALID_BY_ACTION = {
+  publish: 'Champs refusés : vérifiez l’identifiant et les champs',
+  retire: 'Version déjà arrêtée : la liste est actualisée.',
+  retry: 'Ce lead n’est plus réessayable : la liste est actualisée.',
+};
+export function rpcErrorMessage(error, action = 'publish') {
   switch (error?.code) {
-    case '22023': return 'Champs refusés : vérifiez l’identifiant et les champs';
+    case '22023': return INVALID_BY_ACTION[action] || INVALID_BY_ACTION.publish;
     case '42501': return 'Réservé à la direction';
-    case '40001': return 'Actualisez puis réessayez';
+    case '40001':
+    case 'PT409': return 'Actualisez puis réessayez';
     default: return 'Action refusée. Actualisez puis réessayez.';
   }
 }
