@@ -105,7 +105,7 @@ Meta Insights has reporting/snapshot architecture, fixture processing and, from 
 
 ## Record conflicts
 
-Deliberate conflicts (stale version, lost lease, busy lock, translated deadlock) raise `PT409`, never the retryable `40001` ([ADR-009](../architecture/decisions/ADR-009-conflicts-never-retryable.md)); the browser reads them only through `src/lib/conflictErrors.mjs`. CI enforces it on new migration files, on `src/` and on the cumulative catalog. Implemented by migration 119 on the Batch C branch ([plan NRC-r2](../architecture/plans/conflicts-without-retry-loops.md#implementation-record)); not merged or deployed.
+Deliberate conflicts (stale version, lost lease, busy lock, translated deadlock) raise `PT409`, never the retryable `40001` ([ADR-009](../architecture/decisions/ADR-009-conflicts-never-retryable.md)); the browser reads them only through `src/lib/conflictErrors.mjs`. CI enforces it on new migration files, on `src/` and on the cumulative catalog. Implemented by migration 119 ([plan NRC-r2](../architecture/plans/conflicts-without-retry-loops.md#implementation-record)), PR #158; released to Production on 2026-10-24 ([release record](../architecture/evidence/conflicts-without-retry-production-2026-10-24.md)).
 
 ## Infrastructure and security
 
