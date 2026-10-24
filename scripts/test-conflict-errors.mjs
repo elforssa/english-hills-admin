@@ -1,10 +1,11 @@
 // Batch C browser contract (plan NRC-r2, ADR-009, REL-4): record conflicts,
 // worker mapping, new-learner identity and the CSV import rows. No database.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { CONFLICT_CODE, isRecordConflict, recordConflictMessage } from '../src/lib/conflictErrors.mjs';
 import { metaRpcError } from '../src/lib/crm/meta/protocol.mjs';
 import { commandError } from '../src/lib/crm/presentation.mjs';
-import { STUDENT_ALREADY_CREATED_MESSAGE, STUDENT_CREATED_THEN_DELETED_MESSAGE, createStudentOnce, isReceptionistIdentityConflict } from '../src/lib/studentCreate.mjs';
+import { STUDENT_ALREADY_CREATED_MESSAGE, STUDENT_CREATED_THEN_DELETED_MESSAGE, STUDENT_CREATE_UNCONFIRMED_MESSAGE, createLearnerIdentity, createStudentOnce, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '../src/lib/studentCreate.mjs';
 import { IMPORT_FINISHED, csvLine, failedLines, fileDigest, importFailureReason, importFinished, importRowId, rowIdentities, rowStatus, rowsToSend } from '../src/lib/studentImport.mjs';
 
 // conflictErrors: PT409 and the legacy code are both a record conflict; nothing else is.
@@ -93,6 +94,69 @@ assert.equal(isReceptionistIdentityConflict({ code: '23505', message: 'Student c
 assert.equal(isReceptionistIdentityConflict({ code: '23505', message: 'duplicate key value violates unique constraint "students_pkey"' }), false);
 assert.equal(isReceptionistIdentityConflict({ code: 'PT409', message: 'Student create identity conflict' }), false);
 console.log('PASS createStudentOnce: created, replayed, already created, deleted, other errors rethrown');
+
+// One learner id per form: minted once, kept across every failure, rotated only after
+// a confirmed success or "already created".
+{
+  let minted = 0;
+  const identity = createLearnerIdentity(() => `learner-${++minted}`);
+  assert.equal(minted, 1); assert.equal(identity.current(), 'learner-1'); assert.equal(identity.current(), 'learner-1');
+  for (const status of ['uncertain', 'deleted', undefined, 'refused']) { identity.settle(status); assert.equal(identity.current(), 'learner-1', String(status)); }
+  for (const [status, next] of [['created', 'learner-2'], ['replayed', 'learner-3'], ['already_created', 'learner-4']]) {
+    identity.settle(status); assert.equal(identity.current(), next, status);
+  }
+  assert.equal(minted, 4, 'a new id only per confirmed outcome');
+}
+// The receptionist read-back: rows → already created; empty → deleted; a failed read → uncertain.
+assert.deepEqual(await resolveReceptionistIdentityConflict(async () => [{ id: ID }]), { status: 'already_created', message: STUDENT_ALREADY_CREATED_MESSAGE });
+assert.deepEqual(await resolveReceptionistIdentityConflict(async () => []), { status: 'deleted', message: STUDENT_CREATED_THEN_DELETED_MESSAGE });
+assert.deepEqual(await resolveReceptionistIdentityConflict(async () => { throw new TypeError('Failed to fetch'); }), { status: 'uncertain', message: STUDENT_CREATE_UNCONFIRMED_MESSAGE });
+// Both forms, end to end on their send sequence: every send of one learner carries the
+// same id until success or "already created", and the next learner gets a new one.
+async function receptionistSends(script) {
+  const identity = createLearnerIdentity(), sent = [];
+  for (const step of script) {
+    const id = identity.current(); sent.push(id);
+    if (step.error && isReceptionistIdentityConflict(step.error)) identity.settle((await resolveReceptionistIdentityConflict(step.read)).status);
+    else if (!step.error) identity.settle('created');
+  }
+  return sent;
+}
+async function adminSends(outcomes) {
+  const identity = createLearnerIdentity(), sent = [];
+  for (const outcome of outcomes) {
+    const id = identity.current(); sent.push(id);
+    try { identity.settle((await createStudentOnce(client(outcome), id, payload)).status); } catch { /* uncertain: keep the id */ }
+  }
+  return sent;
+}
+const identityConflict = { code: '23505', message: 'Student create identity conflict' };
+{
+  const sent = await receptionistSends([{ error: { message: 'Failed to fetch' } }, { error: identityConflict, read: async () => { throw new TypeError('Failed to fetch'); } },
+    { error: identityConflict, read: async () => [] }, {}, {}]);
+  assert.equal(new Set(sent.slice(0, 4)).size, 1, 'receptionist form: one id across uncertain, unreadable and deleted outcomes, up to success');
+  assert.notEqual(sent[4], sent[3], 'receptionist form: next learner gets a new id after success');
+  const after = await receptionistSends([{ error: identityConflict, read: async () => [{ id: 'x' }] }, {}]);
+  assert.notEqual(after[1], after[0], 'receptionist form: "already created" rotates the id');
+}
+{
+  const stored = { id: ID, full_name: 'Amal Test', date_naissance: '2015-02-03', deleted_at: null };
+  const sent = await adminSends([{ insert: async () => { throw new TypeError('Failed to fetch'); } }, { insert: async () => ({ data: null, error: { code: '503', message: 'gateway' } }) },
+    { insert: async () => ({ data: null, error: pkey }), stored: null }, { insert: async () => ({ data: null, error: pkey }), stored }, { insert: async row => ({ data: row, error: null }) }]);
+  assert.equal(new Set(sent.slice(0, 4)).size, 1, 'admin form: one id across uncertain, refused and deleted outcomes, up to the replay');
+  assert.notEqual(sent[4], sent[3], 'admin form: the replay is a confirmed success and rotates the id');
+  const after = await adminSends([{ insert: async () => ({ data: null, error: pkey }), stored: { ...stored, full_name: 'Changed' } }, { insert: async row => ({ data: row, error: null }) }]);
+  assert.notEqual(after[1], after[0], 'admin form: "already created" rotates the id');
+}
+// Each form holds its id this way: minted once by a lazy initialiser, settled only through it.
+for (const path of ['src/components/students/StudentForm.jsx', 'src/components/students/ReceptionistStudentForm.jsx']) {
+  const source = readFileSync(path, 'utf8');
+  assert.match(source, /const \[newStudentId\] = useState\(\(\) => createLearnerIdentity\(\)\);/, `${path}: lazy, once-only id`);
+  assert(!/crypto\.randomUUID\(\)|useRef\(createStableIdempotencyKey\(\)\)|newStudentId\.current =/.test(source), `${path}: no other id source`);
+}
+assert.match(readFileSync('src/components/students/StudentForm.jsx', 'utf8'), /newStudentId\.settle\(created\.status\)/);
+assert.match(readFileSync('src/components/students/ReceptionistStudentForm.jsx', 'utf8'), /newStudentId\.settle\(conflict\.status\)[\s\S]*if \(!isEdit\) newStudentId\.settle\('created'\)/);
+console.log('PASS one learner id per form: kept across uncertain failures, rotated only after success or "already created"');
 
 // CSV import ids: same file text and line → same id; any edit → new ids.
 const text = 'full_name,email\nAmal,a@example.com\nYassine,\n';

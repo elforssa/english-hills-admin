@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { entities, integrations } from '@/lib/entities';
@@ -9,8 +9,7 @@ import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import StorageImage from '@/components/StorageImage';
 import { ArrowLeft } from 'lucide-react';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
-import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
-import { STUDENT_ALREADY_CREATED_MESSAGE, STUDENT_CREATED_THEN_DELETED_MESSAGE, isReceptionistIdentityConflict } from '@/lib/studentCreate.mjs';
+import { createLearnerIdentity, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '@/lib/studentCreate.mjs';
 
 const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary';
 const categories = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
@@ -28,7 +27,7 @@ export default function ReceptionistStudentForm() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   // REL-4: one learner id from the first send to a confirmed success.
-  const newStudentId = useRef(createStableIdempotencyKey());
+  const [newStudentId] = useState(() => createLearnerIdentity());
   const set = (field, value) => setForm(v => ({ ...v, [field]: value }));
   const show = student => {
     setOriginal(student);
@@ -79,16 +78,20 @@ export default function ReceptionistStudentForm() {
       return;
     }
     if (error && !isEdit && isReceptionistIdentityConflict(error)) {
-      // An earlier send of this learner committed; the receptionist read hides a deleted one.
-      const [existing] = await entities.Student.filter({ id: studentId }).catch(() => []);
-      if (!existing) { toast.error(STUDENT_CREATED_THEN_DELETED_MESSAGE); return; }
-      newStudentId.current = createStableIdempotencyKey();
-      toast.error(STUDENT_ALREADY_CREATED_MESSAGE);
-      router.push(`/students/${studentId}`);
+      // An earlier send of this learner committed; the receptionist read hides a deleted
+      // one, and a failed read keeps the id for an exact resend.
+      const conflict = await resolveReceptionistIdentityConflict(async () => {
+        const { data, error: readError } = await getBrowserClient().from('students').select('id').eq('id', studentId);
+        if (readError) throw readError;
+        return data;
+      });
+      newStudentId.settle(conflict.status);
+      toast.error(conflict.message);
+      if (conflict.status === 'already_created') router.push(`/students/${studentId}`);
       return;
     }
     if (error) { toast.error(error.message); return; }
-    if (!isEdit) newStudentId.current = createStableIdempotencyKey();
+    if (!isEdit) newStudentId.settle('created');
     toast.success(isEdit ? 'Apprenant mis à jour' : 'Apprenant créé');
     router.push(`/students/${studentId}`);
   };
