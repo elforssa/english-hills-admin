@@ -2,7 +2,7 @@
 
 ## Status
 
-**PROPOSED** (2026-10-24) with the [conflicts-without-retry-loops plan](../plans/conflicts-without-retry-loops.md), revision NRC-r1. Not approved, not implemented. Becomes accepted only with the owner's approval of that plan. If a parallel architecture PR claims ADR-009 first, this record is renumbered at merge without changing its content.
+**ACCEPTED** (Maroine, 2026-10-24) with the owner's approval of the [conflicts-without-retry-loops plan](../plans/conflicts-without-retry-loops.md#approval-record), revision NRC-r1 at head `7c98b35` (D1–D6 all A). Not implemented; implementation, migration and release each need separate approval. If a parallel architecture PR claims ADR-009 first, this record is renumbered at merge without changing its content.
 
 ## Date
 

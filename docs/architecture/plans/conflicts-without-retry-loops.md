@@ -2,7 +2,7 @@
 
 ## What will change
 
-**Status: PROPOSED — revision NRC-r1, 2026-10-24. Tier 3. Architecture only: nothing is approved, implemented, merged or deployed.** This plan is Batch C of the read-only platform audit of 2026-10-24 (findings REL-1 and REL-4; the audit report is kept with the owner's project documents, outside this repository). It proposes the answer to the open owner decision on the [deterministic `40001` retry loop](../../ai/OWNER_DECISIONS.md#performance-plan-p-r1--approved-2026-10-08).
+**Status: APPROVED FOR IMPLEMENTATION — revision NRC-r1, 2026-10-24, approved by the owner on 2026-10-24 at plan head `7c98b35` with D1–D6 all A ([approval record](#approval-record)). Tier 3. Nothing is implemented, merged or deployed; the migration, merge, deployment and every Production step each still need their own explicit owner approval.** This plan is Batch C of the read-only platform audit of 2026-10-24 (findings REL-1 and REL-4; the audit report is kept with the owner's project documents, outside this repository). It proposes the answer to the open owner decision on the [deterministic `40001` retry loop](../../ai/OWNER_DECISIONS.md#performance-plan-p-r1--approved-2026-10-08).
 
 Two problems, one outcome: **a save never hangs and never creates a second copy.**
 
@@ -274,6 +274,21 @@ Recovery:
 - A: app first, then the migration in the same window. B: migration first, then the app.
 - Consequences: A has no degraded moment, because the new app reads both codes. B gives a few minutes where CRM dialogs show generic text instead of the refresh text (no hang).
 - **Recommendation: A.**
+
+## Approval record
+
+- **Date and time:** 2026-10-24 15:53 Asia/Shanghai (UTC+08:00), 07:53 UTC.
+- **Owner's words (verbatim):** "all recomended and for E6 paper numbers dont exist". The owner had been shown each plan's owner questions with the plan's recommended option; "all recomended" covers this plan (the E6 remark concerns the payment corrections plan only).
+- **Channel:** chat with Claude, relayed by the coordinating session.
+- **Approved revision:** NRC-r1 at exact head `7c98b35` of branch `docs/plan-c-no-retry-loops` (PR #151).
+- **Options chosen:**
+  - D1 = **A** (do this batch now, whatever the PostgREST version); this closes the open `40001` owner decision with option A.
+  - D2 = **A** (`PT409`, HTTP 409).
+  - D3 = **A** (busy locks, deadlocks and unique violations also raise `PT409`).
+  - D4 = **A** (include the 2 online helpers and the 3 Premium functions).
+  - D5 = **A** (defer the soft duplicate-person check; revisit with Batch G).
+  - D6 = **A** (app first, then the migration in the same window).
+- **Scope of this approval:** architecture approval for implementation of this plan only. It does not approve the merge, the migration, the deployment, the optional probe or any other Production step; each needs its own explicit owner approval under [Rollout, recovery and rollback](#rollout-recovery-and-rollback).
 
 ## IMPLEMENTATION CONTRACT
 
