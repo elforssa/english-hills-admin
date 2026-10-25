@@ -225,11 +225,12 @@ begin
 
   v_main := academic_security.main_group_for(p_student, v_current.groupe_id, v_current.session_type);
   -- M1 transition (removed by M2): a file group that is not a membership (a
-  -- dossier-only placement before the clean-up) stays the main group, unless
-  -- this change took the learner out of it or placed them in another group of
-  -- the same programme.
+  -- dossier-only placement before the clean-up) stays the main group, unless a
+  -- forced downgrade left that same group (074, D-3) or the learner was placed
+  -- in another group of the same programme. Edits, rejections and deletions of
+  -- non-member enrollments never clear it.
   if v_current.groupe_id is not null and v_main is distinct from v_current.groupe_id
-    and v_current.groupe_id is distinct from p_previous_group
+    and not (p_force_downgrade and v_current.groupe_id is not distinct from p_previous_group)
     and not exists (select 1 from public.enrollments e join public.groups mg on mg.id = e.group_id
       join public.groups fg on fg.id = v_current.groupe_id
       where e.student_id = p_student and e.status in ('Validated','Trial') and mg.session_type = fg.session_type) then
@@ -503,6 +504,11 @@ begin
       raise exception 'Année scolaire requise pour cette affectation.' using errcode = '22023', hint = 'egc.school_year_required';
     end if;
   end if;
+  -- A group that declares its school year only takes enrollments of that year.
+  if academic_security.school_year_of(g.annee) is not null and v_year is distinct from academic_security.school_year_of(g.annee) then
+    raise exception 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.'
+      using errcode = '23514', hint = 'egc.school_year_mismatch';
+  end if;
   -- I6: capacity, overridable by director/admin with a reason (D4-A).
   if not online_security.is_online_type(g.session_type) and g.capacite_max is not null then
     perform pg_advisory_xact_lock(hashtextextended('group:seats:' || p_group::text, 0));
@@ -539,6 +545,22 @@ begin
 end $$;
 
 -- 074 semantics on exactly one membership: Validated → Confirmed, Trial → Under Review.
+-- Explicit removal of a dossier-only placement before M2: clears the file group
+-- when it is that group (the sync's own write path), then resyncs without a
+-- forced downgrade, so the status is kept.
+create function academic_security.clear_file_group(p_student uuid, p_group uuid)
+returns void language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
+declare v_flag text;
+begin
+  if exists (select 1 from public.students s where s.id = p_student and s.groupe_id is not distinct from p_group)
+     and not academic_security.is_group_member(p_student, p_group) then
+    v_flag := academic_security.set_flag('eh.membership_sync', 'on');
+    update public.students set groupe_id = null where id = p_student;
+    perform academic_security.set_flag('eh.membership_sync', v_flag);
+  end if;
+  perform public.sync_student_from_enrollments(p_student, false, null);
+end $$;
+
 create function academic_security.remove(p_student uuid, p_group uuid, p_enrollment uuid,
   p_student_updated_at timestamptz, p_enrollment_updated_at timestamptz, p_require_fresh boolean)
 returns uuid language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
@@ -561,10 +583,9 @@ begin
       raise exception 'Sélectionnez l’inscription à retirer.' using errcode = '23514', hint = 'egc.select_enrollment';
     end if;
     if v_ids is null then
-      -- M1 transition: a dossier-only placement (no enrollment) leaves the file.
-      if s.groupe_id is not distinct from p_group then
-        perform public.sync_student_from_enrollments(p_student, false, p_group);
-      end if;
+      -- M1 transition: an explicit removal of a dossier-only placement (no
+      -- enrollment) leaves the file; the status is kept, as in 074.
+      perform academic_security.clear_file_group(p_student, p_group);
       return null;
     end if;
     select * into e from public.enrollments where id = v_ids[1] for update;
@@ -668,7 +689,7 @@ end $$;
 
 create function public.close_school_year(p_school_year text, p_expected_count integer, p_reason text)
 returns integer language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
-declare v_count integer; v_student uuid;
+declare v_count integer; v_student uuid; v_ended integer := 0;
 begin
   if coalesce(public.get_my_role(), '') <> 'director' then
     raise exception 'Forbidden' using errcode = '42501';
@@ -689,13 +710,14 @@ begin
   for v_student in select distinct e.student_id from public.enrollments e
       where e.school_year = p_school_year and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
       order by 1 loop
-    perform academic_security.leave(v_student, 'Alumni', p_reason, array(select e.id from public.enrollments e
+    v_ended := v_ended + academic_security.leave(v_student, 'Alumni', p_reason, array(select e.id from public.enrollments e
       where e.student_id = v_student and e.school_year = p_school_year
         and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')));
   end loop;
   perform academic_security.log('close_school_year', null, null, null,
-    jsonb_build_object('school_year', p_school_year, 'ended', v_count, 'reason', btrim(p_reason)));
-  return v_count;
+    jsonb_build_object('school_year', p_school_year, 'ended', v_ended, 'reason', btrim(p_reason)));
+  -- The number of enrollments actually ended.
+  return v_ended;
 end $$;
 
 create function public.reopen_enrollment(p_enrollment uuid, p_expected_updated_at timestamptz)
@@ -931,7 +953,7 @@ begin
       and e.status in ('Validated','Trial') order by e.id loop
     perform academic_security.remove(p_student, p_group, v_id, null, null, false);
   end loop;
-  perform public.sync_student_from_enrollments(p_student, false, p_group);
+  perform academic_security.clear_file_group(p_student, p_group);
 end;
 $$;
 revoke all on function public.remove_student_group(uuid,uuid) from public,anon;
@@ -1430,8 +1452,14 @@ declare actor uuid:=auth.uid(); digest text; prior public.crm_command_requests%r
   -- E6: the 072 trigger's only remaining outcome for this row (23514), raised
   -- with the handler's mapped message after every earlier check has run.
   if initial_status='Trial' and g.id is null then raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.trial_requires_group'; end if;
-  insert into public.enrollments(student_id,session_type,school_year,level,group_id,status,date_inscription,notes)
-  values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes') returning * into e;
+  -- EGC (I3): a concurrent duplicate on the one-live-enrollment index is a
+  -- record conflict (PT409, egc.duplicate_enrollment), not a raw 23505.
+  begin
+   insert into public.enrollments(student_id,session_type,school_year,level,group_id,status,date_inscription,notes)
+   values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes') returning * into e;
+  exception when unique_violation then
+   perform academic_security.duplicate();
+  end;
  end if;
  update public.crm_leads set student_id=s.id,enrollment_id=e.id,version=version+1,updated_at=now() where id=l.id;
  insert into public.crm_activities(lead_id,enrollment_id,occurred_at,actor_id,actor_kind,event_type,source_key,body)
@@ -1571,11 +1599,14 @@ end $$;
 
 -- C1: back-fill a Validated enrollment for every non-archived file group that
 -- is not a membership, and link the single unlinked non-legacy charge of that
--- programme and year.
+-- programme and year. A learner who already holds a single Confirmed enrollment
+-- of that programme and year without a group (a payment made between M1 and the
+-- clean-up) has that enrollment placed instead; any other live enrollment of
+-- that programme and year stops the stage for a decision.
 create function academic_security.egc_cleanup_c1(p_expected integer, p_expected_links integer)
 returns integer language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 declare r record; v_id uuid; v_charges uuid[]; v_links integer := 0; v_count integer; v_year text; v_flag text;
-  v_before jsonb; v_charge_before jsonb;
+  v_before jsonb; v_charge_before jsonb; v_live uuid[]; v_enrollment_before jsonb;
 begin
   perform academic_security.cleanup_once('C1');
   select count(*) into v_count from public.students s where s.deleted_at is null and s.groupe_id is not null
@@ -1591,14 +1622,28 @@ begin
     v_year := academic_security.school_year_of(r.annee);
     if v_year is null then raise exception 'EGC clean-up C1: group without a school year' using errcode = 'P0001'; end if;
     v_before := academic_security.cleanup_image('students', r.id);
-    insert into public.enrollments(student_id, group_id, status, session_type, level, school_year, date_inscription, notes)
-    values (r.id, r.groupe_id, 'Validated', r.session_type, r.niveau, v_year,
-      coalesce((select min(rc.date) from public.receipts rc join public.charges c on c.id = rc.charge_id
-          where rc.student_id = r.id and rc.voided_at is null and rc.deleted_at is null and c.session_type = r.session_type
-            and rc.date >= make_date(left(v_year, 4)::integer, 6, 1)),
-        (r.created_at at time zone 'Africa/Casablanca')::date), 'Rattrapage EGC')
-    returning id into v_id;
-    perform academic_security.cleanup_journal('C1', 'enrollments', v_id, null);
+    v_live := array(select e.id from public.enrollments e where e.student_id = r.id and e.session_type = r.session_type
+      and e.school_year = v_year and e.status not in ('Rejected','Ended') order by e.id);
+    if cardinality(v_live) = 0 then
+      insert into public.enrollments(student_id, group_id, status, session_type, level, school_year, date_inscription, notes)
+      values (r.id, r.groupe_id, 'Validated', r.session_type, r.niveau, v_year,
+        coalesce((select min(rc.date) from public.receipts rc join public.charges c on c.id = rc.charge_id
+            where rc.student_id = r.id and rc.voided_at is null and rc.deleted_at is null and c.session_type = r.session_type
+              and rc.date >= make_date(left(v_year, 4)::integer, 6, 1)),
+          (r.created_at at time zone 'Africa/Casablanca')::date), 'Rattrapage EGC')
+      returning id into v_id;
+      perform academic_security.cleanup_journal('C1', 'enrollments', v_id, null);
+    elsif cardinality(v_live) = 1 and exists (select 1 from public.enrollments e where e.id = v_live[1]
+        and e.status = 'Confirmed' and e.group_id is null and (e.level is null or e.level = r.niveau)) then
+      v_id := v_live[1];
+      v_enrollment_before := academic_security.cleanup_image('enrollments', v_id);
+      -- Confirmed plus a group becomes Validated (072 trigger).
+      update public.enrollments set group_id = r.groupe_id, level = coalesce(level, r.niveau) where id = v_id;
+      perform academic_security.cleanup_journal('C1', 'enrollments', v_id, v_enrollment_before);
+    else
+      raise exception 'EGC clean-up C1: a learner with an unbacked file group already holds another live % % enrollment that cannot be placed; stop for a decision',
+        r.session_type, v_year using errcode = 'P0001';
+    end if;
     v_charges := array(select c.id from public.charges c where c.student_id = r.id and c.voided_at is null and not c.legacy
       and c.session_type = r.session_type and c.school_year = v_year and c.enrollment_id is null order by c.id);
     if cardinality(v_charges) > 1 then
@@ -1634,6 +1679,12 @@ begin
     v_before := academic_security.cleanup_image('enrollments', r.id);
     v_year := coalesce((select e.school_year from public.enrollments e where e.id = r.id), academic_security.school_year_of(r.annee));
     if v_year is null then raise exception 'EGC clean-up C1b: group without a school year' using errcode = 'P0001'; end if;
+    if exists (select 1 from public.enrollments e where e.student_id = r.student_id and e.id <> r.id
+        and e.session_type = coalesce((select x.session_type from public.enrollments x where x.id = r.id), r.session_type)
+        and e.school_year = v_year and e.status not in ('Rejected','Ended')) then
+      raise exception 'EGC clean-up C1b: the learner already holds another live enrollment of that programme and school year; stop for a decision'
+        using errcode = 'P0001';
+    end if;
     update public.enrollments set session_type = coalesce(session_type, r.session_type), school_year = v_year where id = r.id;
     perform academic_security.cleanup_journal('C1b', 'enrollments', r.id, v_before);
   end loop;
@@ -1734,6 +1785,11 @@ begin
   perform academic_security.cleanup_expect('C5', cardinality(v_ids), p_expected);
   foreach v_student in array v_ids loop
     perform 1 from public.students where id = v_student for update;
+    if exists (select 1 from public.enrollments e where e.student_id = v_student and e.session_type = 'Mise à niveau'
+        and e.school_year = p_school_year and e.status not in ('Rejected','Ended')) then
+      raise exception 'EGC clean-up C5: a learner already holds a live Mise à niveau % enrollment; stop for a decision', p_school_year
+        using errcode = 'P0001';
+    end if;
     v_before := academic_security.cleanup_image('students', v_student);
     insert into public.enrollments(student_id, status, session_type, school_year, date_inscription, notes)
     values (v_student, 'Confirmed', 'Mise à niveau', p_school_year, academic_security.today(),
@@ -1761,6 +1817,11 @@ language sql stable security definer set search_path = pg_catalog, pg_temp as $$
     'group_mismatches', (select count(*) from public.enrollments e join public.groups g on g.id = e.group_id
       where e.session_type is distinct from g.session_type or (e.level is not null and e.level is distinct from g.niveau)),
     'enrolled_or_trial', (select count(*) from public.students s where s.deleted_at is null and s.status in ('Enrolled','Trial')),
+    -- I7, informational: Enrolled/Trial files their enrollments do not back (paid on
+    -- historical receipts). The guard holds I7 for every change; M2 does not refuse them.
+    'status_without_enrollment', (select count(*) from public.students s where s.deleted_at is null and (
+      (s.status = 'Enrolled' and not exists (select 1 from public.enrollments e where e.student_id = s.id and e.status in ('Confirmed','Validated')))
+      or (s.status = 'Trial' and not exists (select 1 from public.enrollments e where e.student_id = s.id and e.status = 'Trial')))),
     'awaiting_group', (select count(*) from public.students s where s.deleted_at is null and (
       exists (select 1 from public.enrollments e where e.student_id = s.id and e.status = 'Confirmed' and e.group_id is null)
       or (s.status in ('Enrolled','Trial') and not exists (select 1 from public.enrollments e where e.student_id = s.id
@@ -1782,6 +1843,14 @@ begin
   if exists (select 1 from pg_constraint c where c.conrelid = 'public.enrollments'::regclass and c.convalidated
       and c.conname in ('enrollments_active_requires_group','enrollments_confirmed_has_programme')) then
     raise exception 'EGC revert: the enforcement migration is applied; revert it first' using errcode = 'P0001';
+  end if;
+  -- Stages are reverted in reverse order: a later stage's journal must go first.
+  if array_position(array['C1','C1b','C2','C3','C4','C5'], p_step) is null then
+    raise exception 'EGC revert: unknown stage %', p_step using errcode = 'P0001';
+  end if;
+  if exists (select 1 from maintenance.egc_cleanup_log l
+      where array_position(array['C1','C1b','C2','C3','C4','C5'], l.step) > array_position(array['C1','C1b','C2','C3','C4','C5'], p_step)) then
+    raise exception 'EGC revert: a later stage is still applied; revert it first' using errcode = 'P0001';
   end if;
   alter table public.enrollments drop constraint enrollments_active_requires_group,
     drop constraint enrollments_confirmed_has_programme,
@@ -1838,7 +1907,8 @@ do $$ declare f text; begin
     'public.create_enrollment(uuid,jsonb)',
     'public.save_enrollment_changes(uuid,timestamptz,jsonb)',
     'public.my_member_group_ids()'] loop
-    execute format('revoke all on function %s from public, anon', f);
+    -- Signed-in staff only; the service role has no business calling them (096 pattern).
+    execute format('revoke all on function %s from public, anon, service_role', f);
     execute format('grant execute on function %s to authenticated', f);
   end loop;
 end $$;

@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,6 +63,7 @@ function YearCloseDialog({ onClose, onDone }) {
 }
 
 export default function Enrollments() {
+  const queryClient = useQueryClient();
   const { role } = useAuth();
   const isReceptionist = role === 'receptionist';
   const [enrollments, setEnrollments] = useState([]);
@@ -144,6 +146,8 @@ export default function Enrollments() {
     if (!confirm('Supprimer ?')) return;
     const { error } = await getBrowserClient().from('enrollments').delete().eq('id', id);
     if (error) { toast.error(membershipErrorMessage(error)); return; }
+    // N7: cached learners and groups follow the deleted enrollment.
+    ['Enrollment', 'Student', 'Group'].forEach(key => queryClient.invalidateQueries({ queryKey: [key] }));
     await load();
   };
 

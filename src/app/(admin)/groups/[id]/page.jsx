@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { currentSchoolYear, groupMemberIds, isMembership } from '@/lib/enrollmentWorkflow.mjs';
-import { membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
+import { egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
@@ -71,6 +71,9 @@ export default function GroupDetail() {
     && e.group_id !== id && e.session_type === (group.session_type || 'Yearly') && (!e.school_year || e.school_year === groupSchoolYear));
   const intendedMatch = (s) => (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
     && (role === 'receptionist' ? s.niveau_cefr === group.niveau : (!s.niveau_cefr || s.niveau_cefr === group.niveau));
+  // N4: the label follows the learner's membership in another programme's group.
+  const memberOfOtherProgramme = (student) => enrollments.some(e => e.student_id === student.id && isMembership(e)
+    && e.session_type !== (group.session_type || 'Yearly'));
   // A member of another programme's group is offered to management too (DAT-1).
   const otherProgrammeMember = (s) => role !== 'receptionist' && s.groupe_id && s.groupe_id !== id && !intendedMatch(s);
   const available = allStudents.filter(s => !students.some(member => member.id === s.id) && !inOtherGroupOfProgramme(s)
@@ -107,6 +110,12 @@ export default function GroupDetail() {
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch (error) {
+      // The server counts every seat (pending enrollments with this group too):
+      // its capacity answer opens the override dialog for direction (S2).
+      if (egcReason(error?.hint) === 'capacity' && canOverride && !overrideReason) {
+        setOverride({ student: s, reason: '' });
+        return;
+      }
       toast.error(membershipErrorMessage(error));
       // Changed in the meantime (ADR-009): reload the members for review.
       if (isRecordConflict(error)) refreshMemberships();
@@ -270,7 +279,7 @@ export default function GroupDetail() {
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
                       <span className="flex-1 truncate">{s.full_name}</span>
                       <span className="text-xs text-muted-foreground ml-2">
-                        {s.groupe_id ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
+                        {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
                       </span>
                     </CommandItem>
                   ))}

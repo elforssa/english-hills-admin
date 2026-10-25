@@ -15,8 +15,6 @@ insert into public.groups(id,name,session_type,niveau) values
  ('97000000-0000-0000-0000-000000000100','Filter Child 1','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000101','Filter MAN A1','Mise à niveau','A1');
 insert into public.students(id,full_name,status,session_type,niveau_cefr) values
- ('97000000-0000-0000-0000-000000000202','Filter 097 submitted','Prospect','Yearly','Child 1'),
- ('97000000-0000-0000-0000-000000000203','Filter 097 review','Prospect','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000204','Filter 097 confirmed','Prospect','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000205','Filter 097 ended','Prospect','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000206','Filter 097 submitted with group','Prospect','Yearly','Child 1'),
@@ -26,9 +24,13 @@ insert into public.students(id,full_name,status,session_type,niveau_cefr) values
 -- Enrolled files without any enrollment (paid on a historical receipt, not a
 -- former learner) remain possible after the clean-up; the learner file no longer
 -- takes an enrolled status directly, so they are seeded with triggers bypassed.
+-- 202 and 203 are such files with a pending pre-enrollment: only the "no pending
+-- enrollment" clause keeps them out of "Groupe à affecter" (S3).
 set local session_replication_role = replica;
 insert into public.students(id,full_name,status,session_type,niveau_cefr) values
  ('97000000-0000-0000-0000-000000000201','Filter 097 dossier','Enrolled','Yearly','Child 1'),
+ ('97000000-0000-0000-0000-000000000202','Filter 097 submitted','Enrolled','Yearly','Child 1'),
+ ('97000000-0000-0000-0000-000000000203','Filter 097 review','Enrolled','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000208','Filter 097 rejected dossier only','Enrolled','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000211','Filter 097 former learner','Alumni','Yearly','Child 1');
 set local session_replication_role = origin;
@@ -46,6 +48,11 @@ insert into public.enrollments(id,student_id,group_id,status,session_type,level,
  ('97000000-0000-0000-0000-000000000310','97000000-0000-0000-0000-000000000210','97000000-0000-0000-0000-000000000100','Trial','Yearly','Child 1','2026/2027');
 -- 205 leaves through the leaver core (Ancien apprenant).
 select academic_security.leave('97000000-0000-0000-0000-000000000205','Alumni','Synthetic leaver',null);
+do $$ begin
+  if (select count(*) from public.students where id in ('97000000-0000-0000-0000-000000000202','97000000-0000-0000-0000-000000000203')
+      and status='Enrolled' and groupe_id is null) <> 2 then
+    raise exception 'The pending-enrollment fixtures must be Enrolled files without a group'; end if;
+end $$;
 
 create function pg_temp.unassigned() returns uuid[] language plpgsql as $$
 declare result jsonb; actual uuid[]; begin

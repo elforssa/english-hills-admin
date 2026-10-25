@@ -112,6 +112,8 @@ insert into public.students(id,full_name,status,session_type,niveau_cefr) values
  ('77000000-0000-0000-0000-000000000025','RPC secondary session','Prospect','Yearly','Child 1');
 -- Legacy rows that predate the EGC programme/year check (NOT VALID): seeded as
 -- Production holds them, before the check existed.
+create temp table egc_i9_def as select pg_get_constraintdef(oid) def, convalidated from pg_constraint
+  where conrelid = 'public.enrollments'::regclass and conname = 'enrollments_confirmed_has_programme';
 alter table public.enrollments drop constraint enrollments_confirmed_has_programme;
 insert into public.enrollments(id,student_id,status,session_type,level,group_id) values
  ('77000000-0000-0000-0000-000000000031','77000000-0000-0000-0000-000000000021','Submitted','Yearly','Child 1',null),
@@ -126,6 +128,14 @@ insert into public.enrollments(id,student_id,status,session_type,school_year,lev
  ('77000000-0000-0000-0000-000000000036','77000000-0000-0000-0000-000000000021','Confirmed','Yearly','2029/2030',null,null);
 alter table public.enrollments add constraint enrollments_confirmed_has_programme
   check (coalesce(status, '') not in ('Confirmed','Validated','Trial') or (session_type is not null and school_year is not null)) not valid;
+-- The re-added check has exactly the migration's expression (this fixture re-adds
+-- it NOT VALID, as M1 does; M2 may have validated the original).
+do $$ begin
+  if (select count(*) from egc_i9_def) <> 1 or (select regexp_replace(def, ' NOT VALID$', '') from egc_i9_def)
+      is distinct from (select regexp_replace(pg_get_constraintdef(oid), ' NOT VALID$', '') from pg_constraint
+      where conrelid = 'public.enrollments'::regclass and conname = 'enrollments_confirmed_has_programme') then
+    raise exception 'I9 check re-added with another definition'; end if;
+end $$;
 create function pg_temp.incompatible(statement text) returns void language plpgsql as $$ begin
   begin execute statement; exception when check_violation then return; end;
   raise exception 'Expected compatibility/identity rejection: %',statement;

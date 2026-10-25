@@ -442,6 +442,9 @@ jobs:
           node scripts/test-large-data-local.mjs
           node scripts/test-receptionist-browser.mjs
           node scripts/test-online-learning-browser.mjs
+      - name: Student placement, second programme, capacity override and leaver browser flow
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-student-placement-browser.mjs
 
       # Shard browser-crm.
       - name: CRM lifecycle and phase 11 browser suites

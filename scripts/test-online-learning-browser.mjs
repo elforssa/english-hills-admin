@@ -225,7 +225,7 @@ try {
     delete from public.online_lessons where group_id in ('${ids.group}','${ids.kids}');
     delete from public.online_courses where group_id in ('${ids.group}','${ids.kids}');
     delete from public.online_consents where student_id = '${ids.child}';
-    set eh.enrollment_command = on; delete from public.enrollments where student_id in ('${ids.adult}','${ids.child}');
+    set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${ids.adult}','${ids.child}');
     delete from public.students where id in ('${ids.adult}','${ids.child}');
     delete from public.groups where id in ('${ids.group}','${ids.kids}');
     delete from public.teachers where id = '${ids.teacher}';

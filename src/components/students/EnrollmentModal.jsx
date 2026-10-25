@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { getLevelsForSession, groupMatchesEnrollment, SESSION_TYPES } from '@/lib/academicPrograms';
 import { currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { displayLabel, ENROLLMENT_LABELS } from '@/lib/ui/presentation.mjs';
 import { changedEnrollmentFields, createEnrollment, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup,
   saveEnrollmentChanges } from '@/lib/academic/membershipActions.mjs';
@@ -30,6 +31,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const ended = form.status === 'Ended';
   const statusLocked = Boolean(form.id) && LOCKED_STATUSES.includes(enrollment?.status);
   const [saving, setSaving] = useState(false);
+  const created = useRef(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const selectedStudent = students.find(s => s.id === form.student_id);
@@ -44,21 +46,28 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   // an existing Validated enrollment is allowed (it becomes Confirmed).
   const needsGroup = form.status === 'Trial' || (!isReceptionist && !statusLocked && form.status === 'Validated');
 
-  // The row's current version, re-read between two commands of one save.
-  const freshEnrollment = async (id) => {
-    const { data, error } = await getBrowserClient().from('enrollments').select('id,updated_at').eq('id', id).single();
-    if (error) throw error;
-    return data;
+  // Versions: the first command sends the ones loaded with the dialog, so a stale
+  // dialog is refused (S1); they are re-read only after this save changed the row.
+  const reread = async (client, enrollmentId, studentId) => {
+    const [{ data: row, error }, { data: file, error: fileError }] = await Promise.all([
+      client.from('enrollments').select('id,updated_at').eq('id', enrollmentId).single(),
+      client.from('students').select('id,updated_at').eq('id', studentId).single(),
+    ]);
+    if (error || fileError) throw error || fileError;
+    return { row, file };
   };
 
   // Director/admin: every write goes through the enrollment commands. A group
   // change is a placement (or a removal); status and the other fields go through
-  // save_enrollment_changes with only what changed and the loaded version.
+  // save_enrollment_changes with only what changed.
   const saveAsManagement = async (client) => {
     const student = students.find(s => s.id === form.student_id);
     const groupId = form.group_id || null;
-    let id = form.id;
-    if (!id) {
+    let row = form.id ? { id: enrollment.id, updated_at: enrollment.updated_at } : null;
+    let file = student ? { id: student.id, updated_at: student.updated_at } : null;
+    let changed = false;
+    const refresh = async () => { ({ row, file } = await reread(client, row.id, form.student_id)); };
+    if (!row) {
       if (!form.school_year) throw { message: 'Programme et année scolaire requis.' };
       const { data, error } = await createEnrollment(client, form.student_id, {
         session_type: effectiveSession, school_year: form.school_year, level: form.level || null,
@@ -66,35 +75,40 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
         date_inscription: form.date_inscription || null, notes: form.notes || null,
       });
       if (error) throw error;
-      id = data;
-    } else if (!assignmentOnly && !ended) {
-      const changes = changedEnrollmentFields(enrollment, form);
-      delete changes.status; // after the group, below
-      if (Object.keys(changes).length) {
-        const { error } = await saveEnrollmentChanges(client, enrollment, changes);
-        if (error) throw error;
-      }
+      // N3: from here a failure closes the dialog, so a retry starts from this row.
+      created.current = true;
+      row = { id: data };
+      changed = true;
     } else if (ended) {
       const changes = changedEnrollmentFields(enrollment, form);
       if ('notes' in changes) {
-        const { error } = await saveEnrollmentChanges(client, enrollment, { notes: changes.notes });
+        const { error } = await saveEnrollmentChanges(client, row, { notes: changes.notes });
         if (error) throw error;
       }
       return;
+    } else if (!assignmentOnly) {
+      const changes = changedEnrollmentFields(enrollment, form);
+      delete changes.status; // after the group, below
+      if (Object.keys(changes).length) {
+        const { error } = await saveEnrollmentChanges(client, row, changes);
+        if (error) throw error;
+        changed = true;
+      }
     }
     const before = enrollment?.group_id || null;
     if (groupId !== before) {
-      const current = { id, updated_at: (await freshEnrollment(id)).updated_at };
-      const freshStudent = student ? { id: student.id, updated_at: (await client.from('students').select('updated_at').eq('id', student.id).single()).data?.updated_at } : null;
+      if (changed || !file?.updated_at) await refresh();
       const { error } = groupId
-        ? await placeLearnerInGroup(client, { student: freshStudent, group: groupId, enrollment: current })
-        : await removeLearnerFromGroup(client, { student: freshStudent, group: before, enrollment: current });
+        ? await placeLearnerInGroup(client, { student: file, group: groupId, enrollment: row })
+        : await removeLearnerFromGroup(client, { student: file, group: before, enrollment: row });
       if (error) throw error;
+      changed = true;
     }
     const targetStatus = form.status;
     const currentStatus = form.id ? enrollment.status : 'Submitted';
     if (!assignmentOnly && !statusLocked && targetStatus !== currentStatus && !(groupId && currentStatus === 'Confirmed')) {
-      const { error } = await saveEnrollmentChanges(client, await freshEnrollment(id), { status: targetStatus });
+      if (changed) await refresh();
+      const { error } = await saveEnrollmentChanges(client, row, { status: targetStatus });
       if (error) throw error;
     }
   };
@@ -123,6 +137,9 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     } catch (error) {
       // Stale version (PT409, egc.stale): "Cette inscription a changé, rechargez".
       toast.error(membershipErrorMessage(error));
+      // N2/N3: a record conflict, or a failure after the enrollment was created,
+      // closes the dialog and reloads the current state.
+      if (isRecordConflict(error) || created.current) onSave();
     } finally {
       setSaving(false);
     }

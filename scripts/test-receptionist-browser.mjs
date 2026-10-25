@@ -529,7 +529,7 @@ try {
         '${validatedStudent}'::uuid,'${teacher}'::uuid,'${group}'::uuid,
         '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
-    set eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
+    set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
       '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}','${readyStudent}','${unsetStudent}');
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
       '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}',

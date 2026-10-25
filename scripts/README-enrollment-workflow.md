@@ -23,7 +23,7 @@ Validated and Trial need a programme and a school year.
 
 The learner status is derived (D3-A): Enrolled while a Confirmed or Validated
 enrollment exists, Trial while only a trial exists, Alumni or Inactive only
-through `end_learner`, `close_school_year` or archiving, Prospect otherwise.
+through `end_learner`, `close_school_year`, `online_close_course` (D8 = A) or archiving, Prospect otherwise.
 Manual creation and CSV imports create Prospect files (an imported Alumni or
 Inactive status is kept). Payments no longer set the status: it follows the
 enrollment the payment confirms, and an Other or legacy-balance receipt changes

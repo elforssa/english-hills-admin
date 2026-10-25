@@ -163,7 +163,7 @@ try {
   const quoted=values=>values.map(x=>"'"+x+"'::uuid").join(',');
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
   // Also remove UI-created requests and notifications scoped to these fixtures.
-  if(records.students?.length) cleanup+=`set eh.enrollment_command = on; delete from public.enrollments where student_id in (${quoted(records.students)});`;
+  if(records.students?.length) cleanup+=`set local eh.enrollment_command = on; delete from public.enrollments where student_id in (${quoted(records.students)});`;
   if(records.teachers?.length) cleanup+=`delete from public.leave_requests where teacher_id in (${quoted(records.teachers)});`;
   if(users.length) cleanup+=`delete from public.notifications where recipient_email in (${users.map(u=>"'"+u.email+"'").join(',')});`;
   for(const table of ['enrollments','leave_requests','students','groups','teachers']) if(records[table]?.length)

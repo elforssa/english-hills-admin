@@ -165,12 +165,11 @@ select pg_temp.ok((academic_security.egc_cleanup_c6()->>'unbacked_file_groups'):
   and (academic_security.egc_cleanup_c6()->>'archived_with_active')::integer = 0, 'C6 counts');
 select pg_temp.ok(not exists (select 1 from maintenance.egc_cleanup_log l where l.before::text ~* 'cleanup |full_name'
   or l.after::text ~* 'cleanup |full_name'), 'journal holds ids and statuses only');
--- Skipping C1b leaves M2 refused on I9.
-select academic_security.egc_revert_cleanup('C1b');
-select pg_temp.ok(academic_security.egc_enforcement_failures() = array['I9: a Confirmed, Validated or Trial enrollment lacks its programme or school year'],
-  'without C1b, M2 refuses on I9 only');
+-- A stage cannot be reverted while a later one is applied (M2 without C1b is
+-- proved by the upgrade test's skip-c1b mode).
+select pg_temp.fails($$select academic_security.egc_revert_cleanup('C1b')$$, 'P0001');
 -- Reversal in reverse order restores the exact before-state.
-select academic_security.egc_revert_cleanup(x) from unnest(array['C5','C4','C3','C2','C1']) x;
+select academic_security.egc_revert_cleanup(x) from unnest(array['C5','C4','C3','C2','C1b','C1']) x;
 select pg_temp.ok((select jsonb_agg(to_jsonb(s) - 'updated_at' order by s.id) from public.students s
     where s.id in (select pg_temp.id(i) from generate_series(901, 907) i)) = (select students from egc_snapshot)
   and (select jsonb_agg(to_jsonb(e) - 'updated_at' order by e.id) from public.enrollments e
@@ -631,8 +630,13 @@ select pg_temp.act(2);
 select pg_temp.fails(format('select public.close_school_year(%L, 2, %L)', '2025/2026', 'Fin d''année'), '42501');
 select pg_temp.act(1);
 select pg_temp.fails(format('select public.close_school_year(%L, 3, %L)', '2025/2026', 'Fin d''année'), 'PT409', 'egc.stale');
-select pg_temp.ok(public.close_school_year('2025/2026', (select count(*)::integer from public.enrollments where school_year = '2025/2026'
-  and status in ('Submitted','Under Review','Confirmed','Validated','Trial')), 'Fin d''année 2025/2026') >= 2, 'year close');
+select pg_temp.owner();
+create temp table egc_year_live as select count(*)::integer n from public.enrollments where school_year = '2025/2026'
+  and status in ('Submitted','Under Review','Confirmed','Validated','Trial');
+select pg_temp.open_to_api('egc_year_live');
+select pg_temp.act(1);
+select pg_temp.ok(public.close_school_year('2025/2026', (select n from egc_year_live), 'Fin d''année 2025/2026') = (select n from egc_year_live)
+  and (select n from egc_year_live) >= 2, 'year close returns the number of enrollments it ended');
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.file(pg_temp.id(219))->>'status' = 'Alumni' and pg_temp.file(pg_temp.id(220))->>'status' = 'Enrolled',
   'learners with nothing else become Alumni; another year keeps them Enrolled');
@@ -731,6 +735,11 @@ select pg_temp.ok(not has_schema_privilege('authenticated', 'academic_security',
   and not has_schema_privilege('authenticated', 'maintenance', 'USAGE'), 'private schemas have no API usage');
 select pg_temp.ok(not exists (select 1 from information_schema.role_routine_grants g where g.routine_schema = 'academic_security'
   and g.grantee in ('PUBLIC','anon','authenticated','service_role')), 'no API grant on academic_security functions');
+select pg_temp.ok(not exists (select 1 from unnest(array['place_learner_in_group','remove_learner_from_group','end_learner','close_school_year',
+    'reopen_enrollment','restore_student','list_archived_students','create_enrollment','save_enrollment_changes','my_member_group_ids']) n
+  join pg_proc p on p.proname = n and p.pronamespace = 'public'::regnamespace
+  where has_function_privilege('service_role', p.oid, 'EXECUTE') or has_function_privilege('anon', p.oid, 'EXECUTE')
+    or not has_function_privilege('authenticated', p.oid, 'EXECUTE')), 'new commands: authenticated only, no anon or service_role');
 -- The compatibility wrapper removes exactly the learner's membership in that group.
 select pg_temp.act(3);
 select public.remove_student_group(pg_temp.id(203), pg_temp.id(302));

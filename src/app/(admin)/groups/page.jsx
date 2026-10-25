@@ -4,6 +4,7 @@ import { currentSchoolYear, groupMemberIds, groupYear } from '@/lib/enrollmentWo
 import { EGC_REASON_TEXT, groupDeleteErrorMessage, membershipErrorMessage } from '@/lib/academic/membershipActions.mjs';
 
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import ContextLink from '@/components/ContextLink';
 import { entities, auth } from '@/lib/entities';
@@ -124,6 +125,9 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
 }
 
 export default function Groups() {
+  const queryClient = useQueryClient();
+  // N7: other screens' cached groups, learners and enrollments follow a group change.
+  const invalidate = () => ['Group', 'Student', 'Enrollment'].forEach(key => queryClient.invalidateQueries({ queryKey: [key] }));
   const { role } = useAuth();
   const [groups, setGroups] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -173,6 +177,7 @@ export default function Groups() {
     const { error } = await getBrowserClient().from('groups').delete().eq('id', id);
     if (error) { toast.error(groupDeleteErrorMessage(error)); return; }
     toast.success('Groupe supprimé');
+    invalidate();
     load();
   };
 
@@ -287,7 +292,7 @@ export default function Groups() {
         )}
       </div>
       {modal !== null && <GroupModal group={modal.id ? modal : null} teachers={teachers} receptionist={role === 'receptionist'}
-        memberCount={modal.id ? counts[modal.id] || 0 : 0} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+        memberCount={modal.id ? counts[modal.id] || 0 : 0} onSave={() => { setModal(null); invalidate(); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }

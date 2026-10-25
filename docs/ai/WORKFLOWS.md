@@ -74,6 +74,7 @@ RCC-A2 (deployed and Production verified on 2026-10-07; [record](../architecture
 - **Ancien apprenant** (director, admin) ends the chosen or all active enrollments with a reason and sets Alumni (programme finished) or Inactive (stopped); the open balance is shown and nothing financial changes. **Rouvrir l’inscription** turns an ended enrollment back into Confirmed without a group.
 - **Clôturer l’année** (director, on Pré-inscriptions) shows the live count of active enrollments of a school year, then ends them with a reason; the command refuses if the count changed meanwhile. Learners left with nothing active become Alumni.
 - **Archive and restore:** archiving a learner ends their enrollments first. **Dossiers archivés** (director, on the Students list) lists archived files and restores one; its enrollments stay ended and the status is recomputed (normally Inactive, no group).
+- **Release note:** the Students list default « Dossiers actifs (inscrits, essai) » is exact only after M2; between M1 and M2 the database default (097) still includes Alumni.
 - **Payment:** a payment confirms the learner's single matching enrollment instead of creating a duplicate, asks to select when several match, and never sets the learner status by itself. Closing an online course ends its enrollments, so the learner can take another online course the same year.
 
 ## Payment/receipt relationship

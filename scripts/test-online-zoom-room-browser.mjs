@@ -194,7 +194,7 @@ try {
     delete from public.online_join_tokens where lesson_id = '${ids.open}';
     delete from public.online_lessons where group_id = '${ids.group}';
     delete from public.online_courses where group_id = '${ids.group}';
-    set eh.enrollment_command = on; delete from public.enrollments where student_id = '${ids.adult}';
+    set local eh.enrollment_command = on; delete from public.enrollments where student_id = '${ids.adult}';
     delete from public.students where id = '${ids.adult}';
     delete from public.groups where id = '${ids.group}';
     delete from public.teachers where id = '${ids.teacher}';

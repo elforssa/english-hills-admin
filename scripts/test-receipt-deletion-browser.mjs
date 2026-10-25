@@ -66,7 +66,7 @@ try {
 } finally {
   await browser?.close();
   if (userId) {
-    sql(`delete from public.financial_events where actor_id='${userId}'; delete from public.financial_requests where actor_id='${userId}'; delete from public.receipts where student_id='${studentId}'; delete from public.charges where student_id='${studentId}'; set eh.enrollment_command = on; delete from public.enrollments where student_id='${studentId}'; delete from public.students where id='${studentId}';`);
+    sql(`begin; delete from public.financial_events where actor_id='${userId}'; delete from public.financial_requests where actor_id='${userId}'; delete from public.receipts where student_id='${studentId}'; delete from public.charges where student_id='${studentId}'; set local eh.enrollment_command = on; delete from public.enrollments where student_id='${studentId}'; delete from public.students where id='${studentId}'; commit;`);
     // Owner-only teardown, as in the batch security suites: on a disposable CI
     // database this synthetic director is the only director, and the
     // last-director guard (migration 042) correctly refuses to delete it.

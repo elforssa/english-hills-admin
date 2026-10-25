@@ -212,6 +212,44 @@ assert.equal(sql(`select public.attendance_student_in_group(${q(id(102))}, ${q(i
   'both rosters before the clean-up');
 console.log('PASS DAT-1 under M1: a dossier-only member placed in a second programme keeps the Yearly roster');
 
+// B1 (review): before M2, a notes edit, a rejection and a deletion of non-member
+// enrollments that carry the file group keep it; the explicit removal of the
+// dossier-only placement clears it and keeps the status. Rolled back.
+assert.equal(sql(`begin;
+set local session_replication_role = replica;
+insert into public.students(id, full_name, status, session_type, niveau_cefr, groupe_id) values
+  (${q(id(110))}, 'Up B1 dossier', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))});
+set local session_replication_role = origin;
+insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
+  (${q(id(220))}, ${q(id(110))}, ${q(id(21))}, 'Submitted', 'Yearly', '2026/2027', 'Child 1'),
+  (${q(id(221))}, ${q(id(110))}, ${q(id(21))}, 'Under Review', 'Yearly', '2027/2028', 'Child 1');
+create temp table b1_steps(step text, file_group uuid, status text);
+update public.enrollments set notes = 'Appel du parent' where id = ${q(id(220))};
+insert into b1_steps select 'notes', groupe_id, status from public.students where id = ${q(id(110))};
+update public.enrollments set status = 'Rejected' where id = ${q(id(220))};
+insert into b1_steps select 'rejected', groupe_id, status from public.students where id = ${q(id(110))};
+delete from public.enrollments where id = ${q(id(221))};
+insert into b1_steps select 'deleted', groupe_id, status from public.students where id = ${q(id(110))};
+set local request.jwt.claim.sub = ${q(id(1))};
+set local request.jwt.claims = ${q(JSON.stringify({ sub: id(1), role: 'authenticated' }))};
+set local role authenticated;
+select public.remove_learner_from_group(${q(id(110))}, ${q(id(21))}, (select updated_at from public.students where id = ${q(id(110))}));
+reset role;
+insert into b1_steps select 'removed', groupe_id, status from public.students where id = ${q(id(110))};
+select string_agg(step || ':' || coalesce(file_group::text, 'none') || ':' || status, ',' order by ctid) from b1_steps;
+rollback;`).split('\n').pop(), [`notes:${id(21)}:Enrolled`, `rejected:${id(21)}:Enrolled`, `deleted:${id(21)}:Enrolled`, 'removed:none:Enrolled'].join(','),
+  'non-member edits keep the file group; the explicit removal clears it and keeps the status');
+console.log('PASS B1 under M1: notes edit, rejection and deletion keep the file group; explicit removal clears it');
+
+// DS1 (review): a dossier-only learner pays the unlinked Yearly charge between M1
+// and the clean-up; the payment creates one Confirmed enrollment, which C1 places.
+sql(as(id(1), `select public.create_charge_payment(jsonb_build_object('student_id', ${q(id(101))}, 'charge_id', ${q(id(301))},
+  'payment_amount', 500, 'payment_date', current_date, 'payment_method', 'Espèces', 'idempotency_key', ${q(id(901))}))`).replace('rollback;', 'commit;'));
+const paid = sql(`select string_agg(e.status || ':' || coalesce(e.group_id::text, 'none') || ':' || e.school_year, ',') || '|' || (select groupe_id from public.students where id = ${q(id(101))})
+  from public.enrollments e join public.charges c on c.enrollment_id = e.id and c.id = ${q(id(301))} where e.student_id = ${q(id(101))}`);
+assert.equal(paid, `Confirmed:none:2026/2027|${id(21)}`, 'the payment confirms one enrollment; the file group stays');
+const paidEnrollment = sql(`select enrollment_id from public.charges where id = ${q(id(301))}`);
+
 // Clean-up with the counts the plan's dry-run queries read on the day.
 const counts = json(`select jsonb_build_object(
   'c1', (select count(*) from students s where s.deleted_at is null and s.groupe_id is not null
@@ -221,13 +259,23 @@ const counts = json(`select jsonb_build_object(
     and not exists(select 1 from enrollments e where e.student_id=s.id and e.group_id=s.groupe_id and e.status in ('Validated','Trial'))) x where n>0),
   'c1b', (select count(*) from enrollments e where e.status in ('Confirmed','Validated','Trial') and e.group_id is not null and (e.session_type is null or e.school_year is null)),
   'c2', (select count(*) from enrollments e where e.status='Validated' and e.group_id is null),
-  'c4', (select count(*) from enrollments e join students st on st.id=e.student_id where st.deleted_at is not null and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')))`);
-assert.deepEqual(counts, { c1: 3, c1links: 1, c1b: 1, c2: 2, c4: 1 }, 'synthetic dry-run counts');
+  'c4', (select count(*) from enrollments e join students st on st.id=e.student_id where st.deleted_at is not null and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')),
+  'c1existing', (select jsonb_build_array(count(*) filter (where live=1 and placeable), count(*) filter (where live>0 and not (live=1 and placeable))) from (
+    select s.id, count(e.id) live, bool_and(e.status='Confirmed' and e.group_id is null and (e.level is null or e.level=g.niveau)) placeable
+    from students s join groups g on g.id=s.groupe_id
+    join enrollments e on e.student_id=s.id and e.session_type=g.session_type and e.school_year=replace(g.annee,'-','/') and e.status not in ('Rejected','Ended')
+    where s.deleted_at is null and not exists(select 1 from enrollments m where m.student_id=s.id and m.group_id=s.groupe_id and m.status in ('Validated','Trial'))
+    group by s.id) x))`);
+// The payment linked the dossier member's only charge, so C1 has no charge left to link (DS1).
+assert.deepEqual(counts, { c1: 3, c1links: 0, c1b: 1, c2: 2, c4: 1, c1existing: [1, 0] }, 'synthetic dry-run counts');
 const stages = [`select academic_security.egc_cleanup_c1(${counts.c1}, ${counts.c1links})`];
 if (mode === 'full') stages.push(`select academic_security.egc_cleanup_c1b(${counts.c1b})`);
 stages.push(`select academic_security.egc_cleanup_c2(${counts.c2})`, `select academic_security.egc_cleanup_c3(2, 'Alumni', current_date - 60)`,
   `select academic_security.egc_cleanup_c4(${counts.c4})`, `select academic_security.egc_cleanup_c5(1, '2026/2027', current_date - 60)`);
 for (const stage of stages) sql(`begin; ${stage}; commit;`);
+assert.equal(sql(`select count(*) || ':' || bool_and(id = ${q(paidEnrollment)} and status = 'Validated' and group_id = ${q(id(21))})
+  from public.enrollments where student_id = ${q(id(101))} and status not in ('Rejected','Ended')`), '1:true',
+  'C1 placed the paid enrollment instead of inserting a second one (DS1)');
 const c6 = json('select academic_security.egc_cleanup_c6()');
 
 if (mode === 'skip-c1b') {

@@ -22,6 +22,7 @@ export const EGC_REASON_TEXT = {
   select_enrollment: 'Plusieurs inscriptions sont possibles : choisissez-la depuis la fiche apprenant.',
   school_year_required: 'Indiquez l’année scolaire (sur le groupe ou l’inscription).',
   group_mismatch: 'Le groupe doit correspondre au programme et au niveau de l’inscription.',
+  school_year_mismatch: 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.',
   group_unavailable: 'Ce groupe est introuvable.',
   enrollment_not_placeable: 'Cette inscription ne peut pas être affectée à un groupe.',
   not_a_member: 'Cet apprenant n’est pas dans ce groupe.',
@@ -48,9 +49,12 @@ export function egcReason(hint) {
 export function membershipErrorMessage(error) {
   if (!error) return '';
   const reason = egcReason(error.hint);
-  if (reason === 'duplicate_enrollment') return DUPLICATE_ENROLLMENT_MESSAGE;
-  if (reason === 'stale') return ENROLLMENT_CHANGED_MESSAGE;
-  if (isRecordConflict(error)) return recordConflictMessage();
+  // ADR-009: a record conflict first; its egc hint picks the precise text.
+  if (isRecordConflict(error)) {
+    if (reason === 'duplicate_enrollment') return DUPLICATE_ENROLLMENT_MESSAGE;
+    if (reason === 'stale') return ENROLLMENT_CHANGED_MESSAGE;
+    return recordConflictMessage();
+  }
   if (reason && Object.hasOwn(EGC_REASON_TEXT, reason)) return EGC_REASON_TEXT[reason];
   const online = onlineReason(error.hint);
   if (online) return ONLINE_REASON_TEXT[online];

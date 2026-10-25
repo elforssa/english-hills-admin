@@ -1,6 +1,6 @@
 # EGC-r2 per-function diffs against their sources
 
-Evidence for the [implementation record](../plans/enrollment-group-consistency.md#implementation-record) (contract: "the PR includes the per-function diffs against their sources"). Produced on 2026-10-25 from a local Supabase reset to migration 119 (the cumulative definitions on `origin/main` `3f97c458db857db02204b0bf6a0e3c7d6e09828d`), then `supabase migration up` to 121. Each block is `pg_get_functiondef` (or the policy definition) at 119 against the same object after M1 and M2, with its grants. Synthetic local data only; no Production access.
+Evidence for the [implementation record](../plans/enrollment-group-consistency.md#implementation-record) (contract: "the PR includes the per-function diffs against their sources"). Regenerated on 2026-10-25 after the independent-review fixes, from a local Supabase reset to migration 119 (the cumulative definitions on `origin/main`; `4fbdda7` changed no migration), then `supabase migration up` to 121. Each block is `pg_get_functiondef` (or the policy definition) at 119 against the same object after M1 and M2, with its grants. Synthetic local data only; no Production access.
 
 | Object | Latest source | Re-created by | Result |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Evidence for the [implementation record](../plans/enrollment-group-consistency.m
 | `public.soft_delete_student` | 041 | M1 | 4 changed lines |
 | `public.remove_student_group` | 074 | M1 | 14 changed lines |
 | `crm_security.evaluate_conversion` | 084 | M1 | 3 changed lines |
-| `public.crm_start_enrollment` | 119 | M1 | 6 changed lines |
+| `public.crm_start_enrollment` | 119 | M1 | 16 changed lines |
 | `public.online_close_course` | 118 | M1 | 8 changed lines |
 | `public.attendance_student_in_group` | 063 | M2 | 14 changed lines |
 | `public.enforce_attendance_integrity` | 096 | M2 | 2 changed lines |
@@ -476,7 +476,7 @@ Source: migration 074. Re-created by M1.
 +      and e.status in ('Validated','Trial') order by e.id loop
 +    perform academic_security.remove(p_student, p_group, v_id, null, null, false);
 +  end loop;
-+  perform public.sync_student_from_enrollments(p_student, false, p_group);
++  perform academic_security.clear_file_group(p_student, p_group);
  end;
  $function$
 ```
@@ -527,6 +527,23 @@ Source: migration 119. Re-created by M1.
      and coalesce(x.session_type,s.session_type)=session and crm_security.enrollment_year(x)=year and not exists(select 1 from public.crm_leads where enrollment_id=x.id))
      then 'crm_enrollment.existing_enrollment_requires_selection' else 'crm_enrollment.existing_enrollment_linked_elsewhere' end; end if;
    if p_data->>'group_id' is not null then
+@@ -105,8 +105,14 @@
+   -- E6: the 072 trigger's only remaining outcome for this row (23514), raised
+   -- with the handler's mapped message after every earlier check has run.
+   if initial_status='Trial' and g.id is null then raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.trial_requires_group'; end if;
+-  insert into public.enrollments(student_id,session_type,school_year,level,group_id,status,date_inscription,notes)
+-  values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes') returning * into e;
++  -- EGC (I3): a concurrent duplicate on the one-live-enrollment index is a
++  -- record conflict (PT409, egc.duplicate_enrollment), not a raw 23505.
++  begin
++   insert into public.enrollments(student_id,session_type,school_year,level,group_id,status,date_inscription,notes)
++   values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes') returning * into e;
++  exception when unique_violation then
++   perform academic_security.duplicate();
++  end;
+  end if;
+  update public.crm_leads set student_id=s.id,enrollment_id=e.id,version=version+1,updated_at=now() where id=l.id;
+  insert into public.crm_activities(lead_id,enrollment_id,occurred_at,actor_id,actor_kind,event_type,source_key,body)
 ```
 
 ## `public.online_close_course`

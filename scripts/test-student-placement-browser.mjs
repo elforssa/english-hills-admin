@@ -159,7 +159,7 @@ try {
   if(browser) await browser.close();
   sql(`begin;
     create temp table cleanup_students as select id from public.students where full_name like '${run}%';
-    set eh.enrollment_command = on; delete from public.enrollments where student_id in(select id from cleanup_students);
+    set local eh.enrollment_command = on; delete from public.enrollments where student_id in(select id from cleanup_students);
     delete from public.students where id in(select id from cleanup_students);
     delete from public.groups where name like '${run}%';
     delete from public.activity_log where target_id in(select id from cleanup_students)${userId ? ` or actor_id='${userId}'` : ''};

@@ -1013,7 +1013,7 @@ export default function GuideContent() {
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant se demande à la direction (<a href="#q12">Q12</a>).</li>
-<li>La capacité est indicative&nbsp;: un groupe «&nbsp;complet&nbsp;» accepte quand même un nouvel apprenant.</li>
+<li>La capacité est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant. Seule la direction peut en ajouter un quand même, avec un motif.</li>
 <li>Vous ne pouvez pas supprimer un groupe&nbsp;: demandez à la direction.</li>
 <li>Après avoir créé ou changé les jours, vérifiez le résultat dans l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>).</li>
 </ul>
@@ -1054,7 +1054,7 @@ export default function GuideContent() {
 <li>Pas de niveau sur le dossier&nbsp;? La plateforme vous demande de créer une pré-inscription avec un niveau depuis la fiche apprenant.</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
-<li>La capacité d’un groupe est indicative&nbsp;: un groupe «&nbsp;complet&nbsp;» accepte quand même un nouvel apprenant. Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
+<li>La capacité d’un groupe est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant (seule la direction peut dépasser, avec un motif). Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
 </ul>
 </div>
 </article>
@@ -1684,7 +1684,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Un apprenant que je viens de créer n’apparaît pas dans la liste</summary>
-<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant créé avec un paiement à 0 reste «&nbsp;Prospect&nbsp;» et est masqué&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
+<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant reste «&nbsp;Prospect&nbsp;», donc masqué, tant qu’aucune inscription n’est confirmée (par un paiement ou une affectation à un groupe), par exemple après un paiement à 0&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
 </details>
 <details className="faq">
 <summary>Le prospect est resté «&nbsp;Qualifié&nbsp;» alors que j’ai créé son inscription</summary>
