@@ -61,7 +61,12 @@ export default function GroupDetail() {
   }, [id, reload]);
 
   const groupSchoolYear = (group?.annee || '').replace('-', '/') || currentSchoolYear();
-  const full = Boolean(group?.capacite_max) && students.length >= group.capacite_max;
+  // Seats as the server counts them: members plus every non-rejected, non-ended
+  // enrollment that carries this group (pre-enrollments too), visible learners only.
+  const seats = new Set([...students.map(s => s.id), ...enrollments
+    .filter(e => e.group_id === id && !['Rejected', 'Ended'].includes(e.status) && allStudents.some(s => s.id === e.student_id))
+    .map(e => e.student_id)]).size;
+  const full = Boolean(group?.capacite_max) && seats >= group.capacite_max;
   // A paid enrollment without level fits any group of its programme (the group sets the level).
   const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
     && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));

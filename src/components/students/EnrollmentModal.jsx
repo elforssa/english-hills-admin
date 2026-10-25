@@ -89,6 +89,8 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     } else if (!assignmentOnly) {
       const changes = changedEnrollmentFields(enrollment, form);
       delete changes.status; // after the group, below
+      // SF2: a group change sets the level from the new group (owner decision 4).
+      if (groupId !== (enrollment?.group_id || null)) delete changes.level;
       if (Object.keys(changes).length) {
         const { error } = await saveEnrollmentChanges(client, row, changes);
         if (error) throw error;
@@ -97,7 +99,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     }
     const before = enrollment?.group_id || null;
     if (groupId !== before) {
-      if (changed || !file?.updated_at) await refresh();
+      if (changed) await refresh();
       const { error } = groupId
         ? await placeLearnerInGroup(client, { student: file, group: groupId, enrollment: row })
         : await removeLearnerFromGroup(client, { student: file, group: before, enrollment: row });

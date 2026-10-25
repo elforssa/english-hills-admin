@@ -28,6 +28,117 @@ Evidence for the [implementation record](../plans/enrollment-group-consistency.m
 
 `enforce_enrollment_student_sync` is re-created byte-identical: 072 already passes the previous group with a forced downgrade for every status outside Validated, Trial and Confirmed, which includes `Ended`. `attendance_student_in_group` changes signature (third argument `p_session_date`); the two-argument function is dropped, so its diff shows the old body removed and the new one added.
 
+## `public.sync_student_from_enrollments` after M1 only
+
+The body between M1 and M2 (with the M1 transition branch: an unbacked file group is kept, and keeps its Enrolled/Trial status, unless a forced downgrade left that group). The block further down is the strict M2 body.
+
+```diff
+--- public.sync_student_from_enrollments @119 (source 074)
++++ public.sync_student_from_enrollments @120 (M1 only)
+@@ -7,16 +7,20 @@
+ declare
+   v_current public.students%rowtype;
+   v_status text;
+-  v_group uuid;
+   v_student_status text;
++  v_leaver text := current_setting('eh.leaver_status', true);
++  v_main uuid;
+   v_session text;
+   v_level text;
++  v_flag text;
+ begin
+-  if p_student is null or pg_trigger_depth() > 1 then return; end if;
++  -- No depth guard any more: no trigger on students writes enrollments, so a
++  -- nested enrollment write (from another trigger) must still resync.
++  if p_student is null then return; end if;
+   select * into v_current from public.students where id = p_student for update;
+   if not found then return; end if;
+
+-  select e.status, e.group_id, e.session_type, e.level into v_status, v_group, v_session, v_level
++  select e.status into v_status
+   from public.enrollments e where e.student_id = p_student
+   order by case e.status
+     when 'Validated' then 0 when 'Trial' then 1 when 'Confirmed' then 2
+@@ -24,33 +28,56 @@
+     e.updated_at desc, e.created_at desc, e.id desc
+   limit 1;
+
+-  v_student_status := case v_status
+-    when 'Validated' then 'Enrolled'
+-    when 'Confirmed' then 'Enrolled'
+-    when 'Trial' then 'Trial'
+-    when 'Rejected' then 'Inactive'
+-    else 'Prospect' end;
+-  if not p_force_downgrade and v_status not in ('Validated','Confirmed','Trial')
+-    and v_current.status in ('Enrolled','Trial','Alumni') then
+-    v_student_status := v_current.status;
++  -- I7: Enrolled from a confirmed enrollment, Trial from a trial; Alumni and
++  -- Inactive only from the leaver/archive core; otherwise the 074 mapping.
++  if exists (select 1 from public.enrollments e where e.student_id = p_student and e.status in ('Confirmed','Validated')) then
++    v_student_status := 'Enrolled';
++  elsif exists (select 1 from public.enrollments e where e.student_id = p_student and e.status = 'Trial') then
++    v_student_status := 'Trial';
++  elsif v_leaver in ('Alumni','Inactive') then
++    v_student_status := v_leaver;
++  else
++    v_student_status := case v_status
++      when 'Rejected' then 'Inactive'
++      when 'Ended' then case when v_current.status in ('Alumni','Inactive') then v_current.status else 'Inactive' end
++      else 'Prospect' end;
++    if not p_force_downgrade and v_current.status in ('Enrolled','Trial','Alumni','Inactive') then
++      v_student_status := v_current.status;
++    end if;
+   end if;
+
++  v_main := academic_security.main_group_for(p_student, v_current.groupe_id, v_current.session_type);
++  -- M1 transition (removed by M2): a file group that is not a membership (a
++  -- dossier-only placement before the clean-up) stays the main group, unless a
++  -- forced downgrade left that same group (074, D-3) or the learner was placed
++  -- in another group of the same programme. Edits, rejections and deletions of
++  -- non-member enrollments never clear it.
++  if v_current.groupe_id is not null and v_main is distinct from v_current.groupe_id
++    and not (p_force_downgrade and v_current.groupe_id is not distinct from p_previous_group)
++    and not exists (select 1 from public.enrollments e join public.groups mg on mg.id = e.group_id
++      join public.groups fg on fg.id = v_current.groupe_id
++      where e.student_id = p_student and e.status in ('Validated','Trial') and mg.session_type = fg.session_type) then
++    v_main := v_current.groupe_id;
++    -- The kept group is still an active placement (owner decision 1): its
++    -- Enrolled/Trial status is not downgraded by ending another enrollment.
++    if coalesce(v_leaver, '') not in ('Alumni','Inactive') and v_current.status in ('Enrolled','Trial')
++       and v_student_status not in ('Enrolled','Trial') then
++      v_student_status := v_current.status;
++    end if;
++  elsif v_main is not null then
++    select g.session_type, g.niveau into v_session, v_level from public.groups g where g.id = v_main;
++  end if;
++
++  v_flag := academic_security.set_flag('eh.membership_sync', 'on');
+   update public.students s set
+     status = v_student_status,
+-    session_type = case when v_group is not null and v_status in ('Validated','Trial') then coalesce(v_session, s.session_type) else s.session_type end,
+-    niveau_cefr = case when v_group is not null and v_status in ('Validated','Trial') then coalesce(v_level, s.niveau_cefr) else s.niveau_cefr end,
+-    groupe_id = case
+-      when v_status in ('Validated','Trial') then v_group
+-      when p_force_downgrade and s.groupe_id is not distinct from p_previous_group then null
+-      else s.groupe_id end
++    groupe_id = v_main,
++    session_type = coalesce(v_session, s.session_type),
++    niveau_cefr = case when v_session is not null then v_level else s.niveau_cefr end
+   where s.id = p_student
+-    and (s.status is distinct from v_student_status
+-      or (v_group is not null and v_status in ('Validated','Trial') and (s.session_type is distinct from coalesce(v_session,s.session_type)
+-        or s.niveau_cefr is distinct from coalesce(v_level,s.niveau_cefr)))
+-      or s.groupe_id is distinct from case
+-        when v_status in ('Validated','Trial') then v_group
+-        when p_force_downgrade and s.groupe_id is not distinct from p_previous_group then null
+-        else s.groupe_id end);
++    and (s.status is distinct from v_student_status or s.groupe_id is distinct from v_main
++      or (v_session is not null and (s.session_type is distinct from v_session or s.niveau_cefr is distinct from v_level)));
++  perform academic_security.set_flag('eh.membership_sync', v_flag);
+ end;
+ $function$
+```
+
 ## `public.sync_student_from_enrollments`
 
 Source: migration 074. Re-created by M1 (M2 removes the transition branch).
@@ -442,7 +553,7 @@ Source: migration 041. Re-created by M1.
    end if;
 +  perform 1 from public.students where id = p_student_id and deleted_at is null for update;
 +  if found then
-+    perform academic_security.leave(p_student_id, 'Inactive', 'Dossier archivé', null);
++    perform academic_security.leave(p_student_id, 'Inactive', 'Dossier archivé', null, false);
 +  end if;
    update public.students set deleted_at = now()
      where id = p_student_id and deleted_at is null;

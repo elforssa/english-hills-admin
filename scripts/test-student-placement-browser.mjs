@@ -30,9 +30,10 @@ try {
   if(error) throw error;
   userId=data.user.id;
   sql(`update public.profiles set role='admin' where id='${userId}'`);
-  const groupId=randomUUID(), manId=randomUUID(), fullId=randomUUID(), paidId=randomUUID(), prospectId=randomUUID(), seatedId=randomUUID();
+  const groupId=randomUUID(), manId=randomUUID(), fullId=randomUUID(), child2Id=randomUUID(), paidId=randomUUID(), prospectId=randomUUID(), seatedId=randomUUID();
   sql(`insert into public.groups(id,name,session_type,niveau,annee,capacite_max) values ('${groupId}','${run} group','Yearly','Child 1','2026-2027',15),
-      ('${manId}','${run} man','Mise à niveau','A1','2026-2027',15),('${fullId}','${run} full','Yearly','Child 2','2026-2027',1);
+      ('${manId}','${run} man','Mise à niveau','A1','2026-2027',15),('${fullId}','${run} full','Yearly','Child 2','2026-2027',1),
+      ('${child2Id}','${run} child2','Yearly','Child 2','2026-2027',15);
     insert into public.students(id,full_name,status,session_type) values ('${paidId}','${run} paid','Prospect','Yearly'),
       ('${prospectId}','${run} prospect','Prospect','Yearly'),('${seatedId}','${run} seated','Prospect','Yearly');
     insert into public.enrollments(student_id,status,session_type,school_year) values ('${paidId}','Confirmed','Yearly','2026/2027'),('${prospectId}','Submitted','Yearly','2026/2027');
@@ -107,9 +108,30 @@ try {
   await page.getByRole('searchbox',{name:'Rechercher un apprenant'}).fill(run+' paid');
   await expect(page.getByRole('row').filter({has:page.getByRole('cell',{name:run+' paid',exact:true})}).getByText('+1',{exact:true})).toBeVisible();
   await page.screenshot({path:join(tmpdir(),'student-placement-desktop.png'),fullPage:true});
-  // History: removing the Yearly group from the enrollment keeps it Confirmed.
+  // SF2 / owner decision 4: direction moves the placed learner to another level's
+  // group of the same programme from the enrollment; the move takes the new level.
   await page.goto(`http://localhost:3101/students/${paidId}`);
   await expect(page.getByRole('heading',{name:'Inscriptions et groupes'})).toBeVisible();
+  const yearlyId=sql(`select id from public.enrollments where student_id='${paidId}' and session_type='Yearly'`).trim();
+  for (const [level,target] of [['Child 2',child2Id],['Child 1',groupId]]) {
+    await page.locator('div.rounded-lg.border.p-3').filter({hasText:'Programme annuel'}).getByRole('button',{name:'Modifier l’inscription'}).click();
+    await page.locator('#enrollment-level').selectOption(level);
+    await page.locator('#enrollment-group').selectOption(target);
+    await page.getByRole('dialog').getByRole('button',{name:'Enregistrer',exact:true}).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect.poll(() => sql(`select id||':'||status||':'||group_id||':'||level from public.enrollments where student_id='${paidId}' and session_type='Yearly'`).trim())
+      .toBe(`${yearlyId}:Validated:${target}:${level}`);
+  }
+  // S1: a dialog left open while the enrollment changed elsewhere is refused, never saved.
+  await page.locator('div.rounded-lg.border.p-3').filter({hasText:'Programme annuel'}).getByRole('button',{name:'Modifier l’inscription'}).click();
+  sql(`update public.enrollments set notes='Modifié ailleurs' where id='${yearlyId}'`);
+  await page.locator('#enrollment-level').selectOption('Child 2');
+  await page.locator('#enrollment-group').selectOption(child2Id);
+  await page.getByRole('dialog').getByRole('button',{name:'Enregistrer',exact:true}).click();
+  await page.getByText('Cette inscription a changé, rechargez.').first().waitFor();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  assert.equal(sql(`select group_id||':'||level from public.enrollments where id='${yearlyId}'`).trim(),`${groupId}:Child 1`,'the stale edit changed nothing');
+  // History: removing the Yearly group from the enrollment keeps it Confirmed.
   await expect(page.getByText('Groupe principal',{exact:false})).toBeVisible();
   await page.locator('div.rounded-lg.border.p-3').filter({hasText:'Programme annuel'}).getByRole('button',{name:'Modifier l’inscription'}).click();
   await page.locator('#enrollment-group').selectOption('');

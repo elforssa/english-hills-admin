@@ -218,7 +218,9 @@ console.log('PASS DAT-1 under M1: a dossier-only member placed in a second progr
 assert.equal(sql(`begin;
 set local session_replication_role = replica;
 insert into public.students(id, full_name, status, session_type, niveau_cefr, groupe_id) values
-  (${q(id(110))}, 'Up B1 dossier', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))});
+  (${q(id(110))}, 'Up B1 dossier', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))}),
+  (${q(id(114))}, 'Up B1 wrapper', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))}),
+  (${q(id(115))}, 'Up B1 reception', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))});
 set local session_replication_role = origin;
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
   (${q(id(220))}, ${q(id(110))}, ${q(id(21))}, 'Submitted', 'Yearly', '2026/2027', 'Child 1'),
@@ -234,12 +236,52 @@ set local request.jwt.claim.sub = ${q(id(1))};
 set local request.jwt.claims = ${q(JSON.stringify({ sub: id(1), role: 'authenticated' }))};
 set local role authenticated;
 select public.remove_learner_from_group(${q(id(110))}, ${q(id(21))}, (select updated_at from public.students where id = ${q(id(110))}));
+select public.remove_student_group(${q(id(114))}, ${q(id(21))});
 reset role;
 insert into b1_steps select 'removed', groupe_id, status from public.students where id = ${q(id(110))};
+insert into b1_steps select 'wrapper', groupe_id, status from public.students where id = ${q(id(114))};
+set local request.jwt.claim.sub = ${q(id(2))};
+set local request.jwt.claims = ${q(JSON.stringify({ sub: id(2), role: 'authenticated' }))};
+set local role authenticated;
+select public.assign_receptionist_student_group(${q(id(115))}, null, null, (select updated_at from public.students where id = ${q(id(115))}), null);
+reset role;
+insert into b1_steps select 'reception', groupe_id, status from public.students where id = ${q(id(115))};
 select string_agg(step || ':' || coalesce(file_group::text, 'none') || ':' || status, ',' order by ctid) from b1_steps;
-rollback;`).split('\n').pop(), [`notes:${id(21)}:Enrolled`, `rejected:${id(21)}:Enrolled`, `deleted:${id(21)}:Enrolled`, 'removed:none:Enrolled'].join(','),
-  'non-member edits keep the file group; the explicit removal clears it and keeps the status');
-console.log('PASS B1 under M1: notes edit, rejection and deletion keep the file group; explicit removal clears it');
+rollback;`).split('\n').pop(), [`notes:${id(21)}:Enrolled`, `rejected:${id(21)}:Enrolled`, `deleted:${id(21)}:Enrolled`, 'removed:none:Enrolled', 'wrapper:none:Enrolled', 'reception:none:Enrolled'].join(','),
+  'non-member edits keep the file group; the explicit removals (command, wrapper, reception) clear it and keep the status');
+console.log('PASS B1 under M1: notes edit, rejection and deletion keep the file group; command, wrapper and reception removals clear it');
+
+// DB S1 (re-review): before M2, ending a dossier-only learner's last active
+// enrollment through end_learner, close_school_year or the online course close
+// (its core, academic_security.end_group_enrollments) keeps the unbacked file
+// group and the status (owner decision 1). Rolled back.
+const directorClaims = `set local request.jwt.claim.sub = ${q(id(1))};
+set local request.jwt.claims = ${q(JSON.stringify({ sub: id(1), role: 'authenticated' }))};`;
+assert.equal(sql(`begin;
+set local session_replication_role = replica;
+insert into public.students(id, full_name, status, session_type, niveau_cefr, groupe_id) values
+  (${q(id(111))}, 'Up S1 leaver', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))}),
+  (${q(id(112))}, 'Up S1 year close', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))}),
+  (${q(id(113))}, 'Up S1 online', 'Enrolled', 'Yearly', 'Child 1', ${q(id(21))});
+set local session_replication_role = origin;
+insert into public.groups(id, name, session_type, niveau, annee) values (${q(id(23))}, 'Up online B1', 'Online', 'B1', '2026-2027');
+insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
+  (${q(id(111))}, null, 'Confirmed', 'Adults', '2026/2027', null),
+  (${q(id(112))}, null, 'Confirmed', 'Summer Camp', '2024/2025', null),
+  (${q(id(113))}, ${q(id(23))}, 'Validated', 'Online', '2026/2027', 'B1');
+${directorClaims}
+set local role authenticated;
+select public.end_learner(${q(id(111))}, (select updated_at from public.students where id = ${q(id(111))}), 'Alumni', 'Programme terminé');
+select public.close_school_year('2024/2025', 1, 'Fin d''année 2024/2025');
+reset role;
+select academic_security.end_group_enrollments(${q(id(23))}, 'Alumni', 'Cours en ligne clôturé');
+select string_agg(s.full_name || ':' || coalesce(s.groupe_id::text, 'none') || ':' || s.status || ':'
+    || (select string_agg(e.status, '+') from public.enrollments e where e.student_id = s.id), ',' order by s.id)
+  from public.students s where s.id in (${q(id(111))}, ${q(id(112))}, ${q(id(113))});
+rollback;`).split('\n').pop(),
+  [`Up S1 leaver:${id(21)}:Enrolled:Ended`, `Up S1 year close:${id(21)}:Enrolled:Ended`, `Up S1 online:${id(21)}:Enrolled:Ended`].join(','),
+  'an unbacked file group stays, with the status, when the last enrollment ends before M2');
+console.log('PASS DB S1 under M1: end_learner, year close and online close keep a dossier-only file group and status');
 
 // DS1 (review): a dossier-only learner pays the unlinked Yearly charge between M1
 // and the clean-up; the payment creates one Confirmed enrollment, which C1 places.

@@ -107,12 +107,15 @@ insert into public.students(id, full_name, status, session_type, niveau_cefr, gr
   (pg_temp.id(904), 'Cleanup no school year', 'Enrolled', 'Yearly', 'Child 1', pg_temp.id(390), '2026-05-01'),
   (pg_temp.id(905), 'Cleanup former balance', 'Enrolled', 'Communication Adult', null, null, '2026-03-01'),
   (pg_temp.id(906), 'Cleanup archived', 'Enrolled', 'Adults', null, null, '2026-03-01'),
-  (pg_temp.id(907), 'Cleanup MAN legacy payer', 'Enrolled', 'Mise à niveau', null, null, '2026-08-15');
+  (pg_temp.id(907), 'Cleanup MAN legacy payer', 'Enrolled', 'Mise à niveau', null, null, '2026-08-15'),
+  (pg_temp.id(908), 'Cleanup dossier paid after M1', 'Enrolled', 'Yearly', 'Child 1', pg_temp.id(390), '2026-07-01');
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level, date_inscription) values
   (pg_temp.id(912), pg_temp.id(902), null, 'Validated', null, null, null, '2026-05-24'),
   (pg_temp.id(913), pg_temp.id(903), null, 'Validated', null, null, null, '2026-05-24'),
   (pg_temp.id(914), pg_temp.id(904), pg_temp.id(390), 'Validated', 'Yearly', null, 'Child 1', '2026-05-24'),
-  (pg_temp.id(916), pg_temp.id(906), null, 'Confirmed', 'Adults', '2026/2027', null, '2026-09-01');
+  (pg_temp.id(916), pg_temp.id(906), null, 'Confirmed', 'Adults', '2026/2027', null, '2026-09-01'),
+  -- DS1: a payment made between M1 and the clean-up left a Confirmed Yearly enrollment.
+  (pg_temp.id(918), pg_temp.id(908), null, 'Confirmed', 'Yearly', '2026/2027', null, '2026-09-20');
 update public.students set deleted_at = now() where id = pg_temp.id(906);
 -- Attendance recorded through the dossier group before EGC.
 insert into public.attendance(student_id, group_id, session_date, status) select pg_temp.id(901), pg_temp.id(390), current_date - 20, 'Présent';
@@ -130,17 +133,60 @@ select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(
   'payment_amount', 600, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(928)));
 select pg_temp.owner();
 create temp table egc_snapshot as select
-  (select jsonb_agg(to_jsonb(s) - 'updated_at' order by s.id) from public.students s where s.id in (select pg_temp.id(i) from generate_series(901, 907) i)) students,
-  (select jsonb_agg(to_jsonb(e) - 'updated_at' order by e.id) from public.enrollments e where e.student_id in (select pg_temp.id(i) from generate_series(901, 907) i)) enrollments,
-  (select jsonb_agg(jsonb_build_object('id', c.id, 'enrollment_id', c.enrollment_id) order by c.id) from public.charges c where c.student_id in (select pg_temp.id(i) from generate_series(901, 907) i)) charges;
+  (select jsonb_agg(to_jsonb(s) - 'updated_at' order by s.id) from public.students s where s.id in (select pg_temp.id(i) from generate_series(901, 908) i)) students,
+  (select jsonb_agg(to_jsonb(e) - 'updated_at' order by e.id) from public.enrollments e where e.student_id in (select pg_temp.id(i) from generate_series(901, 908) i)) enrollments,
+  (select jsonb_agg(jsonb_build_object('id', c.id, 'enrollment_id', c.enrollment_id) order by c.id) from public.charges c where c.student_id in (select pg_temp.id(i) from generate_series(901, 908) i)) charges;
 select pg_temp.ok(academic_security.egc_enforcement_failures() @> array[
   'I2: a learner-file group is not backed by a membership',
   'I1: a Validated or Trial enrollment has no group',
   'I9: a Confirmed, Validated or Trial enrollment lacks its programme or school year',
   'I8: an archived learner has an active enrollment'], 'M2 refuses on each unmet invariant before the clean-up');
+-- C1, C1b and C5 stop for a decision (P0001, named case) before writing a row
+-- that would collide with a live enrollment; each case and its fixture roll back.
+create function pg_temp.stops(setup text, statement text, pattern text) returns void language plpgsql as $f$
+begin
+  begin
+    execute setup; execute statement;
+  exception when others then
+    if sqlstate = 'P0001' and sqlerrm ~ pattern then return; end if;
+    raise exception 'expected P0001 /%/, got % %', pattern, sqlstate, sqlerrm;
+  end;
+  raise exception 'expected P0001 /%/, the stage ran', pattern;
+end $f$;
+select pg_temp.stops($s$
+    set local session_replication_role = replica;
+    insert into public.students(id, full_name, status, session_type, niveau_cefr, groupe_id) values
+      (pg_temp.id(909), 'Cleanup dossier with a pre-enrollment', 'Enrolled', 'Yearly', 'Child 1', pg_temp.id(390));
+    insert into public.enrollments(student_id, status, session_type, school_year) values (pg_temp.id(909), 'Submitted', 'Yearly', '2026/2027');
+    set local session_replication_role = origin;$s$,
+  $s$select academic_security.egc_cleanup_c1((select c1 from egc_base)::integer + 4, 1)$s$, 'C1: .*cannot be placed');
+select pg_temp.stops($s$
+    alter table public.enrollments drop constraint enrollments_confirmed_has_programme;
+    set local session_replication_role = replica;
+    insert into public.students(id, full_name, status, session_type, niveau_cefr) values (pg_temp.id(910), 'Cleanup year collision', 'Enrolled', 'Yearly', 'Child 1');
+    insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
+      (pg_temp.id(910), pg_temp.id(390), 'Validated', 'Yearly', null, 'Child 1'),
+      (pg_temp.id(910), null, 'Submitted', 'Yearly', '2026/2027', null);
+    set local session_replication_role = origin;
+    alter table public.enrollments add constraint enrollments_confirmed_has_programme
+      check (coalesce(status, '') not in ('Confirmed','Validated','Trial') or (session_type is not null and school_year is not null)) not valid;$s$,
+  $s$select academic_security.egc_cleanup_c1b((select c1b from egc_base)::integer + 2)$s$, 'C1b: .*another live enrollment');
+select pg_temp.stops($s$
+    set local session_replication_role = replica;
+    insert into public.students(id, full_name, status, session_type) values (pg_temp.id(911), 'Cleanup MAN with a pre-enrollment', 'Enrolled', 'Mise à niveau');
+    insert into public.enrollments(student_id, status, session_type, school_year) values (pg_temp.id(911), 'Submitted', 'Mise à niveau', '2026/2027');
+    insert into public.charges(id, student_id, session_type, service_description, gross_amount, legacy) values
+      (pg_temp.id(929), pg_temp.id(911), 'Legacy', 'Reçu historique 0003', 800, true);
+    insert into public.receipts(student_id, charge_id, date, nom_prenom, montant_total, montant_paye, mode_paiement, session_type, legacy, actor_id)
+      values (pg_temp.id(911), pg_temp.id(929), current_date - 3, 'Cleanup MAN with a pre-enrollment', 800, 400, 'Espèces', 'Legacy', true, pg_temp.id(2));
+    set local session_replication_role = origin;$s$,
+  $s$select academic_security.egc_cleanup_c5(2, '2026/2027', current_date - 30)$s$, 'C5: .*live Mise à niveau');
 -- Each stage refuses a count other than the approved one, and changes nothing.
-select pg_temp.fails(format('select academic_security.egc_cleanup_c1(%s, 1)', (select c1 from egc_base) + 3), 'P0001');
-select pg_temp.ok(academic_security.egc_cleanup_c1((select c1 from egc_base)::integer + 2, 1) = (select c1 from egc_base) + 2, 'C1 back-fills the dossier groups');
+select pg_temp.fails(format('select academic_security.egc_cleanup_c1(%s, 1)', (select c1 from egc_base) + 4), 'P0001');
+select pg_temp.ok(academic_security.egc_cleanup_c1((select c1 from egc_base)::integer + 3, 1) = (select c1 from egc_base) + 3, 'C1 back-fills the dossier groups');
+select pg_temp.ok((select status = 'Validated' and group_id = pg_temp.id(390) and level = 'Child 1' from public.enrollments where id = pg_temp.id(918))
+  and (select count(*) = 1 from public.enrollments where student_id = pg_temp.id(908) and status not in ('Rejected','Ended')),
+  'C1 places the existing Confirmed enrollment instead of inserting a second one (DS1)');
 select pg_temp.ok((select count(*) = 1 from public.enrollments e where e.student_id = pg_temp.id(901) and e.group_id = pg_temp.id(390)
     and e.status = 'Validated' and e.school_year = '2026/2027' and e.notes = 'Rattrapage EGC')
   and (select enrollment_id from public.charges where id = pg_temp.id(921)) = (select id from public.enrollments where student_id = pg_temp.id(901) and status = 'Validated')
@@ -171,11 +217,11 @@ select pg_temp.fails($$select academic_security.egc_revert_cleanup('C1b')$$, 'P0
 -- Reversal in reverse order restores the exact before-state.
 select academic_security.egc_revert_cleanup(x) from unnest(array['C5','C4','C3','C2','C1b','C1']) x;
 select pg_temp.ok((select jsonb_agg(to_jsonb(s) - 'updated_at' order by s.id) from public.students s
-    where s.id in (select pg_temp.id(i) from generate_series(901, 907) i)) = (select students from egc_snapshot)
+    where s.id in (select pg_temp.id(i) from generate_series(901, 908) i)) = (select students from egc_snapshot)
   and (select jsonb_agg(to_jsonb(e) - 'updated_at' order by e.id) from public.enrollments e
-    where e.student_id in (select pg_temp.id(i) from generate_series(901, 907) i)) = (select enrollments from egc_snapshot)
+    where e.student_id in (select pg_temp.id(i) from generate_series(901, 908) i)) = (select enrollments from egc_snapshot)
   and (select jsonb_agg(jsonb_build_object('id', c.id, 'enrollment_id', c.enrollment_id) order by c.id) from public.charges c
-    where c.student_id in (select pg_temp.id(i) from generate_series(901, 907) i)) = (select charges from egc_snapshot)
+    where c.student_id in (select pg_temp.id(i) from generate_series(901, 908) i)) = (select charges from egc_snapshot)
   and not exists (select 1 from maintenance.egc_cleanup_log), 'revert_cleanup restores the exact before-state');
 rollback to savepoint cleanup_rehearsal;
 select pg_temp.ok(cardinality(academic_security.egc_enforcement_failures()) = 0, 'enforced database again after the rehearsal');

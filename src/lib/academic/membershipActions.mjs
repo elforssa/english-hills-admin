@@ -22,7 +22,6 @@ export const EGC_REASON_TEXT = {
   select_enrollment: 'Plusieurs inscriptions sont possibles : choisissez-la depuis la fiche apprenant.',
   school_year_required: 'Indiquez l’année scolaire (sur le groupe ou l’inscription).',
   group_mismatch: 'Le groupe doit correspondre au programme et au niveau de l’inscription.',
-  school_year_mismatch: 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.',
   group_unavailable: 'Ce groupe est introuvable.',
   enrollment_not_placeable: 'Cette inscription ne peut pas être affectée à un groupe.',
   not_a_member: 'Cet apprenant n’est pas dans ce groupe.',

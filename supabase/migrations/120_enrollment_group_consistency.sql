@@ -235,6 +235,12 @@ begin
       join public.groups fg on fg.id = v_current.groupe_id
       where e.student_id = p_student and e.status in ('Validated','Trial') and mg.session_type = fg.session_type) then
     v_main := v_current.groupe_id;
+    -- The kept group is still an active placement (owner decision 1): its
+    -- Enrolled/Trial status is not downgraded by ending another enrollment.
+    if coalesce(v_leaver, '') not in ('Alumni','Inactive') and v_current.status in ('Enrolled','Trial')
+       and v_student_status not in ('Enrolled','Trial') then
+      v_student_status := v_current.status;
+    end if;
   elsif v_main is not null then
     select g.session_type, g.niveau into v_session, v_level from public.groups g where g.id = v_main;
   end if;
@@ -504,11 +510,6 @@ begin
       raise exception 'Année scolaire requise pour cette affectation.' using errcode = '22023', hint = 'egc.school_year_required';
     end if;
   end if;
-  -- A group that declares its school year only takes enrollments of that year.
-  if academic_security.school_year_of(g.annee) is not null and v_year is distinct from academic_security.school_year_of(g.annee) then
-    raise exception 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.'
-      using errcode = '23514', hint = 'egc.school_year_mismatch';
-  end if;
   -- I6: capacity, overridable by director/admin with a reason (D4-A).
   if not online_security.is_online_type(g.session_type) and g.capacite_max is not null then
     perform pg_advisory_xact_lock(hashtextextended('group:seats:' || p_group::text, 0));
@@ -615,7 +616,13 @@ end $$;
 -- ends the selected active enrollments (default all); when none remains, the
 -- file becomes Alumni or Inactive and leaves its file group. Charges, receipts
 -- and attendance are never touched.
-create function academic_security.leave(p_student uuid, p_final_status text, p_reason text, p_enrollments uuid[])
+-- Before M2 (owner decision 1), a dossier-only file group not backed by a
+-- membership counts as an active placement: ending the learner's enrollments
+-- keeps it and the status, so no M1 path unplaces a learner silently. Only an
+-- explicit leaver of a file with nothing else to end, or the archive
+-- (p_keep_file_group false), ends the file itself. After M2 no such group exists.
+create function academic_security.leave(p_student uuid, p_final_status text, p_reason text, p_enrollments uuid[],
+  p_keep_file_group boolean default true)
 returns integer language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 declare v_id uuid; v_count integer := 0; v_remaining boolean; v_flag text;
 begin
@@ -634,6 +641,13 @@ begin
   end if;
   v_remaining := p_enrollments is not null and exists (select 1 from public.enrollments x where x.student_id = p_student
     and x.status in ('Submitted','Under Review','Confirmed','Validated','Trial') and x.id <> all(p_enrollments));
+  if p_keep_file_group and exists (select 1 from public.students s where s.id = p_student and s.groupe_id is not null
+        and not academic_security.is_group_member(p_student, s.groupe_id))
+     and exists (select 1 from public.enrollments x where x.student_id = p_student
+        and x.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
+        and (p_enrollments is null or x.id = any(p_enrollments))) then
+    v_remaining := true;
+  end if;
   if not v_remaining then v_flag := academic_security.set_flag('eh.leaver_status', p_final_status); end if;
   for v_id in select x.id from public.enrollments x where x.student_id = p_student
       and x.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
@@ -932,7 +946,7 @@ begin
   end if;
   perform 1 from public.students where id = p_student_id and deleted_at is null for update;
   if found then
-    perform academic_security.leave(p_student_id, 'Inactive', 'Dossier archivé', null);
+    perform academic_security.leave(p_student_id, 'Inactive', 'Dossier archivé', null, false);
   end if;
   update public.students set deleted_at = now()
     where id = p_student_id and deleted_at is null;
