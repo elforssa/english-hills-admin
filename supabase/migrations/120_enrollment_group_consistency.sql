@@ -1528,7 +1528,7 @@ end $function$
 -- also ends enrollments placed while it ran.
 create function academic_security.end_group_enrollments(p_group uuid, p_final_status text, p_reason text)
 returns integer language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
-declare v_students uuid[]; v_student uuid; v_count integer := 0;
+declare v_students uuid[]; v_student uuid; v_count integer := 0; v_ids uuid[];
 begin
   loop
     v_students := array(select distinct e.student_id from public.enrollments e where e.group_id = p_group
@@ -1536,9 +1536,13 @@ begin
     exit when cardinality(v_students) = 0;
     perform 1 from public.students s where s.id = any(v_students) order by s.id for update;
     foreach v_student in array v_students loop
-      v_count := v_count + academic_security.leave(v_student, p_final_status, p_reason, array(
-        select e.id from public.enrollments e where e.student_id = v_student and e.group_id = p_group
-          and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')));
+      v_ids := array(select e.id from public.enrollments e where e.student_id = v_student and e.group_id = p_group
+          and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial'));
+      -- Selected after the lock: a learner moved away meanwhile has nothing to end
+      -- here, and leave(..., '{}') would end the file itself.
+      if cardinality(v_ids) > 0 then
+        v_count := v_count + academic_security.leave(v_student, p_final_status, p_reason, v_ids);
+      end if;
     end loop;
   end loop;
   return v_count;

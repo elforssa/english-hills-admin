@@ -56,6 +56,10 @@ function LeaverDialog({ student, enrollments, groups, openBalance, onClose, onDo
     setSaving(false);
     if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) onDone(); return; }
     toast.success(`${data.ended} inscription(s) terminée(s)${Number(data.open_balance) > 0 ? ` · solde restant ${money(data.open_balance)} MAD (inchangé)` : ''}`);
+    // Before the clean-up a dossier-only group is kept (owner decision 1): say so.
+    if (data.status && data.status !== finalStatus) {
+      toast.info(`Le dossier reste « ${displayLabel(DOSSIER_LABELS, data.status)} » : il garde un groupe ou une autre inscription active. Relancez « Ancien apprenant » pour terminer le dossier.`);
+    }
     onDone();
   };
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>

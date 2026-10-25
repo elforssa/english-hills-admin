@@ -30,14 +30,16 @@ try {
   if(error) throw error;
   userId=data.user.id;
   sql(`update public.profiles set role='admin' where id='${userId}'`);
-  const groupId=randomUUID(), manId=randomUUID(), fullId=randomUUID(), child2Id=randomUUID(), paidId=randomUUID(), prospectId=randomUUID(), seatedId=randomUUID();
+  const groupId=randomUUID(), manId=randomUUID(), fullId=randomUUID(), child2Id=randomUUID(), levelledId=randomUUID(), paidId=randomUUID(), prospectId=randomUUID(), seatedId=randomUUID();
   sql(`insert into public.groups(id,name,session_type,niveau,annee,capacite_max) values ('${groupId}','${run} group','Yearly','Child 1','2026-2027',15),
       ('${manId}','${run} man','Mise à niveau','A1','2026-2027',15),('${fullId}','${run} full','Yearly','Child 2','2026-2027',1),
       ('${child2Id}','${run} child2','Yearly','Child 2','2026-2027',15);
     insert into public.students(id,full_name,status,session_type) values ('${paidId}','${run} paid','Prospect','Yearly'),
-      ('${prospectId}','${run} prospect','Prospect','Yearly'),('${seatedId}','${run} seated','Prospect','Yearly');
+      ('${prospectId}','${run} prospect','Prospect','Yearly'),('${seatedId}','${run} seated','Prospect','Yearly'),
+      ('${levelledId}','${run} levelled','Prospect','Yearly');
     insert into public.enrollments(student_id,status,session_type,school_year) values ('${paidId}','Confirmed','Yearly','2026/2027'),('${prospectId}','Submitted','Yearly','2026/2027');
-    insert into public.enrollments(student_id,group_id,status,session_type,level,school_year) values ('${seatedId}','${fullId}','Validated','Yearly','Child 2','2026/2027');`);
+    insert into public.enrollments(student_id,group_id,status,session_type,level,school_year) values ('${seatedId}','${fullId}','Validated','Yearly','Child 2','2026/2027'),
+      ('${levelledId}',null,'Confirmed','Yearly','Child 1','2026/2027');`);
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   page.setDefaultTimeout(30000);
@@ -131,7 +133,19 @@ try {
   await page.getByText('Cette inscription a changé, rechargez.').first().waitFor();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   assert.equal(sql(`select group_id||':'||level from public.enrollments where id='${yearlyId}'`).trim(),`${groupId}:Child 1`,'the stale edit changed nothing');
+  // SF-A: an unplaced enrollment that carries a level (as every CRM pre-enrollment
+  // does) is placed in a group of another level: its level is saved first, then
+  // the placement succeeds with the group's level.
+  await page.goto(`http://localhost:3101/students/${levelledId}`);
+  await page.locator('div.rounded-lg.border.p-3').filter({hasText:'Programme annuel'}).getByRole('button',{name:'Modifier l’inscription'}).click();
+  await page.locator('#enrollment-level').selectOption('Child 2');
+  await page.locator('#enrollment-group').selectOption(child2Id);
+  await page.getByRole('dialog').getByRole('button',{name:'Enregistrer',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect.poll(() => sql(`select status||':'||group_id||':'||level from public.enrollments where student_id='${levelledId}'`).trim())
+    .toBe(`Validated:${child2Id}:Child 2`);
   // History: removing the Yearly group from the enrollment keeps it Confirmed.
+  await page.goto(`http://localhost:3101/students/${paidId}`);
   await expect(page.getByText('Groupe principal',{exact:false})).toBeVisible();
   await page.locator('div.rounded-lg.border.p-3').filter({hasText:'Programme annuel'}).getByRole('button',{name:'Modifier l’inscription'}).click();
   await page.locator('#enrollment-group').selectOption('');
