@@ -265,6 +265,7 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
   3. Implementation note 2 (past online rosters after a course close reading `ended_group_id`) stays out of this PR as a follow-up.
   4. Reception **may** move a learner with a confirmed placement to a group of another level in the same programme; the move updates the enrollment's level (owner's words, verbatim: "reception MAY move a learner with a confirmed placement to a group of another level in the same programme, which updates the enrollment's level"). Deviation 4 of the implementation record is kept.
   5. The school-year match on placement added after the first review is **dropped** from this PR; a year check returns later together with an editable group year and a Production dry-run of group years (owner decision accepting the coordinating session's recommendation).
+- **Release R1–R3 — APPROVED and DONE (2026-10-25).** Owner's words, verbatim, 19:22 Asia/Shanghai, relayed by the coordinating session: "approve D release now" (R1 + R2 + R3 only). The dashboard listed no backup, so the owner approved a manual logical backup to the owner's computer before R2; it was taken 11:35–11:43 UTC. Migration 120 applied 11:45:44 UTC and PR #160 merged as `be701da…` and deployed 11:47:16 UTC ([release evidence](../architecture/evidence/egc-r2-m1-production-2026-10-25.md)). **Pending, each needing its own approval:** R4 (clean-up counts re-read on the day, then C1–C6), R5 (migration 121), R6 (closeout).
 
 ## Payment corrections and receipts (Batch E) — APPROVED (2026-10-24)
 
