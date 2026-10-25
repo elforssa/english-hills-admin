@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { entities, reportError } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
-import { PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { ACTIVE_STUDENT_STATUSES, PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
@@ -77,7 +77,8 @@ export default function Dashboard() {
     const monthlyScope = `${authScope}:${monthStart}`;
     setMonthlyRead(previous => previous.scope === monthlyScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:monthlyScope});
     // Head-only exact counts under the same RLS as the former full-table reads.
-    const ACTIVE_STATUSES = ['Enrolled', 'Trial', 'Alumni'];
+    // "Apprenants actifs": Inscrit and Essai only (EGC, ACA-2); Ancien apprenant is not active.
+    const ACTIVE_STATUSES = ACTIVE_STUDENT_STATUSES;
     const sb = getBrowserClient();
     Promise.all([
       countRows('Student', sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),

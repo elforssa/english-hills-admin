@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { entities, integrations, reportError } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
 import { createLearnerIdentity, createStudentOnce } from '@/lib/studentCreate.mjs';
+import { currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
+import { membershipErrorMessage, placeLearnerInGroup } from '@/lib/academic/membershipActions.mjs';
 import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
@@ -22,7 +24,6 @@ const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
 const AGE_CATEGORIES = ['Young Learners (6-12)', 'Teens (13-17)', 'Adults (18+)', 'Corporate'];
-const STATUSES = ['Prospect', 'Enrolled', 'Trial', 'Inactive', 'Alumni'];
 const SOURCES = [
   'Réseaux sociaux (Facebook / Instagram)',
   'Recherche Google',
@@ -41,7 +42,6 @@ const StudentSchema = z.object({
   niveau_cefr:    z.enum(ALL_LEVELS).optional().or(z.literal('')),
   session_type:   z.enum(SESSION_TYPES).optional().or(z.literal('')),
   referral_source: z.enum(SOURCES).optional().or(z.literal('')),
-  status:         z.enum(STATUSES).optional().or(z.literal('')),
   groupe_id:      z.guid().optional().or(z.literal('')),
   photo_url:      z.string().optional().or(z.literal('')),
   notes:          z.string().max(2000, 'Trop long (max 2000)').optional().or(z.literal('')),
@@ -62,9 +62,13 @@ export default function StudentForm() {
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({
     full_name: '', date_naissance: '', telephone: '', email: '', parent_email: '',
-    niveau_cefr: '', age_category: '', session_type: 'Yearly', status: 'Enrolled',
+    niveau_cefr: '', age_category: '', session_type: 'Yearly',
     referral_source: '', groupe_id: '', photo_url: '', notes: '',
   });
+  // EGC: the status follows enrollments and the file group is the database's copy
+  // of a membership. Edit never writes them; programme and level follow the group.
+  const [schoolYear, setSchoolYear] = useState(() => currentSchoolYear());
+  const [placed, setPlaced] = useState(false);
 
   useEffect(() => {
     entities.Group.listAll('name').then(setGroups).catch(() => {});
@@ -83,7 +87,6 @@ export default function StudentForm() {
               niveau_cefr:  row.niveau_cefr  ?? '',
               session_type: row.session_type ?? 'Yearly',
               referral_source: row.referral_source ?? '',
-              status:       row.status       ?? '',
               date_naissance: row.date_naissance ?? '',
               telephone:    row.telephone    ?? '',
               email:        row.email        ?? '',
@@ -92,6 +95,7 @@ export default function StudentForm() {
               photo_url:    row.photo_url     ?? '',
               notes:        row.notes        ?? '',
             }));
+            setPlaced(Boolean(row.groupe_id));
           }
         })
         .catch((err) => {
@@ -172,43 +176,57 @@ export default function StudentForm() {
       return;
     }
 
-    // Convert empty strings back to null for DB enum/nullable fields
+    // Convert empty strings back to null for DB enum/nullable fields. The file
+    // group and the status are never written (D3-A: a new file is a Prospect).
+    const { groupe_id: chosenGroup, ...fields } = parsed.data;
     const payload = {
-      ...parsed.data,
-      age_category:   parsed.data.age_category   || null,
-      niveau_cefr:    parsed.data.niveau_cefr    || null,
-      session_type:   parsed.data.session_type   || 'Yearly',
-      referral_source: parsed.data.referral_source || null,
-      status:         isEdit ? (parsed.data.status || null) : 'Enrolled',
-      date_naissance: parsed.data.date_naissance || null,
-      telephone:      parsed.data.telephone      || null,
-      email:          parsed.data.email          || null,
-      parent_email:   parsed.data.parent_email   || null,
-      groupe_id:      parsed.data.groupe_id      || null,
-      photo_url:      parsed.data.photo_url      || null,
-      notes:          parsed.data.notes          || null,
+      ...fields,
+      age_category:   fields.age_category   || null,
+      niveau_cefr:    fields.niveau_cefr    || null,
+      session_type:   fields.session_type   || 'Yearly',
+      referral_source: fields.referral_source || null,
+      date_naissance: fields.date_naissance || null,
+      telephone:      fields.telephone      || null,
+      email:          fields.email          || null,
+      parent_email:   fields.parent_email   || null,
+      photo_url:      fields.photo_url      || null,
+      notes:          fields.notes          || null,
     };
+    if (isEdit && placed) { delete payload.session_type; delete payload.niveau_cefr; }
 
     setSaving(true);
+    const client = getBrowserClient();
+    if (isEdit) {
+      const { error } = await client.from('students').update(payload).eq('id', id);
+      if (error) { toast.error(membershipErrorMessage(error)); setSaving(false); return; }
+      toast.success('Apprenant mis à jour');
+      qc.invalidateQueries({ queryKey: ['Student'] });
+      router.push('/students');
+      return;
+    }
+    let studentId;
     try {
-      if (isEdit) {
-        await entities.Student.update(id, payload);
-        toast.success('Apprenant mis à jour');
-      } else {
-        const studentId = newStudentId.current();
-        const created = await createStudentOnce(getBrowserClient(), studentId, payload);
-        qc.invalidateQueries({ queryKey: ['Student'] });
-        newStudentId.settle(created.status);
-        if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
-        if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
-        toast.success('Apprenant créé');
+      studentId = newStudentId.current();
+      const created = await createStudentOnce(client, studentId, { ...payload, status: 'Prospect' });
+      qc.invalidateQueries({ queryKey: ['Student'] });
+      newStudentId.settle(created.status);
+      if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
+      if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
+      // Optional placement: a Validated enrollment of the group's programme (DAT-2).
+      if (chosenGroup) {
+        const { error } = await placeLearnerInGroup(client, { student: created.row, group: chosenGroup, schoolYear });
+        if (error) {
+          toast.error(`Apprenant créé, mais non affecté : ${membershipErrorMessage(error)}`);
+          router.push(`/students/${studentId}`);
+          return;
+        }
       }
+      toast.success('Apprenant créé');
       qc.invalidateQueries({ queryKey: ['Student'] });
       router.push('/students');
     } catch (error) {
-      // entities.js already toasted an update failure; report a create failure the
-      // same way. Stay on the form for retry: a create keeps its learner id.
-      if (!isEdit) reportError('create', 'Student', error);
+      // Report a create failure; stay on the form for retry: a create keeps its learner id.
+      reportError('create', 'Student', error);
       setSaving(false);
     }
   };
@@ -295,24 +313,18 @@ export default function StudentForm() {
           </div>
           <div>
             <label htmlFor="session_type" className={labelClass}>Session</label>
-            <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)}>
+            <select id="session_type" className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} disabled={placed}>
               {SESSION_TYPES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="niveau_cefr" className={labelClass}>Niveau (NIV)</label>
-            <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr || ''} onChange={e => changeLevel(e.target.value)}>
+            <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr || ''} onChange={e => changeLevel(e.target.value)} disabled={placed}>
               <option value="">— Non défini —</option>
               {getLevelsForSession(form.session_type, form.niveau_cefr).map(n => <option key={n}>{n}</option>)}
             </select>
           </div>
-          <div>
-            <label htmlFor="status" className={labelClass}>Statut</label>
-            <select id="status" disabled={!isEdit} className={inputClass} value={form.status || ''} onChange={e => set('status', e.target.value)}>
-              <option value="">— Non défini —</option>
-              {(isEdit ? STATUSES : ['Enrolled']).map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
+          {placed && <p className="col-span-2 -mt-2 text-xs text-muted-foreground">Le programme et le niveau suivent le groupe ; modifiez l’inscription depuis la fiche apprenant.</p>}
           <div className="col-span-2">
             <label htmlFor="referral_source" className={labelClass}>Comment avez-vous connu le centre ?</label>
             <select id="referral_source" className={inputClass} value={form.referral_source || ''} onChange={e => set('referral_source', e.target.value)}>
@@ -320,14 +332,20 @@ export default function StudentForm() {
               {SOURCES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
-          <div className="col-span-2">
-            <label htmlFor="groupe_id" className={labelClass}>Groupe assigné</label>
+          {!isEdit && <>
+          <div>
+            <label htmlFor="groupe_id" className={labelClass}>Affecter à un groupe (facultatif)</label>
             <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => changeGroup(e.target.value)}>
               <option value="">— Aucun groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
             </select>
-            <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau.</p>
+            <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau. L’affectation crée l’inscription.</p>
           </div>
+          <div>
+            <label htmlFor="school_year" className={labelClass}>Année scolaire</label>
+            <input id="school_year" className={inputClass} placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}" value={schoolYear} onChange={e => setSchoolYear(e.target.value)} disabled={!form.groupe_id} />
+          </div>
+          </>}
           <div className="col-span-2">
             <label htmlFor="notes" className={labelClass}>Notes</label>
             <textarea id="notes" className={`${fieldErr('notes') ? inputErrClass : inputClass} h-20 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} />

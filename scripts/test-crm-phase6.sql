@@ -77,7 +77,9 @@ do $$ declare l uuid:=pg_temp.qualified(); d jsonb:=pg_temp.start_data(l); key u
  perform pg_temp.ok((select status='QUALIFIED' from crm_leads where id=l),'NULL enrollment status never converts');
  update enrollments set status='Under Review' where id=e;
  perform pg_temp.ok((select status='QUALIFIED' from crm_leads where id=l),'Under Review does not convert');
- update students set status='Enrolled' where id=s;
+ -- The learner status follows enrollments (EGC I7); write it on the sync's own path
+ -- (every other trigger stays active) to prove a status change alone never converts.
+ perform set_config('eh.membership_sync','on',true);update students set status='Enrolled' where id=s;perform set_config('eh.membership_sync','',true);
  perform pg_temp.ok((select status='QUALIFIED' from crm_leads where id=l),'student status does not convert');
  perform pg_temp.actor(2);execute 'set local role authenticated';update enrollments set status='Confirmed' where id=e;execute 'reset role';
  select conversion_activity_id,converted_at into a,converted from crm_leads where id=l;
@@ -238,13 +240,16 @@ do $$ declare l uuid:=pg_temp.qualified(); r jsonb; d jsonb; e uuid; s uuid; b u
  perform pg_temp.denied(format('select public.create_charge_payment(%L)',d||jsonb_build_object('charge_id',b,'idempotency_key',gen_random_uuid())));
  perform pg_temp.ok(before_rows=jsonb_build_array(pg_temp.finances(),(select count(*) from enrollments)),'unknown-year charge cannot bypass CRM intent protection');
  -- Explicit different program and explicit same-program history are legitimate.
- foreach b in array array[gen_random_uuid(),gen_random_uuid()] loop
-  insert into enrollments(id,student_id,status,session_type,school_year) values(b,s,'Submitted','Adults','2027/2028');
-  r:=public.create_charge_payment(d||jsonb_build_object('session_type','Adults','school_year','2027/2028','plan_type',null,'enrollment_id',b,'idempotency_key',gen_random_uuid()));
+ -- One live enrollment per programme and school year (EGC I3): each one has its year.
+ for i in 0..1 loop
+  b:=gen_random_uuid();
+  insert into enrollments(id,student_id,status,session_type,school_year) values(b,s,'Submitted','Adults',(2027+i)||'/'||(2028+i));
+  r:=public.create_charge_payment(d||jsonb_build_object('session_type','Adults','school_year',(2027+i)||'/'||(2028+i),'plan_type',null,'enrollment_id',b,'idempotency_key',gen_random_uuid()));
   perform pg_temp.ok((r->>'enrollment_id')::uuid=b and (select status='QUALIFIED' and enrollment_id=e from crm_leads where id=l),'explicit unrelated enrollment does not convert or relink A');
  end loop;
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2026/2027') returning id into b;
- r:=public.create_charge_payment(d||jsonb_build_object('enrollment_id',b,'idempotency_key',gen_random_uuid()));
+ -- The separate same-programme enrollment is in another school year (EGC I3).
+ insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2029/2030') returning id into b;
+ r:=public.create_charge_payment(d||jsonb_build_object('enrollment_id',b,'school_year','2029/2030','idempotency_key',gen_random_uuid()));
  perform pg_temp.ok((r->>'enrollment_id')::uuid=b and (select status='QUALIFIED' from crm_leads where id=l),'explicit same-program separate enrollment allowed without converting A');
  -- Zero CRM intent in another year preserves implicit creation.
  r:=public.create_charge_payment(d||jsonb_build_object('school_year','2028/2029','idempotency_key',gen_random_uuid()));
@@ -260,7 +265,7 @@ do $$ declare l uuid:=pg_temp.qualified(); r jsonb; d jsonb; e uuid; s uuid; b u
  perform pg_temp.denied(format('select public.create_charge_payment(%L)',d||jsonb_build_object('enrollment_id',b)),'P0001');
  -- Ambiguous existing CRM intents also require explicit selection.
  perform pg_temp.actor(3);l:=pg_temp.qualified();
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
+ r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'school_year','2029/2030','expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
  perform pg_temp.actor(1);
  perform pg_temp.denied(format('select public.create_charge_payment(%L)',d-'enrollment_id'||jsonb_build_object('idempotency_key',gen_random_uuid())));
  -- Migration 096 explicitly permits receptionist receipt candidates; other roles stay denied.

@@ -121,10 +121,13 @@ insert into paid_case values ('other', public.create_charge_payment(jsonb_build_
   'session_type','Other','school_year','2026/2027','service_detail','Test service',
   'gross_amount',100,'payment_amount',10,'payment_method','Espèces',
   'idempotency_key','72000000-0000-0000-0000-000000000015')));
+-- D3-A (FIN-10, EGC): an Other receipt creates no tuition enrollment and no
+-- longer changes the learner's status.
 do $$ begin
   if (select count(*) from public.enrollments where student_id='72000000-0000-0000-0000-000000000023') <> 0
-    or (select status from public.students where id='72000000-0000-0000-0000-000000000023') <> 'Enrolled' then
-    raise exception 'Other service must enroll student without creating a tuition enrollment';
+    or (select status from public.students where id='72000000-0000-0000-0000-000000000023') <> 'Prospect'
+    or (select (result->>'student_enrolled')::boolean from paid_case where case_name='other') is not false then
+    raise exception 'Other service must not enroll the student nor create a tuition enrollment';
   end if;
 end $$;
 

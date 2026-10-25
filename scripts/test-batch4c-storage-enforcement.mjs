@@ -156,9 +156,14 @@ try {
   const tOther = await create('teachers', { full_name: `${run} Other Teacher`, email: otherTeacher.email });
   const group = await create('groups', { name: `${run} Group`, niveau: 'Child 1', teacher_id: t.id });
   const otherGroup = await create('groups', { name: `${run} Other Group`, niveau: 'Child 1', teacher_id: tOther.id });
-  const child = await create('students', { full_name: `${run} Child`, email: student.email, parent_email: parent.email, niveau_cefr: 'Child 1', groupe_id: group.id });
-  const childTwo = await create('students', { full_name: `${run} Child Two`, parent_email: parent.email, niveau_cefr: 'Child 1', groupe_id: group.id });
-  const unrelated = await create('students', { full_name: `${run} Unrelated`, email: otherStudent.email, parent_email: otherParent.email, niveau_cefr: 'Child 1', groupe_id: otherGroup.id });
+  const child = await create('students', { full_name: `${run} Child`, email: student.email, parent_email: parent.email, niveau_cefr: 'Child 1' });
+  const childTwo = await create('students', { full_name: `${run} Child Two`, parent_email: parent.email, niveau_cefr: 'Child 1' });
+  const unrelated = await create('students', { full_name: `${run} Unrelated`, email: otherStudent.email, parent_email: otherParent.email, niveau_cefr: 'Child 1' });
+  // Group membership derives from a Validated enrollment (EGC); the file group follows it.
+  const seat = (studentId, groupId) => create('enrollments', { student_id: studentId, group_id: groupId, status: 'Validated', session_type: 'Yearly', level: 'Child 1', school_year: '2026/2027' });
+  const childSeat = await seat(child.id, group.id);
+  await seat(childTwo.id, group.id);
+  await seat(unrelated.id, otherGroup.id);
 
   // Unsupported identities, forged subjects, and arbitrary reservation arguments fail closed.
   for (const actor of [null, pending, missing, parent, otherParent, otherTeacher]) await denied(() => rpc(actor, 'reserve_storage_asset', { p_purpose: 'portfolio', p_student_id: child.id }));
@@ -211,9 +216,9 @@ try {
   ok(await patch(admin, 'portfolios', portfolio.id, { visible_to_parent: true, visible_to_student: false }));
   await denied(() => rpc(student, 'resolve_storage_asset', { p_asset_id: portfolioAsset.id }));
   ok(await patch(admin, 'portfolios', portfolio.id, { visible_to_student: true }));
-  ok(await patch(admin, 'students', child.id, { groupe_id: otherGroup.id }));
+  ok(await patch(admin, 'enrollments', childSeat.id, { group_id: otherGroup.id }));
   await denied(() => rpc(teacher, 'resolve_storage_asset', { p_asset_id: portfolioAsset.id }));
-  ok(await patch(admin, 'students', child.id, { groupe_id: group.id }));
+  ok(await patch(admin, 'enrollments', childSeat.id, { group_id: group.id }));
 
   // An authenticated caller cannot nominate a different actor to finalize a
   // reservation, and client JSON cannot turn a non-reserved asset valid.
@@ -294,6 +299,8 @@ try {
   const ids = [...Object.values(records).flat(), ...users.map(u => u.id)];
   let cleanup = 'begin;';
   if (assets.length) cleanup += `delete from public.storage_asset_bindings where asset_id in (${assets.map(a => q(a.id)).join(',')}); delete from public.storage_assets where id in (${assets.map(a => q(a.id)).join(',')});`;
+  // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
+  cleanup += 'set local eh.enrollment_command = on;';
   for (const table of ['authorized_adults', 'portfolios', 'enrollments', 'students', 'groups', 'teachers']) if (records[table]?.length) cleanup += `delete from public.${table} where id in (${records[table].map(q).join(',')});`;
   if (users.length) cleanup += `alter table public.profiles disable trigger role_security_guard; delete from auth.users where id in (${users.map(u => q(u.id)).join(',')}); alter table public.profiles enable trigger role_security_guard; update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');`;
   if (ids.length) cleanup += `delete from public.activity_log where actor_id in (${users.map(u => q(u.id)).join(',')}) or target_id in (${ids.map(q).join(',')});`;

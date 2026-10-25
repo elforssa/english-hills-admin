@@ -26,6 +26,41 @@ import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPr
 import { listHref, recordHref } from '@/lib/navigation.mjs';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { listArchivedStudents, membershipErrorMessage, restoreStudent } from '@/lib/academic/membershipActions.mjs';
+
+// Director (ACA-8): archived files, restored with their enrollments kept Ended.
+function ArchivedStudentsDialog({ onClose, onRestored }) {
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['Student', 'archived', page],
+    queryFn: async () => {
+      const { data: result, error } = await listArchivedStudents(getBrowserClient(), page, 20);
+      if (error) throw error;
+      return result;
+    },
+  });
+  const restore = async (student) => {
+    if (!confirm(`Restaurer le dossier de ${student.full_name} ? Ses inscriptions restent terminées.`)) return;
+    const { error } = await restoreStudent(getBrowserClient(), student.id);
+    if (error) { toast.error(membershipErrorMessage(error)); refetch(); return; }
+    toast.success('Dossier restauré');
+    refetch();
+    onRestored();
+  };
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Dossiers archivés</DialogTitle></DialogHeader>
+      {isLoading ? <p role="status" className="text-sm">Chargement…</p>
+        : isError ? <p role="alert" className="text-sm">Impossible de charger les dossiers archivés. <button className="text-primary underline" onClick={() => refetch()}>Réessayer</button></p>
+        : data.rows.length === 0 ? <p className="text-sm text-muted-foreground">Aucun dossier archivé.</p>
+        : <ul className="divide-y divide-border text-sm">{data.rows.map(row => <li key={row.id} className="flex items-center justify-between gap-2 py-2">
+          <span>{row.full_name}<span className="block text-xs text-muted-foreground">Archivé le {new Date(row.deleted_at).toLocaleDateString('fr-FR', { timeZone: 'Africa/Casablanca' })}</span></span>
+          <button className="text-xs font-semibold text-primary hover:underline" onClick={() => restore(row)}>Restaurer</button>
+        </li>)}</ul>}
+      {data && data.count > 20 && <Pagination page={page} total={data.count} pageSize={20} onChange={setPage} />}
+    </DialogContent>
+  </Dialog>;
+}
 
 const PAGE_SIZE = 20;
 
@@ -62,6 +97,7 @@ export default function StudentsPage() {
   const update = useEntityUpdate('Student');
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);
+  const [archived, setArchived] = useState(false);
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement && !placement.choices) });
 
   // Keep the current server value visible until persistence succeeds.
@@ -78,7 +114,7 @@ export default function StudentsPage() {
       if (role !== 'receptionist') return;
       // Changed in the meantime (ADR-009): reload the list for review.
       if (isRecordConflict(error)) { toast.error(recordConflictMessage()); await queryClient.invalidateQueries({ queryKey: ['Student'] }); }
-      else toast.error(error.message);
+      else toast.error(membershipErrorMessage(error));
     }
   };
   const patchStudent = (student, field, value) => patchStudentFields(student, { [field]: value === '' ? null : value });
@@ -160,16 +196,19 @@ export default function StudentsPage() {
     },
   });
 
+  // Main group plus the number of further memberships (a second programme, DAT-1).
+  const groupLabel = (student) => <span>{student.group_name || 'Groupe affecté'}
+    {Number(student.extra_group_count) > 0 && <span className="ml-1 text-xs font-semibold text-muted-foreground">+{student.extra_group_count}</span>}</span>;
   const renderGroup = (student) => {
     if (role !== 'receptionist') return <div className="space-y-1">
-      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {student.groupe_id && groupLabel(student)}
       {(student.pending_enrollments || []).map(enrollment => (
         <button key={enrollment.id} className="block text-left text-xs font-semibold text-primary hover:underline"
           onClick={() => setPlacement({ student, enrollment })}>
           Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
         </button>
       ))}
-      {!student.groupe_id && !student.pending_enrollments?.length && <Link data-touch-target href={`/students/${student.id}/edit`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
+      {!student.groupe_id && !student.pending_enrollments?.length && <Link data-touch-target href={`/students/${student.id}`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
     </div>;
 
     if (enrollmentsLoading) return <span className="text-xs text-muted-foreground">Chargement des inscriptions…</span>;
@@ -177,7 +216,7 @@ export default function StudentsPage() {
     const relevant = pageEnrollments.filter(enrollment => enrollment.student_id === student.id);
     const awaitingGroup = relevant.filter(enrollment => !enrollment.group_id);
     return <div className="space-y-1">
-      {student.groupe_id && <span>{student.group_name || 'Groupe affecté'}</span>}
+      {student.groupe_id && groupLabel(student)}
       {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
         Groupe à affecter · {displayLabel(ENROLLMENT_LABELS, awaitingGroup[0].status)} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
@@ -203,7 +242,7 @@ export default function StudentsPage() {
         Email: s.email || '',
         Téléphone: s.telephone || '',
         Catégorie: s.age_category || '',
-        Groupe: s.group_name || 'À affecter',
+        Groupe: s.group_name ? `${s.group_name}${Number(s.extra_group_count) > 0 ? ` +${s.extra_group_count}` : ''}` : 'À affecter',
         Session: s.session_type || '',
         Niveau: s.niveau_cefr || '',
         Statut: s.status || '',
@@ -235,12 +274,15 @@ export default function StudentsPage() {
           >
             <Upload size={15} /> Import CSV
           </Link>}
+          {role === 'director' && <button onClick={() => setArchived(true)}
+            className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted">Dossiers archivés</button>}
           <Button asChild>
             <Link data-touch-target href="/students/new">
               <Plus size={15} /> Ajouter
             </Link>
           </Button>
       </>}/>
+      {archived && <ArchivedStudentsDialog onClose={() => setArchived(false)} onRestored={() => queryClient.invalidateQueries({ queryKey: ['Student'] })} />}
       <FilterBar activeCount={activeFilterCount} onReset={resetFilters} search={<SearchField label="Rechercher un apprenant" className="flex-1 basis-60" placeholder="Nom ou téléphone…" maxLength={120} value={search} onChange={value=>{setSearch(value);setPage(1);}}/>} more={<>
 <div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par paiement"><select aria-label="Filtrer par paiement" className="operational-control" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
           <option value="">Paiements : tous</option>
@@ -276,7 +318,7 @@ export default function StudentsPage() {
           {SOURCES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
         </select></FormField></div>
       </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-          <option value="">Dossiers actifs (inscrits, essai, anciens)</option>
+          <option value="">Dossiers actifs (inscrits, essai)</option>
           <option value="all_shown">Tous les statuts</option>
           {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
         </select></FormField></div>}</FilterBar>
@@ -344,23 +386,28 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{renderGroup(s)}</td>
                       <td className="px-3 py-3">
-                        {canEditProgramme ? <InlineSelect
+                        {/* ACA-7: in a group, programme and level follow the group; edit from the enrollment. */}
+                        {canEditProgramme && !s.groupe_id ? <InlineSelect
                           value={s.session_type}
                           label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
                           className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
-                          onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null, groupe_id: null })}
-                        /> : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</span>}
+                          onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null })}
+                        /> : canEditProgramme ? <Link data-touch-target href={studentHref(s.id)} title="Le programme suit le groupe : modifiez l’inscription"
+                          className={`font-medium hover:underline ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</Link>
+                          : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</span>}
                       </td>
                       <td className="px-3 py-3">
-                        {canEditProgramme ? <InlineSelect
+                        {canEditProgramme && !s.groupe_id ? <InlineSelect
                           value={s.niveau_cefr}
                           label={`Niveau de ${s.full_name}`}
                           options={getLevelsForSession(s.session_type || 'Yearly', s.niveau_cefr)}
                           empty="—"
                           className="font-semibold"
-                          onChange={v => patchStudentFields(s, { niveau_cefr: v || null, groupe_id: null })}
-                        /> : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
+                          onChange={v => patchStudentFields(s, { niveau_cefr: v || null })}
+                        /> : canEditProgramme ? <Link data-touch-target href={studentHref(s.id)} title="Le niveau suit le groupe : modifiez l’inscription"
+                          className="font-semibold hover:underline">{s.niveau_cefr || '—'}</Link>
+                          : <span className="font-semibold">{s.niveau_cefr || '—'}</span>}
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-3 py-3">
@@ -418,7 +465,7 @@ function DossierGroupPlacement({ student, groups, onClose, onSave }) {
     } catch (error) {
       // Changed in the meantime (ADR-009): close and reload the list for review.
       if (isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); }
-      else toast.error(error.message);
+      else toast.error(membershipErrorMessage(error));
     }
     finally { setSaving(false); }
   };

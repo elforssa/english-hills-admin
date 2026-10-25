@@ -191,7 +191,7 @@ removed_leads as(delete from public.crm_leads where contact_id in(select id from
 select count(*) from removed_leads;
 delete from public.crm_contacts where created_by='{actor}';delete from public.crm_command_requests where actor_scope='{actor}';delete from public.crm_followup_policies where created_by='{actor}';
 alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
-delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});alter table public.profiles disable trigger role_security_guard;
+set local eh.enrollment_command = on; delete from public.enrollments where student_id in({student_list});delete from public.students where id in({student_list});alter table public.profiles disable trigger role_security_guard;
 delete from auth.users where id='{actor}';
 update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');
 alter table public.profiles enable trigger role_security_guard;commit;""")

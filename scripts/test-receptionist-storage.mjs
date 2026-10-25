@@ -96,7 +96,7 @@ try {
     update public.enrollments set documents_urls='{}'::text[] where id=${q(enrollment)};
     delete from public.storage_asset_bindings where asset_id in (${assets.length ? assets.map(a => q(a.id)).join(',') : "'00000000-0000-0000-0000-000000000000'"});
     delete from public.storage_assets where id in (${assets.length ? assets.map(a => q(a.id)).join(',') : "'00000000-0000-0000-0000-000000000000'"});
-    delete from public.enrollments where id=${q(enrollment)};
+    set local eh.enrollment_command = on; delete from public.enrollments where id=${q(enrollment)};
     delete from public.students where id=${q(student)};
     delete from auth.users where id=${q(actor)};
     delete from public.activity_log where actor_id=${q(actor)} or target_id in (${q(student)},${q(enrollment)});

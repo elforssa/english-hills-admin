@@ -49,31 +49,30 @@ try {
     body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'director' } }) });
   assert.equal(response.status, 200); user = (await response.json()).id;
   sql(`update public.profiles set role='receptionist' where id='${user}';
-    insert into public.groups(id,name,session_type,niveau) values
-      ('${group}','${run}','Yearly','Child 1'),
-      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1'),
-      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2');
-    insert into public.students(id,full_name,status,session_type,niveau_cefr,groupe_id) values
-      ('${student}','${run}','Prospect','Yearly',null,null),
-      ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1',null),
-      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null,null),
-      ('${submittedStudent}','${submittedName}','Enrolled','Yearly','Child 1','${group}'),
-      ('${reviewStudent}','${reviewName}','Enrolled','Yearly','Child 1','${group}'),
-      ('${confirmedStudent}','${confirmedName}','Enrolled','Yearly','Child 1',null),
-      ('${multipleStudent}','${multipleName}','Enrolled','Yearly','Child 1',null),
-      ('${validatedStudent}','${validatedName}','Enrolled','Yearly','Child 1','${group}');
+    insert into public.groups(id,name,session_type,niveau,annee) values
+      ('${group}','${run}','Yearly','Child 1','2026-2027'),
+      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027'),
+      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027');
+    -- Status follows enrollments (EGC): learners with a pre-enrollment are
+    -- prospects; the two Enrolled files without any enrollment (paid on a historical
+    -- receipt) are seeded as Production holds them, with triggers bypassed.
+    insert into public.students(id,full_name,status,session_type,niveau_cefr) values
+      ('${student}','${run}','Prospect','Yearly',null),
+      ('${submittedStudent}','${submittedName}','Prospect','Yearly','Child 1'),
+      ('${reviewStudent}','${reviewName}','Prospect','Yearly','Child 1'),
+      ('${confirmedStudent}','${confirmedName}','Prospect','Yearly','Child 1'),
+      ('${multipleStudent}','${multipleName}','Prospect','Yearly','Child 1');
+    set session_replication_role=replica;
+    insert into public.students(id,full_name,status,session_type,niveau_cefr) values
+      ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
+      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null);
+    set session_replication_role=origin;
     insert into public.enrollments(id,student_id,status,session_type,level,school_year) values
       ('${submittedEnrollment}','${submittedStudent}','Submitted','Yearly','Child 1','2026/2027'),
       ('${reviewEnrollment}','${reviewStudent}','Under Review','Yearly','Child 1','2026/2027'),
       ('${confirmedEnrollment}','${confirmedStudent}','Confirmed','Yearly','Child 1','2026/2027'),
       ('${multipleSubmitted}','${multipleStudent}','Submitted','Yearly','Child 1','2026/2027'),
       ('${multipleReview}','${multipleStudent}','Under Review','Yearly','Child 1','2027/2028');
-    -- Simulate a legacy unassigned Validated row. Current triggers reject creation
-    -- of this state; the checked assignment must still allow its repair.
-    set session_replication_role=replica;
-    insert into public.enrollments(id,student_id,status,session_type,level,school_year)
-      values('${validatedEnrollment}','${validatedStudent}','Validated','Yearly','Child 1','2026/2027');
-    set session_replication_role=origin;
     insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
       values('${teacher}','${teacherName}','${run}-teacher@example.invalid','0600000000',
         'Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');`);
@@ -212,8 +211,10 @@ try {
   assert.equal(groupResult.status(), 200, await groupResult.text());
   assert.equal(groupResult.request().postDataJSON().p_enrollment, null);
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  // DAT-2: the placement created the learner's Validated enrollment; the file group follows it.
   assert.equal(sql(`select groupe_id from public.students where id='${readyStudent}'`), group);
-  console.log('PASS shared student filters, payment state, safe category edit and dossier-only assignment');
+  assert.equal(sql(`select count(*) from public.enrollments where student_id='${readyStudent}' and group_id='${group}' and status='Validated' and school_year='2026/2027'`), '1');
+  console.log('PASS shared student filters, payment state, safe category edit and placement without enrollment (creates it)');
 
   const assignmentVersions = JSON.parse(sql(`select json_build_object(
     'student',s.updated_at,'enrollment',e.updated_at)::text
@@ -234,24 +235,26 @@ try {
     assert.equal(assignmentState(), stateBeforeRejections, `${kind} rejection changed persisted student/enrollment state`);
   }
 
-  async function assertFilterKeepsAction(name, studentId) {
+  // "Groupe à affecter" (EGC M2, one rule for every role): a Confirmed enrollment
+  // without group is listed; a learner with a pending pre-enrollment is handled from
+  // the pre-registration queue and is not, though its row keeps the assignment action.
+  async function assertFilterAction(name, studentId, listed) {
     await page.goto(app + '/students?status=all_shown');
     await page.getByLabel('Rechercher un apprenant').fill(name);
     const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
     await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
-    await row.getByText(run, { exact: true }).waitFor(); // existing dossier group
     await page.getByText('Plus de filtres',{exact:false}).click();
     const filtered = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/search_students_page')
       && response.request().postDataJSON()?.p_group === 'unassigned');
     await page.getByRole('combobox', { name: 'Filtrer par affectation de groupe' }).selectOption('unassigned');
     const result = await filtered;
     assert.equal(result.status(), 200);
-    assert((await result.json()).rows.some(item => item.id === studentId), `${name} disappeared from the group filter`);
-    await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
+    assert.equal((await result.json()).rows.some(item => item.id === studentId), listed, `${name} in the group filter`);
+    if (listed) await row.getByRole('button', { name: /Groupe à affecter/ }).waitFor();
   }
-  await assertFilterKeepsAction(submittedName, submittedStudent);
-  await assertFilterKeepsAction(reviewName, reviewStudent);
-  await assertFilterKeepsAction(validatedName, validatedStudent);
+  await assertFilterAction(submittedName, submittedStudent, false);
+  await assertFilterAction(reviewName, reviewStudent, false);
+  await assertFilterAction(confirmedName, confirmedStudent, true);
 
   async function assignEnrollmentFromList(name, enrollmentId, expectedStatus) {
     await page.goto(app + '/students?status=all_shown');
@@ -277,8 +280,7 @@ try {
   await assignEnrollmentFromList(submittedName, submittedEnrollment, 'Submitted');
   await assignEnrollmentFromList(reviewName, reviewEnrollment, 'Under Review');
   await assignEnrollmentFromList(confirmedName, confirmedEnrollment, 'Validated');
-  await assignEnrollmentFromList(validatedName, validatedEnrollment, 'Validated');
-  assert.equal(sql(`select groupe_id from public.students where id='${validatedStudent}'`), group);
+  assert.equal(sql(`select groupe_id||':'||status from public.students where id='${confirmedStudent}'`), `${group}:Enrolled`);
 
   await page.goto(app + '/students?status=all_shown');
   await page.getByLabel('Rechercher un apprenant').fill(multipleName);
@@ -303,7 +305,7 @@ try {
   await chosenDialog.waitFor({ state: 'hidden' });
   assert.equal(sql(`select group_id from public.enrollments where id='${multipleReview}'`), group);
   assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${multipleSubmitted}'`), 'unset');
-  console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, legacy Validated, explicit multiple choice and incompatible denials');
+  console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, explicit multiple choice and incompatible denials');
 
   await page.goto(app + `/students/${readyStudent}`);
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
@@ -520,15 +522,15 @@ try {
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'
       union select id from public.enrollments where student_id in ('${student}','${submittedStudent}',
-        '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}')
+        '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}','${readyStudent}','${unsetStudent}')
       union select unnest(array['${user}'::uuid,'${student}'::uuid,
         '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${submittedStudent}'::uuid,
         '${reviewStudent}'::uuid,'${confirmedStudent}'::uuid,'${multipleStudent}'::uuid,
         '${validatedStudent}'::uuid,'${teacher}'::uuid,'${group}'::uuid,
         '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
-    delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
-      '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}');
+    set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
+      '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}','${readyStudent}','${unsetStudent}');
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
       '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}',
       '${validatedStudent}');

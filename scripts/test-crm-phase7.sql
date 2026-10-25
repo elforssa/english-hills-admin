@@ -65,9 +65,9 @@ create function pg_temp.flush_revenue() returns void language plpgsql as $$ begi
  set constraints all immediate;
  set constraints all deferred;
 end $$;
-create function pg_temp.pay(s uuid,e uuid,amount numeric default 500,charge uuid default null) returns jsonb language plpgsql as $$ begin
+create function pg_temp.pay(s uuid,e uuid,amount numeric default 500,charge uuid default null,year text default '2026/2027') returns jsonb language plpgsql as $$ begin
  perform pg_temp.actor(1);
- return public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'charge_id',charge,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',amount,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ return public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'charge_id',charge,'session_type','Yearly','school_year',year,'plan_type','Standard','gross_amount',1500,'payment_amount',amount,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
 end $$;
 create function pg_temp.revenue(l uuid) returns numeric language sql as $$ select coalesce(sum(amount_delta),0) from crm_revenue_entries where lead_id=l $$;
 
@@ -117,10 +117,11 @@ do $$ declare s uuid;e uuid;b uuid;l uuid;other uuid;r jsonb;receipt uuid; begin
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(public.crm_get_revenue_reconciliation_queue(100)) x where x->>'receipt_id'=receipt::text and x->>'status'='unattributed'),'old unlinked financial event discoverable');
  l:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e)));
  perform pg_temp.flush_revenue();perform pg_temp.ok(pg_temp.revenue(l)=1000,'delayed enrollment link automatically reconciles older money');
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2026/2027') returning id into b;
- r:=pg_temp.pay(s,b,500);receipt:=(r->>'receipt_id')::uuid;perform pg_temp.flush_revenue();
+ -- The second enrollment of the same learner is in another school year (EGC I3).
+ insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2027/2028') returning id into b;
+ r:=pg_temp.pay(s,b,500,null,'2027/2028');receipt:=(r->>'receipt_id')::uuid;perform pg_temp.flush_revenue();
  perform pg_temp.ok(pg_temp.revenue(l)=1000 and not exists(select 1 from crm_revenue_entries where receipt_id=receipt),'same student different enrollment never guesses');
- other:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(other)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
+ other:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(other)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'school_year','2027/2028','expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
  perform pg_temp.flush_revenue();perform pg_temp.ok(pg_temp.revenue(l)=1000 and pg_temp.revenue(other)=500,'two same-student opportunities have independent explicit revenue');
 end $$;
 

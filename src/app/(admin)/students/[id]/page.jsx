@@ -24,6 +24,9 @@ import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
 import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
+import { LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 // Module scope keeps section DOM stable across renders (a focused row survives).
 const Section = ({ title, children }) => (
@@ -34,6 +37,55 @@ const Section = ({ title, children }) => (
     <div className="p-4">{children}</div>
   </div>
 );
+
+// "Ancien apprenant" (ACA-3, D2): management ends the selected active enrollments
+// with a reason; with none left the file becomes Ancien apprenant or Inactif and
+// leaves every roster. Charges, receipts and attendance never change.
+function LeaverDialog({ student, enrollments, groups, openBalance, onClose, onDone }) {
+  const active = enrollments.filter(e => LIVE_ENROLLMENT_STATUSES.includes(e.status));
+  const [selected, setSelected] = useState(() => active.map(e => e.id));
+  const [finalStatus, setFinalStatus] = useState('Alumni');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const toggle = (enrollmentId) => setSelected(ids => ids.includes(enrollmentId) ? ids.filter(x => x !== enrollmentId) : [...ids, enrollmentId]);
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    const { data, error } = await endLearner(getBrowserClient(), { student, finalStatus, reason: reason.trim(),
+      enrollmentIds: selected.length === active.length ? null : selected });
+    setSaving(false);
+    if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) onDone(); return; }
+    toast.success(`${data.ended} inscription(s) terminée(s)${Number(data.open_balance) > 0 ? ` · solde restant ${money(data.open_balance)} MAD (inchangé)` : ''}`);
+    // Before the clean-up a dossier-only group is kept (owner decision 1): say so.
+    if (data.status && data.status !== finalStatus) {
+      toast.info(`Le dossier reste « ${displayLabel(DOSSIER_LABELS, data.status)} » : il garde un groupe ou une autre inscription active. Relancez « Ancien apprenant » pour terminer le dossier.`);
+    }
+    onDone();
+  };
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Ancien apprenant : {student.full_name}</DialogTitle></DialogHeader>
+      <form className="space-y-3 text-sm" onSubmit={submit}>
+        {active.length === 0 ? <p className="text-muted-foreground">Aucune inscription active : seul le statut du dossier change.</p>
+          : <fieldset className="space-y-1"><legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inscriptions à terminer</legend>
+            {active.map(e => <label key={e.id} className="flex items-center gap-2">
+              <input type="checkbox" checked={selected.includes(e.id)} onChange={() => toggle(e.id)} />
+              {programmeLabel(e.session_type)} · {e.school_year || 'Année non renseignée'} · {e.group_id ? groups.find(g => g.id === e.group_id)?.name || 'Groupe' : displayLabel(ENROLLMENT_LABELS, e.status)}
+            </label>)}</fieldset>}
+        <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Statut du dossier (sans autre inscription active)
+          <select className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" value={finalStatus} onChange={e => setFinalStatus(e.target.value)}>
+            <option value="Alumni">Ancien apprenant — a terminé son programme</option>
+            <option value="Inactive">Inactif — a arrêté en cours de route</option>
+          </select></label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif *
+          <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" required maxLength={200} value={reason} onChange={e => setReason(e.target.value)} /></label>
+        {openBalance > 0 && <p className="rounded-md bg-amber-50 p-2 text-amber-900">Solde restant : {money(openBalance)} MAD. Il reste dû et visible ; aucun paiement n’est annulé.</p>}
+        <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+          <Button type="submit" disabled={saving || !reason.trim() || (active.length > 0 && selected.length === 0)}>{saving ? '…' : 'Confirmer'}</Button></div>
+      </form>
+    </DialogContent>
+  </Dialog>;
+}
 
 export default function StudentDetailPage() {
   return <StudentDetail />;
@@ -49,6 +101,8 @@ function StudentDetail() {
   const [enrollments, setEnrollments] = useState([]);
   const [groups, setGroups] = useState([]);
   const [enrollmentModal, setEnrollmentModal] = useState(null);
+  const [leaver, setLeaver] = useState(false);
+  const isManagement = role === 'director' || role === 'admin';
   const [student, setStudent] = useState(null);
   const [payments, setPayments] = useState([]);
   const [charges, setCharges] = useState([]);
@@ -97,10 +151,10 @@ function StudentDetail() {
   }, [id, reload, scope]);
 
   const handleDelete = async () => {
-    if (!confirm('Archiver cet apprenant ? Son historique sera conservé.')) return;
+    if (!confirm('Archiver cet apprenant ? Ses inscriptions actives seront terminées (« Dossier archivé ») ; son historique et ses paiements sont conservés. La direction peut restaurer le dossier.')) return;
     const sb = getBrowserClient();
     const { error } = await sb.rpc('soft_delete_student', { p_student_id: id });
-    if (error) { toast.error('Erreur : ' + error.message); return; }
+    if (error) { toast.error(membershipErrorMessage(error)); return; }
     toast.success('Apprenant archivé');
     router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')));
   };
@@ -121,6 +175,15 @@ function StudentDetail() {
       if (isRecordConflict(error)) { toast.error(recordConflictMessage()); setReload(value => value + 1); }
       else toast.error(error.message);
     }
+  };
+
+  const reopen = async (enrollment) => {
+    if (!confirm('Rouvrir cette inscription ? Elle redevient « Inscrit — groupe à affecter ».')) return;
+    const { error } = await reopenEnrollment(getBrowserClient(), enrollment);
+    if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) setReload(value => value + 1); return; }
+    toast.success('Inscription rouverte');
+    queryClient.invalidateQueries({ queryKey: ['Student'] });
+    setReload(value => value + 1);
   };
 
   const sameScope = loadedScope === scope;
@@ -145,7 +208,7 @@ function StudentDetail() {
 
   return (
     <PageFrame width="detail" className="break-words">
-      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
+      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{isManagement && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
       <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
@@ -213,16 +276,22 @@ function StudentDetail() {
 
       <Section title="Inscriptions et groupes">
         {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception prépare les pré-inscriptions. La confirmation suit le parcours autorisé ; contactez la direction pour les opérations restreintes.</p>}
-        {role === 'receptionist' && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: new Date().toISOString().slice(0, 10) })}>Nouvelle pré-inscription</button>}
-        {student.groupe_id && <p className="mb-3 text-sm">Groupe du dossier : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
-        {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. <Link data-touch-target href={`/students/${id}/edit`} className="text-primary underline">Modifier le groupe du dossier</Link></p> : (
+        {(role === 'receptionist' || isManagement) && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: new Date().toISOString().slice(0, 10) })}>{role === 'receptionist' ? 'Nouvelle pré-inscription' : 'Nouvelle inscription'}</button>}
+        {/* The main group is the database's copy of one membership; each enrollment shows its own group. */}
+        {student.groupe_id && <p className="mb-3 text-sm">Groupe principal : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
+        {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. Une affectation de groupe passe par une inscription.</p> : (
           <div className="space-y-3">{enrollments.map(enrollment => (
             <div key={enrollment.id} {...(enrollment.id === highlightedEnrollmentId ? { id: `enrollment-${enrollment.id}`, tabIndex: -1 } : {})} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm ${enrollment.id === highlightedEnrollmentId ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-border'}`}>
               <div>{enrollment.id === highlightedEnrollmentId && <p className="mb-1 text-xs font-semibold text-primary">Inscription liée au prospect CRM</p>}<p className="font-semibold">{programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.school_year || 'Année non renseignée'}</p>
-                <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
-                <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}</p>
+                <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.status === 'Ended'
+                  ? `Ancien groupe : ${groups.find(g => g.id === enrollment.ended_group_id)?.name || '—'}`
+                  : enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
+                <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}{enrollment.status === 'Ended' && <> · {enrollment.end_reason || 'Motif non renseigné'}{enrollment.ended_at ? ` · ${new Date(enrollment.ended_at).toLocaleDateString('fr-FR', { timeZone: 'Africa/Casablanca' })}` : ''}</>}</p>
               </div>
-              <button disabled={!canManage} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+              <div className="flex items-center gap-3">
+                {isManagement && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}
+                <button disabled={!canManage || (role === 'receptionist' && enrollment.status === 'Ended')} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+              </div>
               {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
                 {(enrollment.documents_urls || []).map((ref, index) => <button key={ref} type="button"
                   className="text-xs text-primary underline" onClick={() => openStoredFile(ref).catch(error => toast.error(error.message))}>
@@ -235,6 +304,13 @@ function StudentDetail() {
           ))}</div>
         )}
       </Section>
+      {leaver && <LeaverDialog student={student} enrollments={enrollments} groups={groups} openBalance={paymentSummary.balance}
+        onClose={() => setLeaver(false)} onDone={() => {
+          setLeaver(false);
+          queryClient.invalidateQueries({ queryKey: ['Student'] });
+          queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+          setReload(value => value + 1);
+        }} />}
       {enrollmentModal && <EnrollmentModal key={enrollmentModal.id} enrollment={enrollmentModal} students={[student]} groups={groups}
         onClose={() => setEnrollmentModal(null)} onSave={() => {
           setEnrollmentModal(null);

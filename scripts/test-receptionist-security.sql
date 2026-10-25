@@ -12,8 +12,8 @@ insert into public.groups(id,name,session_type,niveau) values
  ('77000000-0000-0000-0000-000000000010','Receptionist test group','Yearly','Child 1');
 insert into public.students(id,full_name,status,session_type) values
  ('77000000-0000-0000-0000-000000000020','Receptionist test student','Prospect','Yearly');
-insert into public.enrollments(id,student_id,status,session_type) values
- ('77000000-0000-0000-0000-000000000030','77000000-0000-0000-0000-000000000020','Confirmed','Yearly');
+insert into public.enrollments(id,student_id,status,session_type,school_year) values
+ ('77000000-0000-0000-0000-000000000030','77000000-0000-0000-0000-000000000020','Confirmed','Yearly','2026/2027');
 insert into public.charges(student_id,session_type,service_description,gross_amount,legacy)
  values('77000000-0000-0000-0000-000000000020','Legacy','Phase 1 synthetic balance',100,true);
 insert into public.app_config(key,value) values('phase1-secret-fixture','never-visible-to-receptionist');
@@ -83,7 +83,8 @@ do $$ begin
  if found then raise exception 'Placement deletion allowed'; end if;
 end $$;
 select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020');
-select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,'77000000-0000-0000-0000-000000000010','Trial','Child 1');
+-- A trial needs a school year (EGC I9) and one live enrollment per programme and year (I3).
+select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,'77000000-0000-0000-0000-000000000010','Trial','Child 1',current_date,null,null,'2025/2026');
 select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020','77000000-0000-0000-0000-000000000030','77000000-0000-0000-0000-000000000010','Validated','Child 1');
 select pg_temp.denied($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,null,'Confirmed')$q$);
 select pg_temp.denied($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020','77000000-0000-0000-0000-000000000030',null,'Submitted')$q$);
@@ -109,12 +110,32 @@ insert into public.students(id,full_name,status,session_type,niveau_cefr) values
  ('77000000-0000-0000-0000-000000000022','RPC unknown level','Prospect','Yearly',null),
  ('77000000-0000-0000-0000-000000000024','RPC other learner','Prospect','Yearly','Child 1'),
  ('77000000-0000-0000-0000-000000000025','RPC secondary session','Prospect','Yearly','Child 1');
+-- Legacy rows that predate the EGC programme/year check (NOT VALID): seeded as
+-- Production holds them, before the check existed.
+create temp table egc_i9_def as select pg_get_constraintdef(oid) def, convalidated from pg_constraint
+  where conrelid = 'public.enrollments'::regclass and conname = 'enrollments_confirmed_has_programme';
+alter table public.enrollments drop constraint enrollments_confirmed_has_programme;
 insert into public.enrollments(id,student_id,status,session_type,level,group_id) values
  ('77000000-0000-0000-0000-000000000031','77000000-0000-0000-0000-000000000021','Submitted','Yearly','Child 1',null),
  ('77000000-0000-0000-0000-000000000032','77000000-0000-0000-0000-000000000021','Under Review',null,null,null),
  ('77000000-0000-0000-0000-000000000033','77000000-0000-0000-0000-000000000021','Confirmed',null,null,null),
  ('77000000-0000-0000-0000-000000000034','77000000-0000-0000-0000-000000000021','Validated','Yearly','Child 1','77000000-0000-0000-0000-000000000010'),
  ('77000000-0000-0000-0000-000000000035','77000000-0000-0000-0000-000000000025','Confirmed','Adults','Beginning 1',null);
+update public.enrollments set school_year='2026/2027' where id='77000000-0000-0000-0000-000000000035';
+-- A Confirmed legacy row that can still exist after the check: programme and year
+-- set, level unknown.
+insert into public.enrollments(id,student_id,status,session_type,school_year,level,group_id) values
+ ('77000000-0000-0000-0000-000000000036','77000000-0000-0000-0000-000000000021','Confirmed','Yearly','2029/2030',null,null);
+alter table public.enrollments add constraint enrollments_confirmed_has_programme
+  check (coalesce(status, '') not in ('Confirmed','Validated','Trial') or (session_type is not null and school_year is not null)) not valid;
+-- The re-added check has exactly the migration's expression (this fixture re-adds
+-- it NOT VALID, as M1 does; M2 may have validated the original).
+do $$ begin
+  if (select count(*) from egc_i9_def) <> 1 or (select regexp_replace(def, ' NOT VALID$', '') from egc_i9_def)
+      is distinct from (select regexp_replace(pg_get_constraintdef(oid), ' NOT VALID$', '') from pg_constraint
+      where conrelid = 'public.enrollments'::regclass and conname = 'enrollments_confirmed_has_programme') then
+    raise exception 'I9 check re-added with another definition'; end if;
+end $$;
 create function pg_temp.incompatible(statement text) returns void language plpgsql as $$ begin
   begin execute statement; exception when check_violation then return; end;
   raise exception 'Expected compatibility/identity rejection: %',statement;
@@ -125,7 +146,7 @@ do $$ declare
   compatible uuid := '77000000-0000-0000-0000-000000000010';
   adults uuid := '77000000-0000-0000-0000-000000000011';
   other_level uuid := '77000000-0000-0000-0000-000000000012';
-  enrollment_id uuid; desired text; result uuid; before_rows jsonb;
+  enrollment_id uuid; desired text; result uuid; before_rows jsonb; year integer := 2026;
 begin
   select jsonb_agg(to_jsonb(e) order by id) into before_rows from public.enrollments e where student_id=learner;
   -- New, normal, NULL-session/level, confirmed legacy and validated records.
@@ -149,19 +170,30 @@ begin
   end loop;
   if before_rows is distinct from (select jsonb_agg(to_jsonb(e) order by id) from public.enrollments e where student_id=learner) then
     raise exception 'Rejected RPC changed enrollments'; end if;
+  -- EGC I9: a Confirmed/Validated legacy row without programme or school year
+  -- cannot be assigned until the clean-up gives it one (C1b) or ends it (C2);
+  -- the refusal leaves it unchanged.
+  perform pg_temp.incompatible(format('select public.save_receptionist_enrollment(%L,%L,%L,%L,null)',learner,
+    '77000000-0000-0000-0000-000000000033',compatible,'Validated'));
+  perform pg_temp.incompatible(format('select public.save_receptionist_enrollment(%L,%L,%L,%L,null)',learner,
+    '77000000-0000-0000-0000-000000000034',compatible,'Validated'));
+  if before_rows is distinct from (select jsonb_agg(to_jsonb(e) order by id) from public.enrollments e where student_id=learner) then
+    raise exception 'Refused legacy assignment changed enrollments'; end if;
   -- Successful NULL-level calls resolve and persist known session/level values.
   foreach enrollment_id in array array[null::uuid,
     '77000000-0000-0000-0000-000000000031'::uuid,
     '77000000-0000-0000-0000-000000000032'::uuid,
-    '77000000-0000-0000-0000-000000000033'::uuid,
-    '77000000-0000-0000-0000-000000000034'::uuid] loop
-    desired := case when right(enrollment_id::text,2) in ('33','34') then 'Validated' else 'Trial' end;
-    result := public.save_receptionist_enrollment(learner,enrollment_id,compatible,desired,null);
+    '77000000-0000-0000-0000-000000000036'::uuid] loop
+    desired := case when right(enrollment_id::text,2) in ('33','34','36') then 'Validated' else 'Trial' end;
+    -- Each live row needs its own school year (EGC I3, I9); legacy rows receive it.
+    result := public.save_receptionist_enrollment(learner,enrollment_id,compatible,desired,null,current_date,null,null,
+      year||'/'||(year+1));
+    year := year + 1;
     if not exists(select 1 from public.enrollments where id=result and student_id=learner
       and session_type='Yearly' and level='Child 1' and group_id=compatible and status=desired) then
       raise exception 'Compatible normal/legacy assignment lost resolved fields'; end if;
   end loop;
-  result := public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000022',null,compatible,'Trial',null);
+  result := public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000022',null,compatible,'Trial',null,current_date,null,null,'2026/2027');
   if not exists(select 1 from public.enrollments where id=result and level='Child 1' and session_type='Yearly')
     or not exists(select 1 from public.students where id='77000000-0000-0000-0000-000000000022'
       and niveau_cefr='Child 1' and groupe_id=compatible and status='Trial') then
@@ -170,11 +202,11 @@ begin
     learner,'77000000-0000-0000-0000-000000000099','Trial'));
   -- Enrollment session/level take precedence over a different dossier session.
   result := public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000025',
-    '77000000-0000-0000-0000-000000000035',adults,'Validated',null);
+    '77000000-0000-0000-0000-000000000035',adults,'Validated',null,current_date,null,null,'2026/2027');
   if not exists(select 1 from public.enrollments where id=result and session_type='Adults' and level='Beginning 1') then
     raise exception 'Authoritative secondary enrollment ignored'; end if;
   -- Explicit compatible level changes remain part of the assignment workflow.
-  result := public.save_receptionist_enrollment(learner,'77000000-0000-0000-0000-000000000034',other_level,'Validated','Child 2');
+  result := public.save_receptionist_enrollment(learner,'77000000-0000-0000-0000-000000000036',other_level,'Validated','Child 2');
   if not exists(select 1 from public.enrollments where id=result and level='Child 2' and group_id=other_level) then
     raise exception 'Explicit compatible level change rejected'; end if;
 end $$;

@@ -5,10 +5,11 @@ import Link from 'next/link';
 import {
   AlertTriangle, ArrowUpRight, CalendarCheck2, GraduationCap, UsersRound,
 } from 'lucide-react';
-import { isPendingPreEnrollment, studentNeedsGroup } from '@/lib/enrollmentWorkflow.mjs';
+import { ACTIVE_STUDENT_STATUSES as ACTIVE, groupMemberIds, isPendingPreEnrollment, studentNeedsGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
 
-const ACTIVE_STUDENT_STATUSES = new Set(['Enrolled', 'Trial', 'Alumni']);
+// Active learners: Inscrit and Essai (EGC); members through the shared roster helper.
+const ACTIVE_STUDENT_STATUSES = new Set(ACTIVE);
 
 function Metric({ icon: Icon, label, value, note, tone = 'slate' }) {
   const tones = {
@@ -67,16 +68,7 @@ export default function AcademicOperationsReport({
 
   const data = useMemo(() => {
     const studentsById = new Map(students.map((student) => [student.id, student]));
-    const membersByGroup = new Map(groups.map((group) => [group.id, new Set()]));
-
-    students.forEach((student) => {
-      if (student.groupe_id && membersByGroup.has(student.groupe_id)) membersByGroup.get(student.groupe_id).add(student.id);
-    });
-    enrollments.forEach((enrollment) => {
-      if (['Validated', 'Trial'].includes(enrollment.status) && enrollment.group_id && membersByGroup.has(enrollment.group_id)) {
-        membersByGroup.get(enrollment.group_id).add(enrollment.student_id);
-      }
-    });
+    const membersByGroup = new Map(groups.map((group) => [group.id, groupMemberIds(students, enrollments, group.id)]));
 
     const sessionGroups = groups.filter((group) => !sessionFilter || (group.session_type || 'Yearly') === sessionFilter);
     const activeStudents = students.filter((student) => ACTIVE_STUDENT_STATUSES.has(student.status));

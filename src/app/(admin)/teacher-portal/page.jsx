@@ -15,6 +15,7 @@ import { markMyNotificationsRead } from '@/lib/notifications';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import { getBrowserClient } from '@/lib/supabase';
+import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -225,12 +226,12 @@ const KOLB_COLORS = {
   Converging: 'bg-green-50 text-green-700', Accommodating: 'bg-orange-50 text-orange-700',
 };
 
-function LearningTab({ groups, students }) {
+function LearningTab({ groups, students, enrollments = [] }) {
   const [assessments, setLearning] = useState([]);
   const [filterGroup, setFilterGroup] = useState('');
   useEffect(() => { entities.LearningAssessment.listAll('-created_date').then(setLearning); }, []);
 
-  const groupStudentIds = filterGroup ? students.filter(s => s.groupe_id === filterGroup).map(s => s.id) : null;
+  const groupStudentIds = filterGroup ? [...groupMemberIds(students, enrollments, filterGroup)] : null;
   const filtered = assessments.filter(a => !groupStudentIds || groupStudentIds.includes(a.student_id));
 
   return (
@@ -467,10 +468,8 @@ export default function TeacherPortal() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup).map(e => e.student_id);
-  const groupStudents = students
-    .filter(s => s.groupe_id === selectedGroup || enrolledStudentIds.includes(s.id))
-    .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+  const memberIds = groupMemberIds(students, enrollments, selectedGroup);
+  const groupStudents = students.filter(s => memberIds.has(s.id));
 
   useEffect(() => sessionManager.current.subscribe(setSessionState), []);
   useEffect(() => { sessionManager.current.select(selectedGroup, sessionDate); }, [selectedGroup, sessionDate]);
@@ -590,8 +589,7 @@ export default function TeacherPortal() {
       {tab === 'groups' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map(g => {
-            const enrolledIds = enrollments.filter(e => e.group_id === g.id).map(e => e.student_id);
-            const count = students.filter(s => s.groupe_id === g.id || enrolledIds.includes(s.id)).length;
+            const count = groupMemberIds(students, enrollments, g.id).size;
             return (
               <div key={g.id} className="bg-card border border-border rounded-xl p-5">
                 <div className="flex items-start justify-between mb-3">
@@ -671,7 +669,7 @@ export default function TeacherPortal() {
       )}
 
       {tab === 'learning' && (
-        <LearningTab groups={groups} students={students} />
+        <LearningTab groups={groups} students={students} enrollments={enrollments} />
       )}
 
       {tab === 'leave' && (

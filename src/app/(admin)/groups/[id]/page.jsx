@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
-import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
-import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
+import { currentSchoolYear, groupMemberIds, isMembership } from '@/lib/enrollmentWorkflow.mjs';
+import { egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
@@ -35,6 +36,8 @@ export default function GroupDetail() {
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [override, setOverride] = useState(null); // { student, reason }
+  const canOverride = role === 'admin' || role === 'director';
 
   useEffect(() => {
     if (!id) return;
@@ -57,44 +60,70 @@ export default function GroupDetail() {
     })().catch(() => setLoading(false));
   }, [id, reload]);
 
+  const groupSchoolYear = (group?.annee || '').replace('-', '/') || currentSchoolYear();
+  // Seats as the server counts them: members plus every non-rejected, non-ended
+  // enrollment that carries this group (pre-enrollments too), visible learners only.
+  const seats = new Set([...students.map(s => s.id), ...enrollments
+    .filter(e => e.group_id === id && !['Rejected', 'Ended'].includes(e.status) && allStudents.some(s => s.id === e.student_id))
+    .map(e => e.student_id)]).size;
+  const full = Boolean(group?.capacite_max) && seats >= group.capacite_max;
+  // A paid enrollment without level fits any group of its programme (the group sets the level).
   const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
-    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student)
-    && (role !== 'receptionist' || (e.level || student.niveau_cefr) === group.niveau));
-  const available = allStudents.filter(s => !students.some(member => member.id === s.id)
-    && (matchingPending(s).length > 0 || ((s.session_type || 'Yearly') === (group.session_type || 'Yearly')
-      && (role !== 'receptionist' ? (!s.niveau_cefr || s.niveau_cefr === group.niveau)
-        : s.niveau_cefr === group.niveau))));
+    && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));
+  // D1: one group per programme and school year; a member of another group of this
+  // programme changes group from their enrollment, not from this picker.
+  const inOtherGroupOfProgramme = (student) => enrollments.some(e => e.student_id === student.id && isMembership(e)
+    && e.group_id !== id && e.session_type === (group.session_type || 'Yearly') && (!e.school_year || e.school_year === groupSchoolYear));
+  const intendedMatch = (s) => (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
+    && (role === 'receptionist' ? s.niveau_cefr === group.niveau : (!s.niveau_cefr || s.niveau_cefr === group.niveau));
+  // N4: the label follows the learner's membership in another programme's group.
+  const memberOfOtherProgramme = (student) => enrollments.some(e => e.student_id === student.id && isMembership(e)
+    && e.session_type !== (group.session_type || 'Yearly'));
+  // A member of another programme's group is offered to management too (DAT-1).
+  const otherProgrammeMember = (s) => role !== 'receptionist' && s.groupe_id && s.groupe_id !== id && !intendedMatch(s);
+  const available = allStudents.filter(s => !students.some(member => member.id === s.id) && !inOtherGroupOfProgramme(s)
+    && (matchingPending(s).length > 0 || intendedMatch(s) || otherProgrammeMember(s)));
   const refreshMemberships = () => {
     queryClient.invalidateQueries({ queryKey: ['Student'] });
     queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
     setReload(value => value + 1);
   };
 
-  const addToGroup = async (s) => {
+  // Every placement creates or uses an enrollment (DAT-2): the reception keeps its
+  // command; director and admin use place_learner_in_group, with a capacity
+  // override reason when the group is full (D4-A).
+  const addToGroup = async (s, overrideReason = null) => {
+    const pending = matchingPending(s);
+    if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
+    if (full && !overrideReason) {
+      if (canOverride) setOverride({ student: s, reason: '' });
+      else toast.error('Ce groupe est complet.');
+      return;
+    }
     setBusyId(s.id);
     try {
-      const groupAssignment = {
-        groupe_id: id,
-        session_type: group.session_type || 'Yearly',
-        niveau_cefr: group.niveau,
-      };
-      const pending = matchingPending(s);
-      if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
-      if (role === 'receptionist') {
-        const selected = pending[0] || null;
-        const { error } = await getBrowserClient().rpc('assign_receptionist_student_group', {
+      const selected = pending[0] || null;
+      const { error } = role === 'receptionist'
+        ? await getBrowserClient().rpc('assign_receptionist_student_group', {
           p_student: s.id, p_enrollment: selected?.id || null, p_group: id,
           p_student_updated_at: s.updated_at, p_enrollment_updated_at: selected?.updated_at || null,
-        });
-        if (error) throw error;
-      } else if (pending.length === 1) await entities.Enrollment.update(pending[0].id, { group_id: id, level: group.niveau });
-      else await entities.Student.update(s.id, groupAssignment);
+        })
+        : await placeLearnerInGroup(getBrowserClient(), { student: s, group: id, enrollment: selected,
+          schoolYear: selected ? null : groupSchoolYear, overrideReason });
+      if (error) throw error;
+      setOverride(null);
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch (error) {
+      // The server counts every seat (pending enrollments with this group too):
+      // its capacity answer opens the override dialog for direction (S2).
+      if (egcReason(error?.hint) === 'capacity' && canOverride && !overrideReason) {
+        setOverride({ student: s, reason: '' });
+        return;
+      }
+      toast.error(membershipErrorMessage(error));
       // Changed in the meantime (ADR-009): reload the members for review.
-      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); refreshMemberships(); }
-      else toast.error(error.message);
+      if (isRecordConflict(error)) refreshMemberships();
     } finally {
       setBusyId(null);
     }
@@ -104,16 +133,15 @@ export default function GroupDetail() {
     if (!confirm(`Retirer ${s.full_name} de ce groupe ?`)) return;
     setBusyId(s.id);
     try {
-      const matching = enrollments.filter(e => e.student_id === s.id && e.group_id === id && ['Validated','Trial'].includes(e.status));
-      if (role === 'receptionist' && matching.length > 1) { toast.error('Sélectionnez une inscription depuis la fiche apprenant.'); return; }
+      const matching = enrollments.filter(e => e.student_id === s.id && e.group_id === id && isMembership(e));
+      if (matching.length > 1) { toast.error('Sélectionnez une inscription depuis la fiche apprenant.'); return; }
       const { error } = role === 'receptionist'
         ? await getBrowserClient().rpc('assign_receptionist_student_group', {
           p_student: s.id, p_enrollment: matching[0]?.id || null, p_group: null,
           p_student_updated_at: s.updated_at, p_enrollment_updated_at: matching[0]?.updated_at || null,
         })
-        : await getBrowserClient().rpc('remove_student_group', { p_student: s.id, p_group: id });
-      if (error && isRecordConflict(error)) { toast.error(recordConflictMessage()); refreshMemberships(); return; }
-      if (error) { toast.error(error.message); return; }
+        : await removeLearnerFromGroup(getBrowserClient(), { student: s, group: id, enrollment: matching[0] || null });
+      if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) refreshMemberships(); return; }
       refreshMemberships();
       toast.success(`${s.full_name} retiré(e) du groupe`);
     } catch {
@@ -135,8 +163,6 @@ export default function GroupDetail() {
     ['Salle', group.salle || '—'],
     ['Terme', `${group.terme || '—'}${group.annee ? ` · ${group.annee}` : ''}`],
   ];
-  const full = group.capacite_max && students.length >= group.capacite_max;
-
   return (
     <div className="p-4 lg:p-8">
       <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/groups'))} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -155,7 +181,9 @@ export default function GroupDetail() {
         {canManage && (
           <button
             onClick={() => setPickerOpen(true)}
-            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90"
+            disabled={full && !canOverride}
+            title={full ? (canOverride ? 'Groupe complet : un dépassement demande un motif' : 'Groupe complet') : undefined}
+            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <UserPlus size={15} /> Ajouter des apprenants
           </button>
@@ -251,12 +279,12 @@ export default function GroupDetail() {
                       key={s.id}
                       value={`${s.full_name} ${s.telephone || ''}`}
                       onSelect={() => addToGroup(s)}
-                      disabled={busyId === s.id}
+                      disabled={busyId === s.id || (full && !canOverride)}
                     >
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
                       <span className="flex-1 truncate">{s.full_name}</span>
                       <span className="text-xs text-muted-foreground ml-2">
-                        {s.groupe_id ? 'change de groupe' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
+                        {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
                       </span>
                     </CommandItem>
                   ))}
@@ -269,6 +297,29 @@ export default function GroupDetail() {
                 <Check size={14} /> Terminé
               </button>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {override && (
+        <Dialog open onOpenChange={(o) => !o && setOverride(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Groupe complet</DialogTitle>
+            </DialogHeader>
+            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); addToGroup(override.student, override.reason.trim()); }}>
+              <p className="text-sm text-muted-foreground">
+                « {group.name} » a atteint sa capacité ({group.capacite_max}). Ajouter {override.student.full_name} quand même ? Le motif est enregistré dans le journal.
+              </p>
+              <label htmlFor="capacity-override-reason" className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif du dépassement *</label>
+              <textarea id="capacity-override-reason" required maxLength={200} value={override.reason}
+                onChange={(event) => setOverride(current => ({ ...current, reason: event.target.value }))}
+                className="h-20 w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setOverride(null)} className="rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">Annuler</button>
+                <button type="submit" disabled={!override.reason.trim() || busyId === override.student.id} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Ajouter quand même</button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
       )}

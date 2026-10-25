@@ -14,19 +14,24 @@ insert into public.teachers(id,full_name,email) values
 insert into public.groups(id,name,niveau,teacher_id) values
   ('00000000-0000-4000-8000-00000000c001','Audit Group','A1','00000000-0000-4000-8000-00000000b001'),
   ('00000000-0000-4000-8000-00000000c002','Unrelated Group','A1',null);
-insert into public.students(id,full_name,groupe_id,email,parent_email,status) values
-  ('00000000-0000-4000-8000-00000000d001','Synthetic Child','00000000-0000-4000-8000-00000000c001','audit-child@example.invalid','audit-parent@example.invalid','Enrolled'),
-  ('00000000-0000-4000-8000-00000000d002','Unrelated Child','00000000-0000-4000-8000-00000000c002','unrelated@example.invalid',null,'Enrolled');
+-- Group membership derives from enrollments (EGC): each child is placed through a
+-- Validated enrollment, which sets the file group and the Enrolled status.
+insert into public.students(id,full_name,email,parent_email,status) values
+  ('00000000-0000-4000-8000-00000000d001','Synthetic Child','audit-child@example.invalid','audit-parent@example.invalid','Prospect'),
+  ('00000000-0000-4000-8000-00000000d002','Unrelated Child','unrelated@example.invalid',null,'Prospect');
+insert into public.enrollments(student_id,group_id,status,session_type,school_year,level) values
+  ('00000000-0000-4000-8000-00000000d001','00000000-0000-4000-8000-00000000c001','Validated','Yearly','2026/2027','A1'),
+  ('00000000-0000-4000-8000-00000000d002','00000000-0000-4000-8000-00000000c002','Validated','Yearly','2026/2027','A1');
 insert into public.students(id,full_name,email,status) values
-  ('00000000-0000-4000-8000-00000000d003','Trial Child','trial@example.invalid','Prospect');
-insert into public.enrollments(student_id,group_id,status) values
-  ('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001','Trial');
--- Model a pre-existing enrollment-only record for the legacy RLS test. Normal
--- group removal now synchronizes enrollments; suspend only that new trigger
--- while constructing this synthetic historical state, then restore it.
-alter table public.students disable trigger student_enrollment_assignment_sync;
+  ('00000000-0000-4000-8000-00000000d003','Trial Child','trial@example.invalid','Prospect'),
+  ('00000000-0000-4000-8000-00000000d004','Status Child','status@example.invalid','Prospect');
+insert into public.enrollments(student_id,group_id,status,session_type,school_year) values
+  ('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001','Trial','Yearly','2026/2027');
+-- Model a pre-existing enrollment-only record for the legacy RLS test: the file
+-- copy of the group is cleared with triggers bypassed (synthetic historical state).
+set local session_replication_role = replica;
 update public.students set groupe_id=null where id='00000000-0000-4000-8000-00000000d003';
-alter table public.students enable trigger student_enrollment_assignment_sync;
+set local session_replication_role = origin;
 update public.profiles set linked_student_id='00000000-0000-4000-8000-00000000d001'
 where id='00000000-0000-4000-8000-00000000a003';
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
@@ -95,18 +100,19 @@ do $$ begin
     raise exception 'Attendance retry duplicated row'; end if;
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a001',true);
-update public.students set status='Prospect' where id='00000000-0000-4000-8000-00000000d001';
-insert into public.enrollments(id,student_id,status,date_inscription)
-values('00000000-0000-4000-8000-00000000f100','00000000-0000-4000-8000-00000000d001','Submitted',current_date);
+-- Status follows enrollments on a learner without another enrollment (EGC I7); a
+-- trial or confirmed row needs its programme and school year (I9).
+insert into public.enrollments(id,student_id,status,date_inscription,session_type,school_year)
+values('00000000-0000-4000-8000-00000000f100','00000000-0000-4000-8000-00000000d004','Submitted',current_date,'Yearly','2026/2027');
 do $$ begin
-  if (select status from public.students where id='00000000-0000-4000-8000-00000000d001') <> 'Prospect' then
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Prospect' then
     raise exception 'Submitted enrollment status drift'; end if;
   begin
     update public.enrollments set status='Validated'
       where id='00000000-0000-4000-8000-00000000f100';
     raise exception 'Validation without group succeeded';
   exception when check_violation then null; end;
-  if (select status from public.students where id='00000000-0000-4000-8000-00000000d001') <> 'Prospect' then
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Prospect' then
     raise exception 'Failed enrollment update changed student'; end if;
   begin
     update public.enrollments set student_id='00000000-0000-4000-8000-00000000d002'
@@ -117,17 +123,17 @@ end $$;
 update public.enrollments set status='Trial',group_id='00000000-0000-4000-8000-00000000c001'
 where id='00000000-0000-4000-8000-00000000f100';
 do $$ begin
-  if (select status from public.students where id='00000000-0000-4000-8000-00000000d001') <> 'Trial' then
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Trial' then
     raise exception 'Trial enrollment status drift'; end if;
 end $$;
 update public.enrollments set status='Validated' where id='00000000-0000-4000-8000-00000000f100';
 do $$ begin
-  if (select status from public.students where id='00000000-0000-4000-8000-00000000d001') <> 'Enrolled' then
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Enrolled' then
     raise exception 'Validated enrollment status drift'; end if;
 end $$;
 update public.enrollments set status='Rejected' where id='00000000-0000-4000-8000-00000000f100';
 do $$ begin
-  if (select status from public.students where id='00000000-0000-4000-8000-00000000d001') <> 'Inactive' then
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Inactive' then
     raise exception 'Rejected enrollment status drift'; end if;
 end $$;
 insert into public.dismissal_logs(student_id,adult_id,adult_name)

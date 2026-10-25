@@ -91,8 +91,11 @@ try {
   const archived=await create('teachers',{full_name:run+' Archived',email:run+'-archived@example.invalid',...hr,deleted_at:new Date().toISOString()});
   const g1=await create('groups',{name:run+' Group One',niveau:'A1',teacher_id:t1.id,jours:'Lundi',horaire:'10:00–11:00',annee:'2026-2027'});
   const g2=await create('groups',{name:run+' Group Two',niveau:'A1',teacher_id:t2.id,jours:'Mardi',horaire:'10:00–11:00'});
-  const s1=await create('students',{full_name:run+' Learner',email:student.email,parent_email:parent.email,groupe_id:g1.id,status:'Enrolled',niveau_cefr:'A1'});
-  const s2=await create('students',{full_name:run+' Other Learner',email:run+'-other@example.invalid',parent_email:run+'-other-parent@example.invalid',groupe_id:g2.id,status:'Enrolled'});
+  // Group membership derives from a Validated enrollment (EGC); the file group follows it.
+  const s1=await create('students',{full_name:run+' Learner',email:student.email,parent_email:parent.email,niveau_cefr:'A1'});
+  const s2=await create('students',{full_name:run+' Other Learner',email:run+'-other@example.invalid',parent_email:run+'-other-parent@example.invalid'});
+  await create('enrollments',{student_id:s1.id,group_id:g1.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
+  await create('enrollments',{student_id:s2.id,group_id:g2.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   sql(`update public.profiles set full_name='Synthetic Admin' where id='${admin.id}'`);
   const pickupAdult=await create('authorized_adults',{student_id:s1.id,full_name:run+' Adult',telephone:'0000000000',relation:'Parent'});
   const pickups=await Promise.all(Array.from({length:4},()=>request(admin,'/rest/v1/dismissal_logs','POST',{
@@ -271,7 +274,9 @@ try {
   // guard disable restores the original director count; no bypass is deployed.
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
   if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs disable trigger enforce_dismissal_integrity;';
-  for(const table of ['messages','attendance','dismissal_logs','authorized_adults','payroll','students','groups','teachers']) if(records[table]?.length)
+  // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
+  cleanup+='set local eh.enrollment_command = on;';
+  for(const table of ['messages','attendance','dismissal_logs','authorized_adults','payroll','enrollments','students','groups','teachers']) if(records[table]?.length)
     cleanup+=`delete from public.${table} where id in (${records[table].map(id=>"'"+id+"'::uuid").join(',')});`;
   if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs enable trigger enforce_dismissal_integrity;';
   if(userIds.length) {

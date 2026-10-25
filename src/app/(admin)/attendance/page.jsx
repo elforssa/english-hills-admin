@@ -8,6 +8,7 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { getBrowserClient } from '@/lib/supabase';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import PersonLink from '@/components/PersonLink';
+import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -66,9 +67,9 @@ export default function Attendance() {
   const saving = selectionMatches && sessionState.saving;
   const history = selectionMatches ? sessionState.history : [];
 
-  const enrolledStudentIds = enrollments.filter(e => e.group_id === selectedGroup && ['Validated','Trial'].includes(e.status)).map(e => e.student_id);
-  const groupStudents = students.filter(s => s.groupe_id === selectedGroup || enrolledStudentIds.includes(s.id))
-    .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i);
+  // One roster rule for the page, the groups list and the database (EGC).
+  const memberIds = groupMemberIds(students, enrollments, selectedGroup);
+  const groupStudents = students.filter(s => memberIds.has(s.id));
 
   const setStatus = (studentId, status) => {
     sessionManager.current.setStatus(selectedGroup, sessionDate, studentId, status);
