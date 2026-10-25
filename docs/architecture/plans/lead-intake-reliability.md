@@ -1,6 +1,6 @@
 # Lead intake reliability — no silent lead loss, no-code form launch, honest ratios, prospect data retention
 
-Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, D1–D8 as recommended, plan head `aa68632`; see the [approval record](#approval-record)), with the independent review's corrections applied inside the approved architecture ([review corrections](#review-corrections-2026-10-24-after-the-approval)). Each migration, data change, scheduled-job activation, Production configuration step (including R-LB) and deployment still needs its own explicit owner approval. Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
+Revision **LIR-r1**, 2026-10-24. **Status: APPROVED FOR IMPLEMENTATION** (owner, 2026-10-24, D1–D8 as recommended, plan head `aa68632`; see the [approval record](#approval-record)), with the independent review's corrections applied inside the approved architecture ([review corrections](#review-corrections-2026-10-24-after-the-approval)). Each migration, data change, scheduled-job activation, Production configuration step (including R-LB) and deployment still needs its own explicit owner approval. **Update 2026-10-25: R-LB was run in Production with its own approval ([release record](#release-record--r-lb-2026-10-25)); look-back now 1440 minutes.** Nothing here is implemented, merged, deployed or run. Owner: Maroine. Baseline `origin/main` `ba009b4` (PR #149 merge), fetched 2026-10-24. Architecture branch `docs/plan-b-lead-intake-reliability`. Source: the read-only platform audit of 2026-10-24, findings CRM-1 (High), CRM-2 (High after verification), REL-5, CRM-3, CRM-5 and CRM-6. Where the audit's verifier corrected a finding, the corrected version is used.
 
 **Risk tier.** Phase 1 is **Tier 3** (it changes the intake scheduler's response, a scheduler/cron surface, and adds director controls over the intake configuration; PR 1b adds a migration and a scheduled check). Phase 2 items are tiered one by one in [Phasing](#phasing-and-tiers); every Production step (migration, configuration, scheduled job, data change) is Tier 3 whatever the tier of its code change. The [separate Production operation](#production-operation-r-lb-widen-the-meta-look-back-to-24-hours) is Tier 3.
 
@@ -204,6 +204,22 @@ select status_code, count(*) from net._http_response
 **Rollback.** The same block with 60 instead of 1440 (in the payload and in the check), after rerunning step 0. Nothing else needs undoing: leads found because of the wider window are genuine and are deduplicated.
 
 **Expected effect.** Each pass reads up to 2 pages instead of usually 1; no new leads are expected, because the counts show none missing. Record the result in CURRENT_STATE with the step 0 and step 2 values (no identifiers).
+
+## Release record — R-LB (2026-10-25)
+
+Owner approval (Maroine, 2026-10-25 10:31 Asia/Shanghai, that is 02:31 UTC): "approve R-LB", covering only this operation, steps 0–3 exactly as written above (decision D3). It approves no PR 1b work, no webhook, attribution or other connection change. Access path as for migration 119: Supabase CLI `supabase db query --linked` (Management API, as `postgres`) from the release session; every read began with `set transaction read only`. No identifier, page/account id, token reference or lead data is recorded: counts, versions, booleans and md5s only (the two `started_at` values are recorded as the first 12 hex digits of their md5).
+
+| Step | Time (UTC) | Result |
+| --- | --- | --- |
+| Step 0 (the plan's query verbatim) | 02:33:34 | `directors` 1; one row; `version` **7**; `webhook_enabled` false; `recon_enabled` true; `lookback` **60**; `recon_started_at` md5 `1dc2856060f1…`; `attr_enabled` true; `attr_started_at` md5 `e9149b1bd561…`; `identity_md5` `90daae559f11d07851922d665e96bc17`; `insights_md5` `3c5e8734bce3205a9c93e8c3643f6ec3`. Every gate condition met. |
+| Step 3 baseline (counts) | 02:34:14 | 1 state row, 0 errors, last pass 4.1 min old; jobs: 44 `done`, nothing else; `net._http_response` last hour: 14 × 200 |
+| Dry run (step 1's block plus a final `raise exception 'RLB_DRYRUN_OK'`) | 02:34:22–02:34:26 | Only `RLB_DRYRUN_OK` raised; step 0 re-run byte-identical (version 7, look-back 60) |
+| Step 1 (the plan's block verbatim, no sentinel) | 02:34:42–02:34:46 | Exit 0, committed on the first attempt; no retry needed |
+| Step 2 (step 0 re-run) | 02:34:51 | `version` **8** (7 + 1); `lookback` **1440**; `recon_started_at`, `attr_enabled`, `attr_started_at`, `webhook_enabled`, `identity_md5`, `insights_md5` and `directors` identical to step 0; no other difference. No rollback. |
+| Step 3 (the plan's three count queries) | 02:58:02 | 1 state row, **0 errors**, last pass **13.2 min** old (a pass ran after the change); jobs: **44 `done`**, no `blocked`/`dead`; `net._http_response` last hour: **14 × 200**, no 424 and no other non-2xx; step 0 still version 8, look-back 1440 |
+| GitHub `crm-intake-scheduler` | — | **pending: first run after 02:34Z not yet observed (GitHub schedules this workflow roughly every 2–2.5 h).** The last run before the change, at 01:32:10, succeeded. |
+
+Script SHA-256: step 0 `e622dc1d8389215bbe18aacd42ec122d1ff9e5a4ffc943e98d7e5920abfee0c9` (with the read-only prefix), dry run `650cf30da42a31117f6eea630eafaa653b166a98ae45c3f42088121402046dd6`, step 1 `c9bf2461dd9bf0727d6e7ab7c81b5a2cf8588a2b9fae34dc0d18546a34e926a3`. Effect as expected: no job beyond the 44 already done, so no lead was missing within the widened window. Rollback (not needed): the same block with 60.
 
 # Design — Phase 1
 
