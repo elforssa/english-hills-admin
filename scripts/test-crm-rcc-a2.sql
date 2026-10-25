@@ -209,7 +209,7 @@ end $$;
 select 'PASS linked_student projection, linked-learner authority reasons and linked path without lead identity data';
 
 -- Existing enrollments: selection, linkage elsewhere, staleness and group integrity.
-do $$ declare s uuid:=pg_temp.student('A2 enrolled'); e1 uuid; e2 uuid; rej uuid; other uuid; a uuid:=pg_temp.lead(); b uuid:=pg_temp.lead(); r jsonb; g uuid; x uuid; nul uuid; before jsonb; begin
+do $$ declare s uuid:=pg_temp.student('A2 enrolled'); s2 uuid:=pg_temp.student('A2 enrolled second'); e1 uuid; e2 uuid; rej uuid; other uuid; a uuid:=pg_temp.lead(); b uuid:=pg_temp.lead(); r jsonb; g uuid; x uuid; nul uuid; before jsonb; begin
  e1:=pg_temp.enrollment(s,'Submitted');
  r:=pg_temp.start(pg_temp.pick(a,s,e1));
  perform pg_temp.ok(r->'enrollment'->>'id'=e1::text and r->'lead'->>'status'='QUALIFIED','unlinked existing enrollment linked');
@@ -222,10 +222,12 @@ do $$ declare s uuid:=pg_temp.student('A2 enrolled'); e1 uuid; e2 uuid; rej uuid
  perform pg_temp.rejects(pg_temp.pick(b,s,rej),'22023','Enrollment unavailable or incompatible','enrollment_incompatible');
  perform pg_temp.rejects(pg_temp.pick(b,s,other),'22023','Enrollment unavailable or incompatible','enrollment_incompatible');
  perform pg_temp.rejects(pg_temp.pick(b,s,gen_random_uuid()),'22023','Enrollment unavailable or incompatible','enrollment_incompatible');
- e2:=pg_temp.enrollment(s,'Under Review');
- perform pg_temp.rejects(pg_temp.existing_data(b,s),'22023','Existing enrollment requires explicit selection','existing_enrollment_requires_selection');
- perform pg_temp.rejects(pg_temp.pick(b,s,e2)||'{"expected_enrollment_updated_at":"2000-01-01T00:00:00Z"}','PT409','Stale enrollment; refresh and retry','enrollment_changed');
- perform pg_temp.rejects(pg_temp.pick(b,s,e2)||'{"expected_enrollment_updated_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
+ -- One live enrollment per learner, programme and year (EGC I3): the selectable
+ -- pre-enrollment belongs to a second learner.
+ e2:=pg_temp.enrollment(s2,'Under Review');
+ perform pg_temp.rejects(pg_temp.existing_data(b,s2),'22023','Existing enrollment requires explicit selection','existing_enrollment_requires_selection');
+ perform pg_temp.rejects(pg_temp.pick(b,s2,e2)||'{"expected_enrollment_updated_at":"2000-01-01T00:00:00Z"}','PT409','Stale enrollment; refresh and retry','enrollment_changed');
+ perform pg_temp.rejects(pg_temp.pick(b,s2,e2)||'{"expected_enrollment_updated_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
  -- An enrollment whose own group no longer matches it (session NULL bypasses the row trigger).
  insert into public.groups(name,session_type,niveau) values('A2 adults group','Adults','Beginning 1') returning id into g;
  x:=pg_temp.student('A2 mismatched');insert into public.enrollments(student_id,session_type,school_year,status,group_id) values(x,null,'2026/2027','Submitted',g) returning id into e1;
@@ -233,7 +235,7 @@ do $$ declare s uuid:=pg_temp.student('A2 enrolled'); e1 uuid; e2 uuid; rej uuid
  x:=pg_temp.student('A2 statusless');nul:=pg_temp.enrollment(x,null);
  perform pg_temp.rejects(pg_temp.existing_data(pg_temp.lead(),x),'22023','Existing enrollment status requires review','existing_enrollment_needs_review');
  perform pg_temp.ok((pg_temp.counts()->>0)::int=(before->>0)::int+3 and (select enrollment_id is null from public.crm_leads where id=b),'only the three fixture students exist; rejections linked nothing');
- r:=pg_temp.start(pg_temp.pick(b,s,e2));
+ r:=pg_temp.start(pg_temp.pick(b,s2,e2));
  perform pg_temp.ok(r->'enrollment'->>'status'='Under Review' and r->'lead'->>'status'='QUALIFIED','Under Review enrollment linked without conversion');
 end $$;
 select 'PASS existing enrollment selection, linked elsewhere, incompatible, stale and group integrity reasons';

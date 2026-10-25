@@ -205,12 +205,14 @@ insert into public.online_lessons(id, group_id, starts_at, ends_at, teacher_id, 
   (pg_temp.id(513), pg_temp.id(308), now() + interval '10 minutes', now() + interval '70 minutes', pg_temp.id(101), 'scheduled', null, null, false),
   (pg_temp.id(514), pg_temp.id(309), now() + interval '10 minutes', now() + interval '70 minutes', pg_temp.id(101), 'scheduled', null, null, false),
   (pg_temp.id(515), pg_temp.id(305), now() + interval '2 days', now() + interval '2 days 1 hour', pg_temp.id(101), 'scheduled', null, null, false);
+-- One live enrollment per programme and school year (EGC I3, D8 = A): the same
+-- learner's other online courses use other school years; seats ignore the year.
 insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
-  (pg_temp.id(201), pg_temp.id(312), 'Validated', 'Online', '2026/2027', 'B1'),
-  (pg_temp.id(202), pg_temp.id(312), 'Validated', 'Online', '2026/2027', 'B1'),
-  (pg_temp.id(204), pg_temp.id(312), 'Trial', 'Online', '2026/2027', 'B1'),
-  (pg_temp.id(201), pg_temp.id(308), 'Validated', 'Online', '2026/2027', 'B1'),
-  (pg_temp.id(201), pg_temp.id(309), 'Validated', 'Online', '2026/2027', 'B1');
+  (pg_temp.id(201), pg_temp.id(312), 'Validated', 'Online', '2025/2026', 'B1'),
+  (pg_temp.id(202), pg_temp.id(312), 'Validated', 'Online', '2025/2026', 'B1'),
+  (pg_temp.id(204), pg_temp.id(312), 'Trial', 'Online', '2025/2026', 'B1'),
+  (pg_temp.id(201), pg_temp.id(308), 'Validated', 'Online', '2027/2028', 'B1'),
+  (pg_temp.id(201), pg_temp.id(309), 'Validated', 'Online', '2028/2029', 'B1');
 select pg_temp.act(1);
 select public.online_close_course(pg_temp.id(309), pg_temp.course_version(pg_temp.id(309)));
 select pg_temp.owner();
@@ -249,6 +251,11 @@ select pg_temp.ok(pg_temp.join_reason(8, 505) = 'online.window_closed', 'learner
 select pg_temp.ok(pg_temp.join_reason(8, 506) = 'online.lesson_cancelled', 'cancelled lesson');
 select pg_temp.ok(pg_temp.join_reason(8, 507) = 'ok', 'a completed lesson stays joinable inside its window');
 select pg_temp.ok(pg_temp.join_reason(8, 513) = 'online.course_inactive', 'draft course');
+-- D8 = A (EGC): closing the course ended the learner's seat; seated again after
+-- the close, the closed state still refuses the join.
+select pg_temp.ok(pg_temp.join_reason(8, 514) = 'online.not_eligible', 'closing the course ended its enrollments');
+insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(201), pg_temp.id(309), 'Validated', 'Online', '2028/2029', 'B1');
 select pg_temp.ok(pg_temp.join_reason(8, 514) = 'online.course_inactive', 'closed course');
 select pg_temp.ok(pg_temp.join_reason(8, 511) = 'online.not_eligible', 'not seated in that course');
 select pg_temp.ok(pg_temp.join_reason(8, 501, 202) = 'online.not_eligible', 'another learner is not visible to this student');
@@ -493,6 +500,14 @@ select pg_temp.fails(format('select public.online_resolve_room(%L)', pg_temp.id(
 select pg_temp.owner();
 select pg_temp.ok(not exists (select 1 from public.online_join_tokens t join public.online_lessons l on l.id = t.lesson_id
   where l.group_id = pg_temp.id(301) and t.revoked_at is null and t.expires_at > now()), 'course close revokes open passes');
+-- D8 = A (EGC): the close ended the course's enrollments (learners left with
+-- nothing active become Alumni); seated again, the closed state still refuses.
+select pg_temp.ok(not exists (select 1 from public.enrollments where group_id = pg_temp.id(301))
+  and (select count(*) from public.enrollments where ended_group_id = pg_temp.id(301) and status = 'Ended'
+    and end_reason = 'Cours en ligne clôturé') = 3, 'course close ends its enrollments');
+select pg_temp.ok(pg_temp.join_reason(8, 507) = 'online.not_eligible', 'no seat after close');
+insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(201), pg_temp.id(301), 'Validated', 'Online', '2026/2027', 'B1');
 select pg_temp.ok(pg_temp.join_reason(8, 507) = 'online.course_inactive', 'no re-issue after close');
 
 -- ---------------------------------------------------------------------------
@@ -596,8 +611,12 @@ insert into public.enrollments(student_id, group_id, status, session_type, schoo
   values (pg_temp.id(217), pg_temp.id(305), 'Rejected', 'Online', '2026/2027', 'A2');
 select pg_temp.fails(format('update public.enrollments set group_id = %L where id = %L', pg_temp.id(305), pg_temp.id(603)), '23514', 'online.capacity');
 select pg_temp.fails(format($$update public.enrollments set status = 'Submitted' where id = %L$$, pg_temp.id(604)), '23514', 'online.capacity');
--- Student-form placement: the 074 sync write of enrollments.group_id is refused; the row is unchanged.
-select pg_temp.fails(format('update public.students set groupe_id = %L where id = %L', pg_temp.id(305), pg_temp.id(216)), '23514', 'online.capacity');
+-- Student-form placement: the 074 sync is gone (EGC); a file-group write is refused
+-- before any enrollment is touched, and the placement command meets the online capacity.
+select pg_temp.fails(format('update public.students set groupe_id = %L where id = %L', pg_temp.id(305), pg_temp.id(216)), '23514', 'egc.group_from_enrollment');
+select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, %L, null, %L)', pg_temp.id(216), pg_temp.id(305),
+  (select updated_at from public.students where id = pg_temp.id(216)), pg_temp.id(605),
+  (select updated_at from public.enrollments where id = pg_temp.id(605))), '23514', 'online.capacity');
 select pg_temp.owner();
 select pg_temp.ok((select groupe_id from public.students where id = pg_temp.id(216)) is null
   and (select group_id from public.enrollments where id = pg_temp.id(605)) is null, 'student-form placement left everything unchanged');

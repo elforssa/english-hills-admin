@@ -13,11 +13,13 @@ import { getLevelsForSession } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
 import { useAuth } from '@/context/AuthContext';
 import ReceptionistAssessments from '@/components/students/ReceptionistAssessments';
+import { finalGrade, parseGrade } from '@/lib/assessmentGrades.mjs';
+import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
-function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
+function AssessmentModal({ assessment, students, groups, enrollments = [], onSave, onClose }) {
   const [form, setForm] = useState(assessment || {
     student_id: '', group_id: '', terme: 'Sept–Déc', note_oral: '', note_ecrit: '', note_devoirs: '',
     poids_oral: 40, poids_ecrit: 30, poids_devoirs: 30, niveau_actuel: 'A1', niveau_cible: 'A2', commentaire: '',
@@ -27,12 +29,11 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   const selectedGroup = groups.find(group => group.id === form.group_id);
   const availableLevels = getLevelsForSession(selectedGroup?.session_type || 'Yearly', form.niveau_actuel);
 
-  const noteFinale = () => {
-    const o = parseFloat(form.note_oral) || 0;
-    const e = parseFloat(form.note_ecrit) || 0;
-    const d = parseFloat(form.note_devoirs) || 0;
-    return ((o * form.poids_oral + e * form.poids_ecrit + d * form.poids_devoirs) / 100).toFixed(1);
-  };
+  // ACA-9: a 0 is kept as 0; only an empty field is no grade.
+  const noteFinale = () => finalGrade(form).toFixed(1);
+  // The chosen group's members (plus the learner already on this assessment).
+  const members = form.group_id ? groupMemberIds(students, enrollments, form.group_id) : null;
+  const learnerOptions = members ? students.filter(s => members.has(s.id) || s.id === form.student_id) : students;
 
   const handleSubmit = async (ev) => {
     ev.preventDefault();
@@ -41,10 +42,10 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
       ...form,
       student_id: form.student_id || null,
       group_id: form.group_id || null,
-      note_oral: parseFloat(form.note_oral) || null,
-      note_ecrit: parseFloat(form.note_ecrit) || null,
-      note_devoirs: parseFloat(form.note_devoirs) || null,
-      note_finale: parseFloat(noteFinale()),
+      note_oral: parseGrade(form.note_oral),
+      note_ecrit: parseGrade(form.note_ecrit),
+      note_devoirs: parseGrade(form.note_devoirs),
+      note_finale: finalGrade(form),
     };
     try {
       if (form.id) {
@@ -75,7 +76,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
               <label className={labelClass}>Apprenant *</label>
               <select className={inputClass} value={form.student_id || ''} onChange={e => set('student_id', e.target.value)} required>
                 <option value="">— Choisir —</option>
-                {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                {learnerOptions.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
             </div>
             <div>
@@ -102,15 +103,15 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
             </div>
             <div>
               <label className={labelClass}>Note oral ({form.poids_oral}%)</label>
-              <input type="number" min="0" max="20" className={inputClass} value={form.note_oral || ''} onChange={e => set('note_oral', e.target.value)} />
+              <input type="number" min="0" max="20" className={inputClass} value={form.note_oral ?? ''} onChange={e => set('note_oral', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>Note écrit ({form.poids_ecrit}%)</label>
-              <input type="number" min="0" max="20" className={inputClass} value={form.note_ecrit || ''} onChange={e => set('note_ecrit', e.target.value)} />
+              <input type="number" min="0" max="20" className={inputClass} value={form.note_ecrit ?? ''} onChange={e => set('note_ecrit', e.target.value)} />
             </div>
             <div>
               <label className={labelClass}>Devoirs ({form.poids_devoirs}%)</label>
-              <input type="number" min="0" max="20" className={inputClass} value={form.note_devoirs || ''} onChange={e => set('note_devoirs', e.target.value)} />
+              <input type="number" min="0" max="20" className={inputClass} value={form.note_devoirs ?? ''} onChange={e => set('note_devoirs', e.target.value)} />
             </div>
             <div className="flex items-end pb-1">
               <div className="w-full px-4 py-2 rounded-md text-center font-bold text-lg bg-primary/10 text-primary">
@@ -141,6 +142,7 @@ function Assessments() {
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [printing, setPrinting] = useState(null);
@@ -151,8 +153,9 @@ function Assessments() {
     entities.Assessment.listAll('-created_date'),
     entities.Student.listAll('full_name'),
     entities.Group.listAll('name'),
+    entities.Enrollment.filterAll({ status: ['Validated', 'Trial'] }, '-created_at'),
   ])
-    .then(([a, s, g]) => { setAssessments(a); setStudents(s); setGroups(g); })
+    .then(([a, s, g, e]) => { setAssessments(a); setStudents(s); setGroups(g); setEnrollments(e); })
     .catch((err) => {
       // eslint-disable-next-line no-console
       console.error('[assessments] load failed:', err);
@@ -283,7 +286,7 @@ function Assessments() {
           </>
         )}
       </div>
-      {modal !== null && <AssessmentModal assessment={modal.id ? modal : null} students={students} groups={groups} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <AssessmentModal assessment={modal.id ? modal : null} students={students} groups={groups} enrollments={enrollments} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
       {printing && <ReportCardPrint student={students.find(s => s.id === printing.student_id)} assessment={printing} groupName={groupName(printing.group_id)} onClose={() => setPrinting(null)} />}
     </div>
   );

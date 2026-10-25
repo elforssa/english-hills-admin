@@ -6,13 +6,15 @@ values ('73000000-0000-0000-0000-000000000001','placement-staff@example.test','a
 update public.profiles set role='director' where id='73000000-0000-0000-0000-000000000001';
 select set_config('request.jwt.claim.sub','73000000-0000-0000-0000-000000000001',true);
 set local role authenticated;
+-- D3-A (EGC): a learner is Enrolled through a confirmed enrollment, so each of the
+-- 25 enrolled learners holds a paid Yearly enrollment that awaits a group.
 insert into public.students(full_name,status,session_type)
-select 'Placement regression ' || i,'Enrolled','Yearly' from generate_series(1,25) i;
+select 'Placement regression ' || i,'Prospect','Yearly' from generate_series(1,25) i;
 insert into public.students(full_name,status) values ('Placement regression prospect','Prospect');
 insert into public.groups(id,name,session_type,niveau)
 values ('73000000-0000-0000-0000-000000000002','Placement regression group','Yearly','Child 1');
 insert into public.enrollments(student_id,status,session_type,school_year)
-select id,'Confirmed','Yearly','2026/2027' from public.students where full_name='Placement regression 1';
+select id,'Confirmed','Yearly','2026/2027' from public.students where full_name ~ '^Placement regression [0-9]+$';
 do $$ declare result jsonb; begin
   result := public.search_students_page(p_search=>'Placement regression',p_group=>'unassigned');
   if (result->>'count')::int <> 25 or jsonb_array_length(result->'rows') <> 20 then

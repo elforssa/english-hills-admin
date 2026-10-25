@@ -907,7 +907,7 @@ export default function GuideContent() {
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>Les filtres se cumulent&nbsp;: ajoutez une session, un niveau ou une catégorie pour réduire la liste. <span className="ui">Effacer les filtres</span> remet tout à zéro.</li>
-<li>Par défaut, seuls les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;» sont listés&nbsp;: choisissez <span className="ui">Tous les statuts</span> pour voir les autres.</li>
+<li>Par défaut, seuls les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;» sont listés&nbsp;: choisissez <span className="ui">Tous les statuts</span> pour voir les autres.</li>
 <li>Le solde affiché est celui d’aujourd’hui. Un reçu garde le solde de sa date (<a href="#q4">Q4</a>).</li>
 </ul>
 </div>
@@ -1050,7 +1050,7 @@ export default function GuideContent() {
 </figure>
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
-<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
+<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
 <li>Pas de niveau sur le dossier&nbsp;? La plateforme vous demande de créer une pré-inscription avec un niveau depuis la fiche apprenant.</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
@@ -1403,7 +1403,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Ajouter un apprenant</h4>
-<p>Seul le <span className="ui">Nom complet</span> est obligatoire. L’apprenant est créé tout de suite avec le statut «&nbsp;Inscrit (dossier)&nbsp;», <b>sans inscription ni groupe</b>.</p>
+<p>Seul le <span className="ui">Nom complet</span> est obligatoire. L’apprenant est créé tout de suite avec le statut «&nbsp;Prospect&nbsp;», <b>sans inscription ni groupe</b>. Il devient «&nbsp;Inscrit&nbsp;» dès qu’une inscription est confirmée (paiement ou affectation à un groupe).</p>
 <ul className="tight">
 <li>Aucune détection de doublon&nbsp;: cherchez-le avant.</li>
 <li>Après une erreur, un nouvel envoi peut créer un second apprenant&nbsp;: vérifiez la liste avant de recommencer.</li>
@@ -1684,7 +1684,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Un apprenant que je viens de créer n’apparaît pas dans la liste</summary>
-<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai, anciens)&nbsp;». Un apprenant créé avec un paiement à 0 reste «&nbsp;Prospect&nbsp;» et est masqué&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
+<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant créé avec un paiement à 0 reste «&nbsp;Prospect&nbsp;» et est masqué&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
 </details>
 <details className="faq">
 <summary>Le prospect est resté «&nbsp;Qualifié&nbsp;» alors que j’ai créé son inscription</summary>

@@ -134,8 +134,10 @@ function validateRows(rawRows) {
         if (v === '' || v === undefined) continue;
         data[k] = v;
       }
-      data.status = importedStudentStatus(data.status);
-      return { idx, ok: true, data };
+      // D3-A: Enrolled/Trial rows import as Prospect; an enrollment confirms them.
+      const requested = data.status;
+      data.status = importedStudentStatus(requested);
+      return { idx, ok: true, data, coerced: Boolean(requested) && requested !== data.status };
     }
     return {
       idx, ok: false, data: row,
@@ -267,7 +269,7 @@ export default function StudentImportPage() {
               <li><code>niveau_cefr</code> · dépend de <code>session_type</code></li>
               <li><code>age_category</code> · {CATEGORIES.join(' / ')}</li>
               <li><code>session_type</code> · {SESSION_TYPES.join(' / ')} (défaut : Yearly)</li>
-              <li><code>status</code> · {STATUSES.join(' / ')}</li>
+              <li><code>status</code> · {STATUSES.join(' / ')} (Enrolled et Trial sont importés en Prospect : le statut Inscrit suit une inscription)</li>
               <li><code>notes</code></li>
             </ul>
             <button
@@ -342,6 +344,12 @@ export default function StudentImportPage() {
                   Erreurs: <strong>{stats.invalid}</strong>
                 </span>
               </div>
+              {parsed.rows.some(r => r.coerced) && (
+                <p role="status" className="rounded-md bg-amber-50 p-2 text-xs text-amber-900">
+                  {parsed.rows.filter(r => r.coerced).length} ligne(s) « Enrolled » ou « Trial » seront importées en Prospect :
+                  le statut Inscrit suit une inscription confirmée (paiement ou affectation).
+                </p>
+              )}
 
               <div className="bg-card border border-border rounded-md overflow-hidden">
                 <div className="px-3 py-2 border-b border-border text-xs font-semibold bg-muted">

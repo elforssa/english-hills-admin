@@ -83,10 +83,11 @@ const offenders = Object.keys(before).filter(name => before[name].src.includes("
 assert.deepEqual(offenders, [...MANIFEST].sort(), 'inventory at 118 differs from the plan manifest: STOP');
 assert.match(catalogFails() || '', /ADR-009/, 'the catalog zero rule must fail at 118');
 
-console.log('Applying 119 with supabase migration up');
-cli(['migration', 'up', '--local']);
-assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '119');
-assert.equal(sql("select name from supabase_migrations.schema_migrations where version = '119'"), 'conflicts_without_retry');
+// The 119 file directly: `supabase migration up` would also apply every later
+// migration (EGC 120 and 121). The ledger is brought to current at the end.
+console.log('Applying the 119 file');
+sql(migration);
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '118');
 assert(!/40001/.test(migration) && !/serialization_failure/.test(migration), 'migration file names the old code');
 const after = catalog();
 assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort(), 'a function was added or dropped');
@@ -127,3 +128,8 @@ for (const [kind, create] of Object.entries(probes)) {
 }
 assert.equal(catalogFails(), null);
 console.log('PASS catalog zero rule: clean after 119, fails on a reintroduced raise and handler');
+console.log('Bringing the ledger to the current migrations with supabase migration up');
+cli(['migration', 'up', '--local']);
+assert.equal(sql("select name from supabase_migrations.schema_migrations where version = '119'"), 'conflicts_without_retry');
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '121');
+assert.equal(catalogFails(), null, 'catalog zero rule at the current migrations');

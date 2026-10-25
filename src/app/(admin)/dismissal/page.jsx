@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { getBrowserClient } from '@/lib/supabase';
 import PersonLink from '@/components/PersonLink';
+import { ACTIVE_STUDENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -27,7 +28,7 @@ export default function Dismissal() {
 
   const load = () => Promise.all([
     entities.DismissalLog.listAll('-created_date'),
-    entities.Student.filter({ age_category: 'Young Learners (6-12)', status: 'Enrolled' }),
+    entities.Student.filter({ age_category: 'Young Learners (6-12)', status: ACTIVE_STUDENT_STATUSES }),
     getBrowserClient().rpc('count_today_dismissals'),
   ])
     .then(async ([l, s, countResult]) => {
@@ -35,7 +36,8 @@ export default function Dismissal() {
       const adultIds = [...new Set(l.map(row => row.adult_id).filter(Boolean))];
       const a = adultIds.length ? await entities.AuthorizedAdult.filter({ id: adultIds }, 'full_name') : [];
       setAdults(a);
-      setLogs(l); setStudents(s); setTodayCount(Number(countResult.data));
+      // Learners in a group (EGC: the main group exists only with a membership), Inscrit or Essai.
+      setLogs(l); setStudents(s.filter(student => student.groupe_id)); setTodayCount(Number(countResult.data));
     })
     .catch((err) => {
       // eslint-disable-next-line no-console

@@ -1,22 +1,62 @@
 // Shared definitions for the pre-registration queue and placement reports.
+// Group membership derives from enrollments (plan EGC-r2, ADR-010): a learner is a
+// member of a group through a Validated or Trial enrollment in it. The learner-file
+// group (students.groupe_id) is the database's "main group" copy.
 export const PENDING_PRE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review'];
+export const MEMBERSHIP_STATUSES = ['Validated', 'Trial'];
+export const LIVE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review', 'Confirmed', 'Validated', 'Trial'];
+// "Apprenants actifs": Inscrit and Essai only (D3-A); Ancien apprenant and Inactif are not active.
+export const ACTIVE_STUDENT_STATUSES = ['Enrolled', 'Trial'];
 export function isPendingPreEnrollment(enrollment) {
   return PENDING_PRE_ENROLLMENT_STATUSES.includes(enrollment.status);
 }
 export function isPreEnrollment(enrollment) {
   return ['Submitted', 'Under Review', 'Rejected', 'Trial'].includes(enrollment.status);
 }
-export function studentNeedsGroup(student, enrollments, session = '') {
-  const pending = enrollments.some(e => e.student_id === student.id && e.status === 'Confirmed'
-    && !e.group_id && (!session || (e.session_type || student.session_type || 'Yearly') === session));
-  return pending || (!student.groupe_id && (!session || (student.session_type || 'Yearly') === session));
+export function isMembership(enrollment) {
+  return MEMBERSHIP_STATUSES.includes(enrollment.status) && Boolean(enrollment.group_id);
 }
+// "Groupe à affecter": a Confirmed enrollment without a group, or an active learner
+// with no membership and no pending enrollment. A learner-file group still counts
+// as placed until the clean-up backs every one with an enrollment.
+export function studentNeedsGroup(student, enrollments, session = '') {
+  const own = enrollments.filter(e => e.student_id === student.id);
+  const inSession = e => !session || (e.session_type || student.session_type || 'Yearly') === session;
+  if (own.some(e => e.status === 'Confirmed' && !e.group_id && inSession(e))) return true;
+  if (!ACTIVE_STUDENT_STATUSES.includes(student.status)) return false;
+  if (session && (student.session_type || 'Yearly') !== session) return false;
+  return !student.groupe_id && !own.some(isMembership)
+    && !own.some(e => ['Submitted', 'Under Review', 'Confirmed'].includes(e.status));
+}
+// Roster of a group among the given (non-archived) learners: the file group or a
+// membership. After the clean-up both sides agree (I2), so this equals the
+// enrollment-only rule the database enforces.
 export function groupMemberIds(students, enrollments, groupId) {
+  const visible = new Set(students.filter(s => !s.deleted_at).map(s => s.id));
   return new Set([
-    ...students.filter(s => s.groupe_id === groupId).map(s => s.id),
-    ...enrollments.filter(e => e.group_id === groupId && ['Validated','Trial'].includes(e.status)).map(e => e.student_id),
+    ...students.filter(s => !s.deleted_at && s.groupe_id === groupId).map(s => s.id),
+    ...enrollments.filter(e => e.group_id === groupId && isMembership(e) && visible.has(e.student_id)).map(e => e.student_id),
   ]);
 }
+// The groups a learner is a member of, main group first.
+export function studentGroupIds(student, enrollments) {
+  const ids = enrollments.filter(e => e.student_id === student.id && isMembership(e)).map(e => e.group_id);
+  return [...new Set([student.groupe_id, ...ids].filter(Boolean))];
+}
+// D3-A: an imported file is a prospect until an enrollment confirms it; a
+// historical Ancien apprenant or Inactif status is kept.
 export function importedStudentStatus(status) {
-  return status || 'Enrolled';
+  return ['Alumni', 'Inactive', 'Prospect'].includes(status) ? status : 'Prospect';
+}
+// School year of a civil date in Casablanca (September start). The time zone is a
+// parameter so tests use fixed offsets; Morocco has been on UTC+0 since 2026-09-20.
+export function currentSchoolYear(date = new Date(), timeZone = 'Africa/Casablanca') {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: 'numeric' })
+    .formatToParts(date).map(part => [part.type, part.value]));
+  const start = Number(parts.year) - (Number(parts.month) < 9 ? 1 : 0);
+  return `${start}/${start + 1}`;
+}
+// groups.annee stores the school year as 'YYYY-YYYY'.
+export function groupYear(schoolYear) {
+  return schoolYear ? schoolYear.replace('/', '-') : '';
 }

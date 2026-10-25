@@ -44,8 +44,9 @@ try {
   const actor = createClient(base, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const { error: loginError } = await actor.auth.signInWithPassword({ email, password });
   if (loginError) throw loginError;
+  // New files are Prospect (EGC D3-A): the export covers every status.
   const { data: exportData, error: exportError } = await actor.rpc('search_students_page', {
-    p_search: run, p_page: 1, p_page_size: 0,
+    p_search: run, p_status: 'all_shown', p_page: 1, p_page_size: 0,
   });
   if (exportError) throw exportError;
   assert.equal(exportData.count, 1205);

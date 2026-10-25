@@ -12,7 +12,7 @@ insert into public.groups(id,name,session_type,niveau) values
  ('74000000-0000-0000-0000-000000000012','Workflow B','Yearly','Child 2'),
  ('74000000-0000-0000-0000-000000000013','Workflow Adult','Adults','Beginning 1');
 insert into public.students(id,full_name,status,session_type) values
- ('74000000-0000-0000-0000-000000000021','Workflow student','Enrolled','Yearly'),
+ ('74000000-0000-0000-0000-000000000021','Workflow student','Prospect','Yearly'),
  ('74000000-0000-0000-0000-000000000022','Workflow legacy payer','Prospect','Yearly');
 insert into public.charges(id,student_id,session_type,service_description,gross_amount,legacy)
 values ('74000000-0000-0000-0000-000000000041','74000000-0000-0000-0000-000000000022','Legacy','Synthetic historic balance',1000,true);
@@ -20,16 +20,32 @@ select set_config('request.jwt.claim.sub','74000000-0000-0000-0000-000000000001'
 set local role authenticated;
 insert into public.enrollments(id,student_id,status,session_type,school_year) values
  ('74000000-0000-0000-0000-000000000031','74000000-0000-0000-0000-000000000021','Confirmed','Yearly','2026/2027');
--- Student edit / primary group assignment.
-update public.students set groupe_id='74000000-0000-0000-0000-000000000011',niveau_cefr='Child 1'
-where id='74000000-0000-0000-0000-000000000021';
+-- EGC (DAT-2): the learner file no longer places a learner; the 074 student-form
+-- sync is gone, so a direct file-group write is refused and changes nothing.
+do $$ begin
+ begin
+  update public.students set groupe_id='74000000-0000-0000-0000-000000000011',niveau_cefr='Child 1'
+  where id='74000000-0000-0000-0000-000000000021';
+  raise exception 'Direct file-group write accepted';
+ exception when check_violation then null; end;
+ if not exists(select 1 from public.enrollments where id='74000000-0000-0000-0000-000000000031'
+   and status='Confirmed' and group_id is null) then raise exception 'Refused file write changed the enrollment'; end if;
+end $$;
+-- Placement uses the learner's enrollment of the group's programme and year.
+select public.place_learner_in_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000011',
+ (select updated_at from public.students where id='74000000-0000-0000-0000-000000000021'),p_school_year=>'2026/2027');
 do $$ begin
  if not exists(select 1 from public.enrollments where id='74000000-0000-0000-0000-000000000031'
-   and status='Validated' and group_id='74000000-0000-0000-0000-000000000011') then raise exception 'Student assignment did not sync enrollment'; end if;
+   and status='Validated' and group_id='74000000-0000-0000-0000-000000000011')
+   or not exists(select 1 from public.students where id='74000000-0000-0000-0000-000000000021'
+   and groupe_id='74000000-0000-0000-0000-000000000011' and niveau_cefr='Child 1' and status='Enrolled') then
+   raise exception 'Placement did not use the enrollment or sync the file'; end if;
 end $$;
--- Moving a student updates the same enrollment without changing its identity.
-update public.students set groupe_id='74000000-0000-0000-0000-000000000012',niveau_cefr='Child 2'
-where id='74000000-0000-0000-0000-000000000021';
+-- Moving a learner updates the same enrollment without changing its identity.
+select public.place_learner_in_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000012',
+ (select updated_at from public.students where id='74000000-0000-0000-0000-000000000021'),
+ '74000000-0000-0000-0000-000000000031',null,
+ (select updated_at from public.enrollments where id='74000000-0000-0000-0000-000000000031'));
 do $$ begin
  if not exists(select 1 from public.enrollments where id='74000000-0000-0000-0000-000000000031'
    and status='Validated' and level='Child 2' and group_id='74000000-0000-0000-0000-000000000012') then raise exception 'Move did not sync enrollment'; end if;
@@ -40,10 +56,21 @@ do $$ begin
   update public.students set groupe_id='74000000-0000-0000-0000-000000000013' where id='74000000-0000-0000-0000-000000000021';
   raise exception 'Mismatched group accepted';
  exception when check_violation then null; end;
+ begin
+  perform public.place_learner_in_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000013',
+   (select updated_at from public.students where id='74000000-0000-0000-0000-000000000021'),
+   '74000000-0000-0000-0000-000000000031',null,
+   (select updated_at from public.enrollments where id='74000000-0000-0000-0000-000000000031'));
+  raise exception 'Cross-programme placement accepted';
+ exception when check_violation then null; end;
 end $$;
 -- Add a second session. It must be visible in rosters independently of primary group.
 insert into public.enrollments(id,student_id,status,session_type,school_year,group_id,level) values
  ('74000000-0000-0000-0000-000000000032','74000000-0000-0000-0000-000000000021','Validated','Adults','2026/2027','74000000-0000-0000-0000-000000000013','Beginning 1');
+do $$ begin
+ if (select groupe_id from public.students where id='74000000-0000-0000-0000-000000000021')
+   <> '74000000-0000-0000-0000-000000000012'::uuid then raise exception 'Second programme moved the main group (DAT-1)'; end if;
+end $$;
 select public.remove_student_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000012');
 do $$ begin
  if not exists(select 1 from public.enrollments where id='74000000-0000-0000-0000-000000000031' and status='Confirmed' and group_id is null)
@@ -60,24 +87,30 @@ do $$ begin
    raise exception 'Removed student still has attendance membership';
  exception when check_violation then null; end;
 end $$;
--- New payment on a legacy balance enrolls the student without rewriting history.
+-- D3-A (FIN-10): a payment on a legacy balance changes no status and rewrites no history.
 select public.create_charge_payment(jsonb_build_object('student_id','74000000-0000-0000-0000-000000000022',
  'charge_id','74000000-0000-0000-0000-000000000041','payment_amount',100,'payment_method','Espèces',
  'idempotency_key','74000000-0000-0000-0000-000000000051'));
 do $$ begin
- if (select status from public.students where id='74000000-0000-0000-0000-000000000022') <> 'Enrolled'
+ if (select status from public.students where id='74000000-0000-0000-0000-000000000022') <> 'Prospect'
  or (select gross_amount from public.charges where id='74000000-0000-0000-0000-000000000041') <> 1000
  or (select balance from public.charge_balances where id='74000000-0000-0000-0000-000000000041') <> 900 then
-  raise exception 'Legacy receipt enrollment or financial balance incorrect'; end if;
+  raise exception 'Legacy receipt status or financial balance incorrect'; end if;
 end $$;
 -- Restore an active membership before testing authorization.
 update public.enrollments set group_id='74000000-0000-0000-0000-000000000013'
 where id='74000000-0000-0000-0000-000000000032';
--- A parent cannot mutate another student's academic state via the new RPC.
+-- A parent cannot mutate another student's academic state via the RPC; the
+-- definer wrapper now refuses instead of silently matching no row.
 reset role;
 select set_config('request.jwt.claim.sub','74000000-0000-0000-0000-000000000002',true);
 set local role authenticated;
-select public.remove_student_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000013');
+do $$ begin
+ begin
+  perform public.remove_student_group('74000000-0000-0000-0000-000000000021','74000000-0000-0000-0000-000000000013');
+  raise exception 'Parent removal accepted';
+ exception when insufficient_privilege then null; end;
+end $$;
 reset role;
 do $$ begin
  if not exists(select 1 from public.enrollments where id='74000000-0000-0000-0000-000000000032'

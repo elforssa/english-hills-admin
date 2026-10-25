@@ -70,7 +70,9 @@ try {
   for(let i=0;i<3;i++) children.push(await create('students',{full_name:run+' Child '+i,parent_email:i<2?parent.email:otherParent.email,
     email:i===0?byRole('student').email:run+'-child'+i+'@example.invalid',status:'Enrolled'}));
   const enrollments=[];
-  for(const child of children) enrollments.push(await create('enrollments',{student_id:child.id,status:'Validated',group_id:group.id}));
+  // A Validated enrollment carries its programme and school year (EGC I9).
+  for(const child of children) enrollments.push(await create('enrollments',{student_id:child.id,status:'Validated',group_id:group.id,
+    session_type:'Yearly',level:'A1',school_year:'2026/2027'}));
   const enrollment={student_id:children[0].id,status:'Submitted',date_inscription:'2026-09-08',notes:'Synthetic request'};
   const leave={teacher_id:t1.id,teacher_name:t1.full_name,date_debut:'2026-10-01',date_fin:'2026-10-02',type_conge:'Personnel',status:'En attente',notes:'Synthetic request'};
   const l1=await create('leave_requests',leave,teacher);
@@ -132,7 +134,10 @@ try {
     // enrollment documents. This staff workflow test concerns review/decision
     // authority, so it deliberately uses no attachment rather than a legacy
     // arbitrary path.
-    const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:[]},staff);
+    // Another school year than the child's live Yearly enrollment (EGC I3), with the
+    // programme a validation needs (I9).
+    const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:[],session_type:'Yearly',
+      school_year:staff===admin?'2027/2028':'2028/2029'},staff);
     for(const status of ['Validated','Rejected']) {
       assert.equal(ok(await request(staff,'enrollments','PATCH',{status,group_id:group.id},'?id=eq.'+e.id))[0].status,status); checks++;
     }
@@ -158,7 +163,7 @@ try {
   const quoted=values=>values.map(x=>"'"+x+"'::uuid").join(',');
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
   // Also remove UI-created requests and notifications scoped to these fixtures.
-  if(records.students?.length) cleanup+=`delete from public.enrollments where student_id in (${quoted(records.students)});`;
+  if(records.students?.length) cleanup+=`set eh.enrollment_command = on; delete from public.enrollments where student_id in (${quoted(records.students)});`;
   if(records.teachers?.length) cleanup+=`delete from public.leave_requests where teacher_id in (${quoted(records.teachers)});`;
   if(users.length) cleanup+=`delete from public.notifications where recipient_email in (${users.map(u=>"'"+u.email+"'").join(',')});`;
   for(const table of ['enrollments','leave_requests','students','groups','teachers']) if(records[table]?.length)

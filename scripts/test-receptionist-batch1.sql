@@ -18,9 +18,9 @@ insert into public.teachers(id,full_name,email,telephone,contract_type,taux_hora
 insert into public.students(id,full_name,email,status,session_type,niveau_cefr)
  values('96000000-0000-0000-0000-000000000020','Batch learner','batch1-student@example.test',
  'Enrolled','Yearly','Child 1');
-insert into public.groups(id,name,session_type,niveau,teacher_id)
+insert into public.groups(id,name,session_type,niveau,teacher_id,annee)
  values('96000000-0000-0000-0000-000000000030','Batch group','Yearly','Child 1',
- '96000000-0000-0000-0000-000000000010');
+ '96000000-0000-0000-0000-000000000010','2026-2027');
 insert into public.enrollments(id,student_id,status,session_type,level,school_year)
  values('96000000-0000-0000-0000-000000000040',
  '96000000-0000-0000-0000-000000000020','Confirmed','Yearly','Child 1','2026/2027');
@@ -224,33 +224,34 @@ do $$ declare v_group uuid; v_enrollment uuid; before_group jsonb; before_enroll
  if not exists(select 1 from public.enrollments where id=v_new and session_type='Adults'
    and level='Beginning 1') then raise exception 'Compatible Adults inheritance failed'; end if;
 
- -- No dossier or paid-enrollment assignment silently supplies an unset level.
+ -- EGC (DAT-2, I4): a placement always goes through an enrollment and the chosen
+ -- group defines its level, never the dossier. A dossier without level placed in a
+ -- Child 1 group gets a Validated Child 1 enrollment; a paid enrollment without
+ -- level takes the group's level; neither touches another enrollment.
  select updated_at into v_student_version from public.students
    where id='96000000-0000-0000-0000-000000000024';
- select to_jsonb(s) into before_student from public.students s
-   where id='96000000-0000-0000-0000-000000000024';
- perform pg_temp.invalid(format('select public.assign_receptionist_student_group(%L,null,%L,%L,null)',
-   '96000000-0000-0000-0000-000000000024',
-   '96000000-0000-0000-0000-000000000030',v_student_version));
- if (select to_jsonb(s) from public.students s
-   where id='96000000-0000-0000-0000-000000000024') is distinct from before_student then
-   raise exception 'Unset dossier level changed after rejection'; end if;
+ perform public.assign_receptionist_student_group('96000000-0000-0000-0000-000000000024',null,
+   '96000000-0000-0000-0000-000000000030',v_student_version,null);
+ if (select count(*) from public.enrollments where student_id='96000000-0000-0000-0000-000000000024'
+     and group_id='96000000-0000-0000-0000-000000000030' and status='Validated' and level='Child 1'
+     and session_type='Yearly' and school_year is not null) <> 1
+   or not exists(select 1 from public.students where id='96000000-0000-0000-0000-000000000024'
+     and groupe_id='96000000-0000-0000-0000-000000000030' and niveau_cefr='Child 1') then
+   raise exception 'Placement without enrollment did not create the group-level enrollment'; end if;
  select updated_at into v_student_version from public.students
-   where id='96000000-0000-0000-0000-000000000027';
- select to_jsonb(s) into before_student from public.students s
    where id='96000000-0000-0000-0000-000000000027';
  select updated_at into v_enrollment_version from public.enrollments
    where id='96000000-0000-0000-0000-000000000044';
  select to_jsonb(e) into before_enrollment from public.enrollments e
    where id='96000000-0000-0000-0000-000000000044';
- perform pg_temp.invalid(format('select public.assign_receptionist_student_group(%L,%L,%L,%L,%L)',
+ perform public.assign_receptionist_student_group(
    '96000000-0000-0000-0000-000000000027','96000000-0000-0000-0000-000000000044',
-   '96000000-0000-0000-0000-000000000030',v_student_version,v_enrollment_version));
- if (select to_jsonb(e) from public.enrollments e
-   where id='96000000-0000-0000-0000-000000000044') is distinct from before_enrollment or
-   (select to_jsonb(s) from public.students s
-     where id='96000000-0000-0000-0000-000000000027') is distinct from before_student then
-   raise exception 'Unset paid level changed after rejection'; end if;
+   '96000000-0000-0000-0000-000000000030',v_student_version,v_enrollment_version);
+ if not exists(select 1 from public.enrollments e where id='96000000-0000-0000-0000-000000000044'
+     and status='Validated' and level='Child 1' and group_id='96000000-0000-0000-0000-000000000030'
+     and school_year=before_enrollment->>'school_year')
+   or (select count(*) from public.enrollments where student_id='96000000-0000-0000-0000-000000000027') <> 1 then
+   raise exception 'Paid enrollment without level did not take the group level'; end if;
 end $$;
 
 -- Exact safe writes and optimistic version checks.
@@ -260,7 +261,8 @@ do $$ declare v_student uuid:='96000000-0000-0000-0000-000000000021';
   v_new_group uuid:='96000000-0000-0000-0000-000000000031'; begin
  perform public.save_receptionist_student(v_student,null,
    '{"full_name":"New Batch learner","session_type":"Yearly","niveau_cefr":"Child 1","email":"new@example.test"}');
- if not exists(select 1 from public.students where id=v_student and status='Enrolled' and plan_type='Standard') then
+ -- D3-A: a new file is a prospect until an enrollment confirms it.
+ if not exists(select 1 from public.students where id=v_student and status='Prospect' and plan_type='Standard') then
    raise exception 'Dossier create failed'; end if;
  select updated_at into v_version from public.students where id=v_student;
  perform public.save_receptionist_student(v_student,v_version,'{"telephone":"0600000000","notes":"Reception note"}');
@@ -270,13 +272,15 @@ do $$ declare v_student uuid:='96000000-0000-0000-0000-000000000021';
  perform public.save_receptionist_teacher_operations('96000000-0000-0000-0000-000000000010',v_teacher_version,
    '{"telephone":"0622222222","certifications":["CELTA"]}');
  perform public.save_receptionist_group(v_new_group,null,
-   '{"name":"New Batch group","session_type":"Yearly","niveau":"Child 1","teacher_id":"96000000-0000-0000-0000-000000000010"}');
+   '{"name":"New Batch group","session_type":"Yearly","niveau":"Child 1","teacher_id":"96000000-0000-0000-0000-000000000010","annee":"2026-2027"}');
  select updated_at into v_group_version from public.groups where id=v_new_group;
  perform public.save_receptionist_group(v_new_group,v_group_version,'{"salle":"Room 1"}');
  select updated_at into v_version from public.students where id=v_student;
  perform public.assign_receptionist_student_group(v_student,null,v_new_group,v_version,null);
- if not exists(select 1 from public.students where id=v_student and groupe_id=v_new_group) then
-   raise exception 'Dossier-only group assignment failed'; end if;
+ -- DAT-2: the placement created a Validated enrollment; the file group follows it.
+ if not exists(select 1 from public.students where id=v_student and groupe_id=v_new_group and status='Enrolled')
+   or not exists(select 1 from public.enrollments where student_id=v_student and group_id=v_new_group and status='Validated') then
+   raise exception 'Group assignment without enrollment failed'; end if;
  select updated_at into v_version from public.students where id='96000000-0000-0000-0000-000000000020';
  select updated_at into v_enrollment_version from public.enrollments where id='96000000-0000-0000-0000-000000000040';
  perform public.assign_receptionist_student_group('96000000-0000-0000-0000-000000000020',

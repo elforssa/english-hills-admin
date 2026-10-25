@@ -259,6 +259,10 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
 - **D6:** the data clean-up is approved as described, with Ancien apprenant; counts are re-read on the day and any difference goes back to the owner.
 - **Not approved by this decision:** the merge, either migration, the clean-up run (R4 needs its own release approval of the exact numbers) and every deployment.
 - **D8 A (2026-10-24, 16:16 Asia/Shanghai; EGC-r2, added after independent review):** owner's words, verbatim: "d8: A". Closing an online course (`online_close_course`) ends the course's enrollments, so a learner can take another online course in the same school year; option B (exempting online programmes from the one-live-enrollment rule) is rejected. The review corrections also add one clean-up row (C1b: a Yearly enrollment without school year gets 2026/2027), shown to the owner with the D6 counts.
+- **Implementation decisions (Maroine, 2026-10-25, chat with Claude, on the implementation PR's open points; [implementation record](../architecture/plans/enrollment-group-consistency.md#implementation-record)):**
+  1. Main group before M2: the test-strategy reading is kept. A learner in a Yearly group without a Yearly enrollment stays in the Yearly group (main group and roster) after joining a Mise à niveau group; D-3's narrower transition rule is not applied until M2.
+  2. Re-creating `enforce_attendance_integrity` (latest 096 body) in M2 is accepted as a listed deviation; the independent reviewer checks it.
+  3. Implementation note 2 (past online rosters after a course close reading `ended_group_id`) stays out of this PR as a follow-up.
 
 ## Payment corrections and receipts (Batch E) — APPROVED (2026-10-24)
 

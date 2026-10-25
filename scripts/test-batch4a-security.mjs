@@ -100,7 +100,9 @@ try {
   const t2=await create('teachers',{full_name:run+' Other Teacher',email:otherTeacher.email});
   const g=await create('groups',{name:run+' Group',niveau:'A1',teacher_id:t.id});
   const children=[];
-  for(let i=0;i<3;i++) children.push(await create('students',{full_name:run+' Child '+i,parent_email:i<2?parent.email:otherParent.email,email:i===0?student.email:null,groupe_id:i<2?g.id:null}));
+  for(let i=0;i<3;i++) children.push(await create('students',{full_name:run+' Child '+i,parent_email:i<2?parent.email:otherParent.email,email:i===0?student.email:null}));
+  // Group membership derives from a Validated enrollment (EGC); the file group follows it.
+  for(const placed of children.slice(0,2)) await create('enrollments',{student_id:placed.id,group_id:g.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   const [child,child2,unrelated]=children;
   const a=await reserve(student,'portfolio',child.id); await ready(student,a);
   const pf=await create('portfolios',{student_id:child.id,title:run,project_type:'Other',file_url:'asset:'+a.id,visible_to_parent:false,teacher_note:'forged'},student);
@@ -235,6 +237,8 @@ try {
   const quoted=values=>values.map(x=>"'"+x+"'::uuid").join(',');
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
   if(assets.length) cleanup+="delete from public.storage_asset_bindings where asset_id in ("+quoted(assets.map(a=>a.id))+"); delete from public.storage_assets where id in ("+quoted(assets.map(a=>a.id))+");";
+  // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
+  cleanup+='set local eh.enrollment_command = on;';
   for(const table of ['portfolios','enrollments','students','groups','teachers']) if(records[table]?.length) cleanup+='delete from public.'+table+' where id in ('+quoted(records[table])+');';
   if(users.length) cleanup+="alter table public.profiles disable trigger role_security_guard; delete from auth.users where id in ("+quoted(users.map(u=>u.id))+"); alter table public.profiles enable trigger role_security_guard; update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director'); delete from public.activity_log where actor_id in ("+quoted(users.map(u=>u.id))+");";
   const targetIds=[...Object.values(records).flat(),...assets.map(a=>a.id),...users.map(u=>u.id)];

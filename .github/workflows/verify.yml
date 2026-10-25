@@ -306,6 +306,16 @@ jobs:
         run: |
           npm run test:conflicts-local
           supabase db reset --local --no-seed
+      - name: Enrollment and group consistency 119 to M1, clean-up and M2, M2 refusal without C1b, prepared M1 revert
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 119 --no-seed
+          node scripts/test-egc-upgrade.mjs full
+          supabase db reset --local --version 119 --no-seed
+          node scripts/test-egc-upgrade.mjs skip-c1b
+          supabase db reset --local --version 119 --no-seed
+          node scripts/test-egc-upgrade.mjs revert-m1
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression
@@ -316,6 +326,7 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-premium-retirement-finance.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-student-placement.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-enrollment-workflow.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-enrollment-group-consistency.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-batch1.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-group-filter.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-phase8.sql
@@ -367,6 +378,9 @@ jobs:
       - name: Advisory R4 forced sharing-stop race matrix
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-crm-r4-advisory-concurrency.py
+      - name: Enrollment and group seat, payment-placement and course-close races
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-enrollment-group-concurrency.py
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'

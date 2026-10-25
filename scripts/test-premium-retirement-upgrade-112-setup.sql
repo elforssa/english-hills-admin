@@ -104,6 +104,16 @@ insert into rehearsal113.fx values ('result_t', public.create_charge_payment(jso
   'student_id','b1130000-0000-0000-0000-0000000000aa','charge_id','b1130000-0000-0000-0000-0000000000b7','payment_amount',200,
   'payment_date','2026-09-15','payment_method','Espèces','idempotency_key','b1130000-0000-0000-0000-0000000000cb')));
 reset role;
+-- The 112 payment body gave the two enrollments it created for the undated charges
+-- no school year. Production holds no Confirmed enrollment without one (EGC sizing,
+-- 2026-10-24), and EGC M2 refuses such rows, so this synthetic copy gets one.
+do $$ declare n integer; begin
+  update public.enrollments set school_year='2026/2027'
+  where student_id in ('b1130000-0000-0000-0000-0000000000a5','b1130000-0000-0000-0000-0000000000aa')
+    and status='Confirmed' and school_year is null;
+  get diagnostics n = row_count;
+  if n <> 2 then raise exception 'Expected the two undated-charge enrollments, got %', n; end if;
+end $$;
 
 insert into rehearsal113.fx values
  ('charge_a',(select v->'charge_id' from rehearsal113.fx where k='result_a')),

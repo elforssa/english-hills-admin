@@ -1,12 +1,13 @@
 // Destructive LOCAL synthetic acceptance (plan NRC-r2, ADR-009): every former
 // retryable-conflict path answers at once over real HTTP. On a PostgREST that
 // retries the old code without limit (the CI stack runs 14.5), a prompt HTTP 409
-// is the proof that PT409 is not retried. Run on a database at 119; the CI step
-// resets it afterwards. Never reads .env.local or accepts a URL from the environment.
+// is the proof that PT409 is not retried. Run on a database at the current
+// migrations (119 or later); the CI step resets it afterwards. Never reads
+// .env.local or accepts a URL from the environment.
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { createStudentOnce } from '../src/lib/studentCreate.mjs';
@@ -19,7 +20,9 @@ const cli = args => execFileSync('supabase', args, { encoding: 'utf8', env: proc
 const q = s => `'${String(s).replaceAll("'", "''")}'`;
 const status = JSON.parse(cli(['status', '-o', 'json']));
 assert.equal(status.API_URL, 'http://127.0.0.1:54321');
-assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '119', 'run on a database at migration 119');
+const latest = Math.max(...readdirSync('supabase/migrations').map(name => Number(/^(\d+)_/.exec(name)?.[1] ?? 0)));
+assert(latest >= 119);
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), String(latest), 'run on a database at the current migrations');
 const postgrest = execFileSync('docker', ['exec', 'supabase_rest_hills-admin-next', 'postgrest', '--version'], { encoding: 'utf8' }).trim();
 console.log(`Versions: PostgreSQL ${sql('show server_version')}; PostgREST ${postgrest}; supabase-js ${JSON.parse(readFileSync('node_modules/@supabase/supabase-js/package.json')).version}`);
 

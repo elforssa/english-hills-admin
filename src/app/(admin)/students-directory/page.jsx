@@ -205,7 +205,7 @@ export default function StudentsDirectory() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {['Apprenant','Niveau','Groupe','Téléphone','Email','Statut'].map(h => (
+                {['Apprenant','Niveau','Groupe principal','Téléphone','Email','Statut'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">{h}</th>
                 ))}
               </tr>

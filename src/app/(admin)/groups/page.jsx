@@ -1,6 +1,7 @@
 'use client';
 
-import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, groupMemberIds, groupYear } from '@/lib/enrollmentWorkflow.mjs';
+import { EGC_REASON_TEXT, groupDeleteErrorMessage, membershipErrorMessage } from '@/lib/academic/membershipActions.mjs';
 
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory } from '@/lib/teacher-directory';
@@ -19,8 +20,18 @@ import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mj
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
-function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
-  const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: '2025-2026' });
+// A populated group keeps its programme and level (ACA-1, D7-A): the selects are
+// locked while it has learners, and the database refuses the change for every role.
+const reassignFirst = 'Réaffectez les apprenants avant de changer le programme ou le niveau.';
+function groupSaveErrorMessage(error) {
+  // The reception command (096) refuses a populated group with its own English text.
+  if (error?.code === '23514' && /Reassign learners/.test(error.message || '')) return EGC_REASON_TEXT.group_level_locked;
+  return membershipErrorMessage(error);
+}
+
+function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCount = 0 }) {
+  const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: groupYear(currentSchoolYear()) });
+  const levelLocked = Boolean(form.id) && memberCount > 0;
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // An online group never carries a group teacher (migration 117): the teacher,
@@ -42,17 +53,18 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
       niveau: form.niveau, teacher_id: online ? null : form.teacher_id || null, salle: online ? null : form.salle || null,
       jours: form.jours || null, horaire: form.horaire || null, capacite_max: form.capacite_max,
       terme: form.terme || null, annee: form.annee || null, categorie: form.categorie || null };
-    if (receptionist) {
-      const { error } = await getBrowserClient().rpc('save_receptionist_group', {
+    if (levelLocked) { delete payload.session_type; delete payload.niveau; }
+    const { error } = receptionist
+      ? await getBrowserClient().rpc('save_receptionist_group', {
         p_group: form.id || crypto.randomUUID(), p_expected_updated_at: form.id ? form.updated_at : null,
         p_changes: payload,
-      });
-      // Changed in the meantime (ADR-009): close and reload the list for review.
-      if (error && isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); return; }
-      if (error) { toast.error(error.message); setSaving(false); return; }
-      toast.success(form.id ? 'Groupe mis à jour' : 'Groupe créé');
-    } else if (form.id) { await entities.Group.update(form.id, payload); toast.success('Groupe mis à jour'); }
-    else { await entities.Group.create(payload); toast.success('Groupe créé'); }
+      })
+      : form.id ? await getBrowserClient().from('groups').update(payload).eq('id', form.id)
+        : await getBrowserClient().from('groups').insert(payload);
+    // Changed in the meantime (ADR-009): close and reload the list for review.
+    if (error && isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); return; }
+    if (error) { toast.error(groupSaveErrorMessage(error)); setSaving(false); return; }
+    toast.success(form.id ? 'Groupe mis à jour' : 'Groupe créé');
     onSave();
   };
   return (
@@ -65,15 +77,16 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2"><label className={labelClass}>Nom du groupe *</label><input className={inputClass} value={form.name} onChange={e => set('name', e.target.value)} required /></div>
             <div><label className={labelClass}>Session *</label>
-              <select className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required>
+              <select className={inputClass} value={form.session_type || 'Yearly'} onChange={e => changeSession(e.target.value)} required disabled={levelLocked}>
                 {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
               </select>
             </div>
             <div><label className={labelClass}>Niveau</label>
-              <select className={inputClass} value={form.niveau} onChange={e => set('niveau', e.target.value)}>
+              <select className={inputClass} value={form.niveau} onChange={e => set('niveau', e.target.value)} disabled={levelLocked}>
                 {getLevelsForSession(form.session_type || 'Yearly', form.niveau).map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
+            {levelLocked && <p className="col-span-2 -mt-2 text-xs text-muted-foreground">{reassignFirst}</p>}
             <div><label className={labelClass}>Catégorie</label>
               <select className={inputClass} value={form.categorie} onChange={e => set('categorie', e.target.value)}>
                 {['Enfants','Ados','Adultes','Business','Particulier','Préparation aux examens'].map(c => <option key={c}>{c}</option>)}
@@ -156,7 +169,9 @@ export default function Groups() {
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce groupe ?')) return;
-    await entities.Group.delete(id);
+    // A group with enrollment history (current or ended) cannot be deleted.
+    const { error } = await getBrowserClient().from('groups').delete().eq('id', id);
+    if (error) { toast.error(groupDeleteErrorMessage(error)); return; }
     toast.success('Groupe supprimé');
     load();
   };
@@ -271,7 +286,8 @@ export default function Groups() {
           </>
         )}
       </div>
-      {modal !== null && <GroupModal group={modal.id ? modal : null} teachers={teachers} receptionist={role === 'receptionist'} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <GroupModal group={modal.id ? modal : null} teachers={teachers} receptionist={role === 'receptionist'}
+        memberCount={modal.id ? counts[modal.id] || 0 : 0} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }
