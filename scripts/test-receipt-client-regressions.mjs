@@ -210,14 +210,21 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(savePendingPayment('key-1', { storage, now: 1000 }), true);
   assert.deepEqual(readPendingPayment({ storage }), { key: 'key-1', savedAt: 1000 });
   const recorded = await recoverPendingPayment(async (key) => (key === 'key-1' ? { id: 'r1', receipt_number: 'EH-2026-00430' } : null), { storage });
-  assert.deepEqual(recorded, { status: 'recorded', receipt: { id: 'r1', receipt_number: 'EH-2026-00430' } });
+  assert.deepEqual(recorded, { status: 'recorded', key: 'key-1', receipt: { id: 'r1', receipt_number: 'EH-2026-00430' } });
   assert.equal(pendingPaymentSettled(recorded), true);
   assert.ok(readPendingPayment({ storage }), 'the caller, not the lookup, clears the key (React strict mode runs the effect twice)');
   clearPendingPayment({ storage });
   assert.deepEqual(await recoverPendingPayment(async () => { throw new Error('unreachable'); }, { storage }), { status: 'none' });
   savePendingPayment('key-2', { storage, now: 2000 });
   const notRecorded = await recoverPendingPayment(async () => null, { storage });
-  assert.deepEqual(notRecorded, { status: 'not_recorded' });
+  assert.deepEqual(notRecorded, { status: 'not_recorded', key: 'key-2' });
+  // A Save pressed during the lookup stores a newer key; clearing the older one leaves it.
+  savePendingPayment('key-newer', { storage, now: 3000 });
+  clearPendingPayment({ storage, key: 'key-2' });
+  assert.equal(readPendingPayment({ storage })?.key, 'key-newer', 'a newer pending key survives the older answer');
+  clearPendingPayment({ storage, key: 'key-newer' });
+  assert.equal(readPendingPayment({ storage }), null);
+  savePendingPayment('key-2', { storage, now: 2000 });
   assert.equal(pendingPaymentSettled(notRecorded), true);
   const unknown = await recoverPendingPayment(async () => { throw new Error('network'); }, { storage });
   assert.deepEqual(unknown, { status: 'unknown' });
@@ -237,6 +244,8 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(receiptForm, /Ce paiement a déjà été enregistré : reçu N°/);
   assert.match(receiptForm, /if \(todayPayment > 0\) savePendingPayment\(idempotencyKey\.current\(\)\);\n\s+onSubmit\(/);
   assert.match(receiptForm, /window\.confirm\(identicalReceiptPrompt\(/);
+  assert.match(receiptForm, /clearPendingPayment\(\{ key: result\.key \}\)/);
+  assert.match(receiptForm, /if \(submitting\.current\) return;/);
   const newReceiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
   assert.match(newReceiptPage, /return;\n\s+\}\n\s+clearPendingPayment\(\);/, 'the key is cleared only after a confirmed response');
 }

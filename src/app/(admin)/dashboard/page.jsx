@@ -146,7 +146,7 @@ export default function Dashboard() {
       </div>
 
       {readError && <ReadState state="error" message="Impossible de charger le tableau de bord." onRetry={() => setReload(x=>x+1)}/>}
-      {isAdmin && !['ready','loading'].includes(financeRead.state) && <ReadState state={financeRead.state} message={financeRead.state === 'refreshing' ? 'Actualisation du total encaissé…' : financeRead.state === 'stale' ? 'Total encaissé : actualisation impossible, dernière valeur conservée.' : financeRead.state === 'error' ? 'Impossible de charger le total encaissé.' : 'Total encaissé indisponible.'} onRetry={() => setReload(x=>x+1)}/>}
+      {isAdmin && !['ready','loading'].includes(financeRead.state) && <ReadState state={financeRead.state} message={financeRead.state === 'refreshing' ? 'Actualisation des totaux financiers…' : financeRead.state === 'stale' ? 'Totaux financiers (encaissé, reste à encaisser) : actualisation impossible, dernières valeurs conservées.' : financeRead.state === 'error' ? 'Impossible de charger les totaux financiers.' : 'Totaux financiers indisponibles.'} onRetry={() => setReload(x=>x+1)}/>}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
           { label: 'Apprenants', value: stats.students, icon: Users, href: '/students', color: 'var(--brand)', bg: '#EEF2FF' },

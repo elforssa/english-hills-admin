@@ -49,6 +49,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const [previousAttempt, setPreviousAttempt] = useState(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  // A ref, not state: a second click in the same render must see the first one at once.
+  const submitting = useRef(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
 
   // After a reload, look the last pressed Save up by its key before anything is re-entered.
@@ -61,7 +63,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     }).then((result) => {
       if (!active || result.status === 'none') return;
       setPreviousAttempt(result);
-      if (pendingPaymentSettled(result)) clearPendingPayment();
+      if (pendingPaymentSettled(result)) clearPendingPayment({ key: result.key });
     });
     return () => { active = false; };
   }, []);
@@ -221,7 +223,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
   const submit = async (event) => {
     event.preventDefault();
-    if (checkingDuplicate) return;
+    if (submitting.current) return;
     if (!form.student_id && mode !== 'new') return toast.error('Sélectionnez un apprenant existant.');
     if (mode === 'new' && form.student_name.trim().length < 2) return toast.error('Le nom complet du nouvel apprenant est obligatoire.');
     if (!form.charge_id && (!form.session_type || !form.school_year)) return toast.error('La session et l’année scolaire sont obligatoires.');
@@ -240,14 +242,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
     if (todayPayment > 0 && form.request_email && !/^\S+@\S+\.\S+$/.test(form.email_recipient.trim())) return toast.error('Indiquez un destinataire email valide ou désactivez l’envoi.');
     if (todayPayment > 0 && form.student_id) {
-      setCheckingDuplicate(true);
+      submitting.current = true; setCheckingDuplicate(true);
       try {
         // Soft check only; the server is unchanged and a lookup failure never blocks the payment.
         const { data } = await getBrowserClient().from('receipts').select('id,receipt_number')
           .eq('student_id', form.student_id).eq('montant_paye', todayPayment).eq('date', form.payment_date)
           .is('voided_at', null).is('deleted_at', null).limit(1);
         if (data?.length && !window.confirm(identicalReceiptPrompt(data[0], { paymentDate: form.payment_date, today: localBusinessDate() }))) return;
-      } catch { /* soft check */ } finally { setCheckingDuplicate(false); }
+      } catch { /* soft check */ } finally { submitting.current = false; setCheckingDuplicate(false); }
     }
     if (todayPayment > 0) savePendingPayment(idempotencyKey.current());
     onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,

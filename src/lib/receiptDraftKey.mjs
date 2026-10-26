@@ -30,8 +30,13 @@ export function readPendingPayment({ storage } = {}) {
   }
 }
 
-export function clearPendingPayment({ storage } = {}) {
-  try { sessionStore(storage)?.removeItem(PENDING_PAYMENT_STORAGE_KEY); } catch { /* storage unavailable */ }
+// With `key`, clears only that pending key: a Save pressed while an earlier key was
+// being looked up stores a newer key, which must survive the older answer.
+export function clearPendingPayment({ storage, key } = {}) {
+  try {
+    if (key && readPendingPayment({ storage })?.key !== key) return;
+    sessionStore(storage)?.removeItem(PENDING_PAYMENT_STORAGE_KEY);
+  } catch { /* storage unavailable */ }
 }
 
 // recorded: the earlier attempt committed (show its receipt, do not prefill);
@@ -47,7 +52,7 @@ export async function recoverPendingPayment(lookupReceiptByKey, { storage } = {}
   } catch {
     return { status: 'unknown' };
   }
-  return receipt ? { status: 'recorded', receipt } : { status: 'not_recorded' };
+  return receipt ? { status: 'recorded', key: pending.key, receipt } : { status: 'not_recorded', key: pending.key };
 }
 
 export function pendingPaymentSettled(result) {

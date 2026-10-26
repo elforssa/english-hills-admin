@@ -6,7 +6,7 @@
 // Three sections, each rendered with `recharts` (already in deps):
 //   • Présences   — daily roll-up of Présent / Absent / Retard / Justifié
 //                   over the last N days (default 30).
-//   • Finance     — monthly encaissé vs facturé, plus % recouvrement.
+//   • Finance     — monthly encaissé and facturé side by side (different sets: no rate).
 //   • Paie        — payroll YTD per teacher (brut/net) for the chosen year.
 //
 // Year/period selectors are local state; the data fetch reuses the

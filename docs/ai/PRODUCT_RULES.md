@@ -48,6 +48,8 @@ RCC-A2 (migration 112; deployed and Production verified on 2026-10-07):
 - An opportunity linked to a learner can only enroll that learner.
 - A pre-enrollment shows **Continuer l'inscription**. It is not conversion, and the opportunity stays QUALIFIED.
 
+Business dates are Casablanca dates by zone name (`Africa/Casablanca`, UTC+0 since 2026-09-20). A browser with time-zone data older than tzdata 2026c still treats Morocco as UTC+1, so between 23:00 and 24:00 its screen defaults and labels may show the next day; the database's date decides ([plan PCR-r2](../architecture/plans/payment-corrections-receipts.md#implementation-record)).
+
 A charge is an agreement; a nonzero payment issues a receipt. Zero payment may create a charge but no receipt or payment-driven enrollment. Collected CRM revenue derives from actual linked payment/void events, not quotes, charge totals or a status change. Preserve idempotency and append-only financial history. See [084](../../supabase/migrations/084_crm_enrollment_and_conversion.sql), [085](../../supabase/migrations/085_crm_revenue_attribution.sql), and [receipt model](../receipt-financial-model.md).
 
 ## Yearly without Formule — Premium retirement

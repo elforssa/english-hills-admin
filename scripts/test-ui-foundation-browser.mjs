@@ -107,7 +107,7 @@ try {
     if(name==='get_finance_charge_summary'||name==='get_monthly_finance_summary') {
      const mode=name==='get_finance_charge_summary'?financeMode:monthlyMode;
      if(mode==='error')return failure();if(mode==='missing')return json(null);if(mode==='malformed')return json({encaisse:null});
-     return json(name==='get_finance_charge_summary'?{total_encaisse:0}:{encaisse:0,restant:0,total:0,count:0});
+     return json(name==='get_finance_charge_summary'?{total_encaisse:0,total_restant:0}:{encaisse:0,restant:0,total:0,count:0});
     }
     assert.fail('Unexpected RPC in presentation harness: '+name);
    }
@@ -202,10 +202,10 @@ try {
   await ctx.clearCookies();await page.evaluate(()=>localStorage.clear());await login(users[1]);
   phase=engine.name()+' Dashboard read truth';await navigate(app+'/dashboard');await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'));
   for(const mode of ['error','missing','malformed']) {
-   financeMode=mode;monthlyMode=mode;await navigate(app+'/dashboard');await page.getByText(mode==='error' ? 'Impossible de charger le total encaissé.' : 'Total encaissé indisponible.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('Indisponible'));assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);assert.equal(await page.getByText('0 MAD',{exact:true}).count(),0,'failure never numeric zero');
+   financeMode=mode;monthlyMode=mode;await navigate(app+'/dashboard');await page.getByText(mode==='error' ? 'Impossible de charger les totaux financiers.' : 'Totaux financiers indisponibles.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('Indisponible'));assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);assert.equal(await page.getByText('0 MAD',{exact:true}).count(),0,'failure never numeric zero');
   }
   financeMode='ready';monthlyMode='ready';rejectDashboard=true;await navigate(app+'/dashboard');await page.getByText('Impossible de charger le tableau de bord.',{exact:true}).waitFor();assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);rejectDashboard=false;
-  financeMode='error';await navigate(app+'/dashboard');await page.getByText('Impossible de charger le total encaissé.',{exact:true}).waitFor();await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();financeMode='ready';monthlyMode='error';await page.getByRole('button',{name:'Réessayer',exact:true}).first().click();await page.getByRole('alert').filter({hasText:'Actualisation impossible'}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'),'independent successful total remains valid zero');
+  financeMode='error';await navigate(app+'/dashboard');await page.getByText('Impossible de charger les totaux financiers.',{exact:true}).waitFor();await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();financeMode='ready';monthlyMode='error';await page.getByRole('button',{name:'Réessayer',exact:true}).first().click();await page.getByRole('alert').filter({hasText:'Actualisation impossible'}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'),'independent successful total remains valid zero');
   assert(requests.filter(r=>r.name==='get_finance_charge_summary').every(r=>!r.args||Object.keys(r.args).length===0));assert(requests.filter(r=>r.name==='get_monthly_finance_summary').every(r=>Object.keys(r.args).join(',')==='p_month_start'));
   await page.waitForLoadState('networkidle');assert.deepEqual(errors,[]);assert(transportErrors.every(error=>cancelled.some(path=>error.message.includes(path))),JSON.stringify({transportErrors,cancelled}));assert.deepEqual(external,[]);
   await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} UIF ${process.argv.includes('--responsive-only') ? 'focused responsive/zoom/contrast/keyboard/44×44 touch targets plus Dashboard/Placement read truth' : 'CRM/Students/Dashboard/Placement read states, answers/destinations, reset, responsive widths, focus, touch, return context'}`);
