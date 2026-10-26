@@ -1,15 +1,15 @@
 # Enrollment and group workflow
 
-Plan [EGC-r2](../docs/architecture/plans/enrollment-group-consistency.md)
-(migrations 120 and 121; merged, not deployed). Until the release steps R2–R5,
-Production keeps the 073/074 behaviour described in the plan's verified state.
+Plan [EGC-r2](../docs/architecture/plans/enrollment-group-consistency.md), live in
+Production: migration 120 (M1) on 2026-10-25, the approved data clean-up and
+migration 121 (M2) on 2026-10-26 ([ADR-010](../docs/architecture/decisions/ADR-010-group-membership-from-enrollments.md)).
 
 ## Membership and status
 
 A learner is a member of a group when a Validated or Trial enrollment of that
 learner has that group and the learner is not archived. This is the only rule;
-after M2 attendance, teacher access, messaging, storage, announcements, rosters
-and the Students list all read it. The learner file's group (`groupe_id`) is the
+attendance, teacher access, messaging, storage, announcements, rosters and the
+Students list all read it. The learner file's group (`groupe_id`) is the
 main group, maintained by `sync_student_from_enrollments`: the current one while
 it is still a membership, otherwise the membership of the file's programme, then
 Yearly, then Validated before Trial, then the oldest. The file's programme and
@@ -92,11 +92,12 @@ the app and run `node scripts/test-student-placement-browser.mjs`; it checks the
 local URL and feature branch, creates synthetic fixtures, and removes them in
 finally.
 
-## Deployment order
+## Release history
 
-Production deployment requires explicit approval under AGENTS.md (release steps
-in the plan): R2 apply 120 (M1) and deploy the application immediately, outside
-reception hours; R3 checks; R4 the clean-up dry-run counts, owner approval of the
-numbers, then C1–C6; R5 apply 121 (M2), which refuses while any learner breaks
-the rules. Before R4, `scripts/egc-revert-m1.sql` is the prepared forward revert
-of M1. Production has not been changed by the local verification described here.
+Released under explicit owner approval (release steps in the plan): R2 applied
+120 (M1) and deployed the application on 2026-10-25; R4 ran the clean-up stages
+C1–C5 with the approved counts and C6 matched; R5 applied 121 (M2) on
+2026-10-26 ([R1–R3 record](../docs/architecture/evidence/egc-r2-m1-production-2026-10-25.md),
+[R4–R5 record](../docs/architecture/evidence/egc-r2-r4-r5-production-2026-10-26.md)).
+`scripts/egc-revert-m1.sql` applied only before the clean-up and is no longer a
+rollback path; a revert after M2 needs a new forward migration.
