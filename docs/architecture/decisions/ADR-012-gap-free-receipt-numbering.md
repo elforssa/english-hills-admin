@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-10-24) with the [payment corrections and receipts plan](../plans/payment-corrections-receipts.md), revision PCR-r1. Not accepted, not implemented. The owner approved the plan on 2026-10-24 at head `a6cce4e` (Q6 = B, historical series `EH-HIST-2026-…`; Q7 = A; [approval record](../plans/payment-corrections-receipts.md#approval-record)); this status is updated as the plan's docs/status reporting defines. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation evidence once it exists.
+**Proposed** (2026-10-24) with the [payment corrections and receipts plan](../plans/payment-corrections-receipts.md), revision PCR-r1. Not accepted, not implemented. The owner approved the plan on 2026-10-24 at head `a6cce4e` (Q6 = B, historical series `EH-HIST-2026-…`; Q7 = A; [approval record](../plans/payment-corrections-receipts.md#approval-record)); this status is updated as the plan's docs/status reporting defines. **Implementation (2026-10-26):** release E-2, migration `122_finance_corrections_numbering_guardrails.sql` (number provisional), on branch `feat/batch-e2-finance-guardrails`; not merged, not applied in Production; the status stays Proposed until acceptance. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns implementation evidence once it exists.
 
 ## Date
 

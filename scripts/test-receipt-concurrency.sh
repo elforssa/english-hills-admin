@@ -8,7 +8,7 @@ charge='41000000-0000-0000-0000-000000000001'
 retry_charge='41000000-0000-0000-0000-000000000002'
 
 cleanup() {
-  psql "$db_url" -v ON_ERROR_STOP=1 -q -c "begin; delete from public.financial_events where actor_id='$actor'; delete from public.financial_requests where actor_id='$actor'; delete from public.receipts where charge_id in ('$charge','$retry_charge'); delete from public.charges where id in ('$charge','$retry_charge'); set local eh.enrollment_command = on; delete from public.enrollments where student_id='$student'; delete from public.students where id='$student'; commit;" || true
+  psql "$db_url" -v ON_ERROR_STOP=1 -q -c "begin; set local english_hills.receipt_test_cleanup = 'on'; delete from public.financial_events where actor_id='$actor'; delete from public.financial_requests where actor_id='$actor'; delete from public.receipts where charge_id in ('$charge','$retry_charge'); delete from public.charges where id in ('$charge','$retry_charge'); set local eh.enrollment_command = on; delete from public.enrollments where student_id='$student'; delete from public.students where id='$student'; commit;"
 }
 trap cleanup EXIT
 cleanup

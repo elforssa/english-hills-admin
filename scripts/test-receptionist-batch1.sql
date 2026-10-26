@@ -143,8 +143,12 @@ do $$ declare row_json jsonb; begin
    or has_schema_privilege('authenticated','operational_security','USAGE') then
    raise exception 'New RPC/private ACL mismatch'; end if;
 end $$;
-select pg_temp.denied($q$select public.get_finance_summary()$q$);
-select pg_temp.denied($q$select public.get_unpaid_receipts()$q$);
+-- Batch E (FIN-12): the two pre-charge finance functions are dropped for every role.
+do $$ begin
+ if to_regprocedure('public.get_finance_summary()') is not null
+   or to_regprocedure('public.get_unpaid_receipts(integer)') is not null then
+   raise exception 'Obsolete finance functions still exist'; end if;
+end $$;
 select pg_temp.denied($q$select public.get_referral_breakdown()$q$);
 select pg_temp.denied($q$select public.get_finance_charge_summary()$q$);
 select pg_temp.denied($q$select public.create_charge_payment_financial('{}'::jsonb)$q$);

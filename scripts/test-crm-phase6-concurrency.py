@@ -167,6 +167,8 @@ finally:
         students=set(json.loads(ids))|set(extra_students)
         student_list=','.join(quote(s) for s in students) or 'null'
         sql(f"""begin;
+-- Receipts are never hard-deleted outside this sanctioned local clean-up (Batch E, P2.3a).
+set local english_hills.receipt_test_cleanup = 'on';
 -- Phase 7 adds derived children; retain compatibility with baseline 084 too.
 do $cleanup$ begin
  if to_regclass('public.crm_revenue_entries') is not null then

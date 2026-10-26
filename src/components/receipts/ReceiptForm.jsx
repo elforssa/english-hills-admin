@@ -9,6 +9,7 @@ import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } fro
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
 import { clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
+import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH, PENDING_CONFIRMATION_MESSAGE, addDays, deskGuardError, paymentBackdateDays, receptionConfirmationPending } from '@/lib/financeCorrections.mjs';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
@@ -30,7 +31,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [form, setForm] = useState({
     ...emptyStudent, ...emptyChargeTerms(), school_year: DEFAULT_SCHOOL_YEAR,
     payment_date: localBusinessDate(), payment_method: 'Espèces', transaction_reference: '', note: '',
-    update_contacts: false, request_email: false, email_recipient: '', ...initialData,
+    update_contacts: false, request_email: false, email_recipient: '', discount_reason_code: '', discount_reason: '', ...initialData,
     student_id: '', charge_id: '', enrollment_id: '',
   });
   const [search, setSearch] = useState(initialData.student_name || '');
@@ -220,6 +221,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const levels = useMemo(() => getLevelsForSession(form.session_type, form.level), [form.session_type, form.level]);
   const lockedCharge = Boolean(selectedCharge);
   const servicePreview = buildServiceDescription({ sessionType: form.session_type, schoolYear: form.school_year, serviceDetail: form.service_detail });
+  // Batch E guardrails (mirrored from the database for messages only).
+  const today = localBusinessDate();
+  const needsDiscountReason = !lockedCharge && discount > 0;
+  const confirmationPending = receptionConfirmationPending({ role, sessionType: form.session_type, net, paidBefore, payment: todayPayment });
 
   const submit = async (event) => {
     event.preventDefault();
@@ -230,6 +235,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!form.charge_id && form.session_type === 'Other' && form.service_detail.trim().length < 3) return toast.error('Décrivez brièvement le service « Autre ».');
     if (!form.charge_id && (!Number.isFinite(gross) || gross < 0 || discount < 0 || discount > gross)) return toast.error('Vérifiez le prix convenu et la remise.');
     if (!Number.isFinite(todayPayment) || todayPayment < 0) return toast.error('Le paiement ne peut pas être négatif.');
+    const guard = deskGuardError({ role, newCharge: !form.charge_id, gross, discount, reasonCode: form.discount_reason_code,
+      reasonText: form.discount_reason, payment: todayPayment, paymentDate: form.payment_date, today });
+    if (guard) return toast.error(guard);
     if (todayPayment > net - paidBefore) return toast.error(`Le paiement dépasse le solde de ${money(net - paidBefore)} MAD.`);
     if (todayPayment > 0 && form.student_id && form.session_type !== 'Other' && !selectedCharge?.enrollment_id
       && (enrollmentsLoading || enrollmentsError)) return toast.error('Vérifiez les inscriptions existantes avant d’encaisser ce paiement.');
@@ -253,6 +261,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     }
     if (todayPayment > 0) savePendingPayment(idempotencyKey.current());
     onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
+      discount_reason_code: needsDiscountReason ? form.discount_reason_code : '',
+      discount_reason: needsDiscountReason && form.discount_reason_code === 'other' ? form.discount_reason.trim() : '',
       service_description: servicePreview, idempotency_key: idempotencyKey.current() });
   };
 
@@ -311,9 +321,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
     <Step number="3" title="Paiement" subtitle="Montant, date et mode d’encaissement">
       <div className="grid gap-4 sm:grid-cols-3">
-        {!lockedCharge && <><Field label="Prix brut convenu *"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} placeholder="0" /></Field><Field label="Échéance (facultative)"><input type="date" className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field></>}
-        <Field label="Montant payé aujourd’hui *"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement *"><input required type="date" className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /></Field><Field label="Mode de paiement *"><select required className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select><p className="mt-1 text-[11px] font-medium text-muted-foreground">Espèces est sélectionné par défaut.</p></Field><Field label="Référence (facultative)"><input maxLength={120} className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note interne (non imprimée)"><textarea maxLength={500} rows={2} className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
+        {!lockedCharge && <><Field label="Prix brut convenu *"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} placeholder="0" />{role === 'receptionist' && <p className="mt-1 text-[11px] font-medium text-muted-foreground">Au-delà de 10 % du prix, demandez au directeur.</p>}</Field><Field label="Échéance (facultative)"><input type="date" className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field>{needsDiscountReason && <><Field label="Motif de la remise *"><select required className={input} value={form.discount_reason_code} onChange={(e) => set('discount_reason_code', e.target.value)}><option value="">Choisir…</option>{DISCOUNT_REASONS.map((reason) => <option key={reason.code} value={reason.code}>{reason.label}</option>)}</select></Field>{form.discount_reason_code === 'other' && <div className="sm:col-span-2"><Field label="Précisez le motif *"><input required minLength={3} maxLength={DISCOUNT_REASON_MAX_LENGTH} className={input} value={form.discount_reason} onChange={(e) => set('discount_reason', e.target.value)} /></Field></div>}</>}</>}
+        <Field label="Montant payé aujourd’hui *"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement *"><input required type="date" min={addDays(today, -paymentBackdateDays(role))} max={today} className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /><p className="mt-1 text-[11px] font-medium text-muted-foreground">Jamais dans le futur ; au plus {paymentBackdateDays(role)} jours en arrière.</p></Field><Field label="Mode de paiement *"><select required className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select><p className="mt-1 text-[11px] font-medium text-muted-foreground">Espèces est sélectionné par défaut.</p></Field><Field label="Référence (facultative)"><input maxLength={120} className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note interne (non imprimée)"><textarea maxLength={500} rows={2} className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
       </div>
+      {confirmationPending && <p role="note" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{PENDING_CONFIRMATION_MESSAGE}</p>}
       <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4"><Amount label="Prix net" value={net} /><Amount label="Déjà payé" value={paidBefore} /><Amount label="Payé aujourd’hui" value={todayPayment} accent /><Amount label="Solde restant" value={balanceAfter} warning={balanceAfter > 0} /></div>
       {todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
     </Step>

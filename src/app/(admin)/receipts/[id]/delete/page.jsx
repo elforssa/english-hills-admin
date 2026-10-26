@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptNumberLabel } from '@/lib/receiptFinance';
+import { LAST_PAYMENT_NOTICE, correctionErrorMessage, isLastLivePaymentOfConfirmedEnrollment } from '@/lib/financeCorrections.mjs';
 
 export default function DeleteMistakenReceipt() {
   const { id } = useParams();
@@ -41,7 +42,8 @@ export default function DeleteMistakenReceipt() {
           charge = chargeResult.data;
           otherPayments = paymentsResult.count;
         }
-        if (active) setRecord({ receipt, charge, otherPayments });
+        const lastPayment = otherPayments === 0 && await isLastLivePaymentOfConfirmedEnrollment(sb, receipt).catch(() => false);
+        if (active) setRecord({ receipt, charge, otherPayments, lastPayment });
       } catch { if (active) setError('Impossible de vérifier ce reçu. Rechargez la page avant de réessayer.'); }
     }
     load();
@@ -54,16 +56,18 @@ export default function DeleteMistakenReceipt() {
     setSaving(true);
     if (!requestKey.current) requestKey.current = crypto.randomUUID();
     try {
-      const { error: deletionError } = await getBrowserClient().rpc('delete_mistaken_receipt', {
+      const { data: deletion, error: deletionError } = await getBrowserClient().rpc('delete_mistaken_receipt', {
         p_receipt_id: id, p_reason: reason.trim(), p_idempotency_key: requestKey.current,
       });
       if (deletionError) throw deletionError;
       await cache.invalidateQueries();
-      toast.success('Reçu supprimé. Le paiement et le montant dû associé sont exclus des totaux.');
+      toast.success(deletion?.enrollment_without_live_payment
+        ? 'Reçu supprimé. L’inscription reste confirmée et apparaît dans « Inscriptions confirmées sans paiement actif ».'
+        : 'Reçu supprimé. Le paiement et le montant dû associé sont exclus des totaux.');
       router.push(record.receipt.student_id ? `/students/${record.receipt.student_id}` : '/receipts');
       router.refresh();
     } catch (failure) {
-      toast.error(failure.message || 'Suppression non confirmée. Réessayez avec le même formulaire.');
+      toast.error(correctionErrorMessage(failure, 'Suppression non confirmée. Réessayez avec le même formulaire.'));
     } finally { setSaving(false); }
   }
 
@@ -79,6 +83,7 @@ export default function DeleteMistakenReceipt() {
             <div className="flex justify-between gap-3"><dt>À retirer des encaissements</dt><dd className="font-semibold">{money(record.receipt.voided_at ? 0 : record.receipt.montant_paye)} MAD</dd></div>
             <div className="flex justify-between gap-3"><dt>À retirer du solde restant</dt><dd className="font-semibold">{money(record.charge?.voided_at ? 0 : record.charge?.balance)} MAD</dd></div>
           </dl>
+          {record.lastPayment && <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><b>Dernier paiement actif de l’inscription.</b> {LAST_PAYMENT_NOTICE}</p>}
           {record.receipt.voided_at && <p className="text-sm">Le paiement est déjà annulé : il ne sera pas déduit une deuxième fois. Le montant dû associé sera annulé.</p>}
           <p className="text-sm text-muted-foreground">Les autres engagements et paiements sont conservés. Le directeur pourra consulter le numéro du reçu, la date, l’auteur et le motif dans l’historique des suppressions.</p>
           <div><label htmlFor="deletion-reason" className="mb-2 block text-sm font-semibold">Motif de suppression</label><textarea id="deletion-reason" value={reason} onChange={(event) => setReason(event.target.value)} disabled={saving} className="min-h-24 w-full rounded-lg border bg-background p-3 text-sm" placeholder="Ex. reçu créé par erreur, remplacé par le reçu correct…" /></div>

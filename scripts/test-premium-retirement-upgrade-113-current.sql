@@ -2,17 +2,24 @@
 -- test-premium-retirement-upgrade-112-setup.sql (plan premium-retirement.md D1, Q7 option A).
 \set ON_ERROR_STOP on
 begin;
+-- Later migrations may add nullable columns (Batch E 122: charges.discount_reason_code and
+-- discount_reason): every snapshot column must be unchanged and every new column null.
+create or replace function pg_temp.same_row(r jsonb, snap jsonb) returns boolean language sql as $$
+ select r is not null
+  and (select bool_and(r ? k and r->k is not distinct from snap->k) from jsonb_object_keys(snap) k)
+  and (select bool_and(snap ? k or r->k = 'null'::jsonb) from jsonb_object_keys(r) k)
+$$;
 
 do $$
 begin
- -- `supabase migration up` also applies every later migration; 121 is the current ceiling.
- if (select max(version::integer) from supabase_migrations.schema_migrations) <> 121
-  or (select count(*) from supabase_migrations.schema_migrations where version in ('113','114','115','116','117','118','119','120','121')) <> 9 then
-  raise exception 'Expected migrations 113 through 121 after upgrade';
+ -- `supabase migration up` also applies every later migration; 122 is the current ceiling.
+ if (select max(version::integer) from supabase_migrations.schema_migrations) <> 122
+  or (select count(*) from supabase_migrations.schema_migrations where version in ('113','114','115','116','117','118','119','120','121','122')) <> 10 then
+  raise exception 'Expected migrations 113 through 122 after upgrade';
  end if;
  -- The migration rewrote no row.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id
-            where s.stage='setup' and s.kind='charge' and to_jsonb(c) is distinct from s.row)
+            where s.stage='setup' and s.kind='charge' and not pg_temp.same_row(to_jsonb(c), s.row))
   or exists(select 1 from rehearsal113.snapshot s left join public.receipts r on r.id=s.id
             where s.stage='setup' and s.kind='receipt' and to_jsonb(r) is distinct from s.row) then
   raise exception 'Migration 113 changed an existing charge or receipt';
@@ -21,7 +28,9 @@ end $$;
 
 create or replace function pg_temp.counts() returns jsonb language sql as $$
  select jsonb_build_object('charges',(select count(*) from public.charges),'receipts',(select count(*) from public.receipts),
-  'requests',(select count(*) from public.financial_requests),'receipt_seq',(select last_value from public.receipt_number_seq));
+  'requests',(select count(*) from public.financial_requests),
+  -- Batch E: numbers come from the counter (the retired sequence no longer moves).
+  'receipt_seq',(select last_value from public.receipt_number_counters where series='EH'));
 $$;
 create or replace function pg_temp.fx(p_key text) returns jsonb language sql as $$
  select v from rehearsal113.fx where k=p_key;
@@ -112,7 +121,8 @@ begin
  if v_checked <> 5 then raise exception 'Expected five instalment receipts, checked %', v_checked; end if;
  -- Arithmetic and numbering as before: five consecutive numbers, balances reduced by 100.
  if (select count(*) from instalment where result->>'receipt_id' is not null) <> 5
-  or (select last_value from public.receipt_number_seq) <> v_seq + 5
+  or (select last_value from public.receipt_number_counters where series='EH') <> v_seq + 5
+  or (select last_value from public.receipt_number_seq) <> v_seq
   or (select balance from public.charge_balances where id=pg_temp.id('charge_a')) <> 1400
   or (select balance from public.charge_balances where id=pg_temp.id('charge_b')) <> 1900
   or (select balance from public.charge_balances where id=pg_temp.id('charge_u')) <> 600
@@ -122,12 +132,13 @@ begin
  end if;
  if (select array_agg(r.receipt_number order by r.receipt_number) from instalment i
       join public.receipts r on r.id=(i.result->>'receipt_id')::uuid)
-    <> (select array_agg('EH-2026-'||lpad((v_seq+n)::text,5,'0') order by n) from generate_series(1,5) n) then
+    -- Batch E (Q7 = A): the year is the Casablanca year of issue.
+    <> (select array_agg('EH-'||to_char(public.business_date(),'YYYY')||'-'||lpad((v_seq+n)::text,5,'0') order by n) from generate_series(1,5) n) then
   raise exception 'Instalment receipt numbers are not consecutive';
  end if;
  -- Charge rows and every first receipt are byte-identical to before.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id
-            where s.stage='setup' and s.kind='charge' and to_jsonb(c) is distinct from s.row)
+            where s.stage='setup' and s.kind='charge' and not pg_temp.same_row(to_jsonb(c), s.row))
   or exists(select 1 from rehearsal113.snapshot s left join public.receipts r on r.id=s.id
             where s.stage='setup' and s.kind='receipt' and to_jsonb(r) is distinct from s.row) then
   raise exception 'An instalment changed a charge row or an earlier receipt';

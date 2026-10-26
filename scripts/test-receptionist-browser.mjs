@@ -505,7 +505,9 @@ try {
   if (browser) await browser.close();
   if (pdfStudent) {
     const portalIds = portalUsers.map(portalUser => `'${portalUser.id}'`).join(',') || 'null';
+    // Receipts are never hard-deleted outside this sanctioned local clean-up (Batch E, P2.3a).
     sql(`begin;
+    set local english_hills.receipt_test_cleanup = 'on';
     delete from public.financial_events where actor_id='${user}';
     delete from public.financial_requests where actor_id='${user}';
     create temporary table pdf_cleanup_receipts on commit drop as

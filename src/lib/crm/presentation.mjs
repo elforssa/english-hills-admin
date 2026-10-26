@@ -131,6 +131,7 @@ export const EVENTS = {
   enrollment_started: 'Inscription commencée',
   lead_converted: 'Inscription confirmée',
   conversion_review_required: 'Inscription à vérifier par la direction',
+  conversion_review_cleared: 'Vérification levée : paiement de remplacement',
   placement_test_booked: 'Test de niveau réservé',
   placement_test_rescheduled: 'Test de niveau reprogrammé',
   placement_test_attended: 'Test passé',
@@ -289,7 +290,7 @@ export const MEANINGFUL_EVENTS = new Set([
   'conversation_recorded', 'whatsapp_sent', 'whatsapp_conversation', 'note_added',
   'lead_engaged', 'lead_qualified', 'lead_lost', 'lead_not_qualified', 'lead_reopened',
   'placement_test_booked', 'placement_test_rescheduled', 'placement_test_attended', 'placement_result_entered',
-  'enrollment_started', 'lead_converted', 'conversion_review_required'
+  'enrollment_started', 'lead_converted', 'conversion_review_required', 'conversion_review_cleared'
 ]);
 // Collapsed history: the latest meaningful exchanges of the first loaded page, else the latest entries.
 export function historySummary(rows, size = 3) {

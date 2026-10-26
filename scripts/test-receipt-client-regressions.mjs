@@ -9,6 +9,8 @@ import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/fun
 import { retryingImport } from '../src/lib/retryingImport.mjs';
 import { PENDING_PAYMENT_STORAGE_KEY, clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, readPendingPayment, recoverPendingPayment, savePendingPayment } from '../src/lib/receiptDraftKey.mjs';
 import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '../src/lib/payroll/status.mjs';
+import { CORRECTION_BUSY_MESSAGE, DISCOUNT_REASONS, LAST_PAYMENT_NOTICE, PENDING_CONFIRMATION_MESSAGE, addDays, correctionErrorMessage, deskGuardError, discountReasonLabel, paymentBackdateDays, receptionConfirmationPending } from '../src/lib/financeCorrections.mjs';
+import { EVENTS, MEANINGFUL_EVENTS } from '../src/lib/crm/presentation.mjs';
 
 let generated = 0;
 const stableKey = createStableIdempotencyKey(() => `request-${++generated}`);
@@ -288,6 +290,72 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   const payrollPage = await readFile(new URL('../src/app/(admin)/payroll/page.jsx', import.meta.url), 'utf8');
   assert.match(payrollPage, /disabled=\{!PAYROLL_CREATION_ENABLED\}/);
   assert.match(payrollPage, /\{modal && PAYROLL_CREATION_ENABLED && <PayrollModal/);
+}
+
+// Batch E, release E-2: desk rules mirrored from migration 122 (same words), correction messages.
+{
+  assert.deepEqual(DISCOUNT_REASONS.map((reason) => reason.code), ['sibling', 'former_student', 'promotion', 'director_approval', 'other']);
+  assert.deepEqual(DISCOUNT_REASONS.map((reason) => reason.label), ['Fratrie', 'Ancien élève', 'Promotion/offre', 'Accord de la direction', 'Autre']);
+  assert.equal(discountReasonLabel('other', 'Accord famille'), 'Autre : Accord famille');
+  assert.equal(discountReasonLabel('sibling', 'ignored'), 'Fratrie');
+  assert.equal(discountReasonLabel(null, null), '');
+  assert.equal(addDays('2026-03-01', -1), '2026-02-28');
+  assert.equal(addDays('2026-12-31', 1), '2027-01-01');
+  assert.deepEqual([paymentBackdateDays('receptionist'), paymentBackdateDays('admin'), paymentBackdateDays('director')], [7, 31, 31]);
+  const base = { role: 'admin', newCharge: true, gross: 1000, discount: 0, reasonCode: '', reasonText: '', payment: 100, paymentDate: '2026-10-26', today: '2026-10-26' };
+  const guard = (change) => deskGuardError({ ...base, ...change });
+  assert.equal(guard({}), null);
+  assert.equal(guard({ discount: 50 }), 'Indiquez le motif de la remise.');
+  assert.equal(guard({ discount: 50, reasonCode: 'loyalty' }), 'Motif de remise inconnu.');
+  assert.equal(guard({ discount: 50, reasonCode: 'other', reasonText: ' x ' }), 'Précisez le motif de la remise « Autre ».');
+  assert.equal(guard({ discount: 50, reasonCode: 'other', reasonText: 'x'.repeat(201) }), 'Le motif de la remise ne doit pas dépasser 200 caractères.');
+  assert.equal(guard({ discount: 50, reasonCode: 'sibling', newCharge: false }), null, 'an existing charge needs no reason');
+  assert.equal(guard({ role: 'receptionist', discount: 100, reasonCode: 'sibling' }), null, 'reception: 10 % is allowed');
+  assert.equal(guard({ role: 'receptionist', discount: 100.01, reasonCode: 'sibling' }), 'Remise supérieure à 10 % : demandez au directeur.');
+  assert.equal(guard({ discount: 778, reasonCode: 'director_approval' }), null, 'admin: no cap');
+  assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur.');
+  assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-19' }), null);
+  assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-18' }), 'La date du paiement ne peut pas être antérieure de plus de 7 jours.');
+  assert.equal(guard({ paymentDate: '2026-09-25' }), null);
+  assert.equal(guard({ paymentDate: '2026-09-24' }), 'La date du paiement ne peut pas être antérieure de plus de 31 jours.');
+  assert.equal(guard({ payment: 0, paymentDate: '2026-01-01' }), null, 'a zero payment has no date window');
+  const pending = (change) => receptionConfirmationPending({ role: 'receptionist', sessionType: 'Adults', net: 1000, paidBefore: 0, payment: 99.99, ...change });
+  assert.equal(pending({}), true);
+  assert.equal(pending({ payment: 100 }), false, '10 % confirms');
+  assert.equal(pending({ paidBefore: 50, payment: 50 }), false, 'earlier payments count');
+  assert.equal(pending({ role: 'admin' }), false);
+  assert.equal(pending({ sessionType: 'Other' }), false, 'an Other service confirms nothing');
+  assert.equal(PENDING_CONFIRMATION_MESSAGE, 'Acompte inférieur à 10 % : reçu émis, inscription en attente de confirmation par la direction.');
+  assert.equal(LAST_PAYMENT_NOTICE, 'L’inscription restera confirmée. Elle apparaîtra dans « Inscriptions confirmées sans paiement actif » et la conversion CRM sera signalée pour vérification.');
+  assert.equal(correctionErrorMessage({ code: 'PT409', message: 'Inscription ou paiement en cours.' }, 'x'), CORRECTION_BUSY_MESSAGE);
+  assert.equal(CORRECTION_BUSY_MESSAGE, 'Paiement en cours pour cet apprenant : actualisez puis réessayez.');
+  assert.equal(correctionErrorMessage({ code: 'P0001', message: 'Receipt not found.' }, 'x'), 'Receipt not found.');
+  assert.equal(correctionErrorMessage(null, 'fallback'), 'fallback');
+  assert.equal(EVENTS.conversion_review_cleared, 'Vérification levée : paiement de remplacement');
+  assert.ok(MEANINGFUL_EVENTS.has('conversion_review_cleared'));
+
+  // Every server guard message has its client mirror, word for word.
+  const migration122 = await readFile(new URL('../supabase/migrations/122_finance_corrections_numbering_guardrails.sql', import.meta.url), 'utf8');
+  const corrections = await readFile(new URL('../src/lib/financeCorrections.mjs', import.meta.url), 'utf8');
+  for (const message of ['Indiquez le motif de la remise.', 'Motif de remise inconnu.', 'Précisez le motif de la remise « Autre ».',
+    'Le motif de la remise ne doit pas dépasser 200 caractères.', 'La date du paiement ne peut pas être dans le futur.']) {
+    assert.ok(migration122.includes(message) && corrections.includes(message), message);
+  }
+  assert.ok(migration122.includes('Remise supérieure à 10 %% : demandez au directeur.'), 'RAISE escapes the percent sign');
+  assert.doesNotMatch(migration122, /40001/);
+  assert.match(receiptForm, /deskGuardError\(\{ role, newCharge: !form\.charge_id/);
+  assert.match(receiptForm, /discount_reason_code: needsDiscountReason \? form\.discount_reason_code : ''/);
+  assert.match(receiptForm, /min=\{addDays\(today, -paymentBackdateDays\(role\)\)\} max=\{today\}/);
+  for (const path of ['receipts/[id]/edit', 'receipts/[id]/delete']) {
+    const page = await readFile(new URL(`../src/app/(admin)/${path}/page.jsx`, import.meta.url), 'utf8');
+    assert.match(page, /isLastLivePaymentOfConfirmedEnrollment\(/, path);
+    assert.match(page, /\{LAST_PAYMENT_NOTICE\}/, path);
+    assert.match(page, /correctionErrorMessage\(/, path);
+  }
+  const financePageE2 = await readFile(new URL('../src/app/(admin)/finance/page.jsx', import.meta.url), 'utf8');
+  assert.match(financePageE2, /\{role === 'director' && <FinanceReviewQueue \/>\}/);
+  const newPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
+  assert.match(newPage, /data\.enrollment_confirmation_pending \? PENDING_CONFIRMATION_MESSAGE/);
 }
 
 const emailFunction = await readFile(new URL('../supabase/functions/sendReceiptEmail/index.ts', import.meta.url), 'utf8');

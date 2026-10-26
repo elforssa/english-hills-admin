@@ -142,7 +142,7 @@ do $$ declare session_name text; result jsonb; begin
     result := public.create_charge_payment(jsonb_build_object(
       'student_id','20000000-0000-0000-0000-000000000001','session_type',session_name,'school_year','2026/2027',
       'service_detail',case when session_name='Other' then 'Autre service synthétique' else null end,
-      'plan_type','Standard','gross_amount','1.25','discount_amount','0.25','payment_amount','0',
+      'plan_type','Standard','gross_amount','1.25','discount_amount','0.25','discount_reason_code','promotion','payment_amount','0',
       'payment_method','Espèces','idempotency_key',gen_random_uuid()));
     if result->>'charge_id' is null or result->>'receipt_id' is not null then raise exception 'Catalog session failed: %',session_name; end if;
   end loop;
@@ -151,7 +151,7 @@ end $$;
 -- Decimal discount and zero-payment owed charge (no zero-value receipt).
 insert into test_results values ('decimal', public.create_charge_payment(jsonb_build_object(
   'student_id','20000000-0000-0000-0000-000000000001','session_type','Adults','school_year','2026/2027',
-  'plan_type','Standard','gross_amount','100.01','discount_amount','0.01','payment_amount','40.00','payment_date',current_date,
+  'plan_type','Standard','gross_amount','100.01','discount_amount','0.01','discount_reason_code','promotion','payment_amount','40.00','payment_date',current_date,
   'due_date',current_date-1,'payment_method','Carte bancaire','idempotency_key','30000000-0000-0000-0000-000000000003')));
 insert into test_results values ('zero', public.create_charge_payment(jsonb_build_object(
   'student_id','20000000-0000-0000-0000-000000000001','session_type','Summer Camp','school_year','2026/2027',

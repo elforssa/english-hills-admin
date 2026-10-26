@@ -157,6 +157,8 @@ finally:
         students = ','.join(quote(ids[k]) for k in ['l1', 'l2', 'l3', 'l4'])
         sql(f"""begin;
 set local eh.enrollment_command = on;
+-- Receipts are never hard-deleted outside this sanctioned local clean-up (Batch E, P2.3a).
+set local english_hills.receipt_test_cleanup = 'on';
 delete from public.financial_events where actor_id={quote(admin)};
 delete from public.financial_requests where actor_id={quote(admin)};
 delete from public.receipts where student_id in ({students});

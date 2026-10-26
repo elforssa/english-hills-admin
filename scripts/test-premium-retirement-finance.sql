@@ -57,7 +57,8 @@ insert into r values
  ('premium', '{"student_id":"b1131000-0000-0000-0000-0000000000a2","plan_type":"Premium"}', null),
  ('standard','{"student_id":"b1131000-0000-0000-0000-0000000000a3","plan_type":" Standard "}', null);
 update r set payload = payload || jsonb_build_object('session_type','Yearly','school_year','2026/2027','gross_amount',2000,
-  'payment_amount',500,'payment_date','2026-09-15','payment_method','Espèces','idempotency_key',gen_random_uuid());
+  -- Batch E (Q4): inside the 31-day payment-date window.
+  'payment_amount',500,'payment_date',public.business_date(),'payment_method','Espèces','idempotency_key',gen_random_uuid());
 update r set result = public.create_charge_payment(payload);
 do $$ declare v record; begin
  for v in select r.k, c.service_description c_text, c.plan_type c_plan, x.service_description r_text, x.plan_type r_plan,
@@ -78,7 +79,7 @@ do $$ declare v_payload jsonb := (select payload from r where k='premium'); begi
    <> encode(extensions.digest(jsonb_strip_nulls(jsonb_build_object(
         'student_id',v_payload->>'student_id','update_contacts',false,'session_type','Yearly','school_year','2026/2027',
         'plan_type','Premium','gross_amount',2000.00::numeric(12,2),'discount_amount',0.00::numeric(12,2),
-        'payment_amount',500.00::numeric(12,2),'payment_date','2026-09-15'::date,'payment_method','Espèces',
+        'payment_amount',500.00::numeric(12,2),'payment_date',(v_payload->>'payment_date')::date,'payment_method','Espèces',
         'request_email',false))::text,'sha256'),'hex') then
   raise exception 'Fingerprint of a new Yearly request differs from migration 112';
  end if;

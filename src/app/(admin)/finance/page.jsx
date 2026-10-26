@@ -9,11 +9,14 @@ import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import { financeExportRows, localBusinessDate, money } from '@/lib/receiptFinance';
 import { toast } from 'sonner';
 import PersonLink from '@/components/PersonLink';
+import FinanceReviewQueue from '@/components/finance/FinanceReviewQueue';
+import { useAuth } from '@/context/AuthContext';
 
 const STATUT_CONFIG = PAYMENT_STATUS_COLORS;
 const RELANCER_SHOWN = 10;
 
 export default function Finance() {
+  const { role } = useAuth();
   const [summary, setSummary] = useState(null);
   const [relancer, setRelancer] = useState([]);
   const [sources, setSources] = useState([]);
@@ -106,6 +109,8 @@ export default function Finance() {
         <StatCard label="Paiements en retard" value={enRetard} icon={AlertTriangle} color="#B91C2E" />
         <StatCard label="Reçus soldés" value={payes} icon={CheckCircle} color="#16a34a" />
       </div>
+
+      {role === 'director' && <FinanceReviewQueue />}
 
       {Number(summary?.legacy_unreconciled || 0) > 0 && <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><b>{summary.legacy_unreconciled} reçu(s) historique(s) à rapprocher</b><p className="mt-1 text-xs">Leur apprenant est absent ou archivé. Ils restent comptés dans les encaissements, mais aucun engagement n’a été fabriqué. Vue de contrôle : <code>legacy_receipt_reconciliation</code>.</p></div>}
 

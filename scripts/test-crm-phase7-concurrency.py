@@ -93,6 +93,8 @@ finally:
     if created:
         student_list=','.join(quote(s) for s in extra_students) or 'null'
         sql(f"""begin;
+-- Receipts are never hard-deleted outside this sanctioned local clean-up (Batch E, P2.3a).
+set local english_hills.receipt_test_cleanup = 'on';
 lock table public.crm_revenue_entries,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks in access exclusive mode;
 alter table public.crm_revenue_entries disable trigger crm_revenue_immutable;
 delete from public.crm_revenue_entries where financial_event_id in(select id from public.financial_events where actor_id='{actor}');

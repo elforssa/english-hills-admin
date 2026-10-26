@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { paymentErrorMessage } from '@/lib/receiptPresentation';
 import { clearPendingPayment } from '@/lib/receiptDraftKey.mjs';
+import { PENDING_CONFIRMATION_MESSAGE } from '@/lib/financeCorrections.mjs';
 
 export default function ReceiptNew() {
   const { role } = useAuth();
@@ -40,6 +41,7 @@ export default function ReceiptNew() {
       return;
     }
     toast.success(data.replayed ? 'Paiement déjà enregistré — reçu existant affiché.'
+      : data.enrollment_confirmation_pending ? PENDING_CONFIRMATION_MESSAGE
       : data.group_pending ? 'Paiement enregistré. Apprenant inscrit — groupe à affecter.'
         : data.enrollment_confirmed ? 'Paiement enregistré. Inscription confirmée.'
         : data.student_enrolled ? 'Paiement enregistré. Apprenant inscrit.'
