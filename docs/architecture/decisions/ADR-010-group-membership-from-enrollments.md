@@ -1,12 +1,12 @@
 # ADR-010: Group membership derives from enrollments
 
-**Status: PROPOSED** (2026-10-24, with plan revision EGC-r1). Not accepted, not implemented. Acceptance requires the owner's approval of the [enrollment and group consistency plan](../plans/enrollment-group-consistency.md) and its decisions D1–D7. The owner approved the plan on 2026-10-24 at head `50da715` ([approval record](../plans/enrollment-group-consistency.md#approval-record)); this status is updated at release closeout (R6).
+**Status: ACCEPTED AND IMPLEMENTED** (accepted with the owner's approval of plan EGC-r1 on 2026-10-24 and the EGC-r2 implementation decisions of 2026-10-25; implemented by migrations [120](../../../supabase/migrations/120_enrollment_group_consistency.sql) (M1, live 2026-10-25) and [121](../../../supabase/migrations/121_enrollment_group_consistency_enforce.sql) (M2, live 2026-10-26 after the approved data clean-up); [plan](../plans/enrollment-group-consistency.md), release records [R1–R3](../evidence/egc-r2-m1-production-2026-10-25.md) and [R4–R5](../evidence/egc-r2-r4-r5-production-2026-10-26.md)). Deviations approved during implementation: the school-year match on placement is not enforced (owner decision 5), and a placement move to another level of the same programme takes the new level (owner decision 4). Original status: PROPOSED (2026-10-24).
 
 ## Context
 
 A learner's group is stored twice: `students.groupe_id` (one value) and `enrollments.group_id` (one per enrollment). Migrations [070](../../../supabase/migrations/070_enrollment_student_atomic_sync.sql), [072](../../../supabase/migrations/072_paid_enrollment_without_group.sql) and [074](../../../supabase/migrations/074_enrollment_workflow_consistency.sql) keep them in step with two triggers that write each other's table. Readers disagree on which copy counts: rosters, attendance and teacher access use the union, while announcements and teacher file access use `groupe_id` only. The 2026-10-24 audit found that this design removes a learner from their Yearly group when a second programme is placed (DAT-1), leaves 36 learners in groups without an enrollment (DAT-2), lets a group edit block payments (ACA-1), lets a legacy row silently clear a group (ACA-4), and cannot express "this learner has left" (ACA-2, ACA-3).
 
-## Decision (proposed)
+## Decision
 
 1. A learner is a member of a group if and only if they have an enrollment in that group with status Validated or Trial and the learner is not archived. One private helper implements the rule; every reader uses it.
 2. At most one live enrollment per learner, programme and school year; one group per enrollment. A learner can therefore be in one group per programme at the same time (owner decision D1).
