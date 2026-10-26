@@ -566,12 +566,15 @@ insert into public.portfolios(id, student_id, student_name, title, project_type,
 select pg_temp.act(10);
 update public.portfolios set teacher_note = 'rewritten', visible_to_parent = false, title = 'Mine now' where id = pg_temp.id(952);
 delete from public.portfolios where id = pg_temp.id(952);
-update public.portfolios set teacher_note = 'self feedback', visible_to_parent = false, title = 'My essay v2' where id = pg_temp.id(951);
+select pg_temp.fails(format($$update public.portfolios set teacher_note = 'self feedback' where id = %L$$, pg_temp.id(951)), '42501', 'portal.protected_portfolio_fields');
+select pg_temp.fails(format($$update public.portfolios set visible_to_parent = false where id = %L$$, pg_temp.id(951)), '42501', 'portal.protected_portfolio_fields');
+select pg_temp.fails(format($$update public.portfolios set teacher_id = %L where id = %L$$, pg_temp.id(101), pg_temp.id(951)), '42501', 'portal.protected_portfolio_fields');
+update public.portfolios set title = 'My essay v2' where id = pg_temp.id(951);
 select pg_temp.owner();
 select pg_temp.ok((select title = 'Teacher project' and teacher_note = 'teacher feedback' from public.portfolios where id = pg_temp.id(952)),
   'T-29 a student cannot change or delete the teacher''s entry');
 select pg_temp.ok((select title = 'My essay v2' and teacher_note is null and visible_to_parent from public.portfolios where id = pg_temp.id(951)),
-  'T-29 on the own entry, teacher fields and visibility stay unchanged');
+  'T-29 on the own entry, teacher fields and visibility are refused, the title changes');
 select pg_temp.fails(format('update public.portfolios set created_by = %L where id = %L', pg_temp.id(1), pg_temp.id(951)), '42501', 'portal.immutable_author');
 select pg_temp.act(10);
 delete from public.portfolios where id = pg_temp.id(951);

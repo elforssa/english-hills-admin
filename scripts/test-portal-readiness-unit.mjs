@@ -21,6 +21,12 @@ const req = (headers) => new Request(APP + '/api/admin/invite', { method: 'POST'
 const json = { 'content-type': 'application/json' };
 assert.equal(requestOriginRefusal(req({ ...json, origin: APP })), null, 'same-origin JSON passes');
 assert.equal(requestOriginRefusal(req({ 'content-type': 'application/json; charset=utf-8', origin: APP, 'sec-fetch-site': 'same-origin' })), null);
+// The origin the browser targeted (scheme + Host), e.g. a local server reporting localhost in request.url.
+const local = (headers) => new Request('http://localhost:3101/api/storage/sign', { method: 'POST', headers, body: '{}' });
+assert.equal(requestOriginRefusal(local({ ...json, host: '127.0.0.1:3101', origin: 'http://127.0.0.1:3101' })), null);
+assert.deepEqual(requestOriginRefusal(local({ ...json, host: '127.0.0.1:3101', origin: 'http://127.0.0.1:3999' })).status, 403);
+assert.deepEqual(requestOriginRefusal(local({ ...json, host: '127.0.0.1:3101', origin: 'https://127.0.0.1:3101' })).status, 403);
+checks += 3;
 for (const [headers, label] of [
   [{ ...json }, 'missing Origin'],
   [{ ...json, origin: 'https://english-hills.com' }, 'the public site (same site, other origin)'],

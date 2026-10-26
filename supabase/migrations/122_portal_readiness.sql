@@ -122,18 +122,18 @@ create trigger portal_normalize_emails before insert or update on public.message
   for each row execute function portal_security.normalize_emails();
 create trigger portal_normalize_emails before insert or update on public.notifications
   for each row execute function portal_security.normalize_emails();
--- Validated by the release task after clean-up step C1.
+-- Validated by the release task after clean-up step C1. An empty value passes and
+-- becomes NULL on the row's next write (trigger above).
 alter table public.students add constraint students_email_normalized
-  check (email is null or (email = lower(btrim(email)) and email <> '')) not valid;
+  check (email = lower(btrim(email))) not valid;
 alter table public.students add constraint students_parent_email_normalized
-  check (parent_email is null or (parent_email = lower(btrim(parent_email)) and parent_email <> '')) not valid;
+  check (parent_email = lower(btrim(parent_email))) not valid;
 alter table public.teachers add constraint teachers_email_normalized
-  check (email is null or (email = lower(btrim(email)) and email <> '')) not valid;
+  check (email = lower(btrim(email))) not valid;
 alter table public.messages add constraint messages_emails_normalized
-  check ((from_user_email is null or (from_user_email = lower(btrim(from_user_email)) and from_user_email <> ''))
-    and (to_user_email is null or (to_user_email = lower(btrim(to_user_email)) and to_user_email <> ''))) not valid;
+  check (from_user_email = lower(btrim(from_user_email)) and to_user_email = lower(btrim(to_user_email))) not valid;
 alter table public.notifications add constraint notifications_recipient_email_normalized
-  check (recipient_email is null or (recipient_email = lower(btrim(recipient_email)) and recipient_email <> '')) not valid;
+  check (recipient_email = lower(btrim(recipient_email))) not valid;
 
 -- ── D4: teacher identity and membership ──────────────────────────────────
 create unique index teachers_active_email_normalized on public.teachers (lower(btrim(email)))
@@ -417,6 +417,9 @@ create trigger log_activity_t after insert or update or delete on public.attenda
   for each row execute function public.log_activity();
 
 -- ── D6: student portfolio boundary ───────────────────────────────────────
+-- For the student role, whatever file_url holds: teacher fields are cleared and
+-- the entry is visible on insert; on update a change to them is refused, as the
+-- storage binding already refuses it for asset-backed entries.
 alter table public.portfolios add column created_by uuid;
 create index portfolios_created_by_idx on public.portfolios (created_by) where created_by is not null;
 create function portal_security.guard_portfolio() returns trigger
@@ -433,9 +436,10 @@ begin
     if tg_op = 'INSERT' then
       new.teacher_note := null; new.teacher_id := null;
       new.visible_to_parent := true; new.visible_to_student := true;
-    else
-      new.teacher_note := old.teacher_note; new.teacher_id := old.teacher_id;
-      new.visible_to_parent := old.visible_to_parent; new.visible_to_student := old.visible_to_student;
+    elsif (new.teacher_note, new.teacher_id, new.visible_to_parent, new.visible_to_student)
+        is distinct from (old.teacher_note, old.teacher_id, old.visible_to_parent, old.visible_to_student) then
+      perform portal_security.fail('protected_portfolio_fields', '42501',
+        'Le retour de l’enseignant et la visibilité d’une entrée ne se modifient pas depuis l’espace apprenant.');
     end if;
   end if;
   return new;

@@ -4,7 +4,9 @@
 // stop a page on the public site from posting with the staff session.
 //
 // A request passes only when:
-//   • its Origin header equals the route's own origin (the admin site);
+//   • its Origin header equals the route's own origin (the admin site): the
+//     origin of request.url, or the scheme plus the Host header the browser
+//     targeted (a cross-site page can set neither);
 //   • Sec-Fetch-Site, when the browser sends it, is "same-origin";
 //   • its Content-Type is application/json (a cross-site form cannot send it).
 //
@@ -16,9 +18,11 @@ export const CROSS_ORIGIN_ERROR = 'Requête refusée : origine non autorisée.';
 export const CONTENT_TYPE_ERROR = 'Requête refusée : JSON attendu.';
 
 export function requestOriginRefusal(request) {
-  const expected = new URL(request.url).origin;
+  const url = new URL(request.url);
+  const host = request.headers.get('host');
+  const expected = new Set([url.origin, ...(host ? [`${url.protocol}//${host}`] : [])]);
   const origin = request.headers.get('origin');
-  if (!origin || origin !== expected) return { status: 403, error: CROSS_ORIGIN_ERROR };
+  if (!origin || !expected.has(origin)) return { status: 403, error: CROSS_ORIGIN_ERROR };
   const site = request.headers.get('sec-fetch-site');
   if (site && site !== 'same-origin') return { status: 403, error: CROSS_ORIGIN_ERROR };
   const type = request.headers.get('content-type') || '';

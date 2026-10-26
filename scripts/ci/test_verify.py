@@ -428,8 +428,12 @@ class VerificationTests(unittest.TestCase):
                       'test-delete-mistaken-receipt.sql', 'test-receipt-deletion-browser.mjs',
                       'test-batch1-security.mjs', 'test-batch2-security.mjs', 'test-batch3b-security.mjs',
                       'test-batch4c-storage-enforcement.mjs',
-                      'test-receptionist-storage.mjs', 'test-receptionist-security.sql'):
+                      'test-receptionist-storage.mjs', 'test-receptionist-security.sql',
+                      'test-portal-readiness.sql', 'test-portal-readiness.mjs', 'test-portal-readiness-browser.mjs',
+                      'test-portal-readiness-concurrency.py'):
             self.assertEqual(database.count('scripts/' + suite), 1, suite)
+        # Portal readiness upgrade rehearsal: both modes, each from a database at 121.
+        self.assertEqual(database.count('node scripts/test-portal-readiness-upgrade.mjs '), 2)
         self.assertIn('python3 scripts/ci/sqlstate_guard.py', jobs[3])
 
     def test_classifier_edge_cases_fail_closed(self):

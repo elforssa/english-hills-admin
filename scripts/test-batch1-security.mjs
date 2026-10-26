@@ -30,6 +30,22 @@ assert.equal(sql("select count(*) from vault.secrets where name in ('receipt_web
 
 const batch2 = sql("select count(*) from supabase_migrations.schema_migrations where version='042'") === '1';
 const run = `batch1-${randomUUID()}`;
+// Portal roles take the portal invitations (PRF-r2 D3): a learner or a teacher
+// record carries the invited address only while that invitation needs it.
+const portalLearner = randomUUID(), portalTeacher = randomUUID();
+let portalFixtures = false;
+function preparePortalFixture(role, email) {
+  if (!portalFixtures) {
+    sql(`insert into public.students(id,full_name,status,age_category) values('${portalLearner}','${run} learner','Prospect','Adults (18+)');
+      insert into public.teachers(id,full_name,email,contract_type) values('${portalTeacher}','${run} teacher','${run}-teacher-record@example.invalid','Freelance');`);
+    portalFixtures = true;
+  }
+  sql(`update public.students set parent_email=${role === 'parent' ? `'${email}'` : 'null'},
+      email=${role === 'student' ? `'${email}'` : 'null'} where id='${portalLearner}';
+    update public.teachers set email='${role === 'teacher' ? email : run + '-teacher-record@example.invalid'}' where id='${portalTeacher}';`);
+}
+const portalInvitation = (role) => role === 'teacher' ? { teacherId: portalTeacher }
+  : ['parent', 'student'].includes(role) ? { studentIds: [portalLearner] } : {};
 const password = randomBytes(24).toString('base64url');
 const roles = ['pending', 'parent', 'student', 'teacher', 'admin', 'director'];
 const users = [];
@@ -151,13 +167,19 @@ try {
   sql(`update public.profiles set role='pending' where id='${pending.id}';`);
   for (const role of roles.filter(r => r !== 'pending')) {
     pendingEmails.push(pending.email);
-    if (batch2) success(await request(director, '/rest/v1/rpc/prepare_role_invitation', 'POST', { p_email: pending.email, p_role: role }));
+    if (batch2 && ['parent', 'student', 'teacher'].includes(role)) {
+      preparePortalFixture(role, pending.email);
+      success(await request(director, `/rest/v1/rpc/${role === 'teacher' ? 'prepare_teacher_invitation' : 'prepare_family_invitation'}`, 'POST',
+        role === 'teacher' ? { p_email: pending.email, p_teacher_id: portalTeacher }
+          : { p_email: pending.email, p_role: role, p_student_ids: [portalLearner] }));
+    } else if (batch2) success(await request(director, '/rest/v1/rpc/prepare_role_invitation', 'POST', { p_email: pending.email, p_role: role }));
     else success(await request(service, '/rest/v1/pending_roles', 'POST', { email: pending.email, role }));
     assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), role);
     assert.equal((await rows('profiles', pending.id))[0].role, role);
     assert.deepEqual(success(await request(service, `/rest/v1/pending_roles?email=eq.${pending.email}`)), []);
     assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), null);
-    sql(`update public.profiles set role='pending' where id='${pending.id}';`);
+    sql(`update public.profiles set role='pending', linked_teacher_id=null where id='${pending.id}';
+      delete from public.family_links where profile_id='${pending.id}';`);
     checks++;
   }
   denied(await request(anonymous, '/rest/v1/rpc/apply_pending_role', 'POST', {}));
@@ -185,7 +207,8 @@ try {
       assert.equal(error, null);
       const response = await fetch(`http://127.0.0.1:3101${path}`, {
         method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30000),
-        headers: { 'Content-Type': 'application/json', Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') },
+        // Same-origin browser request: the admin routes refuse any other Origin (PRF-r2 D10).
+        headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:3101', Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') },
         body: JSON.stringify(body),
       });
       return { ok: response.ok, status: response.status, data: await response.json() };
@@ -197,9 +220,10 @@ try {
       sql(`update public.profiles set role='pending' where id='${pending.id}';`);
       // Existing-account invitation queues a role without delivering email.
       pendingEmails.push(pending.email);
-      success(await appRequest(actor, '/api/admin/invite', { email: pending.email, role }));
+      if (role === 'teacher') preparePortalFixture(role, pending.email);
+      success(await appRequest(actor, '/api/admin/invite', { email: pending.email, role, ...portalInvitation(role) }));
       assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), role);
-      sql(`update public.profiles set role='pending' where id='${pending.id}';`);
+      sql(`update public.profiles set role='pending', linked_teacher_id=null where id='${pending.id}';`);
       checks += 2;
     }
     const beforeDirector = await rows('profiles', director.id);
@@ -302,6 +326,11 @@ try {
 } finally {
   // IDs/emails below were generated by this run, never taken from existing data.
   for (const email of new Set(pendingEmails)) sql(`delete from public.pending_roles where email='${email}';`);
+  if (portalFixtures) sql(`delete from public.family_links where student_id='${portalLearner}';
+    delete from public.students where id='${portalLearner}';
+    update public.profiles set linked_teacher_id=null where linked_teacher_id='${portalTeacher}';
+    delete from public.teachers where id='${portalTeacher}';
+    delete from public.activity_log where target_id in ('${portalLearner}','${portalTeacher}');`);
   for (const table of ['students', 'teachers']) {
     for (const id of records[table]) success(await request(service, `/rest/v1/${table}?id=eq.${id}`, 'DELETE'));
   }

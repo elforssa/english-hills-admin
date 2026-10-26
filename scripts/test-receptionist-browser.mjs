@@ -415,7 +415,10 @@ try {
   }
   const [parentUser, studentUser] = portalUsers;
   sql(`update public.profiles set role='parent' where id='${parentUser.id}'; update public.profiles set role='student' where id='${studentUser.id}';
-    insert into public.students(id,full_name,status,email,parent_email) values('${pdfStudent}','${run} pdf','Enrolled','${studentUser.email}','${parentUser.email}');`);
+    insert into public.students(id,full_name,status,email,parent_email) values('${pdfStudent}','${run} pdf','Enrolled','${studentUser.email}','${parentUser.email}');
+    insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+      ('${pdfStudent}','parent','${parentUser.id}','${parentUser.email}','active',now()),
+      ('${pdfStudent}','self','${studentUser.id}','${studentUser.email}','active',now());`);
   const pdfReceipt = JSON.parse(sql(`begin; alter table public.receipts disable trigger on_receipt_created;
     select set_config('request.jwt.claim.sub','${user}',true); set local role authenticated;
     select public.create_charge_payment(jsonb_build_object('student_id','${pdfStudent}','session_type','Other','service_detail','Synthetic PDF loader','school_year','2026/2027','gross_amount',100,'payment_amount',40,'payment_date',current_date,'payment_method','Espèces','idempotency_key','${randomUUID()}'));
@@ -520,6 +523,7 @@ try {
       select id from public.receipts where student_id='${pdfStudent}';
     delete from public.receipts where student_id='${pdfStudent}';
     delete from public.charges where student_id='${pdfStudent}';
+    delete from public.family_links where student_id='${pdfStudent}';
     delete from public.students where id='${pdfStudent}';
     delete from public.rate_limits where user_id in (${portalIds});
     delete from auth.users where id in (${portalIds});

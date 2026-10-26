@@ -73,8 +73,9 @@ async function app(actor,operation,body) {
     }});
     assert.equal((await client.auth.setSession({access_token:actor.token,refresh_token:actor.refreshToken})).error,null);
   }
+  // Same-origin browser request: the storage routes refuse any other Origin (PRF-r2 D10).
   const r=await fetch('http://127.0.0.1:3101/api/storage/'+operation,{method:'POST',redirect:'error',
-    headers:{'Content-Type':'application/json',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
+    headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
   assert.equal(r.headers.get('cache-control'),'no-store');
   return {status:r.status,ok:r.ok,data:await r.json()};
 }
@@ -104,6 +105,15 @@ try {
   // Group membership derives from a Validated enrollment (EGC); the file group follows it.
   for(const placed of children.slice(0,2)) await create('enrollments',{student_id:placed.id,group_id:g.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   const [child,child2,unrelated]=children;
+  // Portal readiness (PRF-r2 D3/D4): families reach a learner through explicit links
+  // and teacher accounts are bound to their records.
+  sql(`insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+    ('${child.id}','parent','${parent.id}','${parent.email}','active',now()),
+    ('${child2.id}','parent','${parent.id}','${parent.email}','active',now()),
+    ('${unrelated.id}','parent','${otherParent.id}','${otherParent.email}','active',now()),
+    ('${child.id}','self','${student.id}','${student.email}','active',now());
+    update public.profiles set linked_teacher_id='${t.id}' where id='${teacher.id}';
+    update public.profiles set linked_teacher_id='${t2.id}' where id='${otherTeacher.id}';`);
   const a=await reserve(student,'portfolio',child.id); await ready(student,a);
   const pf=await create('portfolios',{student_id:child.id,title:run,project_type:'Other',file_url:'asset:'+a.id,visible_to_parent:false,teacher_note:'forged'},student);
   assert.equal(pf.teacher_note,null); assert.equal(pf.visible_to_parent,true); checks+=2;
@@ -172,6 +182,8 @@ try {
   await denied(()=>app(admin,'finalize',{assetId:draft.id}));
   await denied(()=>app(admin,'sign',{assetId:draft.id}));
   const photoChild=await create('students',{full_name:run+' Photo Child',parent_email:parent.email,photo_url:'asset:'+draft.id},admin);
+  sql(`insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at)
+    values('${photoChild.id}','parent','${parent.id}','${parent.email}','active',now());`);
   ok(await app(parent,'sign',{assetId:draft.id})); checks++;
   await denied(()=>request(admin,'students','PATCH',{photo_url:'asset:'+draft.id},'?id=eq.'+unrelated.id));
   const replacement=await reserve(director,'student_photo',photoChild.id); await ready(director,replacement);
@@ -239,6 +251,7 @@ try {
   if(assets.length) cleanup+="delete from public.storage_asset_bindings where asset_id in ("+quoted(assets.map(a=>a.id))+"); delete from public.storage_assets where id in ("+quoted(assets.map(a=>a.id))+");";
   // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
   cleanup+='set local eh.enrollment_command = on;';
+  if(records.students?.length) cleanup+='delete from public.family_links where student_id in ('+quoted(records.students)+');';
   for(const table of ['portfolios','enrollments','students','groups','teachers']) if(records[table]?.length) cleanup+='delete from public.'+table+' where id in ('+quoted(records[table])+');';
   if(users.length) cleanup+="alter table public.profiles disable trigger role_security_guard; delete from auth.users where id in ("+quoted(users.map(u=>u.id))+"); alter table public.profiles enable trigger role_security_guard; update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director'); delete from public.activity_log where actor_id in ("+quoted(users.map(u=>u.id))+");";
   const targetIds=[...Object.values(records).flat(),...assets.map(a=>a.id),...users.map(u=>u.id)];
