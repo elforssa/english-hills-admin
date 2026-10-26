@@ -10,7 +10,7 @@ import { entities, reportError } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
 import { ACTIVE_STUDENT_STATUSES, PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
-import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { businessMonthStart, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
@@ -73,7 +73,7 @@ export default function Dashboard() {
     let active = true;
     setLoading(true); setReadError(false);
     setFinanceRead(previous => previous.scope === authScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:authScope});
-    const monthStart = new Date().toISOString().slice(0, 7) + '-01';
+    const monthStart = businessMonthStart();
     const monthlyScope = `${authScope}:${monthStart}`;
     setMonthlyRead(previous => previous.scope === monthlyScope ? {...previous, state: previous.data ? 'refreshing' : 'loading'} : {state:'loading', scope:monthlyScope});
     // Head-only exact counts under the same RLS as the former full-table reads.
@@ -91,7 +91,7 @@ export default function Dashboard() {
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
     ]).then(([students, teachers, groups, receipts, enrollmentsPending, testsPlanifies, financeResult, monthlyResult]) => {
       if (!active) return;
-      const finance = financeReadResult(financeResult, ['total_encaisse']);
+      const finance = financeReadResult(financeResult, ['total_encaisse','total_restant']);
       const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
       setFinanceRead(previous => finance.state === 'ready' ? {...finance, scope:authScope} : {...failedRead(previous, finance.reason), state: previous.data ? 'stale' : finance.state});
       setMonthlyRead(previous => monthly.state === 'ready' ? {...monthly, scope:monthlyScope} : {...failedRead(previous, monthly.reason), scope:monthlyScope, state: previous.data ? 'stale' : monthly.state});
@@ -181,7 +181,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <div>
             <h2 className="font-semibold text-sm text-foreground">
-              Paiements — {new Date().toLocaleDateString('fr-MA', { month: 'long', year: 'numeric' })}
+              Paiements — {new Date().toLocaleDateString('fr-MA', { month: 'long', year: 'numeric', timeZone: 'Africa/Casablanca' })}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">{monthlyData ? monthlyData.count : '—'} reçu(s) ce mois</p>
           </div>
@@ -192,37 +192,40 @@ export default function Dashboard() {
         <ReadState state={monthlyRead.state} onRetry={['error','stale','unavailable'].includes(monthlyRead.state) ? () => setReload(x=>x+1) : undefined}>
         {monthlyData && <><div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-emerald-50 rounded-xl p-4">
-            <p className="text-xs text-emerald-600 font-medium mb-1">Encaissé</p>
+            <p className="text-xs text-emerald-600 font-medium mb-1">Encaissé ce mois</p>
             <p className="text-xl font-bold text-emerald-700">{monthlyData.encaisse.toLocaleString('fr-MA')} MAD</p>
-          </div>
-          <div className="bg-red-50 rounded-xl p-4">
-            <p className="text-xs text-red-500 font-medium mb-1">Solde restant</p>
-            <p className="text-xl font-bold text-red-600">{monthlyData.restant.toLocaleString('fr-MA')} MAD</p>
+            <p className="text-[11px] text-emerald-700/80 mt-1">Paiements datés de ce mois</p>
           </div>
           <div className="bg-muted rounded-xl p-4">
-            <p className="text-xs text-muted-foreground font-medium mb-1">Total facturé</p>
+            <p className="text-xs text-muted-foreground font-medium mb-1">Facturé ce mois</p>
             <p className="text-xl font-bold text-foreground">{monthlyData.total.toLocaleString('fr-MA')} MAD</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Engagements créés ce mois</p>
+          </div>
+          <div className="bg-red-50 rounded-xl p-4">
+            <p className="text-xs text-red-500 font-medium mb-1">Reste à encaisser (tous engagements)</p>
+            <p className="text-xl font-bold text-red-600">{financeRead.data ? `${financeRead.data.total_restant.toLocaleString('fr-MA')} MAD` : 'Indisponible'}</p>
           </div>
         </div>
-        {!loading && monthlyData.total > 0 && (
-          <div>
+        {/* Same set of charges on both sides: this month's charges and what is already paid on them (FIN-9). */}
+        {!loading && monthlyData.total > 0 && (() => {
+          const alreadyPaid = Math.max(0, monthlyData.total - monthlyData.restant);
+          const paidShare = Math.min(100, Math.round((alreadyPaid / monthlyData.total) * 100));
+          return <div>
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-              <span>Taux de recouvrement mensuel</span>
-              <span className="font-bold" style={{ color: 'var(--brand)' }}>
-                {Math.round((monthlyData.encaisse / monthlyData.total) * 100)}%
-              </span>
+              <span>Facturé ce mois, dont déjà encaissé : {alreadyPaid.toLocaleString('fr-MA')} MAD</span>
+              <span className="font-bold" style={{ color: 'var(--brand)' }}>{paidShare}%</span>
             </div>
             <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
               <div
                 className="h-3 rounded-full transition-all"
                 style={{
-                  width: `${Math.min(100, Math.round((monthlyData.encaisse / monthlyData.total) * 100))}%`,
+                  width: `${paidShare}%`,
                   background: 'linear-gradient(90deg, #059669, #10b981)',
                 }}
               />
             </div>
-          </div>
-        )}
+          </div>;
+        })()}
         {!loading && monthlyData.total === 0 && (
           <p className="text-xs text-muted-foreground text-center py-2">Aucun reçu enregistré ce mois.</p>
         )}

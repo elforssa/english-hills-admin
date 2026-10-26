@@ -8,7 +8,7 @@ import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
-import { money } from '@/lib/receiptFinance';
+import { money, receiptNumberLabel } from '@/lib/receiptFinance';
 
 export default function DeleteMistakenReceipt() {
   const { id } = useParams();
@@ -50,7 +50,7 @@ export default function DeleteMistakenReceipt() {
 
   async function remove() {
     if (saving || !record || record.otherPayments || reason.trim().length < 3) return;
-    if (!window.confirm(`Supprimer le reçu ${record.receipt.receipt_number} créé par erreur et annuler son montant dû ? Cette action ne rembourse pas d’argent.`)) return;
+    if (!window.confirm(`Supprimer le reçu ${receiptNumberLabel(record.receipt)} créé par erreur et annuler son montant dû ? Cette action ne rembourse pas d’argent.`)) return;
     setSaving(true);
     if (!requestKey.current) requestKey.current = crypto.randomUUID();
     try {
@@ -73,7 +73,7 @@ export default function DeleteMistakenReceipt() {
     <section className="space-y-5 rounded-xl border bg-card p-6">
       <div><h1 className="text-xl font-bold">Supprimer un reçu créé par erreur</h1><p className="mt-2 text-sm text-muted-foreground">Le reçu et son montant dû seront retirés des comptes actifs. Cette action ne rembourse pas d’argent et ne modifie pas l’inscription.</p></div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : !record ? <p role="status">Vérification du reçu…</p> : <>
-        <div><p className="font-semibold">{record.receipt.receipt_number} · {record.receipt.nom_prenom}</p><p className="text-sm text-muted-foreground">{record.charge?.service_description || record.receipt.service_description || 'Reçu historique'}</p></div>
+        <div><p className="font-semibold">{receiptNumberLabel(record.receipt)} · {record.receipt.nom_prenom}</p><p className="text-sm text-muted-foreground">{record.charge?.service_description || record.receipt.service_description || 'Reçu historique'}</p></div>
         {record.otherPayments > 0 ? <div role="alert" className="space-y-3 rounded-lg border p-4 text-sm"><p>Cet engagement comporte {record.otherPayments} autre(s) paiement(s) actif(s). La suppression est bloquée pour les préserver.</p><Link href={`/receipts/${id}/edit`} className="inline-flex min-h-10 items-center font-semibold text-primary underline">Corriger uniquement le paiement</Link></div> : <>
           <dl className="space-y-3 rounded-lg bg-muted/50 p-4 text-sm">
             <div className="flex justify-between gap-3"><dt>À retirer des encaissements</dt><dd className="font-semibold">{money(record.receipt.voided_at ? 0 : record.receipt.montant_paye)} MAD</dd></div>

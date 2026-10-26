@@ -10,6 +10,7 @@ import { crmRpc, useCrmRefresh } from '@/lib/crm/queries';
 import { retryKey, commandError } from '@/lib/crm/presentation.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
+import { localBusinessDate } from '@/lib/receiptFinance';
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
@@ -53,7 +54,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
   const refresh = useCrmRefresh();
   const [error, setError] = useState('');
   const [expected, setExpected] = useState({ lead: crmLead?.version, task: crmLead?.confirm_placement_task, updated: test?.updated_at });
-  const [form, setForm] = useState({ student_id: '', student_name: '', date_test: new Date().toISOString().split('T')[0], heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '', ...(linked ? { niveau_recommande: '', student_name: crmLead?.learner_name || test?.student_name || '' } : {}), ...test });
+  const [form, setForm] = useState({ student_id: '', student_name: '', date_test: localBusinessDate(), heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '', ...(linked ? { niveau_recommande: '', student_name: crmLead?.learner_name || test?.student_name || '' } : {}), ...test });
   const [saving, setSaving] = useState(false);
   const [chosenStudent, setChosenStudent] = useState(null);
   const [chosenGroup, setChosenGroup] = useState(null);

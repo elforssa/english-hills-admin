@@ -375,3 +375,13 @@ Stop and report (do not improvise) if: a lifecycle producer or candidate functio
 ### Docs / status reporting
 
 Update the receipt model (numbering, corrections, guardrails), PRODUCT_RULES (conversion and finance: void review rule, reception confirmation threshold), SECURITY_RULES (reception finance limits, director review list, payroll validation), CURRENT_STATE only with release evidence, ADR-012 status on acceptance, this plan's implementation record per release. Hand off with the AGENTS.md implementation status, PR, head/base SHA, CI run, migration filename and open decisions.
+
+## Implementation record
+
+### E-1 (Tier 2, app only)
+
+- **Branch:** `feat/batch-e1-payment-corrections`, from `origin/main` `b0b6a83209fa8576029db8b1c0894a585dbad1e6` (2026-10-26). The PCR-r2 re-review called for in the status line has no record in the repository; implementation was started on the owner's instruction of 2026-10-26 to implement PCR-r2.
+- **Scope delivered:** P4 FIN-5 (export), FIN-9 (dashboard card, reports totals), FIN-8/REL-7 app part (dashboard month, `receiptStatus`, five form defaults); P2.6 "Reçu historique" on PDF, print, correction and deletion screens; P5 (pending key recovery after reload, identical-receipt prompt); P6 interim payroll stop. Details in the [receipt model](../../receipt-financial-model.md#batch-e-release-e-1-app-only-not-yet-merged).
+- **Deviations:** none from the plan's text. Choices within it: the pending key is stored only for a nonzero payment (a zero payment issues no receipt to look up); a failed lookup keeps the key and shows a warning instead of starting over; the identical-receipt prompt names the payment date when it is not today; deleted receipts count as cancelled in the export, like voided ones.
+- **Tests:** `scripts/test-receipt-client-regressions.mjs` (export order and amounts, Casablanca boundaries with fixed-offset zones, pending-key recovery including blocked storage, wiring of the five forms, payroll stop order); `npm test`, lint, build.
+- **Shared files with Batch F (portal readiness):** `src/app/(admin)/parent-portal/page.jsx` (one default date and its import), `src/lib/receiptPdf.js` (number label), `src/app/api/admin/payroll/route.js` (Batch F adds an Origin check at the top of the same handler). No function or policy is shared.

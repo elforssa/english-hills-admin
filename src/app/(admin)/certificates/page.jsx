@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
 import { getLevelsForSession } from '@/lib/academicPrograms';
+import { localBusinessDate } from '@/lib/receiptFinance';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -17,7 +18,7 @@ function CertificateModal({ students, onSave, onClose }) {
   const [form, setForm] = useState({
     student_id: '', student_name: '', niveau_complete: 'Pre-Child',
     terme: 'Sept–Déc', annee: '2025-2026',
-    date_emission: new Date().toISOString().split('T')[0],
+    date_emission: localBusinessDate(),
     directeur: 'Direction English Hills', notes: '', issued: true,
   });
   const [saving, setSaving] = useState(false);

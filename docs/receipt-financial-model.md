@@ -138,3 +138,31 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
 - Stored text of issued receipts and settled or voided charges is left as it was
   (owner decision Q1). The plan word was removed from the 10 open non-legacy Yearly
   charge descriptions by the separately approved cleanup step on 2026-10-09 UTC.
+
+### Batch E release E-1 (app only; not yet merged)
+
+[Plan PCR-r2](architecture/plans/payment-corrections-receipts.md#implementation-record), release E-1. No database change:
+
+- **Finance CSV export (FIN-5).** `N° reçu` is the first column. Rows are ordered by series (`EH-YYYY-`, then
+  `EH-HIST-`, then any other number, then unnumbered rows) and by the numeric suffix as a number. A cancelled
+  receipt (voided or deleted) stays in the file with `Montant reçu` = 0, its original amount in `Montant annulé`,
+  `Annulé le` (Casablanca date) and `Motif d'annulation`; summing `Montant reçu` gives collections. The file name
+  uses the Casablanca date.
+- **Dashboard and reports (FIN-9).** "Encaissé ce mois" (payments dated this month) stands alone; "Facturé ce mois"
+  shows what is already paid on that same set of charges (`total − restant`); "Reste à encaisser (tous
+  engagements)" comes from `get_finance_charge_summary.total_restant`. Reports show facturé and encaissé without a
+  remaining balance or rate derived from the two; payroll totals cover every teacher, the chart the top 12.
+- **Casablanca dates (FIN-8/REL-7, app part).** The dashboard month, "En retard" in `receiptStatus` and the default
+  dates of the placement, enrollment, certificate, learning-assessment and parent re-enrollment forms use
+  `localBusinessDate()` (zone `Africa/Casablanca`, never a fixed offset). The database part is release E-2.
+- **Unnumbered historical receipts.** Until data step D1 numbers them, the PDF, print, correction and deletion
+  screens show "Reçu historique" instead of an empty number.
+- **No duplicate after a reload (FIN-13).** Pressing Save for a payment stores `{key, savedAt}` in
+  `sessionStorage`; a confirmed response clears it. After a reload the form looks the key up in
+  `receipts.idempotency_key`: found, it shows the receipt and does not prefill; not found, it says the attempt was
+  not recorded (the form already holds a fresh key); lookup failed, it keeps the key and asks staff to check the
+  learner's receipts. Before a payment, an active receipt for the same learner, amount and payment date asks for
+  confirmation. Both are client-side; the server contract is unchanged.
+- **Payroll (Q9).** `POST /api/admin/payroll` answers 409 "Paie désactivée : barème à valider par le comptable."
+  after its authentication and role checks and before any write; the page shows the banner and disables creation.
+  Existing payslips stay readable and printable. Release E-3 replaces the switch with a validated rule set.
