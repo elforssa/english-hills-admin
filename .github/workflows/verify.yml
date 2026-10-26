@@ -316,7 +316,7 @@ jobs:
           supabase db reset --local --version 119 --no-seed
           node scripts/test-egc-upgrade.mjs revert-m1
           supabase db reset --local --no-seed
-      - name: Portal readiness 121 to 122 upgrade, guarded clean-up and prepared corrective
+      - name: Portal readiness 121 to 123 upgrade, guarded clean-up and prepared corrective
         if: matrix.shard == 'upgrades-from-112-to-116'
         run: |
           supabase db reset --local --version 121 --no-seed

@@ -28,7 +28,7 @@ function sql(input) {
   return execFileSync('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
     { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 }
-assert.equal(sql("select count(*) from pg_proc where proname = 'portal_learner_record'"), '1', 'migration 122 applied');
+assert.equal(sql("select count(*) from pg_proc where proname = 'portal_learner_record'"), '1', 'migration 123 applied');
 assert.equal(sql("select count(*) from vault.secrets where name in ('receipt_webhook_url','receipt_webhook_token')"), '0');
 const run = 'portal-' + randomUUID().slice(0, 8), password = randomBytes(24).toString('base64url');
 const users = [], ids = Object.fromEntries(['t1', 't2', 'g1', 'childA', 'childB', 'adult', 'receipt', 'charge'].map(k => [k, randomUUID()]));

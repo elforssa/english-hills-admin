@@ -131,5 +131,5 @@ console.log('PASS catalog zero rule: clean after 119, fails on a reintroduced ra
 console.log('Bringing the ledger to the current migrations with supabase migration up');
 cli(['migration', 'up', '--local']);
 assert.equal(sql("select name from supabase_migrations.schema_migrations where version = '119'"), 'conflicts_without_retry');
-assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '122');
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '123');
 assert.equal(catalogFails(), null, 'catalog zero rule at the current migrations');

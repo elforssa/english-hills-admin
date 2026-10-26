@@ -3,14 +3,14 @@
 //   node scripts/test-portal-readiness-upgrade.mjs full
 //     seeds the Production patterns on 121 (staff only, no portal account, a
 //     placeholder learner address, addresses differing only by case or spaces, a
-//     teacher with an empty address, receipts, portfolios), applies migration 122
+//     teacher with an empty address, receipts, portfolios), applies migration 123
 //     (the file directly; the ledger stays at 121), proves that no existing row
 //     changed, that the catalog changed only in the plan's manifest and that the
 //     new constraints are NOT VALID; then runs the clean-up script with wrong
 //     counts (refused, nothing changed) and with the right counts (C0 before-image,
 //     C1, C2, constraints validated, receipts untouched), and proves it runs once;
 //   node scripts/test-portal-readiness-upgrade.mjs corrective
-//     applies 122 then the prepared corrective (scripts/portal-readiness-corrective.sql):
+//     applies 123 then the prepared corrective (scripts/portal-readiness-corrective.sql):
 //     every RLS policy is the 121 policy again.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -26,7 +26,7 @@ const sql = input => psql(input);
 const json = input => JSON.parse(sql(input));
 const applyFile = (path, extra) => psql(readFileSync(path, 'utf8'), extra);
 const failsFile = (path, extra) => { try { applyFile(path, extra); return null; } catch (error) { return String(error.stderr || error.message); } };
-const MIGRATION = 'supabase/migrations/122_portal_readiness.sql';
+const MIGRATION = 'supabase/migrations/123_portal_readiness.sql';
 const CLEANUP = 'scripts/portal-readiness-cleanup.sql';
 const CORRECTIVE = 'scripts/portal-readiness-corrective.sql';
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '121', 'run on a database at migration 121');
@@ -47,7 +47,7 @@ const catalog = () => json(`select jsonb_build_object(
     from pg_policies),
   'columns', (select jsonb_object_agg(table_name || '.' || column_name, data_type) from information_schema.columns where table_schema = 'public'))`);
 const diffKeys = (a = {}, b = {}) => [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).sort();
-// Every existing row of the touched tables, minus the columns 122 adds.
+// Every existing row of the touched tables, minus the columns 123 adds.
 const TABLES = ['students', 'teachers', 'profiles', 'groups', 'enrollments', 'receipts', 'charges', 'portfolios', 'notifications', 'messages',
   'pending_roles', 'attendance', 'assessments', 'placement_tests', 'certificates', 'app_config', 'activity_log'];
 const ADDED = { portfolios: ['created_by'], notifications: ['recipient_profile_id'], messages: ['recipient_profile_id', 'sender_profile_id'],
@@ -97,7 +97,7 @@ const beforeCatalog = catalog();
 const beforeRows = rows();
 applyFile(MIGRATION);
 const afterCatalog = catalog();
-assert.deepEqual(rows(), beforeRows, 'migration 122 changes no existing row');
+assert.deepEqual(rows(), beforeRows, 'migration 123 changes no existing row');
 checks++;
 
 if (mode === 'corrective') {
@@ -162,7 +162,7 @@ assert.deepEqual(diffKeys(beforeCatalog.columns, afterCatalog.columns), ['family
 assert.deepEqual(json(`select to_jsonb(portal_security.readiness_failures())`), ['office recipient is not configured',
   'an address is on more than 10 learner files', 'e-mail normalisation constraints are not validated']);
 checks += 8;
-console.log('PASS 121 → 122: no existing row changed; functions, policies, constraints and columns exactly the manifest');
+console.log('PASS 121 → 123: no existing row changed; functions, policies, constraints and columns exactly the manifest');
 
 // Clean-up: wrong counts are refused and change nothing; the right counts run C0–C2 once.
 const counts = { c1_parent: 2, c1_email: 1, c1_teacher: 1, c2_email: 12, c2_parent: 3 };

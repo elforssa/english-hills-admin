@@ -1,4 +1,4 @@
--- Portal readiness (migration 122, plan PRF-r2, ADR-011): cross-role denial suite.
+-- Portal readiness (migration 123, plan PRF-r2, ADR-011): cross-role denial suite.
 -- Synthetic local fixtures, fully rolled back. Numbered tests follow the plan's
 -- "Cross-role denial test suite design": T-01..T-08 column and value denial,
 -- T-09..T-16 family isolation, T-17..T-22 invitation, T-23..T-27 teacher,

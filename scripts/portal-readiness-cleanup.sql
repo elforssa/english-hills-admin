@@ -1,6 +1,6 @@
 -- Portal readiness (plan PRF-r2) data clean-up C0–C2 and the D9 constraint
 -- validation. NOT RUN by the migration or by CI against real data: the release
--- task runs it once, after migration 122, under the owner's explicit approval
+-- task runs it once, after migration 123, under the owner's explicit approval
 -- (R3), with the counts its own dry-run queries returned:
 --
 --   psql ... -v c1_parent=4 -v c1_email=2 -v c1_teacher=1 -v c2_email=33 -v c2_parent=7 \
@@ -17,7 +17,7 @@ select set_config('portal_cleanup.c1_parent', :'c1_parent', true), set_config('p
 
 do $$ begin
   if to_regclass('public.family_links') is null then
-    raise exception 'Portal clean-up requires migration 122' using errcode = '55000';
+    raise exception 'Portal clean-up requires migration 123' using errcode = '55000';
   end if;
   if exists (select 1 from public.family_links) or exists (select 1 from public.profiles where role in ('parent','student','teacher')) then
     raise exception 'Portal clean-up runs before the first portal account exists' using errcode = '55000';

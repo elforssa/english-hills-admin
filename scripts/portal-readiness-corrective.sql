@@ -1,9 +1,9 @@
 -- Portal readiness (plan PRF-r2) prepared corrective migration: REVIEWED, NOT
 -- APPLIED. Recovery is forward (plan "Migration strategy"): if the portals must be
--- reopened on the pre-122 access model before the first invitation, the release
+-- reopened on the pre-123 access model before the first invitation, the release
 -- task copies this file into a new numbered migration with the owner's approval,
 -- together with an application revert. It re-creates, from their migration-121
--- definitions, every policy migration 122 removed or replaced, and restores the
+-- definitions, every policy migration 123 removed or replaced, and restores the
 -- anonymous grant on the legacy reconciliation view. It keeps the family-link
 -- visibility, the bound teacher identity, the new functions, columns, triggers
 -- and the D12 helper grants: they are inert or narrower without these policies.
