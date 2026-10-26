@@ -179,12 +179,16 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
 - **Corrections.** `void_financial_receipt` and `delete_mistaken_receipt` lock in payment order (shared enrollment-intent
   lock, learner, charge, receipt, enrollment, lead) and, when the receipt was the last live payment of a Confirmed or
   Validated enrollment, write `enrollment_id` and `enrollment_without_live_payment` on their `payment_voided` event and
-  flag a CONVERTED linked lead once. A replacement payment clears that flag under the Q1-B rule.
-- **Desk guardrails.** New charges with a discount store `discount_reason_code` (`sibling`, `former_student`,
-  `promotion`, `director_approval`, `other`) and, for `other`, `discount_reason`; both enter the request fingerprint only
-  when present, so earlier requests still replay. Reception discounts are capped at 10 %; payment dates are limited to
-  today and 7 (reception) or 31 (admin, director) days back; all after the idempotent replay. Below 10 % of the net price
-  a reception payment leaves the enrollment Under Review (`enrollment_confirmation_pending`).
+  flag a CONVERTED linked lead once. A replacement payment clears that flag under the Q1-B rule (no review of the lead
+  ever raised for another reason). A receipt changed under a void is a `PT409` conflict (hint `finance.receipt_changed`).
+- **Desk guardrails.** A new charge with a discount gets a row in the staff-only `charge_discount_reasons` (code
+  `sibling`, `former_student`, `promotion`, `director_approval` or `other`, with text for `other`); the payload fields
+  `discount_reason_code`/`discount_reason` enter the request fingerprint only when present, so earlier requests still
+  replay. Reception discounts are capped at 10 %; payment dates are limited to today and 7 (reception) or 31 (admin,
+  director) days back, by the server's Casablanca date (the future-date refusal names it, for browsers whose time-zone
+  data predates tzdata 2026c); all after the idempotent replay. Below 10 % of the net price a reception payment issues
+  the receipt but confirms nothing (`enrollment_confirmation_pending`): a linked Submitted, Under Review or Trial
+  enrollment keeps its status and a new one is created as Under Review.
 - **Dates and reports.** `public.business_date()` (zone `Africa/Casablanca`) replaces `current_date` in `charge_balances`,
   the payment functions and the monthly/yearly finance summaries. `get_finance_summary()` and `get_unpaid_receipts(int)`
   are dropped. `get_finance_review_queue` feeds the director's "Contrôles" list on `/finance`.

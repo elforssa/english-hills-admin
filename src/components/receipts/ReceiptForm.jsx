@@ -224,7 +224,10 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   // Batch E guardrails (mirrored from the database for messages only).
   const today = localBusinessDate();
   const needsDiscountReason = !lockedCharge && discount > 0;
-  const confirmationPending = receptionConfirmationPending({ role, sessionType: form.session_type, net, paidBefore, payment: todayPayment });
+  const targetEnrollmentId = selectedCharge?.enrollment_id || (form.enrollment_id !== 'new' ? form.enrollment_id : '');
+  const targetEnrollmentStatus = targetEnrollmentId ? (enrollments.find((row) => row.id === targetEnrollmentId)?.status || 'unknown') : null;
+  const confirmationPending = receptionConfirmationPending({ role, sessionType: form.session_type, net, paidBefore, payment: todayPayment,
+    enrollmentStatus: targetEnrollmentStatus });
 
   const submit = async (event) => {
     event.preventDefault();

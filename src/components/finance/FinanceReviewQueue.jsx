@@ -59,7 +59,7 @@ export default function FinanceReviewQueue() {
               <Link href={recordHref(`/receipts/${row.receipt_id}/print`, '/finance')} className="font-semibold text-primary hover:underline">{row.receipt_number || 'Reçu historique'}</Link>
               <span className="text-xs text-muted-foreground"> · {row.learner_name} · daté du {row.payment_date}, émis le {row.issued_on} ({row.days_back} j) · {money(row.amount)} MAD · {ROLE_LABELS[row.author_role] || 'Auteur inconnu'}{row.voided ? ' · annulé' : ''}</span>
             </>} />
-          <ReviewList title="Acomptes de l’accueil en attente de confirmation" empty="Aucune inscription en attente après un acompte de l’accueil." rows={data.pending_confirmation}
+          <ReviewList title="Acomptes inférieurs à 10 % en attente de confirmation" empty="Aucune inscription en attente après un acompte inférieur à 10 %." rows={data.pending_confirmation}
             render={(row) => <>
               <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
               <span className="text-xs text-muted-foreground"> · {row.session_type} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · payé {money(row.paid)} MAD sur {money(row.net)} MAD · dernier paiement {row.last_payment_date}</span>

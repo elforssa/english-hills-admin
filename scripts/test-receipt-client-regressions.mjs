@@ -9,7 +9,7 @@ import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/fun
 import { retryingImport } from '../src/lib/retryingImport.mjs';
 import { PENDING_PAYMENT_STORAGE_KEY, clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, readPendingPayment, recoverPendingPayment, savePendingPayment } from '../src/lib/receiptDraftKey.mjs';
 import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '../src/lib/payroll/status.mjs';
-import { CORRECTION_BUSY_MESSAGE, DISCOUNT_REASONS, LAST_PAYMENT_NOTICE, PENDING_CONFIRMATION_MESSAGE, addDays, correctionErrorMessage, deskGuardError, discountReasonLabel, paymentBackdateDays, receptionConfirmationPending } from '../src/lib/financeCorrections.mjs';
+import { CORRECTION_BUSY_MESSAGE, RECEIPT_CHANGED_MESSAGE, DISCOUNT_REASONS, LAST_PAYMENT_NOTICE, PENDING_CONFIRMATION_MESSAGE, addDays, correctionErrorMessage, deskGuardError, discountReasonLabel, paymentBackdateDays, receptionConfirmationPending } from '../src/lib/financeCorrections.mjs';
 import { EVENTS, MEANINGFUL_EVENTS } from '../src/lib/crm/presentation.mjs';
 
 let generated = 0;
@@ -313,7 +313,14 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(guard({ role: 'receptionist', discount: 100, reasonCode: 'sibling' }), null, 'reception: 10 % is allowed');
   assert.equal(guard({ role: 'receptionist', discount: 100.01, reasonCode: 'sibling' }), 'Remise supérieure à 10 % : demandez au directeur.');
   assert.equal(guard({ discount: 778, reasonCode: 'director_approval' }), null, 'admin: no cap');
-  assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur.');
+  assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).');
+  // Integer centimes: 0.1 + 0.2 style float noise never decides the 10 % cap.
+  assert.equal(guard({ role: 'receptionist', gross: 0.3, discount: 0.03, reasonCode: 'sibling' }), null, '3 centimes of 30 is exactly 10 %');
+  assert.equal(guard({ role: 'receptionist', gross: 1000.01, discount: 100, reasonCode: 'sibling' }), null);
+  // An old browser (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00: the server's
+  // own refusal reaches the user word for word.
+  assert.equal(paymentErrorMessage({ code: '22023', message: 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).' }),
+    'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).');
   assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-19' }), null);
   assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-18' }), 'La date du paiement ne peut pas être antérieure de plus de 7 jours.');
   assert.equal(guard({ paymentDate: '2026-09-25' }), null);
@@ -325,11 +332,15 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(pending({ paidBefore: 50, payment: 50 }), false, 'earlier payments count');
   assert.equal(pending({ role: 'admin' }), false);
   assert.equal(pending({ sessionType: 'Other' }), false, 'an Other service confirms nothing');
+  assert.equal(pending({ net: 0.3, payment: 0.03 }), false, '10 % exactly, in centimes, confirms');
+  for (const status of ['Submitted', 'Under Review', 'Trial']) assert.equal(pending({ enrollmentStatus: status }), true, status);
+  for (const status of ['Confirmed', 'Validated', 'Ended', 'unknown']) assert.equal(pending({ enrollmentStatus: status }), false, status);
   assert.equal(PENDING_CONFIRMATION_MESSAGE, 'Acompte inférieur à 10 % : reçu émis, inscription en attente de confirmation par la direction.');
   assert.equal(LAST_PAYMENT_NOTICE, 'L’inscription restera confirmée. Elle apparaîtra dans « Inscriptions confirmées sans paiement actif » et la conversion CRM sera signalée pour vérification.');
   assert.equal(correctionErrorMessage({ code: 'PT409', message: 'Inscription ou paiement en cours.' }, 'x'), CORRECTION_BUSY_MESSAGE);
   assert.equal(CORRECTION_BUSY_MESSAGE, 'Paiement en cours pour cet apprenant : actualisez puis réessayez.');
   assert.equal(correctionErrorMessage({ code: 'P0001', message: 'Receipt not found.' }, 'x'), 'Receipt not found.');
+  assert.equal(correctionErrorMessage({ code: 'PT409', hint: 'finance.receipt_changed', message: 'Le reçu a changé. Rechargez la page.' }, 'x'), RECEIPT_CHANGED_MESSAGE);
   assert.equal(correctionErrorMessage(null, 'fallback'), 'fallback');
   assert.equal(EVENTS.conversion_review_cleared, 'Vérification levée : paiement de remplacement');
   assert.ok(MEANINGFUL_EVENTS.has('conversion_review_cleared'));
@@ -338,7 +349,7 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   const migration122 = await readFile(new URL('../supabase/migrations/122_finance_corrections_numbering_guardrails.sql', import.meta.url), 'utf8');
   const corrections = await readFile(new URL('../src/lib/financeCorrections.mjs', import.meta.url), 'utf8');
   for (const message of ['Indiquez le motif de la remise.', 'Motif de remise inconnu.', 'Précisez le motif de la remise « Autre ».',
-    'Le motif de la remise ne doit pas dépasser 200 caractères.', 'La date du paiement ne peut pas être dans le futur.']) {
+    'Le motif de la remise ne doit pas dépasser 200 caractères.', 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ']) {
     assert.ok(migration122.includes(message) && corrections.includes(message), message);
   }
   assert.ok(migration122.includes('Remise supérieure à 10 %% : demandez au directeur.'), 'RAISE escapes the percent sign');
@@ -351,6 +362,7 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
     assert.match(page, /isLastLivePaymentOfConfirmedEnrollment\(/, path);
     assert.match(page, /\{LAST_PAYMENT_NOTICE\}/, path);
     assert.match(page, /correctionErrorMessage\(/, path);
+    assert.match(page, /isRecordConflict\((error|failure)\)/, `${path}: a conflict reloads the record`);
   }
   const financePageE2 = await readFile(new URL('../src/app/(admin)/finance/page.jsx', import.meta.url), 'utf8');
   assert.match(financePageE2, /\{role === 'director' && <FinanceReviewQueue \/>\}/);

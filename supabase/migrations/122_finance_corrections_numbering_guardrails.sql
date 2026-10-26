@@ -11,7 +11,7 @@
 -- New: schema finance_security, finance_security.review_enrollment_without_live_payment,
 --   finance_security.guard_receipt_number / guard_receipt_delete,
 --   public.receipt_number_counters, public.business_date,
---   public.get_finance_review_queue, charges.discount_reason(_code),
+--   public.get_finance_review_queue, staff-only table public.charge_discount_reasons,
 --   financial_events type charge_terms_corrected (for data step D3).
 -- Dropped: public.get_finance_summary(), public.get_unpaid_receipts(integer).
 -- Conflicts raise PT409 (ADR-009); this file contains no other conflict code.
@@ -118,14 +118,27 @@ create trigger receipts_no_hard_delete before delete on public.receipts
 create trigger receipts_no_truncate before truncate on public.receipts
   for each statement execute function finance_security.guard_receipt_delete();
 
--- P3.1 (Q2 = A): a reason for a new discount, required by the function, not by a
--- table constraint (existing discounted charges have none and stay voidable).
-alter table public.charges
-  add column discount_reason_code text,
-  add column discount_reason text,
-  add constraint charges_discount_reason_code_check check (discount_reason_code is null
-    or discount_reason_code in ('sibling', 'former_student', 'promotion', 'director_approval', 'other')),
-  add constraint charges_discount_reason_length check (discount_reason is null or char_length(discount_reason) <= 200);
+-- P3.1 (Q2 = A): the reason for a new discount, required by the payment function
+-- (existing discounted charges have none and stay voidable). Staff only: families
+-- read their charges (table SELECT + "charges family read"), so the reason lives in
+-- its own table, written only by the definer payment function, readable by the same
+-- staff as charges ("charges staff read", receptionist_charge_read).
+create table public.charge_discount_reasons (
+  charge_id uuid primary key references public.charges(id) on delete restrict,
+  reason_code text not null
+    check (reason_code in ('sibling', 'former_student', 'promotion', 'director_approval', 'other')),
+  reason text check (reason is null or char_length(reason) between 3 and 200),
+  created_at timestamptz not null default now(),
+  check (reason_code <> 'other' or reason is not null)
+);
+alter table public.charge_discount_reasons enable row level security;
+revoke all on table public.charge_discount_reasons from public, anon, authenticated, service_role;
+grant select on table public.charge_discount_reasons to authenticated;
+create policy "charge discount reasons staff read" on public.charge_discount_reasons for select to authenticated
+  using (public.get_my_role() in ('admin', 'director'));
+create policy "charge discount reasons receptionist read" on public.charge_discount_reasons for select to authenticated
+  using (public.get_my_role() = 'receptionist' and exists (select 1 from public.charges c join public.students s on s.id = c.student_id
+    where c.id = charge_id and s.deleted_at is null));
 
 -- P4 FIN-7 (Q8 = A): the event type data step D3 writes.
 alter table public.financial_events drop constraint financial_events_event_type_check;
@@ -174,7 +187,8 @@ $function$;
 revoke all on function finance_security.review_enrollment_without_live_payment(uuid, text, jsonb)
   from public, anon, authenticated, service_role;
 
--- 055 + E-2 (P1.1, P1.3): locks in payment order before any write (shared
+-- 055 + E-2 (P1.1, P1.3): a receipt changed under the caller is a PT409 conflict
+-- (hint finance.receipt_changed); locks in payment order before any write (shared
 -- enrollment-intent lock, PT409 when a CRM linkage holds it; student; charge;
 -- receipt; enrollment; lead last); after the void, the enrollment review (P1.2)
 -- and its result in the payment_voided metadata. A replay of a voided receipt does nothing.
@@ -210,7 +224,7 @@ begin
   end if;
   select * into v_receipt from public.receipts where id = p_receipt_id for update;
   if v_receipt.student_id is distinct from v_student_id or v_receipt.charge_id is distinct from v_charge_id then
-    raise exception 'Le reçu a changé. Rechargez la page.';
+    raise exception 'Le reçu a changé. Rechargez la page.' using errcode='PT409', hint='finance.receipt_changed';
   end if;
   if v_receipt.voided_at is not null then
     return jsonb_build_object('receipt_id',v_receipt.id,'already_voided',true);
@@ -275,7 +289,7 @@ begin
   end if;
   select * into v_receipt from public.receipts where id=p_receipt_id for update;
   if v_receipt.charge_id is distinct from v_charge_id or v_receipt.student_id is distinct from v_student_id then
-    raise exception 'Le reçu a changé. Rechargez la page.';
+    raise exception 'Le reçu a changé. Rechargez la page.' using errcode='PT409', hint='finance.receipt_changed';
   end if;
   if v_receipt.deleted_at is not null and (v_charge_id is null or v_charge.voided_at is not null) then
     return jsonb_build_object('receipt_id',p_receipt_id,'already_deleted',true);
@@ -455,8 +469,11 @@ begin
   end if;
   if v_payment > 0 then
     -- Q4 = A: never in the future; reception 7 days back, admin and director 31.
+    -- Names the Casablanca date: a browser with time-zone data older than tzdata 2026c
+    -- (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00.
     if v_payment_date > v_today then
-      raise exception 'La date du paiement ne peut pas être dans le futur.' using errcode = '22023';
+      raise exception 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : %).', v_today
+        using errcode = '22023';
     end if;
     v_back_days := case when v_role = 'receptionist' then 7 else 31 end;
     if v_payment_date < v_today - v_back_days then
@@ -500,14 +517,18 @@ begin
       else concat_ws(' · ', v_session, v_school_year)
     end;
     insert into public.charges(student_id,session_type,school_year,service_description,plan_type,
-      level,gross_amount,discount_amount,due_date,created_by,discount_reason_code,discount_reason)
+      level,gross_amount,discount_amount,due_date,created_by)
     -- charges_yearly_formula_check still requires a value for Yearly; it is a
     -- fixed, inert server value that no screen reads.
     values (v_student_id,v_session,v_school_year,v_service,
       case when v_session = 'Yearly' then 'Standard' end,
-      v_level,v_gross,v_discount,v_due_date,v_actor,v_reason_code,v_reason)
+      v_level,v_gross,v_discount,v_due_date,v_actor)
     returning * into v_charge;
     v_new_charge := true;
+    if v_reason_code is not null then
+      insert into public.charge_discount_reasons(charge_id, reason_code, reason)
+      values (v_charge.id, v_reason_code, case when v_reason_code = 'other' then v_reason end);
+    end if;
   else
     select * into v_charge from public.charges
     where id=v_charge_id and student_id=v_student_id and voided_at is null for update;
@@ -525,7 +546,7 @@ begin
   if v_new_charge then
     insert into public.financial_events(event_type,charge_id,actor_id,metadata)
     values ('charge_created',v_charge.id,v_actor,jsonb_build_object('gross_amount',v_charge.gross_amount,'discount_amount',v_charge.discount_amount,'school_year',v_charge.school_year)
-      || jsonb_strip_nulls(jsonb_build_object('discount_reason_code',v_charge.discount_reason_code,'discount_reason',v_charge.discount_reason)));
+      || jsonb_strip_nulls(jsonb_build_object('discount_reason_code',v_reason_code,'discount_reason',case when v_reason_code = 'other' then v_reason end)));
   end if;
   if v_payment = 0 then
     return jsonb_build_object('charge_id',v_charge.id,'receipt_id',null,'balance',v_balance,'replayed',false);
@@ -736,8 +757,10 @@ begin
   select * into v_enrollment from public.enrollments where id = v_enrollment_id;
 
   -- E-2 (P1.4, Q1 = B): this payment is live and linked; clear a review flag only
-  -- when every review since the last clear came from a payment cancellation and
-  -- the conversion was not from LOST/NOT_QUALIFIED. Leads are locked last.
+  -- when a payment-cancellation review follows the last clear, no review of the
+  -- lead was ever raised for another reason (all time: an enrollment downgrade's
+  -- activity is timestamped at its command start and may predate a later clear),
+  -- and the conversion was not from LOST/NOT_QUALIFIED. Leads are locked last.
   if v_enrollment.status in ('Confirmed','Validated') then
     for v_lead in select * from public.crm_leads
       where enrollment_id = v_enrollment_id and merged_into_lead_id is null and conversion_review_required
@@ -748,8 +771,7 @@ begin
       if exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
           and a.event_type = 'conversion_review_required' and (v_last_clear is null or a.occurred_at > v_last_clear))
         and not exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
-          and a.event_type = 'conversion_review_required' and (v_last_clear is null or a.occurred_at > v_last_clear)
-          and a.details->>'reason' is distinct from 'payment_voided')
+          and a.event_type = 'conversion_review_required' and a.details->>'reason' is distinct from 'payment_voided')
         and not exists (select 1 from public.crm_activities c where c.id = v_lead.conversion_activity_id
           and c.from_status in ('LOST','NOT_QUALIFIED')) then
         insert into public.crm_activities(lead_id, enrollment_id, receipt_id, occurred_at, actor_id, actor_kind,
@@ -880,9 +902,10 @@ begin
         'created_on', public.business_date(c.created_at), 'session_type', c.session_type,
         'gross_amount', c.gross_amount, 'discount_amount', c.discount_amount,
         'discount_percent', case when c.gross_amount > 0 then round(c.discount_amount * 100 / c.gross_amount, 1) end,
-        'reason_code', c.discount_reason_code, 'reason', c.discount_reason, 'author_role', p.role,
+        'reason_code', dr.reason_code, 'reason', dr.reason, 'author_role', p.role,
         'voided', c.voided_at is not null) row_data
       from public.charges c join public.students s on s.id = c.student_id
+      left join public.charge_discount_reasons dr on dr.charge_id = c.id
       left join public.profiles p on p.id = c.created_by
       where not c.legacy and c.discount_amount > 0 and public.business_date(c.created_at) >= v_since
       order by c.created_at desc, c.id limit 200) q), '[]'::jsonb),
@@ -895,7 +918,9 @@ begin
       from public.receipts r left join public.profiles p on p.id = r.actor_id
       where r.date < public.business_date(r.created_at) and public.business_date(r.created_at) >= v_since
       order by r.created_at desc, r.id limit 200) q), '[]'::jsonb),
-    -- (d) Enrollments left unconfirmed by a below-threshold reception payment (P3.4).
+    -- (d) Enrollments left unconfirmed by a below-threshold reception payment (P3.4):
+    -- not yet confirmed, live payments below 10 % of the net price (admin and director
+    -- payments confirm at any amount, so only reception payments leave this state).
     'pending_confirmation', coalesce((select jsonb_agg(row_data order by row_data->>'last_payment_date' desc, row_data->>'enrollment_id') from (
       select jsonb_build_object('enrollment_id', e.id, 'student_id', s.id, 'learner_name', s.full_name,
         'enrollment_status', e.status, 'session_type', e.session_type, 'school_year', e.school_year,
@@ -908,7 +933,8 @@ begin
         from public.receipts r
         where r.voided_at is null and r.deleted_at is null
           and (r.enrollment_id = e.id or r.charge_id in (select c.id from public.charges c where c.enrollment_id = e.id))) pay
-      where e.status in ('Submitted','Under Review','Trial') and pay.paid > 0 and pay.last_date >= v_since
+      where e.status in ('Submitted','Under Review','Trial') and pay.paid > 0 and pay.paid * 10 < pay.net
+        and pay.last_date >= v_since
       order by pay.last_date desc, e.id limit 200) q), '[]'::jsonb));
 end
 $function$;

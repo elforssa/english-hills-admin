@@ -30,6 +30,11 @@ export function discountReasonLabel(code, text) {
   return code === 'other' && text ? `${label} : ${text}` : label;
 }
 
+// Amounts compared in integer centimes, never as floating-point MAD.
+function centimes(amount) {
+  return Math.round(Number(amount || 0) * 100);
+}
+
 export function addDays(isoDate, days) {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -44,24 +49,29 @@ export function deskGuardError({ role, newCharge, gross, discount, reasonCode, r
     const text = (reasonText || '').trim();
     if (reasonCode === 'other' && text.length < 3) return 'Précisez le motif de la remise « Autre ».';
     if (text.length > DISCOUNT_REASON_MAX_LENGTH) return 'Le motif de la remise ne doit pas dépasser 200 caractères.';
-    if (role === 'receptionist' && gross > 0 && discount > RECEPTION_DISCOUNT_CAP * gross) return 'Remise supérieure à 10 % : demandez au directeur.';
+    if (role === 'receptionist' && centimes(gross) > 0 && centimes(discount) * 10 > centimes(gross)) return 'Remise supérieure à 10 % : demandez au directeur.';
   }
   if (payment > 0 && paymentDate) {
-    if (paymentDate > today) return 'La date du paiement ne peut pas être dans le futur.';
+    if (paymentDate > today) return `La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ${today}).`;
     const days = paymentBackdateDays(role);
     if (paymentDate < addDays(today, -days)) return `La date du paiement ne peut pas être antérieure de plus de ${days} jours.`;
   }
   return null;
 }
 
-// Preview of P3.4: would this reception payment leave the enrollment waiting?
-export function receptionConfirmationPending({ role, sessionType, net, paidBefore, payment }) {
+// Preview of P3.4: would this reception payment leave the enrollment waiting? Only a
+// new enrollment or a Submitted / Under Review / Trial one can wait; an enrollment
+// already confirmed (or one whose status the form cannot see) shows no preview.
+export function receptionConfirmationPending({ role, sessionType, net, paidBefore, payment, enrollmentStatus = null }) {
   if (role !== 'receptionist' || !(payment > 0) || !sessionType || sessionType === 'Other') return false;
-  return paidBefore + payment < RECEPTION_CONFIRMATION_THRESHOLD * net;
+  if (enrollmentStatus !== null && !['Submitted', 'Under Review', 'Trial'].includes(enrollmentStatus)) return false;
+  return (centimes(paidBefore) + centimes(payment)) * 10 < centimes(net);
 }
 
+export const RECEIPT_CHANGED_MESSAGE = 'Le reçu a changé entre-temps : la page est actualisée, vérifiez puis recommencez.';
+
 export function correctionErrorMessage(error, fallback) {
-  if (isRecordConflict(error)) return CORRECTION_BUSY_MESSAGE;
+  if (isRecordConflict(error)) return error?.hint === 'finance.receipt_changed' ? RECEIPT_CHANGED_MESSAGE : CORRECTION_BUSY_MESSAGE;
   return error?.message || fallback;
 }
 

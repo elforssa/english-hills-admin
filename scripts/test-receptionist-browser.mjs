@@ -359,11 +359,17 @@ try {
   const forbiddenFinanceKeys = /"(?:salary|salaire_mensuel|taux_horaire|iban|payroll|financial_events|profit|roas|cac|total_revenue|net_revenue)"\s*:/i;
   for (const payload of financePayloads) assert(!forbiddenFinanceKeys.test(JSON.stringify(payload)), 'Management or HR key leaked in operational response');
   assert(!pageRequests.some(path => forbiddenPageData.test(path)), 'Allowed page preloaded a restricted data endpoint');
-  for (const rpc of ['get_finance_summary','get_finance_charge_summary','get_referral_breakdown']) {
+  for (const rpc of ['get_finance_charge_summary','get_referral_breakdown']) {
     const denied = await page.request.post(`${base}/rest/v1/rpc/${rpc}`, { headers: { ...authHeaders, 'Content-Type': 'application/json' }, data: {} });
     assert([401, 403].includes(denied.status()), `${rpc} was not denied`);
   }
-  console.log('PASS operational finance responses omit management fields and analytics RPCs deny reception');
+  // Batch E (FIN-12): the two pre-charge finance functions no longer exist for anyone.
+  for (const rpc of ['get_finance_summary','get_unpaid_receipts']) {
+    const absent = await page.request.post(`${base}/rest/v1/rpc/${rpc}`, { headers: { ...authHeaders, 'Content-Type': 'application/json' }, data: {} });
+    assert.equal(absent.status(), 404, `${rpc} still answers`);
+    assert.equal((await absent.json()).code, 'PGRST202', `${rpc} is not reported as absent`);
+  }
+  console.log('PASS operational finance responses omit management fields, analytics RPCs deny reception, obsolete finance RPCs are absent');
 
   await page.goto(app + '/settings');
   await page.getByRole('heading', { name: 'Mon compte', exact: true }).waitFor();

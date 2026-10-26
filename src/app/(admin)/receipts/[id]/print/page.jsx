@@ -32,8 +32,9 @@ export default function ReceiptPrint() {
   useEffect(() => {
     if (!receipt?.charge_id || !['admin', 'director', 'receptionist'].includes(role)) return undefined;
     let active = true;
-    getBrowserClient().from('charges').select('discount_reason_code,discount_reason').eq('id', receipt.charge_id).maybeSingle()
-      .then(({ data }) => { if (active) setDiscountReason(discountReasonLabel(data?.discount_reason_code, data?.discount_reason)); });
+    // Staff-only table (RLS); families never receive the reason.
+    getBrowserClient().from('charge_discount_reasons').select('reason_code,reason').eq('charge_id', receipt.charge_id).maybeSingle()
+      .then(({ data }) => { if (active) setDiscountReason(discountReasonLabel(data?.reason_code, data?.reason)); });
     return () => { active = false; };
   }, [receipt?.charge_id, role]);
   const retryEmail = async () => {

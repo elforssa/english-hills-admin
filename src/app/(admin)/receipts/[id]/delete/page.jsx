@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { money, receiptNumberLabel } from '@/lib/receiptFinance';
 import { LAST_PAYMENT_NOTICE, correctionErrorMessage, isLastLivePaymentOfConfirmedEnrollment } from '@/lib/financeCorrections.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 
 export default function DeleteMistakenReceipt() {
   const { id } = useParams();
@@ -21,6 +22,7 @@ export default function DeleteMistakenReceipt() {
   const [error, setError] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     if (role !== 'director') return;
     let active = true;
@@ -48,7 +50,7 @@ export default function DeleteMistakenReceipt() {
     }
     load();
     return () => { active = false; };
-  }, [id, role]);
+  }, [id, role, reload]);
 
   async function remove() {
     if (saving || !record || record.otherPayments || reason.trim().length < 3) return;
@@ -68,6 +70,8 @@ export default function DeleteMistakenReceipt() {
       router.refresh();
     } catch (failure) {
       toast.error(correctionErrorMessage(failure, 'Suppression non confirmée. Réessayez avec le même formulaire.'));
+      // ADR-009: a conflict reloads the record (and a new request key) so the screen is current.
+      if (isRecordConflict(failure)) { requestKey.current = null; setReload((value) => value + 1); }
     } finally { setSaving(false); }
   }
 

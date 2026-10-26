@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { receiptAmounts, receiptNumberLabel, money } from '@/lib/receiptFinance';
 import { toast } from 'sonner';
 import { LAST_PAYMENT_NOTICE, correctionErrorMessage, isLastLivePaymentOfConfirmedEnrollment } from '@/lib/financeCorrections.mjs';
+import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { ArrowLeft, Ban, ShieldCheck } from 'lucide-react';
 
 export default function ReceiptCorrection() {
@@ -18,7 +19,8 @@ export default function ReceiptCorrection() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [lastPayment, setLastPayment] = useState(false);
-  useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id]);
+  const [reload, setReload] = useState(0);
+  useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id, reload]);
   useEffect(() => {
     if (!receipt || role !== 'director') return undefined;
     let active = true;
@@ -33,7 +35,12 @@ export default function ReceiptCorrection() {
     const { data, error } = await getBrowserClient().rpc('void_financial_receipt', {
       p_receipt_id: id, p_reason: reason.trim(), p_idempotency_key: crypto.randomUUID(),
     });
-    if (error) { toast.error(correctionErrorMessage(error, 'Annulation non confirmée. Réessayez.')); setSaving(false); return; }
+    if (error) {
+      toast.error(correctionErrorMessage(error, 'Annulation non confirmée. Réessayez.')); setSaving(false);
+      // ADR-009: a conflict reloads the record so the notice below reflects the current state.
+      if (isRecordConflict(error)) setReload((value) => value + 1);
+      return;
+    }
     toast.success(data.already_voided ? 'Ce reçu était déjà annulé.'
       : data.enrollment_without_live_payment ? 'Paiement annulé. L’inscription reste confirmée et apparaît dans « Inscriptions confirmées sans paiement actif ».'
         : 'Paiement annulé. La trace originale est conservée.');

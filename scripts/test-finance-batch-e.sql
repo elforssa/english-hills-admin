@@ -3,8 +3,8 @@
 -- rolls back. Covers gap-free immutable numbering (P2), the void review and
 -- the Q1-B clear (P1), the lifecycle hold (P1.5), the desk guardrails (P3),
 -- Casablanca dates and the obsolete functions (P4) and the director list (P1.6).
--- The owner-level session-user guard needs separate logins and runs in
--- scripts/test-receipt-concurrency.sh.
+-- The races and the owner-level session-user guard need separate sessions and logins
+-- and run in scripts/test-finance-batch-e-concurrency.py.
 \set ON_ERROR_STOP on
 begin;
 alter table public.receipts disable trigger on_receipt_created;
@@ -61,12 +61,12 @@ create function pg_temp.open_to_api(t text) returns void language plpgsql as $$ 
   execute format('grant all on %s to public', t);
 end $$;
 
--- Users: 1 director, 2 admin, 3 receptionist, 4 teacher, 5 parent.
+-- Users: 1 director, 2 admin, 3 receptionist, 4 teacher, 5 parent, 6 student.
 insert into auth.users(id, email, aud, role, email_confirmed_at, created_at, updated_at)
 select pg_temp.id(i), 'batch-e-' || i || '@example.test', 'authenticated', 'authenticated', now(), now(), now()
-from generate_series(1, 5) i;
+from generate_series(1, 6) i;
 update public.profiles p set role = r.role
-from (values (1, 'director'), (2, 'admin'), (3, 'receptionist'), (4, 'teacher'), (5, 'parent')) r(i, role)
+from (values (1, 'director'), (2, 'admin'), (3, 'receptionist'), (4, 'teacher'), (5, 'parent'), (6, 'student')) r(i, role)
 where p.id = pg_temp.id(r.i);
 -- Learners 101..140, one per scenario.
 insert into public.students(id, full_name, status, session_type)
@@ -161,6 +161,27 @@ do $$ declare v uuid := (select (v->>'receipt_id')::uuid from e2 where k = 'firs
   delete from public.receipts where id = h;
   set local english_hills.receipt_test_cleanup = 'off';
 end $$;
+-- 23:30 UTC on 31 December: the real business_date body with its zone swapped for a
+-- fixed offset (no dependence on the installed tzdata; Morocco is UTC+0 since
+-- 2026-09-20, so with tzdata 2026c Africa/Casablanca itself gives 2026-12-31).
+do $$ declare body text := pg_get_functiondef('public.business_date(timestamptz)'::regprocedure); r jsonb; begin
+  perform pg_temp.ok(body ~ '''Africa/Casablanca''', 'business_date names the zone');
+  execute replace(replace(body, 'public.business_date(', 'pg_temp.business_date_fixed('), '''Africa/Casablanca''', '''Etc/GMT-1''');
+  perform pg_temp.ok(pg_temp.business_date_fixed(timestamptz '2026-12-31 23:30:00+00') = date '2027-01-01', 'UTC+1: 23:30 UTC on 31 December is 2027-01-01');
+  execute replace(replace(body, 'public.business_date(', 'pg_temp.business_date_utc('), '''Africa/Casablanca''', '''Etc/GMT''');
+  perform pg_temp.ok(pg_temp.business_date_utc(timestamptz '2026-12-31 23:30:00+00') = date '2026-12-31', 'UTC+0: still 2026-12-31');
+  -- The receipt number takes its year from that date: with the UTC+1 body in place, a
+  -- receipt issued at 23:30 UTC on 31 December would be EH-2027.
+  execute replace(body, '(p_at at time zone ''Africa/Casablanca'')', '(timestamptz ''2026-12-31 23:30:00+00'' at time zone ''Etc/GMT-1'')');
+  r := pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(104), 'session_type', 'Adults', 'school_year', '2026/2027',
+    'gross_amount', 100, 'payment_amount', 10, 'payment_date', '2026-12-31'));
+  perform pg_temp.owner();
+  perform pg_temp.ok(pg_temp.num((r->>'receipt_id')::uuid) like 'EH-2027-%', 'issue year at 23:30 UTC on 31 December (UTC+1): ' || pg_temp.num((r->>'receipt_id')::uuid));
+  raise exception 'rollback' using errcode = 'P0099';
+exception when sqlstate 'P0099' then null;
+end $$;
+select pg_temp.owner();
+select pg_temp.ok(public.business_date() = (now() at time zone 'Africa/Casablanca')::date, 'business_date restored after the fixed-offset check');
 -- Five digits at least, never truncated; the year comes from the business date of issue.
 do $$ declare r jsonb; begin
   update public.receipt_number_counters set last_value = 99999 where series = 'EH';
@@ -172,19 +193,10 @@ do $$ declare r jsonb; begin
 exception when sqlstate 'P0099' then null;
 end $$;
 select pg_temp.owner();
-do $$ declare r jsonb; begin
-  -- Issued on 2027-01-01 (business date) for a payment dated 2026-12-31: the year is the year of issue.
-  create or replace function public.business_date(p_at timestamptz default now()) returns date language sql stable
-    set search_path = pg_catalog, pg_temp as $f$ select date '2027-01-01' $f$;
-  r := pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(104), 'session_type', 'Adults', 'school_year', '2026/2027',
-    'gross_amount', 100, 'payment_amount', 10, 'payment_date', '2026-12-31'));
-  perform pg_temp.owner();
-  perform pg_temp.ok(pg_temp.num((r->>'receipt_id')::uuid) like 'EH-2027-%', 'issue year, not payment year: ' || pg_temp.num((r->>'receipt_id')::uuid));
-  raise exception 'rollback' using errcode = 'P0099';
-exception when sqlstate 'P0099' then null;
-end $$;
-select pg_temp.owner();
 select pg_temp.ok(public.business_date() = (now() at time zone 'Africa/Casablanca')::date, 'business_date restored');
+-- A receipt changed under a void is a PT409 conflict with a stable hint (not P0001).
+select pg_temp.ok(prosrc ~ 'Le reçu a changé\. Rechargez la page\.'' using errcode=''PT409'', hint=''finance\.receipt_changed''', proname || ': changed receipt is PT409')
+from pg_proc where proname in ('void_financial_receipt', 'delete_mistaken_receipt') and pronamespace = 'public'::regnamespace;
 
 -- ===========================================================================
 -- P1 corrections: review flag, director list, Q1-B clear, lifecycle hold
@@ -296,6 +308,21 @@ insert into e2 select 'crm_replacement_2', pg_temp.pay(2, jsonb_build_object('st
 select pg_temp.owner();
 select pg_temp.ok(not (pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'crm'))).conversion_review_required
   and pg_temp.reviews((select (v->>'lead')::uuid from e2 where k = 'crm'), 'conversion_review_cleared') = 2, 'second cycle clears twice');
+-- S4: a downgrade review is checked over all time. Its activity carries its command's
+-- start time and can predate a clear it followed; such a lead is never cleared again.
+insert into public.crm_activities(lead_id, enrollment_id, occurred_at, actor_kind, event_type, source_key, body, details)
+select (v->>'lead')::uuid, (v->>'enrollment')::uuid,
+  (select max(occurred_at) - interval '1 minute' from public.crm_activities where lead_id = (v->>'lead')::uuid and event_type = 'conversion_review_cleared'),
+  'system', 'conversion_review_required', 'conversion-review:batch-e-predated',
+  'Inscription modifiée après confirmation : vérification par la direction.', '{"previous_enrollment_status":"Confirmed","enrollment_status":"Submitted"}'
+from e2 where k = 'crm';
+select pg_temp.void((select (v->>'receipt_id')::uuid from e2 where k = 'crm_replacement_2'));
+select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'crm'))).conversion_review_required, 'void after the predated downgrade flags');
+select pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(111), 'charge_id', (select v->>'charge_id' from e2 where k = 'crm_replacement_2'), 'payment_amount', 100));
+select pg_temp.owner();
+select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'crm'))).conversion_review_required
+  and pg_temp.reviews((select (v->>'lead')::uuid from e2 where k = 'crm'), 'conversion_review_cleared') = 2,
+  'a downgrade review dated before the last clear still blocks the automatic clear');
 -- A flag raised by an enrollment downgrade (a review activity without the payment reason, as
 -- crm_security.evaluate_conversion writes it) is never cleared, even mixed with a void flag.
 insert into e2 select 'mixed', pg_temp.crm_enrollment(pg_temp.id(112));
@@ -354,7 +381,7 @@ do $$ declare s text; i integer := 114; c jsonb; p jsonb; begin
   end loop;
 end $$;
 
--- Void against payment and against an exclusive CRM linkage lock: scripts/test-receipt-concurrency.sh.
+-- Void against payment and against an exclusive CRM linkage lock: scripts/test-finance-batch-e-concurrency.py.
 
 -- ===========================================================================
 -- P3 desk guardrails (Q2–Q5), after the idempotent replay
@@ -380,8 +407,31 @@ insert into e2 select 'reasoned', pg_temp.pay(2, jsonb_build_object('student_id'
   'school_year', '2026/2027', 'gross_amount', 1000, 'discount_amount', 300, 'discount_reason_code', 'other',
   'discount_reason', '  Accord famille  ', 'payment_amount', 200));
 select pg_temp.owner();
-select pg_temp.ok((select discount_reason_code = 'other' and discount_reason = 'Accord famille' from public.charges
-  where id = (select (v->>'charge_id')::uuid from e2 where k = 'reasoned')), 'reason stored on the charge');
+select pg_temp.ok((select reason_code = 'other' and reason = 'Accord famille' from public.charge_discount_reasons
+  where charge_id = (select (v->>'charge_id')::uuid from e2 where k = 'reasoned')), 'reason stored in the staff-only table');
+-- Staff only (S3): the learner's parent and the learner read the charge, never its reason.
+update public.students set parent_email = 'batch-e-5@example.test', email = 'batch-e-6@example.test' where id = pg_temp.id(120);
+do $$ declare r integer; c uuid := (select (v->>'charge_id')::uuid from e2 where k = 'reasoned'); begin
+  foreach r in array array[1, 2, 3] loop
+    perform pg_temp.act(r);
+    perform pg_temp.ok((select count(*) from public.charge_discount_reasons where charge_id = c) = 1, 'staff ' || r || ' reads the reason');
+  end loop;
+  foreach r in array array[5, 6] loop
+    perform pg_temp.act(r);
+    perform pg_temp.ok((select count(*) from public.charges where id = c) = 1, 'family ' || r || ' still reads its charge');
+    perform pg_temp.ok((select count(*) from public.charge_discount_reasons) = 0, 'family ' || r || ' reads no reason');
+    perform pg_temp.ok(not exists(select 1 from jsonb_each(to_jsonb((select x from public.charges x where x.id = c))) j where j.key like 'discount_reason%'),
+      'no discount reason column on charges');
+  end loop;
+  perform pg_temp.act(4);
+  perform pg_temp.ok((select count(*) from public.charge_discount_reasons) = 0, 'teacher reads no reason');
+  perform pg_temp.act(null);
+  perform pg_temp.fails('select count(*) from public.charge_discount_reasons', '42501');
+  perform pg_temp.owner();
+end $$;
+select pg_temp.ok(not exists(select 1 from unnest(array['anon','authenticated','service_role']) r,
+  unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p where has_table_privilege(r, 'public.charge_discount_reasons', p)),
+  'no API write privilege on the reasons');
 select pg_temp.ok((select metadata->>'discount_reason_code' = 'other' and metadata->>'discount_reason' = 'Accord famille' from public.financial_events
   where event_type = 'charge_created' and charge_id = (select (v->>'charge_id')::uuid from e2 where k = 'reasoned')), 'reason copied to charge_created');
 -- A payment on an existing charge never needs or stores a reason; a zero discount stores none.
@@ -389,7 +439,7 @@ select pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(120), 'charge_
 insert into e2 select 'no_discount', pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(121), 'session_type', 'Adults',
   'school_year', '2026/2027', 'gross_amount', 1000, 'discount_reason_code', 'sibling', 'payment_amount', 200));
 select pg_temp.owner();
-select pg_temp.ok((select discount_reason_code is null from public.charges where id = (select (v->>'charge_id')::uuid from e2 where k = 'no_discount')),
+select pg_temp.ok(not exists(select 1 from public.charge_discount_reasons where charge_id = (select (v->>'charge_id')::uuid from e2 where k = 'no_discount')),
   'no reason without a discount');
 -- Q3: reception at most 10 %; admin and director no cap.
 select pg_temp.fails(pg_temp.new_charge(3, 122, '{"discount_amount":100.01,"discount_reason_code":"sibling"}'), '22023',
@@ -404,7 +454,7 @@ select pg_temp.owner();
 do $$ declare r integer; begin
   foreach r in array array[1, 2, 3] loop
     perform pg_temp.fails(pg_temp.new_charge(r, 126, jsonb_build_object('payment_date', public.business_date() + 1)), '22023',
-      'La date du paiement ne peut pas être dans le futur.');
+      'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ' || public.business_date() || ').');
   end loop;
   perform pg_temp.fails(pg_temp.new_charge(3, 126, jsonb_build_object('payment_date', public.business_date() - 8)), '22023',
     'La date du paiement ne peut pas être antérieure de plus de 7 jours.');

@@ -2,13 +2,6 @@
 -- test-premium-retirement-upgrade-112-setup.sql (plan premium-retirement.md D1, Q7 option A).
 \set ON_ERROR_STOP on
 begin;
--- Later migrations may add nullable columns (Batch E 122: charges.discount_reason_code and
--- discount_reason): every snapshot column must be unchanged and every new column null.
-create or replace function pg_temp.same_row(r jsonb, snap jsonb) returns boolean language sql as $$
- select r is not null
-  and (select bool_and(r ? k and r->k is not distinct from snap->k) from jsonb_object_keys(snap) k)
-  and (select bool_and(snap ? k or r->k = 'null'::jsonb) from jsonb_object_keys(r) k)
-$$;
 
 do $$
 begin
@@ -19,7 +12,7 @@ begin
  end if;
  -- The migration rewrote no row.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id
-            where s.stage='setup' and s.kind='charge' and not pg_temp.same_row(to_jsonb(c), s.row))
+            where s.stage='setup' and s.kind='charge' and to_jsonb(c) is distinct from s.row)
   or exists(select 1 from rehearsal113.snapshot s left join public.receipts r on r.id=s.id
             where s.stage='setup' and s.kind='receipt' and to_jsonb(r) is distinct from s.row) then
   raise exception 'Migration 113 changed an existing charge or receipt';
@@ -90,7 +83,7 @@ insert into instalment values
 grant select, update on instalment to authenticated;
 set local role authenticated;
 update instalment set result=public.create_charge_payment(jsonb_build_object('student_id',student_id,'charge_id',charge_id,
-  'payment_amount',100,'payment_date','2026-10-01','payment_method','Espèces','idempotency_key',gen_random_uuid()))
+  'payment_amount',100,'payment_date',public.business_date(),'payment_method','Espèces','idempotency_key',gen_random_uuid()))
 where k in ('a','b','u','t','l');
 reset role;
 
@@ -138,7 +131,7 @@ begin
  end if;
  -- Charge rows and every first receipt are byte-identical to before.
  if exists(select 1 from rehearsal113.snapshot s left join public.charges c on c.id=s.id
-            where s.stage='setup' and s.kind='charge' and not pg_temp.same_row(to_jsonb(c), s.row))
+            where s.stage='setup' and s.kind='charge' and to_jsonb(c) is distinct from s.row)
   or exists(select 1 from rehearsal113.snapshot s left join public.receipts r on r.id=s.id
             where s.stage='setup' and s.kind='receipt' and to_jsonb(r) is distinct from s.row) then
   raise exception 'An instalment changed a charge row or an earlier receipt';
@@ -152,7 +145,7 @@ declare v_payload jsonb; r jsonb;
 begin
  foreach v_payload in array array['{}'::jsonb, '{"plan_type":"Premium"}', '{"plan_type":"Standard"}'] loop
   r := public.create_charge_payment(jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a1','session_type','Yearly',
-   'school_year','2027/2028','gross_amount',100,'payment_amount',10,'payment_date','2026-10-01','payment_method','Espèces',
+   'school_year','2027/2028','gross_amount',100,'payment_amount',10,'payment_date',public.business_date(),'payment_method','Espèces',
    'idempotency_key',gen_random_uuid()) || v_payload);
   if (select service_description||'|'||plan_type from public.charges where id=(r->>'charge_id')::uuid) <> 'Yearly · 2027/2028|Standard'
    or (select service_description||'|'||coalesce(plan_type,'NULL') from public.receipts where id=(r->>'receipt_id')::uuid) <> 'Yearly · 2027/2028|NULL' then
