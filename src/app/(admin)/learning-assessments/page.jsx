@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
 import { localBusinessDate } from '@/lib/receiptFinance';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { loadTeacherAcademicRows } from '@/lib/portal';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -127,6 +130,9 @@ function AssessmentModal({ students, onSave, onClose }) {
 }
 
 export default function LearningAssessments() {
+  const { role } = useAuth();
+  // Teachers create and correct; deletion is management only (Q2 = A).
+  const canDelete = hasCapability(role, 'canDeleteAcademicRecords');
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,10 +141,13 @@ export default function LearningAssessments() {
 
   const load = () => Promise.all([
     entities.LearningAssessment.listAll('-created_date'),
-    entities.Student.listAll('full_name'),
+    // A teacher reads the class list of their groups (no contact field, Q1 = A).
+    role === 'teacher' ? loadTeacherAcademicRows().then(rows => rows.students) : entities.Student.listAll('full_name'),
   ]).then(([a, s]) => { setAssessments(a); setStudents(s); setLoading(false); });
 
-  useEffect(() => { load(); }, []);
+  // The role comes from AuthContext, resolved before render; teachers load their class list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role]);
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ?')) return;
@@ -168,7 +177,7 @@ export default function LearningAssessments() {
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand-tint)' }}>
                   <Brain size={16} style={{ color: 'var(--brand)' }} />
                 </div>
-                <button onClick={() => handleDelete(a.id)} aria-label={`Supprimer l’évaluation de ${a.student_name}`} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600"><Trash2 size={14} /></button>
+                {canDelete && <button onClick={() => handleDelete(a.id)} aria-label={`Supprimer l’évaluation de ${a.student_name}`} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600"><Trash2 size={14} /></button>}
               </div>
               <p className="font-semibold text-sm"><PersonLink id={a.student_id}>{a.student_name}</PersonLink></p>
               <button type="button" onClick={() => setDetail(a)} className="mb-3 inline-flex min-h-10 items-center text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Évaluation du {a.date_assessment || '—'}</button>

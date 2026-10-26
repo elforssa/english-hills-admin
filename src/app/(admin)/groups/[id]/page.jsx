@@ -18,6 +18,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
 import ContextLink from '@/components/ContextLink';
 import { safeReturnTo } from '@/lib/navigation.mjs';
+import { getTeacherRoster, rosterToAcademicRows } from '@/lib/portal';
 
 export default function GroupDetail() {
   const params = useParams();
@@ -48,17 +49,23 @@ export default function GroupDetail() {
         const [t] = await getTeacherDirectory({ id: g.teacher_id });
         setTeacher(t || null);
       }
-      const [registrations, everyone] = await Promise.all([
-        entities.Enrollment.listAll('-created_at'),
-        entities.Student.listAll('full_name'),
-      ]);
+      // A teacher reads the class list of this group (no contact field, Q1 = A).
+      const [registrations, everyone] = role === 'teacher'
+        ? await getTeacherRoster(id).then(rows => {
+          const roster = rosterToAcademicRows(rows);
+          return [roster.enrollments, roster.students];
+        })
+        : await Promise.all([
+          entities.Enrollment.listAll('-created_at'),
+          entities.Student.listAll('full_name'),
+        ]);
       setEnrollments(registrations);
       const members = groupMemberIds(everyone, registrations, id);
       setStudents(everyone.filter(s => members.has(s.id)));
       setAllStudents(everyone);
       setLoading(false);
     })().catch(() => setLoading(false));
-  }, [id, reload]);
+  }, [id, reload, role]);
 
   const groupSchoolYear = (group?.annee || '').replace('-', '/') || currentSchoolYear();
   // Seats as the server counts them: members plus every non-rejected, non-ended
@@ -220,7 +227,7 @@ export default function GroupDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted border-b border-border">
-                  {['Nom', 'Catégorie', 'Session', 'Niveau', 'Téléphone', 'Statut', ''].map(hd => (
+                  {['Nom', 'Catégorie', 'Session', 'Niveau', ...(canManage ? ['Téléphone'] : []), 'Statut', ''].map(hd => (
                     <th key={hd} className="text-left px-4 py-3 font-semibold text-muted-foreground">{hd}</th>
                   ))}
                 </tr>
@@ -240,7 +247,7 @@ export default function GroupDetail() {
                     <td className="px-4 py-3">
                       {group.niveau ? <span className="inline-block text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{group.niveau}</span> : '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>
+                    {canManage && <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>}
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                     </td>

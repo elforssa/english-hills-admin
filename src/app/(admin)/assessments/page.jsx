@@ -15,6 +15,8 @@ import { useAuth } from '@/context/AuthContext';
 import ReceptionistAssessments from '@/components/students/ReceptionistAssessments';
 import { finalGrade, parseGrade } from '@/lib/assessmentGrades.mjs';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import { loadTeacherAcademicRows } from '@/lib/portal';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -135,10 +137,12 @@ function AssessmentModal({ assessment, students, groups, enrollments = [], onSav
 
 export default function AssessmentsPage() {
   const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistAssessments /> : <Assessments />;
+  return role === 'receptionist' ? <ReceptionistAssessments /> : <Assessments role={role} />;
 }
 
-function Assessments() {
+function Assessments({ role }) {
+  // Teachers correct grades; deletion is management only (Q2 = A).
+  const canDelete = hasCapability(role, 'canDeleteAcademicRecords');
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -151,11 +155,14 @@ function Assessments() {
 
   const load = () => Promise.all([
     entities.Assessment.listAll('-created_date'),
-    entities.Student.listAll('full_name'),
     entities.Group.listAll('name'),
-    entities.Enrollment.filterAll({ status: ['Validated', 'Trial'] }, '-created_at'),
+    // A teacher reads the class list of their groups (no contact field, Q1 = A).
+    role === 'teacher' ? loadTeacherAcademicRows() : Promise.all([
+      entities.Student.listAll('full_name'),
+      entities.Enrollment.filterAll({ status: ['Validated', 'Trial'] }, '-created_at'),
+    ]).then(([students, enrollments]) => ({ students, enrollments })),
   ])
-    .then(([a, s, g, e]) => { setAssessments(a); setStudents(s); setGroups(g); setEnrollments(e); })
+    .then(([a, g, { students: s, enrollments: e }]) => { setAssessments(a); setStudents(s); setGroups(g); setEnrollments(e); })
     .catch((err) => {
       // eslint-disable-next-line no-console
       console.error('[assessments] load failed:', err);
@@ -163,7 +170,9 @@ function Assessments() {
     })
     .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  // The role comes from AuthContext, resolved before render; teachers load their class list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role]);
 
   const studentName = id => students.find(s => s.id === id)?.full_name || '—';
   const groupName = id => groups.find(g => g.id === id)?.name || '—';
@@ -241,7 +250,7 @@ function Assessments() {
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(a)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
-                    <button onClick={() => handleDelete(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                    {canDelete && <button onClick={() => handleDelete(a.id)} aria-label="Supprimer la note" className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -275,7 +284,7 @@ function Assessments() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => setModal(a)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
-                          <button onClick={() => handleDelete(a.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                          {canDelete && <button onClick={() => handleDelete(a.id)} aria-label="Supprimer la note" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>

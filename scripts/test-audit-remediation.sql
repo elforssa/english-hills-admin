@@ -34,6 +34,10 @@ update public.students set groupe_id=null where id='00000000-0000-4000-8000-0000
 set local session_replication_role = origin;
 update public.profiles set linked_student_id='00000000-0000-4000-8000-00000000d001'
 where id='00000000-0000-4000-8000-00000000a003';
+-- Portal readiness (PRF-r2 D3/D4): family access is an explicit active link and a
+-- teacher account is bound to its record; neither comes from the e-mail any more.
+insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+  ('00000000-0000-4000-8000-00000000d001','parent','00000000-0000-4000-8000-00000000a003','audit-parent@example.invalid','active',now());
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
   ('00000000-0000-4000-8000-00000000e001','00000000-0000-4000-8000-00000000d001','Synthetic Adult','0000000000','Parent');
 
@@ -64,10 +68,17 @@ do $$ begin
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a002',true);
 do $$ begin
-  if (select linked_teacher_id is not null from public.profiles where id=auth.uid()) then
-    raise exception 'Teacher fixture unexpectedly has a linked teacher'; end if;
-  if public.get_my_teacher_id() <> '00000000-0000-4000-8000-00000000b001'::uuid then
-    raise exception 'Email-derived teacher identity failed'; end if;
+  -- The matching e-mail alone no longer names a teacher record (D4).
+  if public.get_my_teacher_id() is not null then
+    raise exception 'Email-derived teacher identity still grants a record'; end if;
+end $$;
+reset role;
+update public.profiles set linked_teacher_id='00000000-0000-4000-8000-00000000b001'
+where id='00000000-0000-4000-8000-00000000a002';
+set local role authenticated;
+do $$ begin
+  if public.get_my_teacher_id() is distinct from '00000000-0000-4000-8000-00000000b001'::uuid then
+    raise exception 'Linked teacher identity failed'; end if;
   if not public.can_message_recipient('audit-parent@example.invalid')
     or not public.can_message_recipient('audit-child@example.invalid') then
     raise exception 'Teacher cannot contact own group'; end if;

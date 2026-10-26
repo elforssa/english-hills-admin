@@ -82,6 +82,18 @@ insert into public.students(id, full_name, email, parent_email, telephone, date_
 insert into public.students(id, full_name, email, parent_email, status, session_type, niveau_cefr)
 select pg_temp.id(210 + i), 'Seat Learner ' || i, 'seat' || i || '@example.test', 'seat' || i || 'p@example.test',
   'Enrolled', 'Online', 'A2' from generate_series(1, 8) i;
+-- Portal readiness (PRF-r2 D3/D4): families reach a learner only through an active
+-- link, and teacher accounts are bound to their records; the matching addresses
+-- above no longer grant anything by themselves.
+insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+  (pg_temp.id(201), 'self', pg_temp.id(8), 'ol-user-8@example.test', 'active', now()),
+  (pg_temp.id(204), 'self', pg_temp.id(11), 'ol-user-11@example.test', 'active', now()),
+  (pg_temp.id(205), 'self', pg_temp.id(12), 'ol-user-12@example.test', 'active', now()),
+  (pg_temp.id(206), 'parent', pg_temp.id(7), 'ol-user-7@example.test', 'active', now()),
+  (pg_temp.id(207), 'parent', pg_temp.id(7), 'ol-user-7@example.test', 'active', now()),
+  (pg_temp.id(208), 'parent', pg_temp.id(10), 'ol-user-10@example.test', 'active', now());
+update public.profiles p set linked_teacher_id = t.id from public.teachers t
+  where p.id in (pg_temp.id(4), pg_temp.id(5), pg_temp.id(6)) and t.email = p.email;
 
 -- ---------------------------------------------------------------------------
 -- D1 vocabulary: five constraints accept both online values and refuse others.
@@ -391,9 +403,11 @@ select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_
 select pg_temp.ok(public.online_get_lesson_roster(pg_temp.id(508)) is not null and public.online_get_lesson_roster(pg_temp.id(501)) is null,
   'substitute sees exactly one roster');
 select pg_temp.ok((select count(*) from public.students) = 0, 'substitute reads zero students rows');
--- Mixed teacher (OL-r4): the 071 policies still open exactly the in-person learners.
+-- Mixed teacher (OL-r4): the class list (PRF-r2 D2) opens exactly the in-person learners.
 select pg_temp.act(6);
-select pg_temp.ok((select array_agg(id order by id) from public.students) = array[pg_temp.id(209), pg_temp.id(210)], 'mixed teacher reads exactly the in-person learners');
+select pg_temp.ok((select array_agg(distinct student_id order by student_id) from public.portal_teacher_roster())
+  = array[pg_temp.id(209), pg_temp.id(210)], 'mixed teacher reads exactly the in-person learners');
+select pg_temp.ok((select count(*) from public.students) = 0, 'mixed teacher reads no learner row directly');
 select pg_temp.ok((select bool_and(keys = array['attendance_note','attendance_status','display_label','is_guest','niveau_cefr','student_id'])
   and count(*) = 1 from (select array_agg(k order by k) keys from jsonb_array_elements(public.online_get_lesson_roster(pg_temp.id(512))->'roster') r,
   jsonb_object_keys(r) k group by r) x)

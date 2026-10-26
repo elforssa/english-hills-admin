@@ -176,7 +176,10 @@ export const config = {
     // reports send even from unauthenticated pages (e.g. /login).
     // `_vercel/` is Vercel's platform prefix (Speed Insights script and vitals
     // beacon). No application route can live there: `_`-prefixed app folders
-    // are private and never routable.
-    '/((?!_next/static|_next/image|_vercel/|monitoring|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // are private and never routable. `monitoring` is anchored and the image
+    // exemption covers only the real files in public/ (the logo and the staff
+    // guide screenshots), so look-alikes such as /monitoringx or
+    // /students/abc.png stay gated (plan PRF-r2 D13).
+    '/((?!_next/static|_next/image|_vercel/|monitoring(?:/|$)|favicon\\.ico$|eh-logo\\.png$|helpdesk/[^/]+\\.(?:jpg|png)$).*)',
   ],
 };

@@ -8,6 +8,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { useAuth } from '@/context/AuthContext';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
+import FamilyLinksPanel from '@/components/students/FamilyLinksPanel';
 import { useQueryClient } from '@tanstack/react-query';
 import PageFrame from '@/components/operational/PageFrame';
 import PageHeader from '@/components/operational/PageHeader';
@@ -272,6 +273,10 @@ function StudentDetail() {
             </div>
           )}
         </div>
+      </Section>
+
+      <Section title="Comptes famille">
+        <FamilyLinksPanel studentId={id} canRevoke={isManagement} />
       </Section>
 
       <Section title="Inscriptions et groupes">

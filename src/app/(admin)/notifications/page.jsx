@@ -6,6 +6,7 @@ import { Bell, Send, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { learnerNoticeTargets } from '@/lib/portal';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -24,29 +25,50 @@ const TYPE_COLORS = {
 
 function SendNotifModal({ students, onSave, onClose }) {
   const [form, setForm] = useState({ type: 'general', recipient_email: '', recipient_name: '', subject: '', message: '' });
+  const [student, setStudent] = useState(null);
+  const [targets, setTargets] = useState(null); // D8: linked accounts, else the dossier address (e-mail only)
   const [sending, setSending] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleStudentSelect = (id) => {
-    const s = students.find(s => s.id === id);
-    if (s) { set('recipient_email', s.email || ''); set('recipient_name', s.full_name); set('student_id', id); }
+  const handleStudentSelect = async (id) => {
+    const s = students.find(row => row.id === id) || null;
+    setStudent(s); setTargets(null);
+    if (!s) return;
+    try {
+      setTargets(await learnerNoticeTargets(s));
+    } catch {
+      toast.error('Impossible de charger les comptes famille de cet apprenant.');
+    }
   };
+
+  const recipients = student
+    ? (targets?.targets || [])
+    : (form.recipient_email ? [{ email: form.recipient_email, name: form.recipient_name }] : []);
 
   const handleSend = async (e) => {
     e.preventDefault();
+    if (recipients.length === 0) { toast.error('Aucun destinataire.'); return; }
     setSending(true);
     try {
-      await integrations.Core.SendEmail({
-        to: form.recipient_email,
-        subject: `[English Hills] ${form.subject}`,
-        body: `Bonjour ${form.recipient_name},\n\n${form.message}\n\n—\nEnglish Hills Language Center\ncontact@english-hills.com`,
-      });
-      await entities.Notification.create({ ...form, sent: true, sent_at: new Date().toISOString() });
+      // One e-mail and one row per recipient; the row keeps the learner so the
+      // database can attribute it to the linked account (D7b).
+      for (const recipient of recipients) {
+        await integrations.Core.SendEmail({
+          to: recipient.email,
+          subject: `[English Hills] ${form.subject}`,
+          body: `Bonjour ${recipient.name || ''},\n\n${form.message}\n\n—\nEnglish Hills Language Center`,
+        });
+        await entities.Notification.create({
+          ...form, recipient_email: recipient.email, recipient_name: recipient.name || null,
+          student_id: student?.id || null, sent: true, sent_at: new Date().toISOString(),
+        });
+      }
       toast.success('Notification envoyée');
       onSave();
     } catch (err) {
-      setSending(false);
       toast.error("Erreur d'envoi : " + (err.message || 'Veuillez réessayer.'));
+    } finally {
+      setSending(false);
     }
   };
 
@@ -65,19 +87,33 @@ function SendNotifModal({ students, onSave, onClose }) {
           </div>
           <div>
             <label className={labelClass}>Apprenant (optionnel)</label>
-            <select className={inputClass} onChange={e => handleStudentSelect(e.target.value)}>
+            <select className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)}>
               <option value="">— Ou saisir manuellement —</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
           </div>
-          <div>
-            <label className={labelClass}>Email destinataire *</label>
-            <input type="email" className={inputClass} value={form.recipient_email} onChange={e => set('recipient_email', e.target.value)} required />
-          </div>
-          <div>
-            <label className={labelClass}>Nom destinataire</label>
-            <input className={inputClass} value={form.recipient_name} onChange={e => set('recipient_name', e.target.value)} />
-          </div>
+          {student ? (
+            <div className="text-sm">
+              <p className={labelClass}>Envoyé à</p>
+              {!targets ? <p className="text-muted-foreground">Chargement…</p>
+                : targets.targets.length === 0 ? <p className="text-red-700">Aucun compte ni adresse au dossier.</p>
+                : <ul className="space-y-1">{targets.targets.map(t => <li key={t.email}>{t.name} · {t.email}</li>)}</ul>}
+              {targets?.emailOnly && targets.targets.length > 0 && (
+                <p className="mt-1 text-xs text-amber-700">E-mail uniquement, pas de compte : la notification n’apparaîtra dans aucun espace.</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={labelClass}>Email destinataire *</label>
+                <input type="email" className={inputClass} value={form.recipient_email} onChange={e => set('recipient_email', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelClass}>Nom destinataire</label>
+                <input className={inputClass} value={form.recipient_name} onChange={e => set('recipient_name', e.target.value)} />
+              </div>
+            </>
+          )}
           <div>
             <label className={labelClass}>Objet *</label>
             <input className={inputClass} value={form.subject} onChange={e => set('subject', e.target.value)} required />
@@ -88,7 +124,7 @@ function SendNotifModal({ students, onSave, onClose }) {
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={sending}>
+            <Button type="submit" disabled={sending || (student && !targets)}>
               <Send size={14} /> {sending ? 'Envoi...' : 'Envoyer'}
             </Button>
           </DialogFooter>

@@ -6,6 +6,9 @@ import { Plus, Upload, FileText, Video, Mic, Trash2, Check } from 'lucide-react'
 import { toast } from 'sonner';
 import { openStoredFile as openFile } from '@/lib/storage';
 import PersonLink from '@/components/PersonLink';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { loadTeacherAcademicRows } from '@/lib/portal';
 
 // Registry refs use authorized signing; legacy URL/path compatibility ends after backfill.
 async function openStoredFile(stored) {
@@ -163,6 +166,9 @@ function PortfolioModal({ students, onSave, onClose }) {
 }
 
 export default function Portfolios() {
+  const { role } = useAuth();
+  // Teachers create and correct; deletion is management only (Q2 = A).
+  const canDelete = hasCapability(role, 'canDeleteAcademicRecords');
   const [portfolios, setPortfolios] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +179,8 @@ export default function Portfolios() {
 
   const load = () => Promise.all([
     entities.Portfolio.listAll('-created_date'),
-    entities.Student.listAll('full_name'),
+    // A teacher reads the class list of their groups (no contact field, Q1 = A).
+    role === 'teacher' ? loadTeacherAcademicRows().then(rows => rows.students) : entities.Student.listAll('full_name'),
   ])
     .then(([p, s]) => { setPortfolios(p); setStudents(s); })
     .catch((err) => {
@@ -182,7 +189,9 @@ export default function Portfolios() {
     })
     .finally(() => setLoading(false));
 
-  useEffect(() => { load(); }, []);
+  // The role comes from AuthContext, resolved before render; teachers load their class list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role]);
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ?')) return;
@@ -241,11 +250,11 @@ export default function Portfolios() {
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'var(--brand-tint)' }}>
                     <Icon size={16} style={{ color: 'var(--brand)' }} />
                   </div>
-                  <div className="flex gap-1">
+                  {canDelete && <div className="flex gap-1">
                     <button onClick={() => handleDelete(p.id)} aria-label={`Supprimer le projet ${p.title}`} className="p-2 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-600">
                       <Trash2 size={14} />
                     </button>
-                  </div>
+                  </div>}
                 </div>
                 {p.file_url ? <button type="button" onClick={() => openStoredFile(p.file_url)} className="block text-left font-semibold text-sm text-primary mb-1 min-h-10 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{p.title}</button> : <><p className="font-semibold text-sm mb-1">{p.title}</p><p className="text-xs text-muted-foreground">Aucun fichier joint</p></>}
                 <p className="text-xs text-muted-foreground mb-2"><PersonLink id={p.student_id}>{studentName(p.student_id)}</PersonLink></p>

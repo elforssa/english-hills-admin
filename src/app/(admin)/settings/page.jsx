@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import { entities, users } from '@/lib/entities';
 import { Building2, Users, UserPlus, Edit2, Check, X, Save, CalendarDays, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
+import { portalErrorMessage, previewFamilyInvitation } from '@/lib/portal';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputReadOnly = "w-full border border-border rounded-md px-3 py-2 text-sm bg-muted text-muted-foreground focus:outline-none";
@@ -154,9 +156,18 @@ function InviteUserForm({ currentUser }) {
   const [role, setRole] = useState('student');
   const [loading, setLoading] = useState(false);
   const [invited, setInvited] = useState([]);
+  // Family invitations (plan PRF-r2 D3): the address only proposes learners;
+  // staff tick each one, and confirm with the family when names or phones differ.
+  const [preview, setPreview] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [confirmed, setConfirmed] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [teacherId, setTeacherId] = useState('');
 
   const isDirector = currentUser?.role === 'director';
   const isAdmin = currentUser?.role === 'admin' || isDirector;
+  const familyRole = role === 'parent' || role === 'student';
 
   const ROLES = isDirector
     ? [
@@ -173,11 +184,46 @@ function InviteUserForm({ currentUser }) {
         { value: 'teacher', label: 'Enseignant' },
       ];
 
+  useEffect(() => {
+    if (role !== 'teacher' || teachers.length) return;
+    getTeacherDirectory().then(setTeachers).catch(() => toast.error('Impossible de charger les fiches enseignants.'));
+  }, [role, teachers.length]);
+
+  const resetPreview = () => { setPreview(null); setSelected([]); setConfirmed([]); };
+  const needsConfirmation = Boolean(preview?.mixed_surnames || preview?.mixed_phones);
+
+  const loadPreview = async () => {
+    if (!email.trim()) return;
+    setPreviewing(true);
+    try {
+      const result = await previewFamilyInvitation(email.trim(), role);
+      setPreview(result);
+      setSelected([]);
+      setConfirmed([]);
+    } catch (err) {
+      toast.error(portalErrorMessage(err, 'Vérification impossible. Réessayez.'));
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const handleInvite = async (e) => {
     e.preventDefault();
     if (!email) return;
     if (!ROLES.some(r => r.value === role)) {
       toast.error("Vous n'êtes pas autorisé à attribuer ce rôle.");
+      return;
+    }
+    if (familyRole && (!preview || preview.refusal || selected.length === 0)) {
+      toast.error('Vérifiez l’adresse puis cochez les apprenants à relier.');
+      return;
+    }
+    if (familyRole && needsConfirmation && selected.some(id => !confirmed.includes(id))) {
+      toast.error('Confirmez chaque apprenant avec la famille avant d’inviter.');
+      return;
+    }
+    if (role === 'teacher' && !teacherId) {
+      toast.error('Choisissez la fiche enseignant à relier.');
       return;
     }
     setLoading(true);
@@ -186,15 +232,23 @@ function InviteUserForm({ currentUser }) {
     try {
       // The API delegates role authorization to the authenticated database
       // operation; the service key is used only for Auth invitation delivery.
-      const result = await users.inviteUser(trimmedEmail, role);
+      const result = await users.inviteUser(trimmedEmail, role, {
+        studentIds: familyRole ? selected : undefined,
+        teacherId: role === 'teacher' ? teacherId : undefined,
+      });
       setInvited(prev => [...prev, { email: trimmedEmail, role }]);
       if (result?.alreadyRegistered) {
         toast.success(`${trimmedEmail} : invitation traitée. Un rôle en attente sera appliqué à la prochaine connexion ; un rôle actif n'est pas modifié par une invitation.`);
       } else {
         toast.success(`Invitation envoyée à ${trimmedEmail} avec le rôle "${ROLES.find(r => r.value === role)?.label}".`);
       }
+      if (role === 'teacher' && result?.teacherHasGroup === false) {
+        toast.warning('Cette fiche enseignant n’a encore aucun groupe : le compte ne verra aucun apprenant.');
+      }
       setEmail('');
       setRole('student');
+      setTeacherId('');
+      resetPreview();
     } catch (err) {
       toast.error(err?.message || "Échec de l'envoi de l'invitation.");
     } finally {
@@ -211,14 +265,15 @@ function InviteUserForm({ currentUser }) {
 
       <form onSubmit={handleInvite} className="space-y-4">
         <div>
-          <label className={labelClass}>Adresse email</label>
+          <label htmlFor="invite-email" className={labelClass}>Adresse email</label>
           <input
+            id="invite-email"
             type="email"
             required
             className={inputClass}
             placeholder="partenaire@email.com"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => { setEmail(e.target.value); resetPreview(); }}
           />
         </div>
         <div>
@@ -228,7 +283,7 @@ function InviteUserForm({ currentUser }) {
               <button
                 key={r.value}
                 type="button"
-                onClick={() => setRole(r.value)}
+                onClick={() => { setRole(r.value); resetPreview(); }}
                 className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left ${
                   role === r.value
                     ? 'border-primary bg-primary/10 text-primary'
@@ -240,6 +295,58 @@ function InviteUserForm({ currentUser }) {
             ))}
           </div>
         </div>
+
+        {familyRole && (
+          <div className="space-y-3">
+            <button type="button" onClick={loadPreview} disabled={!email.trim() || previewing}
+              className="px-4 py-2 text-sm font-semibold rounded-lg border border-border hover:bg-muted disabled:opacity-50">
+              {previewing ? 'Vérification…' : 'Vérifier les apprenants de cette adresse'}
+            </button>
+            {preview?.refusal && (
+              <p role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">{preview.refusal.message}</p>
+            )}
+            {preview && !preview.refusal && (
+              <fieldset className="space-y-2">
+                <legend className={labelClass}>Apprenants à relier à ce compte</legend>
+                {needsConfirmation && (
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    Noms ou téléphones différents : confirmez chaque apprenant avec la famille.
+                  </p>
+                )}
+                {preview.matches.map(m => (
+                  <div key={m.student_id} className="border border-border rounded-lg p-2 text-sm">
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" className="mt-1" checked={selected.includes(m.student_id)} disabled={m.linked}
+                        onChange={e => setSelected(prev => e.target.checked ? [...prev, m.student_id] : prev.filter(id => id !== m.student_id))} />
+                      <span>
+                        <span className="font-medium">{m.full_name}</span>
+                        <span className="block text-xs text-muted-foreground">{m.age_category || '—'} · {m.groups.length ? m.groups.join(', ') : 'sans groupe'}{m.linked ? ' · déjà relié' : ''}</span>
+                      </span>
+                    </label>
+                    {needsConfirmation && selected.includes(m.student_id) && (
+                      <label className="flex items-center gap-2 mt-2 text-xs">
+                        <input type="checkbox" checked={confirmed.includes(m.student_id)}
+                          onChange={e => setConfirmed(prev => e.target.checked ? [...prev, m.student_id] : prev.filter(id => id !== m.student_id))} />
+                        J&apos;ai vérifié avec la famille
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </fieldset>
+            )}
+          </div>
+        )}
+
+        {role === 'teacher' && (
+          <div>
+            <label htmlFor="invite-teacher" className={labelClass}>Fiche enseignant</label>
+            <select id="invite-teacher" className={inputClass} value={teacherId} onChange={e => setTeacherId(e.target.value)} required>
+              <option value="">— Choisir —</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">L’adresse invitée doit être celle de la fiche choisie.</p>
+          </div>
+        )}
 
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex gap-2">
           <CheckCircle size={14} className="shrink-0 mt-0.5 text-green-700" />

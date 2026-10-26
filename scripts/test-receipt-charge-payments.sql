@@ -23,6 +23,10 @@ values ('20000000-0000-0000-0000-000000000001','Synthetic Yearly','0600000000','
 insert into public.students(id,full_name,telephone,status)
 values ('20000000-0000-0000-0000-000000000003','Second Synthetic','0611111111','Prospect');
 update public.profiles set role='parent',linked_student_id='20000000-0000-0000-0000-000000000001' where id='10000000-0000-0000-0000-000000000002';
+-- Portal readiness (PRF-r2 D3): families see a learner only through an active link.
+insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+  ('20000000-0000-0000-0000-000000000001','parent','10000000-0000-0000-0000-000000000002','parent@example.test','active',now()),
+  ('20000000-0000-0000-0000-000000000001','self','10000000-0000-0000-0000-000000000003','student@example.test','active',now());
 
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -297,15 +301,19 @@ do $$ begin begin insert into public.charges(student_id,session_type,service_des
 reset role;
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000002',true);
 set local role authenticated;
-do $$ begin if (select count(*) from public.charge_balances where student_id='20000000-0000-0000-0000-000000000001') < 1 then raise exception 'Parent cannot read linked balances'; end if; begin perform public.create_charge_payment('{}'); raise exception 'parent mutation accepted'; exception when insufficient_privilege then null; end; end $$;
+-- Families read balances through the portal projection (PRF-r2 D2), never the rows.
+do $$ begin if jsonb_array_length(public.portal_learner_record('20000000-0000-0000-0000-000000000001')->'charges') < 1 then raise exception 'Parent cannot read linked balances'; end if;
+  if (select count(*) from public.charge_balances where student_id='20000000-0000-0000-0000-000000000001') <> 0 then raise exception 'Parent reads charge rows directly'; end if;
+  begin perform public.create_charge_payment('{}'); raise exception 'parent mutation accepted'; exception when insufficient_privilege then null; end; end $$;
 
 reset role;
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000003',true);
 set local role authenticated;
-do $$ declare c record; begin
-  if (select count(*) from public.receipts where charge_id=(select (result->>'charge_id')::uuid from test_results where name='first')) <> 2 then raise exception 'Student cannot read own receipt history'; end if;
-  select * into c from public.charge_balances where id=(select (result->>'charge_id')::uuid from test_results where name='first');
-  if c.paid_amount <> 1500 or c.balance <> 1500 then raise exception 'Student balance cannot see own payments: %',row_to_json(c); end if;
+do $$ declare c jsonb; r jsonb := public.portal_learner_record('20000000-0000-0000-0000-000000000001'); begin
+  if (select count(*) from jsonb_array_elements(r->'receipts') x where x->>'charge_id' = (select result->>'charge_id' from test_results where name='first')) <> 2 then raise exception 'Student cannot read own receipt history'; end if;
+  select x into c from jsonb_array_elements(r->'charges') x where x->>'id' = (select result->>'charge_id' from test_results where name='first');
+  if (c->>'paid_amount')::numeric <> 1500 or (c->>'balance')::numeric <> 1500 then raise exception 'Student balance cannot see own payments: %',c; end if;
+  if (select count(*) from public.receipts where student_id='20000000-0000-0000-0000-000000000001') <> 0 then raise exception 'Student reads receipt rows directly'; end if;
 end $$;
 
 reset role;

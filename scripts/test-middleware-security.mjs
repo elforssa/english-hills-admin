@@ -88,6 +88,17 @@ for (const path of ['/_vercel', '/_vercelx', '/_vercel-admin/dashboard', '/stude
   checks++;
 }
 console.log('PASS middleware exempts only the /_vercel/ platform prefix');
+// The Sentry tunnel is anchored and only the real public files skip middleware (plan PRF-r2 D13).
+for (const path of ['/monitoring', '/favicon.ico', '/eh-logo.png', '/helpdesk/q01-annuaire.jpg']) {
+  assert.equal(matched(path), false, 'Public file or tunnel must bypass middleware: ' + path);
+  checks++;
+}
+for (const path of ['/monitoringx', '/monitoring-admin', '/students/abc.png', '/students/00000000-0000-4000-8000-000000000001.png',
+  '/dashboard/x.jpg', '/settings.svg', '/helpdesk', '/helpdesk/sub/x.jpg', '/favicon.ico/x', '/x/eh-logo.png']) {
+  assert.equal(matched(path), true, 'Look-alike path must stay behind middleware: ' + path);
+  checks++;
+}
+console.log('PASS middleware exempts only the anchored tunnel and the real public files');
 
 // Online sub-path, look-alike and malformed forms that must stay closed (or open) exactly as expected().
 const ROOM = '/online/room/00000000-0000-4000-8000-000000000001';

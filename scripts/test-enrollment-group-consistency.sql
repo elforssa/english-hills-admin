@@ -80,6 +80,9 @@ update public.profiles set role = (array['director','admin','receptionist','teac
 insert into public.teachers(id, full_name, email, contract_type) values
   (pg_temp.id(101), 'EGC Teacher A', 'egc-user-4@example.test', 'Freelance'),
   (pg_temp.id(102), 'EGC Teacher B', 'egc-user-5@example.test', 'Freelance');
+-- Portal readiness (PRF-r2 D4): each teacher account is bound to its record.
+update public.profiles set linked_teacher_id = pg_temp.id(97 + right(id::text, 1)::integer)
+  where id in (pg_temp.id(4), pg_temp.id(5));
 
 -- ===========================================================================
 -- Clean-up cores (R4) and M2's refusal on a synthetic copy of each Production
@@ -244,6 +247,11 @@ select pg_temp.id(200 + i), 'EGC Learner ' || i,
   case when i = 1 then 'egc-user-6@example.test' else null end,
   '06' || lpad((80000000 + i)::text, 8, '0'), 'Prospect', 'Yearly', null
 from generate_series(1, 40) i;
+-- Portal readiness (PRF-r2 D3): the parent and the adult learner see their learner
+-- through an explicit active link, not through the matching dossier address.
+insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+  (pg_temp.id(201), 'parent', pg_temp.id(6), 'egc-user-6@example.test', 'active', now()),
+  (pg_temp.id(206), 'self', pg_temp.id(7), 'egc-user-7@example.test', 'active', now());
 
 -- ===========================================================================
 -- DAT-1: a second programme never moves the first (every placement path).
@@ -298,10 +306,10 @@ insert into public.announcements(id, title, body, group_id, audience) values
 select pg_temp.act(4);
 select pg_temp.ok(public.teacher_can_access_student_group(pg_temp.id(201), pg_temp.id(301))
   and not public.teacher_can_access_student_group(pg_temp.id(201), pg_temp.id(302)), 'teacher A through the Yearly group only');
-select pg_temp.ok(exists (select 1 from public.students where id = pg_temp.id(201)), 'teacher A reads the learner file');
+select pg_temp.ok(exists (select 1 from public.portal_teacher_roster() where student_id = pg_temp.id(201)), 'teacher A reads the learner file');
 select pg_temp.act(5);
 select pg_temp.ok(public.teacher_can_access_student_group(pg_temp.id(201), pg_temp.id(302)), 'teacher B through the second-programme group');
-select pg_temp.ok(exists (select 1 from public.students where id = pg_temp.id(201)), 'teacher B reads the learner file');
+select pg_temp.ok(exists (select 1 from public.portal_teacher_roster() where student_id = pg_temp.id(201)), 'teacher B reads the learner file');
 select pg_temp.ok(public.can_message_recipient('egc-user-6@example.test'), 'teacher B may message the parent');
 select pg_temp.act(6);
 select pg_temp.ok((select array_agg(id order by id) from public.announcements where id in (pg_temp.id(701), pg_temp.id(702), pg_temp.id(703)))

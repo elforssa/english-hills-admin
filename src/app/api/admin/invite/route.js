@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
+import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
 
 const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director', 'receptionist'];
 const PRIVILEGED_ROLES = ['admin', 'director'];
@@ -14,9 +15,22 @@ const RATE_LIMITS = [
 const InviteSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   role: z.enum(ALLOWED_ROLES),
+  // Parent and student invitations name the learners staff confirmed; teacher
+  // invitations name the teacher record (plan PRF-r2 D3).
+  studentIds: z.array(z.guid()).min(1).max(10).optional(),
+  teacherId: z.guid().optional(),
 });
 
+// A closed portal.* refusal carries its French message; other errors stay generic.
+function portalRefusal(error) {
+  if (!String(error?.hint || '').startsWith('portal.')) return null;
+  const status = error.code === 'PT409' ? 409 : error.code === '22023' ? 400 : 403;
+  return NextResponse.json({ error: error.message, reason: error.hint }, { status });
+}
+
 export async function POST(request) {
+  const refused = rejectCrossOrigin(request);
+  if (refused) return refused;
   // ── Gate 1: must be authenticated ──────────────────────────────────────
   const supabase = await getServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -64,13 +78,21 @@ export async function POST(request) {
       { status: 400 },
     );
   }
-  const { email, role } = parsed.data;
+  const { email, role, studentIds, teacherId } = parsed.data;
 
   // Authorize and persist via the caller's JWT, before any Auth email is
   // sent. Existing active accounts cannot change role through re-invitation.
-  const { data, error } = await supabase.rpc('prepare_role_invitation', { p_email: email, p_role: role });
+  // Family accounts are linked to the confirmed learners and teacher accounts
+  // to one teacher record in the same transaction as the queue row.
+  const { data, error } = ['parent', 'student'].includes(role)
+    ? await supabase.rpc('prepare_family_invitation', { p_email: email, p_role: role, p_student_ids: studentIds ?? [] })
+    : role === 'teacher'
+      ? await supabase.rpc('prepare_teacher_invitation', { p_email: email, p_teacher_id: teacherId ?? null })
+      : await supabase.rpc('prepare_role_invitation', { p_email: email, p_role: role });
   if (error) {
-    const status = error.code === '42501' ? 403 : ['23514', '40001', '40P01'].includes(error.code) ? 409 : 500;
+    const refusal = portalRefusal(error);
+    if (refusal) return refusal;
+    const status = error.code === '42501' ? 403 : ['23514', 'PT409', '40001', '40P01'].includes(error.code) ? 409 : 500;
     return NextResponse.json({ error: status === 403 ? 'Forbidden' : status === 409
       ? "Ce compte existe déjà ou a changé. Utilisez la gestion des rôles puis réessayez."
       : "Échec de la préparation de l'invitation." }, { status });

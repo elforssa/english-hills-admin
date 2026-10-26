@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
@@ -14,8 +13,8 @@ import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
-import { getBrowserClient } from '@/lib/supabase';
-import { localBusinessDate, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { getLearnerRecord, getMyLearners, getMyMessages, portalErrorMessage, requestReenrollment } from '@/lib/portal';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -50,7 +49,6 @@ export default function ParentPortal() {
   const [announcements, setAnnouncements] = useState([]);
   const [learningAssessments, setLearningAssessments] = useState([]);
   const [authorizedAdults, setAuthorizedAdults] = useState([]);
-  const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [office, setOffice] = useState(null);
@@ -64,25 +62,19 @@ export default function ParentPortal() {
       try {
         const u = sessionUser;
         setUser(u);
-        const [parentRows, studentRows] = await Promise.all([
-          entities.Student.filter({ parent_email: u?.email }, 'full_name'),
-          entities.Student.filter({ email: u?.email }, 'full_name'),
-        ]);
-        const myStudents = [...new Map([...parentRows, ...studentRows].map(s => [s.id, s])).values()].sort((a, b) => a.full_name.localeCompare(b.full_name));
+        // Only the learners the centre linked to this account (family links).
+        const myStudents = await getMyLearners();
         setStudents(myStudents);
         if (myStudents.length > 0) setSelectedStudent(myStudents[0]);
         // RLS scopes announcements to what this parent may see (audience 'all',
         // 'parents', and their child's group).
         const ann = await entities.Announcement.list('-created_date', 20);
         setAnnouncements(ann);
-        // Personal notifications addressed to this parent (RLS scopes by email).
-        entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
+        // Personal notifications addressed to this account (RLS: account and links).
+        entities.Notification.filterAll({ recipient_profile_id: u?.id }, '-created_date')
           .then(setNotifications).catch(() => {});
         // Unread direct messages — drives the tab badge.
-        entities.Message.filter({ to_user_email: u?.email, read: false })
-          .then(rows => setUnreadMessages(rows.length)).catch(() => {});
-        // Teachers are messaging recipients; the office is added separately.
-        getTeacherDirectory().then(setTeachers).catch(() => {});
+        getMyMessages('inbox').then(rows => setUnreadMessages(rows.filter(m => !m.read).length)).catch(() => {});
         getOfficeRecipient().then(setOffice).catch(() => {});
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -102,20 +94,19 @@ export default function ParentPortal() {
     let cancelled = false;
     setAttendance([]); setAssessments([]); setReceipts([]); setCharges([]);
     setPortfolios([]); setLearningAssessments([]); setAuthorizedAdults([]);
+    // Attendance, receipts and balances come from the family projection, which
+    // carries no staff-only field; the other sections stay link-scoped by RLS.
     Promise.all([
-      entities.Attendance.filter({ student_id: selectedStudent.id }, '-session_date'),
+      getLearnerRecord(selectedStudent.id),
       entities.Assessment.filter({ student_id: selectedStudent.id }, '-created_date'),
-      entities.Receipt.filter({ student_id: selectedStudent.id }, '-date'),
       entities.Portfolio.filter({ student_id: selectedStudent.id }),
       entities.LearningAssessment.filter({ student_id: selectedStudent.id }, '-date_assessment'),
       entities.AuthorizedAdult.filter({ student_id: selectedStudent.id }),
-      getBrowserClient().from('charge_balances').select('*').eq('student_id', selectedStudent.id),
     ])
-      .then(async ([att, ass, rec, port, la, adults, chargeResult]) => {
+      .then(async ([record, ass, port, la, adults]) => {
         if (cancelled) return;
-        if (chargeResult.error) throw chargeResult.error;
-        setAttendance(att); setAssessments(ass);
-        setReceipts(rec); setCharges(chargeResult.data || []);
+        setAttendance(record?.attendance || []); setAssessments(ass);
+        setReceipts(record?.receipts || []); setCharges(record?.charges || []);
         setPortfolios(port); setLearningAssessments(la); setAuthorizedAdults(adults);
       })
       .catch((err) => {
@@ -143,15 +134,10 @@ export default function ParentPortal() {
     if (!confirm(`Envoyer une demande de réinscription pour ${selectedStudent.full_name} ? Le centre vous recontactera pour finaliser.`)) return;
     setReEnrolling(true);
     try {
-      await entities.Enrollment.create({
-        student_id: selectedStudent.id,
-        status: 'Submitted',
-        date_inscription: localBusinessDate(),
-        notes: `Demande de réinscription envoyée par le parent (${user?.email}).`,
-      });
+      await requestReenrollment(selectedStudent.id);
       toast.success('Demande de réinscription envoyée. Le centre vous recontactera.');
-    } catch {
-      // entities.js already toasted
+    } catch (error) {
+      toast.error(portalErrorMessage(error, 'Demande non envoyée. Réessayez.'));
     } finally {
       setReEnrolling(false);
     }
@@ -172,8 +158,8 @@ export default function ParentPortal() {
     );
   }
 
-  // No learner is linked to this parent's email — give clear guidance instead
-  // of a silent empty portal.
+  // No learner is linked to this account yet — give clear guidance instead of
+  // a silent empty portal. Access comes from the centre's links, not the address.
   if (students.length === 0) {
     return (
       <div className="p-4 lg:p-8 max-w-2xl mx-auto">
@@ -182,14 +168,13 @@ export default function ParentPortal() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
           <p className="font-semibold text-amber-800 mb-2">Aucun apprenant lié à votre compte</p>
           <p className="text-sm text-amber-800/90">
-            Nous n’avons trouvé aucun apprenant rattaché à l’adresse <strong>{user?.email}</strong>.
-            Cela arrive généralement lorsque l’email enregistré au centre est différent de celui
-            utilisé pour vous connecter.
+            Aucun apprenant n’est encore relié à votre compte. Le centre ouvre l’accès à chaque
+            apprenant lors de l’invitation.
           </p>
           <p className="text-sm text-amber-800/90 mt-3">
             Merci de contacter l’administration
             {office?.email ? <> à <a className="font-semibold underline" href={`mailto:${office.email}`}>{office.email}</a></> : null}
-            {' '}pour mettre à jour votre dossier.
+            {' '}pour vérifier l’accès de votre compte.
           </p>
         </div>
       </div>
@@ -201,13 +186,7 @@ export default function ParentPortal() {
   const attendanceRate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
   const isYoungLearner = selectedStudent?.age_category === 'Young Learners (6-12)';
 
-  const balanceDue = charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0);
-
-  // Recipients: each teacher + the front office (so parents can reach reception).
-  const recipients = [
-    ...teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name })),
-    ...(office ? [office] : []),
-  ];
+  const balanceDue = charges.reduce((sum, charge) => sum + (charge.voided ? 0 : Number(charge.balance || 0)), 0);
 
   const TABS = [
     { id: 'overview', label: "Vue d'ensemble" },
@@ -383,7 +362,7 @@ export default function ParentPortal() {
             <div>
               <p className="text-xs text-muted-foreground">Solde restant dû</p>
               <p className={`text-xl font-bold ${balanceDue > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {charges.some(charge => !charge.voided_at) ? `${balanceDue.toLocaleString('fr-MA')} MAD` : 'Aucun engagement enregistré'}
+                {charges.some(charge => !charge.voided) ? `${balanceDue.toLocaleString('fr-MA')} MAD` : 'Aucun engagement enregistré'}
               </p>
             </div>
             <button
@@ -523,10 +502,7 @@ export default function ParentPortal() {
       )}
 
       {tab === 'messages' && (
-        <MessagesTab
-          me={{ email: user?.email, name: user?.full_name }}
-          recipients={recipients}
-        />
+        <MessagesTab learners={students} onUnreadChange={setUnreadMessages} />
       )}
 
       <Dialog open={Boolean(previewReceipt)} onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}>

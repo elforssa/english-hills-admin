@@ -114,6 +114,9 @@ function LoginInner() {
       email: trimmedEmail,
       options: {
         emailRedirectTo: `${window.location.origin}/login/callback${next}`,
+        // Accounts come only from invitations (plan PRF-r2 D11): an unknown
+        // address gets no account from the magic-link form.
+        shouldCreateUser: false,
       },
     });
 

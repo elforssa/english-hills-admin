@@ -5,19 +5,26 @@
 // via the integrations.Core.SendEmail shim. We require a signed-in user
 // so the endpoint can't be abused as an open relay.
 //
-// Body shape:
+// Staff (director/admin) body shape:
 //   { to: string|string[], subject: string, body: string,
-//     html?: boolean, reply_to?: string }
+//     html?: boolean, message_id?: uuid }
+// Portal (teacher/parent/student) body shape: { message_id: uuid } — every
+// other field is ignored; the recipient is the saved message's recipient
+// account (plan PRF-r2 D7).
 //
-// Note: the From display name is derived from the caller's profile —
-// callers cannot spoof it. A `from_name` field in the body is ignored.
+// Sender names are server-set: staff send under their sanitised profile name
+// with the office as Reply-To; portal notices use the fixed "English Hills"
+// sender with no Reply-To, and name the sender by the message's from_name.
 // =============================================================================
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
+import { getServiceRoleClient } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
 import { readBoundedJson } from '@/lib/boundedJson.mjs';
+import { portalNoticeEmail, senderAddress, staffEmailOptions } from '@/lib/emailSender.mjs';
+import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
 
 // Cap on recipients per request — defends against a compromised account
 // fanning a single call out to the whole address book.
@@ -46,8 +53,22 @@ const SendEmailSchema = z.object({
   reply_to:  emailField.optional(),
   message_id: z.guid().optional(),
 });
+// Portal callers name only the saved message; anything else they send is ignored.
+const PortalNoticeSchema = z.object({ message_id: z.guid() });
+
+async function officeAddress(supabase) {
+  const { data } = await supabase.from('app_config').select('value').eq('key', 'center_info').maybeSingle();
+  try {
+    const email = JSON.parse(data?.value || '{}').email;
+    return emailField.safeParse(email).success ? String(email).trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request) {
+  const refused = rejectCrossOrigin(request);
+  if (refused) return refused;
   // Gate: require an authenticated session.
   const supabase = await getServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -55,7 +76,6 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  // Look up caller's display name server-side so callers can't spoof it.
   const { data: callerProfile, error: profileError } = await supabase
     .from('profiles')
     .select('full_name, role, email')
@@ -64,7 +84,6 @@ export async function POST(request) {
   if (profileError || !callerProfile || !['director', 'admin', 'teacher', 'parent', 'student'].includes(callerProfile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  const callerName = callerProfile?.full_name || null;
 
   // Gate: per-user rate limit (atomic, DB-backed).
   for (const limit of RATE_LIMITS) {
@@ -87,51 +106,56 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: raw.status });
   }
 
-  // Fixed message: validation issues are not echoed back.
-  const parsed = SendEmailSchema.safeParse(raw.data);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request payload' }, { status: 400 });
-  }
-
-  const { to, subject, body, html, message_id } = parsed.data;
-  const recipients = [...new Set((Array.isArray(to) ? to : [to]).map(value => value.toLowerCase()))];
   const staff = ['director', 'admin'].includes(callerProfile.role);
-  if (!staff && (recipients.length !== 1 || !message_id || html)) {
-    return NextResponse.json({ error: 'A saved message is required' }, { status: 403 });
-  }
+  let recipients;
+  let effectiveSubject;
+  let effectiveBody;
+  let options;
+  const sender = senderAddress(process.env.RESEND_FROM_ADDRESS);
 
-  for (const recipient of recipients) {
-    const { data: permitted, error: permissionError } = await supabase.rpc('can_message_recipient', { p_email: recipient });
-    if (permissionError) return NextResponse.json({ error: 'Recipient authorization unavailable' }, { status: 503 });
-    if (!permitted) return NextResponse.json({ error: 'Recipient forbidden' }, { status: 403 });
-  }
-
-  let effectiveSubject = subject;
-  let effectiveBody = body;
-  if (!staff) {
-    const { data: message, error: messageError } = await supabase.from('messages')
-      .select('id, from_user_email, to_user_email, subject, body, created_at')
-      .eq('id', message_id).maybeSingle();
-    if (messageError || !message
-      || message.from_user_email?.toLowerCase() !== callerProfile.email?.toLowerCase()
-      || message.to_user_email?.toLowerCase() !== recipients[0]
+  if (staff) {
+    // Fixed message: validation issues are not echoed back.
+    const parsed = SendEmailSchema.safeParse(raw.data);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request payload' }, { status: 400 });
+    }
+    const { to, subject, body, html } = parsed.data;
+    recipients = [...new Set((Array.isArray(to) ? to : [to]).map(value => value.toLowerCase()))];
+    for (const recipient of recipients) {
+      const { data: permitted, error: permissionError } = await supabase.rpc('can_message_recipient', { p_email: recipient });
+      if (permissionError) return NextResponse.json({ error: 'Recipient authorization unavailable' }, { status: 503 });
+      if (!permitted) return NextResponse.json({ error: 'Recipient forbidden' }, { status: 403 });
+    }
+    effectiveSubject = subject;
+    effectiveBody = body;
+    // Replies reach the office mailbox, never a personal address.
+    options = staffEmailOptions({ profileName: callerProfile.full_name, sender, office: await officeAddress(supabase), html });
+  } else {
+    const parsed = PortalNoticeSchema.safeParse(raw.data);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'A saved message is required' }, { status: 403 });
+    }
+    // Portal accounts cannot read messages directly: the server reads the saved
+    // row and its recipient account with the service role, after the checks above.
+    const admin = getServiceRoleClient();
+    const { data: message, error: messageError } = await admin.from('messages')
+      .select('id, sender_profile_id, recipient_profile_id, from_name, subject, body, created_at')
+      .eq('id', parsed.data.message_id).maybeSingle();
+    if (messageError || !message || message.sender_profile_id !== user.id || !message.recipient_profile_id
       || Date.now() - new Date(message.created_at).getTime() > 5 * 60 * 1000) {
       return NextResponse.json({ error: 'Message not eligible for email notification' }, { status: 403 });
     }
-    effectiveSubject = `Nouveau message English Hills : ${message.subject}`;
-    effectiveBody = `Bonjour,\n\nVous avez reçu un message via votre espace English Hills :\n\n${message.body}\n\nConnectez-vous à votre espace pour répondre.`;
+    const { data: recipient } = await admin.from('profiles').select('email')
+      .eq('id', message.recipient_profile_id).maybeSingle();
+    if (!recipient?.email || !emailField.safeParse(recipient.email).success) {
+      return NextResponse.json({ error: 'Message not eligible for email notification' }, { status: 403 });
+    }
+    recipients = [recipient.email.toLowerCase()];
+    ({ subject: effectiveSubject, body: effectiveBody, options } = portalNoticeEmail({
+      fromName: message.from_name, subject: message.subject, body: message.body, sender }));
   }
 
   try {
-    const options = {};
-    if (html)      options.html = true;
-    if (callerProfile.email) options.replyTo = callerProfile.email;
-    if (callerName && process.env.RESEND_FROM_ADDRESS) {
-      // Use the server-side display name so callers can't spoof it.
-      const verified = process.env.RESEND_FROM_ADDRESS;
-      const addrMatch = verified.match(/<([^>]+)>/) || [null, verified];
-      options.from = `${callerName} <${addrMatch[1]}>`;
-    }
     const result = await sendEmail(recipients, effectiveSubject, effectiveBody, options);
     return NextResponse.json({ success: true, id: result?.id });
   } catch (err) {
