@@ -348,6 +348,7 @@ jobs:
         run: |
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-receipt-charge-payments.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-delete-mistaken-receipt.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-finance-batch-e.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-receptionist-security.sql
       - name: Advisory D2 scope, safety and retention acceptance
         if: matrix.shard == 'sql-and-concurrency'
@@ -381,6 +382,9 @@ jobs:
       - name: Enrollment and group seat, payment-placement and course-close races
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-enrollment-group-concurrency.py
+      - name: Batch E numbering, void and payment races and owner-level session user
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-finance-batch-e-concurrency.py
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'

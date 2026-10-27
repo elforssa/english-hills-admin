@@ -1,4 +1,10 @@
-# Payment tracking sync
+# Payment tracking sync (retired)
+
+**Retired.** The 2026 import was applied on 2026-09-13. Both `sync-payment-tracking.mjs` and
+`generate-payment-tracking-sql.mjs` now exit at start: receipts can no longer be hard-deleted or
+inserted with user triggers disabled under the gap-free numbering of Batch E
+([plan PCR-r2, P2.3a](../docs/architecture/plans/payment-corrections-receipts.md)). The parsing library
+`lib/payment-tracking-sync.mjs` and its offline test stay. Any future import needs its own approved plan.
 
 This one-off operational importer reconciles the 2026 Annual and Mise à niveau
 payment-tracking CSVs with students and receipts. It is dry-run by default.

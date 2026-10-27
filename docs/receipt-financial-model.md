@@ -166,3 +166,32 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
 - **Payroll (Q9).** `POST /api/admin/payroll` answers 409 "Paie désactivée : barème à valider par le comptable."
   after its authentication and role checks and before any write; the page shows the banner and disables creation.
   Existing payslips stay readable and printable. Release E-3 replaces the switch with a validated rule set.
+
+### Batch E release E-2 (migration 122; not yet merged or applied)
+
+[Plan PCR-r2](architecture/plans/payment-corrections-receipts.md#e-2-tier-3-migration--app), [ADR-012](architecture/decisions/ADR-012-gap-free-receipt-numbering.md):
+
+- **Numbering.** `set_receipt_number()` takes the next value from `receipt_number_counters` (series `EH`, seeded from the
+  greater of the retired sequence and the largest issued suffix) inside the receipt's transaction, so a rollback gives the
+  number back. A supplied number is refused (`22023`); the year is the Casablanca year of issue; the suffix keeps at least
+  five digits and never truncates. Guard triggers refuse any number change, hard delete or truncation for every role.
+  Receipt-issuing transactions serialise on the counter row between insert and commit.
+- **Corrections.** `void_financial_receipt` and `delete_mistaken_receipt` lock in payment order (shared enrollment-intent
+  lock, learner, charge, receipt, enrollment, lead) and, when the receipt was the last live payment of a Confirmed or
+  Validated enrollment, write `enrollment_id` and `enrollment_without_live_payment` on their `payment_voided` event and
+  flag a CONVERTED linked lead once. A replacement payment clears that flag under the Q1-B rule (no review of the lead
+  ever raised for another reason). A receipt changed under a void is a `PT409` conflict (hint `finance.receipt_changed`).
+- **Desk guardrails.** A new charge with a discount gets a row in the staff-only `charge_discount_reasons` (code
+  `sibling`, `former_student`, `promotion`, `director_approval` or `other`, with text for `other`); the payload fields
+  `discount_reason_code`/`discount_reason` enter the request fingerprint only when present, so earlier requests still
+  replay. Reception discounts are capped at 10 %; payment dates are limited to today and 7 (reception) or 31 (admin,
+  director) days back, by the server's Casablanca date (the future-date refusal names it, for browsers whose time-zone
+  data predates tzdata 2026c); all after the idempotent replay. Below 10 % of the net price a reception payment issues
+  the receipt but confirms nothing (`enrollment_confirmation_pending`): a linked Submitted, Under Review or Trial
+  enrollment keeps its status and a new one is created as Under Review.
+- **Dates and reports.** `public.business_date()` (zone `Africa/Casablanca`) replaces `current_date` in `charge_balances`,
+  the payment functions and the monthly/yearly finance summaries. `get_finance_summary()` and `get_unpaid_receipts(int)`
+  are dropped. `get_finance_review_queue` feeds the director's "Contrôles" list on `/finance`.
+- **Data steps** (written, each needs its own approval): `supabase/manual/batch_e_d1_historical_receipt_numbers.sql`
+  (EH-HIST-2026 series, then `receipts_number_required`), `batch_e_d2_unpaid_confirmed_enrollments.sql`,
+  `batch_e_d3_legacy_rounding.sql`, each with a reverse script.

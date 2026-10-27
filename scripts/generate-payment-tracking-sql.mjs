@@ -2,6 +2,11 @@ import { chmodSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadSource, prepareSources, receiptPayload, studentPayload } from './lib/payment-tracking-sync.mjs';
 
+// Retired (Batch E, PCR-r2 P2.3a): the one-off import disabled user triggers on
+// receipts and hard-deleted receipts on rollback; both are now refused.
+console.error('Retired: the 2026 payment-tracking import was applied on 2026-09-13; see docs/architecture/plans/payment-corrections-receipts.md.');
+process.exit(1);
+
 function args(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 2) out[argv[i].replace(/^--/, '')] = argv[i + 1];

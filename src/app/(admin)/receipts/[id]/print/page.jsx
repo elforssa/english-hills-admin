@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, Edit, Mail, Printer, Trash2 } from 'lucide-react';
 import { safeReturnTo } from '@/lib/navigation.mjs';
+import { discountReasonLabel } from '@/lib/financeCorrections.mjs';
 import ContextLink from '@/components/ContextLink';
 
 export default function ReceiptPrint() {
@@ -21,11 +22,21 @@ export default function ReceiptPrint() {
   const [receipt, setReceipt] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [retryingEmail, setRetryingEmail] = useState(false);
+  const [discountReason, setDiscountReason] = useState('');
   useEffect(() => {
     getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data, error }) => {
       setReceipt(data || null); setLoadError(error?.message || '');
     });
   }, [id]);
+  // Staff see why a discount was given (never on the PDF or the e-mail).
+  useEffect(() => {
+    if (!receipt?.charge_id || !['admin', 'director', 'receptionist'].includes(role)) return undefined;
+    let active = true;
+    // Staff-only table (RLS); families never receive the reason.
+    getBrowserClient().from('charge_discount_reasons').select('reason_code,reason').eq('charge_id', receipt.charge_id).maybeSingle()
+      .then(({ data }) => { if (active) setDiscountReason(discountReasonLabel(data?.reason_code, data?.reason)); });
+    return () => { active = false; };
+  }, [receipt?.charge_id, role]);
   const retryEmail = async () => {
     setRetryingEmail(true);
     try {
@@ -63,6 +74,7 @@ export default function ReceiptPrint() {
       </div>
     </div>
 
+    {discountReason && <p className="mx-auto mb-4 max-w-[148mm] rounded-xl border bg-white p-3 text-sm text-slate-600 print:hidden"><b>Motif de la remise (non imprimé) :</b> {discountReason}</p>}
     {['admin', 'director'].includes(role) && (receipt.payment_note || receipt.observation || receipt.void_reason) && <aside className="mx-auto mb-4 max-w-[148mm] rounded-xl border bg-white p-4 text-sm text-slate-600 print:hidden">
       <h2 className="mb-2 font-bold text-slate-800">Informations internes — non imprimées</h2>
       {(receipt.payment_note || receipt.observation) && <p className="whitespace-pre-wrap break-words"><b>Note :</b> {receipt.payment_note || receipt.observation}</p>}

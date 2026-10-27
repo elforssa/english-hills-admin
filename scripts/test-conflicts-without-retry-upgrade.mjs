@@ -84,7 +84,7 @@ assert.deepEqual(offenders, [...MANIFEST].sort(), 'inventory at 118 differs from
 assert.match(catalogFails() || '', /ADR-009/, 'the catalog zero rule must fail at 118');
 
 // The 119 file directly: `supabase migration up` would also apply every later
-// migration (EGC 120 and 121). The ledger is brought to current at the end.
+// migration (EGC 120 and 121, Batch E 122). The ledger is brought to current at the end.
 console.log('Applying the 119 file');
 sql(migration);
 assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '118');
@@ -131,5 +131,5 @@ console.log('PASS catalog zero rule: clean after 119, fails on a reintroduced ra
 console.log('Bringing the ledger to the current migrations with supabase migration up');
 cli(['migration', 'up', '--local']);
 assert.equal(sql("select name from supabase_migrations.schema_migrations where version = '119'"), 'conflicts_without_retry');
-assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '121');
+assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), '122');
 assert.equal(catalogFails(), null, 'catalog zero rule at the current migrations');

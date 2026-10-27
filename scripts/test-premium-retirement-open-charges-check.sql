@@ -85,7 +85,7 @@ create temp table d5a_after(k text primary key, payload jsonb, original jsonb, r
 insert into d5a_after select right(p.k,1), p.v, r.v, null from rehearsal113.fx p join rehearsal113.fx r on r.k='result_'||right(p.k,1)
  where p.k like 'payload_%';
 insert into d5a_after values ('instalment', jsonb_build_object('student_id','b1130000-0000-0000-0000-0000000000a2',
- 'charge_id',pg_temp.id('charge_b'),'payment_amount',100,'payment_date','2026-10-02','payment_method','Espèces',
+ 'charge_id',pg_temp.id('charge_b'),'payment_amount',100,'payment_date',public.business_date(),'payment_method','Espèces',
  'idempotency_key',gen_random_uuid()), null, null);
 grant select, update on d5a_after to authenticated;
 set local role authenticated;
