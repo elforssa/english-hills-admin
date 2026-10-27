@@ -1,18 +1,18 @@
 // Destructive LOCAL synthetic upgrade rehearsal for Batch F (plan PRF-r2): run after
-// `supabase db reset --local --version 121 --no-seed`, once per mode.
+// `supabase db reset --local --version 122 --no-seed`, once per mode.
 //   node scripts/test-portal-readiness-upgrade.mjs full
-//     seeds the Production patterns on 121 (staff only, no portal account, a
+//     seeds the Production patterns on 122 (the migration before this one) (staff only, no portal account, a
 //     placeholder learner address, addresses differing only by case or spaces, a
 //     teacher with an empty address, receipts, portfolios), applies migration 123
 //     and edits, archives and creates a teacher with an empty address (NOT NULL),
-//     (the file directly; the ledger stays at 121), proves that no existing row
+//     (the file directly; the ledger stays at 122), proves that no existing row
 //     changed, that the catalog changed only in the plan's manifest and that the
 //     new constraints are NOT VALID; then runs the clean-up script with wrong
 //     counts (refused, nothing changed) and with the right counts (C0 before-image,
 //     C1, C2, constraints validated, receipts untouched), and proves it runs once;
 //   node scripts/test-portal-readiness-upgrade.mjs corrective
 //     applies 123 then the prepared corrective (scripts/portal-readiness-corrective.sql):
-//     every RLS policy is the 121 policy again.
+//     every RLS policy is the 122 policy again.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -30,7 +30,7 @@ const failsFile = (path, extra) => { try { applyFile(path, extra); return null; 
 const MIGRATION = 'supabase/migrations/123_portal_readiness.sql';
 const CLEANUP = 'scripts/portal-readiness-cleanup.sql';
 const CORRECTIVE = 'scripts/portal-readiness-corrective.sql';
-assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '121', 'run on a database at migration 121');
+assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '122', 'run on a database at migration 122');
 assert.equal(sql("select count(*) from pg_namespace where nspname = 'portal_security'"), '0');
 let checks = 0;
 
@@ -56,7 +56,7 @@ const ADDED = { portfolios: ['created_by'], notifications: ['recipient_profile_i
 const rows = () => json(`select jsonb_build_object(${TABLES.map(t => `'${t}', (select coalesce(jsonb_object_agg(x.id::text,
   md5((to_jsonb(x) - '{${(ADDED[t] || []).join(',')}}'::text[])::text)), '{}') from public.${t} x)`).join(', ')})`);
 
-// Production patterns at 121 (synthetic): staff accounts only; one learner address on
+// Production patterns at 122 (synthetic): staff accounts only; one learner address on
 // 12 files of different families (also the parent address of 3); addresses that differ
 // only by case or spaces; a teacher in mixed case, one with an empty address, one archived.
 sql(`begin;
@@ -115,9 +115,9 @@ if (mode === 'full') {
 
 if (mode === 'corrective') {
   applyFile(CORRECTIVE);
-  assert.deepEqual(diffKeys(beforeCatalog.policies, catalog().policies), [], 'every policy is the 121 policy again');
+  assert.deepEqual(diffKeys(beforeCatalog.policies, catalog().policies), [], 'every policy is the 122 policy again');
   assert.deepEqual(rows(), beforeRows, 'the corrective changes no row');
-  console.log('PASS corrective: every RLS policy is back at its 121 definition; no row changed');
+  console.log('PASS corrective: every RLS policy is back at its pre-123 definition; no row changed');
   process.exit(0);
 }
 
@@ -176,7 +176,7 @@ assert.deepEqual(diffKeys(beforeCatalog.columns, afterCatalog.columns), ['family
 assert.deepEqual(json(`select to_jsonb(portal_security.readiness_failures())`), ['office recipient is not configured',
   'an address is on more than 10 learner files', 'e-mail normalisation constraints are not validated']);
 checks += 8;
-console.log('PASS 121 → 123: no existing row changed; functions, policies, constraints and columns exactly the manifest');
+console.log('PASS 122 → 123: no existing row changed; functions, policies, constraints and columns exactly the manifest');
 
 // Clean-up: wrong counts are refused and change nothing; the right counts run C0–C2 once.
 const counts = { c1_parent: 2, c1_email: 1, c1_teacher: 1, c2_email: 12, c2_parent: 3 };
