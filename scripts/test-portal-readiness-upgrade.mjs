@@ -4,6 +4,7 @@
 //     seeds the Production patterns on 121 (staff only, no portal account, a
 //     placeholder learner address, addresses differing only by case or spaces, a
 //     teacher with an empty address, receipts, portfolios), applies migration 123
+//     and edits, archives and creates a teacher with an empty address (NOT NULL),
 //     (the file directly; the ledger stays at 121), proves that no existing row
 //     changed, that the catalog changed only in the plan's manifest and that the
 //     new constraints are NOT VALID; then runs the clean-up script with wrong
@@ -50,7 +51,7 @@ const diffKeys = (a = {}, b = {}) => [...new Set([...Object.keys(a), ...Object.k
 // Every existing row of the touched tables, minus the columns 123 adds.
 const TABLES = ['students', 'teachers', 'profiles', 'groups', 'enrollments', 'receipts', 'charges', 'portfolios', 'notifications', 'messages',
   'pending_roles', 'attendance', 'assessments', 'placement_tests', 'certificates', 'app_config', 'activity_log'];
-const ADDED = { portfolios: ['created_by'], notifications: ['recipient_profile_id'], messages: ['recipient_profile_id', 'sender_profile_id'],
+const ADDED = { portfolios: ['created_by'], notifications: ['recipient_profile_id'], messages: ['recipient_profile_id', 'sender_profile_id', 'notified_at'],
   pending_roles: ['teacher_id'] };
 const rows = () => json(`select jsonb_build_object(${TABLES.map(t => `'${t}', (select coalesce(jsonb_object_agg(x.id::text,
   md5((to_jsonb(x) - '{${(ADDED[t] || []).join(',')}}'::text[])::text)), '{}') from public.${t} x)`).join(', ')})`);
@@ -100,6 +101,18 @@ const afterCatalog = catalog();
 assert.deepEqual(rows(), beforeRows, 'migration 123 changes no existing row');
 checks++;
 
+// Review B1: teachers.email is NOT NULL. A teacher with an empty address (one exists
+// in Production) can still be edited, archived and created after 123; '' stays ''.
+if (mode === 'full') {
+  sql(`update public.teachers set full_name = 'Up Teacher Empty Edited' where id = '${id(102)}';
+    update public.teachers set deleted_at = now() where id = '${id(102)}';
+    insert into public.teachers(id, full_name, email, contract_type) values ('${id(104)}', 'Up Teacher New Empty', '  ', 'Freelance');`);
+  assert.equal(sql(`select string_agg(quote_literal(email) || ':' || (deleted_at is not null), ',' order by id) from public.teachers
+    where id in ('${id(102)}', '${id(104)}')`), "'':true,'':false");
+  checks++;
+  console.log('PASS a teacher with an empty address is edited, archived and created after 123 (NOT NULL kept)');
+}
+
 if (mode === 'corrective') {
   applyFile(CORRECTIVE);
   assert.deepEqual(diffKeys(beforeCatalog.policies, catalog().policies), [], 'every policy is the 121 policy again');
@@ -112,7 +125,8 @@ if (mode === 'corrective') {
 const RECREATED = ['public.get_visible_student_ids()', 'public.get_my_teacher_id()', 'public.get_my_email()',
   'public.teacher_can_access_student_group(uuid,uuid)', 'public.can_message_recipient(text)', 'public.get_teacher_directory(uuid)',
   'public.resolve_storage_asset(uuid)', 'storage_security.can_write(uuid,text,uuid,uuid,uuid)', 'public.prepare_role_invitation(text,text)',
-  'public.apply_pending_role()', 'public.log_activity()', 'public.mark_my_notifications_read()', 'public.mark_message_read(uuid)'];
+  'public.apply_pending_role()', 'public.log_activity()', 'public.mark_my_notifications_read()', 'public.mark_message_read(uuid)',
+  'online_security.caller_teacher_id()'];
 const GRANTS_ONLY = ['public.get_my_role()', 'public.get_my_student_id()', 'public.handle_new_auth_user()', 'public.handle_new_receipt()',
   'public.notify_premium_homework_teacher()', 'public.sync_premium_membership_entitlement()'];
 const NEW_PUBLIC = ['portal_teacher_roster(uuid)', 'portal_my_learners()', 'portal_learner_record(uuid)', 'portal_request_reenrollment(uuid)',
@@ -138,7 +152,7 @@ const EXPECTED_POLICIES = [
   'public.receipts.receipts parent read', 'public.receipts.receipts student financial read', 'public.charges.charges family read',
   ...['placement parent read', 'placement student read', 'placement teacher rw', 'placement teacher select', 'placement teacher insert',
     'placement teacher update'].map(p => 'public.placement_tests.' + p),
-  ...['attendance parent read', 'attendance student read', 'attendance teacher delete', 'attendance teacher insert',
+  ...['attendance parent read', 'attendance student read', 'attendance teacher delete', 'attendance teacher insert', 'attendance teacher select',
     'attendance teacher update'].map(p => 'public.attendance.' + p),
   'public.certificates.certificates parent read', 'public.certificates.certificates student read',
   ...['assessments teacher rw', 'assessments teacher select', 'assessments teacher insert', 'assessments teacher update'].map(p => 'public.assessments.' + p),
@@ -157,7 +171,7 @@ assert.ok(['students.students_email_normalized', 'students.students_parent_email
 assert.deepEqual(diffKeys(beforeCatalog.columns, afterCatalog.columns), ['family_links.activated_at', 'family_links.created_at',
   'family_links.created_by', 'family_links.id', 'family_links.invite_email', 'family_links.pending_role_id', 'family_links.profile_id',
   'family_links.relation', 'family_links.revoke_reason', 'family_links.revoked_at', 'family_links.revoked_by', 'family_links.status',
-  'family_links.student_id', 'messages.recipient_profile_id', 'messages.sender_profile_id', 'notifications.recipient_profile_id',
+  'family_links.student_id', 'messages.notified_at', 'messages.recipient_profile_id', 'messages.sender_profile_id', 'notifications.recipient_profile_id',
   'pending_roles.teacher_id', 'portfolios.created_by'], 'columns: the manifest only');
 assert.deepEqual(json(`select to_jsonb(portal_security.readiness_failures())`), ['office recipient is not configured',
   'an address is on more than 10 learner files', 'e-mail normalisation constraints are not validated']);

@@ -212,14 +212,19 @@ try {
   }
   // The teacher identity is the bound record (PRF-r2 D4) for messaging as for attendance and the class list.
   assert.equal(sql(`select linked_teacher_id from public.profiles where id='${teacher.id}'`),t1.id);
+  // The teacher's scope is the keys of the class list's linked accounts; the e-mail
+  // check is staff only and refuses every address alike (review S3).
+  const keys=ok(await rpc(teacher,'portal_message_recipients')).map(r=>r.recipient_key);
   for(const [key,recipient] of [['parent:'+s1.id,parent],['learner:'+s1.id,student]]) {
-    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient.email})),true);
+    assert.ok(keys.includes(key));
+    assert.equal((await rpc(teacher,'can_message_recipient',{p_email:recipient.email})).status,403);
     const [id]=ok(await rpc(teacher,'portal_send_message',{p_recipient_key:key,p_subject:run,p_body:'Teacher recipient relationship test'}));
     (records.messages??=[]).push(id);
     assert.equal(sql(`select to_user_email||'|'||recipient_profile_id from public.messages where id='${id}'`),recipient.email+'|'+recipient.id); checks+=2;
   }
+  assert.ok(!keys.some(k=>k.endsWith(s2.id)));
   for(const recipient of [s2.email,s2.parent_email]) {
-    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient})),false);
+    assert.equal((await rpc(teacher,'can_message_recipient',{p_email:recipient})).status,403);
     const denied=await request(teacher,'/rest/v1/messages','POST',{
       from_user_email:teacher.email,to_user_email:recipient,subject:run,body:'FORBIDDEN',
     });

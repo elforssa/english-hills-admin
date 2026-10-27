@@ -95,14 +95,6 @@ export async function revokeFamilyLink(linkId, reason) {
   return rpc('revoke_family_link', { p_link_id: linkId, p_reason: reason });
 }
 
-export async function linkFamilyStudent(profileId, studentId) {
-  return rpc('link_family_student', { p_profile_id: profileId, p_student_id: studentId });
-}
-
-export async function linkTeacherAccount(profileId, teacherId) {
-  return rpc('link_teacher_account', { p_profile_id: profileId, p_teacher_id: teacherId });
-}
-
 // D8: a notice about a learner goes to the linked accounts — the parents of a
 // child, the learner's own account for an adult or teen — one row per account.
 // Without a linked account it goes to the dossier address as e-mail only; that

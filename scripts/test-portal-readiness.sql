@@ -191,7 +191,11 @@ insert into public.certificates(id, student_id, student_name, niveau_complete, t
   (pg_temp.id(911), pg_temp.id(201), 'Sara Alami', 'Child 1', 'Sept–Déc', '2026', current_date, 'Direction', 'certificate note', true),
   (pg_temp.id(912), pg_temp.id(201), 'Sara Alami', 'Child 2', 'Sept–Déc', '2027', current_date, 'Direction', 'draft note', false);
 insert into public.attendance(id, student_id, group_id, session_date, status, notes) values
-  (pg_temp.id(921), pg_temp.id(201), pg_temp.id(301), current_date - 7, 'Absent', 'attendance staff note');
+  (pg_temp.id(921), pg_temp.id(201), pg_temp.id(301), current_date - 7, 'Absent', 'attendance staff note'),
+  -- Review S1: a member later archived (203), a former learner (213), another group (214).
+  (pg_temp.id(922), pg_temp.id(213), pg_temp.id(301), current_date - 30, 'Présent', 'former learner note'),
+  (pg_temp.id(923), pg_temp.id(203), pg_temp.id(301), current_date - 7, 'Présent', null),
+  (pg_temp.id(924), pg_temp.id(214), pg_temp.id(303), current_date - 7, 'Présent', 'other group note');
 -- One row in each Premium table, with free text in the notes fields (T-47).
 insert into public.premium_groups(id, name, teacher_id, start_time, notes) values
   (pg_temp.id(931), 'PR premium', pg_temp.id(101), '10:00', 'premium group staff note');
@@ -222,8 +226,11 @@ do $$ declare i integer; t text; begin
 end $$;
 -- T-02: teacher rows on the academic tables carry no family contact column.
 select pg_temp.act(4);
-select pg_temp.ok((select count(*) from public.attendance) = 1 and (select count(*) from public.placement_tests) = 1
-  and (select count(*) from public.certificates) = 2, 'T-02 T1 keeps group-scoped academic rows, never the CRM-linked test');
+select pg_temp.ok((select array_agg(id order by id) from public.attendance) = array[pg_temp.id(921), pg_temp.id(923)]
+  and (select count(*) from public.placement_tests) = 1 and (select count(*) from public.certificates) = 2,
+  'T-02 T1 keeps member academic rows only: no former learner, no other group, never the CRM-linked test');
+select pg_temp.act(6);
+select pg_temp.ok((select count(*) from public.attendance) = 0, 'T-02 the archived teacher record reads no attendance');
 -- T-03: key scan of every portal function output.
 select pg_temp.act(4);
 select pg_temp.ok(not exists (select 1 from pg_temp.keys((select jsonb_agg(to_jsonb(r)) from public.portal_teacher_roster() r)) k
@@ -305,6 +312,20 @@ select pg_temp.ok((select array_agg(student_id) from public.portal_my_learners()
 select pg_temp.fails(format('select public.portal_learner_record(%L)', pg_temp.id(202)), '42501', 'portal.not_linked');
 select pg_temp.act(2);
 select pg_temp.fails(format('select public.revoke_family_link(%L, %L)', pg_temp.id(602), 'encore'), 'PT409', 'portal.link_not_active');
+-- Review S4: a revoked link no longer counts for messaging or storage either.
+select pg_temp.act(4);
+select pg_temp.ok(not exists (select 1 from public.portal_message_recipients() where recipient_key = 'parent:' || pg_temp.id(202)),
+  'T-12 the teacher loses the parent key of the revoked link');
+select pg_temp.fails(format($$select public.portal_send_message(%L, 's', 'b')$$, 'parent:' || pg_temp.id(202)), '42501', 'portal.no_linked_account');
+select pg_temp.owner();
+select pg_temp.ok(storage_security.can_write(pg_temp.id(10), 'portfolio', pg_temp.id(204), null, null), 'T-12 the self link allows a portfolio upload');
+select pg_temp.act(2);
+select public.revoke_family_link(pg_temp.id(604), 'Test retrait apprenant');
+select pg_temp.owner();
+select pg_temp.ok(not storage_security.can_write(pg_temp.id(10), 'portfolio', pg_temp.id(204), null, null)
+  and not portal_security.family_linked(pg_temp.id(10), pg_temp.id(204)), 'T-12 a revoked self link ends storage writes');
+select pg_temp.act(10);
+select pg_temp.ok(not exists (select 1 from public.portal_my_learners()), 'T-12 the student sees nothing once the self link is revoked');
 rollback to savepoint t12;
 savepoint t13;
 select pg_temp.act(1);
@@ -494,6 +515,8 @@ select public.soft_delete_student(pg_temp.id(203));
 select pg_temp.act(4);
 select pg_temp.ok(not public.teacher_can_access_student_group(pg_temp.id(203), null)
   and not exists (select 1 from public.portal_teacher_roster() where student_id = pg_temp.id(203)), 'T-26 an archived learner is not visible');
+select pg_temp.ok(not exists (select 1 from public.attendance where student_id = pg_temp.id(203)),
+  'T-26 an archived learner''s attendance is not visible to the teacher (review S1)');
 rollback to savepoint t26;
 savepoint t26b;
 select pg_temp.owner();
@@ -616,6 +639,20 @@ select pg_temp.ok((select array_agg(id) from public.get_teacher_directory()) = a
 select pg_temp.act(3);
 select pg_temp.ok((select count(*) from public.get_teacher_directory() where id in (pg_temp.id(101), pg_temp.id(102))) = 2,
   'T-33 the receptionist keeps the safe directory');
+-- Review S3: the e-mail recipient check is staff only; any other caller gets the same
+-- refusal for a known and an unknown address (nothing about existence leaks).
+do $$ declare who integer; addr text; begin
+  foreach who in array array[3, 4, 7, 10, 11] loop
+    foreach addr in array array['pr-family-a@example.test', 'pr-t1@example.test', 'nobody-' || who || '@example.test'] loop
+      perform pg_temp.act(who);
+      perform pg_temp.fails(format('select public.can_message_recipient(%L)', addr), '42501');
+    end loop;
+  end loop;
+  perform pg_temp.act(2);
+  perform pg_temp.ok(public.can_message_recipient('pr-family-a@example.test') and not public.can_message_recipient('nobody@example.test'),
+    'T-33 director/admin keep the e-mail recipient check');
+  perform pg_temp.owner();
+end $$;
 -- T-34: parent:<id> resolves to every active parent link and is refused without one.
 select pg_temp.owner();
 insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
@@ -721,6 +758,16 @@ select pg_temp.ok(not exists (select 1 from public.portal_my_messages('inbox') w
 select pg_temp.act(8);
 select pg_temp.ok(not exists (select 1 from public.notifications) and not exists (select 1 from public.portal_my_messages('inbox')),
   'T-42 the unlinked same-address account sees none (e-mail only)');
+-- Review S4: no portal role reads message rows directly, whatever their addresses.
+do $$ declare who integer; begin
+  foreach who in array array[4, 5, 7, 8, 9, 10] loop
+    perform pg_temp.act(who);
+    perform pg_temp.ok(pg_temp.none('select * from public.messages'), 'T-42 user ' || who || ' reads no message row directly');
+  end loop;
+  perform pg_temp.owner();
+end $$;
+select pg_temp.ok((select count(*) from public.messages where to_user_email in ('pr-parent-a@example.test', 'pr-t1@example.test')) >= 3,
+  'T-42 the direct-read checks ran with messages addressed to those accounts');
 -- T-43: a client-supplied recipient is overwritten.
 select pg_temp.act(2);
 insert into public.notifications(id, type, recipient_email, student_id, subject, message, sent, recipient_profile_id)

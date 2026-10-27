@@ -46,8 +46,11 @@ create policy "certificates student read" on public.certificates for select
 grant select on public.legacy_receipt_reconciliation to anon;
 
 -- D4/D5: teacher attendance by group, teacher ALL policies and attendance delete.
+drop policy "attendance teacher select" on public.attendance;
 drop policy "attendance teacher insert" on public.attendance;
 drop policy "attendance teacher update" on public.attendance;
+create policy "attendance teacher select" on public.attendance for select
+  using (get_my_role() = 'teacher' and group_id in (select groups.id from public.groups where groups.teacher_id = get_my_teacher_id()));
 create policy "attendance teacher insert" on public.attendance for insert
   with check (get_my_role() = 'teacher' and group_id in (select groups.id from public.groups where groups.teacher_id = get_my_teacher_id()));
 create policy "attendance teacher update" on public.attendance for update

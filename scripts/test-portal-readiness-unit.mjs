@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { requestOriginRefusal, CROSS_ORIGIN_ERROR, CONTENT_TYPE_ERROR } from '../src/lib/http/requestOrigin.mjs';
 import { portalNoticeEmail, senderAddress, staffEmailOptions } from '../src/lib/emailSender.mjs';
 import { sanitizeDisplayName } from '../src/lib/displayName.mjs';
+import { createDeliveryTracker } from '../src/lib/deliveryOnce.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 let checks = 0;
@@ -116,4 +117,35 @@ assert.doesNotMatch(portalBranch.slice(0, portalBranch.indexOf('try {')), /parse
   'the portal branch never reads the caller\'s `to` nor sets a Reply-To');
 checks += 8;
 
-console.log(`PASS portal readiness unit: ${checks} checks (origin guard, ${guarded.length} guarded routes, ${exempt.length} exemptions, e-mail sender rules)`);
+// ── POR-7 / review S7: a retry after a part-way failure duplicates nothing ──
+{
+  const saved = [], sent = [];
+  let failOn = 'B@example.test ';
+  const steps = [
+    ['row', async r => { saved.push(r.email); return { id: 'row-' + r.email }; }],
+    ['email', async (r, state) => { if (r.email === failOn) throw new Error('smtp'); sent.push(state.row.id); }],
+  ];
+  const recipients = [{ email: 'a@example.test' }, { email: 'B@example.test ' }, { email: 'c@example.test' }];
+  const tracker = createDeliveryTracker();
+  await assert.rejects(tracker.run(recipients, steps), /smtp/);
+  assert.deepEqual(saved, ['a@example.test', 'B@example.test ']);
+  assert.deepEqual(sent, ['row-a@example.test']);
+  failOn = null;
+  const states = await tracker.run(recipients, steps);
+  assert.deepEqual(saved, ['a@example.test', 'B@example.test ', 'c@example.test'], 'each row is saved once');
+  assert.deepEqual(sent, ['row-a@example.test', 'row-B@example.test ', 'row-c@example.test'], 'each recipient is e-mailed once');
+  assert.ok(states.every(state => state.row && state.email));
+  await tracker.run(recipients, steps);
+  assert.equal(saved.length, 3); assert.equal(sent.length, 3);
+  // Send-then-save order (notifications): a failed save after a sent e-mail never re-sends it.
+  const order = []; let failSave = true;
+  const notices = createDeliveryTracker();
+  const noticeSteps = [['email', async r => { order.push('send ' + r.email); }],
+    ['row', async r => { if (failSave) { failSave = false; throw new Error('db'); } order.push('save ' + r.email); }]];
+  await assert.rejects(notices.run([{ email: 'p@example.test' }], noticeSteps), /db/);
+  await notices.run([{ email: 'p@example.test' }], noticeSteps);
+  assert.deepEqual(order, ['send p@example.test', 'save p@example.test']);
+  checks += 9;
+}
+
+console.log(`PASS portal readiness unit: ${checks} checks (origin guard, ${guarded.length} guarded routes, ${exempt.length} exemptions, e-mail sender rules, retries without duplicates)`);

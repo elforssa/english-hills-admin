@@ -248,8 +248,13 @@ try {
       }
     }
     if (!['admin', 'director'].includes(role)) for (const path of ['/api/admin/invite', '/api/admin/update-role', '/api/admin/payroll']) {
-      const r = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json' }, body: '{}' });
+      // Same-origin browser request (the routes refuse any other Origin, PRF-r2 D10).
+      const r = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json', Origin: app }, body: '{}' });
       assert.equal(r.status, role === 'anonymous' ? 401 : 403, path + ' ' + role); checks++;
+      // A cross-origin request is refused before authentication, for every role.
+      const foreign = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json', Origin: 'https://english-hills.com' }, body: '{}' });
+      assert.equal(foreign.status, 403, 'cross-origin ' + path + ' ' + role);
+      assert.equal((await foreign.json()).error, 'Requête refusée : origine non autorisée.'); checks++;
     }
   }
   console.log('PASS direct HTTP full role/route matrix, RSC/prefetch and independent API 401/403 gates');

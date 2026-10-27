@@ -7,7 +7,8 @@
 -- can_message_recipient, resolve_storage_asset and storage_security.can_write (121),
 -- get_teacher_directory (096), prepare_role_invitation (077), apply_pending_role
 -- (042), log_activity (021), mark_message_read (047), mark_my_notifications_read
--- (028); policy "announcements audience read" (121).
+-- (028), online_security.caller_teacher_id (117); policy "announcements audience
+-- read" (121).
 --
 -- Refusals raise 42501 (not allowed) or 22023 (invalid input) with a closed
 -- portal.<reason> hint; deliberate conflicts raise PT409 (ADR-009).
@@ -96,6 +97,9 @@ alter table public.pending_roles
   add constraint pending_roles_teacher_only check (teacher_id is null or role = 'teacher');
 
 -- ── D9: e-mail normalisation ─────────────────────────────────────────────
+-- Nullable columns: lower-case, trimmed, empty → NULL. NOT NULL columns
+-- (teachers.email, messages.from_user_email, notifications.recipient_email):
+-- lower-case and trimmed only, so an empty value stays '' and stays valid.
 create function portal_security.normalize_emails() returns trigger
 language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 begin
@@ -103,12 +107,12 @@ begin
     new.email := portal_security.norm_email(new.email);
     new.parent_email := portal_security.norm_email(new.parent_email);
   elsif tg_table_name = 'teachers' then
-    new.email := portal_security.norm_email(new.email);
+    new.email := lower(btrim(new.email));
   elsif tg_table_name = 'messages' then
-    new.from_user_email := portal_security.norm_email(new.from_user_email);
+    new.from_user_email := lower(btrim(new.from_user_email));
     new.to_user_email := portal_security.norm_email(new.to_user_email);
   elsif tg_table_name = 'notifications' then
-    new.recipient_email := portal_security.norm_email(new.recipient_email);
+    new.recipient_email := lower(btrim(new.recipient_email));
   end if;
   return new;
 end $$;
@@ -122,8 +126,8 @@ create trigger portal_normalize_emails before insert or update on public.message
   for each row execute function portal_security.normalize_emails();
 create trigger portal_normalize_emails before insert or update on public.notifications
   for each row execute function portal_security.normalize_emails();
--- Validated by the release task after clean-up step C1. An empty value passes and
--- becomes NULL on the row's next write (trigger above).
+-- Validated by the release task after clean-up step C1. An empty value passes; on
+-- a nullable column it becomes NULL on the row's next write (trigger above).
 alter table public.students add constraint students_email_normalized
   check (email = lower(btrim(email))) not valid;
 alter table public.students add constraint students_parent_email_normalized
@@ -161,6 +165,21 @@ $function$;
 
 -- The only teacher membership test: the record is not archived, one of its
 -- groups (or the given one) holds the learner as a member (Plan D, D-1).
+-- Online module (owner decision 2026-10-26, "Fix it inside F"): the online teacher
+-- identity is the same bound record, from its 117 definition; e-mail no longer
+-- identifies a teacher. Online family eligibility already reads the links through
+-- get_visible_student_ids(); lesson_recipients/notify keep dossier addresses as
+-- delivery addresses only (D7b attributes those rows to linked accounts).
+CREATE OR REPLACE FUNCTION online_security.caller_teacher_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select t.id from public.profiles p join public.teachers t on t.id = p.linked_teacher_id
+  where p.id = auth.uid() and p.role = 'teacher' and t.deleted_at is null
+$function$;
+
 create function portal_security.teacher_member(p_teacher uuid, p_student uuid, p_group uuid default null)
 returns boolean language sql stable security definer set search_path = pg_catalog, pg_temp as $$
   select p_teacher is not null and p_student is not null
@@ -197,6 +216,12 @@ AS $function$
     and ((p.role = 'parent' and fl.relation = 'parent') or (p.role = 'student' and fl.relation = 'self'))
 $function$;
 
+-- Review S6: replace the 025 comments, which described e-mail-keyed access.
+comment on function public.get_visible_student_ids() is
+  'INVARIANT (portal readiness, ADR-011): a parent or student sees a learner only through an active family_links row created by director/admin whose relation matches the stored role, and only while the learner is not archived. No e-mail comparison grants access; editing a dossier address never adds or removes access.';
+comment on function public.get_my_teacher_id() is
+  'INVARIANT (portal readiness, ADR-011): the teacher identity is profiles.linked_teacher_id, set at invitation, for a teacher-role account whose teacher record is not archived; otherwise NULL. The e-mail address does not identify a teacher.';
+
 -- The same rule for a given account (storage writes, recipient resolution).
 create function portal_security.account_sees(p_profile uuid, p_student uuid) returns boolean
 language sql stable security definer set search_path = pg_catalog, pg_temp as $$
@@ -215,6 +240,12 @@ language sql stable security definer set search_path = pg_catalog, pg_temp as $$
 $$;
 
 -- ── D5: teacher academic writes, no delete, audited ──────────────────────
+-- Every teacher attendance read and write goes through the one membership helper
+-- (D4): a learner who left the group or was archived drops out of the teacher's
+-- view. Teachers keep the attendance note (D1 hides it from families only).
+drop policy "attendance teacher select" on public.attendance;
+create policy "attendance teacher select" on public.attendance for select to authenticated
+  using (get_my_role() = 'teacher' and teacher_can_access_student_group(student_id, group_id));
 drop policy "attendance teacher delete" on public.attendance;
 drop policy "attendance teacher insert" on public.attendance;
 create policy "attendance teacher insert" on public.attendance for insert to authenticated
@@ -1009,7 +1040,9 @@ end $$;
 alter table public.notifications add column recipient_profile_id uuid references public.profiles(id) on delete set null;
 alter table public.messages
   add column recipient_profile_id uuid references public.profiles(id) on delete set null,
-  add column sender_profile_id uuid references public.profiles(id) on delete set null;
+  add column sender_profile_id uuid references public.profiles(id) on delete set null,
+  -- Set once by /api/email/send when the portal e-mail notice goes out (one notice per message).
+  add column notified_at timestamptz;
 create index notifications_recipient_profile_idx on public.notifications (recipient_profile_id, created_at desc)
   where recipient_profile_id is not null;
 create index messages_recipient_profile_idx on public.messages (recipient_profile_id, created_at desc)
@@ -1311,45 +1344,26 @@ begin
   limit 100;
 end $$;
 
+-- Staff only (review S3): portal accounts address recipients by opaque keys, so the
+-- e-mail-keyed check would only let them probe addresses. Any other caller gets the
+-- same refusal whatever the address; director and admin keep the 121 rule.
 CREATE OR REPLACE FUNCTION public.can_message_recipient(p_email text)
  RETURNS boolean
- LANGUAGE sql
+ LANGUAGE plpgsql
  STABLE SECURITY DEFINER
  SET search_path TO 'pg_catalog', 'pg_temp'
 AS $function$
-  with actor as (
-    select p.role, p.email
-    from public.profiles p where p.id = auth.uid()
-  ), target as (
-    select pg_catalog.lower(pg_catalog.btrim(p_email)) as email
-  ), students_for_actor as (
-    select s.id from public.students s, actor a
-    where a.role in ('parent','student') and s.id in (select public.get_visible_student_ids())
-  ), student_groups as (
-    select g.id as group_id from public.groups g
-    where exists (select 1 from students_for_actor sa where academic_security.is_group_member(sa.id, g.id))
-  )
-  select exists (
-    select 1 from actor a, target t
-    where a.role in ('director','admin','teacher','parent','student')
-      and t.email <> '' and t.email is not null
-      and (
-        (a.role in ('director','admin') and (
-          exists(select 1 from public.profiles p where p.role <> 'pending' and pg_catalog.lower(p.email) = t.email)
-          or exists(select 1 from public.students s where pg_catalog.lower(s.email) = t.email or pg_catalog.lower(s.parent_email) = t.email)
-          or exists(select 1 from public.teachers x where pg_catalog.lower(x.email) = t.email)
-        ))
-        or exists(select 1 from public.profiles p where p.role in ('director','admin') and pg_catalog.lower(p.email) = t.email)
-        or (a.role in ('parent','student') and exists (
-          select 1 from public.groups g join public.teachers x on x.id = g.teacher_id
-          where g.id in (select group_id from student_groups) and pg_catalog.lower(x.email) = t.email
-        ))
-        or (a.role = 'teacher' and exists (
-          select 1 from public.students s where portal_security.teacher_sees(s.id, null)
-            and (pg_catalog.lower(s.email) = t.email or pg_catalog.lower(s.parent_email) = t.email)
-        ))
-      )
-  );
+declare v_role text; v_email text := pg_catalog.lower(pg_catalog.btrim(p_email));
+begin
+  select p.role into v_role from public.profiles p where p.id = auth.uid();
+  if v_role is null or v_role not in ('director', 'admin') then
+    raise exception 'Forbidden' using errcode = '42501';
+  end if;
+  return v_email <> '' and v_email is not null and (
+    exists(select 1 from public.profiles p where p.role <> 'pending' and pg_catalog.lower(p.email) = v_email)
+    or exists(select 1 from public.students s where pg_catalog.lower(s.email) = v_email or pg_catalog.lower(s.parent_email) = v_email)
+    or exists(select 1 from public.teachers x where pg_catalog.lower(x.email) = v_email));
+end;
 $function$;
 
 -- Families lose the directory; a teacher reads only the own row.

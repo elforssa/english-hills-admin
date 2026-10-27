@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { entities, auth, integrations } from '@/lib/entities';
 import { MessageSquare, Megaphone, Plus, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { learnerNoticeTargets } from '@/lib/portal';
+import { createDeliveryTracker } from '@/lib/deliveryOnce.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -77,14 +78,15 @@ function MessageModal({ students, onSave, onClose }) {
   const [student, setStudent] = useState(null);
   const [targets, setTargets] = useState(null); // { emailOnly, targets } for a chosen learner
   const [sending, setSending] = useState(false);
-  // Rows already saved by an earlier attempt: a retry re-sends the e-mails only
-  // and never creates a second message row (POR-7).
-  const [saved, setSaved] = useState(null);
+  // Each recipient's row is saved, then e-mailed, once: a retry after a part-way
+  // failure skips what is done — no second row, no second e-mail (POR-7).
+  const tracker = useRef(createDeliveryTracker());
+  const [saved, setSaved] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleStudentSelect = async (id) => {
     const s = students.find(row => row.id === id) || null;
-    setStudent(s); setTargets(null); setSaved(null);
+    setStudent(s); setTargets(null); setSaved(false); tracker.current = createDeliveryTracker();
     if (!s) return;
     try {
       setTargets(await learnerNoticeTargets(s));
@@ -100,34 +102,31 @@ function MessageModal({ students, onSave, onClose }) {
     if (recipients.length === 0) { toast.error('Aucun destinataire.'); return; }
     setSending(true);
     try {
-      let rows = saved;
-      if (!rows) {
-        const user = await auth.me();
-        rows = [];
-        for (const recipient of recipients) {
-          rows.push(await entities.Message.create({
+      const user = await auth.me();
+      // One row and one e-mail per recipient: no recipient sees another family's address.
+      await tracker.current.run(recipients, [
+        ['row', async (recipient) => {
+          const row = await entities.Message.create({
             ...form,
             to_user_email: recipient.email,
             to_name: recipient.name || form.to_name,
             student_id: student?.id || null,
             from_user_email: user?.email || '',
             from_name: user?.full_name || 'Admin',
-          }));
-        }
-        setSaved(rows);
-      }
-      // One e-mail per recipient: no recipient sees another family's address.
-      for (const row of rows) {
-        await integrations.Core.SendEmail({
-          to: row.to_user_email,
+          });
+          setSaved(true);
+          return row;
+        }],
+        ['email', (recipient, state) => integrations.Core.SendEmail({
+          to: state.row.to_user_email,
           subject: `[English Hills] ${form.subject}`,
-          body: `Bonjour ${row.to_name || ''},\n\n${form.body}\n\n—\nEnglish Hills Language Center`,
-          message_id: row.id,
-        });
-      }
+          body: `Bonjour ${state.row.to_name || ''},\n\n${form.body}\n\n—\nEnglish Hills Language Center`,
+          message_id: state.row.id,
+        })],
+      ]);
       toast.success('Message envoyé'); onSave();
     } catch {
-      // entities / integrations already toasted; the saved rows are kept for a retry.
+      // entities / integrations already toasted; what succeeded is kept for a retry.
     } finally {
       setSending(false);
     }
@@ -179,7 +178,7 @@ function MessageModal({ students, onSave, onClose }) {
             <label className={labelClass}>Message *</label>
             <textarea className={`${inputClass} h-24 resize-none`} value={form.body} onChange={e => set('body', e.target.value)} required disabled={Boolean(saved)} />
           </div>
-          {saved && <p className="text-xs text-amber-700">Message enregistré ; l’e-mail n’est pas parti. « Envoyer » réessaie l’e-mail sans créer de doublon.</p>}
+          {saved && <p className="text-xs text-amber-700">Envoi interrompu. « Envoyer » reprend là où il s’est arrêté, sans doublon.</p>}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={saved ? onSave : onClose}>{saved ? 'Fermer' : 'Annuler'}</Button>
             <Button type="submit" disabled={sending || (student && !targets)}>

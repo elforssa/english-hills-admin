@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Bell, Send, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { learnerNoticeTargets } from '@/lib/portal';
+import { createDeliveryTracker } from '@/lib/deliveryOnce.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -28,11 +29,14 @@ function SendNotifModal({ students, onSave, onClose }) {
   const [student, setStudent] = useState(null);
   const [targets, setTargets] = useState(null); // D8: linked accounts, else the dossier address (e-mail only)
   const [sending, setSending] = useState(false);
+  // Each recipient is e-mailed, then recorded, once: a retry after a part-way failure
+  // re-sends nothing that already went out and saves no second row (POR-7).
+  const tracker = useRef(createDeliveryTracker());
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleStudentSelect = async (id) => {
     const s = students.find(row => row.id === id) || null;
-    setStudent(s); setTargets(null);
+    setStudent(s); setTargets(null); tracker.current = createDeliveryTracker();
     if (!s) return;
     try {
       setTargets(await learnerNoticeTargets(s));
@@ -52,17 +56,17 @@ function SendNotifModal({ students, onSave, onClose }) {
     try {
       // One e-mail and one row per recipient; the row keeps the learner so the
       // database can attribute it to the linked account (D7b).
-      for (const recipient of recipients) {
-        await integrations.Core.SendEmail({
+      await tracker.current.run(recipients, [
+        ['email', recipient => integrations.Core.SendEmail({
           to: recipient.email,
           subject: `[English Hills] ${form.subject}`,
           body: `Bonjour ${recipient.name || ''},\n\n${form.message}\n\n—\nEnglish Hills Language Center`,
-        });
-        await entities.Notification.create({
+        })],
+        ['row', recipient => entities.Notification.create({
           ...form, recipient_email: recipient.email, recipient_name: recipient.name || null,
           student_id: student?.id || null, sent: true, sent_at: new Date().toISOString(),
-        });
-      }
+        })],
+      ]);
       toast.success('Notification envoyée');
       onSave();
     } catch (err) {

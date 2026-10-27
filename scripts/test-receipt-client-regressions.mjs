@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
 import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
@@ -267,11 +267,20 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(reports, /payrollByTeacher\.slice\(0, 12\)/);
   assert.match(reports, /data=\{payrollChart\}/);
   for (const path of ['components/placement/PlacementTestModal.jsx', 'components/students/EnrollmentModal.jsx', 'app/(admin)/certificates/page.jsx',
-    'app/(admin)/learning-assessments/page.jsx', 'app/(admin)/parent-portal/page.jsx']) {
+    'app/(admin)/learning-assessments/page.jsx']) {
     const source = await readFile(new URL(`../src/${path}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /new Date\(\)\.toISOString\(\)\.split\('T'\)\[0\]/, path);
     assert.match(source, /localBusinessDate\(\)/, path);
   }
+  // The parent's re-enrollment request is dated by the server since portal readiness
+  // (PRF-r2 D2): the page sends only the learner, the function stamps the Casablanca date.
+  const parentPortal = await readFile(new URL('../src/app/(admin)/parent-portal/page.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(parentPortal, /date_inscription|Enrollment\.create/, 'parent portal sends no client date');
+  assert.match(parentPortal, /requestReenrollment\(selectedStudent\.id\)/);
+  const portalMigration = (await readdir(new URL('../supabase/migrations/', import.meta.url))).find(name => /_portal_readiness\.sql$/.test(name));
+  const portalSql = await readFile(new URL(`../supabase/migrations/${portalMigration}`, import.meta.url), 'utf8');
+  const reenrollment = portalSql.slice(portalSql.indexOf('function public.portal_request_reenrollment'));
+  assert.match(reenrollment.slice(0, reenrollment.indexOf('end $$;')), /\(now\(\) at time zone 'Africa\/Casablanca'\)::date/);
   for (const path of ['receipts/[id]/print', 'receipts/[id]/edit', 'receipts/[id]/delete']) {
     const page = await readFile(new URL(`../src/app/(admin)/${path}/page.jsx`, import.meta.url), 'utf8');
     assert.match(page, /receiptNumberLabel\(/, path);

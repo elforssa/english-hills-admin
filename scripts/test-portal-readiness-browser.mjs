@@ -1,8 +1,9 @@
 // Portal readiness (plan PRF-r2) browser check, local stack only. Requires the built
 // app on 127.0.0.1:3101 (npm run build && npm run start). Seeds a linked teacher, a
 // linked parent, a self-linked adult learner and the office login, then checks in
-// Chromium: the teacher portal, group page (no phone column), attendance and
-// assessments render from the class list; the parent and student portals render
+// Chromium: the teacher portal, group list and page (no phone column), attendance,
+// assessments, portfolios and learning assessments render from the class list,
+// with no delete for a teacher; the parent and student portals render
 // from the projections; every message composer lists names, never an address; no
 // Supabase response received by the teacher's or the parent's browser carries
 // another person's address or phone. Removes only this run's fixtures.
@@ -24,7 +25,7 @@ setTimeout(() => { console.error('FAIL portal browser check stalled'); process.e
 const sql = input => execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
   { input, encoding: 'utf8', timeout: 120_000 }).trim();
 const run = 'portal-ui-' + randomUUID().slice(0, 8), password = randomBytes(18).toString('base64url');
-const ids = Object.fromEntries(['teacher', 'group', 'child', 'other', 'adult'].map(k => [k, randomUUID()]));
+const ids = Object.fromEntries(['teacher', 'group', 'otherGroup', 'child', 'other', 'adult'].map(k => [k, randomUUID()]));
 const users = {};
 const phones = { child: '0655' + run.slice(-6), other: '0666' + run.slice(-6), adult: '0677' + run.slice(-6) };
 let browser;
@@ -86,6 +87,10 @@ try {
       ('${ids.child}', '${ids.group}', 'Validated', 'Yearly', '2026/2027', 'Child 1'),
       ('${ids.other}', '${ids.group}', 'Validated', 'Yearly', '2026/2027', 'Child 1'),
       ('${ids.adult}', '${ids.group}', 'Validated', 'Yearly', '2026/2027', 'Child 1');
+    -- Another teacher's group (not listed for this teacher) and academic rows to list.
+    insert into public.groups(id, name, session_type, niveau, annee) values ('${ids.otherGroup}', 'Groupe ${run} autre', 'Yearly', 'Child 1', '2026-2027');
+    insert into public.portfolios(student_id, student_name, title, project_type) values ('${ids.child}', 'Sara ${run}', 'T1 portfolio ${run}', 'Other');
+    insert into public.learning_assessments(student_id, student_name, date_assessment, kolb_style) values ('${ids.child}', 'Sara ${run}', current_date, 'Diverging');
     insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
       ('${ids.child}', 'parent', '${users.parent.id}', '${users.parent.email}', 'active', now()),
       ('${ids.adult}', 'self', '${users.student.id}', '${users.student.email}', 'active', now());
@@ -109,10 +114,24 @@ try {
   await teacher.page.getByText('Sara ' + run).waitFor();
   await teacher.page.goto(app + '/assessments');
   await teacher.page.getByRole('heading').first().waitFor();
+  // Group list: only the teacher's group, counted from the class list; no management action.
+  await teacher.page.goto(app + '/groups');
+  await teacher.page.getByRole('link', { name: 'Groupe ' + run }).first().waitFor();
+  assert.equal(await teacher.page.getByRole('link', { name: 'Groupe ' + run + ' autre' }).count(), 0, 'another teacher\'s group is not listed');
+  assert.equal(await teacher.page.getByRole('button', { name: /Nouveau groupe/ }).count(), 0);
+  // Portfolios and learning assessments: the class list feeds the forms; no delete for a teacher (Q2 = A).
+  await teacher.page.goto(app + '/portfolios');
+  await teacher.page.getByRole('heading', { level: 1 }).waitFor();
+  await teacher.page.getByText('T1 portfolio ' + run).waitFor();
+  assert.equal(await teacher.page.getByRole('button', { name: /^Supprimer le projet/ }).count(), 0, 'no portfolio delete for a teacher');
+  await teacher.page.goto(app + '/learning-assessments');
+  await teacher.page.getByRole('heading', { level: 1 }).waitFor();
+  await teacher.page.getByText('Sara ' + run).first().waitFor();
+  assert.equal(await teacher.page.getByRole('button', { name: /^Supprimer l’évaluation/ }).count(), 0, 'no learning-assessment delete for a teacher');
   await teacher.page.waitForLoadState('networkidle');
   assertNoContacts(teacher.bodies, 'teacher');
   await teacher.context.close();
-  console.log('PASS teacher portal, group page without phone column, attendance and assessments from the class list; names-only composer');
+  console.log('PASS teacher portal, group list and page (no phone column), attendance, assessments, portfolios and learning assessments from the class list; no delete; names-only composer');
 
   // Parent: linked child, payments tab, names-only composer.
   const parent = await signIn('parent', '/parent-portal');
@@ -144,9 +163,11 @@ try {
     delete from public.family_links where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
     set local eh.enrollment_command = on;
     delete from public.attendance where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
+    delete from public.portfolios where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
+    delete from public.learning_assessments where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
     delete from public.enrollments where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
     delete from public.students where id in ('${ids.child}', '${ids.other}', '${ids.adult}');
-    delete from public.groups where id = '${ids.group}';
+    delete from public.groups where id in ('${ids.group}', '${ids.otherGroup}');
     update public.profiles set linked_teacher_id = null where linked_teacher_id = '${ids.teacher}';
     delete from public.teachers where id = '${ids.teacher}';
     delete from public.app_config where key = 'portal_office_profile_id' and label = 'Accueil portail ${run}';

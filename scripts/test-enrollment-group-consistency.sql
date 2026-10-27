@@ -310,13 +310,16 @@ select pg_temp.ok(exists (select 1 from public.portal_teacher_roster() where stu
 select pg_temp.act(5);
 select pg_temp.ok(public.teacher_can_access_student_group(pg_temp.id(201), pg_temp.id(302)), 'teacher B through the second-programme group');
 select pg_temp.ok(exists (select 1 from public.portal_teacher_roster() where student_id = pg_temp.id(201)), 'teacher B reads the learner file');
-select pg_temp.ok(public.can_message_recipient('egc-user-6@example.test'), 'teacher B may message the parent');
+-- Messaging keys for linked accounts (PRF-r2 D7); the e-mail check is staff only (review S3).
+select pg_temp.ok(exists (select 1 from public.portal_message_recipients() where recipient_key = 'parent:' || pg_temp.id(201)),
+  'teacher B may message the parent');
 select pg_temp.act(6);
 select pg_temp.ok((select array_agg(id order by id) from public.announcements where id in (pg_temp.id(701), pg_temp.id(702), pg_temp.id(703)))
   = array[pg_temp.id(701), pg_temp.id(702)], 'the parent sees both groups'' announcements, not another group''s');
 select pg_temp.ok((select array_agg(x order by x) from public.my_member_group_ids() x) = array[pg_temp.id(301), pg_temp.id(302)],
   'my_member_group_ids: the parent''s own learner''s groups');
-select pg_temp.ok(public.can_message_recipient('egc-user-5@example.test') and public.can_message_recipient('egc-user-4@example.test'),
+select pg_temp.ok((select array_agg(recipient_key order by recipient_key) from public.portal_message_recipients() where recipient_key like 'teacher:%')
+  = (select array_agg('teacher:' || x order by 'teacher:' || x) from unnest(array[pg_temp.id(101), pg_temp.id(102)]) x),
   'the parent may message both teachers');
 select pg_temp.act(9);
 select pg_temp.ok(not exists (select 1 from public.announcements where id in (pg_temp.id(701), pg_temp.id(702)))

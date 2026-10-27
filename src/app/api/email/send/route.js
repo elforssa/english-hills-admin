@@ -85,8 +85,10 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Gate: per-user rate limit (atomic, DB-backed).
-  for (const limit of RATE_LIMITS) {
+  const staff = ['director', 'admin'].includes(callerProfile.role);
+  // Gate: per-user rate limit (atomic, DB-backed). A portal notice consumed it once
+  // already when portal_send_message saved the message, and is sent once per message.
+  if (staff) for (const limit of RATE_LIMITS) {
     const { data: allowed, error: rlError } = await supabase.rpc('consume_rate_limit', { p_scope: limit.scope });
     if (rlError) {
       // eslint-disable-next-line no-console
@@ -106,8 +108,8 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: raw.status });
   }
 
-  const staff = ['director', 'admin'].includes(callerProfile.role);
   let recipients;
+  let claimed = null;
   let effectiveSubject;
   let effectiveBody;
   let options;
@@ -137,17 +139,22 @@ export async function POST(request) {
     }
     // Portal accounts cannot read messages directly: the server reads the saved
     // row and its recipient account with the service role, after the checks above.
+    // One notice per message: claim it atomically (caller is the sender, under five
+    // minutes old, not yet notified); a failed delivery releases the claim below.
     const admin = getServiceRoleClient();
     const { data: message, error: messageError } = await admin.from('messages')
-      .select('id, sender_profile_id, recipient_profile_id, from_name, subject, body, created_at')
-      .eq('id', parsed.data.message_id).maybeSingle();
-    if (messageError || !message || message.sender_profile_id !== user.id || !message.recipient_profile_id
-      || Date.now() - new Date(message.created_at).getTime() > 5 * 60 * 1000) {
+      .update({ notified_at: new Date().toISOString() })
+      .eq('id', parsed.data.message_id).eq('sender_profile_id', user.id).is('notified_at', null)
+      .not('recipient_profile_id', 'is', null).gt('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+      .select('id, recipient_profile_id, from_name, subject, body').maybeSingle();
+    if (messageError || !message) {
       return NextResponse.json({ error: 'Message not eligible for email notification' }, { status: 403 });
     }
+    claimed = message.id;
     const { data: recipient } = await admin.from('profiles').select('email')
       .eq('id', message.recipient_profile_id).maybeSingle();
     if (!recipient?.email || !emailField.safeParse(recipient.email).success) {
+      await admin.from('messages').update({ notified_at: null }).eq('id', claimed);
       return NextResponse.json({ error: 'Message not eligible for email notification' }, { status: 403 });
     }
     recipients = [recipient.email.toLowerCase()];
@@ -159,6 +166,7 @@ export async function POST(request) {
     const result = await sendEmail(recipients, effectiveSubject, effectiveBody, options);
     return NextResponse.json({ success: true, id: result?.id });
   } catch (err) {
+    if (claimed) await getServiceRoleClient().from('messages').update({ notified_at: null }).eq('id', claimed);
     // eslint-disable-next-line no-console
     console.error('[POST /api/email/send] Resend error:', err);
     return NextResponse.json({ error: err.message || 'Email send failed' }, { status: 500 });
