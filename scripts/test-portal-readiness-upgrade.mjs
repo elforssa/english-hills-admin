@@ -180,13 +180,15 @@ assert.equal(sql(`select to_regclass('maintenance.portal_cleanup_before') is nul
 assert.match(failsFile(CLEANUP, vars({ ...counts, c1_parent: 4 })), /C1: expected 4 parent addresses/);
 assert.match(failsFile(CLEANUP, vars({ ...counts, c1_message: 0 })), /C1: expected 0 message rows/);
 assert.match(failsFile(CLEANUP, vars({ ...counts, c1_notification: 0 })), /C1: expected 0 notification rows/);
+assert.deepEqual(rows(), beforeRows, 'the refused clean-ups changed nothing');
 // Re-review N2: an archived record that differs from the mixed-case active teacher only by
 // case is found by the pre-check, not as a raw unique violation during the update.
 sql(`insert into public.teachers(id, full_name, email, contract_type, deleted_at) values
   ('${id(105)}', 'Up Teacher Archived Twin', 'up.teacher@example.test', 'Freelance', now());`);
+const withTwin = rows();
 assert.match(failsFile(CLEANUP, vars(counts)), /C1: a teacher address differs from another teacher record \(active or archived\)/);
+assert.deepEqual(rows(), withTwin, 'the refused clean-up changed nothing');
 sql(`delete from public.teachers where id = '${id(105)}';`);
-assert.deepEqual(rows(), beforeRows, 'the refused clean-ups changed nothing');
 const result = JSON.parse(applyFile(CLEANUP, vars(counts)).split('\n').filter(Boolean).pop());
 assert.equal(result.c2_rows, 12); assert.equal(result.c1_rows, 6); assert.equal(result.placeholder_left, 0);
 assert.deepEqual(result.readiness_failures, ['office recipient is not configured']);
@@ -206,7 +208,7 @@ assert.equal(sql(`select (select from_user_email || '|' || to_user_email || '|' 
 assert.equal(sql(`select has_table_privilege('authenticated', 'maintenance.portal_cleanup_before', 'SELECT')
   or has_table_privilege('service_role', 'maintenance.portal_cleanup_before', 'SELECT')`), 'f', 'the before-image has no API grant');
 assert.match(failsFile(CLEANUP, vars({ ...counts, c2_email: 0, c2_parent: 0, c1_parent: 0, c1_email: 0, c1_teacher: 0, c1_message: 0, c1_notification: 0 })), /already ran/);
-checks += 17;
+checks += 18;
 console.log('PASS clean-up: wrong counts refused with no change; C0 before-image, C1, C2, constraints validated, receipts untouched, runs once');
 // Review B1: teachers.email is NOT NULL. A teacher with an empty address (one exists
 // in Production) can still be edited, archived and created after 123 and the clean-up

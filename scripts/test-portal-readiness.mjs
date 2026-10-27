@@ -185,8 +185,8 @@ try {
   const [saved] = ok(await rpc(parent, 'portal_send_message', { p_recipient_key: 'office', p_subject: run, p_body: 'Pour l’accueil.' }));
   ok(await route(parent, '/api/email/send', { message_id: saved, to: `${run}-attacker@example.invalid` }));
   // Re-review: one notice per message; the same notice sent again is refused.
-  const again = await route(parent, '/api/email/send', { message_id: saved });
-  assert.equal(again.status, 403, 'a second notice for the same message is refused');
+  const secondNotice = await route(parent, '/api/email/send', { message_id: saved });
+  assert.equal(secondNotice.status, 403, 'a second notice for the same message is refused');
   assert.equal(sql(`select notified_at is not null from public.messages where id = '${saved}'`), 't');
   const othersMessage = await route(student, '/api/email/send', { message_id: saved });
   assert.equal(othersMessage.status, 403);
