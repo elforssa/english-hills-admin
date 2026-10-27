@@ -91,7 +91,11 @@ insert into public.portfolios(id, student_id, title, project_type, teacher_id, t
   ('${id(501)}', '${id(201)}', 'Up project', 'Other', '${id(101)}', 'feedback'),
   ('${id(502)}', '${id(221)}', 'Up project 2', 'Other', null, null);
 insert into public.notifications(id, type, recipient_email, student_id, subject, message, sent)
-  values ('${id(601)}', 'general', 'up.parent@example.test', '${id(221)}', 'Up notice', 'x', true);
+  values ('${id(601)}', 'general', 'up.parent@example.test', '${id(221)}', 'Up notice', 'x', true),
+  -- Re-review N3: a staff notice and a message whose addresses differ only by case or spaces.
+  ('${id(602)}', 'general', 'PR-UP-1@Example.test', null, 'Up staff notice', 'x', true);
+insert into public.messages(id, from_user_email, to_user_email, subject, body, student_id)
+  values ('${id(701)}', 'PR-UP-2@Example.test', ' Up.Parent@Example.test ', 'Up message', 'x', '${id(221)}');
 commit;`);
 
 const beforeCatalog = catalog();
@@ -167,15 +171,24 @@ checks += 8;
 console.log('PASS 122 → 123: no existing row changed; functions, policies, constraints and columns exactly the manifest');
 
 // Clean-up: wrong counts are refused and change nothing; the right counts run C0–C2 once.
-const counts = { c1_parent: 2, c1_email: 1, c1_teacher: 1, c2_email: 12, c2_parent: 3 };
+const counts = { c1_parent: 2, c1_email: 1, c1_teacher: 1, c1_message: 1, c1_notification: 1, c2_email: 12, c2_parent: 3 };
 const vars = c => Object.entries(c).flatMap(([k, v]) => ['-v', `${k}=${v}`]);
 const refused = failsFile(CLEANUP, vars({ ...counts, c2_email: 33 }));
 assert.match(refused, /C2: expected 33 learner files/);
 assert.deepEqual(rows(), beforeRows, 'a refused clean-up changes nothing');
 assert.equal(sql(`select to_regclass('maintenance.portal_cleanup_before') is null`), 't', 'nor creates the before-image');
 assert.match(failsFile(CLEANUP, vars({ ...counts, c1_parent: 4 })), /C1: expected 4 parent addresses/);
+assert.match(failsFile(CLEANUP, vars({ ...counts, c1_message: 0 })), /C1: expected 0 message rows/);
+assert.match(failsFile(CLEANUP, vars({ ...counts, c1_notification: 0 })), /C1: expected 0 notification rows/);
+// Re-review N2: an archived record that differs from the mixed-case active teacher only by
+// case is found by the pre-check, not as a raw unique violation during the update.
+sql(`insert into public.teachers(id, full_name, email, contract_type, deleted_at) values
+  ('${id(105)}', 'Up Teacher Archived Twin', 'up.teacher@example.test', 'Freelance', now());`);
+assert.match(failsFile(CLEANUP, vars(counts)), /C1: a teacher address differs from another teacher record \(active or archived\)/);
+sql(`delete from public.teachers where id = '${id(105)}';`);
+assert.deepEqual(rows(), beforeRows, 'the refused clean-ups changed nothing');
 const result = JSON.parse(applyFile(CLEANUP, vars(counts)).split('\n').filter(Boolean).pop());
-assert.equal(result.c2_rows, 12); assert.equal(result.c1_rows, 4); assert.equal(result.placeholder_left, 0);
+assert.equal(result.c2_rows, 12); assert.equal(result.c1_rows, 6); assert.equal(result.placeholder_left, 0);
 assert.deepEqual(result.readiness_failures, ['office recipient is not configured']);
 assert.equal(sql(`select string_agg(conname || ':' || convalidated, ',' order by conname) from pg_constraint where conname like '%email%normalized'`),
   'messages_emails_normalized:true,notifications_recipient_email_normalized:true,students_email_normalized:true,'
@@ -185,11 +198,15 @@ assert.equal(sql(`select parent_email || '|' || (select parent_email from public
   from public.students where id = '${id(221)}'`), 'up.parent@example.test|up-space@example.test|up.adult@example.test|up.teacher@example.test');
 assert.equal(sql(`select count(*) from public.students where email = 'up-placeholder@example.test' or parent_email = 'up-placeholder@example.test'`), '0');
 assert.equal(sql(`select email from public.receipts where id = '${id(401)}'`), 'up-placeholder@example.test', 'issued receipts unchanged');
-assert.equal(sql(`select count(*) from maintenance.portal_cleanup_before`), '16');
+assert.equal(sql(`select count(*) from maintenance.portal_cleanup_before`), '18');
+assert.equal(sql(`select (select from_user_email || '|' || to_user_email || '|' || (recipient_profile_id is null) from public.messages where id = '${id(701)}')
+  || '|' || (select recipient_email || '|' || (recipient_profile_id = '${id(1)}') from public.notifications where id = '${id(602)}')`),
+  'pr-up-2@example.test|up.parent@example.test|true|pr-up-1@example.test|true',
+  'messages and notifications normalised; no family account named, the staff notice names its staff account');
 assert.equal(sql(`select has_table_privilege('authenticated', 'maintenance.portal_cleanup_before', 'SELECT')
   or has_table_privilege('service_role', 'maintenance.portal_cleanup_before', 'SELECT')`), 'f', 'the before-image has no API grant');
-assert.match(failsFile(CLEANUP, vars({ ...counts, c2_email: 0, c2_parent: 0, c1_parent: 0, c1_email: 0, c1_teacher: 0 })), /already ran/);
-checks += 12;
+assert.match(failsFile(CLEANUP, vars({ ...counts, c2_email: 0, c2_parent: 0, c1_parent: 0, c1_email: 0, c1_teacher: 0, c1_message: 0, c1_notification: 0 })), /already ran/);
+checks += 17;
 console.log('PASS clean-up: wrong counts refused with no change; C0 before-image, C1, C2, constraints validated, receipts untouched, runs once');
 // Review B1: teachers.email is NOT NULL. A teacher with an empty address (one exists
 // in Production) can still be edited, archived and created after 123 and the clean-up

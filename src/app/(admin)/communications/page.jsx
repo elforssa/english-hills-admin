@@ -178,7 +178,8 @@ function MessageModal({ students, onSave, onClose }) {
             <label className={labelClass}>Message *</label>
             <textarea className={`${inputClass} h-24 resize-none`} value={form.body} onChange={e => set('body', e.target.value)} required disabled={Boolean(saved)} />
           </div>
-          {saved && <p className="text-xs text-amber-700">Envoi interrompu. « Envoyer » reprend là où il s’est arrêté, sans doublon.</p>}
+          {/* Only after a part-way failure: during a normal send `saved` is already true. */}
+          {saved && !sending && <p className="text-xs text-amber-700">Envoi interrompu. « Envoyer » reprend là où il s’est arrêté, sans doublon.</p>}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={saved ? onSave : onClose}>{saved ? 'Fermer' : 'Annuler'}</Button>
             <Button type="submit" disabled={sending || (student && !targets)}>

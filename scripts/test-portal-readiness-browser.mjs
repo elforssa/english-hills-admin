@@ -6,7 +6,8 @@
 // with no delete for a teacher; the parent and student portals render
 // from the projections; every message composer lists names, never an address; no
 // Supabase response received by the teacher's or the parent's browser carries
-// another person's address or phone. Removes only this run's fixtures.
+// another person's address or phone; a Notifications send that fails part-way is
+// locked and its retry sends nothing twice. Removes only this run's fixtures.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -154,12 +155,67 @@ try {
   assertNoContacts(student.bodies, 'student');
   await student.context.close();
   console.log('PASS student portal from the self link');
+
+  // Notifications (re-review): a part-way failure locks the form to that notice; the
+  // retry finishes it without a second e-mail or row, and the learner cannot be re-picked.
+  const office = await signIn('office', '/dashboard');
+  const emailPosts = []; let failRow = true, emailDelay = 0;
+  await office.context.route(app + '/api/email/send', async route => {
+    emailPosts.push(route.request().postDataJSON());
+    await new Promise(resolve => setTimeout(resolve, emailDelay));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' });
+  });
+  await office.context.route(base + '/rest/v1/notifications*', async route => {
+    if (route.request().method() === 'POST' && failRow) {
+      failRow = false;
+      return route.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"simulated failure"}' });
+    }
+    return route.continue();
+  });
+  await office.page.goto(app + '/notifications');
+  await office.page.getByRole('button', { name: 'Envoyer une notification' }).click();
+  const dialog = office.page.getByRole('dialog');
+  await dialog.locator('select').nth(1).selectOption(ids.child);
+  await dialog.getByText(users.parent.email).waitFor();
+  await dialog.locator('input').first().fill('Notice ' + run);
+  await dialog.locator('textarea').fill('Bonjour');
+  await dialog.getByRole('button', { name: 'Envoyer' }).click();
+  await dialog.getByRole('button', { name: 'Réessayer' }).waitFor();
+  assert.ok(await dialog.locator('select').nth(1).isDisabled(), 'the learner cannot be re-picked after a part-way failure');
+  assert.ok(await dialog.locator('input').first().isDisabled(), 'the notice is locked');
+  assert.equal(emailPosts.length, 1);
+  await dialog.getByRole('button', { name: 'Réessayer' }).click();
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(emailPosts.length, 1, 'the retry sends no second e-mail');
+  assert.equal(sql(`select count(*) || ':' || bool_and(recipient_profile_id = '${users.parent.id}') from public.notifications
+    where subject = 'Notice ${run}'`), '1:true', 'one row, for the linked account');
+  console.log('PASS notifications: a part-way failure locks the notice; the retry sends no second e-mail and saves one row');
+  // Communications: the "Envoi interrompu" notice never shows during a normal (slow) send.
+  emailDelay = 1500;
+  await office.page.goto(app + '/communications');
+  await office.page.getByRole('button', { name: 'Message', exact: true }).click();
+  const composer = office.page.getByRole('dialog');
+  await composer.locator('select').nth(1).selectOption(ids.child);
+  await composer.getByText(users.parent.email).waitFor();
+  await composer.locator('input').first().fill('Message ' + run);
+  await composer.locator('textarea').fill('Bonjour');
+  await composer.getByRole('button', { name: 'Envoyer' }).click();
+  let interruptedShown = false;
+  while (await composer.count()) {
+    if (await office.page.getByText(/Envoi interrompu/).count()) interruptedShown = true;
+    await office.page.waitForTimeout(100);
+  }
+  assert.equal(interruptedShown, false, 'no interruption notice during a normal send');
+  assert.equal(sql(`select count(*) from public.messages where subject = 'Message ${run}'`), '1');
+  await office.context.close();
+  console.log('PASS communications: no interruption notice during a normal send');
   console.log('PASS portal readiness browser check');
 } finally {
   if (browser) await browser.close();
   const userIds = Object.values(users).map(u => `'${u.id}'`).join(',') || 'null';
   sql(`begin;
     delete from public.messages where sender_profile_id in (${userIds}) or recipient_profile_id in (${userIds});
+    delete from public.notifications where subject = 'Notice ${run}';
     delete from public.family_links where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');
     set local eh.enrollment_command = on;
     delete from public.attendance where student_id in ('${ids.child}', '${ids.other}', '${ids.adult}');

@@ -3,8 +3,11 @@
 -- task runs it once, after migration 123, under the owner's explicit approval
 -- (R3), with the counts its own dry-run queries returned:
 --
---   psql ... -v c1_parent=4 -v c1_email=2 -v c1_teacher=1 -v c2_email=33 -v c2_parent=7 \
---     -f scripts/portal-readiness-cleanup.sql
+--   psql ... -v c1_parent=4 -v c1_email=2 -v c1_teacher=1 -v c1_message=N -v c1_notification=N \
+--     -v c2_email=33 -v c2_parent=7 -f scripts/portal-readiness-cleanup.sql
+--
+-- c1_message / c1_notification (re-review N3): the plan's 2026-10-24 counts did not
+-- cover messages and notifications; the dry run measures them like the others.
 --
 -- One transaction: any count that differs aborts it and changes nothing. No
 -- address is printed or written anywhere but the private before-image (C0).
@@ -13,7 +16,8 @@
 begin;
 select set_config('portal_cleanup.c1_parent', :'c1_parent', true), set_config('portal_cleanup.c1_email', :'c1_email', true),
   set_config('portal_cleanup.c1_teacher', :'c1_teacher', true), set_config('portal_cleanup.c2_email', :'c2_email', true),
-  set_config('portal_cleanup.c2_parent', :'c2_parent', true);
+  set_config('portal_cleanup.c2_parent', :'c2_parent', true), set_config('portal_cleanup.c1_message', :'c1_message', true),
+  set_config('portal_cleanup.c1_notification', :'c1_notification', true);
 
 do $$ begin
   if to_regclass('public.family_links') is null then
@@ -29,10 +33,11 @@ end $$;
 create table if not exists maintenance.portal_cleanup_before (
   id bigint generated always as identity primary key,
   step text not null,
-  entity text not null check (entity in ('students','teachers')),
+  entity text not null check (entity in ('students','teachers','messages','notifications')),
   row_id uuid not null,
-  email text,
-  parent_email text,
+  email text,          -- students.email, teachers.email, messages.from_user_email, notifications.recipient_email
+  parent_email text,   -- students.parent_email
+  to_email text,       -- messages.to_user_email
   at timestamptz not null default now()
 );
 alter table maintenance.portal_cleanup_before enable row level security;
@@ -93,6 +98,25 @@ begin
       group by lower(btrim(email)) having count(*) > 1) then
     raise exception 'C1: two active teacher records would share an address' using errcode = '23505';
   end if;
+  -- Re-review N2: teachers_email_key is unique over every row, archived ones included, so a
+  -- record that differs from another (active or archived) only by case or spaces is found here,
+  -- not as a raw unique violation during the update below.
+  if exists (select 1 from public.teachers where nullif(btrim(email), '') is not null
+      group by lower(btrim(email)) having count(*) > 1) then
+    raise exception 'C1: a teacher address differs from another teacher record (active or archived) only by case or spaces; review it first'
+      using errcode = '23505';
+  end if;
+  -- Re-review N3: message and notification addresses, non-blank only (blank stays as stored).
+  select count(*) into n from public.messages where (btrim(from_user_email) <> '' and from_user_email <> lower(btrim(from_user_email)))
+    or to_user_email <> lower(btrim(to_user_email));
+  if n <> current_setting('portal_cleanup.c1_message')::integer then
+    raise exception 'C1: expected % message rows to normalise, found %', current_setting('portal_cleanup.c1_message'), n using errcode = '23514';
+  end if;
+  select count(*) into n from public.notifications where btrim(recipient_email) <> '' and recipient_email <> lower(btrim(recipient_email));
+  if n <> current_setting('portal_cleanup.c1_notification')::integer then
+    raise exception 'C1: expected % notification rows to normalise, found %', current_setting('portal_cleanup.c1_notification'), n
+      using errcode = '23514';
+  end if;
 end $$;
 
 -- C0 before-image, then C1 and C2.
@@ -106,6 +130,12 @@ where (s.email <> lower(btrim(s.email)) or s.parent_email <> lower(btrim(s.paren
   and not exists (select 1 from maintenance.portal_cleanup_before b where b.row_id = s.id);
 insert into maintenance.portal_cleanup_before(step, entity, row_id, email, parent_email)
 select 'C1', 'teachers', t.id, t.email, null from public.teachers t where btrim(t.email) <> '' and t.email <> lower(btrim(t.email));
+insert into maintenance.portal_cleanup_before(step, entity, row_id, email, to_email)
+select 'C1', 'messages', m.id, m.from_user_email, m.to_user_email from public.messages m
+where (btrim(m.from_user_email) <> '' and m.from_user_email <> lower(btrim(m.from_user_email))) or m.to_user_email <> lower(btrim(m.to_user_email));
+insert into maintenance.portal_cleanup_before(step, entity, row_id, email)
+select 'C1', 'notifications', n.id, n.recipient_email from public.notifications n
+where btrim(n.recipient_email) <> '' and n.recipient_email <> lower(btrim(n.recipient_email));
 
 -- C2 (Q9 = A): the placeholder is cleared from the learner files; reception
 -- collects each family's real address before inviting.
@@ -115,6 +145,12 @@ update public.students set parent_email = null where lower(btrim(parent_email)) 
 update public.students set email = email, parent_email = parent_email
 where email <> lower(btrim(email)) or parent_email <> lower(btrim(parent_email));
 update public.teachers set email = email where btrim(email) <> '' and email <> lower(btrim(email));
+-- The D7b trigger recomputes recipient_profile_id for these rows. No portal account exists yet
+-- (checked above), so it can name only a director or admin account, as it would on insert.
+update public.messages set from_user_email = from_user_email, to_user_email = to_user_email
+where (btrim(from_user_email) <> '' and from_user_email <> lower(btrim(from_user_email))) or to_user_email <> lower(btrim(to_user_email));
+update public.notifications set recipient_email = recipient_email
+where btrim(recipient_email) <> '' and recipient_email <> lower(btrim(recipient_email));
 
 -- D9: validate the constraints; a remaining non-normalised row aborts everything.
 alter table public.students validate constraint students_email_normalized;

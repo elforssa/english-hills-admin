@@ -30,13 +30,17 @@ function SendNotifModal({ students, onSave, onClose }) {
   const [targets, setTargets] = useState(null); // D8: linked accounts, else the dossier address (e-mail only)
   const [sending, setSending] = useState(false);
   // Each recipient is e-mailed, then recorded, once: a retry after a part-way failure
-  // re-sends nothing that already went out and saves no second row (POR-7).
+  // re-sends nothing that already went out and saves no second row (POR-7). Once a send
+  // has started the form is locked to that notice: only a retry or closing is possible,
+  // so re-picking the learner cannot reach earlier recipients again.
   const tracker = useRef(createDeliveryTracker());
+  const [locked, setLocked] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleStudentSelect = async (id) => {
+    if (locked) return;
     const s = students.find(row => row.id === id) || null;
-    setStudent(s); setTargets(null); tracker.current = createDeliveryTracker();
+    setStudent(s); setTargets(null);
     if (!s) return;
     try {
       setTargets(await learnerNoticeTargets(s));
@@ -52,7 +56,7 @@ function SendNotifModal({ students, onSave, onClose }) {
   const handleSend = async (e) => {
     e.preventDefault();
     if (recipients.length === 0) { toast.error('Aucun destinataire.'); return; }
-    setSending(true);
+    setSending(true); setLocked(true);
     try {
       // One e-mail and one row per recipient; the row keeps the learner so the
       // database can attribute it to the linked account (D7b).
@@ -85,13 +89,13 @@ function SendNotifModal({ students, onSave, onClose }) {
         <form onSubmit={handleSend} className="space-y-4">
           <div>
             <label className={labelClass}>Type</label>
-            <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)}>
+            <select className={inputClass} value={form.type} onChange={e => set('type', e.target.value)} disabled={locked}>
               {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div>
             <label className={labelClass}>Apprenant (optionnel)</label>
-            <select className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)}>
+            <select className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)} disabled={locked}>
               <option value="">— Ou saisir manuellement —</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
@@ -110,26 +114,29 @@ function SendNotifModal({ students, onSave, onClose }) {
             <>
               <div>
                 <label className={labelClass}>Email destinataire *</label>
-                <input type="email" className={inputClass} value={form.recipient_email} onChange={e => set('recipient_email', e.target.value)} required />
+                <input type="email" className={inputClass} value={form.recipient_email} onChange={e => set('recipient_email', e.target.value)} required disabled={locked} />
               </div>
               <div>
                 <label className={labelClass}>Nom destinataire</label>
-                <input className={inputClass} value={form.recipient_name} onChange={e => set('recipient_name', e.target.value)} />
+                <input className={inputClass} value={form.recipient_name} onChange={e => set('recipient_name', e.target.value)} disabled={locked} />
               </div>
             </>
           )}
           <div>
             <label className={labelClass}>Objet *</label>
-            <input className={inputClass} value={form.subject} onChange={e => set('subject', e.target.value)} required />
+            <input className={inputClass} value={form.subject} onChange={e => set('subject', e.target.value)} required disabled={locked} />
           </div>
           <div>
             <label className={labelClass}>Message *</label>
-            <textarea className={`${inputClass} h-24 resize-none`} value={form.message} onChange={e => set('message', e.target.value)} required />
+            <textarea className={`${inputClass} h-24 resize-none`} value={form.message} onChange={e => set('message', e.target.value)} required disabled={locked} />
           </div>
+          {locked && !sending && (
+            <p className="text-xs text-amber-700">Envoi interrompu : « Réessayer » termine cette notification sans renvoyer aux destinataires déjà servis. Fermez pour en préparer une autre.</p>
+          )}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
             <Button type="submit" disabled={sending || (student && !targets)}>
-              <Send size={14} /> {sending ? 'Envoi...' : 'Envoyer'}
+              <Send size={14} /> {sending ? 'Envoi...' : locked ? 'Réessayer' : 'Envoyer'}
             </Button>
           </DialogFooter>
         </form>

@@ -297,6 +297,14 @@ update public.profiles set linked_teacher_id = pg_temp.id(102) where id = pg_tem
 select pg_temp.ok(pg_temp.join_reason(4, 502) = 'online.not_eligible' and pg_temp.join_reason(4, 508) = 'ok',
   'the bound record, not the e-mail, decides which lessons an account hosts');
 rollback to savepoint ol_other;
+-- Re-review N5: an archived teacher record hosts nothing, even while still bound.
+savepoint ol_archived;
+update public.teachers set deleted_at = now() where id = (select linked_teacher_id from public.profiles where id = pg_temp.id(4));
+select pg_temp.ok(pg_temp.join_reason(4, 502) = 'online.not_eligible', 'an archived teacher record cannot host');
+select pg_temp.act(4);
+select pg_temp.ok(jsonb_array_length(public.online_list_my_lessons()) = 0, 'an archived teacher record lists no lesson');
+select pg_temp.owner();
+rollback to savepoint ol_archived;
 -- Observers (Q6): director and admin; never the receptionist.
 select pg_temp.ok(pg_temp.join_reason(1, 501) = 'ok' and pg_temp.join_reason(2, 501) = 'ok', 'management observes');
 select pg_temp.ok(pg_temp.join_reason(1, 502) = 'online.window_closed', 'observer uses the learner window');

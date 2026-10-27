@@ -184,10 +184,14 @@ try {
   assert.equal(noMessage.status, 403);
   const [saved] = ok(await rpc(parent, 'portal_send_message', { p_recipient_key: 'office', p_subject: run, p_body: 'Pour l’accueil.' }));
   ok(await route(parent, '/api/email/send', { message_id: saved, to: `${run}-attacker@example.invalid` }));
+  // Re-review: one notice per message; the same notice sent again is refused.
+  const again = await route(parent, '/api/email/send', { message_id: saved });
+  assert.equal(again.status, 403, 'a second notice for the same message is refused');
+  assert.equal(sql(`select notified_at is not null from public.messages where id = '${saved}'`), 't');
   const othersMessage = await route(student, '/api/email/send', { message_id: saved });
   assert.equal(othersMessage.status, 403);
   assert.equal(sql(`select recipient_profile_id from public.messages where id = '${saved}'`), office.id);
-  checks += 4;
+  checks += 6;
   console.log('PASS e-mail route: portal notices only for the caller\'s saved message, sent to its recipient account');
 
   // T-12: revoking the link ends access and the rows about the learner at once.

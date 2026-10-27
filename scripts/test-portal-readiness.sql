@@ -195,7 +195,9 @@ insert into public.attendance(id, student_id, group_id, session_date, status, no
   -- Review S1: a member later archived (203), a former learner (213), another group (214).
   (pg_temp.id(922), pg_temp.id(213), pg_temp.id(301), current_date - 30, 'Présent', 'former learner note'),
   (pg_temp.id(923), pg_temp.id(203), pg_temp.id(301), current_date - 7, 'Présent', null),
-  (pg_temp.id(924), pg_temp.id(214), pg_temp.id(303), current_date - 7, 'Présent', 'other group note');
+  (pg_temp.id(924), pg_temp.id(214), pg_temp.id(303), current_date - 7, 'Présent', 'other group note'),
+  -- Re-review N1: a row with no group about a member learner, never a teacher's row under 006.
+  (pg_temp.id(925), pg_temp.id(201), null, current_date - 14, 'Absent', 'no group note');
 -- One row in each Premium table, with free text in the notes fields (T-47).
 insert into public.premium_groups(id, name, teacher_id, start_time, notes) values
   (pg_temp.id(931), 'PR premium', pg_temp.id(101), '10:00', 'premium group staff note');
@@ -228,7 +230,7 @@ end $$;
 select pg_temp.act(4);
 select pg_temp.ok((select array_agg(id order by id) from public.attendance) = array[pg_temp.id(921), pg_temp.id(923)]
   and (select count(*) from public.placement_tests) = 1 and (select count(*) from public.certificates) = 2,
-  'T-02 T1 keeps member academic rows only: no former learner, no other group, never the CRM-linked test');
+  'T-02 T1 keeps member academic rows only: no former learner, no other group, no row without a group, never the CRM-linked test');
 select pg_temp.act(6);
 select pg_temp.ok((select count(*) from public.attendance) = 0, 'T-02 the archived teacher record reads no attendance');
 -- T-03: key scan of every portal function output.
@@ -305,9 +307,18 @@ select pg_temp.ok(not exists (select 1 from public.assessments where student_id 
   and not exists (select 1 from public.authorized_adults where student_id = pg_temp.id(201)), 'T-11 parent B reads none of A');
 -- T-12/T-13: revoking and archiving remove access at once.
 savepoint t12;
+-- Re-review N7: a stored photo of the linked child resolves until the link is revoked.
+select pg_temp.owner();
+insert into storage.objects(bucket_id, name, owner_id, version) values ('documents', 'pr-t12/photo-202.png', pg_temp.id(1)::text, 'v1');
+insert into public.storage_assets(id, bucket_id, object_path, purpose, student_id, state, object_version, verified_size, verified_type)
+  values (pg_temp.id(971), 'documents', 'pr-t12/photo-202.png', 'student_photo', pg_temp.id(202), 'active', 'v1', 10, 'image/png');
+insert into public.storage_asset_bindings(asset_id, student_photo_id, bound_by) values (pg_temp.id(971), pg_temp.id(202), pg_temp.id(1));
+select pg_temp.act(7);
+select pg_temp.ok(public.resolve_storage_asset(pg_temp.id(971))->>'path' = 'pr-t12/photo-202.png', 'T-12 the linked parent resolves the child''s photo');
 select pg_temp.act(2);
 select public.revoke_family_link(pg_temp.id(602), 'Test retrait');
 select pg_temp.act(7);
+select pg_temp.fails(format('select public.resolve_storage_asset(%L)', pg_temp.id(971)), '42501');
 select pg_temp.ok((select array_agg(student_id) from public.portal_my_learners()) = array[pg_temp.id(201)], 'T-12 a revoked link ends access at once');
 select pg_temp.fails(format('select public.portal_learner_record(%L)', pg_temp.id(202)), '42501', 'portal.not_linked');
 select pg_temp.act(2);
@@ -408,6 +419,25 @@ select pg_temp.fails($$select public.prepare_role_invitation('pr-x@example.test'
 select pg_temp.fails($$select public.prepare_role_invitation('pr-x@example.test', 'teacher')$$, '42501', 'portal.use_portal_invitation');
 select pg_temp.ok((public.prepare_role_invitation('pr-new-admin@example.test', 'admin')->>'role') = 'admin'
   and not (public.prepare_role_invitation('pr-new-admin@example.test', 'admin') ? 'queueId'), 'T-21 staff invitations keep their shape');
+-- Re-review N4: the caller is checked before the address, so a receptionist or portal
+-- account gets one refusal whatever the address (unknown, an account, one whose profile
+-- and Auth addresses disagree), for a staff or a portal role.
+savepoint t21n4;
+select pg_temp.owner();
+update public.profiles set email = 'pr-mismatch@example.test' where id = pg_temp.id(11);
+do $$ declare who integer; addr text; r text; begin
+  foreach who in array array[3, 4, 7, 10, 11, 13] loop
+    foreach addr in array array['nobody-n4@example.test', 'pr-t1@example.test', 'pr-mismatch@example.test', 'pr-pending@example.test'] loop
+      foreach r in array array['admin', 'receptionist', 'parent'] loop
+        perform pg_temp.act(who);
+        perform pg_temp.fails(format('select public.prepare_role_invitation(%L, %L)', addr, r), '42501', 'portal.forbidden');
+      end loop;
+    end loop;
+  end loop;
+  perform pg_temp.owner();
+end $$;
+rollback to savepoint t21n4;
+select pg_temp.act(1);
 -- T-22: invitation lifecycle. Queue with links; re-invitation replaces them; activation order.
 select pg_temp.act(2);
 select pg_temp.ok(jsonb_array_length(public.prepare_family_invitation('pr-former@example.test', 'parent', array[pg_temp.id(213)])->'links') = 1,
@@ -544,6 +574,24 @@ select public.save_attendance(pg_temp.id(201), pg_temp.id(301), current_date - 1
 select pg_temp.fails(format($$select public.save_attendance(%L, %L, current_date - 1, 'Présent')$$, pg_temp.id(213), pg_temp.id(301)), '42501');
 select pg_temp.act(5);
 select pg_temp.fails(format($$select public.save_attendance(%L, %L, current_date - 1, 'Absent')$$, pg_temp.id(201), pg_temp.id(301)), '42501');
+-- Re-review N1/N6: direct attendance writes follow the same rule; no row without a group, no other group.
+select pg_temp.act(4);
+select pg_temp.fails(format($$insert into public.attendance(student_id, group_id, session_date, status) values (%L, null, current_date - 2, 'Présent')$$,
+  pg_temp.id(201)), '42501');
+select pg_temp.fails(format($$insert into public.attendance(student_id, group_id, session_date, status) values (%L, %L, current_date - 2, 'Présent')$$,
+  pg_temp.id(214), pg_temp.id(303)), '42501');
+select pg_temp.fails(format($$insert into public.attendance(student_id, group_id, session_date, status) values (%L, %L, current_date - 2, 'Présent')$$,
+  pg_temp.id(213), pg_temp.id(301)), '42501');
+with u as (update public.attendance set status = 'Présent' where id in (pg_temp.id(922), pg_temp.id(924), pg_temp.id(925)) returning 1)
+select pg_temp.ok((select count(*) from u) = 0, 'T-27 a teacher updates no former-learner, other-group or group-less attendance row');
+select pg_temp.fails(format($$update public.attendance set group_id = null where id = %L$$, pg_temp.id(921)), '42501');
+select pg_temp.fails(format($$update public.attendance set group_id = %L where id = %L$$, pg_temp.id(303), pg_temp.id(921)), '42501');
+with u as (update public.attendance set status = 'Retard' where id = pg_temp.id(921) returning 1)
+select pg_temp.ok((select count(*) from u) = 1, 'T-27 a teacher updates a member''s attendance in the own group');
+select pg_temp.owner();
+select pg_temp.ok((select group_id = pg_temp.id(301) and status = 'Retard' from public.attendance where id = pg_temp.id(921))
+  and (select group_id is null and status = 'Absent' and notes = 'no group note' from public.attendance where id = pg_temp.id(925)),
+  'T-27 the refused writes changed nothing');
 select pg_temp.act(4);
 insert into public.assessments(id, student_id, group_id, terme, note_oral, note_finale, commentaire)
   values (pg_temp.id(941), pg_temp.id(201), pg_temp.id(301), 'Sept–Déc', 14, 13.5, 'teacher free text');

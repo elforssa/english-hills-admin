@@ -247,17 +247,18 @@ $$;
 -- Every teacher attendance read and write goes through the one membership helper
 -- (D4): a learner who left the group or was archived drops out of the teacher's
 -- view. Teachers keep the attendance note (D1 hides it from families only).
+-- A row with no group (and its notes) was never a teacher's under 006: the group is required.
 drop policy "attendance teacher select" on public.attendance;
 create policy "attendance teacher select" on public.attendance for select to authenticated
-  using (get_my_role() = 'teacher' and teacher_can_access_student_group(student_id, group_id));
+  using (get_my_role() = 'teacher' and group_id is not null and teacher_can_access_student_group(student_id, group_id));
 drop policy "attendance teacher delete" on public.attendance;
 drop policy "attendance teacher insert" on public.attendance;
 create policy "attendance teacher insert" on public.attendance for insert to authenticated
-  with check (get_my_role() = 'teacher' and teacher_can_access_student_group(student_id, group_id));
+  with check (get_my_role() = 'teacher' and group_id is not null and teacher_can_access_student_group(student_id, group_id));
 drop policy "attendance teacher update" on public.attendance;
 create policy "attendance teacher update" on public.attendance for update to authenticated
-  using (get_my_role() = 'teacher' and teacher_can_access_student_group(student_id, group_id))
-  with check (get_my_role() = 'teacher' and teacher_can_access_student_group(student_id, group_id));
+  using (get_my_role() = 'teacher' and group_id is not null and teacher_can_access_student_group(student_id, group_id))
+  with check (get_my_role() = 'teacher' and group_id is not null and teacher_can_access_student_group(student_id, group_id));
 
 drop policy "assessments teacher rw" on public.assessments;
 create policy "assessments teacher select" on public.assessments for select to authenticated
@@ -694,6 +695,8 @@ CREATE OR REPLACE FUNCTION public.prepare_role_invitation(p_email text, p_role t
  SECURITY DEFINER
  SET search_path TO 'pg_catalog', 'pg_temp'
 AS $function$ begin
+  -- Caller first (re-review N4): a non-manager learns nothing about the address.
+  perform portal_security.require_manager();
   if p_role in ('parent', 'student', 'teacher') then
     perform portal_security.fail('use_portal_invitation', '42501',
       'Les comptes parent, apprenant et enseignant passent par l’invitation dédiée.');
