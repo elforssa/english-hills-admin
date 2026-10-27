@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
 import { RECEIPT_PDF_ERROR, downloadReceiptPDF, printReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
-import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from '@/lib/receiptFinance';
 import { receiptSchoolYear } from '@/lib/receiptPresentation';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -77,7 +77,7 @@ export default function ReceiptPrint() {
           <p className="pt-1 text-right text-[9px] font-black uppercase tracking-[0.16em] text-[#B91C2E]">Learn Today<br />Lead Tomorrow</p>
         </div>
         <div className="mt-5 h-px bg-[#1E4D8B]" />
-        <div className="mt-4 flex items-end justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Reçu de paiement</p><h1 className="mt-1 text-xl font-black text-slate-900">{receipt.receipt_number}</h1></div><div className="text-right"><p className="text-[10px] uppercase tracking-wide text-slate-400">Date du paiement</p><p className="text-sm font-black">{receipt.date}</p><p className="mt-1 text-[10px] font-semibold text-[#1E4D8B]">{status}</p></div></div>
+        <div className="mt-4 flex items-end justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Reçu de paiement</p><h1 className="mt-1 text-xl font-black text-slate-900">{receiptNumberLabel(receipt)}</h1></div><div className="text-right"><p className="text-[10px] uppercase tracking-wide text-slate-400">Date du paiement</p><p className="text-sm font-black">{receipt.date}</p><p className="mt-1 text-[10px] font-semibold text-[#1E4D8B]">{status}</p></div></div>
       </header>
 
       <div className="receipt-body flex-1 space-y-3 px-7 pb-4 sm:px-9">

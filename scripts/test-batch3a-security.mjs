@@ -254,13 +254,17 @@ try {
     console.log('PASS local invite authorization, one-shot activation, expired queue and magic-link verification');
     for(const actor of users.filter(u=>roles.includes(u.role))) {
       const r=await app(actor,'/api/admin/payroll',{teacher_id:t1.id,mois:actor.role==='director'?'Mars':'Février',annee:'2026',heures:20});
+      // Batch E (PCR-r2, Q9): payslip creation is off until the accountant validates
+      // the rules. Admin and director pass authorization and get 409; nothing is written.
       if(['admin','director'].includes(actor.role)) {
-        const {payroll}=ok(r); (records.payroll??=[]).push(payroll.id);
-        assert.equal(payroll.salaire_brut,hr.salaire_mensuel); assert.equal(payroll.taux_horaire,hr.taux_horaire);
+        assert.equal(r.status,409);
+        assert.deepEqual(r.data,{error:'Paie désactivée : barème à valider par le comptable.'});
+        const month=actor.role==='director'?'Mars':'Février';
+        assert.deepEqual(ok(await request(service,`/rest/v1/payroll?teacher_id=eq.${t1.id}&mois=eq.${encodeURIComponent(month)}&select=id`)),[]);
       } else assert.equal(r.status,403);
       checks++;
     }
-    console.log('PASS payroll API authorization and privileged salary calculation');
+    console.log('PASS payroll API authorization and interim creation stop (409, no write)');
   }
   console.log(`PASS Batch 3A: ${checks} checks`);
   if(process.argv.includes('--ui')) {

@@ -6,7 +6,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { TrendingUp, AlertTriangle, CheckCircle, Clock, Plus, FileText, Download, Wallet, Phone } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
-import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { financeExportRows, localBusinessDate, money } from '@/lib/receiptFinance';
 import { toast } from 'sonner';
 import PersonLink from '@/components/PersonLink';
 
@@ -74,25 +74,8 @@ export default function Finance() {
         if (error) throw error;
         data.push(...(page || [])); if (!page || page.length < 1000) break;
       }
-      exportToCsv(data.map(r => {
-        const amounts = receiptAmounts(r);
-        return ({
-        Apprenant: r.nom_prenom,
-        Date: r.date,
-        Session: r.session_type || '',
-        'Année scolaire': r.school_year_snapshot || '',
-        Service: r.service_description || '',
-        Niveau: r.niveau || '',
-        'Prix brut': amounts.gross,
-        Remise: amounts.discount,
-        'Prix net': amounts.net,
-        'Payé avant': amounts.paidBefore,
-        'Montant reçu': amounts.payment,
-        'Solde après': amounts.balance,
-        Mode: r.mode_paiement,
-        Statut: receiptStatus(r),
-        Référence: r.transaction_reference || '',
-      });}), `finance-${new Date().toISOString().slice(0, 10)}.csv`);
+      // Ordered by receipt number; cancelled receipts count 0 in « Montant reçu » (FIN-5).
+      exportToCsv(financeExportRows(data), `finance-${localBusinessDate()}.csv`);
     } catch {
       toast.error('Export incomplet. Aucun fichier CSV créé. Réessayez.');
     } finally {

@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
+import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '@/lib/payroll/status.mjs';
 
 // CNSS 2024 Morocco rates (authoritative server-side copy)
 const CNSS_EMPLOYEE_RATE = 0.0448;
@@ -65,6 +66,10 @@ export async function POST(request) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (!profile || !['admin', 'director'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  // Interim stop (Q9): no payslip until the accountant validates the rules.
+  if (!PAYROLL_CREATION_ENABLED) {
+    return NextResponse.json({ error: PAYROLL_DISABLED_MESSAGE }, { status: 409 });
   }
 
   let raw;

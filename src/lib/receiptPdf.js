@@ -1,7 +1,7 @@
 'use client';
 
 import { toast } from 'sonner';
-import { money, receiptAmounts, receiptStatus } from './receiptFinance.js';
+import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from './receiptFinance.js';
 import { RECEIPT_PAPER_FORMAT, receiptSchoolYear } from './receiptPresentation.js';
 import { retryingImport } from './retryingImport.mjs';
 
@@ -106,7 +106,7 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...INK);
   doc.text('REÇU DE PAIEMENT', margin, y);
   y += 5;
-  doc.setFontSize(9); doc.setTextColor(...BLUE); doc.text(receipt.receipt_number || '', margin, y); y += 5;
+  doc.setFontSize(9); doc.setTextColor(...BLUE); doc.text(receiptNumberLabel(receipt), margin, y); y += 5;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...MUTED);
   doc.text(`Date du paiement : ${receipt.date || ''}`, margin, y);
   doc.text(`Statut : ${receiptStatus(receipt)}`, width - margin, y, { align: 'right' }); y += 4;

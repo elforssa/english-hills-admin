@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
+import { localBusinessDate } from '@/lib/receiptFinance';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -27,7 +28,7 @@ const KOLB_COLORS = {
 
 function AssessmentModal({ students, onSave, onClose }) {
   const [form, setForm] = useState({
-    student_id: '', student_name: '', date_assessment: new Date().toISOString().split('T')[0],
+    student_id: '', student_name: '', date_assessment: localBusinessDate(),
     kolb_style: 'Diverging', dominant_intelligence: 'Linguistique', teacher_notes: '',
   });
   const [intelligenceScores, setIntelligenceScores] = useState(

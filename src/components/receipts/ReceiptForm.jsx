@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
 import { SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
-import { PAYMENT_METHODS, localBusinessDate, money } from '@/lib/receiptFinance';
+import { PAYMENT_METHODS, localBusinessDate, money, receiptNumberLabel } from '@/lib/receiptFinance';
 import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } from '@/lib/receiptPresentation';
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
+import { clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
@@ -45,7 +47,26 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [enrollmentsError, setEnrollmentsError] = useState('');
   const [duplicateMatches, setDuplicateMatches] = useState([]);
   const [duplicateWarning, setDuplicateWarning] = useState('');
+  const [previousAttempt, setPreviousAttempt] = useState(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  // A ref, not state: a second click in the same render must see the first one at once.
+  const submitting = useRef(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+  // After a reload, look the last pressed Save up by its key before anything is re-entered.
+  useEffect(() => {
+    let active = true;
+    recoverPendingPayment(async (key) => {
+      const { data, error } = await getBrowserClient().from('receipts').select('id,receipt_number').eq('idempotency_key', key).maybeSingle();
+      if (error) throw error;
+      return data;
+    }).then((result) => {
+      if (!active || result.status === 'none') return;
+      setPreviousAttempt(result);
+      if (pendingPaymentSettled(result)) clearPendingPayment({ key: result.key });
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!initialData.student_id) return;
@@ -200,8 +221,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const lockedCharge = Boolean(selectedCharge);
   const servicePreview = buildServiceDescription({ sessionType: form.session_type, schoolYear: form.school_year, serviceDetail: form.service_detail });
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
+    if (submitting.current) return;
     if (!form.student_id && mode !== 'new') return toast.error('Sélectionnez un apprenant existant.');
     if (mode === 'new' && form.student_name.trim().length < 2) return toast.error('Le nom complet du nouvel apprenant est obligatoire.');
     if (!form.charge_id && (!form.session_type || !form.school_year)) return toast.error('La session et l’année scolaire sont obligatoires.');
@@ -219,6 +241,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (form.enrollment_id && form.enrollment_id !== 'new' && !selectedCharge?.enrollment_id
       && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
     if (todayPayment > 0 && form.request_email && !/^\S+@\S+\.\S+$/.test(form.email_recipient.trim())) return toast.error('Indiquez un destinataire email valide ou désactivez l’envoi.');
+    if (todayPayment > 0 && form.student_id) {
+      submitting.current = true; setCheckingDuplicate(true);
+      try {
+        // Soft check only; the server is unchanged and a lookup failure never blocks the payment.
+        const { data } = await getBrowserClient().from('receipts').select('id,receipt_number')
+          .eq('student_id', form.student_id).eq('montant_paye', todayPayment).eq('date', form.payment_date)
+          .is('voided_at', null).is('deleted_at', null).limit(1);
+        if (data?.length && !window.confirm(identicalReceiptPrompt(data[0], { paymentDate: form.payment_date, today: localBusinessDate() }))) return;
+      } catch { /* soft check */ } finally { submitting.current = false; setCheckingDuplicate(false); }
+    }
+    if (todayPayment > 0) savePendingPayment(idempotencyKey.current());
     onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
       service_description: servicePreview, idempotency_key: idempotencyKey.current() });
   };
@@ -226,6 +259,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
 
   return <form onSubmit={submit} className="space-y-5">
+    {previousAttempt?.status === 'recorded' && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><b>Ce paiement a déjà été enregistré : reçu N° {receiptNumberLabel(previousAttempt.receipt)}.</b> <Link href={`/receipts/${previousAttempt.receipt.id}/print`} className="font-bold text-primary underline">Ouvrir le reçu</Link><p className="mt-1 text-xs">Ne le saisissez pas une deuxième fois.</p></div>}
+    {previousAttempt?.status === 'not_recorded' && <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">La tentative précédente n’a pas été enregistrée. Vous pouvez saisir le paiement à nouveau.</div>}
+    {previousAttempt?.status === 'unknown' && <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Impossible de vérifier la tentative précédente. Ouvrez la liste des reçus de l’apprenant avant de saisir à nouveau ce paiement.</div>}
     <Step number="1" title="Apprenant" subtitle="Recherchez un dossier ou créez un apprenant ; le paiement des cours confirme son inscription">
       <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5" role="tablist" aria-label="Mode de sélection de l’apprenant">
         <ModeButton active={mode === 'existing'} onClick={() => resetLearner('existing')} icon={Users}>Rechercher un apprenant</ModeButton>
@@ -282,7 +318,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
     </Step>
 
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : 'Enregistrer l’engagement'}</button></div>
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving || checkingDuplicate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : 'Enregistrer l’engagement'}</button></div>
   </form>;
 }
 

@@ -9,6 +9,7 @@ import ReceiptForm from '@/components/receipts/ReceiptForm';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { paymentErrorMessage } from '@/lib/receiptPresentation';
+import { clearPendingPayment } from '@/lib/receiptDraftKey.mjs';
 
 export default function ReceiptNew() {
   const { role } = useAuth();
@@ -26,6 +27,7 @@ export default function ReceiptNew() {
       setSaving(false);
       return;
     }
+    clearPendingPayment();
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['Receipt'] }),
       queryClient.invalidateQueries({ queryKey: ['Student'] }),

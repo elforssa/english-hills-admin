@@ -15,7 +15,7 @@ import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
 import { getBrowserClient } from '@/lib/supabase';
-import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { localBusinessDate, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -146,7 +146,7 @@ export default function ParentPortal() {
       await entities.Enrollment.create({
         student_id: selectedStudent.id,
         status: 'Submitted',
-        date_inscription: new Date().toISOString().split('T')[0],
+        date_inscription: localBusinessDate(),
         notes: `Demande de réinscription envoyée par le parent (${user?.email}).`,
       });
       toast.success('Demande de réinscription envoyée. Le centre vous recontactera.');

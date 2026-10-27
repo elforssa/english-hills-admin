@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { PAYROLL_STATUS_COLORS } from '@/lib/statusColors';
 import PersonLink from '@/components/PersonLink';
+import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '@/lib/payroll/status.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -172,10 +173,12 @@ export default function PayrollPage() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Paie & RH</h1>
-        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
+        <Button onClick={() => setModal(true)} disabled={!PAYROLL_CREATION_ENABLED} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle fiche de paie
         </Button>
       </div>
+
+      {!PAYROLL_CREATION_ENABLED && <div role="status" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><b>{PAYROLL_DISABLED_MESSAGE}</b><p className="mt-1 text-xs">Les fiches existantes restent consultables et imprimables. La création reprendra lorsque la direction aura enregistré la validation du comptable.</p></div>}
 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-card border border-border rounded-lg p-4">
@@ -247,7 +250,7 @@ export default function PayrollPage() {
           </>
         )}
       </div>
-      {modal && <PayrollModal teachers={teachers} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
+      {modal && PAYROLL_CREATION_ENABLED && <PayrollModal teachers={teachers} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
       <Dialog open={Boolean(detail)} onOpenChange={(open) => { if (!open) setDetail(null); }}>
         <DialogContent><DialogHeader><DialogTitle>Fiche de paie {detail?.mois} {detail?.annee}</DialogTitle></DialogHeader>
           {detail && <div className="space-y-2 text-sm">

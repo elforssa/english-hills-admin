@@ -6,7 +6,7 @@
 // Three sections, each rendered with `recharts` (already in deps):
 //   • Présences   — daily roll-up of Présent / Absent / Retard / Justifié
 //                   over the last N days (default 30).
-//   • Finance     — monthly encaissé vs facturé, plus % recouvrement.
+//   • Finance     — monthly encaissé and facturé side by side (different sets: no rate).
 //   • Paie        — payroll YTD per teacher (brut/net) for the chosen year.
 //
 // Year/period selectors are local state; the data fetch reuses the
@@ -183,15 +183,12 @@ export default function ReportsPage() {
     return months;
   }, [financeRows, year]);
 
-  const financeTotals = useMemo(() => {
-    const facture  = financeMonthly.reduce((s, m) => s + m.facture,  0);
-    const encaisse = financeMonthly.reduce((s, m) => s + m.encaisse, 0);
-    return {
-      facture, encaisse,
-      restant: facture - encaisse,
-      rate: facture > 0 ? Math.round((encaisse / facture) * 100) : 0,
-    };
-  }, [financeMonthly]);
+  // Facturé (charges created) and encaissé (payments dated) are different sets,
+  // so no remaining balance or rate is derived from them (FIN-9).
+  const financeTotals = useMemo(() => ({
+    facture: financeMonthly.reduce((s, m) => s + m.facture, 0),
+    encaisse: financeMonthly.reduce((s, m) => s + m.encaisse, 0),
+  }), [financeMonthly]);
 
   // ── payroll: YTD per teacher for selected year ──
   const payrollByTeacher = useMemo(() => {
@@ -208,16 +205,15 @@ export default function ReportsPage() {
       entry.count += 1;
       m.set(key, entry);
     }
-    return Array.from(m.values())
-      .sort((a, b) => b.net - a.net)
-      .slice(0, 12);
+    return Array.from(m.values()).sort((a, b) => b.net - a.net);
   }, [payroll, year]);
 
-  const payrollTotals = useMemo(() => {
-    const brut = payrollByTeacher.reduce((s, t) => s + t.brut, 0);
-    const net  = payrollByTeacher.reduce((s, t) => s + t.net,  0);
-    return { brut, net };
-  }, [payrollByTeacher]);
+  // Totals cover every teacher; only the chart is limited to the top 12.
+  const payrollTotals = useMemo(() => ({
+    brut: payrollByTeacher.reduce((s, t) => s + t.brut, 0),
+    net: payrollByTeacher.reduce((s, t) => s + t.net, 0),
+  }), [payrollByTeacher]);
+  const payrollChart = useMemo(() => payrollByTeacher.slice(0, 12), [payrollByTeacher]);
 
   // ── student status mix — useful sanity check on the active pipeline ──
   const studentMix = useMemo(() => {
@@ -294,14 +290,14 @@ export default function ReportsPage() {
         <StatCard
           label={`Encaissé ${year}`}
           value={loading ? '—' : MAD(financeTotals.encaisse)}
-          hint={`${financeTotals.rate}% du facturé`}
+          hint="Paiements datés de l’année"
           color={COLORS.primary}
         />
         <StatCard
-          label={`Reste à recouvrer ${year}`}
-          value={loading ? '—' : MAD(financeTotals.restant)}
-          hint={MAD(financeTotals.facture) + ' facturé'}
-          color={COLORS.danger}
+          label={`Facturé ${year}`}
+          value={loading ? '—' : MAD(financeTotals.facture)}
+          hint="Engagements créés dans l’année"
+          color={COLORS.amber}
         />
         <StatCard
           label={`Paie nette ${year}`}
@@ -384,20 +380,17 @@ export default function ReportsPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="bg-emerald-50 rounded-lg p-3">
               <p className="text-xs text-emerald-600 font-medium">Encaissé</p>
               <p className="text-lg font-bold text-emerald-700">{MAD(financeTotals.encaisse)}</p>
             </div>
-            <div className="bg-red-50 rounded-lg p-3">
-              <p className="text-xs text-red-500 font-medium">Restant</p>
-              <p className="text-lg font-bold text-red-600">{MAD(financeTotals.restant)}</p>
-            </div>
             <div className="bg-muted rounded-lg p-3">
-              <p className="text-xs text-muted-foreground font-medium">Taux</p>
-              <p className="text-lg font-bold text-foreground">{financeTotals.rate}%</p>
+              <p className="text-xs text-muted-foreground font-medium">Facturé</p>
+              <p className="text-lg font-bold text-foreground">{MAD(financeTotals.facture)}</p>
             </div>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">Facturé : engagements créés dans le mois. Encaissé : paiements datés du mois, quel que soit l’engagement. Le reste à encaisser figure dans Finance.</p>
         </Panel>
 
         {/* ── Payroll YTD ───────────────────────────────────────────── */}
@@ -414,7 +407,7 @@ export default function ReportsPage() {
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={payrollByTeacher}
+                  data={payrollChart}
                   layout="vertical"
                   margin={{ left: 80, right: 16, top: 4, bottom: 4 }}
                 >

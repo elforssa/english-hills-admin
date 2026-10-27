@@ -7,6 +7,8 @@ import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
 import { retryingImport } from '../src/lib/retryingImport.mjs';
+import { PENDING_PAYMENT_STORAGE_KEY, clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, readPendingPayment, recoverPendingPayment, savePendingPayment } from '../src/lib/receiptDraftKey.mjs';
+import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '../src/lib/payroll/status.mjs';
 
 let generated = 0;
 const stableKey = createStableIdempotencyKey(() => `request-${++generated}`);
@@ -157,6 +159,137 @@ const { receiptAmounts } = await import(`data:text/javascript,${encodeURICompone
 assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00Z' }).payment, 125,
   'a voided receipt must still display its original issued amount');
 
+// Batch E, release E-1 (PCR-r2 P2.6, P4, P5, P6).
+{
+  const { BUSINESS_TIME_ZONE, businessMonthStart, financeExportRows, localBusinessDate, receiptNumberLabel, receiptStatus } = await import(`data:text/javascript,${encodeURIComponent(finance)}`);
+  // Day boundaries: the zone name, never a fixed offset; boundaries proven with fixed-offset zones
+  // so the test does not depend on the installed tzdata (Morocco is UTC+0 since 2026-09-20).
+  assert.equal(BUSINESS_TIME_ZONE, 'Africa/Casablanca');
+  assert.doesNotMatch(finance, /\+0[01]:00/);
+  const lateNewYearsEve = new Date('2026-12-31T23:30:00Z');
+  assert.equal(localBusinessDate(lateNewYearsEve, 'Etc/GMT-1'), '2027-01-01', 'UTC+1: already the next day');
+  assert.equal(localBusinessDate(lateNewYearsEve, 'Etc/GMT'), '2026-12-31', 'UTC+0: still the same day');
+  assert.equal(localBusinessDate(new Date('2026-10-01T00:30:00Z'), 'Etc/GMT+1'), '2026-09-30', 'UTC-1: still the previous day');
+  assert.equal(businessMonthStart(new Date('2026-10-31T23:30:00Z'), 'Etc/GMT-1'), '2026-11-01');
+  assert.equal(businessMonthStart(new Date('2026-10-31T23:30:00Z'), 'Etc/GMT'), '2026-10-01');
+
+  // "En retard" compares with the business date it is given, not the UTC date.
+  const due = { due_date: '2026-10-26', net_amount_snapshot: 100, paid_before_snapshot: 0, montant_paye: 10, balance_after_snapshot: 90 };
+  assert.equal(receiptStatus(due, '2026-10-26'), 'Acompte versé');
+  assert.equal(receiptStatus(due, '2026-10-27'), 'En retard');
+  assert.equal(receiptStatus({ ...due, voided_at: '2026-10-27T00:00:00Z' }, '2026-10-27'), 'Annulé');
+
+  assert.equal(receiptNumberLabel({ receipt_number: 'EH-2026-00425' }), 'EH-2026-00425');
+  assert.equal(receiptNumberLabel({ receipt_number: null }), 'Reçu historique', 'historical receipts never print an empty number');
+
+  // FIN-5: ordered by series then numeric suffix; cancelled rows stay with 0 received.
+  const rows = financeExportRows([
+    { id: 'u1', receipt_number: null, montant_paye: 300, date: '2026-09-10' },
+    { id: 'h2', receipt_number: 'EH-HIST-2026-0002', montant_paye: 200, date: '2026-09-11' },
+    { id: 'big', receipt_number: 'EH-2026-100000', montant_paye: 50, date: '2026-10-20' },
+    { id: 'v', receipt_number: 'EH-2026-00425', montant_paye: 125, date: '2026-10-20', voided_at: '2026-10-21T10:00:00Z', void_reason: 'Erreur de saisie' },
+    { id: 'm', receipt_number: 'EH-2026-99999', montant_paye: 75, date: '2026-10-20' },
+    { id: 'd', receipt_number: 'EH-2026-00426', montant_paye: 40, date: '2026-10-20', deleted_at: '2026-10-22T10:00:00Z', voided_at: '2026-10-22T10:00:00Z', void_reason: 'Créé par erreur' },
+    { id: 'h1', receipt_number: 'EH-HIST-2026-0001', montant_paye: 100, date: '2026-09-10' },
+  ], '2026-10-26');
+  assert.deepEqual(rows.map((row) => row['N° reçu']), ['EH-2026-00425', 'EH-2026-00426', 'EH-2026-99999', 'EH-2026-100000', 'EH-HIST-2026-0001', 'EH-HIST-2026-0002', '']);
+  assert.equal(Object.keys(rows[0])[0], 'N° reçu', 'the receipt number is the first column');
+  for (const column of ['Montant reçu', 'Montant annulé', 'Annulé le', "Motif d'annulation"]) assert.ok(column in rows[0], column);
+  assert.deepEqual([rows[0]['Montant reçu'], rows[0]['Montant annulé'], rows[0]['Annulé le'], rows[0]["Motif d'annulation"], rows[0].Statut],
+    [0, 125, '2026-10-21', 'Erreur de saisie', 'Annulé']);
+  assert.deepEqual([rows[1]['Montant reçu'], rows[1]['Montant annulé']], [0, 40], 'a deleted receipt counts as cancelled');
+  assert.deepEqual([rows[2]['Montant reçu'], rows[2]['Montant annulé'], rows[2]['Annulé le']], [75, 0, '']);
+  assert.equal(rows.reduce((sum, row) => sum + row['Montant reçu'], 0), 725, 'summing « Montant reçu » gives true collections');
+}
+
+// FIN-13: the pending key survives a reload and is looked up before re-entry.
+{
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  assert.equal(readPendingPayment({ storage }), null);
+  assert.equal(savePendingPayment('key-1', { storage, now: 1000 }), true);
+  assert.deepEqual(readPendingPayment({ storage }), { key: 'key-1', savedAt: 1000 });
+  const recorded = await recoverPendingPayment(async (key) => (key === 'key-1' ? { id: 'r1', receipt_number: 'EH-2026-00430' } : null), { storage });
+  assert.deepEqual(recorded, { status: 'recorded', key: 'key-1', receipt: { id: 'r1', receipt_number: 'EH-2026-00430' } });
+  assert.equal(pendingPaymentSettled(recorded), true);
+  assert.ok(readPendingPayment({ storage }), 'the caller, not the lookup, clears the key (React strict mode runs the effect twice)');
+  clearPendingPayment({ storage });
+  assert.deepEqual(await recoverPendingPayment(async () => { throw new Error('unreachable'); }, { storage }), { status: 'none' });
+  savePendingPayment('key-2', { storage, now: 2000 });
+  const notRecorded = await recoverPendingPayment(async () => null, { storage });
+  assert.deepEqual(notRecorded, { status: 'not_recorded', key: 'key-2' });
+  // A Save pressed during the lookup stores a newer key; clearing the older one leaves it.
+  savePendingPayment('key-newer', { storage, now: 3000 });
+  clearPendingPayment({ storage, key: 'key-2' });
+  assert.equal(readPendingPayment({ storage })?.key, 'key-newer', 'a newer pending key survives the older answer');
+  clearPendingPayment({ storage, key: 'key-newer' });
+  assert.equal(readPendingPayment({ storage }), null);
+  savePendingPayment('key-2', { storage, now: 2000 });
+  assert.equal(pendingPaymentSettled(notRecorded), true);
+  const unknown = await recoverPendingPayment(async () => { throw new Error('network'); }, { storage });
+  assert.deepEqual(unknown, { status: 'unknown' });
+  assert.equal(pendingPaymentSettled(unknown), false, 'a failed lookup keeps the key for the next load');
+  store.set(PENDING_PAYMENT_STORAGE_KEY, '{not json');
+  assert.equal(readPendingPayment({ storage }), null);
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+  assert.equal(savePendingPayment('key-3', { storage: broken }), false, 'blocked storage never breaks the form');
+  assert.equal(readPendingPayment({ storage: broken }), null);
+  clearPendingPayment({ storage: broken });
+  assert.match(identicalReceiptPrompt({ receipt_number: 'EH-2026-00430' }, { paymentDate: '2026-10-26', today: '2026-10-26' }),
+    /^Un reçu identique existe déjà aujourd’hui pour cet apprenant, du même montant \(reçu N° EH-2026-00430\)\./);
+  assert.match(identicalReceiptPrompt({}, { paymentDate: '2026-10-20', today: '2026-10-26' }), /existe déjà le 2026-10-20 /);
+
+  assert.match(receiptForm, /recoverPendingPayment\(/);
+  assert.match(receiptForm, /eq\('idempotency_key', key\)/);
+  assert.match(receiptForm, /Ce paiement a déjà été enregistré : reçu N°/);
+  assert.match(receiptForm, /if \(todayPayment > 0\) savePendingPayment\(idempotencyKey\.current\(\)\);\n\s+onSubmit\(/);
+  assert.match(receiptForm, /window\.confirm\(identicalReceiptPrompt\(/);
+  assert.match(receiptForm, /clearPendingPayment\(\{ key: result\.key \}\)/);
+  assert.match(receiptForm, /if \(submitting\.current\) return;/);
+  const newReceiptPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
+  assert.match(newReceiptPage, /return;\n\s+\}\n\s+clearPendingPayment\(\);/, 'the key is cleared only after a confirmed response');
+}
+
+// FIN-5/FIN-9/REL-7 wiring and the five form defaults on the Casablanca date.
+{
+  const financePage = await readFile(new URL('../src/app/(admin)/finance/page.jsx', import.meta.url), 'utf8');
+  assert.match(financePage, /exportToCsv\(financeExportRows\(data\), `finance-\$\{localBusinessDate\(\)\}\.csv`\)/);
+  const dashboard = await readFile(new URL('../src/app/(admin)/dashboard/page.jsx', import.meta.url), 'utf8');
+  assert.match(dashboard, /const monthStart = businessMonthStart\(\);/);
+  assert.doesNotMatch(dashboard, /toISOString/);
+  assert.doesNotMatch(dashboard, /monthlyData\.encaisse \/ monthlyData\.total/, 'no rate mixing payments with charges');
+  assert.match(dashboard, /Reste à encaisser \(tous engagements\)/);
+  assert.match(dashboard, /total_restant/);
+  const reports = await readFile(new URL('../src/app/(admin)/reports/page.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(reports, /restant: facture - encaisse/);
+  assert.match(reports, /payrollByTeacher\.slice\(0, 12\)/);
+  assert.match(reports, /data=\{payrollChart\}/);
+  for (const path of ['components/placement/PlacementTestModal.jsx', 'components/students/EnrollmentModal.jsx', 'app/(admin)/certificates/page.jsx',
+    'app/(admin)/learning-assessments/page.jsx', 'app/(admin)/parent-portal/page.jsx']) {
+    const source = await readFile(new URL(`../src/${path}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /new Date\(\)\.toISOString\(\)\.split\('T'\)\[0\]/, path);
+    assert.match(source, /localBusinessDate\(\)/, path);
+  }
+  for (const path of ['receipts/[id]/print', 'receipts/[id]/edit', 'receipts/[id]/delete']) {
+    const page = await readFile(new URL(`../src/app/(admin)/${path}/page.jsx`, import.meta.url), 'utf8');
+    assert.match(page, /receiptNumberLabel\(/, path);
+  }
+}
+
+// Q9 interim stop: no payslip is created until the accountant validates the rules.
+{
+  assert.equal(PAYROLL_CREATION_ENABLED, false);
+  assert.equal(PAYROLL_DISABLED_MESSAGE, 'Paie désactivée : barème à valider par le comptable.');
+  const route = await readFile(new URL('../src/app/api/admin/payroll/route.js', import.meta.url), 'utf8');
+  const forbidden = route.indexOf("{ status: 403 }");
+  const stop = route.indexOf('{ error: PAYROLL_DISABLED_MESSAGE }, { status: 409 }');
+  const insert = route.indexOf(".from('payroll').insert(");
+  assert.ok(forbidden > 0 && stop > forbidden && insert > stop, 'the stop runs after the role check and before any write');
+  const payrollPage = await readFile(new URL('../src/app/(admin)/payroll/page.jsx', import.meta.url), 'utf8');
+  assert.match(payrollPage, /disabled=\{!PAYROLL_CREATION_ENABLED\}/);
+  assert.match(payrollPage, /\{modal && PAYROLL_CREATION_ENABLED && <PayrollModal/);
+}
+
 const emailFunction = await readFile(new URL('../supabase/functions/sendReceiptEmail/index.ts', import.meta.url), 'utf8');
 const currentLookup = emailFunction.indexOf('loadReceipt: loadCurrentReceipt');
 const workflowCall = emailFunction.indexOf('deliverReceiptEmail(receiptId');
@@ -173,6 +306,7 @@ assert.match(receiptPdf, /fetch\('\/eh-logo\.png'\)/);
 assert.match(receiptPdf, /format: RECEIPT_PAPER_FORMAT/);
 assert.match(receiptPdf, /Montant payé aujourd’hui/);
 assert.match(receiptPdf, /Solde restant/);
+assert.match(receiptPdf, /doc\.text\(receiptNumberLabel\(receipt\), margin, y\)/);
 assert.doesNotMatch(receiptPdf, /À déterminer/);
 
 const migration = await readFile(new URL('../supabase/migrations/055_receipt_charge_payments.sql', import.meta.url), 'utf8');
