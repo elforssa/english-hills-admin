@@ -1,7 +1,8 @@
 -- REVERSE OF D3. Only with the owner's explicit approval; plain SQL, one call, dry run first.
 -- Restores discount_amount from each D3 event's "before" value and records the reversal as a
 -- 'charge_terms_corrected' event with step 'D3-reverse'. Targets charges whose latest D3-family
--- event is a forward D3 correction and whose discount still equals that correction's "after".
+-- event is a forward D3 correction, whose discount still equals that correction's "after", and
+-- which has not been voided since (a voided charge is left as it is).
 -- No journal needed.
 begin;
 -- PARAMETERS (transaction-local).
@@ -16,7 +17,8 @@ from public.financial_events e
 where e.event_type = 'charge_terms_corrected' and e.metadata->>'step' in ('D3', 'D3-reverse')
 order by e.charge_id, e.created_at desc, e.id desc;
 delete from d3_reverse r where r.metadata->>'step' <> 'D3'
-  or (select c.discount_amount from public.charges c where c.id = r.charge_id) is distinct from (r.metadata#>>'{after,discount_amount}')::numeric;
+  or (select c.discount_amount from public.charges c where c.id = r.charge_id) is distinct from (r.metadata#>>'{after,discount_amount}')::numeric
+  or (select c.voided_at from public.charges c where c.id = r.charge_id) is not null;
 
 do $$ begin
   if (select count(*) from d3_reverse) <> current_setting('batch_e.d3_expected_rows')::integer then

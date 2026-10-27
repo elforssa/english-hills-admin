@@ -472,8 +472,8 @@ begin
     -- Names the Casablanca date: a browser with time-zone data older than tzdata 2026c
     -- (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00.
     if v_payment_date > v_today then
-      raise exception 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : %).', v_today
-        using errcode = '22023';
+      raise exception 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : %).',
+        to_char(v_today, 'DD/MM/YYYY') using errcode = '22023';
     end if;
     v_back_days := case when v_role = 'receptionist' then 7 else 31 end;
     if v_payment_date < v_today - v_back_days then

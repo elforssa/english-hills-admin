@@ -35,6 +35,12 @@ function centimes(amount) {
   return Math.round(Number(amount || 0) * 100);
 }
 
+// 2026-10-27 → 27/10/2026, as the server writes it in its refusal.
+export function frenchDate(isoDate) {
+  const [year, month, day] = String(isoDate).split('-');
+  return `${day}/${month}/${year}`;
+}
+
 export function addDays(isoDate, days) {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -52,7 +58,7 @@ export function deskGuardError({ role, newCharge, gross, discount, reasonCode, r
     if (role === 'receptionist' && centimes(gross) > 0 && centimes(discount) * 10 > centimes(gross)) return 'Remise supérieure à 10 % : demandez au directeur.';
   }
   if (payment > 0 && paymentDate) {
-    if (paymentDate > today) return `La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ${today}).`;
+    if (paymentDate > today) return `La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ${frenchDate(today)}).`;
     const days = paymentBackdateDays(role);
     if (paymentDate < addDays(today, -days)) return `La date du paiement ne peut pas être antérieure de plus de ${days} jours.`;
   }

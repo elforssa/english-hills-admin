@@ -313,14 +313,14 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(guard({ role: 'receptionist', discount: 100, reasonCode: 'sibling' }), null, 'reception: 10 % is allowed');
   assert.equal(guard({ role: 'receptionist', discount: 100.01, reasonCode: 'sibling' }), 'Remise supérieure à 10 % : demandez au directeur.');
   assert.equal(guard({ discount: 778, reasonCode: 'director_approval' }), null, 'admin: no cap');
-  assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).');
+  assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 26/10/2026).');
   // Integer centimes: 0.1 + 0.2 style float noise never decides the 10 % cap.
   assert.equal(guard({ role: 'receptionist', gross: 0.3, discount: 0.03, reasonCode: 'sibling' }), null, '3 centimes of 30 is exactly 10 %');
   assert.equal(guard({ role: 'receptionist', gross: 1000.01, discount: 100, reasonCode: 'sibling' }), null);
   // An old browser (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00: the server's
   // own refusal reaches the user word for word.
-  assert.equal(paymentErrorMessage({ code: '22023', message: 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).' }),
-    'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 2026-10-26).');
+  assert.equal(paymentErrorMessage({ code: '22023', message: 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 26/10/2026).' }),
+    'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 26/10/2026).');
   assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-19' }), null);
   assert.equal(guard({ role: 'receptionist', paymentDate: '2026-10-18' }), 'La date du paiement ne peut pas être antérieure de plus de 7 jours.');
   assert.equal(guard({ paymentDate: '2026-09-25' }), null);

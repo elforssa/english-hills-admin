@@ -454,7 +454,7 @@ select pg_temp.owner();
 do $$ declare r integer; begin
   foreach r in array array[1, 2, 3] loop
     perform pg_temp.fails(pg_temp.new_charge(r, 126, jsonb_build_object('payment_date', public.business_date() + 1)), '22023',
-      'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ' || public.business_date() || ').');
+      'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ' || to_char(public.business_date(), 'DD/MM/YYYY') || ').');
   end loop;
   perform pg_temp.fails(pg_temp.new_charge(3, 126, jsonb_build_object('payment_date', public.business_date() - 8)), '22023',
     'La date du paiement ne peut pas être antérieure de plus de 7 jours.');
