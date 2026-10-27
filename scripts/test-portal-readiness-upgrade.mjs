@@ -101,21 +101,6 @@ const afterCatalog = catalog();
 assert.deepEqual(rows(), beforeRows, 'migration 123 changes no existing row');
 checks++;
 
-// Review B1: teachers.email is NOT NULL. A teacher with an empty address (one exists
-// in Production) can still be edited, archived and created after 123; '' stays ''.
-if (mode === 'full') {
-  sql(`update public.teachers set full_name = 'Up Teacher Empty Edited' where id = '${id(102)}';
-    update public.teachers set deleted_at = now() where id = '${id(102)}';`);
-  // A blank value is kept as stored: the unique teachers_email_key already holds ''
-  // (teacher 102), so a second blank teacher must not be rewritten to ''.
-  sql(`insert into public.teachers(id, full_name, email, contract_type) values ('${id(104)}', 'Up Teacher New Blank', '  ', 'Freelance');
-    update public.teachers set full_name = 'Up Teacher Blank Edited' where id = '${id(104)}';`);
-  assert.equal(sql(`select string_agg(quote_literal(email) || ':' || (deleted_at is not null), ',' order by id) from public.teachers
-    where id in ('${id(102)}', '${id(104)}')`), "'':true,'  ':false");
-  checks++;
-  console.log('PASS a teacher with an empty address is edited, archived and created after 123 (NOT NULL kept)');
-}
-
 if (mode === 'corrective') {
   applyFile(CORRECTIVE);
   assert.deepEqual(diffKeys(beforeCatalog.policies, catalog().policies), [], 'every policy is the 122 policy again');
@@ -206,4 +191,18 @@ assert.equal(sql(`select has_table_privilege('authenticated', 'maintenance.porta
 assert.match(failsFile(CLEANUP, vars({ ...counts, c2_email: 0, c2_parent: 0, c1_parent: 0, c1_email: 0, c1_teacher: 0 })), /already ran/);
 checks += 12;
 console.log('PASS clean-up: wrong counts refused with no change; C0 before-image, C1, C2, constraints validated, receipts untouched, runs once');
+// Review B1: teachers.email is NOT NULL. A teacher with an empty address (one exists
+// in Production) can still be edited, archived and created after 123 and the clean-up
+// (constraints validated); '' stays ''.
+sql(`update public.teachers set full_name = 'Up Teacher Empty Edited' where id = '${id(102)}';
+  update public.teachers set deleted_at = now() where id = '${id(102)}';`);
+// A blank value is kept as stored: the unique teachers_email_key already holds ''
+// (teacher 102), so a second blank teacher must not be rewritten to ''.
+sql(`insert into public.teachers(id, full_name, email, contract_type) values ('${id(104)}', 'Up Teacher New Blank', '  ', 'Freelance');
+  update public.teachers set full_name = 'Up Teacher Blank Edited' where id = '${id(104)}';`);
+assert.equal(sql(`select string_agg(quote_literal(email) || ':' || (deleted_at is not null), ',' order by id) from public.teachers
+  where id in ('${id(102)}', '${id(104)}')`), "'':true,'  ':false");
+checks++;
+console.log('PASS a teacher with an empty address is edited, archived and created after 123 (NOT NULL kept)');
+
 console.log(`PASS portal readiness upgrade rehearsal (${mode}): ${checks} checks`);
