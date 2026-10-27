@@ -410,7 +410,12 @@ select pg_temp.owner();
 select pg_temp.ok((select reason_code = 'other' and reason = 'Accord famille' from public.charge_discount_reasons
   where charge_id = (select (v->>'charge_id')::uuid from e2 where k = 'reasoned')), 'reason stored in the staff-only table');
 -- Staff only (S3): the learner's parent and the learner read the charge, never its reason.
+-- Portal readiness (PRF-r2 D2/D3): families read it through an active link and the
+-- portal_learner_record projection, no longer by e-mail on public.charges.
 update public.students set parent_email = 'batch-e-5@example.test', email = 'batch-e-6@example.test' where id = pg_temp.id(120);
+insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+  (pg_temp.id(120), 'parent', pg_temp.id(5), 'batch-e-5@example.test', 'active', now()),
+  (pg_temp.id(120), 'self', pg_temp.id(6), 'batch-e-6@example.test', 'active', now());
 do $$ declare r integer; c uuid := (select (v->>'charge_id')::uuid from e2 where k = 'reasoned'); begin
   foreach r in array array[1, 2, 3] loop
     perform pg_temp.act(r);
@@ -418,11 +423,15 @@ do $$ declare r integer; c uuid := (select (v->>'charge_id')::uuid from e2 where
   end loop;
   foreach r in array array[5, 6] loop
     perform pg_temp.act(r);
-    perform pg_temp.ok((select count(*) from public.charges where id = c) = 1, 'family ' || r || ' still reads its charge');
+    perform pg_temp.ok((select count(*) from jsonb_array_elements(public.portal_learner_record(pg_temp.id(120))->'charges') e
+      where (e->>'id')::uuid = c) = 1, 'family ' || r || ' still reads its charge');
     perform pg_temp.ok((select count(*) from public.charge_discount_reasons) = 0, 'family ' || r || ' reads no reason');
-    perform pg_temp.ok(not exists(select 1 from jsonb_each(to_jsonb((select x from public.charges x where x.id = c))) j where j.key like 'discount_reason%'),
-      'no discount reason column on charges');
+    perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(public.portal_learner_record(pg_temp.id(120))->'charges') e,
+      jsonb_object_keys(e) k where k like 'discount_reason%'), 'no discount reason in the family''s charge');
   end loop;
+  perform pg_temp.owner();
+  perform pg_temp.ok(not exists(select 1 from information_schema.columns where table_schema = 'public'
+    and table_name in ('charges', 'charge_balances') and column_name like 'discount_reason%'), 'no discount reason column on charges');
   perform pg_temp.act(4);
   perform pg_temp.ok((select count(*) from public.charge_discount_reasons) = 0, 'teacher reads no reason');
   perform pg_temp.act(null);

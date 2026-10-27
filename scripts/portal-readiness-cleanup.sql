@@ -85,7 +85,7 @@ begin
   if n <> current_setting('portal_cleanup.c1_email')::integer then
     raise exception 'C1: expected % learner addresses to normalise, found %', current_setting('portal_cleanup.c1_email'), n using errcode = '23514';
   end if;
-  select count(*) into n from public.teachers where email <> lower(btrim(email));
+  select count(*) into n from public.teachers where btrim(email) <> '' and email <> lower(btrim(email));
   if n <> current_setting('portal_cleanup.c1_teacher')::integer then
     raise exception 'C1: expected % teacher addresses to normalise, found %', current_setting('portal_cleanup.c1_teacher'), n using errcode = '23514';
   end if;
@@ -105,7 +105,7 @@ select 'C1', 'students', s.id, s.email, s.parent_email from public.students s
 where (s.email <> lower(btrim(s.email)) or s.parent_email <> lower(btrim(s.parent_email)))
   and not exists (select 1 from maintenance.portal_cleanup_before b where b.row_id = s.id);
 insert into maintenance.portal_cleanup_before(step, entity, row_id, email, parent_email)
-select 'C1', 'teachers', t.id, t.email, null from public.teachers t where t.email <> lower(btrim(t.email));
+select 'C1', 'teachers', t.id, t.email, null from public.teachers t where btrim(t.email) <> '' and t.email <> lower(btrim(t.email));
 
 -- C2 (Q9 = A): the placeholder is cleared from the learner files; reception
 -- collects each family's real address before inviting.
@@ -114,7 +114,7 @@ update public.students set parent_email = null where lower(btrim(parent_email)) 
 -- C1: the D9 trigger stores the normalised value on any write of the row.
 update public.students set email = email, parent_email = parent_email
 where email <> lower(btrim(email)) or parent_email <> lower(btrim(parent_email));
-update public.teachers set email = email where email <> lower(btrim(email));
+update public.teachers set email = email where btrim(email) <> '' and email <> lower(btrim(email));
 
 -- D9: validate the constraints; a remaining non-normalised row aborts everything.
 alter table public.students validate constraint students_email_normalized;

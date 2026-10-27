@@ -99,7 +99,9 @@ alter table public.pending_roles
 -- ── D9: e-mail normalisation ─────────────────────────────────────────────
 -- Nullable columns: lower-case, trimmed, empty → NULL. NOT NULL columns
 -- (teachers.email, messages.from_user_email, notifications.recipient_email):
--- lower-case and trimmed only, so an empty value stays '' and stays valid.
+-- only a non-blank value is lower-cased and trimmed; a blank one is kept as
+-- stored, so editing or archiving such a row never fails (NOT NULL, and the
+-- existing unique teachers_email_key allows one '' only).
 create function portal_security.normalize_emails() returns trigger
 language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 begin
@@ -107,12 +109,12 @@ begin
     new.email := portal_security.norm_email(new.email);
     new.parent_email := portal_security.norm_email(new.parent_email);
   elsif tg_table_name = 'teachers' then
-    new.email := lower(btrim(new.email));
+    if btrim(new.email) <> '' then new.email := lower(btrim(new.email)); end if;
   elsif tg_table_name = 'messages' then
-    new.from_user_email := lower(btrim(new.from_user_email));
+    if btrim(new.from_user_email) <> '' then new.from_user_email := lower(btrim(new.from_user_email)); end if;
     new.to_user_email := portal_security.norm_email(new.to_user_email);
   elsif tg_table_name = 'notifications' then
-    new.recipient_email := lower(btrim(new.recipient_email));
+    if btrim(new.recipient_email) <> '' then new.recipient_email := lower(btrim(new.recipient_email)); end if;
   end if;
   return new;
 end $$;
@@ -126,18 +128,20 @@ create trigger portal_normalize_emails before insert or update on public.message
   for each row execute function portal_security.normalize_emails();
 create trigger portal_normalize_emails before insert or update on public.notifications
   for each row execute function portal_security.normalize_emails();
--- Validated by the release task after clean-up step C1. An empty value passes; on
--- a nullable column it becomes NULL on the row's next write (trigger above).
+-- Validated by the release task after clean-up step C1. On a nullable column an
+-- empty value passes and becomes NULL on the row's next write; on a NOT NULL
+-- column a blank value passes as stored (trigger above).
 alter table public.students add constraint students_email_normalized
   check (email = lower(btrim(email))) not valid;
 alter table public.students add constraint students_parent_email_normalized
   check (parent_email = lower(btrim(parent_email))) not valid;
 alter table public.teachers add constraint teachers_email_normalized
-  check (email = lower(btrim(email))) not valid;
+  check (email = lower(btrim(email)) or btrim(email) = '') not valid;
 alter table public.messages add constraint messages_emails_normalized
-  check (from_user_email = lower(btrim(from_user_email)) and to_user_email = lower(btrim(to_user_email))) not valid;
+  check ((from_user_email = lower(btrim(from_user_email)) or btrim(from_user_email) = '')
+    and to_user_email = lower(btrim(to_user_email))) not valid;
 alter table public.notifications add constraint notifications_recipient_email_normalized
-  check (recipient_email = lower(btrim(recipient_email))) not valid;
+  check (recipient_email = lower(btrim(recipient_email)) or btrim(recipient_email) = '') not valid;
 
 -- ── D4: teacher identity and membership ──────────────────────────────────
 create unique index teachers_active_email_normalized on public.teachers (lower(btrim(email)))

@@ -105,10 +105,13 @@ checks++;
 // in Production) can still be edited, archived and created after 123; '' stays ''.
 if (mode === 'full') {
   sql(`update public.teachers set full_name = 'Up Teacher Empty Edited' where id = '${id(102)}';
-    update public.teachers set deleted_at = now() where id = '${id(102)}';
-    insert into public.teachers(id, full_name, email, contract_type) values ('${id(104)}', 'Up Teacher New Empty', '  ', 'Freelance');`);
+    update public.teachers set deleted_at = now() where id = '${id(102)}';`);
+  // A blank value is kept as stored: the unique teachers_email_key already holds ''
+  // (teacher 102), so a second blank teacher must not be rewritten to ''.
+  sql(`insert into public.teachers(id, full_name, email, contract_type) values ('${id(104)}', 'Up Teacher New Blank', '  ', 'Freelance');
+    update public.teachers set full_name = 'Up Teacher Blank Edited' where id = '${id(104)}';`);
   assert.equal(sql(`select string_agg(quote_literal(email) || ':' || (deleted_at is not null), ',' order by id) from public.teachers
-    where id in ('${id(102)}', '${id(104)}')`), "'':true,'':false");
+    where id in ('${id(102)}', '${id(104)}')`), "'':true,'  ':false");
   checks++;
   console.log('PASS a teacher with an empty address is edited, archived and created after 123 (NOT NULL kept)');
 }
