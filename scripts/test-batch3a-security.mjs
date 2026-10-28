@@ -74,7 +74,8 @@ async function app(actor,path,body) {
   }});
   assert.equal((await client.auth.setSession({access_token:actor.token,refresh_token:actor.refreshToken})).error,null);
   const res=await fetch('http://127.0.0.1:3101'+path,{method:'POST',redirect:'error',signal:AbortSignal.timeout(30000),
-    headers:{'Content-Type':'application/json',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
+    // Same-origin browser request: the routes refuse any other Origin (PRF-r2 D10).
+    headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
   return {ok:res.ok,status:res.status,data:await res.json()};
 }
 try {
@@ -94,6 +95,13 @@ try {
   // Group membership derives from a Validated enrollment (EGC); the file group follows it.
   const s1=await create('students',{full_name:run+' Learner',email:student.email,parent_email:parent.email,niveau_cefr:'A1'});
   const s2=await create('students',{full_name:run+' Other Learner',email:run+'-other@example.invalid',parent_email:run+'-other-parent@example.invalid'});
+  // Portal readiness (PRF-r2 D3/D4): teacher accounts are bound to their records and
+  // the family reaches the learner through explicit links, not the matching addresses.
+  sql(`update public.profiles set linked_teacher_id='${t1.id}' where id='${teacher.id}';
+    update public.profiles set linked_teacher_id='${t2.id}' where id='${teacher2.id}';
+    insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+      ('${s1.id}','parent','${parent.id}','${parent.email}','active',now()),
+      ('${s1.id}','self','${student.id}','${student.email}','active',now());`);
   await create('enrollments',{student_id:s1.id,group_id:g1.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   await create('enrollments',{student_id:s2.id,group_id:g2.id,status:'Validated',session_type:'Yearly',level:'A1',school_year:'2026/2027'});
   sql(`update public.profiles set full_name='Synthetic Admin' where id='${admin.id}'`);
@@ -124,13 +132,20 @@ try {
       if(privileged) assert.equal(row.teachers.iban,hr.iban);
       else assert.equal(row.teachers,null);
     } else assert.ok([401,403].includes(embedded.status));
+    // PRF-r2 D7: families lose the directory; a teacher reads only the own row.
     const directory=await rpc(actor,'get_teacher_directory');
-    if(roles.includes(actor?.role)&&actor.role!=='pending') {
+    if(privileged) {
       const rows=ok(directory); safe(rows);
       assert.ok(rows.some(t=>t.id===t1.id)); assert.ok(rows.some(t=>t.id===t2.id));
       assert.ok(!rows.some(t=>t.id===archived.id));
       assert.deepEqual(ok(await rpc(actor,'get_teacher_directory',{p_teacher_id:archived.id})),[]);
       assert.equal(ok(await rpc(actor,'get_teacher_directory',{p_teacher_id:t1.id}))[0].email,teacher.email);
+    } else if(actor?.role==='teacher') {
+      const own=actor===teacher?t1:t2, other=actor===teacher?t2:t1;
+      const rows=ok(directory); safe(rows);
+      assert.deepEqual(rows.map(t=>t.id),[own.id]);
+      assert.deepEqual(ok(await rpc(actor,'get_teacher_directory',{p_teacher_id:other.id})),[]);
+      assert.deepEqual(ok(await rpc(actor,'get_teacher_directory',{p_teacher_id:archived.id})),[]);
     } else assert.ok([401,403].includes(directory.status));
     checks+=3;
     for(const patch of [{salaire_mensuel:999999},{taux_horaire:9999},{iban:'FORGED'},{notes:'FORGED'},{email:run+'-forged@example.invalid'}]) {
@@ -158,15 +173,21 @@ try {
   for(const actor of [teacher,parent,student,admin,director]) {
     for(const query of ['select=iban','select=*,teachers(*)','iban=eq.SYNTHETIC-PRIVATE-IBAN','order=salaire_mensuel']) {
       const result=await request(actor,'/rest/v1/rpc/get_teacher_directory?'+query,'POST',{});
-      assert.ok([400,404].includes(result.status),JSON.stringify(result)); checks++;
+      // Families are refused outright since PRF-r2; staff and teachers still meet the fixed projection.
+      assert.ok((actor===parent||actor===student?[400,403,404]:[400,404]).includes(result.status),JSON.stringify(result)); checks++;
     }
   }
+  // PRF-r2 D4: the identity is the bound record; the matching e-mail alone names none.
   assert.equal(ok(await rpc(teacher,'get_my_teacher_id')),t1.id);
   assert.equal(ok(await rpc(teacher2,'get_my_teacher_id')),t2.id);
-  assert.equal(sql(`select linked_teacher_id is null from public.profiles where id='${teacher.id}'`),'t');
+  sql(`update public.profiles set linked_teacher_id=null where id='${teacher.id}';`);
+  assert.equal(ok(await rpc(teacher,'get_my_teacher_id')),null);
+  sql(`update public.profiles set linked_teacher_id='${t1.id}' where id='${teacher.id}';`);
+  // PRF-r2 D2: no learner row is read directly; the projections keep the same scope.
   for(const actor of [teacher,parent,student]) {
-    const roster=ok(await request(actor,`/rest/v1/students?id=in.(${s1.id},${s2.id})&select=id`));
-    assert.deepEqual(roster.map(s=>s.id),[s1.id]); checks++;
+    assert.deepEqual(ok(await request(actor,`/rest/v1/students?id=in.(${s1.id},${s2.id})&select=id`)),[]);
+    const roster=actor===teacher?ok(await rpc(actor,'portal_teacher_roster')):ok(await rpc(actor,'portal_my_learners'));
+    assert.deepEqual([...new Set(roster.map(s=>s.student_id))],[s1.id]); checks+=2;
   }
   const attendance=await create('attendance',{student_id:s1.id,group_id:g1.id,session_date:'2026-09-08',status:'Présent'},teacher);
   assert.equal(ok(await request(teacher,`/rest/v1/attendance?id=eq.${attendance.id}`))[0].student_id,s1.id);
@@ -179,21 +200,31 @@ try {
   assert.equal(new Set(savedIds).size,1);
   assert.equal(sql(`select count(*) from public.attendance where student_id='${s1.id}' and group_id='${g1.id}' and session_date='2026-09-09'`),'1');
   (records.attendance??=[]).push(savedIds[0]); checks+=2;
+  // PRF-r2 D7: families reach the teacher through an opaque key and the teacher
+  // reads it in the account inbox; no portal role writes or reads message rows.
   for(const sender of [parent,student]) {
-    const [recipient]=ok(await rpc(sender,'get_teacher_directory',{p_teacher_id:t1.id}));
-    const msg=await create('messages',{from_user_email:sender.email,to_user_email:recipient.email,subject:run,body:'Synthetic directory-recipient test'},sender);
-    assert.equal(ok(await request(teacher,`/rest/v1/messages?id=eq.${msg.id}`))[0].body,'Synthetic directory-recipient test'); checks++;
+    const [id]=ok(await rpc(sender,'portal_send_message',{p_recipient_key:'teacher:'+t1.id,p_subject:run,p_body:'Synthetic directory-recipient test'}));
+    (records.messages??=[]).push(id);
+    assert.equal(ok(await rpc(teacher,'portal_my_messages',{p_box:'inbox'})).find(m=>m.id===id)?.body,'Synthetic directory-recipient test');
+    assert.equal(ok(await request(teacher,`/rest/v1/messages?id=eq.${id}`)).length,0);
+    assert.equal((await request(sender,'/rest/v1/messages','POST',{from_user_email:sender.email,to_user_email:teacher.email,subject:run,body:'direct'})).status,403);
+    checks+=3;
   }
-  // The normal teacher profile has no linked_teacher_id; authorization must
-  // use the same email-derived teacher identity as attendance and roster RLS.
-  assert.equal(sql(`select linked_teacher_id is null from public.profiles where id='${teacher.id}'`),'t');
-  for(const recipient of [parent.email,student.email]) {
-    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient})),true);
-    const msg=await create('messages',{from_user_email:teacher.email,to_user_email:recipient,subject:run,body:'Teacher recipient relationship test'},teacher);
-    assert.equal(msg.to_user_email,recipient); checks+=2;
+  // The teacher identity is the bound record (PRF-r2 D4) for messaging as for attendance and the class list.
+  assert.equal(sql(`select linked_teacher_id from public.profiles where id='${teacher.id}'`),t1.id);
+  // The teacher's scope is the keys of the class list's linked accounts; the e-mail
+  // check is staff only and refuses every address alike (review S3).
+  const keys=ok(await rpc(teacher,'portal_message_recipients')).map(r=>r.recipient_key);
+  for(const [key,recipient] of [['parent:'+s1.id,parent],['learner:'+s1.id,student]]) {
+    assert.ok(keys.includes(key));
+    assert.equal((await rpc(teacher,'can_message_recipient',{p_email:recipient.email})).status,403);
+    const [id]=ok(await rpc(teacher,'portal_send_message',{p_recipient_key:key,p_subject:run,p_body:'Teacher recipient relationship test'}));
+    (records.messages??=[]).push(id);
+    assert.equal(sql(`select to_user_email||'|'||recipient_profile_id from public.messages where id='${id}'`),recipient.email+'|'+recipient.id); checks+=2;
   }
+  assert.ok(!keys.some(k=>k.endsWith(s2.id)));
   for(const recipient of [s2.email,s2.parent_email]) {
-    assert.equal(ok(await rpc(teacher,'can_message_recipient',{p_email:recipient})),false);
+    assert.equal((await rpc(teacher,'can_message_recipient',{p_email:recipient})).status,403);
     const denied=await request(teacher,'/rest/v1/messages','POST',{
       from_user_email:teacher.email,to_user_email:recipient,subject:run,body:'FORBIDDEN',
     });
@@ -212,35 +243,51 @@ try {
     const client=createClient(base,env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false},
       global:{headers:{Authorization:'Bearer '+actor.token}}});
     const adapter=adapterFactory(()=>client);
+    // PRF-r2 D7: the directory is refused to families and limited to the own row for a teacher.
+    if(actor===parent||actor===student) {
+      await assert.rejects(adapter.getTeacherDirectory(),error=>error.code==='42501');
+      checks+=3; continue;
+    }
     const directory=await adapter.getTeacherDirectory(); safe(directory);
     assert.ok(directory.some(t=>t.id===t1.id));
+    if(actor===teacher) assert.deepEqual(directory.map(t=>t.id),[t1.id]);
     assert.equal((await adapter.getTeacherDirectory({id:t1.id}))[0].email,teacher.email);
     assert.equal((await adapter.getMyTeacher())?.id??null,actor===teacher?t1.id:null);
     checks+=3;
   }
   console.log('PASS shared portal/group/timetable adapter with real local Supabase clients');
   // Ensure the reviewed non-admin modules cannot silently return to Teacher.*.
-  for(const name of ['teacher-portal','parent-portal','student-portal','groups','groups/[id]','timetable']) {
+  for(const name of ['teacher-portal','groups','groups/[id]','timetable']) {
     const source=readFileSync(new URL('src/app/(admin)/'+name+'/page.jsx',root),'utf8');
     assert.ok(source.includes('@/lib/teacher-directory')); assert.ok(!source.includes('entities.Teacher.')); checks++;
+  }
+  // The family portals read no teacher row at all: recipients are opaque keys (PRF-r2 D7).
+  for(const name of ['parent-portal','student-portal']) {
+    const source=readFileSync(new URL('src/app/(admin)/'+name+'/page.jsx',root),'utf8');
+    assert.ok(!source.includes('@/lib/teacher-directory') && !source.includes('entities.Teacher.')); checks++;
   }
   if(process.argv.includes('--app')) {
     const invitee=await makeUser('pending','invitee');
     const expiredInvitee=await makeUser('pending','expired-invitee');
-    const forbiddenInvite=await app(parent,'/api/admin/invite',{email:invitee.email,role:'parent'});
+    // A family invitation names the learners whose dossier carries the address (PRF-r2 D3).
+    const inviteeChild=await create('students',{full_name:run+' Invitee Child',parent_email:invitee.email,age_category:'Young Learners (6-12)'});
+    const expiredChild=await create('students',{full_name:run+' Expired Child',parent_email:expiredInvitee.email,age_category:'Young Learners (6-12)'});
+    const forbiddenInvite=await app(parent,'/api/admin/invite',{email:invitee.email,role:'parent',studentIds:[inviteeChild.id]});
     assert.equal(forbiddenInvite.status,403); checks++;
-    const prepared=await app(admin,'/api/admin/invite',{email:invitee.email,role:'parent'});
+    const prepared=await app(admin,'/api/admin/invite',{email:invitee.email,role:'parent',studentIds:[inviteeChild.id]});
     assert.equal(prepared.status,200,JSON.stringify(prepared));
     assert.equal(prepared.data.needsDelivery,false);
     assert.equal(sql(`select role from public.pending_roles where email='${invitee.email}'`),'parent'); checks++;
     assert.equal(ok(await rpc(invitee,'apply_pending_role')),'parent');
     assert.equal(sql(`select role from public.profiles where id='${invitee.id}'`),'parent');
-    assert.equal(sql(`select count(*) from public.pending_roles where email='${invitee.email}'`),'0'); checks++;
+    assert.equal(sql(`select count(*) from public.pending_roles where email='${invitee.email}'`),'0');
+    assert.equal(sql(`select count(*) from public.family_links where profile_id='${invitee.id}' and student_id='${inviteeChild.id}' and status='active'`),'1'); checks++;
     assert.equal(ok(await rpc(invitee,'apply_pending_role')),null); checks++;
-    ok(await rpc(admin,'prepare_role_invitation',{p_email:expiredInvitee.email,p_role:'teacher'}));
+    ok(await rpc(admin,'prepare_family_invitation',{p_email:expiredInvitee.email,p_role:'parent',p_student_ids:[expiredChild.id]}));
     sql(`update public.pending_roles set expires_at=now()-interval '1 second' where email='${expiredInvitee.email}'`);
     assert.equal(ok(await rpc(expiredInvitee,'apply_pending_role')),null);
-    assert.equal(sql(`select role from public.profiles where id='${expiredInvitee.id}'`),'pending'); checks++;
+    assert.equal(sql(`select role from public.profiles where id='${expiredInvitee.id}'`),'pending');
+    assert.equal(sql(`select count(*) from public.family_links where student_id='${expiredChild.id}'`),'0'); checks++;
     const serviceAuth=createClient(base,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
     const { data: magic, error: magicError }=await serviceAuth.auth.admin.generateLink({type:'magiclink',email:invitee.email});
     assert.equal(magicError,null);
@@ -280,6 +327,7 @@ try {
   if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs disable trigger enforce_dismissal_integrity;';
   // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
   cleanup+='set local eh.enrollment_command = on;';
+  if(records.students?.length) cleanup+=`delete from public.family_links where student_id in (${records.students.map(id=>"'"+id+"'::uuid").join(',')});`;
   for(const table of ['messages','attendance','dismissal_logs','authorized_adults','payroll','enrollments','students','groups','teachers']) if(records[table]?.length)
     cleanup+=`delete from public.${table} where id in (${records[table].map(id=>"'"+id+"'::uuid").join(',')});`;
   if(records.dismissal_logs?.length) cleanup+='alter table public.dismissal_logs enable trigger enforce_dismissal_integrity;';

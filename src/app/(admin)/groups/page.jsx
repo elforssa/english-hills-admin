@@ -17,6 +17,7 @@ import PersonLink from '@/components/PersonLink';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
+import { loadTeacherAcademicRows } from '@/lib/portal';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -155,12 +156,17 @@ export default function Groups() {
     window.history.replaceState(window.history.state, '', `/groups${params.size ? `?${params}` : ''}`);
   }, [urlReady, filterSession, filterLevel, filterTerme]);
 
+  // A teacher sees the groups assigned to them, counted from their class list;
+  // the directory returns only their own row (plan PRF-r2 D7).
   const load = () => Promise.all([
     entities.Group.listAll('-created_date'),
     getTeacherDirectory(),
-    entities.Student.listAll('full_name'),
-    entities.Enrollment.listAll('-created_at'),
-  ]).then(([g, t, s, e]) => {
+    role === 'teacher' ? loadTeacherAcademicRows() : Promise.all([
+      entities.Student.listAll('full_name'),
+      entities.Enrollment.listAll('-created_at'),
+    ]).then(([students, enrollments]) => ({ students, enrollments })),
+  ]).then(([allGroups, t, { students: s, enrollments: e }]) => {
+    const g = role === 'teacher' ? allGroups.filter(group => group.teacher_id && group.teacher_id === t[0]?.id) : allGroups;
     setGroups(g);
     setTeachers(t);
     const c = {};
@@ -169,7 +175,9 @@ export default function Groups() {
     setLoading(false);
   });
 
-  useEffect(() => { load(); }, []);
+  // The role comes from AuthContext, resolved before render; teachers load their class list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role]);
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ce groupe ?')) return;
@@ -195,9 +203,9 @@ export default function Groups() {
           <h1 className="text-2xl font-bold">Groupes & niveaux</h1>
           <p className="text-muted-foreground text-sm mt-1">{groups.length} groupes</p>
         </div>
-        <Button onClick={() => setModal({})} className="self-start sm:self-auto">
+        {role !== 'teacher' && <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouveau groupe
-        </Button>
+        </Button>}
       </div>
 
       <div className="mb-5 flex flex-wrap gap-3">
@@ -222,7 +230,7 @@ export default function Groups() {
               {filtered.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground text-sm">
                   Aucun groupe.{' '}
-                  <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
+                  {role !== 'teacher' && <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>}
                 </div>
               )}
               {filtered.map(g => (
@@ -239,10 +247,10 @@ export default function Groups() {
                       <span className="text-xs text-muted-foreground">{g.terme}</span>
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  {role !== 'teacher' && <div className="flex gap-2 mt-3">
                     <button onClick={() => setModal(g)} className="p-1.5 rounded hover:bg-muted text-muted-foreground"><Edit size={15} /></button>
                     {role !== 'receptionist' && <button onClick={() => handleDelete(g.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
-                  </div>
+                  </div>}
                 </div>
               ))}
             </div>
@@ -259,7 +267,7 @@ export default function Groups() {
                   {filtered.length === 0 && (
                     <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground text-sm">
                       Aucun groupe.{' '}
-                      <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>
+                      {role !== 'teacher' && <button onClick={() => setModal({})} className="text-primary font-medium hover:underline">Créer le premier →</button>}
                     </td></tr>
                   )}
                   {filtered.map(g => (
@@ -278,10 +286,10 @@ export default function Groups() {
                       <td className="px-4 py-3 text-muted-foreground">{g.salle || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{g.terme}</td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-2">
+                        {role !== 'teacher' && <div className="flex gap-2">
                           <button onClick={() => setModal(g)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"><Edit size={14} /></button>
                           {role !== 'receptionist' && <button onClick={() => handleDelete(g.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
-                        </div>
+                        </div>}
                       </td>
                     </tr>
                   ))}

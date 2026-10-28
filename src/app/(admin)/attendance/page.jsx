@@ -9,6 +9,9 @@ import { getBrowserClient } from '@/lib/supabase';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import PersonLink from '@/components/PersonLink';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import { useAuth } from '@/context/AuthContext';
+import { loadTeacherAcademicRows } from '@/lib/portal';
+import { getMyTeacher } from '@/lib/teacher-directory';
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -20,6 +23,7 @@ const STATUS_CONFIG = {
 };
 
 export default function Attendance() {
+  const { role } = useAuth();
   const [groups, setGroups] = useState([]);
   const [students, setStudents] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -43,18 +47,26 @@ export default function Attendance() {
   const [enrollments, setEnrollments] = useState([]);
 
   useEffect(() => {
+    // A teacher takes attendance for the groups assigned to them (an empty one
+    // included), from the class list of those groups.
     Promise.all([
       entities.Group.listAll('name'),
-      entities.Student.listAll('full_name'),
-      entities.Enrollment.listAll('-created_date'),
+      role === 'teacher' ? loadTeacherAcademicRows() : Promise.all([
+        entities.Student.listAll('full_name'),
+        entities.Enrollment.listAll('-created_date'),
+      ]).then(([students, enrollments]) => ({ students, enrollments })),
+      role === 'teacher' ? getMyTeacher() : null,
     ])
-      .then(([g, s, e]) => { setGroups(g); setStudents(s); setEnrollments(e); })
+      .then(([g, { students: s, enrollments: e }, me]) => {
+        setGroups(role === 'teacher' ? g.filter(group => me && group.teacher_id === me.id) : g);
+        setStudents(s); setEnrollments(e);
+      })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error('[attendance] initial load failed:', err);
         toast.error('Impossible de charger les groupes / apprenants.');
       });
-  }, []);
+  }, [role]);
 
   useEffect(() => sessionManager.current.subscribe(setSessionState), []);
   useEffect(() => { sessionManager.current.select(selectedGroup, sessionDate); }, [selectedGroup, sessionDate]);

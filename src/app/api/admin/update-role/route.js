@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
+import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
 
 const ASSIGNABLE_ROLES = ['student', 'parent', 'teacher', 'admin', 'director', 'receptionist'];
 
@@ -15,6 +16,8 @@ const Schema = z.object({
 });
 
 export async function POST(request) {
+  const refused = rejectCrossOrigin(request);
+  if (refused) return refused;
   // ── Gate 1: must be authenticated ──────────────────────────────────────
   const supabase = await getServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();

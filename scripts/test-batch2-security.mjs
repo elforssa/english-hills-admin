@@ -37,6 +37,9 @@ if (!process.argv.includes('--preserve-directors')) assert.equal(initialDirector
   'Use a disposable local instance or --preserve-directors (skips global last-director races)');
 const roles = ['pending','parent','student','teacher','admin','director','receptionist'];
 const run = `batch2-${randomUUID()}`;
+// Portal roles take the portal invitations (PRF-r2 D3): a learner and a teacher
+// record carry the target's address only while an iteration needs it.
+const fixtureLearner = randomUUID(), fixtureTeacher = randomUUID();
 const password = randomBytes(24).toString('base64url');
 const users = [];
 const emails = new Set();
@@ -91,7 +94,8 @@ async function app(actor,path,body) {
   }});
   assert.equal((await client.auth.setSession({access_token:actor.token,refresh_token:actor.refreshToken})).error,null);
   const r=await fetch('http://127.0.0.1:3101'+path,{method:'POST',redirect:'error',signal:AbortSignal.timeout(30000),
-    headers:{'Content-Type':'application/json',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
+    // Same-origin browser request: the admin routes refuse any other Origin (PRF-r2 D10).
+    headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101',Cookie:[...cookies].map(([k,v])=>k+'='+v).join('; ')},body:JSON.stringify(body)});
   return {status:r.status,ok:r.ok,data:await r.json()};
 }
 try {
@@ -117,24 +121,45 @@ try {
     checks++;
   }
   console.log('PASS 343 caller/current/requested role transitions and audit attribution');
+  sql(`insert into public.students(id,full_name,status,age_category) values('${fixtureLearner}','${run} learner','Prospect','Adults (18+)');
+    insert into public.teachers(id,full_name,email,contract_type) values('${fixtureTeacher}','${run} teacher','${run}-teacher-record@example.invalid','Freelance');`);
+  const prepareFixtures=desired=>sql(`delete from public.family_links where student_id='${fixtureLearner}';
+    update public.profiles set linked_teacher_id=null where id='${target.id}';
+    update public.students set parent_email=${desired==='parent'?`'${target.email}'`:'null'},
+      email=${desired==='student'?`'${target.email}'`:'null'} where id='${fixtureLearner}';
+    update public.teachers set email='${desired==='teacher'?target.email:run+'-teacher-record@example.invalid'}' where id='${fixtureTeacher}';`);
+  // Staff roles keep prepare_role_invitation; parent/student/teacher go through the
+  // portal invitations, which link the learner or the teacher record.
+  const invite=(actor,desired)=>['parent','student'].includes(desired)
+    ? rpc(actor,'prepare_family_invitation',{p_email:target.email.toUpperCase(),p_role:desired,p_student_ids:[fixtureLearner]})
+    : desired==='teacher' ? rpc(actor,'prepare_teacher_invitation',{p_email:target.email.toUpperCase(),p_teacher_id:fixtureTeacher})
+      : rpc(actor,'prepare_role_invitation',{p_email:target.email.toUpperCase(),p_role:desired});
+  const withoutBinding=row=>{ const o=JSON.parse(row); delete o.linked_teacher_id; delete o.updated_at; return o; };
   for(const actor of actors) for(const current of roles) for(const desired of roles) {
-    setRole(target.id,current);
+    setRole(target.id,current); prepareFixtures(desired);
     const before=snapshot(target.id);
-    const result=await rpc(actor,'prepare_role_invitation',{p_email:target.email.toUpperCase(),p_role:desired});
+    const result=await invite(actor,desired);
     if(!can(actor.role,current,desired)) { deny(result); assert.equal(snapshot(target.id),before); }
-    else if(current!=='pending' && desired!==current) {
+    else if(['parent','student'].includes(desired) && ['teacher','admin','director','receptionist'].includes(current)) {
+      // A staff or teacher account's address never opens a family account (PRF-r2 D3).
+      deny(result); assert.equal(result.data.hint,'portal.staff_address'); assert.equal(snapshot(target.id),before);
+    } else if(current!=='pending' && desired!==current) {
       assert.equal(result.status,400); assert.equal(result.data.code,'23514'); assert.equal(snapshot(target.id),before);
     } else {
-      ok(result); assert.equal(snapshot(target.id),before);
+      ok(result); assert.deepEqual(withoutBinding(snapshot(target.id)),withoutBinding(before));
       if(current==='pending') {
         assert.equal(ok(await rpc(target,'apply_pending_role')),desired);
         assert.equal(ok(await rpc(target,'apply_pending_role')),null);
         assert.equal(getRole(target.id),desired);
       }
+      if(['parent','student'].includes(desired)) assert.equal(sql(`select count(*) from public.family_links
+        where student_id='${fixtureLearner}' and profile_id='${target.id}' and status='active'`),'1');
+      if(desired==='teacher') assert.equal(sql(`select linked_teacher_id from public.profiles where id='${target.id}'`),fixtureTeacher);
     }
     assert.equal(sql(`select count(*) from public.pending_roles where email='${target.email}';`),'0');
     checks++;
   }
+  prepareFixtures('admin');
   console.log('PASS 343 invitation transitions, privileged reinvites and repeated activation');
   setRole(target.id,'pending');
   for(const actor of [null,...actors,service]) {
@@ -262,16 +287,19 @@ try {
 
   if(process.argv.includes('--app')) {
     for(const [actor,role] of [[admin,'teacher'],[director,'admin'],[director,'receptionist']]) {
-      setRole(target.id,'pending');
+      setRole(target.id,'pending'); prepareFixtures(role);
       ok(await app(actor,'/api/admin/update-role',{userId:target.id,role}));
       assert.equal(getRole(target.id),role);
       setRole(target.id,'pending');
-      ok(await app(actor,'/api/admin/invite',{email:target.email,role}));
+      ok(await app(actor,'/api/admin/invite',{email:target.email,role,...(role==='teacher'?{teacherId:fixtureTeacher}:{})}));
       assert.equal(ok(await rpc(target,'apply_pending_role')),role); checks+=2;
     }
+    prepareFixtures('admin');
     const before=snapshot(director.id);
-    deny(await app(admin,'/api/admin/invite',{email:director.email,role:'student'}));
-    assert.equal((await app(director,'/api/admin/invite',{email:director.email,role:'student'})).status,409);
+    deny(await app(admin,'/api/admin/invite',{email:director.email,role:'student',studentIds:[fixtureLearner]}));
+    // A director's own address never opens a family account (PRF-r2 D3).
+    const own=await app(director,'/api/admin/invite',{email:director.email,role:'student',studentIds:[fixtureLearner]});
+    assert.equal(own.status,403); assert.equal(own.data.reason,'portal.staff_address');
     assert.equal(snapshot(director.id),before);
     const newEmail=`${run}-new-invite@example.invalid`; emails.add(newEmail);
     ok(await app(director,'/api/admin/invite',{email:newEmail,role:'receptionist'}));
@@ -303,6 +331,11 @@ try {
     sql(`begin; lock table public.profiles in access exclusive mode;
       alter table public.profiles disable trigger role_security_guard;
       delete from public.pending_roles where email in (${mails});
+      delete from public.family_links where student_id='${fixtureLearner}';
+      delete from public.students where id='${fixtureLearner}';
+      update public.profiles set linked_teacher_id=null where linked_teacher_id='${fixtureTeacher}';
+      delete from public.teachers where id='${fixtureTeacher}';
+      delete from public.activity_log where target_id in ('${fixtureLearner}','${fixtureTeacher}');
       delete from auth.users where id in (${ids});
       alter table public.profiles enable trigger role_security_guard;
       update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');

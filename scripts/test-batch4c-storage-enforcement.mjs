@@ -119,7 +119,8 @@ async function app(actor, operation, body) {
   }
   const response = await fetch(`${appBase}/api/storage/${operation}`, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),
-    headers: { 'Content-Type': 'application/json', Cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; ') }, body: JSON.stringify(body),
+    // Same-origin browser request: the storage routes refuse any other Origin (PRF-r2 D10).
+    headers: { 'Content-Type': 'application/json', Origin: new URL(appBase).origin, Cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; ') }, body: JSON.stringify(body),
   });
   const text = await response.text(); let data = null;
   try { data = JSON.parse(text); } catch { /* API always returns JSON; retain response for assertion output */ }
@@ -164,6 +165,16 @@ try {
   const childSeat = await seat(child.id, group.id);
   await seat(childTwo.id, group.id);
   await seat(unrelated.id, otherGroup.id);
+  // Portal readiness (PRF-r2 D3/D4): families reach a learner through explicit links
+  // and teacher accounts are bound to their records, not through matching addresses.
+  sql(`insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+    (${q(child.id)},'parent',${q(parent.id)},${q(parent.email)},'active',now()),
+    (${q(childTwo.id)},'parent',${q(parent.id)},${q(parent.email)},'active',now()),
+    (${q(unrelated.id)},'parent',${q(otherParent.id)},${q(otherParent.email)},'active',now()),
+    (${q(child.id)},'self',${q(student.id)},${q(student.email)},'active',now()),
+    (${q(unrelated.id)},'self',${q(otherStudent.id)},${q(otherStudent.email)},'active',now());
+    update public.profiles set linked_teacher_id=${q(t.id)} where id=${q(teacher.id)};
+    update public.profiles set linked_teacher_id=${q(tOther.id)} where id=${q(otherTeacher.id)};`);
 
   // Unsupported identities, forged subjects, and arbitrary reservation arguments fail closed.
   for (const actor of [null, pending, missing, parent, otherParent, otherTeacher]) await denied(() => rpc(actor, 'reserve_storage_asset', { p_purpose: 'portfolio', p_student_id: child.id }));
@@ -301,6 +312,7 @@ try {
   if (assets.length) cleanup += `delete from public.storage_asset_bindings where asset_id in (${assets.map(a => q(a.id)).join(',')}); delete from public.storage_assets where id in (${assets.map(a => q(a.id)).join(',')});`;
   // Enrollment history is deleted only by the commands (EGC I10); this owner teardown says so.
   cleanup += 'set local eh.enrollment_command = on;';
+  if (records.students?.length) cleanup += `delete from public.family_links where student_id in (${records.students.map(q).join(',')});`;
   for (const table of ['authorized_adults', 'portfolios', 'enrollments', 'students', 'groups', 'teachers']) if (records[table]?.length) cleanup += `delete from public.${table} where id in (${records[table].map(q).join(',')});`;
   if (users.length) cleanup += `alter table public.profiles disable trigger role_security_guard; delete from auth.users where id in (${users.map(u => q(u.id)).join(',')}); alter table public.profiles enable trigger role_security_guard; update role_security.director_guard set director_count=(select count(*) from public.profiles where role='director');`;
   if (ids.length) cleanup += `delete from public.activity_log where actor_id in (${users.map(u => q(u.id)).join(',')}) or target_id in (${ids.map(q).join(',')});`;

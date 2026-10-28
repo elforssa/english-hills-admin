@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
+import { getMyMessages, loadTeacherAcademicRows } from '@/lib/portal';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import { getBrowserClient } from '@/lib/supabase';
@@ -24,12 +26,6 @@ const NOTIF_TYPE_LABELS = {
   enrollment_confirmed: 'Inscription confirmée', schedule_change: 'Changement horaire',
   class_reminder: 'Rappel de cours', general: 'Général',
 };
-
-// Build a unique recipient list from rows like {email, name}, dropping blanks.
-function uniqueRecipients(list) {
-  const seen = new Set();
-  return list.filter(r => r.email && !seen.has(r.email) && seen.add(r.email));
-}
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -158,7 +154,7 @@ function AssessmentModal({ assessment, students, groups, onSave, onClose }) {
   );
 }
 
-function NotesTab({ groups, students, assessments: initialAssessments, setAssessments }) {
+function NotesTab({ groups, students, assessments: initialAssessments, setAssessments, canDelete }) {
   const [modal, setModal] = useState(null);
   const [localAssessments, setLocalAssessments] = useState(initialAssessments);
 
@@ -197,7 +193,7 @@ function NotesTab({ groups, students, assessments: initialAssessments, setAssess
             <div className="flex items-center gap-3">
               <p className="font-bold text-primary">{a.note_finale ?? '—'}/20</p>
               <button onClick={() => setModal(a)} className="p-1 rounded hover:bg-muted text-muted-foreground"><Edit size={13} /></button>
-              <button onClick={() => handleDelete(a.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={13} /></button>
+              {canDelete && <button onClick={() => handleDelete(a.id)} aria-label="Supprimer la note" className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={13} /></button>}
             </div>
           </div>
         ))}
@@ -440,18 +436,27 @@ export default function TeacherPortal() {
         ? allGroups.filter(g => g.teacher_id === me.id)
         : (u?.role === 'director' ? allGroups : []);
       setGroups(myGroups);
-      // Personal notifications + unread messages + office contact.
-      entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
+      // Personal notifications (keyed by account) + unread messages + office contact.
+      entities.Notification.filterAll({ recipient_profile_id: u?.id }, '-created_date')
         .then(setNotifications).catch(() => {});
-      entities.Message.filter({ to_user_email: u?.email, read: false })
-        .then(rows => setUnreadMessages(rows.length)).catch(() => {});
+      if (u?.role === 'teacher') {
+        getMyMessages('inbox').then(rows => setUnreadMessages(rows.filter(m => !m.read).length)).catch(() => {});
+      }
       getOfficeRecipient().then(setOffice).catch(() => {});
-      const allStudents = await entities.Student.listAll('full_name');
-      setStudents(allStudents);
-      // Validated enrollments let us include students enrolled in a group even
-      // if their student.groupe_id wasn't set — matches the /attendance roster.
-      const activeEnrollments = await entities.Enrollment.listAll('-created_date');
-      setEnrollments(activeEnrollments.filter(e => ['Validated','Trial'].includes(e.status)));
+      // Teachers read the class list of their groups (no contact field); a
+      // director viewing this portal keeps the staff reads.
+      if (u?.role === 'teacher') {
+        const roster = await loadTeacherAcademicRows();
+        setStudents(roster.students);
+        setEnrollments(roster.enrollments);
+      } else {
+        const allStudents = await entities.Student.listAll('full_name');
+        setStudents(allStudents);
+        // Validated enrollments let us include students enrolled in a group even
+        // if their student.groupe_id wasn't set — matches the /attendance roster.
+        const activeEnrollments = await entities.Enrollment.listAll('-created_date');
+        setEnrollments(activeEnrollments.filter(e => ['Validated','Trial'].includes(e.status)));
+      }
       // RLS scopes announcements to what this teacher may see (audience 'all',
       // 'teachers', and their groups). No client-side audience filter needed.
       const ann = await entities.Announcement.list('-created_date', 10);
@@ -524,15 +529,6 @@ export default function TeacherPortal() {
     { id: 'messages', label: 'Messages', badge: unreadMessages },
   ];
 
-  // Recipients: parents + students of this teacher's students, plus the office.
-  const recipients = uniqueRecipients([
-    ...students.flatMap(s => [
-      { email: s.parent_email, name: `Parent de ${s.full_name}` },
-      { email: s.email, name: s.full_name },
-    ]),
-    ...(office ? [office] : []),
-  ]);
-
   return (
     <div className="p-4 lg:p-8 max-w-5xl mx-auto">
       <div className="mb-6 flex items-start justify-between">
@@ -555,7 +551,7 @@ export default function TeacherPortal() {
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-5 text-sm text-amber-800">
           <p className="font-semibold mb-1">Aucune fiche enseignant liée à votre compte</p>
           <p>
-            Votre adresse <strong>{user?.email}</strong> n’est rattachée à aucune fiche enseignant,
+            Votre compte n’est relié à aucune fiche enseignant active,
             donc aucun groupe ni apprenant n’apparaît ici. Merci de contacter l’administration
             {office?.email ? <> à <a className="font-semibold underline" href={`mailto:${office.email}`}>{office.email}</a></> : null}
             {' '}pour relier votre compte.
@@ -665,7 +661,8 @@ export default function TeacherPortal() {
       )}
 
       {tab === 'notes' && (
-        <NotesTab groups={groups} students={students} assessments={assessments} setAssessments={setAssessments} />
+        <NotesTab groups={groups} students={students} assessments={assessments} setAssessments={setAssessments}
+          canDelete={hasCapability(user?.role, 'canDeleteAcademicRecords')} />
       )}
 
       {tab === 'learning' && (
@@ -698,10 +695,9 @@ export default function TeacherPortal() {
       )}
 
       {tab === 'messages' && (
-        <MessagesTab
-          me={{ email: user?.email, name: user?.full_name }}
-          recipients={recipients}
-        />
+        user?.role === 'teacher'
+          ? <MessagesTab onUnreadChange={setUnreadMessages} />
+          : <div className="p-8 text-center text-muted-foreground text-sm bg-card border border-border rounded-lg">La messagerie du personnel se trouve dans Communications.</div>
       )}
 
     </div>

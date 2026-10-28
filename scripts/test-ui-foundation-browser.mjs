@@ -98,6 +98,8 @@ try {
     if(name==='crm_get_form_answers')return json(args.p_offset===0?answers:{rows:[{...answers.rows[0],id:randomUUID(),source_label:'Demande antérieure'}],total:6});
     if(name==='crm_list_open_tasks')return json([task]);
     if(name==='crm_get_timeline'||name==='crm_list_placements'||name==='crm_list_intake_review')return json({rows:[],total:0,has_more:false});
+    // Learner file "Comptes famille" panel (PRF-r2 D3): a read-only staff list, no family account in this fixture.
+    if(name==='list_family_links')return json([]);
     if(name==='search_students_page') {
      if(hold)await hold;
      if(studentMode==='error')return failure();

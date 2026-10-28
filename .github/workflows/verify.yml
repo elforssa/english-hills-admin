@@ -316,6 +316,14 @@ jobs:
           supabase db reset --local --version 119 --no-seed
           node scripts/test-egc-upgrade.mjs revert-m1
           supabase db reset --local --no-seed
+      - name: Portal readiness 122 to 123 upgrade, guarded clean-up and prepared corrective
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 122 --no-seed
+          node scripts/test-portal-readiness-upgrade.mjs full
+          supabase db reset --local --version 122 --no-seed
+          node scripts/test-portal-readiness-upgrade.mjs corrective
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression
@@ -342,6 +350,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-online-learning.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-portal-readiness.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
       - name: Payment, receipt deletion and receptionist rollback-only regression
         if: matrix.shard == 'sql-and-concurrency'
@@ -385,6 +394,9 @@ jobs:
       - name: Batch E numbering, void and payment races and owner-level session user
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-finance-batch-e-concurrency.py
+      - name: Portal readiness concurrent invitations of one address
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-portal-readiness-concurrency.py
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'
@@ -449,6 +461,11 @@ jobs:
       - name: Student placement, second programme, capacity override and leaver browser flow
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-student-placement-browser.mjs
+      - name: Portal readiness cross-role REST, route origin guard and portal browser checks
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: |
+          node scripts/test-portal-readiness.mjs
+          node scripts/test-portal-readiness-browser.mjs
 
       # Shard browser-crm.
       - name: CRM lifecycle and phase 11 browser suites

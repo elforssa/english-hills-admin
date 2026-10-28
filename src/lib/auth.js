@@ -197,10 +197,11 @@ export const users = {
   /**
    * Invite a new user by email. Sends an invitation link landing on
    * /inscription-compte and queues a pending_roles row so the role is
-   * applied automatically on first sign-in.
+   * applied automatically on first sign-in. Parent and student invitations
+   * carry the learners staff confirmed; teacher invitations the teacher record.
    */
-  async inviteUser(email, role) {
-    return postJson('/api/admin/invite', { email, role });
+  async inviteUser(email, role, { studentIds, teacherId } = {}) {
+    return postJson('/api/admin/invite', { email, role, studentIds, teacherId });
   },
 
   /**

@@ -116,10 +116,12 @@ export function buildReceiptPDF(doc, receipt, { logoData = null } = {}) {
   detailRow('Email', receipt.email);
 
   sectionTitle('Session');
-  detailRow('Session', receipt.session_type || (receipt.legacy ? 'Historique' : ''));
+  // The family projection carries is_legacy and no contact snapshot (plan PRF-r2 D1).
+  const legacy = receipt.legacy || receipt.is_legacy;
+  detailRow('Session', receipt.session_type || (legacy ? 'Historique' : ''));
   detailRow('Année scolaire', receiptSchoolYear(receipt));
   detailRow('Niveau', receipt.niveau);
-  detailRow('Service', receipt.service_description || (receipt.legacy ? 'Reçu historique' : ''));
+  detailRow('Service', receipt.service_description || (legacy ? 'Reçu historique' : ''));
 
   sectionTitle('Paiement');
   amountRow('Prix brut convenu', `${money(amounts.gross)} MAD`);

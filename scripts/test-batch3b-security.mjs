@@ -33,6 +33,12 @@ async function request(actor,table,method='GET',body,query='',prefer='return=rep
   return {status:res.status,ok:res.ok,data:await res.json().catch(()=>null)};
 }
 function ok(r) { assert.ok(r.ok,JSON.stringify(r)); return r.data; }
+// Anonymous reads return a permission error since PRF-r2 D12 (helpers no longer
+// executable by anon), or nothing; never rows.
+function anonymousOrOk(actor,r) {
+  if(!actor&&!r.ok) { assert.ok([401,403].includes(r.status),JSON.stringify(r)); return []; }
+  return ok(r);
+}
 async function create(table,body,actor=service) {
   const [row]=ok(await request(actor,table,'POST',body)); (records[table]??=[]).push(row.id); return row;
 }
@@ -65,10 +71,19 @@ try {
   const missing=await makeUser('pending','missing'); sql(`delete from public.profiles where id='${missing.id}';`); missing.role='missing';
   const t1=await create('teachers',{full_name:run+' Teacher One',email:teacher.email});
   const t2=await create('teachers',{full_name:run+' Teacher Two',email:otherTeacher.email});
+  // Portal readiness (PRF-r2 D4): a teacher account is bound to its record.
+  sql(`update public.profiles set linked_teacher_id='${t1.id}' where id='${teacher.id}';
+    update public.profiles set linked_teacher_id='${t2.id}' where id='${otherTeacher.id}';`);
   const group=await create('groups',{name:run+' Group',niveau:'A1',teacher_id:t1.id});
   const children=[];
   for(let i=0;i<3;i++) children.push(await create('students',{full_name:run+' Child '+i,parent_email:i<2?parent.email:otherParent.email,
     email:i===0?byRole('student').email:run+'-child'+i+'@example.invalid',status:'Enrolled'}));
+  // Portal readiness (PRF-r2 D3): family access is an explicit active link.
+  sql(`insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+    ('${children[0].id}','parent','${parent.id}','${parent.email}','active',now()),
+    ('${children[1].id}','parent','${parent.id}','${parent.email}','active',now()),
+    ('${children[2].id}','parent','${otherParent.id}','${otherParent.email}','active',now()),
+    ('${children[0].id}','self','${byRole('student').id}','${byRole('student').email}','active',now());`);
   const enrollments=[];
   // A Validated enrollment carries its programme and school year (EGC I9).
   for(const child of children) enrollments.push(await create('enrollments',{student_id:child.id,status:'Validated',group_id:group.id,
@@ -79,10 +94,22 @@ try {
   const l2=await create('leave_requests',{...leave,teacher_id:t2.id,teacher_name:t2.full_name},otherTeacher);
   for(const actor of [null,...users]) {
     const staff=['admin','director'].includes(actor?.role);
-    const e=ok(await request(actor,'enrollments','GET',undefined,'?id=in.('+enrollments.map(x=>x.id).join(',')+')&select=id'));
-    const visible=staff||actor===teacher?enrollments:actor===parent?enrollments.slice(0,2):actor===otherParent?enrollments.slice(2):[];
-    assert.deepEqual(e.map(x=>x.id).sort(),visible.map(x=>x.id).sort()); checks++;
-    const l=ok(await request(actor,'leave_requests','GET',undefined,`?id=in.(${l1.id},${l2.id})&select=id`));
+    const e=anonymousOrOk(actor,await request(actor,'enrollments','GET',undefined,'?id=in.('+enrollments.map(x=>x.id).join(',')+')&select=id'));
+    // Portal roles read no enrollment row directly (PRF-r2 D2) ...
+    assert.deepEqual(e.map(x=>x.id).sort(),(staff?enrollments:[]).map(x=>x.id).sort()); checks++;
+    // ... and the projections keep the former row scope: families through the
+    // learner record, the teacher through the class list of the group.
+    const projected=[];
+    if(actor&&['parent','student'].includes(actor.role)) for(const child of children) {
+      const r=await request(actor,'rpc/portal_learner_record','POST',{p_student_id:child.id});
+      if(r.ok) projected.push(...r.data.enrollments.map(x=>x.id)); else assert.equal(r.status,403,JSON.stringify(r));
+    }
+    if(actor?.role==='teacher') for(const row of ok(await request(actor,'rpc/portal_teacher_roster','POST',{})))
+      projected.push(enrollments.find(x=>x.student_id===row.student_id&&x.group_id===row.group_id).id);
+    const scope=actor===teacher?enrollments:actor===parent?enrollments.slice(0,2):actor===otherParent?enrollments.slice(2)
+      :actor===byRole('student')?enrollments.slice(0,1):[];
+    assert.deepEqual(projected.sort(),scope.map(x=>x.id).sort()); checks++;
+    const l=anonymousOrOk(actor,await request(actor,'leave_requests','GET',undefined,`?id=in.(${l1.id},${l2.id})&select=id`));
     const own=staff?[l1,l2]:actor===teacher?[l1]:actor===otherTeacher?[l2]:[];
     assert.deepEqual(l.map(x=>x.id).sort(),own.map(x=>x.id).sort()); checks++;
     if(!staff) {
@@ -90,22 +117,36 @@ try {
       await denyMutation(actor,'enrollments',enrollments[0].id,'DELETE');
       for(const patch of [{status:'Approuvé'},{status:'Refusé'},{remplacant:'forged'},{teacher_id:t2.id},{notes:'overwrite'}]) await denyMutation(actor,'leave_requests',l1.id,'PATCH',patch);
       await denyMutation(actor,'leave_requests',l1.id,'DELETE');
-      if(actor!==parent) await denyInsert(actor,'enrollments',enrollment);
+      // No portal role inserts an enrollment directly; parents use portal_request_reenrollment.
+      await denyInsert(actor,'enrollments',enrollment);
       if(actor!==teacher) await denyInsert(actor,'leave_requests',leave);
     }
   }
-  for(const child of children.slice(0,2)) assert.equal((await create('enrollments',{...enrollment,student_id:child.id},parent)).status,'Submitted');
+  // The re-enrollment request (PRF-r2 D2) inserts the same Submitted row for a linked child only.
+  for(const child of children.slice(0,2)) {
+    const id=ok(await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:child.id}));
+    (records.enrollments??=[]).push(id);
+    assert.equal(sql(`select status||'|'||coalesce(group_id::text,'-')||'|'||(documents_urls is null) from public.enrollments where id='${id}'`),'Submitted|-|true');
+  }
   checks+=2;
+  for(const target of [children[2].id]) {
+    const r=await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:target});
+    assert.equal(r.status,403,JSON.stringify(r)); assert.equal(r.data?.hint,'portal.not_linked'); checks++;
+  }
   const archived=await create('students',{full_name:run+' Archived Child',parent_email:parent.email,deleted_at:new Date().toISOString()});
   await denyInsert(parent,'enrollments',{...enrollment,student_id:archived.id});
+  {
+    const r=await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:archived.id});
+    assert.equal(r.status,403,JSON.stringify(r)); checks++;
+  }
   const {status: _enrollmentStatus,...defaultEnrollment}=enrollment;
-  assert.equal((await create('enrollments',defaultEnrollment,parent)).status,'Submitted'); checks++;
+  await denyInsert(parent,'enrollments',defaultEnrollment);
   const {status: _leaveStatus,...defaultLeave}=leave;
   assert.equal((await create('leave_requests',defaultLeave,teacher)).status,'En attente'); checks++;
   // Migrations 070/072 added a BEFORE trigger that rejects (23514) an active
   // status without a group and a missing student for every role, before RLS
   // runs. Active statuses therefore carry a valid group so the denial must come
-  // from the parent insert policy.
+  // from RLS: since PRF-r2 no portal role has an enrollment insert policy.
   for(const patch of [{status:'Under Review'},{status:'Validated',group_id:group.id},{status:'Rejected'},{status:'Trial',group_id:group.id},{status:null},{group_id:group.id},
     {student_id:children[2].id},{documents_urls:['https://example.invalid/forged']},{created_at:'2000-01-01'},{updated_at:'2000-01-01'}])
     await denyInsert(parent,'enrollments',{...enrollment,...patch});
@@ -163,7 +204,8 @@ try {
   const quoted=values=>values.map(x=>"'"+x+"'::uuid").join(',');
   let cleanup='begin; lock table public.profiles in access exclusive mode;';
   // Also remove UI-created requests and notifications scoped to these fixtures.
-  if(records.students?.length) cleanup+=`set local eh.enrollment_command = on; delete from public.enrollments where student_id in (${quoted(records.students)});`;
+  if(records.students?.length) cleanup+=`set local eh.enrollment_command = on; delete from public.enrollments where student_id in (${quoted(records.students)});
+    delete from public.family_links where student_id in (${quoted(records.students)});`;
   if(records.teachers?.length) cleanup+=`delete from public.leave_requests where teacher_id in (${quoted(records.teachers)});`;
   if(users.length) cleanup+=`delete from public.notifications where recipient_email in (${users.map(u=>"'"+u.email+"'").join(',')});`;
   for(const table of ['enrollments','leave_requests','students','groups','teachers']) if(records[table]?.length)

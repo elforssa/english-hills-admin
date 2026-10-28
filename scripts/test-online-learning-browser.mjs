@@ -77,6 +77,12 @@ try {
     insert into public.students(id, full_name, email, parent_email, status, session_type, niveau_cefr) values
       ('${ids.adult}', 'Amal Bennani', '${users.student.email}', null, 'Enrolled', 'Online', 'B1'),
       ('${ids.child}', 'Lina Tazi', null, '${users.parent.email}', 'Enrolled', 'Online', 'A1');
+    -- Portal readiness (PRF-r2 D3/D4): families join through explicit links; the
+    -- teacher account is bound to its record.
+    insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+      ('${ids.adult}', 'self', '${users.student.id}', '${users.student.email}', 'active', now()),
+      ('${ids.child}', 'parent', '${users.parent.id}', '${users.parent.email}', 'active', now());
+    update public.profiles set linked_teacher_id = '${ids.teacher}' where id = '${users.teacher.id}';
     insert into public.groups(id, name, session_type, niveau) values
       ('${ids.group}', '${run} adultes', 'Online', 'B1'), ('${ids.kids}', '${run} enfants', 'Online', 'A1');
     insert into public.online_courses(group_id, teacher_id, audience, capacity, status, provider, provider_room_ref, term_start, term_end) values
@@ -226,6 +232,7 @@ try {
     delete from public.online_courses where group_id in ('${ids.group}','${ids.kids}');
     delete from public.online_consents where student_id = '${ids.child}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${ids.adult}','${ids.child}');
+    delete from public.family_links where student_id in ('${ids.adult}','${ids.child}');
     delete from public.students where id in ('${ids.adult}','${ids.child}');
     delete from public.groups where id in ('${ids.group}','${ids.kids}');
     delete from public.teachers where id = '${ids.teacher}';

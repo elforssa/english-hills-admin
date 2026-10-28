@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
 import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '@/lib/payroll/status.mjs';
+import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
 
 // CNSS 2024 Morocco rates (authoritative server-side copy)
 const CNSS_EMPLOYEE_RATE = 0.0448;
@@ -58,6 +59,8 @@ const Schema = z.object({
 });
 
 export async function POST(request) {
+  const refused = rejectCrossOrigin(request);
+  if (refused) return refused;
   const supabase = await getServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {

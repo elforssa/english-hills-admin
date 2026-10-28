@@ -1,31 +1,27 @@
 'use client';
 
 // =============================================================================
-// MessagesTab — shared inbox/sent panel for parent + teacher portals.
+// MessagesTab — shared inbox/sent panel for the teacher, parent and student
+// portals (plan PRF-r2 D7/D7b).
 //
-// Reads/writes public.messages (schema lives in migration 001). The table
-// already supports threading via reply_to_id but the portal UI is kept
-// flat — replies show as new rows in the same conversation, sorted by
-// created_at. Threading proper can come later without a schema change.
-//
-// What the tab does:
-//   • Inbox  : messages where to_user_email = me.
-//   • Envoyés: messages where from_user_email = me.
-//   • Compose: send a new message to a chosen recipient. The recipient
-//              list is supplied by the host portal (parent → admin/teacher,
-//              teacher → admin/parent/student) so this component stays
-//              context-agnostic.
-//   • Reply  : open a thread, reply inline. Reply rows mark `reply_to_id`
-//              so a future thread view can stitch them together.
-//   • Read   : opening a message flips `read=true` for inbox rows.
+// Portal accounts never read or write public.messages directly:
+//   • Inbox / Envoyés: portal_my_messages — rows addressed to (or sent by) this
+//     account, and about a learner only while the account may see it.
+//   • Compose: portal_send_message with an opaque recipient key from
+//     portal_message_recipients ("Accueil English Hills", a teacher, "Parent
+//     de …"). No address is shown or sent from the browser; the server sets the
+//     sender name.
+//   • Reply  : replies go to the original sender's account.
+//   • Read   : opening an inbox message flips `read=true` (mark_message_read).
 // =============================================================================
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Inbox, Send, Mail, ChevronLeft, Reply, X } from 'lucide-react';
-import { useEntityCreate, useEntityFilter } from '@/lib/queries';
 import { integrations } from '@/lib/entities';
 import { markMessageRead } from '@/lib/messages';
+import { getMessageRecipients, getMyMessages, portalErrorMessage, sendPortalMessage } from '@/lib/portal';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -35,7 +31,7 @@ function fmtDate(iso) {
   });
 }
 
-function MessageList({ items, onOpen, emptyLabel, showFrom = true }) {
+function MessageList({ items, onOpen, emptyLabel, showUnread = true }) {
   if (items.length === 0) {
     return (
       <div className="p-10 text-center text-muted-foreground text-sm">
@@ -53,13 +49,13 @@ function MessageList({ items, onOpen, emptyLabel, showFrom = true }) {
           >
             <div
               className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                showFrom && !m.read ? 'bg-primary' : 'bg-transparent'
+                showUnread && !m.read ? 'bg-primary' : 'bg-transparent'
               }`}
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3">
-                <p className={`text-sm truncate ${showFrom && !m.read ? 'font-semibold' : 'font-medium text-muted-foreground'}`}>
-                  {showFrom ? (m.from_name || m.from_user_email) : (m.to_name || m.to_user_email)}
+                <p className={`text-sm truncate ${showUnread && !m.read ? 'font-semibold' : 'font-medium text-muted-foreground'}`}>
+                  {m.counterpart}
                 </p>
                 <p className="text-xs text-muted-foreground flex-shrink-0">{fmtDate(m.created_at)}</p>
               </div>
@@ -73,53 +69,52 @@ function MessageList({ items, onOpen, emptyLabel, showFrom = true }) {
   );
 }
 
-function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onClose, onSent }) {
-  const [to, setTo] = useState(defaultTo || (recipients?.[0]?.email ?? ''));
-  const [subject, setSubject] = useState(defaultSubject || '');
+function ComposeForm({ recipients, learners, replyTo, onClose, onSent }) {
+  const [to, setTo] = useState(recipients?.[0]?.recipient_key ?? '');
+  const [studentId, setStudentId] = useState('');
+  const [subject, setSubject] = useState(replyTo
+    ? (replyTo.subject?.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject}`)
+    : '');
   const [body, setBody] = useState('');
-  const create = useEntityCreate('Message');
+  const [sending, setSending] = useState(false);
+
+  // A family names the learner a message is about when several could apply.
+  const recipient = recipients?.find(r => r.recipient_key === to);
+  const learnerChoices = replyTo ? [] : learners.filter(l => !recipient?.student_ids || recipient.student_ids.includes(l.id));
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!to || !subject.trim() || !body.trim()) {
+    if ((!replyTo && !to) || !subject.trim() || !body.trim()) {
       toast.error('Destinataire, objet et message sont requis.');
       return;
     }
-    const recipient = recipients?.find(r => r.email === to);
-    const savedMessage = await create.mutateAsync({
-      from_user_email: from.email,
-      from_name:       from.name,
-      to_user_email:   to,
-      to_name:         recipient?.name || null,
-      subject:         subject.trim(),
-      body:            body.trim(),
-      type:            'message',
-      reply_to_id:     replyTo?.id || null,
-      read:            false,
-    });
-
-    // Notify the recipient by email so a new message isn't missed between
-    // logins. Best-effort: the message is already saved, so a failed email
-    // must not block the success path.
-    try {
-      await integrations.Core.SendEmail({
-        message_id: savedMessage.id,
-        to: to,
-        subject: `Nouveau message de ${from.name || from.email}`,
-        body:
-          `Bonjour,\n\n${from.name || from.email} vous a envoyé un message ` +
-          `via l'espace English Hills :\n\n` +
-          `Objet : ${subject.trim()}\n\n${body.trim()}\n\n` +
-          `Connectez-vous à votre espace pour répondre.`,
-        reply_to: from.email,
-      });
-    } catch {
-      /* email is a courtesy nudge; the in-app message is the source of truth */
+    if (learnerChoices.length > 1 && !studentId) {
+      toast.error('Choisissez l’apprenant concerné.');
+      return;
     }
-
-    toast.success('Message envoyé');
-    onSent?.();
-    onClose();
+    setSending(true);
+    try {
+      const ids = await sendPortalMessage({
+        recipientKey: replyTo ? null : to,
+        subject: subject.trim(),
+        body: body.trim(),
+        replyToId: replyTo?.id || null,
+        studentId: studentId || (learnerChoices.length === 1 ? learnerChoices[0].id : null),
+      });
+      // Notify each recipient account by e-mail so a new message isn't missed
+      // between logins. Best-effort: the message is already saved, and the
+      // server picks the recipient and the fixed sender.
+      for (const id of ids) {
+        try { await integrations.Core.SendEmail({ message_id: id }); } catch { /* courtesy nudge */ }
+      }
+      toast.success('Message envoyé');
+      onSent?.();
+      onClose();
+    } catch (error) {
+      toast.error(portalErrorMessage(error, 'Message non envoyé. Réessayez.'));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -128,46 +123,57 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
         <p className="font-semibold text-sm">
           {replyTo ? 'Répondre' : 'Nouveau message'}
         </p>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={onClose} aria-label="Fermer" className="text-muted-foreground hover:text-foreground">
           <X size={16} />
         </button>
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+        <label htmlFor="portal-message-to" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
           À
         </label>
-        {recipients?.length > 0 ? (
+        {replyTo ? (
+          <p id="portal-message-to" className="text-sm">{replyTo.counterpart}</p>
+        ) : recipients?.length > 0 ? (
           <select
+            id="portal-message-to"
             value={to}
-            onChange={e => setTo(e.target.value)}
+            onChange={e => { setTo(e.target.value); setStudentId(''); }}
             className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white"
-            disabled={!!replyTo}
           >
             {recipients.map(r => (
-              <option key={r.email} value={r.email}>
-                {r.name ? `${r.name} (${r.email})` : r.email}
-              </option>
+              <option key={r.recipient_key} value={r.recipient_key}>{r.label}</option>
             ))}
           </select>
         ) : (
-          <input
-            type="email"
-            value={to}
-            onChange={e => setTo(e.target.value)}
-            placeholder="email@exemple.com"
-            className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white"
-            disabled={!!replyTo}
-            required
-          />
+          <p id="portal-message-to" className="text-sm text-muted-foreground">Aucun destinataire disponible pour le moment.</p>
         )}
       </div>
 
+      {learnerChoices.length > 1 && (
+        <div>
+          <label htmlFor="portal-message-learner" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+            Apprenant concerné
+          </label>
+          <select
+            id="portal-message-learner"
+            value={studentId}
+            onChange={e => setStudentId(e.target.value)}
+            className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white"
+            required
+          >
+            <option value="">— Choisir —</option>
+            {learnerChoices.map(l => <option key={l.id} value={l.id}>{l.full_name}</option>)}
+          </select>
+        </div>
+      )}
+
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+        <label htmlFor="portal-message-subject" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
           Objet
         </label>
         <input
+          id="portal-message-subject"
           value={subject}
           onChange={e => setSubject(e.target.value)}
           maxLength={200}
@@ -177,10 +183,11 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+        <label htmlFor="portal-message-body" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
           Message
         </label>
         <textarea
+          id="portal-message-body"
           value={body}
           onChange={e => setBody(e.target.value)}
           maxLength={4000}
@@ -195,28 +202,27 @@ function ComposeForm({ from, recipients, defaultTo, defaultSubject, replyTo, onC
         </button>
         <button
           type="submit"
-          disabled={create.isPending}
+          disabled={sending || (!replyTo && !recipients?.length)}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90 disabled:opacity-50"
         >
-          <Send size={14} /> {create.isPending ? 'Envoi…' : 'Envoyer'}
+          <Send size={14} /> {sending ? 'Envoi…' : 'Envoyer'}
         </button>
       </div>
     </form>
   );
 }
 
-export default function MessagesTab({ me, recipients = [] }) {
-  // me: { email, name }  — viewer identity (already loaded by the portal).
-  // recipients: [{ email, name? }] — list shown in the compose dropdown.
+export default function MessagesTab({ learners = [], onUnreadChange }) {
+  // learners: [{ id, full_name }] — a family's linked learners, to name the
+  // learner a message is about. Teachers pass none.
   const [view, setView]       = useState('inbox'); // inbox | sent
   const [opened, setOpened]   = useState(null);    // currently-open message
   const [replying, setReplying] = useState(null);  // reply target
   const [composing, setComposing] = useState(false);
 
-  // Two filtered queries — each gets its own cache key so they update
-  // independently when the user sends/receives.
-  const inbox = useEntityFilter('Message', { to_user_email: me?.email }, '-created_date', 200);
-  const sent  = useEntityFilter('Message', { from_user_email: me?.email }, '-created_date', 200);
+  const inbox = useQuery({ queryKey: ['portal-messages', 'inbox'], queryFn: () => getMyMessages('inbox') });
+  const sent  = useQuery({ queryKey: ['portal-messages', 'sent'], queryFn: () => getMyMessages('sent') });
+  const recipients = useQuery({ queryKey: ['portal-message-recipients'], queryFn: getMessageRecipients });
 
   const items = view === 'inbox' ? (inbox.data || []) : (sent.data || []);
   const loading = view === 'inbox' ? inbox.isLoading : sent.isLoading;
@@ -232,7 +238,8 @@ export default function MessagesTab({ me, recipients = [] }) {
     if (view === 'inbox' && !msg.read) {
       try {
         await markMessageRead(msg.id);
-        await inbox.refetch();
+        const refreshed = await inbox.refetch();
+        onUnreadChange?.((refreshed.data || []).filter(m => !m.read).length);
       } catch { /* swallow — the user already saw the message */ }
     }
   }
@@ -241,14 +248,8 @@ export default function MessagesTab({ me, recipients = [] }) {
   if (composing || replying) {
     return (
       <ComposeForm
-        from={me}
-        recipients={recipients}
-        defaultTo={replying ? replying.from_user_email : undefined}
-        defaultSubject={
-          replying
-            ? (replying.subject?.startsWith('Re:') ? replying.subject : `Re: ${replying.subject}`)
-            : ''
-        }
+        recipients={recipients.data || []}
+        learners={learners}
         replyTo={replying}
         onClose={() => { setComposing(false); setReplying(null); }}
         onSent={() => {
@@ -271,14 +272,13 @@ export default function MessagesTab({ me, recipients = [] }) {
         </button>
         <h3 className="font-semibold text-lg">{opened.subject}</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          De <strong>{opened.from_name || opened.from_user_email}</strong>
-          {' '}à <strong>{opened.to_name || opened.to_user_email}</strong>
+          {view === 'inbox' ? 'De' : 'À'} <strong>{opened.counterpart}</strong>
           {' · '}{fmtDate(opened.created_at)}
         </p>
         <div className="mt-4 text-sm whitespace-pre-wrap text-foreground/90">
           {opened.body}
         </div>
-        {view === 'inbox' && (
+        {view === 'inbox' && opened.can_reply && (
           <button
             onClick={() => setReplying(opened)}
             className="inline-flex items-center gap-1.5 mt-5 px-4 py-2 text-sm font-semibold text-white rounded-md bg-primary hover:opacity-90"
@@ -339,7 +339,7 @@ export default function MessagesTab({ me, recipients = [] }) {
           <MessageList
             items={items}
             onOpen={handleOpen}
-            showFrom={view === 'inbox'}
+            showUnread={view === 'inbox'}
             emptyLabel={
               view === 'inbox'
                 ? 'Aucun message reçu.'

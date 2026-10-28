@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { toast } from 'sonner';
 import { entities, integrations } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
@@ -12,7 +11,7 @@ import { exportToCsv } from '@/utils/exportCsv';
 import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
-import { getBrowserClient } from '@/lib/supabase';
+import { getLearnerRecord, getMyLearners, getMyMessages } from '@/lib/portal';
 import { downloadReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
@@ -56,7 +55,6 @@ export default function StudentPortal() {
   const [portfolios, setPortfolios] = useState([]);
   const [learning, setLearning] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [teachers, setTeachers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [office, setOffice] = useState(null);
@@ -76,30 +74,25 @@ export default function StudentPortal() {
   useEffect(() => {
     Promise.resolve(sessionUser).then(async (u) => {
       setUser(u);
-      const matches = await entities.Student.filter({ email: u?.email }, 'full_name', 2);
-      const me = matches[0];
+      // The learner record the centre linked to this account (self link).
+      const [me] = await getMyLearners();
       setStudent(me || null);
       if (me) {
-        const [att, ass, la, receiptRows, chargeResult] = await Promise.all([
-          entities.Attendance.filter({ student_id: me.id }, '-session_date'),
+        const [record, ass, la] = await Promise.all([
+          getLearnerRecord(me.id),
           entities.Assessment.filter({ student_id: me.id }, '-created_date'),
           entities.LearningAssessment.filter({ student_id: me.id }, '-date_assessment'),
-          entities.Receipt.filter({ student_id: me.id }, '-date'),
-          getBrowserClient().from('charge_balances').select('*').eq('student_id', me.id),
         ]);
-        if (chargeResult.error) throw chargeResult.error;
-        setAttendance(att); setAssessments(ass); setLearning(la);
-        setReceipts(receiptRows); setCharges(chargeResult.data || []);
+        setAttendance(record?.attendance || []); setAssessments(ass); setLearning(la);
+        setReceipts(record?.receipts || []); setCharges(record?.charges || []);
         loadPortfolios(me.id);
       }
       // RLS scopes announcements to what this student may see.
       const ann = await entities.Announcement.list('-created_date', 20);
       setAnnouncements(ann);
-      entities.Notification.filterAll({ recipient_email: u?.email }, '-created_date')
+      entities.Notification.filterAll({ recipient_profile_id: u?.id }, '-created_date')
         .then(setNotifications).catch(() => {});
-      entities.Message.filter({ to_user_email: u?.email, read: false })
-        .then(rows => setUnreadMessages(rows.length)).catch(() => {});
-      getTeacherDirectory().then(setTeachers).catch(() => {});
+      getMyMessages('inbox').then(rows => setUnreadMessages(rows.filter(m => !m.read).length)).catch(() => {});
       getOfficeRecipient().then(setOffice).catch(() => {});
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -148,8 +141,8 @@ export default function StudentPortal() {
 
   if (loading) return <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>;
 
-  // No student record is linked to this login email — explain rather than show
-  // an empty portal.
+  // No learner record is linked to this account — explain rather than show an
+  // empty portal. Access comes from the centre's link, not the address.
   if (!student) {
     return (
       <div className="p-4 lg:p-8 max-w-2xl mx-auto">
@@ -158,8 +151,8 @@ export default function StudentPortal() {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
           <p className="font-semibold text-amber-800 mb-2">Aucun dossier apprenant lié à votre compte</p>
           <p className="text-sm text-amber-800/90">
-            Nous n’avons trouvé aucun dossier rattaché à <strong>{user?.email}</strong>.
-            L’email enregistré au centre est peut-être différent de celui utilisé pour vous connecter.
+            Aucun dossier apprenant n’est encore relié à votre compte. Le centre ouvre l’accès
+            lors de l’invitation.
           </p>
           <p className="text-sm text-amber-800/90 mt-3">
             Merci de contacter l’administration
@@ -173,11 +166,6 @@ export default function StudentPortal() {
   const presentCount = attendance.filter(a => a.status === 'Présent').length;
   const rate = attendance.length > 0 ? Math.round((presentCount / attendance.length) * 100) : 0;
   const lastAssessment = assessments[0];
-
-  const recipients = [
-    ...teachers.filter(t => t.email).map(t => ({ email: t.email, name: t.full_name })),
-    ...(office ? [office] : []),
-  ];
 
   const TABS = [
     { id: 'progress', label: 'Ma progression' },
@@ -299,7 +287,7 @@ export default function StudentPortal() {
 
       {tab === 'finance' && (
         <div className="space-y-4">
-          <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{charges.some(charge => !charge.voided_at) ? `${money(charges.reduce((sum, charge) => sum + (charge.voided_at ? 0 : Number(charge.balance || 0)), 0))} MAD` : 'Aucun engagement enregistré'}</p></div>
+          <div className="rounded-xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Solde actuel</p><p className="mt-1 text-2xl font-black text-rose-700">{charges.some(charge => !charge.voided) ? `${money(charges.reduce((sum, charge) => sum + (charge.voided ? 0 : Number(charge.balance || 0)), 0))} MAD` : 'Aucun engagement enregistré'}</p></div>
           <div className="divide-y overflow-hidden rounded-xl border bg-card">{receipts.map((receipt) => { const amounts = receiptAmounts(receipt); return <div key={receipt.id} className="flex items-center justify-between gap-3 p-4"><div><button type="button" onClick={() => setPreviewReceipt(receipt)} className="inline-flex min-h-10 items-center text-left text-sm font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{receipt.receipt_number || `Reçu du ${receipt.date}`}</button><p className="text-xs text-muted-foreground">{receipt.date} · {receiptServiceSummary(receipt)} · {receipt.service_description || 'Reçu historique'} · {receiptStatus(receipt)}</p></div><div className="flex items-center gap-3"><p className="text-sm font-black">{money(amounts.payment)} MAD</p><button onClick={() => downloadReceiptPDF(receipt).catch(showReceiptPdfError)} className="rounded-lg border p-2 text-muted-foreground" title="Télécharger le reçu" aria-label={`Télécharger le reçu ${receipt.receipt_number || receipt.date}`}><FileDown size={14} /></button></div></div>; })}{receipts.length === 0 && <p className="p-8 text-center text-sm text-muted-foreground">Aucun paiement enregistré.</p>}</div>
         </div>
       )}
@@ -391,10 +379,7 @@ export default function StudentPortal() {
       )}
 
       {tab === 'messages' && (
-        <MessagesTab
-          me={{ email: user?.email, name: user?.full_name }}
-          recipients={recipients}
-        />
+        <MessagesTab learners={[student]} onUnreadChange={setUnreadMessages} />
       )}
       <Dialog open={Boolean(previewReceipt)} onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}>
         <DialogContent>

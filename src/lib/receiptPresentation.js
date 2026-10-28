@@ -46,5 +46,5 @@ export function paymentErrorMessage(error) {
 }
 
 export function receiptServiceDescription(receipt) {
-  return receipt?.service_description || (receipt?.legacy ? 'Reçu historique' : '');
+  return receipt?.service_description || (receipt?.legacy || receipt?.is_legacy ? 'Reçu historique' : '');
 }

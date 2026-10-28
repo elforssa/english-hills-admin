@@ -82,6 +82,18 @@ insert into public.students(id, full_name, email, parent_email, telephone, date_
 insert into public.students(id, full_name, email, parent_email, status, session_type, niveau_cefr)
 select pg_temp.id(210 + i), 'Seat Learner ' || i, 'seat' || i || '@example.test', 'seat' || i || 'p@example.test',
   'Enrolled', 'Online', 'A2' from generate_series(1, 8) i;
+-- Portal readiness (PRF-r2 D3/D4): families reach a learner only through an active
+-- link, and teacher accounts are bound to their records; the matching addresses
+-- above no longer grant anything by themselves.
+insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+  (pg_temp.id(201), 'self', pg_temp.id(8), 'ol-user-8@example.test', 'active', now()),
+  (pg_temp.id(204), 'self', pg_temp.id(11), 'ol-user-11@example.test', 'active', now()),
+  (pg_temp.id(205), 'self', pg_temp.id(12), 'ol-user-12@example.test', 'active', now()),
+  (pg_temp.id(206), 'parent', pg_temp.id(7), 'ol-user-7@example.test', 'active', now()),
+  (pg_temp.id(207), 'parent', pg_temp.id(7), 'ol-user-7@example.test', 'active', now()),
+  (pg_temp.id(208), 'parent', pg_temp.id(10), 'ol-user-10@example.test', 'active', now());
+update public.profiles p set linked_teacher_id = t.id from public.teachers t
+  where p.id in (pg_temp.id(4), pg_temp.id(5), pg_temp.id(6)) and t.email = p.email;
 
 -- ---------------------------------------------------------------------------
 -- D1 vocabulary: five constraints accept both online values and refuse others.
@@ -270,6 +282,29 @@ select pg_temp.ok(pg_temp.join_reason(5, 508) = 'ok', 'substitute hosts the one 
 select pg_temp.ok(pg_temp.join_reason(5, 501) = 'online.not_eligible', 'substitute has no other lesson');
 select pg_temp.ok(pg_temp.join_reason(6, 501) = 'online.not_eligible', 'other teacher');
 select pg_temp.ok(pg_temp.join_reason(13, 501) = 'online.not_eligible', 'teacher role without a teacher row');
+-- PRF-r2 (owner decision 2026-10-26, "Fix it inside F"): the online teacher identity is
+-- the bound record. With the binding removed, the matching e-mail no longer hosts.
+savepoint ol_unbound;
+update public.profiles set linked_teacher_id = null where id = pg_temp.id(4);
+select pg_temp.ok(pg_temp.join_reason(4, 502) = 'online.not_eligible', 'an unbound teacher account with the record''s e-mail cannot host');
+select pg_temp.act(4);
+select pg_temp.ok(jsonb_array_length(public.online_list_my_lessons()) = 0, 'an unbound teacher account lists no lesson');
+select pg_temp.owner();
+rollback to savepoint ol_unbound;
+-- Bound to another teacher's record, the account hosts only that teacher's lessons.
+savepoint ol_other;
+update public.profiles set linked_teacher_id = pg_temp.id(102) where id = pg_temp.id(4);
+select pg_temp.ok(pg_temp.join_reason(4, 502) = 'online.not_eligible' and pg_temp.join_reason(4, 508) = 'ok',
+  'the bound record, not the e-mail, decides which lessons an account hosts');
+rollback to savepoint ol_other;
+-- Re-review N5: an archived teacher record hosts nothing, even while still bound.
+savepoint ol_archived;
+update public.teachers set deleted_at = now() where id = (select linked_teacher_id from public.profiles where id = pg_temp.id(4));
+select pg_temp.ok(pg_temp.join_reason(4, 502) = 'online.not_eligible', 'an archived teacher record cannot host');
+select pg_temp.act(4);
+select pg_temp.ok(jsonb_array_length(public.online_list_my_lessons()) = 0, 'an archived teacher record lists no lesson');
+select pg_temp.owner();
+rollback to savepoint ol_archived;
 -- Observers (Q6): director and admin; never the receptionist.
 select pg_temp.ok(pg_temp.join_reason(1, 501) = 'ok' and pg_temp.join_reason(2, 501) = 'ok', 'management observes');
 select pg_temp.ok(pg_temp.join_reason(1, 502) = 'online.window_closed', 'observer uses the learner window');
@@ -355,6 +390,15 @@ select pg_temp.fails(format('select public.online_revoke_consent(%L)', pg_temp.i
 select pg_temp.act(1);
 select pg_temp.ok((public.online_revoke_consent(pg_temp.id(207)))->>'passes_revoked' = '1', 'consent revocation revokes the open pass');
 select pg_temp.ok(pg_temp.join_reason(7, 511, 207) = 'online.consent_missing', 'revoked consent closes the room');
+-- PRF-r2: a revoked family link refuses new passes at once; the dossier address still matches.
+savepoint ol_revoked_link;
+update public.family_links set status = 'revoked', revoked_at = now() where student_id = pg_temp.id(206) and profile_id = pg_temp.id(7);
+select pg_temp.ok(pg_temp.join_reason(7, 511, 206) = 'online.not_eligible', 'a revoked family link refuses the join');
+select pg_temp.act(7);
+select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_lessons_for_my_children()) x
+  where x->>'student_id' = pg_temp.id(206)::text) = 0, 'a revoked family link drops the child''s lessons');
+select pg_temp.owner();
+rollback to savepoint ol_revoked_link;
 select pg_temp.act(7);
 select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_lessons_for_my_children())) = 2
   and (select bool_and(not (x ? 'email') and not (x ? 'parent_email') and not (x ? 'telephone'))
@@ -375,8 +419,11 @@ select pg_temp.ok((select count(*) from public.enrollments) = 0 and (select coun
   and (select count(*) from public.online_lessons) = 0 and (select count(*) from public.online_attendance) = 0,
   'online-only teacher reads no enrolment or online table row');
 select pg_temp.fails('select count(*) from public.online_join_tokens', '42501');
-select pg_temp.ok(public.can_message_recipient('l202@example.test') is not true
-  and public.can_message_recipient('ol-user-7@example.test') is not true, 'no learner or parent message recipient');
+-- The e-mail recipient check is staff only (PRF-r2 review S3): refused whatever the address.
+select pg_temp.fails($$select public.can_message_recipient('l202@example.test')$$, '42501');
+select pg_temp.fails($$select public.can_message_recipient('ol-user-7@example.test')$$, '42501');
+select pg_temp.ok(not exists (select 1 from public.portal_message_recipients() where recipient_key <> 'office'),
+  'no learner or parent message recipient');
 select pg_temp.ok((select bool_and(keys = array['attendance_note','attendance_status','display_label','is_guest','niveau_cefr','student_id'])
   and count(*) = 2 from (select array_agg(k order by k) keys from jsonb_array_elements(public.online_get_lesson_roster(pg_temp.id(501))->'roster') r,
   jsonb_object_keys(r) k group by r) x), 'roster rows carry exactly the six projection keys');
@@ -391,16 +438,19 @@ select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_
 select pg_temp.ok(public.online_get_lesson_roster(pg_temp.id(508)) is not null and public.online_get_lesson_roster(pg_temp.id(501)) is null,
   'substitute sees exactly one roster');
 select pg_temp.ok((select count(*) from public.students) = 0, 'substitute reads zero students rows');
--- Mixed teacher (OL-r4): the 071 policies still open exactly the in-person learners.
+-- Mixed teacher (OL-r4): the class list (PRF-r2 D2) opens exactly the in-person learners.
 select pg_temp.act(6);
-select pg_temp.ok((select array_agg(id order by id) from public.students) = array[pg_temp.id(209), pg_temp.id(210)], 'mixed teacher reads exactly the in-person learners');
+select pg_temp.ok((select array_agg(distinct student_id order by student_id) from public.portal_teacher_roster())
+  = array[pg_temp.id(209), pg_temp.id(210)], 'mixed teacher reads exactly the in-person learners');
+select pg_temp.ok((select count(*) from public.students) = 0, 'mixed teacher reads no learner row directly');
 select pg_temp.ok((select bool_and(keys = array['attendance_note','attendance_status','display_label','is_guest','niveau_cefr','student_id'])
   and count(*) = 1 from (select array_agg(k order by k) keys from jsonb_array_elements(public.online_get_lesson_roster(pg_temp.id(512))->'roster') r,
   jsonb_object_keys(r) k group by r) x)
   and (public.online_get_lesson_roster(pg_temp.id(512))->'roster'->0->>'display_label') = 'Youssef A.', 'mixed teacher: online projection only');
-select pg_temp.ok(public.can_message_recipient('l203@example.test') is not true and public.can_message_recipient('l203p@example.test') is not true,
+select pg_temp.ok(not exists (select 1 from public.portal_message_recipients() where recipient_key like '%' || pg_temp.id(203)),
   'mixed teacher cannot message the online learner or parent');
-select pg_temp.ok(public.can_message_recipient('p209@example.test') is true, 'in-person teacher messaging unchanged');
+select pg_temp.ok(public.teacher_can_access_student_group(pg_temp.id(209), null), 'in-person teacher messaging scope unchanged');
+select pg_temp.fails($$select public.can_message_recipient('p209@example.test')$$, '42501');
 -- Teachers write attendance only as the lesson's effective teacher, inside the window.
 select pg_temp.act(4);
 select pg_temp.fails(format($$select public.online_save_attendance(%L, %s, '[]')$$, pg_temp.id(508), pg_temp.lesson_version(pg_temp.id(508))),
@@ -801,8 +851,9 @@ select pg_temp.fails('select count(*) from public.online_join_tokens', '42501');
 select pg_temp.fails('select count(*) from public.online_join_events', '42501');
 select pg_temp.ok(public.teacher_can_see_student(pg_temp.id(201)) is not true and public.teacher_can_see_student(pg_temp.id(202)) is not true
   and public.teacher_can_see_student(pg_temp.id(206)) is not true, '071 helper grants the online teacher no learner');
-select pg_temp.ok(public.can_message_recipient('ol-user-8@example.test') is not true and public.can_message_recipient('l202@example.test') is not true
-  and public.can_message_recipient('ol-user-7@example.test') is not true, 'online teacher can message no learner or parent address');
+select pg_temp.fails($$select public.can_message_recipient('ol-user-8@example.test')$$, '42501');
+select pg_temp.ok(not exists (select 1 from public.portal_message_recipients() where recipient_key <> 'office'),
+  'online teacher can message no learner or parent address');
 select pg_temp.ok((select count(*) from jsonb_array_elements(public.online_list_my_lessons()) l where l::text like '%fake-room-%' or l ? 'room_ref' or l ? 'provider_room_ref') = 0,
   'teacher lesson list carries no room reference');
 -- Parent and student projections carry no room reference either.

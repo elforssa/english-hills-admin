@@ -34,6 +34,10 @@ update public.students set groupe_id=null where id='00000000-0000-4000-8000-0000
 set local session_replication_role = origin;
 update public.profiles set linked_student_id='00000000-0000-4000-8000-00000000d001'
 where id='00000000-0000-4000-8000-00000000a003';
+-- Portal readiness (PRF-r2 D3/D4): family access is an explicit active link and a
+-- teacher account is bound to its record; neither comes from the e-mail any more.
+insert into public.family_links(student_id,relation,profile_id,invite_email,status,activated_at) values
+  ('00000000-0000-4000-8000-00000000d001','parent','00000000-0000-4000-8000-00000000a003','audit-parent@example.invalid','active',now());
 insert into public.authorized_adults(id,student_id,full_name,telephone,relation) values
   ('00000000-0000-4000-8000-00000000e001','00000000-0000-4000-8000-00000000d001','Synthetic Adult','0000000000','Parent');
 
@@ -54,36 +58,61 @@ end $$;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a004',true);
-do $$ begin
-  if public.can_message_recipient('audit-admin@example.invalid') then raise exception 'Pending user may message'; end if;
+-- Portal readiness (PRF-r2, review S3): the e-mail-keyed recipient check is staff
+-- only; any other caller gets the same refusal whatever the address (no probing).
+do $$ declare a text; begin
+  foreach a in array array['audit-admin@example.invalid','unrelated@example.invalid','nobody@example.invalid'] loop
+    begin perform public.can_message_recipient(a); raise exception 'Pending user may probe %', a;
+    exception when insufficient_privilege then null; end;
+  end loop;
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a003',true);
-do $$ begin
-  if not public.can_message_recipient('audit-teacher@example.invalid') then raise exception 'Parent cannot contact own teacher'; end if;
-  if public.can_message_recipient('unrelated@example.invalid') then raise exception 'Parent can contact unrelated child'; end if;
+do $$ declare a text; begin
+  foreach a in array array['audit-teacher@example.invalid','unrelated@example.invalid','nobody@example.invalid'] loop
+    begin perform public.can_message_recipient(a); raise exception 'Parent may probe %', a;
+    exception when insufficient_privilege then null; end;
+  end loop;
 end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a002',true);
 do $$ begin
-  if (select linked_teacher_id is not null from public.profiles where id=auth.uid()) then
-    raise exception 'Teacher fixture unexpectedly has a linked teacher'; end if;
-  if public.get_my_teacher_id() <> '00000000-0000-4000-8000-00000000b001'::uuid then
-    raise exception 'Email-derived teacher identity failed'; end if;
-  if not public.can_message_recipient('audit-parent@example.invalid')
-    or not public.can_message_recipient('audit-child@example.invalid') then
+  -- The matching e-mail alone no longer names a teacher record (D4).
+  if public.get_my_teacher_id() is not null then
+    raise exception 'Email-derived teacher identity still grants a record'; end if;
+end $$;
+reset role;
+update public.profiles set linked_teacher_id='00000000-0000-4000-8000-00000000b001'
+where id='00000000-0000-4000-8000-00000000a002';
+set local role authenticated;
+do $$ begin
+  if public.get_my_teacher_id() is distinct from '00000000-0000-4000-8000-00000000b001'::uuid then
+    raise exception 'Linked teacher identity failed'; end if;
+  -- Messaging scope now comes from opaque keys for linked accounts (PRF-r2 D7).
+  if not exists (select 1 from public.portal_message_recipients() where recipient_key = 'parent:00000000-0000-4000-8000-00000000d001') then
     raise exception 'Teacher cannot contact own group'; end if;
-  if public.can_message_recipient('unrelated@example.invalid') then
+  if exists (select 1 from public.portal_message_recipients() where recipient_key like '%00000000-0000-4000-8000-00000000d002') then
     raise exception 'Teacher can contact unrelated student'; end if;
   if not public.teacher_can_access_student_group('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001') then
     raise exception 'Teacher cannot access trial enrollment without primary group'; end if;
   if public.teacher_can_access_student_group('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c002') then
     raise exception 'Teacher can access trial student in unrelated group'; end if;
-  if not public.can_message_recipient('audit-parent@example.invalid') then raise exception 'Teacher cannot contact own parent'; end if;
-  if public.can_message_recipient('unrelated@example.invalid') then raise exception 'Teacher can contact unrelated student'; end if;
+  begin perform public.can_message_recipient('audit-parent@example.invalid'); raise exception 'Teacher may probe a parent address';
+  exception when insufficient_privilege then null; end;
+  begin perform public.can_message_recipient('unrelated@example.invalid'); raise exception 'Teacher may probe an unrelated address';
+  exception when insufficient_privilege then null; end;
   begin
     perform public.save_attendance('00000000-0000-4000-8000-00000000d002','00000000-0000-4000-8000-00000000c002',current_date,'Présent');
     raise exception 'Teacher attendance bypass';
   exception when insufficient_privilege then null; end;
 end $$;
+-- The parent now reaches the own child's teacher through its key, and nobody else.
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a003',true);
+do $$ begin
+  if not exists (select 1 from public.portal_message_recipients() where recipient_key = 'teacher:00000000-0000-4000-8000-00000000b001') then
+    raise exception 'Parent cannot contact own teacher'; end if;
+  if (select count(*) from public.portal_message_recipients() where recipient_key like 'teacher:%') <> 1 then
+    raise exception 'Parent can contact another teacher'; end if;
+end $$;
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a002',true);
 insert into public.assessments(student_id,group_id,terme)
 values('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001','Sept–Déc');
 do $$ begin

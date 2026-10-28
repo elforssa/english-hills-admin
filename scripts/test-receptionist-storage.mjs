@@ -34,7 +34,8 @@ async function app(operation, assetId, session) {
   } });
   assert.equal((await client.auth.setSession(session)).error, null);
   const response = await fetch(`${appBase}/api/storage/${operation}`, { method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; ') },
+    // Same-origin browser request: the storage routes refuse any other Origin (PRF-r2 D10).
+    headers: { 'Content-Type': 'application/json', Origin: appBase, Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; ') },
     body: JSON.stringify({ assetId }) });
   assert.equal(response.headers.get('cache-control'), 'no-store');
   return { status: response.status, data: await response.json() };
