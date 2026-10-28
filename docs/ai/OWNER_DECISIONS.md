@@ -290,7 +290,7 @@ Plan: [payment corrections and receipts](../architecture/plans/payment-correctio
 - **Not approved by this decision:** any merge, migration, deployment or data step; E-1, E-2, E-3 and D1–D3 each need their own approval.
 - **E-2 released (2026-10-27).** Owner's words, verbatim, 12:43 Asia/Shanghai, relayed by the coordinating session: "approve E-2 release now" (R0–R4 only). At 12:52 the owner accepted the R0 difference: "the plan's 424 figure was stale; 20 consecutive receipts (424–443) were issued since. The correct seed is 443 (next receipt EH-2026-00444)." Migration 122 applied 04:57:05 UTC, PR #164 merged as `e840f6a…` and deployed 04:58:26 UTC ([release evidence](../architecture/evidence/batch-e2-production-2026-10-27.md)). **Pending, each needing its own approval:** D1 (historical numbers), D2 (backfill review), D3 (legacy rounding, Q8), the gap register (D4), E-3 (payroll, after the accountant's rates).
 
-## Portal readiness — teachers and families (Batch F) — PRF-r2 APPROVED FOR IMPLEMENTATION (2026-10-24); R0–R2 RELEASED (2026-10-28)
+## Portal readiness — teachers and families (Batch F) — PRF-r2 APPROVED FOR IMPLEMENTATION (2026-10-24)
 
 Plan: [portal readiness](../architecture/plans/portal-readiness.md#approval-record), revision PRF-r1 at head `ba94ad3` (Tier 3). Owner approval 2026-10-24 15:53 (UTC+08:00), chat with Claude relayed by the coordinating session, verbatim: "all recomended and for E6 paper numbers dont exist".
 
