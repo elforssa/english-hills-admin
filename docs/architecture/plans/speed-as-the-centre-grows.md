@@ -592,25 +592,47 @@ Each step requires its own owner approval.
 **Refinements within the approved design** (no access or scope change):
 
 - **Activity-log order.** Newest first, ties by `id` **descending**, and the index is `(created_at desc, id desc)`. One row comparison then uses one index range. Rows written in the same transaction share a timestamp, so their relative order was arbitrary before as well.
-- **Full reads.** These are keyset on **(order column, `id`) in the database's own order, with explicit NULL phases**, rather than "by `id`, then sorted in the browser". Browser collation differs from the database's ICU collation, so a browser sort would change name order.
-  - Each read ends on an empty page, so a server row cap cannot truncate it.
+- **Full reads.** These are keyset on **(order column, `id`) in the database's own order**, rather than "by `id`, then sorted in the browser". Browser collation differs from the database's ICU collation, so a browser sort would change name order.
+  - The cursor is a single sequence with explicit `nullslast`/`nullsfirst` (review S1).
+  - A short page ends the read, so a table under 1,000 rows is one request, as with the old reader. The page size equals PostgREST `max_rows` (1,000).
   - `paginateAll.mjs` stays only because the unchanged large-data regression imports it.
 - **Middleware 503.** The 503 page is an inline response from the middleware, not a `/unavailable` route.
   - No new import, so the existing middleware security suite still runs the unmodified middleware body.
   - No new public path. It auto-retries after 15 s and has a "Réessayer maintenant" link.
+  - An Auth 429 also answers 503.
+- **Browser profile read (D3 = B).** The decision is in `src/lib/sessionProfile.mjs`.
+  - A failed read, including a failed re-read after recovery, shows "Connexion impossible" with Réessayer and Se déconnecter. It never covers `/login`.
+  - The screen is cleared on the no-user branch and on `SIGNED_OUT`.
+  - A failed **Auth** read in the browser is still treated as signed out.
+- **`report_attendance_daily`** counts the rows in the window before laying them on the day/status grid, and runs with `jit = off` (review DB-S1).
+- **The restore script refuses**, changing nothing, unless every policy it restores is still exactly its 124 rewrite.
 - **Group page "add learners" picker.** It reads every learner and enrollment only when opened; the page itself reads only the group's rows.
 - **Measured but not gated.** A caller whom RLS gives no activity-log rows, such as the receptionist, still walks the index on a call: 85–329 ms at 5×. That is the same order of cost as the direct table read the caller can already issue. The functions add no role shortcut, which would duplicate authorization.
 
 **Tests.**
 
 - `scripts/test-speed-as-the-centre-grows-local.mjs upgrade` (CI, shard `upgrades-from-112-to-116`): the generator check plus the full equivalence matrix.
-  - Ten identities: 79 RLS tables read, 99 write probes and 840 students-page calls each, so 10,180 observations per pass.
-  - The fixture yields 137 non-empty read cells, 104 allowed writes and 468 RLS-refused writes.
+  - Eleven identities, including a teacher account bound to an archived teacher record: 79 RLS tables read, 99 write probes and 840 students-page calls each.
+  - The fixture yields every payment status, 141 non-empty read cells, 104 allowed writes and 514 RLS-refused writes.
   - **Zero differences** after 124 and after the restore.
-  - The catalog changes only by the manifest and returns exactly to 123 after the restore.
+  - The catalog changes only by the manifest and returns exactly to 123 after the restore. A restore against a changed policy refuses and changes nothing.
 - `budget` mode (CI, same shard) at 5×: the p95 gates.
-- Unit suites in `npm test`: `test-keyset-read`, `test-report-data`, `test-cache-invalidation` and `test-middleware-unavailable`.
-- No existing test script was edited.
+- Unit suites in `npm test`: `test-keyset-read` (with request counts), `test-report-data` (with the report page's loader), `test-cache-invalidation` (per call site) and `test-middleware-unavailable`, plus `test-session-profile` (D3).
+- **Browser check (plan §6), local only:** a built app behind a local proxy that can fail profile reads.
+  - The middleware 503 page, its recovery, the client retry screen, sign-out and `/login` were checked.
+  - So were the activity log, reports, group page and teacher portal.
+  - 23/23 checks passed.
+- **Existing tests edited:** only the mechanical migration-ledger ceiling bump from 123 to 124, in six upgrade scripts:
+  - `test-premium-retirement-upgrade-113-current.sql`
+  - `test-crm-batch2-upgrade-current.sql`
+  - `test-crm-h3-upgrade-103-current.sql`
+  - `test-crm-r4-upgrade-100-current.sql`
+  - `test-crm-r4-upgrade-102-current.sql`
+  - `test-conflicts-without-retry-upgrade.mjs`
+
+  Batches E and F followed the same convention. Maroine acknowledged on 2026-10-28 (relayed by the coordinating session) that this does not count as the contract's "change an existing test" stop condition.
+- No security suite and no other test was edited.
+- **Review B2.** `test-ui-foundation-browser.mjs` failed because its REST stub answers every students read with the same row and ignores the cursor. The first keyset reader asked for a second page and threw "did not advance". The S1 short-page stop fixes the code path, and the suite is unchanged.
 
 # IMPLEMENTATION CONTRACT
 

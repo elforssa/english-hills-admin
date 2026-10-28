@@ -45,6 +45,30 @@ export function normalise(expression) {
 const ident = name => `"${name.replaceAll('"', '""')}"`;
 const comment = text => text.split('\n').map(line => `--   ${line}`).join('\n');
 
+// SQL twin of normalise(): the restore refuses unless every policy it restores is
+// still exactly the 124 rewrite of its 123 text.
+const normaliseSql = column => `regexp_replace(regexp_replace(regexp_replace(${column},
+      '\\( SELECT (get_my_role|get_my_teacher_id|get_my_email)\\(\\) AS \\1\\)', '\\1()', 'g'),
+      '\\( SELECT auth\\.uid\\(\\) AS uid\\)', 'auth.uid()', 'g'),
+    '^\\(\\(get_my_role\\(\\) = ''teacher''::text\\) AND (teacher_can_access_student_group\\([^()]*\\))\\)$', '\\1')`;
+const literal = text => (text == null ? 'null' : `$scg$${text}$scg$`);
+function restoreGuard(policies) {
+  const rows = policies.map(p => `    (${literal(p.tablename)}, ${literal(p.policyname)}, ${literal(p.qual)}, ${literal(p.with_check)}, ${literal(rewrite(p.qual))}, ${literal(rewrite(p.with_check))})`);
+  return `do $restore$ declare bad text; begin
+  select string_agg(v.t || '.' || v.p, ', ') into bad
+  from (values
+${rows.join(',\n')}) v(t, p, q, w, q124, w124)
+  left join pg_policies c on c.schemaname = 'public' and c.tablename = v.t and c.policyname = v.p
+  where c.policyname is null
+    or ${normaliseSql('c.qual')} is distinct from v.q
+    or ${normaliseSql('c.with_check')} is distinct from v.w
+    or (c.qual is null) <> (v.q124 is null) or (c.with_check is null) <> (v.w124 is null);
+  if bad is not null then
+    raise exception 'Restore 124: policies not in their 124 state: %', bad using errcode = '55000';
+  end if;
+end $restore$;`;
+}
+
 function statement(policy, using, check) {
   return `alter policy ${ident(policy.policyname)} on public.${ident(policy.tablename)}`
     + (using == null ? '' : `\n  using (${using})`) + (check == null ? '' : `\n  with check (${check})`) + ';';
@@ -64,6 +88,7 @@ select coalesce(jsonb_agg(jsonb_build_object('tablename', tablename, 'policyname
 export function generate(policies) {
   const forward = [];
   const restore = [];
+  const changed = [];
   for (const policy of policies) {
     const using = rewrite(policy.qual);
     const check = rewrite(policy.with_check);
@@ -71,8 +96,10 @@ export function generate(policies) {
     const was = [policy.qual != null && `using: ${policy.qual}`, policy.with_check != null && `with check: ${policy.with_check}`].filter(Boolean).join('\n');
     forward.push(`-- was\n${comment(was)}\n${statement(policy, using, check)}`);
     restore.push(statement(policy, policy.qual, policy.with_check));
+    changed.push(policy);
   }
-  return { count: forward.length, forward: `${BEGIN}\n${forward.join('\n\n')}\n${END}`, restore: `${BEGIN}\n${restore.join('\n\n')}\n${END}` };
+  return { count: forward.length, forward: `${BEGIN}\n${forward.join('\n\n')}\n${END}`,
+    restore: `${BEGIN}\n${restoreGuard(changed)}\n\n${restore.join('\n\n')}\n${END}` };
 }
 
 export function committedBlock(path) {

@@ -28,10 +28,8 @@ import { entities } from '@/lib/entities';
 import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
 import { getBrowserClient } from '@/lib/supabase';
 import {
-  ACADEMIC_ENROLLMENT_STATUSES, attendanceSeries as toAttendanceSeries, attendanceTotals as toAttendanceTotals,
-  isAcademicSourceStudent, reportYears,
+  attendanceSeries as toAttendanceSeries, attendanceTotals as toAttendanceTotals, loadAcademicSources, reportYears,
 } from '@/lib/reportData.mjs';
-import { ACTIVE_STUDENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 
 // Brand palette — matches the rest of the platform.
 const COLORS = {
@@ -108,32 +106,6 @@ async function rpc(name, args) {
   return data;
 }
 
-const chunks = (values, size = 100) => Array.from({ length: Math.ceil(values.length / size) }, (_, i) => values.slice(i * size, (i + 1) * size));
-
-// The academic-operations report's rows only: live enrollments, active learners,
-// the learners those enrollments name and the learners filed in a group.
-async function loadAcademicSources(groups) {
-  const [enrollments, active] = await Promise.all([
-    entities.Enrollment.filterAll({ status: ACADEMIC_ENROLLMENT_STATUSES }, '-created_date'),
-    entities.Student.filterAll({ status: ACTIVE_STUDENT_STATUSES }, 'full_name'),
-  ]);
-  const have = new Set(active.map(s => s.id));
-  const named = [...new Set(enrollments.map(e => e.student_id).filter(id => id && !have.has(id)))];
-  const extra = (await Promise.all([
-    ...chunks(named).map(ids => entities.Student.filterAll({ id: ids }, 'full_name')),
-    ...chunks(groups.map(g => g.id)).map(ids => entities.Student.filterAll({ groupe_id: ids }, 'full_name')),
-  ])).flat();
-  const liveIds = new Set(enrollments.map(e => e.student_id));
-  const groupIds = new Set(groups.map(g => g.id));
-  const students = [...active];
-  for (const student of extra) {
-    if (have.has(student.id) || !isAcademicSourceStudent(student, liveIds, groupIds)) continue;
-    have.add(student.id);
-    students.push(student);
-  }
-  return { students, enrollments };
-}
-
 export default function ReportsPage() {
   const [days, setDays]   = useState(30);
   const [chosenYear, setYear] = useState(null);
@@ -150,7 +122,7 @@ export default function ReportsPage() {
   const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError } = useEntityAll('Group', 'name');
   const academicQuery = useQuery({ queryKey: ['report', 'academic-sources', groups.map(g => g.id)], enabled: !groupsLoading && !groupsError,
-    queryFn: () => loadAcademicSources(groups) });
+    queryFn: () => loadAcademicSources(entities, groups) });
   const students = academicQuery.data?.students ?? [];
   const enrollments = academicQuery.data?.enrollments ?? [];
   const financeRows = useMemo(() => (Array.isArray(financeQuery.data) ? financeQuery.data : []), [financeQuery.data]);

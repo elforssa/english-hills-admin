@@ -22,25 +22,62 @@ const LIBRARIES = new Set(['src/lib/academic/membershipActions.mjs', 'src/lib/st
 
 const files = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory()
   ? files(`${dir}/${e.name}`) : /\.(m?js|jsx)$/.test(e.name) ? [`${dir}/${e.name}`] : []);
+// Per call site: within the next WINDOW lines after a write call, a helper call or a
+// delegate that refreshes. Delegates defined in the same module must themselves call a
+// helper; a callback prop (onSave, onDone, onRestored) is refreshed by its caller,
+// which this scan checks as a call site of the same write.
+const WINDOW = 25;
+const HELPER = { finance: /invalidateAfterFinance\(|invalidateQueries\(\)/, learner: /invalidateAfterLearnerSave\(/ };
+const DELEGATES = ['refreshMemberships(', 'refreshAfterSave(', 'invalidate()', 'onSave(', 'onDone(', 'onRestored('];
+// Writes whose refresh happens in a different function, with the reason.
+const INDIRECT = {
+  "src/app/(admin)/attendance/page.jsx 'save_attendance'": 'saveRow runs inside the session manager; handleSave refreshes after save()',
+  "src/app/(admin)/teacher-portal/page.jsx 'save_attendance'": 'saveRow runs inside the session manager; handleSave refreshes after save()',
+  'src/components/students/EnrollmentModal.jsx *': 'the management writes run inside saveAsManagement(); the submit handler refreshes once it returns',
+};
 let checks = 0;
 const found = { finance: new Set(), learner: new Set() };
 for (const file of files('src')) {
   if (LIBRARIES.has(file) || file.startsWith('src/app/api/')) continue;
   const text = readFileSync(file, 'utf8');
-  // A quoted name is an RPC: only its call form counts (not a filter value or a longer name).
-  const hits = list => list.filter(token => (token.startsWith("'") && !token.startsWith("'/")
-    ? new RegExp(`rpc\\(\\s*${token}`).test(text) : text.includes(token)));
-  const finance = hits(FINANCE);
-  const learner = hits(LEARNER);
-  if (finance.length) {
-    found.finance.add(file);
-    assert.ok(/invalidateAfterFinance\(/.test(text) || /invalidateQueries\(\)/.test(text),
-      `${file} calls ${finance.join(', ')} without invalidateAfterFinance`);
-    checks += 1;
+  const lines = text.split('\n');
+  for (const [kind, list] of [['finance', FINANCE], ['learner', LEARNER]]) {
+    for (const token of list) {
+      // A quoted name is an RPC: only its call form counts (not a filter value or a longer name).
+      const pattern = token.startsWith("'") && !token.startsWith("'/")
+        ? new RegExp(`rpc\\(\\s*${token}`) : { test: line => line.includes(token) };
+      lines.forEach((line, index) => {
+        if (!pattern.test(line)) return;
+        found[kind].add(file);
+        const reason = INDIRECT[`${file} ${token}`] || INDIRECT[`${file} *`];
+        if (reason) {
+          assert.ok(HELPER[kind].test(text), `${file}: ${reason}`);
+          checks += 1;
+          return;
+        }
+        const window = lines.slice(index, index + WINDOW).join('\n');
+        const delegate = DELEGATES.find(d => window.includes(d));
+        const refreshed = HELPER[kind].test(window) || (delegate && (['onSave(', 'onDone(', 'onRestored('].includes(delegate)
+          || new RegExp(`const ${delegate.replace(/[()]/g, '')} = [^;]*${HELPER[kind].source}`).test(text.replace(/\n/g, ' '))));
+        assert.ok(refreshed, `${file}:${index + 1} ${token.trim()} is not followed by a ${kind} cache refresh`);
+        checks += 1;
+      });
+    }
   }
-  if (learner.length) {
-    found.learner.add(file);
-    assert.ok(/invalidateAfterLearnerSave\(/.test(text), `${file} calls ${learner.join(', ')} without invalidateAfterLearnerSave`);
+}
+// onSave / onDone / onRestored callers refresh: every such prop handler next to a
+// write-making component calls a helper.
+for (const [file, component] of [['src/app/(admin)/students/page.jsx', 'DossierGroupPlacement'], ['src/app/(admin)/students/page.jsx', 'EnrollmentModal'],
+  ['src/app/(admin)/students/page.jsx', 'ArchivedStudentsDialog'], ['src/app/(admin)/students/[id]/page.jsx', 'LeaverDialog'],
+  ['src/app/(admin)/students/[id]/page.jsx', 'EnrollmentModal'], ['src/app/(admin)/enrollments/page.jsx', 'EnrollmentModal'],
+  ['src/app/(admin)/enrollments/page.jsx', 'YearCloseDialog'], ['src/app/(admin)/groups/page.jsx', 'GroupModal'], ['src/app/(admin)/payroll/page.jsx', 'PayrollModal']]) {
+  const text = readFileSync(file, 'utf8');
+  const uses = [...text.matchAll(new RegExp(`<${component}\\b[\\s\\S]*?/>`, 'g'))].map(m => m[0]);
+  if (!uses.length && component === 'PayrollModal') continue;
+  assert.ok(uses.length, `${file}: <${component}> not found`);
+  for (const use of uses) {
+    const handler = use.match(/on(Save|Done|Restored)=\{[\s\S]*?\}\s*(?=\w+=|\/>)/)?.[0] || '';
+    assert.ok(/invalidateAfterLearnerSave\(|invalidateAfterFinance\(|refreshAfterSave\(|invalidate\(\)|load\(\)/.test(handler), `${file}: <${component}> callback does not refresh: ${handler}`);
     checks += 1;
   }
 }
@@ -66,4 +103,4 @@ await invalidateAfterLearnerSave(client);
 assert.deepEqual(calls.splice(0), LEARNER_KEYS.map(key => [key]));
 for (const key of ['Receipt', 'Student', 'Enrollment', 'report']) assert.ok(FINANCE_KEYS.includes(key));
 for (const key of ['Student', 'Enrollment', 'Group', 'Attendance', 'report']) assert.ok(LEARNER_KEYS.includes(key));
-console.log(`PASS cache refresh after every finance command and learner save (${checks} modules, ${found.finance.size} finance, ${found.learner.size} learner)`);
+console.log(`PASS cache refresh after every finance command and learner save (${checks} call sites and callbacks; ${found.finance.size} finance, ${found.learner.size} learner modules)`);

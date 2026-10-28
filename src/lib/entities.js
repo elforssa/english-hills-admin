@@ -104,10 +104,10 @@ function applyCriteria(query, criteria) {
  */
 async function readAll(table, criteria, orderBy) {
   const { column, ascending } = parseOrderBy(orderBy);
-  return keysetReadAll(({ phase, last, limit }) => applyKeyset(
+  return keysetReadAll(({ last, limit }) => applyKeyset(
     applyCriteria(getBrowserClient().from(table).select('*'), criteria),
-    { column, ascending, phase, last },
-  ).limit(limit), { column, ascending });
+    { column, ascending, last },
+  ).limit(limit));
 }
 
 /** Strips fields that the DB owns (id on create, timestamps always). */

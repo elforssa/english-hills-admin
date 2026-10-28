@@ -1196,21 +1196,27 @@ $$;
 -- ── 4. Reports (REL-3, REL-6) ────────────────────────────────────────────
 -- Attendance per Casablanca civil day and status over the last p_days days,
 -- today included; every day and status is present (zero when empty). A status
--- left empty counts as Présent, as the page did.
+-- left empty counts as Présent, as the page did. The rows in the window are
+-- counted first, then laid on the day/status grid; JIT costs more than it saves
+-- on a query this small.
 create function public.report_attendance_daily(p_days integer)
 returns table(day date, status text, n bigint)
-language plpgsql stable set search_path = pg_catalog, pg_temp as $$
+language plpgsql stable set search_path = pg_catalog, pg_temp set jit = off as $$
 declare v_today date := public.business_date();
 begin
   if p_days is null or p_days not in (7, 30, 90) then
     raise exception 'Invalid report request' using errcode = '22023';
   end if;
   return query
-  select d.day, s.status, count(a.id)
+  with counts as (
+    select a.session_date as day, coalesce(a.status, 'Présent') as status, count(*) as n
+    from public.attendance a
+    where a.session_date between v_today - (p_days - 1) and v_today
+    group by 1, 2)
+  select d.day, s.status, coalesce(c.n, 0)::bigint
   from (select (v_today - g)::date as day from pg_catalog.generate_series(0, p_days - 1) g) d
   cross join (values ('Présent'), ('Absent'), ('Retard'), ('Justifié')) s(status)
-  left join public.attendance a on a.session_date = d.day and coalesce(a.status, 'Présent') = s.status
-  group by d.day, s.status
+  left join counts c on c.day = d.day and c.status = s.status
   order by d.day, s.status;
 end;
 $$;

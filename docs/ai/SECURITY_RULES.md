@@ -49,7 +49,9 @@ The [Production-verified O3-r2 Batch-1 reads](../architecture/evidence/outcome-3
   - call `get_my_role()`, `get_my_teacher_id()`, `get_my_email()` and `auth.uid()` only as `( SELECT f() AS f)`;
   - put a single-role per-row helper (for example `teacher_can_access_student_group`) behind that role's wrapped test.
 
-  A rewrite keeps every policy's name, table, command, roles and kind, and is proven equivalent before/after for every identity (read, write and function outputs; `scripts/test-speed-as-the-centre-grows-local.mjs`). Read models that only shape rows the caller may read (`list_activity_log`, `report_*`, `search_students_page`) are SECURITY INVOKER and executable by `authenticated` only. A failed profile or Auth read is never treated as "no profile" or "signed out": middleware answers 503 and the browser shows a retry screen, with no role.
+  A rewrite keeps every policy's name, table, command, roles and kind, and is proven equivalent before/after for every identity (read, write and function outputs; `scripts/test-speed-as-the-centre-grows-local.mjs`). Read models that only shape rows the caller may read (`list_activity_log`, `report_*`, `search_students_page`) are SECURITY INVOKER and executable by `authenticated` only. Connection failures never grant or keep a role:
+  - **Middleware:** an unreachable Auth (network, 5xx or 429) or a failed profile read answers 503 with a retry page; an Auth 4xx still means `/login`, and no profile row still means pending.
+  - **Browser (`AuthContext`):** only a failed **profile** read shows the retry screen (with sign-out, never on `/login`). A failed **Auth** read in the browser is still treated as signed out, as before; PR #121's design owns that path.
 - Preserve storage authorization, PII scrubbing and immutable audit/financial evidence. Never export real customer data into local fixtures without explicit authorization.
 
 ## Production boundary

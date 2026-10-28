@@ -3,7 +3,8 @@
 // report gives the same result from its reduced reads as from whole tables.
 import assert from 'node:assert/strict';
 import {
-  ACADEMIC_ENROLLMENT_STATUSES, academicOperationsData, attendanceSeries, attendanceTotals, isAcademicSourceStudent, reportYears,
+  ACADEMIC_ENROLLMENT_STATUSES, academicOperationsData, attendanceSeries, attendanceTotals, isAcademicSourceStudent, loadAcademicSources,
+  reportYears,
 } from '../src/lib/reportData.mjs';
 
 // Day keys are copied, never recomputed: identical under any TZ the process runs in.
@@ -48,10 +49,31 @@ for (let school = 0; school < 200; school += 1) {
   const liveIds = new Set(live.map(e => e.student_id));
   const groupIds = new Set(groups.map(g => g.id));
   const subset = students.filter(s => isAcademicSourceStudent(s, liveIds, groupIds));
+  // The page's loader, against an entities-like reader over the same rows: every
+  // read carries a filter, id lists stay small, and the result is the reduced set.
+  const calls = [];
+  const byName = (a, b) => (a.full_name < b.full_name ? -1 : a.full_name > b.full_name ? 1 : a.id < b.id ? -1 : 1);
+  const reader = rows => ({ filterAll: async (criteria, orderBy) => {
+    calls.push({ criteria, orderBy });
+    const out = rows.filter(r => Object.entries(criteria).every(([k, v]) => (Array.isArray(v) ? v.includes(r[k]) : r[k] === v)));
+    return orderBy === 'full_name' ? out.sort(byName) : out;
+  } });
+  const loaded = await loadAcademicSources({ Enrollment: reader(enrollments), Student: reader(students) }, groups, 7);
+  assert.ok(calls.every(c => Object.keys(c.criteria).length === 1 && Object.values(c.criteria).every(v => Array.isArray(v) && v.length <= 7)),
+    'every read is filtered, id lists chunked');
+  assert.deepEqual(new Set(loaded.students.map(s => s.id)), new Set(subset.map(s => s.id)));
+  assert.deepEqual(new Set(loaded.enrollments.map(e => e.id)), new Set(live.map(e => e.id)));
   for (const sessionFilter of ['', 'Yearly', 'Adults', 'Summer Camp']) {
     const full = academicOperationsData({ students, teachers, groups, enrollments, sessionFilter, sessionTypes: ['Yearly', 'Adults', 'Summer Camp'] });
     const reduced = academicOperationsData({ students: subset, teachers, groups, enrollments: live, sessionFilter, sessionTypes: ['Yearly', 'Adults', 'Summer Camp'] });
     assert.deepEqual(reduced, full, `school ${school}, session ${sessionFilter || 'all'}`);
+    // Before this change the page read every learner in name order; the loader keeps
+    // active learners in that order.
+    const page = academicOperationsData({ students: [...students].sort(byName), teachers, groups, enrollments, sessionFilter,
+      sessionTypes: ['Yearly', 'Adults', 'Summer Camp'] });
+    const fromLoader = academicOperationsData({ students: loaded.students, teachers, groups, enrollments: loaded.enrollments, sessionFilter,
+      sessionTypes: ['Yearly', 'Adults', 'Summer Camp'] });
+    assert.deepEqual(fromLoader, page, `loader: school ${school}, session ${sessionFilter || 'all'}`);
   }
 }
-console.log('PASS report days verbatim under five time zones; academic report identical from reduced reads (200 random schools x 4 sessions)');
+console.log('PASS report days verbatim under five time zones; academic report identical from the page loader’s reduced reads (200 random schools x 4 sessions)');

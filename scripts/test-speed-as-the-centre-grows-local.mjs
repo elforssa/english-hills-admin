@@ -1,7 +1,7 @@
 // Batch G (plan SCG-r1) local database suites. Destructive: synthetic data only.
 //   node scripts/test-speed-as-the-centre-grows-local.mjs upgrade
 //     after `supabase db reset --local --version 123 --no-seed`: seeds the equivalence
-//     fixture, records for ten identities what every public RLS table returns, what a
+//     fixture, records for eleven identities what every public RLS table returns, what a
 //     representative INSERT, UPDATE and DELETE on every policy-bearing table does, and
 //     what search_students_page returns over a filter matrix; applies migration 124
 //     (the file; the ledger stays at 123) and requires zero differences, the policy
@@ -30,10 +30,11 @@ const id = n => `c0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 let checks = 0;
 const ok = (condition, message) => { assert(condition, message); checks += 1; };
 
-// Ten identities: 9 JWT subjects (8 profiles and one account without a profile) and anon.
+// Eleven identities: 10 JWT subjects (9 profiles, one bound to an archived teacher
+// record, and one account without a profile) and anon.
 const IDENTITIES = [
   ['director', 1], ['admin', 2], ['receptionist', 3], ['teacher_linked', 4], ['teacher_unlinked', 5],
-  ['parent', 6], ['student', 7], ['pending', 8], ['no_profile', 9], ['anon', null]];
+  ['parent', 6], ['student', 7], ['pending', 8], ['no_profile', 9], ['teacher_archived_record', 10], ['anon', null]];
 const as = (n, body) => n == null
   ? `begin;\nset local role anon;\n${body}\ncommit;`
   : `begin;\nselect set_config('request.jwt.claims', '{"sub":"${id(n)}","role":"authenticated"}', true);
@@ -168,6 +169,10 @@ grant execute on procedure scg_test.observe(text, text) to authenticated, anon;`
     'writes_ok_zero', count(*) filter (where kind = 'write' and outcome = 'ok:0'),
     'pages_rows', count(distinct outcome) filter (where kind = 'students_page')) from scg_test.obs where label = 'before'`);
   console.log('observations per identity set:', counts, informative);
+  const statuses = json(`select jsonb_agg(distinct r->>'payment_status' order by r->>'payment_status') from jsonb_array_elements((
+    select public.search_students_page(p_status => 'all_shown', p_page_size => 0))->'rows') r`);
+  ok(JSON.stringify(statuses) === JSON.stringify(['Acompte versé', 'Aucun engagement', 'En attente', 'En retard', 'Soldé']),
+    `the fixture produces every payment status (${statuses})`);
   ok(informative.reads_nonempty >= 120 && informative.writes_ok_nonzero >= 80 && informative.writes_refused_rls >= 300,
     'the fixture exercises visible reads, allowed writes and refused writes');
 
@@ -205,7 +210,8 @@ grant execute on procedure scg_test.observe(text, text) to authenticated, anon;`
     'search_students_page keeps its security mode, volatility, configuration, owner and ACL');
   for (const f of NEW_FUNCTIONS) {
     const [, definer, volatility, config, , acl] = after.functions[f];
-    ok(!definer && volatility === 's' && JSON.stringify(config) === JSON.stringify(['search_path=pg_catalog, pg_temp'])
+    const expectedConfig = f.startsWith('report_attendance_daily') ? ['search_path=pg_catalog, pg_temp', 'jit=off'] : ['search_path=pg_catalog, pg_temp'];
+    ok(!definer && volatility === 's' && JSON.stringify(config) === JSON.stringify(expectedConfig)
       && /authenticated=X/.test(acl) && !/(^|[{,])=X/.test(acl) && !/anon=X/.test(acl), `${f}: invoker, stable, pinned path, authenticated only (${acl})`);
   }
   ok(JSON.stringify(diffKeys(before.indexes, after.indexes)) === JSON.stringify(['public.activity_log_created_id_idx']), 'indexes: one added');
@@ -216,8 +222,19 @@ grant execute on procedure scg_test.observe(text, text) to authenticated, anon;`
 
   // A non-teacher reading a teacher-guarded table tests the role once (InitPlan) before any per-row helper.
   const plan = sql(as(1, `explain (costs off) select * from public.assessments;`));
-  ok(/InitPlan/.test(plan) && /\(InitPlan \d+\)\.col1 = 'teacher'::text\) AND teacher_can_access_student_group/.test(plan),
+  // PostgreSQL 17 prints the InitPlan output as (InitPlan n).col1, PostgreSQL 16 as $n.
+  ok(/InitPlan/.test(plan) && /(\(InitPlan \d+\)\.col1|\$\d+) = 'teacher'::text\) AND teacher_can_access_student_group/.test(plan),
     `assessments read guards the per-row teacher helper with the once-evaluated role: ${plan}`);
+
+  // The restore refuses when a policy is no longer in its 124 state, changing nothing.
+  const probe = sql(`select tablename || '|' || policyname || '|' || qual from pg_policies
+    where schemaname = 'public' and tablename = 'students' and policyname = 'students admin select'`).split('|');
+  sql(`alter policy "${probe[1]}" on public."${probe[0]}" using (${normalise(probe[2])} and true)`);
+  let refused = null;
+  try { applyFile(RESTORE); } catch (error) { refused = String(error.stderr || error.message); }
+  ok(/policies not in their 124 state: students\.students admin select/.test(refused || ''), `the restore refuses a changed policy: ${refused}`);
+  ok(sql("select to_regprocedure('public.report_years()') is not null"), 'a refused restore changes nothing');
+  sql(`alter policy "${probe[1]}" on public."${probe[0]}" using (${probe[2]})`);
 
   // Restore: back to the 123 catalog and the same observations.
   applyFile(RESTORE);

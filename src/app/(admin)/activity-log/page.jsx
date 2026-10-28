@@ -30,10 +30,12 @@ const ACTION_COLORS = {
   DELETE: 'bg-red-100 text-red-700',
 };
 
+// Casablanca time, like the Du/Au filters (the zone name; the browser's zone table
+// resolves it).
 function fmt(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleString('fr-MA', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZone: 'Africa/Casablanca', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 }
 
@@ -91,8 +93,10 @@ export default function ActivityLog() {
 
   const tables = useQuery({ queryKey: ['ActivityLog', 'tables'], queryFn: () => rpc('list_activity_log_tables') });
   const filters = { search, table, action, from, to };
+  const invalidRange = Boolean(from && to && to < from);
   const log = useInfiniteQuery({
     queryKey: ['ActivityLog', 'page', filters],
+    enabled: !invalidRange,
     initialPageParam: null,
     queryFn: ({ pageParam }) => rpc('list_activity_log', {
       p_before_created_at: pageParam?.created_at ?? null, p_before_id: pageParam?.id ?? null,
@@ -103,7 +107,6 @@ export default function ActivityLog() {
   });
   const rows = log.data?.pages.flat() ?? [];
   const filtered = Boolean(search || table || action || from || to);
-  const invalidRange = Boolean(from && to && to < from);
   const reset = () => { setSearchInput(''); setSearch(''); setTable(''); setAction(''); setFrom(''); setTo(''); };
 
   return (

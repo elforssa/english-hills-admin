@@ -118,7 +118,7 @@ Plan [SCG-r1](../architecture/plans/speed-as-the-centre-grows.md) ([ADR-013](../
 - **Pages:** the group page and teacher portal read only their own rows.
 - **Full reads:** entity full reads use keyset (`src/lib/keysetRead.mjs`) instead of offset plus count.
 - **Cache:** every finance command and learner save refreshes dependent caches through `src/lib/cacheInvalidation.mjs`.
-- **Connection failures:** a failed profile/Auth read is a 503 retry (middleware) or a retry screen (`AuthContext`), never "pending".
+- **Connection failures:** an unreachable Auth or a failed profile read in middleware is a 503 retry page. In the browser, a failed profile read is a retry screen (`AuthContext`), never "pending". A failed Auth read in the browser is still treated as signed out.
 
 ## Infrastructure and security
 

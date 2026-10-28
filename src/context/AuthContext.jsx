@@ -29,40 +29,11 @@ import {
   useState,
 } from 'react';
 import { getBrowserClient } from '@/lib/supabase';
+import { usePathname } from 'next/navigation';
 import { queryClientInstance } from '@/lib/query-client';
+import { resolveProfile, showsUnavailable } from '@/lib/sessionProfile.mjs';
 
 const AuthContext = createContext(null);
-
-class ProfileUnavailableError extends Error {}
-
-async function loadOrCreateProfile(sb, authUser) {
-  // Try to read first.
-  const { data: existing, error: readErr } = await sb
-    .from('profiles')
-    .select('*')
-    .eq('id', authUser.id)
-    .maybeSingle();
-
-  if (readErr) {
-    // eslint-disable-next-line no-console
-    console.error('profiles read failed:', readErr);
-    throw new ProfileUnavailableError('profiles read failed');
-  }
-  if (existing) return existing;
-
-  // Authenticated clients cannot insert profiles under the current grants.
-  // The narrow RPC derives the identity from auth.uid() and auth.users.
-  const { error: recoveryErr } = await sb.rpc('recover_missing_profile');
-  if (recoveryErr) {
-    // eslint-disable-next-line no-console
-    console.error('profiles recovery failed:', recoveryErr);
-    return null;
-  }
-  const { data: recovered, error: rereadErr } = await sb.from('profiles')
-    .select('*').eq('id', authUser.id).maybeSingle();
-  if (rereadErr) return null;
-  return recovered;
-}
 
 /**
  * Calls the apply_pending_role() SECURITY DEFINER RPC. The RPC looks up
@@ -105,15 +76,14 @@ export function AuthProvider({ children }) {
       identityRef.current = null;
       setUser(null);
       setRole(null);
+      setUnavailable(false);
       setIsLoading(false);
       return;
     }
 
-    let profile;
-    try {
-      profile = await loadOrCreateProfile(sb, authUser);
-    } catch (readError) {
-      if (!(readError instanceof ProfileUnavailableError)) throw readError;
+    // eslint-disable-next-line no-console
+    const resolved = await resolveProfile(sb, authUser, (...args) => console.error(...args));
+    if (resolved.status === 'unavailable') {
       if (requestId !== requestRef.current) return;
       // Fail closed: no role is kept or granted while the profile is unreadable.
       queryClientInstance.clear();
@@ -125,6 +95,7 @@ export function AuthProvider({ children }) {
       return;
     }
     setUnavailable(false);
+    let { profile } = resolved;
     if (profile) {
       profile = await applyPendingRoleIfAny(sb, profile);
     }
@@ -168,6 +139,7 @@ export function AuthProvider({ children }) {
         identityRef.current = null;
         setUser(null);
         setRole(null);
+        setUnavailable(false);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         loadSession({ silent: true });
       }
@@ -194,25 +166,34 @@ export function AuthProvider({ children }) {
     [user, role, isLoading, logout, loadSession]
   );
 
+  // The retry screen never covers the sign-in pages.
+  const pathname = usePathname() || '';
   return (
     <AuthContext.Provider value={value}>
-      {unavailable ? <ConnectionProblem onRetry={() => loadSession()} /> : children}
+      {showsUnavailable(unavailable, pathname) ? <ConnectionProblem onRetry={() => loadSession()} onSignOut={logout} /> : children}
     </AuthContext.Provider>
   );
 }
 
-function ConnectionProblem({ onRetry }) {
+function ConnectionProblem({ onRetry, onSignOut }) {
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-background" role="alert">
       <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
-        <h1 className="text-lg font-semibold">Connexion impossible, nouvel essai…</h1>
+        <h1 className="text-lg font-semibold">Connexion impossible</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Votre compte n’a pas pu être chargé à cause d’un problème de connexion. Vos accès ne sont pas modifiés.
+          Vérifiez la connexion puis réessayez.
         </p>
-        <button type="button" onClick={onRetry}
-          className="mt-4 inline-flex min-h-10 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-muted">
-          Réessayer
-        </button>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button type="button" onClick={onRetry}
+            className="inline-flex min-h-10 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-muted">
+            Réessayer
+          </button>
+          <button type="button" onClick={onSignOut}
+            className="inline-flex min-h-10 items-center rounded-md px-4 text-sm font-medium text-muted-foreground hover:bg-muted">
+            Se déconnecter
+          </button>
+        </div>
       </div>
     </main>
   );

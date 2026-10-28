@@ -3,7 +3,8 @@
 -- FK checks are skipped (replica role); the rows are consistent anyway.
 -- Identities: c0…01 director, 02 admin, 03 receptionist, 04 linked teacher (T1),
 -- 05 unlinked teacher, 06 parent (L1, L2), 07 student (self L3), 08 pending,
--- 09 an account without a profile; anon has no claims.
+-- 09 an account without a profile, 10 a teacher account bound to an archived
+-- teacher record (T3); anon has no claims.
 begin;
 set local session_replication_role = replica;
 
@@ -14,11 +15,13 @@ create function pg_temp.i(n integer) returns uuid language sql immutable as $$
 
 insert into auth.users (id, email, aud, role, instance_id)
 select pg_temp.i(n), r || '@scg.test', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'
-from (values (1,'director'),(2,'admin'),(3,'receptionist'),(4,'teacher'),(5,'teacher2'),(6,'parent'),(7,'student'),(8,'pending'),(9,'noprofile')) v(n, r);
+from (values (1,'director'),(2,'admin'),(3,'receptionist'),(4,'teacher'),(5,'teacher2'),(6,'parent'),(7,'student'),(8,'pending'),(9,'noprofile'),(10,'teacher3')) v(n, r);
 
 insert into public.teachers (id, full_name, email, contract_type) values
   (pg_temp.i(11), 'Scg Teacher One', 'teacher@scg.test', 'Employé'),
   (pg_temp.i(12), 'Scg Teacher Two', 'teacher-two@scg.test', 'Freelance');
+insert into public.teachers (id, full_name, email, contract_type, deleted_at) values
+  (pg_temp.i(13), 'Scg Teacher Archived', 'teacher-three@scg.test', 'Freelance', now());
 insert into public.profiles (id, email, full_name, role, linked_teacher_id) values
   (pg_temp.i(1), 'director@scg.test', 'Scg Director', 'director', null),
   (pg_temp.i(2), 'admin@scg.test', 'Scg Admin', 'admin', null),
@@ -27,11 +30,13 @@ insert into public.profiles (id, email, full_name, role, linked_teacher_id) valu
   (pg_temp.i(5), 'teacher2@scg.test', 'Scg Teacher Unlinked', 'teacher', null),
   (pg_temp.i(6), 'parent@scg.test', 'Scg Parent', 'parent', null),
   (pg_temp.i(7), 'student@scg.test', 'Scg Student', 'student', null),
-  (pg_temp.i(8), 'pending@scg.test', 'Scg Pending', 'pending', null);
+  (pg_temp.i(8), 'pending@scg.test', 'Scg Pending', 'pending', null),
+  (pg_temp.i(10), 'teacher3@scg.test', 'Scg Teacher Archived', 'teacher', pg_temp.i(13));
 
 insert into public.groups (id, name, niveau, teacher_id, session_type, categorie, capacite_max) values
   (pg_temp.i(21), 'Scg G1', 'A1', pg_temp.i(11), 'Yearly', 'Adultes', 10),
-  (pg_temp.i(22), 'Scg G2', 'A2', pg_temp.i(12), 'Adults', 'Adultes', 10);
+  (pg_temp.i(22), 'Scg G2', 'A2', pg_temp.i(12), 'Adults', 'Adultes', 10),
+  (pg_temp.i(23), 'Scg G3', 'A1', pg_temp.i(13), 'Summer Camp', 'Adultes', 10);
 
 insert into public.students (id, full_name, email, parent_email, status, age_category, session_type, groupe_id, deleted_at) values
   (pg_temp.i(31), 'Scg Learner One', 'l1@scg.test', 'parent@scg.test', 'Enrolled', 'Young Learners (6-12)', 'Yearly', pg_temp.i(21), null),
@@ -52,13 +57,16 @@ insert into public.enrollments (id, student_id, group_id, status, session_type, 
   (pg_temp.i(43), pg_temp.i(33), pg_temp.i(21), 'Trial', 'Yearly', '2026/2027'),
   (pg_temp.i(45), pg_temp.i(35), null, 'Confirmed', 'Yearly', '2026/2027'),
   (pg_temp.i(46), pg_temp.i(36), pg_temp.i(21), 'Validated', 'Yearly', '2026/2027'),
-  (pg_temp.i(47), pg_temp.i(35), null, 'Submitted', 'Adults', '2027/2028');
+  (pg_temp.i(47), pg_temp.i(35), null, 'Submitted', 'Adults', '2027/2028'),
+  (pg_temp.i(48), pg_temp.i(36), pg_temp.i(23), 'Validated', 'Summer Camp', '2026/2027');
 
 insert into public.charges (id, student_id, enrollment_id, session_type, service_description, plan_type, gross_amount, discount_amount, due_date, legacy, school_year) values
   (pg_temp.i(51), pg_temp.i(31), pg_temp.i(41), 'Yearly', 'Formation annuelle', 'Standard', 6000, 500, current_date - 10, true, '2026/2027'),
   (pg_temp.i(52), pg_temp.i(32), pg_temp.i(42), 'Adults', 'Cours adultes', null, 3000, 0, current_date + 20, true, '2026/2027'),
   (pg_temp.i(53), pg_temp.i(33), pg_temp.i(43), 'Yearly', 'Formation annuelle', 'Standard', 6000, 0, current_date + 20, true, '2026/2027'),
-  (pg_temp.i(54), pg_temp.i(34), null, 'Other', 'Frais de dossier', null, 200, 0, current_date - 40, true, null);
+  (pg_temp.i(54), pg_temp.i(34), null, 'Other', 'Frais de dossier', null, 200, 0, current_date - 40, true, null),
+  -- "En attente": a balance, not yet due, nothing paid.
+  (pg_temp.i(55), pg_temp.i(36), pg_temp.i(46), 'Yearly', 'Formation annuelle', 'Standard', 5000, 0, current_date + 40, true, '2026/2027');
 insert into public.receipts (id, student_id, receipt_number, date, nom_prenom, montant_total, montant_paye, mode_paiement, charge_id, legacy, deleted_at) values
   (pg_temp.i(61), pg_temp.i(31), 'SCG-1', current_date, 'Scg Learner One', 5500, 2000, 'Espèces', pg_temp.i(51), true, null),
   (pg_temp.i(62), pg_temp.i(32), 'SCG-2', current_date, 'Scg Learner Two', 3000, 3000, 'Virement', pg_temp.i(52), true, null),
@@ -74,6 +82,7 @@ insert into public.attendance (student_id, group_id, session_date, status, notes
   (pg_temp.i(33), pg_temp.i(21), current_date - 1, 'Absent', null),
   (pg_temp.i(36), pg_temp.i(21), current_date - 1, 'Présent', null),
   (pg_temp.i(32), pg_temp.i(22), current_date - 2, 'Retard', 'note two'),
+  (pg_temp.i(36), pg_temp.i(23), current_date - 2, 'Absent', null),
   (pg_temp.i(31), null, current_date - 3, 'Justifié', null);
 insert into public.assessments (student_id, group_id, terme, note_finale) values
   (pg_temp.i(31), pg_temp.i(21), 'Sept–Déc', 14), (pg_temp.i(33), pg_temp.i(21), 'Sept–Déc', 12),
