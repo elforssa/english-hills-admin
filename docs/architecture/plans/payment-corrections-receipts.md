@@ -428,3 +428,15 @@ Owner approval 2026-10-27 12:43 Asia/Shanghai, verbatim: "approve E-2 release no
 - **R2:** PR #164 squash-merged 04:57:14 as `e840f6a88a0f53d0ae2b4207e6b8db2170dcb86a`; GitHub Production deployment `7350728304` success 04:58:26.
 - **R3 (non-mutating):** ledger 001–122; catalog diff exactly the 122 manifest (5 added, 2 dropped, 7 re-created functions; 3 receipt triggers; 2 `charge_discount_reasons` policies; counter and reasons tables); grants as planned; receptionist refused on the director review list; 0 `'40001'`; counter 443 unchanged; logs clean; anonymous routes redirect to `/login`. Zero-payment probes skipped (they would create a charge).
 - **Observation (to 05:27:30, 30 minutes):** counter 443 and catalog unchanged; no Postgres error; no API 4xx/5xx. **R4:** no real receipt yet during the window; the first must be EH-2026-00444 and the numbers consecutive (check recipe in the evidence).
+
+### D1–D3 release record
+
+Owner approval 2026-10-28 11:39 Asia/Shanghai, verbatim: "approve D1: 54 (EH-HIST-2026-0001–0054, main counter stays 443) and approve D3: 16, hold the 25 MAD charge for manual review". Full values in the [release evidence](../evidence/batch-e-d1-d3-production-2026-10-28.md). Times UTC (2026-10-28).
+
+- **Export instead of a dump:** targeted read-only export of receipts (334), charges (329), `financial_events` (236), `charge_discount_reasons` (0), the D2 rows (0), learner/profile/teacher/message/notification e-mail columns (237/5/9/0/0) and the D1 (54) and D3 (17) journals, 03:40:54–03:42:47, with `SHA256SUMS`; a full dump is not possible through the release computer's VPN.
+- **Counts re-read (03:43):** 54 unnumbered receipts; counter, highest EH-2026 number and sequence 443; D3 17 candidates (14 overpaid, 3 small balances), 1 paid above its gross price (25 MAD) held, 16 targets.
+- **D1 (03:43:16–03:43:23):** the reviewed file with only `dry_run` off, 54 expected. Result: 0 unnumbered receipts; `EH-HIST-2026-0001`–`0054` in (date, created_at, id) order, no gap or duplicate; `receipts_number_required` validated; the 280 other numbers and the main counter (443, next EH-2026-00444) unchanged.
+- **D3 (03:44:08–03:44:14):** the reviewed file with only its parameter block set (16 expected, the one charge held, the director as actor, `dry_run` off). Result: 16 charges with net = paid (all `Soldé`, including the 3 small balances), 16 `charge_terms_corrected` events; the held charge, every receipt and every amount paid unchanged.
+- **Reverse scripts (not run):** would find 54 (D1) and 16 (D3) targets.
+- **D2 not needed:** 0 targets; the plan's 2 enrollments were ended by Batch D's C4 (dry run `DRYRUN_OK D2 enrollments=0 flags=0`).
+- **Open:** the held 25 MAD charge (owner/director manual review), the gap register (D4), E-3.
