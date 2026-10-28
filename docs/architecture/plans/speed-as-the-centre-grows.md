@@ -1,6 +1,6 @@
 # Speed as the centre grows (Batch G) — architecture, revision SCG-r1
 
-**Status: PROPOSED — architecture only, awaiting owner approval. Not implemented, not approved for implementation.** Tier 3 (RLS on every public table, a finance read model, the middleware authorization gate). Baseline: `origin/main` `0bd2d27e75c192a298a62c6d48316e73cd1797ef`, migration ledger 001–123 (the Production ledger recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
+**Status: APPROVED FOR IMPLEMENTATION — revision SCG-r1 at exact head `649056f`, approved by the owner on 2026-10-28 13:07 Asia/Shanghai with D1 = A, D2 = A, D3 = B, D4 = A ([approval record](#approval-record)). Not implemented, merged or released.** Tier 3 (RLS on every public table, a finance read model, the middleware authorization gate). Baseline: `origin/main` `0bd2d27e75c192a298a62c6d48316e73cd1797ef`, migration ledger 001–123 (the Production ledger recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
 
 **Scope.** Audit 2026-10-24 findings REL-2, REL-3, REL-6, REL-8 and REL-9. REL-7 was fixed by Batch E. The audit text is not in this repository; each finding is restated below from the batch brief and checked against the code.
 
@@ -12,7 +12,7 @@
 - **D2 = A:** apply the pattern to all public policies.
 - Who can see or change which rows must not change.
 
-New questions raised by this plan are in [Owner decisions required](#owner-decisions-required).
+New questions raised by this plan are in [Owner decisions required](#owner-decisions-required); D3 and D4 were answered at approval.
 
 # Owner summary
 
@@ -444,6 +444,11 @@ So the policy rewrite is the main lever; the function change makes the default p
 
 **Production.** No Production data was read for this plan. Release R0 records the `pg_stat_statements` mean for `search_students_page`, read-only and with the release approval; R3 records it again, and once more after one reception day.
 
+**Owner-side observations, 2026-10-28** (reported by the coordinating session; a live read-only browser measurement from the owner's location; no Production SQL was run):
+
+- The students list took **0.4–0.8 s** per round trip, about 0.35 s of it network.
+- The activity log took **about 10 s** to load 2,515 entries in 6 sequential pages.
+
 # Migration, test, rollout and recovery
 
 ## Files
@@ -561,7 +566,14 @@ Each step requires its own owner approval.
 
 # Approval record
 
-Not approved. The owner records approval date, plan revision, exact head SHA and the D3/D4 answers here. On approval, the plan PR is merged and PR #124 is closed with a link to this plan.
+- **Approved by:** Maroine (owner), in chat, **2026-10-28 13:07 Asia/Shanghai**. Verbatim: "approve G plan, D3 B, D4 A".
+- **Revision and head:** SCG-r1, PR #171 at exact head `649056f`.
+- **Decisions:**
+  - **D1 = A** and **D2 = A**, decided 2026-10-28 about 12:35 Asia/Shanghai.
+  - **D3 = B:** `AuthContext` shows the connection-problem retry screen on a profile-read error. "No row" is unchanged, and no `recover_missing_profile` call is made on an error.
+  - **D4 = A:** other client-side Casablanca dates stay a separate follow-up.
+- **Independent check by the coordinating session:** plan sound, and no access change in the prototypes.
+- **Consequences:** PR #124 is closed as superseded ("Superseded by SCG-r1, PR #171"). Implementation proceeds in one Tier-3 PR under the [implementation contract](#implementation-contract). Approval of the plan is not merge, release or Production approval.
 
 # IMPLEMENTATION CONTRACT
 
