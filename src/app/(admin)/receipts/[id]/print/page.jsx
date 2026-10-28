@@ -14,6 +14,8 @@ import { ArrowLeft, Download, Edit, Mail, Printer, Trash2 } from 'lucide-react';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import { discountReasonLabel } from '@/lib/financeCorrections.mjs';
 import ContextLink from '@/components/ContextLink';
+import { invalidateAfterFinance } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 export default function ReceiptPrint() {
   const { id } = useParams();
@@ -43,7 +45,7 @@ export default function ReceiptPrint() {
       const sb = getBrowserClient();
       const { data, error } = await sb.rpc('retry_receipt_email', { p_receipt_id: id });
       if (error) toast.error(error.message);
-      else if (data.queued) toast.success('Nouvelle tentative d’envoi mise en file.');
+      else if (data.queued) { invalidateAfterFinance(queryClientInstance); toast.success('Nouvelle tentative d’envoi mise en file.'); }
       else toast.error(data.configuration_error ? 'Le service email n’est pas configuré.' : 'Ce reçu ne peut pas être envoyé.');
       const refreshed = await sb.from('receipts').select('*').eq('id', id).single();
       if (refreshed.data) setReceipt(refreshed.data);

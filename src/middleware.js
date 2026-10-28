@@ -76,9 +76,31 @@ export async function middleware(request) {
     }
   );
 
+  // A failed read is a connection problem, not "signed out" or "no profile"
+  // (plan SCG-r1, REL-9): answer 503 with a retry page that renders no
+  // protected page and grants no role. It carries the refreshed cookies.
+  const unavailable = () => {
+    const page = '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="15">'
+      + '<title>Connexion impossible</title></head><body style="font-family:system-ui,sans-serif;margin:0;'
+      + 'min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f8fafc">'
+      + '<main style="max-width:28rem;text-align:center"><h1 style="font-size:1.125rem">Connexion impossible, nouvel essai…</h1>'
+      + '<p style="color:#475569;font-size:.875rem">La page n’a pas pu vérifier votre compte à cause d’un problème de connexion. '
+      + 'Vos accès ne sont pas modifiés. Nouvel essai automatique dans quelques secondes.</p>'
+      + '<p><a href="" style="color:#1d4ed8;font-weight:600">Réessayer maintenant</a></p></main></body></html>';
+    const failed = new NextResponse(page, { status: 503, headers: {
+      'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '5' } });
+    response.cookies.getAll().forEach((cookie) => failed.cookies.set(cookie));
+    return failed;
+  };
+  // Auth answered and refused (4xx: no or invalid session) versus could not
+  // answer (network, 5xx, rate limit 429).
+  const authUnreachable = (error) => Boolean(error) && (error.name === 'AuthRetryableFetchError'
+    || error.status === 429 || !(error.status >= 400 && error.status < 500));
+
   // Always refresh the session — keeps the cookie alive even on public
   // pages so the client picks up a fresh access token.
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
 
   // Public routes: let through without further checks.
   if (isPublic(pathname)) {
@@ -92,6 +114,8 @@ export async function middleware(request) {
     return response;
   }
 
+  if (!user && authUnreachable(userError)) return unavailable();
+
   // Not signed in → bounce to /login with returnTo.
   if (!user) {
     const url = request.nextUrl.clone();
@@ -101,12 +125,14 @@ export async function middleware(request) {
   }
 
   // Signed in — look up the role. profiles.id == auth.users.id (migration 002).
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .maybeSingle();
 
+  // An error is never "no profile": no row is pending, a failed read is a 503.
+  if (profileError) return unavailable();
   const role = profile?.role || 'pending';
 
   if (role !== 'director' && (isDirectorAnalyticsPath(pathname) || isDirectorLifecyclePath(pathname))) {

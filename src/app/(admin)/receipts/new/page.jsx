@@ -11,6 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { paymentErrorMessage } from '@/lib/receiptPresentation';
 import { clearPendingPayment } from '@/lib/receiptDraftKey.mjs';
 import { PENDING_CONFIRMATION_MESSAGE } from '@/lib/financeCorrections.mjs';
+import { invalidateAfterFinance } from '@/lib/cacheInvalidation.mjs';
 
 export default function ReceiptNew() {
   const { role } = useAuth();
@@ -30,10 +31,7 @@ export default function ReceiptNew() {
     }
     clearPendingPayment();
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['Receipt'] }),
-      queryClient.invalidateQueries({ queryKey: ['Student'] }),
-      queryClient.invalidateQueries({ queryKey: ['Enrollment'] }),
-      queryClient.invalidateQueries({ queryKey: ['Charge'] }),
+      invalidateAfterFinance(queryClient),
     ]);
     if (!data.receipt_id) {
       toast.success('Solde à payer enregistré. Aucun reçu émis.');

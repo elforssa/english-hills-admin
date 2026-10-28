@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { PAYROLL_STATUS_COLORS } from '@/lib/statusColors';
 import PersonLink from '@/components/PersonLink';
 import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '@/lib/payroll/status.mjs';
+import { invalidateAfterFinance } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -75,6 +77,7 @@ function PayrollModal({ teachers, onSave, onClose }) {
         setSaving(false);
         return;
       }
+      invalidateAfterFinance(queryClientInstance);
       toast.success('Fiche de paie créée');
       onSave();
     } catch {
@@ -150,17 +153,20 @@ export default function PayrollPage() {
 
   const handleValidate = async (id) => {
     await entities.Payroll.update(id, { statut: 'Validé' });
+    invalidateAfterFinance(queryClientInstance);
     toast.success('Validé'); load();
   };
 
   const handlePay = async (id) => {
     await entities.Payroll.update(id, { statut: 'Payé' });
+    invalidateAfterFinance(queryClientInstance);
     toast.success('Marqué comme payé'); load();
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Supprimer ?')) return;
     await entities.Payroll.delete(id);
+    invalidateAfterFinance(queryClientInstance);
     toast.success('Supprimé'); load();
   };
 

@@ -14,6 +14,8 @@ import { displayLabel, ENROLLMENT_LABELS } from '@/lib/ui/presentation.mjs';
 import { changedEnrollmentFields, createEnrollment, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup,
   saveEnrollmentChanges } from '@/lib/academic/membershipActions.mjs';
 import { localBusinessDate } from '@/lib/receiptFinance';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : displayLabel(ENROLLMENT_LABELS, status);
 // Confirmed, Validated and Ended follow payment, placement and the leaver commands (ACA-5).
@@ -138,13 +140,14 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
         await saveAsManagement(client);
       }
       toast.success(form.id ? 'Mis à jour' : 'Inscription créée');
+      invalidateAfterLearnerSave(queryClientInstance);
       onSave();
     } catch (error) {
       // Stale version (PT409, egc.stale): "Cette inscription a changé, rechargez".
       toast.error(membershipErrorMessage(error));
       // N2/N3: a record conflict, or a failure after the enrollment was created,
       // closes the dialog and reloads the current state.
-      if (isRecordConflict(error) || created.current) onSave();
+      if (isRecordConflict(error) || created.current) { invalidateAfterLearnerSave(queryClientInstance); onSave(); }
     } finally {
       setSaving(false);
     }

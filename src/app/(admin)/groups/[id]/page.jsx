@@ -8,7 +8,7 @@ import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { currentSchoolYear, groupMemberIds, isMembership } from '@/lib/enrollmentWorkflow.mjs';
 import { egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -19,6 +19,27 @@ import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
 import ContextLink from '@/components/ContextLink';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import { getTeacherRoster, rosterToAcademicRows } from '@/lib/portal';
+import ReadState from '@/components/operational/ReadState';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+
+const chunks = (values, size = 100) => Array.from({ length: Math.ceil(values.length / size) }, (_, i) => values.slice(i * size, (i + 1) * size));
+
+// Staff read this group only (plan SCG-r1, REL-3): the learners filed in it or
+// named by one of its enrollments, and those learners' enrollments.
+async function loadGroupRoster(groupId) {
+  const [filed, groupEnrollments] = await Promise.all([
+    entities.Student.filterAll({ groupe_id: groupId }, 'full_name'),
+    entities.Enrollment.filterAll({ group_id: groupId }, '-created_at'),
+  ]);
+  const have = new Set(filed.map(s => s.id));
+  const named = [...new Set(groupEnrollments.map(e => e.student_id).filter(sid => sid && !have.has(sid)))];
+  const others = (await Promise.all(chunks(named).map(ids => entities.Student.filterAll({ id: ids }, 'full_name')))).flat();
+  const students = [...filed, ...others];
+  const ids = students.map(s => s.id);
+  const theirs = (await Promise.all(chunks(ids).map(chunk => entities.Enrollment.filterAll({ student_id: chunk }, '-created_at')))).flat();
+  const enrollments = [...new Map([...groupEnrollments, ...theirs].map(e => [e.id, e])).values()];
+  return [enrollments, students];
+}
 
 export default function GroupDetail() {
   const params = useParams();
@@ -33,8 +54,9 @@ export default function GroupDetail() {
   const [group, setGroup] = useState(null);
   const [teacher, setTeacher] = useState(null);
   const [students, setStudents] = useState([]); // roster (in this group)
-  const [allStudents, setAllStudents] = useState([]);
+  const [visibleStudents, setVisibleStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [override, setOverride] = useState(null); // { student, reason }
@@ -42,6 +64,8 @@ export default function GroupDetail() {
 
   useEffect(() => {
     if (!id) return;
+    setLoading(true);
+    setLoadError(false);
     (async () => {
       const [g] = await entities.Group.filter({ id });
       setGroup(g || null);
@@ -55,44 +79,54 @@ export default function GroupDetail() {
           const roster = rosterToAcademicRows(rows);
           return [roster.enrollments, roster.students];
         })
-        : await Promise.all([
-          entities.Enrollment.listAll('-created_at'),
-          entities.Student.listAll('full_name'),
-        ]);
+        : await loadGroupRoster(id);
       setEnrollments(registrations);
       const members = groupMemberIds(everyone, registrations, id);
       setStudents(everyone.filter(s => members.has(s.id)));
-      setAllStudents(everyone);
+      setVisibleStudents(everyone);
       setLoading(false);
-    })().catch(() => setLoading(false));
+    })().catch(() => { setLoadError(true); setLoading(false); });
   }, [id, reload, role]);
+
+  // The picker needs every learner and enrollment: read only when it opens.
+  const picker = useQuery({
+    queryKey: ['Student', 'group-picker', id],
+    enabled: pickerOpen && canManage,
+    queryFn: async () => {
+      const [pickerEnrollments, pickerStudents] = await Promise.all([
+        entities.Enrollment.listAll('-created_at'),
+        entities.Student.listAll('full_name'),
+      ]);
+      return { enrollments: pickerEnrollments, students: pickerStudents };
+    },
+  });
+  const pickerEnrollments = picker.data?.enrollments ?? [];
 
   const groupSchoolYear = (group?.annee || '').replace('-', '/') || currentSchoolYear();
   // Seats as the server counts them: members plus every non-rejected, non-ended
   // enrollment that carries this group (pre-enrollments too), visible learners only.
   const seats = new Set([...students.map(s => s.id), ...enrollments
-    .filter(e => e.group_id === id && !['Rejected', 'Ended'].includes(e.status) && allStudents.some(s => s.id === e.student_id))
+    .filter(e => e.group_id === id && !['Rejected', 'Ended'].includes(e.status) && visibleStudents.some(s => s.id === e.student_id))
     .map(e => e.student_id)]).size;
   const full = Boolean(group?.capacite_max) && seats >= group.capacite_max;
   // A paid enrollment without level fits any group of its programme (the group sets the level).
-  const matchingPending = (student) => enrollments.filter(e => e.student_id === student.id
+  const matchingPending = (student) => pickerEnrollments.filter(e => e.student_id === student.id
     && e.status === 'Confirmed' && !e.group_id && groupMatchesEnrollment(group, e, student));
   // D1: one group per programme and school year; a member of another group of this
   // programme changes group from their enrollment, not from this picker.
-  const inOtherGroupOfProgramme = (student) => enrollments.some(e => e.student_id === student.id && isMembership(e)
+  const inOtherGroupOfProgramme = (student) => pickerEnrollments.some(e => e.student_id === student.id && isMembership(e)
     && e.group_id !== id && e.session_type === (group.session_type || 'Yearly') && (!e.school_year || e.school_year === groupSchoolYear));
   const intendedMatch = (s) => (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
     && (role === 'receptionist' ? s.niveau_cefr === group.niveau : (!s.niveau_cefr || s.niveau_cefr === group.niveau));
   // N4: the label follows the learner's membership in another programme's group.
-  const memberOfOtherProgramme = (student) => enrollments.some(e => e.student_id === student.id && isMembership(e)
+  const memberOfOtherProgramme = (student) => pickerEnrollments.some(e => e.student_id === student.id && isMembership(e)
     && e.session_type !== (group.session_type || 'Yearly'));
   // A member of another programme's group is offered to management too (DAT-1).
   const otherProgrammeMember = (s) => role !== 'receptionist' && s.groupe_id && s.groupe_id !== id && !intendedMatch(s);
-  const available = allStudents.filter(s => !students.some(member => member.id === s.id) && !inOtherGroupOfProgramme(s)
+  const available = (picker.data?.students ?? []).filter(s => !students.some(member => member.id === s.id) && !inOtherGroupOfProgramme(s)
     && (matchingPending(s).length > 0 || intendedMatch(s) || otherProgrammeMember(s)));
   const refreshMemberships = () => {
-    queryClient.invalidateQueries({ queryKey: ['Student'] });
-    queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+    invalidateAfterLearnerSave(queryClient);
     setReload(value => value + 1);
   };
 
@@ -159,6 +193,7 @@ export default function GroupDetail() {
   };
 
   if (loading) return <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>;
+  if (loadError) return <div className="p-4 lg:p-8"><ReadState state="error" onRetry={() => setReload(value => value + 1)} /></div>;
   if (!group) return <div className="p-8 text-center text-muted-foreground text-sm">Groupe introuvable.</div>;
 
   const meta = [
@@ -279,7 +314,7 @@ export default function GroupDetail() {
             <Command>
               <CommandInput placeholder="Rechercher un apprenant…" />
               <CommandList className="max-h-80">
-                <CommandEmpty>Aucun apprenant disponible.</CommandEmpty>
+                <CommandEmpty>{picker.isError ? 'Impossible de charger les apprenants.' : picker.isLoading ? 'Chargement…' : 'Aucun apprenant disponible.'}</CommandEmpty>
                 <CommandGroup>
                   {available.map(s => (
                     <CommandItem

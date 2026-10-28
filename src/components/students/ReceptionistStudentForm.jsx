@@ -10,6 +10,8 @@ import StorageImage from '@/components/StorageImage';
 import { ArrowLeft } from 'lucide-react';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { createLearnerIdentity, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '@/lib/studentCreate.mjs';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary';
 const categories = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
@@ -74,6 +76,7 @@ export default function ReceptionistStudentForm() {
     if (error && isEdit && isRecordConflict(error)) {
       // Changed in the meantime (ADR-009): reload the latest record for review.
       toast.error(recordConflictMessage());
+      invalidateAfterLearnerSave(queryClientInstance);
       await load().catch(() => {});
       return;
     }
@@ -92,6 +95,7 @@ export default function ReceptionistStudentForm() {
     }
     if (error) { toast.error(error.message); return; }
     if (!isEdit) newStudentId.settle('created');
+    invalidateAfterLearnerSave(queryClientInstance);
     toast.success(isEdit ? 'Apprenant mis à jour' : 'Apprenant créé');
     router.push(`/students/${studentId}`);
   };

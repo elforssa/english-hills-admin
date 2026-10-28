@@ -10,6 +10,11 @@
 //      apply that role to the profile and delete the PendingRole row.
 //
 // Public surface (kept minimal per spec): { user, role, isLoading, logout }.
+//
+// A profile read that FAILS (network, timeout, server error) is a connection
+// problem, never "no profile": the provider shows a retry screen with no role,
+// no children and no navigation, and does not call recover_missing_profile
+// (plan SCG-r1, REL-9, owner decision D3 = B). "No row" behaves as before.
 // =============================================================================
 
 'use client';
@@ -28,6 +33,8 @@ import { queryClientInstance } from '@/lib/query-client';
 
 const AuthContext = createContext(null);
 
+class ProfileUnavailableError extends Error {}
+
 async function loadOrCreateProfile(sb, authUser) {
   // Try to read first.
   const { data: existing, error: readErr } = await sb
@@ -39,6 +46,7 @@ async function loadOrCreateProfile(sb, authUser) {
   if (readErr) {
     // eslint-disable-next-line no-console
     console.error('profiles read failed:', readErr);
+    throw new ProfileUnavailableError('profiles read failed');
   }
   if (existing) return existing;
 
@@ -77,6 +85,7 @@ export function AuthProvider({ children }) {
   const [user,      setUser]      = useState(null);
   const [role,      setRole]      = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const identityRef = useRef(null);
   const requestRef = useRef(0);
 
@@ -100,7 +109,22 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    let profile = await loadOrCreateProfile(sb, authUser);
+    let profile;
+    try {
+      profile = await loadOrCreateProfile(sb, authUser);
+    } catch (readError) {
+      if (!(readError instanceof ProfileUnavailableError)) throw readError;
+      if (requestId !== requestRef.current) return;
+      // Fail closed: no role is kept or granted while the profile is unreadable.
+      queryClientInstance.clear();
+      identityRef.current = null;
+      setUser(null);
+      setRole(null);
+      setUnavailable(true);
+      setIsLoading(false);
+      return;
+    }
+    setUnavailable(false);
     if (profile) {
       profile = await applyPendingRoleIfAny(sb, profile);
     }
@@ -170,7 +194,28 @@ export function AuthProvider({ children }) {
     [user, role, isLoading, logout, loadSession]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {unavailable ? <ConnectionProblem onRetry={() => loadSession()} /> : children}
+    </AuthContext.Provider>
+  );
+}
+
+function ConnectionProblem({ onRetry }) {
+  return (
+    <main className="min-h-screen flex items-center justify-center p-6 bg-background" role="alert">
+      <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-lg font-semibold">Connexion impossible, nouvel essai…</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Votre compte n’a pas pu être chargé à cause d’un problème de connexion. Vos accès ne sont pas modifiés.
+        </p>
+        <button type="button" onClick={onRetry}
+          className="mt-4 inline-flex min-h-10 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-muted">
+          Réessayer
+        </button>
+      </div>
+    </main>
+  );
 }
 
 export function useAuth() {

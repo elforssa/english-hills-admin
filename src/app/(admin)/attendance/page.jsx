@@ -12,6 +12,8 @@ import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { loadTeacherAcademicRows } from '@/lib/portal';
 import { getMyTeacher } from '@/lib/teacher-directory';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -90,6 +92,7 @@ export default function Attendance() {
   const handleSave = async () => {
     const result = await sessionManager.current.save(selectedGroup, sessionDate, groupStudents);
     if (result.skipped) return;
+    invalidateAfterLearnerSave(queryClientInstance);
     const label = `${groupName(result.group)} — ${result.date}`;
     if (result.failed === 0 && !result.refreshFailed) toast.success(`Présences enregistrées : ${label}`);
     else if (result.failed < result.total && !result.refreshFailed)

@@ -28,6 +28,7 @@ import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
 import { LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 // Module scope keeps section DOM stable across renders (a focused row survives).
 const Section = ({ title, children }) => (
@@ -156,6 +157,8 @@ function StudentDetail() {
     const sb = getBrowserClient();
     const { error } = await sb.rpc('soft_delete_student', { p_student_id: id });
     if (error) { toast.error(membershipErrorMessage(error)); return; }
+    invalidateAfterFinance(queryClient);
+    invalidateAfterLearnerSave(queryClient);
     toast.success('Apprenant archivé');
     router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')));
   };
@@ -169,6 +172,7 @@ function StudentDetail() {
         p_enrollment: enrollment.id, p_expected_updated_at: enrollment.updated_at, p_asset: file_url,
       });
       if (error) throw error;
+      invalidateAfterLearnerSave(queryClient);
       toast.success('Document ajouté');
       setReload(value => value + 1);
     } catch (error) {
@@ -181,9 +185,9 @@ function StudentDetail() {
   const reopen = async (enrollment) => {
     if (!confirm('Rouvrir cette inscription ? Elle redevient « Inscrit — groupe à affecter ».')) return;
     const { error } = await reopenEnrollment(getBrowserClient(), enrollment);
-    if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) setReload(value => value + 1); return; }
+    if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) { invalidateAfterLearnerSave(queryClient); setReload(value => value + 1); } return; }
     toast.success('Inscription rouverte');
-    queryClient.invalidateQueries({ queryKey: ['Student'] });
+    invalidateAfterLearnerSave(queryClient);
     setReload(value => value + 1);
   };
 
@@ -312,15 +316,13 @@ function StudentDetail() {
       {leaver && <LeaverDialog student={student} enrollments={enrollments} groups={groups} openBalance={paymentSummary.balance}
         onClose={() => setLeaver(false)} onDone={() => {
           setLeaver(false);
-          queryClient.invalidateQueries({ queryKey: ['Student'] });
-          queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+          invalidateAfterLearnerSave(queryClient);
           setReload(value => value + 1);
         }} />}
       {enrollmentModal && <EnrollmentModal key={enrollmentModal.id} enrollment={enrollmentModal} students={[student]} groups={groups}
         onClose={() => setEnrollmentModal(null)} onSave={() => {
           setEnrollmentModal(null);
-          queryClient.invalidateQueries({ queryKey: ['Student'] });
-          queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+          invalidateAfterLearnerSave(queryClient);
           setReload(value => value + 1);
         }} />}
 

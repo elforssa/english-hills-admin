@@ -18,6 +18,7 @@ import {
   getLevelsForSession,
   groupMatchesSelection,
 } from '@/lib/academicPrograms';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
@@ -200,7 +201,7 @@ export default function StudentForm() {
       const { error } = await client.from('students').update(payload).eq('id', id);
       if (error) { toast.error(membershipErrorMessage(error)); setSaving(false); return; }
       toast.success('Apprenant mis à jour');
-      qc.invalidateQueries({ queryKey: ['Student'] });
+      invalidateAfterLearnerSave(qc);
       router.push('/students');
       return;
     }
@@ -208,7 +209,7 @@ export default function StudentForm() {
     try {
       studentId = newStudentId.current();
       const created = await createStudentOnce(client, studentId, { ...payload, status: 'Prospect' });
-      qc.invalidateQueries({ queryKey: ['Student'] });
+      invalidateAfterLearnerSave(qc);
       newStudentId.settle(created.status);
       if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
       if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
@@ -222,7 +223,7 @@ export default function StudentForm() {
         }
       }
       toast.success('Apprenant créé');
-      qc.invalidateQueries({ queryKey: ['Student'] });
+      invalidateAfterLearnerSave(qc);
       router.push('/students');
     } catch (error) {
       // Report a create failure; stay on the form for retry: a create keeps its learner id.
