@@ -520,7 +520,7 @@ Each step needs the approvals named in [AGENTS](../../../AGENTS.md); this plan a
 
 ## H5 dry-run record
 
-- **Run:** 2026-10-29 about 03:15 UTC (11:15 Asia/Shanghai), under the approval above. The run used the read-only operator path (`supabase db query --linked`, the CLI's standard short-lived login role). The query was the plan's text, with `set transaction read only` first and `transaction_read_only` returned as `on`. It was validated first on a local synthetic stack.
+- **Run:** 2026-10-29 about 03:11 UTC (11:11 Asia/Shanghai), under the approval above. The run used the read-only operator path (`supabase db query --linked`, the CLI's standard short-lived login role). The query was the plan's text, with `set transaction read only` first and `transaction_read_only` returned as `on`. It was validated first on a local synthetic stack.
 - **Summary:**
   - 8 groups;
   - 0 without a year and 0 with an unreadable year;
