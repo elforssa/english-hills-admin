@@ -304,6 +304,15 @@ Plan: [portal readiness](../architecture/plans/portal-readiness.md#approval-reco
 - **R0–R2 released (2026-10-28).** Owner's words, verbatim, 2026-10-27 22:40 Asia/Shanghai: "approve F release now" (fresh backup, R0, R1 migration 123, R2 merge of PR #167 at `d3911c5…`, read-only checks only). The planned 21:00 UTC start was missed; at the owner's request it ran on 2026-10-28 from about 02:00 Casablanca. The backup could not be taken; owner's words, verbatim: "I accept the risk: proceed with the F release without a fresh backup, as the plan originally allowed (the migration changes no existing row)." Migration 123 applied 02:05:33 UTC, PR #167 merged as `e3020456…` and deployed 02:08:02 UTC ([release evidence](../architecture/evidence/batch-f-r0-r2-production-2026-10-28.md)).
 - **Pending, each needing its own approval:** R3 clean-up C0–C2 and constraint validation, with the read-only dry-run counts of 2026-10-28 (re-read on the day): C2 33 learner and 7 parent addresses equal to the one placeholder (0 archived; the 28 issued receipts carrying it are not changed), C1 4 parent, 2 learner, 1 teacher, 0 message and 0 notification addresses, C0 38 before-image rows; R4 office login (Q6) and teacher assignment to groups; R5 pilot; R6 first invitations. The prepared corrective migration is not applied.
 
+## Speed as the centre grows (Batch G) — SCG-r1 APPROVED (2026-10-28); R0–R3 RELEASED (2026-10-29)
+
+Plan: [speed as the centre grows](../architecture/plans/speed-as-the-centre-grows.md#approval-record) (Tier 3).
+
+- **Plan approval:** 2026-10-28 13:07 Asia/Shanghai, verbatim: "approve G plan, D3 B, D4 A" (D1 = A, D2 = A decided about 12:35).
+- **Release approval:** 2026-10-28 15:27 Asia/Shanghai, verbatim: "approve G release now" (R0–R3 and the docs closeout only; the restore script not approved to run). The first attempt stopped at R0 because max_rows could not be read; on 2026-10-29 at 09:39 Asia/Shanghai the owner read **Max rows = 1000** from Dashboard > Project Settings > API and asked to run the same steps from a fresh R0.
+- **Released 2026-10-29:** migration 124 applied 01:40:58 UTC, PR #172 merged as `3e02efa…` and deployed 01:42:38 UTC ([release evidence](../architecture/evidence/batch-g-r0-r3-production-2026-10-29.md)).
+- **Open:** `pg_stat_statements` after one reception day; D4 = A (other client-side Casablanca dates) stays a separate follow-up; the restore needs its own approval. Owner check suggested: PostgreSQL places Africa/Casablanca at +01:00 while the owner uses UTC+0, so report day boundaries follow PostgreSQL's time-zone data.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

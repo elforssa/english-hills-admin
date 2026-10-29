@@ -666,3 +666,14 @@ Each step requires its own owner approval.
   - Production time-zone data contradicting UTC+0 at R0.
 - **Not authorized:** merge, deployment, any Production read or write, closing PR #124 before plan approval.
 - **Status reporting:** per [AGENTS](../../../AGENTS.md#implementation-handoff). After that, a fresh independent review of the exact head SHA, then separate release approval per step.
+
+# Release record (R0–R3)
+
+**R0–R3 DONE (2026-10-29); restore not run.** Owner approval 2026-10-28 15:27 Asia/Shanghai, verbatim: "approve G release now". The first attempt (2026-10-28) stopped at R0 because PostgREST max_rows could not be read from the release session; on 2026-10-29 the owner read **max_rows = 1000** (Dashboard > Project Settings > API, 09:39 Asia/Shanghai) and asked to run the same steps from a fresh R0. Times UTC, 2026-10-29; full values in the [release evidence](../evidence/batch-g-r0-r3-production-2026-10-29.md).
+
+- **Safety copy (01:40):** targeted catalog export (163 policy texts, `search_students_page` definition, `SHA256SUMS`) instead of a full dump.
+- **R0 (01:39:41–01:40:04):** PR #172 at `aa77fa0…`, `required` success; `main` `b00c690`; ledger 123; max_rows 1000 (owner-read); Casablanca offset in `pg_timezone_names` +01:00; catalog equal to a clean 123 build on all nine digests with D1's `receipts_number_required` included; the 163 policy expressions equal. Baselines: `search_students_page` 367 calls, weighted mean 1,230.8 ms (cumulative since 2026-08-22); `activity_log` 2,569 rows; `xact_rollback` 391,314,453.
+- **R1:** Production dry run `DRYRUN_OK` 01:40:26–01:40:32, nothing changed; migration 124 applied 01:40:51–01:40:58 through the guarded wrapper (row 124 MD5 `5f1fe6b5f34a9fa080666ef752f1d0f7`, `created_by` from row 123).
+- **R2:** PR #172 squash-merged 01:41:05 as `3e02efaa59b2940ddc8657e094e2eb11a8f877ad`; GitHub Production deployment `7401818691` success 01:42:38.
+- **R3:** ledger 001–124; catalog diff exactly the manifest (6 new functions, `search_students_page` re-created, 157 policies rewritten with metadata unchanged, one new index, `jit=off` on `report_attendance_daily`); the generator's rewrite replayed against the Production text: 157 rewritten, 6 unchanged, 0 mismatches; 0 `'40001'`; rolled-back role probe as expected; `pg_stat_statements` 369 calls, mean 1,224.2 ms; logs clean; `/` and `/crm/leads` redirect to `/login`; 30 minutes of observation clean.
+- **Open:** `pg_stat_statements` after one reception day; the restore stays unapplied.
