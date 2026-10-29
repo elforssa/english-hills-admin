@@ -1,4 +1,5 @@
 'use client';
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useMemo, useState } from 'react';
 import { RotateCcw, Upload, Ban } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,7 +19,7 @@ import {
 // or lead field, although crm_get_meta_diagnostics returns full connection rows.
 const RUNBOOK = 'https://github.com/elforssa/english-hills-admin/blob/main/docs/crm-operations-runbook.md#campaign-launch-checklist';
 const input = 'mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-50';
-const when = v => v ? new Intl.DateTimeFormat('fr-MA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Casablanca' }).format(new Date(v)) : '—';
+const when = v => v ? formatCentre(v, 'fr-MA', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 const hours = n => new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 1 }).format(n);
 // <input type="datetime-local"> works in the browser's local time.
 const toLocalInput = iso => { const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };

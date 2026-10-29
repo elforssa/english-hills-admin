@@ -1,5 +1,6 @@
 'use client';
 
+import { centreDate } from '@/lib/centreClock.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { entities, auth } from '@/lib/entities';
 import { toast } from 'sonner';
@@ -15,7 +16,7 @@ import { getMyTeacher } from '@/lib/teacher-directory';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { queryClientInstance } from '@/lib/query-client';
 
-const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
+const todayInCasablanca = () => centreDate();
 
 const STATUS_CONFIG = {
   'Présent': { color: 'bg-green-100 text-green-700', icon: CheckCircle },

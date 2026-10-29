@@ -1,4 +1,5 @@
 'use client';
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useAuth } from '@/context/AuthContext';
 
 import { useEffect, useState } from 'react';
@@ -21,6 +22,9 @@ import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
+import ProgrammePill from '@/components/operational/ProgrammePill';
+import { fileAwaitsGroup } from '@/lib/enrollmentWorkflow.mjs';
+import { PILL_CLASS, PILL_SELECT_CLASS } from '@/lib/ui/pill.mjs';
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { listHref, recordHref } from '@/lib/navigation.mjs';
@@ -55,7 +59,7 @@ function ArchivedStudentsDialog({ onClose, onRestored }) {
         : isError ? <p role="alert" className="text-sm">Impossible de charger les dossiers archivés. <button className="text-primary underline" onClick={() => refetch()}>Réessayer</button></p>
         : data.rows.length === 0 ? <p className="text-sm text-muted-foreground">Aucun dossier archivé.</p>
         : <ul className="divide-y divide-border text-sm">{data.rows.map(row => <li key={row.id} className="flex items-center justify-between gap-2 py-2">
-          <span>{row.full_name}<span className="block text-xs text-muted-foreground">Archivé le {new Date(row.deleted_at).toLocaleDateString('fr-FR', { timeZone: 'Africa/Casablanca' })}</span></span>
+          <span>{row.full_name}<span className="block text-xs text-muted-foreground">Archivé le {formatCentre(row.deleted_at, 'fr-FR')}</span></span>
           <button className="text-xs font-semibold text-primary hover:underline" onClick={() => restore(row)}>Restaurer</button>
         </li>)}</ul>}
       {data && data.count > 20 && <Pagination page={page} total={data.count} pageSize={20} onChange={setPage} />}
@@ -76,13 +80,13 @@ const SOURCES = [
 
 // Compact borderless dropdown for editing a single field directly in a table
 // row. `empty` (when provided) renders a "clear" option that maps to null.
-function InlineSelect({ value, options, onChange, empty, label, className = '' }) {
+function InlineSelect({ value, options, onChange, empty, label, className = '', base = 'operational-control cursor-pointer' }) {
   return (
     <select
       value={value ?? ''}
       aria-label={label}
       onChange={e => onChange(e.target.value)}
-      className={`operational-control cursor-pointer ${className}`}
+      className={`${base} ${className}`}
     >
       {empty !== undefined && <option value="">{empty}</option>}
       {options.map(o => <option key={o} value={o}>{programmeLabel(o)}</option>)}
@@ -209,7 +213,9 @@ export default function StudentsPage() {
           Groupe à affecter · {enrollment.session_type || student.session_type || 'Session'}{enrollment.school_year ? ` · ${enrollment.school_year}` : ''}
         </button>
       ))}
-      {!student.groupe_id && !student.pending_enrollments?.length && <Link data-touch-target href={`/students/${student.id}`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>}
+      {!student.groupe_id && !student.pending_enrollments?.length && (fileAwaitsGroup(student)
+        ? <Link data-touch-target href={`/students/${student.id}`} className="text-xs font-semibold text-primary hover:underline">Groupe à affecter</Link>
+        : <span aria-label="Aucun groupe">—</span>)}
     </div>;
 
     if (enrollmentsLoading) return <span className="text-xs text-muted-foreground">Chargement des inscriptions…</span>;
@@ -224,8 +230,10 @@ export default function StudentsPage() {
       </button>}
       {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
-      {!student.groupe_id && relevant.length === 0 && <button className="text-xs font-semibold text-primary hover:underline"
-        onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>}
+      {!student.groupe_id && relevant.length === 0 && (fileAwaitsGroup(student)
+        ? <button className="text-xs font-semibold text-primary hover:underline"
+          onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>
+        : <span aria-label="Aucun groupe">—</span>)}
       {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link data-touch-target href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
     </div>;
   };
@@ -345,12 +353,12 @@ export default function StudentsPage() {
                 <div key={s.id} className="flex items-center justify-between px-3 py-3 hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 break-words text-sm font-semibold [overflow-wrap:anywhere]"><Link data-touch-target href={studentHref(s.id)} className="inline-flex min-h-11 min-w-11 items-center text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{s.full_name}</Link></p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · {programmeLabel(s.session_type)} {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.age_category || '—'} · <ProgrammePill sessionType={s.session_type} /> {s.niveau_cefr ? `· ${s.niveau_cefr}` : ''}</p>
                     {renderGroup(s)}
                     <p className="text-xs text-muted-foreground">{s.telephone || '—'}</p>
-                    <p className="mt-1 text-xs"><span className={`inline-block rounded-full px-2 py-0.5 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD · solde restant actuel</span>}</p>
+                    <p className="mt-1 text-xs"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-1 font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="ml-2 font-semibold">{money(s.payment_balance)} MAD · solde restant actuel</span>}</p>
                   </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ml-3 max-w-28 break-words ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
+                  <span className={`${PILL_CLASS} ml-3 ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
                 </div>
               ))}
             </div>
@@ -390,11 +398,12 @@ export default function StudentsPage() {
                           value={s.session_type}
                           label={`Session de ${s.full_name}`}
                           options={SESSION_TYPES}
-                          className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}
+                          base={PILL_SELECT_CLASS}
+                          className={SESSION_TYPE_COLORS[s.session_type] || 'bg-slate-100 text-slate-700'}
                           onChange={v => patchStudentFields(s, { session_type: v, niveau_cefr: null })}
-                        /> : canEditProgramme ? <Link data-touch-target href={studentHref(s.id)} title="Le programme suit le groupe : modifiez l’inscription"
-                          className={`font-medium hover:underline ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</Link>
-                          : <span className={`font-medium ${SESSION_TYPE_COLORS[s.session_type] || ''}`}>{programmeLabel(s.session_type)}</span>}
+                        /> : <ProgrammePill sessionType={s.session_type}
+                          href={canEditProgramme ? studentHref(s.id) : undefined}
+                          title={canEditProgramme ? 'Le programme suit le groupe : modifiez l’inscription' : undefined} />}
                       </td>
                       <td className="px-3 py-3">
                         {canEditProgramme && !s.groupe_id ? <InlineSelect
@@ -410,9 +419,9 @@ export default function StudentsPage() {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground">{s.telephone || '—'}</td>
                       <td className="px-3 py-3">
-                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
+                        <span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,s.status)}</span>
                       </td>
-                      <td className="px-3 py-3"><span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="block mt-1 text-xs font-semibold text-foreground">{money(s.payment_balance)} MAD · solde restant actuel</span>}</td>
+                      <td className="px-3 py-3"><span className={`inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${PAYMENT_STATUS_COLORS[s.payment_status] || PAYMENT_STATUS_COLORS['Aucun engagement']}`}>{s.payment_status || 'Aucun engagement'}</span>{Number(s.payment_balance) > 0 && <span className="block mt-1 text-xs font-semibold text-foreground">{money(s.payment_balance)} MAD · solde restant actuel</span>}</td>
                     </tr>
                   ))}
                 </tbody>

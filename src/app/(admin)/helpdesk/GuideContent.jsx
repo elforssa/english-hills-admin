@@ -1578,7 +1578,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Enrolled · Prospect · Inactive · Alumni</td>
-<td>Inscrit (dossier) · Prospect · Inactif · Ancien apprenant</td>
+<td>Inscrit · Prospect · Inactif · Ancien apprenant</td>
 </tr>
 <tr>
 <td>Yearly</td>

@@ -129,6 +129,9 @@ insert into public.groups(id, name, session_type, niveau) values
   (pg_temp.id(310), 'OL CRM B1', 'Online', 'B1'),
   (pg_temp.id(311), 'OL CRM Solo B1', 'Online One-to-One', 'B1'),
   (pg_temp.id(312), 'OL Notices B1', 'Online', 'B1');
+-- Batch H (H5): a placement's school year is its group's; these courses run in other years.
+update public.groups set annee = case id when pg_temp.id(312) then '2025-2026' when pg_temp.id(308) then '2027-2028'
+  else '2028-2029' end where id in (pg_temp.id(312), pg_temp.id(308), pg_temp.id(309));
 select pg_temp.fails(format($$insert into public.groups(name, session_type, niveau, teacher_id) values ('T', 'Online', 'B1', %L)$$, pg_temp.id(101)),
   '23514', 'online.teacher_on_course');
 select pg_temp.fails(format($$update public.groups set teacher_id = %L where id = %L$$, pg_temp.id(101), pg_temp.id(301)),

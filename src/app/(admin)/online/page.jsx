@@ -3,6 +3,7 @@
 // Online courses for operations staff (D13). An online group is created in the group
 // form with an online programme; its course record, teacher, pattern and activation
 // are management actions on the course page.
+import { centreMonth } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Video, Plus } from 'lucide-react';
@@ -16,9 +17,7 @@ import { ONLINE_COURSE_STATUS_COLORS } from '@/lib/statusColors';
 const STATUS = { draft: 'En préparation', active: 'Actif', closed: 'Clôturé' };
 
 function casablancaMonth() {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit' })
-    .formatToParts(new Date()).map(p => [p.type, p.value]));
-  return `${parts.year}-${parts.month}`;
+  return centreMonth();
 }
 
 function TeacherCounts() {

@@ -34,6 +34,11 @@ export const EGC_REASON_TEXT = {
   programme_fixed: 'Le programme et l’année scolaire ne changent plus une fois fixés.',
   level_invalid: 'Programme, niveau ou année scolaire invalide.',
   ended_read_only: 'Une inscription terminée ne se modifie que par ses notes.',
+  // Batch H (H5): the group school year.
+  school_year_mismatch: 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.',
+  group_year_missing: 'Renseignez l’année scolaire du groupe.',
+  group_year_invalid: 'Année scolaire du groupe invalide : utilisez le format 2026-2027.',
+  group_year_locked: 'Réaffectez les apprenants avant de changer l’année scolaire du groupe.',
 };
 
 const GENERIC = 'L’action n’a pas pu aboutir. Réessayez ; si le problème persiste, contactez la direction.';
@@ -54,6 +59,8 @@ export function membershipErrorMessage(error) {
     if (reason === 'stale') return ENROLLMENT_CHANGED_MESSAGE;
     return recordConflictMessage();
   }
+  // The year mismatch names both years in the server's own French words.
+  if (reason === 'school_year_mismatch' && /^L’année scolaire/.test(error.message || '')) return error.message;
   if (reason && Object.hasOwn(EGC_REASON_TEXT, reason)) return EGC_REASON_TEXT[reason];
   const online = onlineReason(error.hint);
   if (online) return ONLINE_REASON_TEXT[online];

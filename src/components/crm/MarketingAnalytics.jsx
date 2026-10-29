@@ -1,4 +1,5 @@
 'use client';
+import { centreDate } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
 import { ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -20,7 +21,7 @@ const input = 'mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3
 const columns = [['leads','Prospects'],['contacted','Contactés'],['engaged','Engagés'],['qualified','Qualifiés'],['tests_booked','Tests réservés (nb)'],['tests_attended','Tests passés (nb)'],['results','Résultats'],['converted','Inscrits']];
 export default function MarketingAnalytics() {
   const { role } = useAuth();
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca' }).format(new Date());
+  const today = centreDate();
   const [from, setFrom] = useState(`${today.slice(0, 7)}-01`), [to, setTo] = useState(today), [cutoff, setCutoff] = useState('');
   const [account, setAccount] = useState(''), [channel, setChannel] = useState(''), [level, setLevel] = useState('campaign'), [program, setProgram] = useState('');
   const [drill, setDrill] = useState([]), [offset, setOffset] = useState(0);

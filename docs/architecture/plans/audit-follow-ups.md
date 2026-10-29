@@ -1,6 +1,6 @@
 # Audit follow-ups (Batch H) — architecture, revision AFU-r1
 
-**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). Not implemented, merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
+**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). **Implemented** on branch `feat/audit-follow-ups` with migration `125_audit_follow_ups.sql` ([implementation record](#implementation-record)); not merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
 
 **Scope.** Eight follow-ups left after Batches A–G and the 2026-10-24 audit, delivered as **one outcome**: one implementation PR, one migration, one release. Every item below was checked against the code at the baseline; file and line references are to that commit.
 
@@ -529,3 +529,59 @@ Each step needs the approvals named in [AGENTS](../../../AGENTS.md); this plan a
   - 0 populated groups without a valid year.
 - **Detail:** 0 problem rows.
 - **Consequence:** the STOP condition is met with nothing to correct. No R1 correction step is needed, and the year check ships in the implementation migration. Release R0 re-reads the summary; any difference goes back to the owner.
+
+## Implementation record
+
+Branch `feat/audit-follow-ups`, rebased on `origin/main` `a3d4202` (this plan merged as PR #174). Migration `125_audit_follow_ups.sql`: the recorded Production ledger is 001–124, and no open PR adds a migration. Restore: `scripts/rollback/125_audit_follow_ups_restore.sql`, prepared and tested locally, not run.
+
+**What was built, per item:**
+
+- **H1:** `create_charge_payment_financial` (latest definition: 122), re-created without the Q3 block. The client cap, its message and the reception hint in the receipt form are removed.
+- **H2:**
+  - `ProgrammePill` (`src/components/operational/ProgrammePill.jsx`) and one pill shape (`src/lib/ui/pill.mjs`).
+  - Used on the Students list (table and phone card), the student page, the enrollments page, the groups list and the group page.
+  - The editable programme select is drawn as the same pill.
+- **H3:** `DOSSIER_LABELS.Enrolled` = « Inscrit »; the guide and tests are updated.
+- **H4:** `fileAwaitsGroup` decides the Groupe column's fallback (« Groupe à affecter » for an active file, otherwise « — »).
+- **H5:**
+  - Three triggers and helper functions in `academic_security`: `check_group_year`, `guard_enrollment_group_year` on `enrollments`, and `guard_group_year` on `groups`.
+  - Early year checks in `save_receptionist_enrollment` and `crm_start_enrollment`; `crm_enrollment_groups` returns `annee`.
+  - A required year in the group form; a new enrollment takes its year from the chosen group in `EnrollmentModal` and `CrmEnrollmentDialog`.
+- **H6:** `src/instrumentation.js`, moved from the root.
+- **H7:**
+  - `public.centre_utc_offset()`, `public.centre_school_year()` and a new body for `public.business_date()`.
+  - 28 functions re-created from the 124 catalog with only the zone substitution.
+  - `src/lib/centreClock.mjs` behind every client date and time helper.
+- **H8:** `groupMemberIds` is enrollment-only.
+
+**Deviations from the plan text** (within the approved decisions):
+
+1. **H7, two helpers instead of four.** `AT TIME ZONE` accepts an `interval` (ISO sign, verified), so each substitution keeps the original expression and only the zone token changes. The planned `centre_local`/`centre_instant` helpers were unnecessary.
+2. **H7, labels kept.** The JSON `timezone` label in four CRM read models and the task command's label check still say `Africa/Casablanca`. They are labels, not time computation. The guards check computation, not labels.
+3. **H7, the generator owns every re-created body.** `scripts/generate-centre-clock.py --write|--check` reads the 124 catalog. It also holds the four H1/H5 edits, so a reviewer can regenerate every re-created function. CI runs `--check` at 124.
+4. **H5, a missing year on group insert.**
+   - A group inserted without a year takes the current school year in the trigger, not through a column default. This is because the reception command passes an explicit NULL.
+   - The year trigger steps aside only for the consumed Batch D clean-up revert, which alone sets both `eh.membership_sync` and `eh.enrollment_command`.
+5. **H5, an old year-less enrollment placed in a group now takes the group's year.** This applies to an old Confirmed enrollment row without a year, which the I9 check used to refuse. Status-only updates, ends and the year close are not year checks.
+6. **H2, level badges are pills too.** The group list and group page level badges get the same pill shape (owner: "all matches and consistent design").
+7. **H3, guide screenshots not retaken.** Three guide screenshots (`s12`, `s13`, `q02b` in `public/helpdesk`) still show « Inscrit (dossier) » and the former programme style. Retaking them is left to the documentation closeout.
+
+**Test fixtures changed for the new rule.** Several existing fixtures placed enrollments of different school years in one group. They now use a group of the right year, or seed legacy rows with the year trigger disabled, as they already drop the I9 check. No assertion was weakened:
+- `test-receptionist-security.sql`;
+- `test-online-learning.sql`;
+- `test-portal-readiness.sql`;
+- `test-enrollment-group-consistency.sql`.
+
+`test-finance-batch-e.sql` asserts the centre clock and the uncapped reception discount instead of the zone name and the cap.
+
+**Local evidence** (private Supabase stack on remapped ports, synthetic data only):
+
+- **Unit, lint and build:** `npm test`, lint and build pass.
+- **SQL suites:** the 33 rollback-only SQL suites of the CI `sql-and-concurrency` shard pass. So does the new `test-audit-follow-ups.sql`.
+- **Concurrency:** the placement and portal concurrency suites pass.
+- **Upgrade test:** `test-audit-follow-ups-upgrade.mjs` passes. It shows that the 124 bodies read at UTC equal the 125 bodies over 13 instants, that the catalog changes only in the listed functions with their security posture and grants kept, that no row changes, and that a restore then reapply round trip works.
+- **Browser:** `test-ui-foundation-browser.mjs` passes in Chromium and WebKit. A visual check of the Students list, group form and student page was done on a local build.
+- **Sentry (H6), local only:**
+  - The built app now contains `.next/server/instrumentation.js`.
+  - A synthetic route-handler error reached a local capture listener. The e-mail and phone number were redacted, the cookie redacted and the query string removed.
+  - No error was sent to the real DSN or triggered on Production.

@@ -145,7 +145,7 @@ insert into public.enrollments(id, student_id, group_id, status, session_type, s
   (pg_temp.id(402), pg_temp.id(202), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(403), pg_temp.id(203), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(404), pg_temp.id(204), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
-  (pg_temp.id(413), pg_temp.id(213), pg_temp.id(301), 'Validated', 'Yearly', '2025/2026', 'Child 1', null),
+  (pg_temp.id(413), pg_temp.id(213), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(414), pg_temp.id(214), pg_temp.id(303), 'Validated', 'Adults', '2026/2027', 'Beginning 1', null);
 select pg_temp.act(1);
 select public.end_learner(pg_temp.id(213), (select updated_at from public.students where id = pg_temp.id(213)), 'Alumni',

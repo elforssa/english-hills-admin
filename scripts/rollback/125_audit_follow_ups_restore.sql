@@ -1,0 +1,1624 @@
+-- Restore for migration 125 (Batch H, plan AFU-r1). Forward-applicable: run only
+-- after the application is rolled back to a build that does not rely on the new
+-- behaviour. It returns every re-created function to its 124 body (the zone name,
+-- the 10 % reception discount cap, no group year check), drops the two year
+-- triggers and the new functions, and changes no data. It refuses, changing
+-- nothing, unless migration 125 is applied. The ledger row 125 is removed by the
+-- operator wrapper, not here.
+begin;
+
+do $$ begin
+  if to_regprocedure('public.centre_utc_offset()') is null then
+    raise exception 'Restore 125: migration 125 is not applied' using errcode = '55000';
+  end if;
+end $$;
+
+drop trigger enrollment_group_year_guard on public.enrollments;
+drop trigger groups_year_guard on public.groups;
+
+-- BEGIN GENERATED FUNCTIONS (scripts/generate-centre-clock.py)
+
+CREATE OR REPLACE FUNCTION academic_security.today()
+ RETURNS date
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select (now() at time zone 'Africa/Casablanca')::date
+$function$;
+
+CREATE OR REPLACE FUNCTION online_security.today()
+ RETURNS date
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select (now() at time zone 'Africa/Casablanca')::date
+$function$;
+
+CREATE OR REPLACE FUNCTION online_security.local_date(p_at timestamp with time zone)
+ RETURNS date
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select (p_at at time zone 'Africa/Casablanca')::date
+$function$;
+
+CREATE OR REPLACE FUNCTION online_security.local_time(p_at timestamp with time zone)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select to_char(p_at at time zone 'Africa/Casablanca', 'HH24:MI')
+$function$;
+
+CREATE OR REPLACE FUNCTION online_security.french_when(p_at timestamp with time zone)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select (array['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'])
+      [extract(dow from p_at at time zone 'Africa/Casablanca')::integer + 1]
+    || ' ' || to_char(p_at at time zone 'Africa/Casablanca', 'DD/MM/YYYY') || ' à '
+    || online_security.local_time(p_at)
+$function$;
+
+CREATE OR REPLACE FUNCTION online_security.pattern_slots(p_group uuid, p_from date, p_to date)
+ RETURNS TABLE(pattern_id uuid, starts_at timestamp with time zone, ends_at timestamp with time zone)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select p.id, (d.day::date + p.start_time) at time zone 'Africa/Casablanca',
+    ((d.day::date + p.start_time) at time zone 'Africa/Casablanca') + make_interval(mins => p.minutes)
+  from public.online_lesson_patterns p
+  cross join lateral generate_series(greatest(p.valid_from, p_from)::timestamp,
+    least(p.valid_to, p_to)::timestamp, interval '1 day') as d(day)
+  where p.group_id = p_group and extract(dow from d.day) = p.weekday
+$function$;
+
+CREATE OR REPLACE FUNCTION public.online_update_lesson(p_lesson uuid, p_expected_version bigint, p_changes jsonb, p_scope text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare v_role text; l public.online_lessons%rowtype; c public.online_courses%rowtype; p public.online_lesson_patterns%rowtype;
+  g public.groups%rowtype; v_date date; v_time time; v_minutes integer; v_start timestamptz; v_end timestamptz;
+  v_old_start timestamptz; v_from date; v_pattern uuid; v_first uuid; v_ids uuid[] := '{}'; v_version bigint;
+begin
+  v_role := online_security.require_role(array['director', 'admin', 'receptionist']);
+  if p_scope is null or p_scope not in ('this', 'following') then
+    perform online_security.fail('scope_invalid', '22023', 'Choisissez « ce cours » ou « ce cours et les suivants ».');
+  end if;
+  -- "This and the following" moves the weekly pattern, a management action (D13).
+  if p_scope = 'following' and v_role not in ('director', 'admin') then
+    perform online_security.fail('forbidden', '42501', 'Action non autorisée.');
+  end if;
+  if p_changes is null or jsonb_typeof(p_changes) <> 'object' or p_changes = '{}'::jsonb
+     or exists (select 1 from jsonb_object_keys(p_changes) k where k <> all(array['date', 'start_time', 'minutes'])) then
+    perform online_security.fail('invalid_input', '22023', 'Modification invalide.');
+  end if;
+  l := online_security.lesson_for_update(p_lesson, p_expected_version);
+  select * into strict c from public.online_courses where group_id = l.group_id;
+  select * into strict g from public.groups where id = l.group_id;
+  if c.status = 'closed' then perform online_security.fail('course_closed', '23514', 'Ce cours est clôturé.'); end if;
+  if l.status = 'cancelled' then perform online_security.fail('lesson_cancelled', '23514', 'Ce cours est annulé.'); end if;
+  if l.status = 'completed' or l.starts_at <= now() then
+    perform online_security.fail('lesson_past', '23514', 'Ce cours a déjà commencé.');
+  end if;
+  begin
+    v_date := coalesce(nullif(p_changes->>'date', '')::date, online_security.local_date(l.starts_at));
+    v_time := coalesce(nullif(p_changes->>'start_time', '')::time, (l.starts_at at time zone 'Africa/Casablanca')::time);
+    v_minutes := coalesce(nullif(p_changes->>'minutes', '')::integer,
+      (extract(epoch from l.ends_at - l.starts_at) / 60)::integer);
+  exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow
+      or numeric_value_out_of_range then
+    perform online_security.fail('invalid_input', '22023', 'Modification invalide.');
+  end;
+  if extract(second from v_time) <> 0 or v_minutes not between 15 and 240 then
+    perform online_security.fail('invalid_input', '22023', 'Modification invalide.');
+  end if;
+  v_start := (v_date + v_time) at time zone 'Africa/Casablanca';
+  v_end := v_start + make_interval(mins => v_minutes);
+  if v_start <= now() then perform online_security.fail('lesson_past', '23514', 'La nouvelle date est passée.'); end if;
+  if v_date not between c.term_start and c.term_end then
+    perform online_security.fail('term_invalid', '22023', 'La nouvelle date est hors de la période du cours.');
+  end if;
+  v_old_start := l.starts_at;
+  if p_scope = 'this' then
+    if v_start = l.starts_at and v_end = l.ends_at then
+      return jsonb_build_object('lesson_id', l.id, 'version', l.version, 'notification_ids', '[]'::jsonb);
+    end if;
+    begin
+      update public.online_lessons set starts_at = v_start, ends_at = v_end, detached = true, version = version + 1,
+        updated_at = now(), updated_by = auth.uid()
+      where id = l.id returning * into l;
+    exception when unique_violation then
+      perform online_security.fail('lesson_overlap', '23514', 'Un autre cours de ce groupe commence à cette heure.');
+    end;
+    perform online_security.revoke_passes(l.id, null, 'rescheduled');
+    perform online_security.assert_no_overlap(l.group_id);
+    v_ids := online_security.notify(array[l.id], 'online_lesson_rescheduled', 'Cours en ligne déplacé — ' || g.name,
+      'Le cours en ligne « ' || g.name || ' » du ' || online_security.french_when(v_old_start)
+      || ' est déplacé au ' || online_security.french_when(v_start) || '.');
+    v_version := l.version;
+  else
+    if l.pattern_id is null then
+      perform online_security.fail('scope_invalid', '22023', 'Ce cours ne suit pas l’horaire hebdomadaire.');
+    end if;
+    select * into strict p from public.online_lesson_patterns where id = l.pattern_id for update;
+    v_from := least(online_security.local_date(l.starts_at), v_date);
+    if p.valid_from < v_from then
+      update public.online_lesson_patterns set valid_to = v_from - 1 where id = p.id;
+    else
+      delete from public.online_lesson_patterns where id = p.id;
+    end if;
+    insert into public.online_lesson_patterns(group_id, weekday, start_time, minutes, valid_from, valid_to, created_by)
+    values (l.group_id, extract(dow from v_date)::smallint, v_time, v_minutes, v_from, greatest(p.valid_to, v_from), auth.uid())
+    returning id into v_pattern;
+    perform online_security.reconcile_lessons(l.group_id, v_from, greatest(p.valid_to, v_from));
+    perform online_security.refresh_group_schedule(l.group_id);
+    update public.online_courses set version = version + 1, updated_at = now(), updated_by = auth.uid()
+    where group_id = l.group_id;
+    select id into v_first from public.online_lessons where pattern_id = v_pattern and starts_at > now()
+    order by starts_at limit 1;
+    if v_first is not null then
+      v_ids := online_security.notify(array[v_first], 'online_lesson_rescheduled', 'Horaire du cours en ligne modifié — ' || g.name,
+        'À partir du ' || online_security.french_when(v_old_start) || ', le cours en ligne « ' || g.name
+        || ' » a lieu le ' || online_security.french_when(
+          (select starts_at from public.online_lessons where id = v_first)) || ' puis chaque semaine à la même heure.');
+    end if;
+    select version into v_version from public.online_lessons where id = v_first;
+  end if;
+  return jsonb_build_object('lesson_id', coalesce(v_first, l.id), 'version', v_version, 'notification_ids', to_jsonb(v_ids));
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.attendance_student_in_group(p_student uuid, p_group uuid, p_session_date date DEFAULT NULL::date)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select academic_security.is_group_member(p_student, p_group)
+    or (p_session_date is not null and exists (select 1 from public.enrollments e
+      where e.student_id = p_student and e.status = 'Ended' and e.ended_group_id = p_group
+        and p_session_date < (e.ended_at at time zone 'Africa/Casablanca')::date))
+$function$;
+
+CREATE OR REPLACE FUNCTION public.count_today_dismissals()
+ RETURNS bigint
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+  select count(*) from public.dismissal_logs
+  where confirmed is true
+    and ("timestamp" at time zone 'Africa/Casablanca')::date
+      = (pg_catalog.now() at time zone 'Africa/Casablanca')::date;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.enforce_dismissal_integrity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_role text;
+  v_staff text;
+  v_student text;
+  v_adult text;
+begin
+  if tg_op <> 'INSERT' then
+    raise exception 'Dismissal history is immutable; contact the director for a documented correction.'
+      using errcode = '42501';
+  end if;
+  select p.role, p.full_name into v_role, v_staff
+  from public.profiles p where p.id = auth.uid();
+  if v_role not in ('admin','director') or v_staff is null or pg_catalog.btrim(v_staff) = '' then
+    raise exception 'Authorized staff profile required' using errcode = '42501';
+  end if;
+  select s.full_name into v_student from public.students s where s.id = new.student_id;
+  select a.full_name into v_adult from public.authorized_adults a
+  where a.id = new.adult_id and a.student_id = new.student_id;
+  if v_student is null or v_adult is null then
+    raise exception 'Adult is not authorized for this student' using errcode = '23514';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('dismissal:' || new.student_id::text, 0)
+  );
+  if exists (
+    select 1 from public.dismissal_logs d
+    where d.student_id = new.student_id and d.confirmed is true
+      and (d.timestamp at time zone 'Africa/Casablanca')::date
+        = (pg_catalog.clock_timestamp() at time zone 'Africa/Casablanca')::date
+  ) then
+    raise exception 'Student already dismissed today' using errcode = '23505';
+  end if;
+  new.student_name := v_student;
+  new.adult_name := v_adult;
+  new.staff_name := v_staff;
+  new.timestamp := pg_catalog.clock_timestamp();
+  new.confirmed := true;
+  return new;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.create_public_registration(p_payload jsonb, p_request_id uuid, p_hash text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_existing record;
+  v_student_id uuid;
+begin
+  if p_request_id is null or p_hash !~ '^[0-9a-f]{64}$'
+    or p_payload->>'consent' <> 'true'
+    or coalesce(pg_catalog.btrim(p_payload->>'full_name'), '') = ''
+    or coalesce(pg_catalog.btrim(p_payload->>'telephone'), '') = ''
+    or (coalesce(p_payload->>'email','') = '' and coalesce(p_payload->>'parent_email','') = '') then
+    raise exception 'Invalid public registration' using errcode = '22023';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('registration:' || p_request_id::text, 0));
+  select e.student_id, e.registration_payload_hash into v_existing
+  from public.enrollments e where e.registration_request_id = p_request_id;
+  if found then
+    if v_existing.registration_payload_hash <> p_hash then
+      raise exception 'Registration request key reused with changed data' using errcode = '23505';
+    end if;
+    return v_existing.student_id;
+  end if;
+  insert into public.students
+    (full_name, date_naissance, telephone, email, parent_email, age_category,
+     session_type, niveau_cefr, notes, status)
+  values
+    (p_payload->>'full_name', nullif(p_payload->>'date_naissance','')::date,
+     p_payload->>'telephone', nullif(p_payload->>'email',''),
+     nullif(p_payload->>'parent_email',''), nullif(p_payload->>'age_category',''),
+     coalesce(nullif(p_payload->>'session_type',''),'Yearly'),
+     nullif(p_payload->>'niveau_cefr',''), nullif(p_payload->>'notes',''), 'Prospect')
+  returning id into v_student_id;
+  insert into public.enrollments
+    (student_id, status, date_inscription, documents_urls, notes,
+     registration_request_id, registration_payload_hash, consent_at,
+     consent_policy_version, consent_source)
+  values
+    (v_student_id, 'Submitted', (pg_catalog.clock_timestamp() at time zone 'Africa/Casablanca')::date,
+     array[]::text[], nullif(p_payload->>'notes',''), p_request_id, p_hash,
+     pg_catalog.clock_timestamp(), 'public-privacy-2026-09-17', 'public_inscription');
+  return v_student_id;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.guard_premium_homework_write()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  linked_student uuid;
+  linked_teacher uuid;
+  linked_group uuid;
+  linked_date date;
+  linked_time time;
+  linked_status text;
+  caller_role text := public.get_my_role();
+begin
+  select session.student_id, session.teacher_id, session.premium_group_id,
+         session.scheduled_date, session.start_time, session.status
+    into linked_student, linked_teacher, linked_group, linked_date, linked_time, linked_status
+  from public.premium_sessions session where session.id = new.premium_session_id;
+  if not found or linked_status = 'Cancelled' then
+    raise exception 'A valid Premium session is required.';
+  end if;
+  if linked_group is not null then
+    linked_student := new.student_id;
+    if not exists (
+      select 1 from public.premium_group_memberships membership
+      where membership.premium_group_id = linked_group
+        and membership.student_id = linked_student
+        and membership.start_date <= linked_date
+        and (membership.end_date is null or membership.end_date >= linked_date)
+    ) then
+      raise exception 'The student is not a member of this Premium workshop.';
+    end if;
+  end if;
+  new.title := btrim(new.title);
+  if tg_op = 'INSERT' then
+    if caller_role in ('student', 'parent')
+      and linked_date + linked_time <= timezone('Africa/Casablanca', now()) then
+      raise exception 'Homework must be submitted before the Premium session.';
+    end if;
+    new.student_id := linked_student;
+    new.teacher_id := linked_teacher;
+    new.status := 'Submitted';
+    new.teacher_note := null;
+    new.reviewed_at := null;
+    new.submitted_at := now();
+  elsif caller_role in ('student', 'parent') then
+    if linked_date + linked_time <= timezone('Africa/Casablanca', now()) then
+      raise exception 'Homework must be submitted before the Premium session.';
+    end if;
+    if (new.premium_session_id, new.student_id, new.teacher_id) is distinct from
+       (old.premium_session_id, old.student_id, old.teacher_id) then
+      raise exception 'Learners may update only their submission content.';
+    end if;
+    new.status := 'Submitted'; new.teacher_note := null; new.reviewed_at := null; new.submitted_at := now();
+  elsif caller_role = 'teacher' then
+    if (new.premium_session_id, new.student_id, new.teacher_id, new.title, new.student_note, new.file_url, new.file_name)
+       is distinct from
+       (old.premium_session_id, old.student_id, old.teacher_id, old.title, old.student_note, old.file_url, old.file_name) then
+      raise exception 'Teachers may update only preparation fields.';
+    end if;
+    if new.status not in ('Reviewed', 'Prepared') then
+      raise exception 'Teachers may mark homework only as Reviewed or Prepared.';
+    end if;
+    if new.reviewed_at is null then new.reviewed_at := now(); end if;
+  end if;
+  if linked_student is distinct from new.student_id or linked_teacher is distinct from new.teacher_id then
+    raise exception 'Submission assignment does not match the Premium session.';
+  end if;
+  return new;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.portal_request_reenrollment(p_student_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare v_id uuid;
+begin
+  if public.get_my_role() is distinct from 'parent' then
+    perform portal_security.fail('forbidden', '42501', 'Réservé aux parents.');
+  end if;
+  if p_student_id is null or p_student_id not in (select public.get_visible_student_ids()) then
+    perform portal_security.fail('not_linked', '42501', 'Cet apprenant n’est pas lié à votre compte.');
+  end if;
+  insert into public.enrollments(student_id, status, date_inscription, notes)
+  values (p_student_id, 'Submitted', (now() at time zone 'Africa/Casablanca')::date,
+    'Demande de réinscription envoyée depuis l’espace parent.')
+  returning id into v_id;
+  return v_id;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.list_activity_log(p_before_created_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_before_id uuid DEFAULT NULL::uuid, p_table text DEFAULT ''::text, p_action text DEFAULT ''::text, p_from date DEFAULT NULL::date, p_to date DEFAULT NULL::date, p_search text DEFAULT ''::text, p_limit integer DEFAULT 50)
+ RETURNS TABLE(id uuid, created_at timestamp with time zone, actor_email text, action text, target_table text, target_id uuid, changed_columns text[])
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 100 or pg_catalog.length(coalesce(p_search, '')) > 120
+    or (p_before_created_at is null) <> (p_before_id is null)
+    or coalesce(p_action, '') not in ('', 'INSERT', 'UPDATE', 'DELETE')
+    or (p_from is not null and p_to is not null and p_to < p_from) then
+    raise exception 'Invalid activity log request' using errcode = '22023';
+  end if;
+  return query
+  select a.id, a.created_at, a.actor_email, a.action, a.target_table, a.target_id, a.changed_columns
+  from public.activity_log a
+  where (a.created_at, a.id) < (coalesce(p_before_created_at, 'infinity'::timestamptz),
+      coalesce(p_before_id, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+    and (coalesce(p_table, '') = '' or a.target_table = p_table)
+    and (coalesce(p_action, '') = '' or a.action = p_action)
+    and (p_from is null or a.created_at >= (p_from::timestamp at time zone 'Africa/Casablanca'))
+    and (p_to is null or a.created_at < ((p_to + 1)::timestamp at time zone 'Africa/Casablanca'))
+    and (coalesce(p_search, '') = ''
+      or pg_catalog.strpos(pg_catalog.lower(coalesce(a.actor_email, '')), pg_catalog.lower(p_search)) > 0
+      or pg_catalog.strpos(pg_catalog.lower(a.target_table), pg_catalog.lower(p_search)) > 0
+      or pg_catalog.strpos(coalesce(a.target_id::text, ''), pg_catalog.lower(p_search)) > 0)
+  order by a.created_at desc, a.id desc
+  limit p_limit;
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.crm_get_today(p_limit integer DEFAULT 30, p_offset integer DEFAULT 0, p_schedule_offset integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare result jsonb; start_at timestamptz:=((now() at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca'; end_at timestamptz;
+begin
+ perform crm_security.require_reader(false);perform crm_security.check_page(p_limit,p_offset);perform crm_security.check_page(p_limit,p_schedule_offset);
+ end_at:=(((now() at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca';
+ with active as (
+ select l.id,l.status,l.created_at,coalesce(l.last_attempt_at,l.created_at) last_contact,
+ coalesce((select max(greatest(f.completed_at,f.cancelled_at)) from public.crm_tasks f where f.lead_id=l.id and f.status<>'open'),l.created_at) unattended_since,
+ p.stale_contacting_minutes,t.id task_id,t.due_at,
+ exists(select 1 from public.placement_tests x where x.crm_lead_id=l.id and x.status='Planifié' and (x.date_test+x.heure::time) at time zone 'Africa/Casablanca'>=now()) scheduled_test,
+ exists(select 1 from public.crm_tasks f where f.lead_id=l.id and f.status='open' and f.task_type='first_contact') first_contact
+ from public.crm_leads l join public.crm_followup_policies p on p.id=l.followup_policy_id
+ left join lateral(select t.id,t.due_at from public.crm_tasks t where t.lead_id=l.id and t.status='open' order by t.due_at,t.id limit 1)t on true
+ where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
+ ), ranked as (
+ select id,case when due_at<now() then 1 when status='NEW' and first_contact then 2 when due_at>=start_at and due_at<end_at then 3
+ when task_id is null and not scheduled_test then 4 when status='CONTACTING' and last_contact<now()-make_interval(mins=>stale_contacting_minutes) then 5 end priority,
+ case when due_at<now() then due_at
+ when status='NEW' and first_contact then created_at
+ when due_at>=start_at and due_at<end_at then due_at
+ when task_id is null then unattended_since else last_contact end sort_at,
+ status='CONTACTING' and last_contact<now()-make_interval(mins=>stale_contacting_minutes) stale
+ from active
+ ), attention as(select id,priority,sort_at,stale from ranked where priority is not null order by priority,sort_at,id limit p_limit offset p_offset),
+ appointments as (
+ select t.id,t.lead_id,t.task_type,t.due_at,t.version,'task'::text kind,null::jsonb placement from public.crm_tasks t join active l on l.id=t.lead_id
+ where t.status='open' and t.due_at>=start_at and t.due_at<end_at
+ union all
+ select p.id,p.crm_lead_id,'placement_test',(p.date_test+p.heure::time) at time zone 'Africa/Casablanca',null::bigint,'placement',crm_security.placement_summary(p)
+ from public.placement_tests p where p.crm_lead_id is not null and p.status='Planifié' and p.date_test=(now() at time zone 'Africa/Casablanca')::date
+ ), schedule as(select * from appointments order by due_at,kind,id limit p_limit offset p_schedule_offset)
+ select jsonb_build_object('as_of',now(),'timezone','Africa/Casablanca',
+ 'counts',jsonb_build_object('new',(select count(*) from active where status='NEW' and first_contact),
+ 'overdue',(select count(*) from public.crm_tasks t join active a on a.id=t.lead_id where t.status='open' and t.due_at<now()),
+ 'callbacks',(select count(*) from public.crm_tasks t join active a on a.id=t.lead_id where t.status='open' and t.task_type='callback' and t.due_at>=start_at and t.due_at<end_at),
+ 'due_today',(select count(*) from public.crm_tasks t join active a on a.id=t.lead_id where t.status='open' and t.due_at>=start_at and t.due_at<end_at)),
+ 'attention_total',(select count(*) from ranked where priority is not null),
+ 'needs_attention',coalesce((select jsonb_agg(crm_security.operational_card(id)||jsonb_build_object('priority',priority,'stale',stale) order by priority,sort_at,id) from attention),'[]'::jsonb),
+ 'schedule_total',(select count(*) from appointments),
+ 'today_schedule',coalesce((select jsonb_agg(jsonb_build_object('id',s.id,'kind',s.kind,'placement',s.placement,'task_type',s.task_type,'due_at',s.due_at,'version',s.version,'lead',crm_security.operational_card(s.lead_id)) order by s.due_at,s.kind,s.id) from schedule s),'[]'::jsonb)) into result;
+ return result;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.crm_get_admissions_calendar(p_start date, p_end date, p_kind text DEFAULT 'all'::text, p_include_completed boolean DEFAULT false, p_cursor jsonb DEFAULT NULL::jsonb, p_limit integer DEFAULT 100)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare fingerprint text; after_date date; after_time time; after_kind text; after_id uuid; result jsonb;
+begin
+ perform crm_security.require_reader(false);
+ if p_start is null or p_end is null or not isfinite(p_start) or not isfinite(p_end)
+ or p_end<=p_start or p_end-p_start>42
+ or p_kind is null or p_kind not in ('all','placement','center_visit')
+ or p_include_completed is null or p_limit is null or p_limit not between 1 and 100 then
+ raise exception 'Invalid calendar range or filters' using errcode='22023'; end if;
+ fingerprint:=md5(jsonb_build_array(auth.uid(),p_start,p_end,p_kind,p_include_completed)::text);
+ perform crm_security.o3_cursor(p_cursor,'calendar',fingerprint);
+ if p_cursor is not null then
+  if p_cursor-array['v','kind','filter','date','time','event_kind','id']<>'{}'::jsonb
+  or jsonb_typeof(p_cursor->'date') is distinct from 'string'
+  or jsonb_typeof(p_cursor->'time') is distinct from 'string'
+  or jsonb_typeof(p_cursor->'id') is distinct from 'string'
+  or p_cursor->>'event_kind' is null or p_cursor->>'event_kind' not in ('placement','center_visit') then
+  raise exception 'Invalid calendar cursor' using errcode='22023'; end if;
+  after_date:=(p_cursor->>'date')::date; after_time:=(p_cursor->>'time')::time;
+  after_kind:=p_cursor->>'event_kind'; after_id:=(p_cursor->>'id')::uuid;
+  if not isfinite(after_date) or after_date<p_start or after_date>=p_end
+  or (p_cursor->>'time')!~ '^(([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,6})?|24:00:00)$' then
+  raise exception 'Invalid calendar cursor' using errcode='22023'; end if;
+ end if;
+ -- Cumulative RLS: admin/director have placement reads; 077 grants receptionist
+ -- all placement reads, with 083 restricting linked reads to these same roles.
+ -- This projection adds no role or row authority and does not join student data.
+ with events as (
+  select 'placement'::text kind,p.id,p.crm_lead_id lead_id,p.student_id,p.student_name display_name,
+  l.status stage,p.status placement_status,null::text task_type,p.date_test local_date,
+  crm_security.calendar_time(p.heure) local_time,
+  (p.date_test+crm_security.calendar_time(p.heure)) at time zone 'Africa/Casablanca' starts_at,
+  null::timestamptz ends_at,p.examinateur examiner_label,null::uuid assigned_to,
+  null::text assignee_name,p.updated_at,null::bigint task_version
+  from public.placement_tests p left join public.crm_leads l on l.id=p.crm_lead_id
+  where p_kind in ('all','placement') and p.date_test>=p_start and p.date_test<p_end
+  and (p.status='Planifié' or p_include_completed and p.status in ('Passé','Résultat saisi','Affecté'))
+  union all
+  select 'center_visit',t.id,t.lead_id,l.student_id,coalesce(l.learner_name,c.display_name),
+  l.status,null,t.task_type,(t.due_at at time zone 'Africa/Casablanca')::date,
+  (t.due_at at time zone 'Africa/Casablanca')::time,t.due_at,t.scheduled_end_at,null,t.assigned_to,
+  a.full_name,t.updated_at,t.version
+  from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
+  join public.crm_contacts c on c.id=l.contact_id left join public.profiles a on a.id=t.assigned_to
+  where p_kind in ('all','center_visit') and t.task_type='center_visit' and t.status='open'
+  and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
+  and t.due_at>=p_start::timestamp at time zone 'Africa/Casablanca'
+  and t.due_at<p_end::timestamp at time zone 'Africa/Casablanca'),
+ page as materialized(select * from events where after_date is null or
+  (local_date,coalesce(local_time,'24:00:00'::time),kind collate "C",id)>(after_date,after_time,after_kind collate "C",after_id)
+  order by local_date,coalesce(local_time,'24:00:00'::time),kind collate "C",id limit p_limit+1),
+ shown as(select * from page order by local_date,coalesce(local_time,'24:00:00'::time),kind collate "C",id limit p_limit)
+ select jsonb_build_object('as_of',now(),'timezone','Africa/Casablanca','start_date',p_start,'end_date',p_end,
+ 'rows',coalesce((select jsonb_agg(jsonb_build_object('kind',kind,'id',id,'lead_id',lead_id,
+ 'student_id',student_id,'display_name',display_name,'stage',stage,'placement_status',placement_status,
+ 'task_type',task_type,'local_date',local_date,'local_time',local_time,'starts_at',starts_at,'ends_at',ends_at,
+ 'examiner_label',examiner_label,'assigned_to',assigned_to,'assignee_name',assignee_name,
+ 'updated_at',updated_at,'task_version',task_version,
+ 'end_local_date',crm_security.scheduled_civil(ends_at)->'local_date',
+ 'end_local_time',crm_security.scheduled_civil(ends_at)->'local_time')
+ order by local_date,coalesce(local_time,'24:00:00'::time),kind collate "C",id) from shown),'[]'::jsonb),
+ 'has_more',(select count(*)>p_limit from page),'next_cursor',case when (select count(*)>p_limit from page) then
+ (select jsonb_build_object('v',1,'kind','calendar','filter',fingerprint,'date',local_date,
+ 'time',coalesce(local_time,'24:00:00'::time),'event_kind',kind,'id',id)
+ from shown order by local_date desc,coalesce(local_time,'24:00:00'::time) desc,kind collate "C" desc,id desc limit 1) end) into result;
+ return result;
+exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
+ raise exception 'Invalid calendar cursor' using errcode='22023';
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.command(cmd text, request uuid, data jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare actor uuid:=auth.uid(); digest text; prior public.crm_command_requests%rowtype; result jsonb;
+ l public.crm_leads%rowtype; t public.crm_tasks%rowtype; p public.crm_followup_policies%rowtype;
+ contact uuid; submission uuid; aid uuid; tid uuid; source text; allowed text[]; offsets integer[];
+ phone text; email text; candidates jsonb; count_failed integer; ordinal smallint;
+ due timestamptz; happened timestamptz; outcome text; meaningful boolean:=false; needs_next boolean:=false;
+ reason text; target text; initial_status text; next_spec jsonb; policy_version integer;
+begin
+ if cmd in ('create_manual_lead','resolve_submission') then
+  perform crm_security.lifecycle_barrier(true);
+  if cmd='resolve_submission' then
+
+   perform crm_security.lifecycle_preidentity_keys(src.id,fm.connection_id)
+   from public.crm_submissions src join public.crm_form_mappings fm on fm.id=src.form_mapping_id where src.id=(data->>'submission_id')::uuid;
+  end if;
+ end if;
+
+ perform crm_security.require_reader(cmd='create_followup_policy');
+ if request is null or jsonb_typeof(data) is distinct from 'object' or octet_length(data::text)>32768 then
+  raise exception 'Request key and bounded object payload required' using errcode='22023'; end if;
+ allowed:=case cmd
+ when 'create_followup_policy' then array['weekly_hours','timezone','attempt_offsets','minimum_attempt_gap_minutes','first_contact_sla_minutes','post_test_sla_minutes','stale_contacting_minutes','effective_from']
+ when 'create_manual_lead' then array['display_name','contact_kind','phone','whatsapp','email','preferred_channel','learner_name','learner_age','learner_birth_date','session_type','program_interest_text','source_label','owner_id']
+ when 'resolve_submission' then array['lead_id','expected_version','submission_id']
+ when 'add_note' then array['lead_id','expected_version','note']
+ when 'record_call_outcome' then array['lead_id','expected_version','task_id','expected_task_version','outcome','occurred_at','note','next_task']
+ when 'record_whatsapp' then array['lead_id','expected_version','kind','occurred_at','note','next_task']
+ when 'record_conversation' then array['lead_id','expected_version','channel','occurred_at','note','next_task']
+ when 'schedule_task' then array['lead_id','expected_version','task_id','expected_task_version','task','note']
+ when 'complete_task' then array['lead_id','expected_version','task_id','expected_task_version','outcome','note','next_task']
+ when 'cancel_task' then array['lead_id','expected_version','task_id','expected_task_version','reason','next_task']
+ when 'qualify_lead' then array['lead_id','expected_version','qualification_step','note','conversation_channel','next_task']
+ when 'close_lost' then array['lead_id','expected_version','reason','note']
+ when 'close_not_qualified' then array['lead_id','expected_version','reason','note']
+ when 'reopen_lead' then array['lead_id','expected_version','reason','next_task']
+ when 'reassign' then array['lead_id','expected_version','owner_id','task_id','expected_task_version','assigned_to','note']
+ else null end;
+ if allowed is null or data-allowed<>'{}'::jsonb then raise exception 'Unsupported command fields' using errcode='22023'; end if;
+ digest:=encode(sha256(convert_to(data::text,'UTF8')),'hex');
+ perform pg_advisory_xact_lock(hashtextextended('crm:request:'||actor||':'||cmd||':'||request,0));
+ select * into prior from public.crm_command_requests where actor_scope=actor::text and command_name=cmd and request_key=request;
+ if found then
+  if prior.payload_hash<>digest then raise exception 'Request key payload conflict' using errcode='22023'; end if;
+  return prior.result;
+ end if;
+ source:='command:'||actor||':'||cmd||':'||request;
+
+ if cmd='create_followup_policy' then
+  if coalesce(data->>'timezone','Africa/Casablanca')<>'Africa/Casablanca' then raise exception 'Timezone must be Africa/Casablanca' using errcode='22023'; end if;
+  if data ? 'attempt_offsets' then select array_agg(value::integer order by ord) into offsets from jsonb_array_elements_text(data->'attempt_offsets') with ordinality a(value,ord);
+  else offsets:=array[0,0,1,3,5]; end if;
+  perform crm_security.validate_policy(data->'weekly_hours',offsets);
+  if coalesce((data->>'minimum_attempt_gap_minutes')::integer,180) not between 180 and 10080
+   or coalesce((data->>'first_contact_sla_minutes')::integer,15) not between 1 and 1440
+   or coalesce((data->>'post_test_sla_minutes')::integer,120) not between 1 and 10080
+   or coalesce((data->>'stale_contacting_minutes')::integer,2880) not between 60 and 43200 then
+   raise exception 'Invalid policy timing' using errcode='22023'; end if;
+  happened:=coalesce((data->>'effective_from')::timestamptz,now());
+  if not isfinite(happened) or happened<now()-interval '1 minute' then raise exception 'Policy cannot be backdated' using errcode='22023'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('crm:policy:publish',0));
+  select coalesce(max(version),0)+1 into policy_version from public.crm_followup_policies;
+  insert into public.crm_followup_policies(version,weekly_hours,date_exceptions,attempt_offsets,minimum_attempt_gap_minutes,
+   first_contact_sla_minutes,post_test_sla_minutes,stale_contacting_minutes,effective_from,created_by)
+  values(policy_version,data->'weekly_hours','[]',offsets,coalesce((data->>'minimum_attempt_gap_minutes')::integer,180),
+   coalesce((data->>'first_contact_sla_minutes')::integer,15),coalesce((data->>'post_test_sla_minutes')::integer,120),
+   coalesce((data->>'stale_contacting_minutes')::integer,2880),happened,actor) returning * into p;
+  result:=jsonb_build_object('policy_id',p.id,'version',p.version,'timezone',p.timezone,'weekly_hours',p.weekly_hours,'effective_from',p.effective_from);
+
+ elsif cmd='create_manual_lead' then
+  select * into p from public.crm_followup_policies where effective_from<=now() and (retired_at is null or retired_at>now()) order by version desc limit 1;
+  if not found then raise exception 'No effective follow-up policy; ask a director to publish one' using errcode='22023'; end if;
+  if nullif(btrim(data->>'learner_name'),'') is null or length(data->>'learner_name')>200
+   or nullif(btrim(data->>'display_name'),'') is null or length(data->>'display_name')>200
+   or nullif(btrim(data->>'source_label'),'') is null or length(data->>'source_label')>200 then
+   raise exception 'Contact, learner and source label required (maximum 200 characters)' using errcode='22023'; end if;
+  if (data->>'learner_birth_date')::date>current_date then raise exception 'Birth date cannot be in the future' using errcode='22023'; end if;
+  perform crm_security.assert_staff((data->>'owner_id')::uuid);
+  phone:=crm_security.normalize_phone(data->>'phone'); email:=nullif(lower(btrim(data->>'email')),'');
+  if email is not null and (length(email)>254 or email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$') then raise exception 'Invalid email' using errcode='22023'; end if;
+  -- No automatic reuse, including a unique phone/email match: shared family
+  -- identifiers are not proof of contact identity. Return bounded suggestions.
+  select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'display_name',c.display_name,'version',c.version)),'[]'::jsonb) into candidates
+  from (select id,display_name,version from public.crm_contacts where merged_into_contact_id is null
+   and ((phone is not null and phone_e164=phone) or (email is not null and email_normalized=email)) order by id limit 10) c;
+  insert into public.crm_contacts(display_name,contact_kind,phone_raw,phone_e164,whatsapp_raw,whatsapp_e164,email_raw,email_normalized,preferred_channel,created_by)
+  values(btrim(data->>'display_name'),coalesce(data->>'contact_kind','unknown'),data->>'phone',phone,data->>'whatsapp',crm_security.normalize_phone(data->>'whatsapp'),
+   data->>'email',email,data->>'preferred_channel',actor) returning id into contact;
+  submission:=gen_random_uuid(); l.id:=gen_random_uuid();
+  due:=crm_security.next_window(p.id,now()+make_interval(mins=>p.first_contact_sla_minutes));
+  insert into public.crm_leads(id,contact_id,learner_name,learner_name_normalized,learner_age,age_recorded_at,learner_birth_date,session_type,program_interest_text,
+    owner_id,first_submission_id,latest_submission_id,followup_policy_id,outreach_anchor_date)
+  values(l.id,contact,btrim(data->>'learner_name'),lower(btrim(data->>'learner_name')),(data->>'learner_age')::integer,
+   case when data->>'learner_age' is not null then now() end,(data->>'learner_birth_date')::date,data->>'session_type',data->>'program_interest_text',
+   (data->>'owner_id')::uuid,submission,submission,p.id,(due at time zone p.timezone)::date) returning * into l;
+  insert into public.crm_submissions(id,lead_id,channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,resolved_by,resolved_at,payload_hash)
+  values(submission,l.id,'manual',now(),now(),'server',data,'[]',btrim(data->>'source_label'),'resolved',actor,now(),digest);
+  perform crm_security.event(l.id,'lead_created',source||':lead',null,null,null,null,null,null,null,null,'NEW');
+  aid:=crm_security.event(l.id,'submission_received',source||':submission',submission=>submission);
+  -- Activity ownership FK is satisfied; acquisition snapshots are never edited.
+  tid:=crm_security.new_task(l,jsonb_build_object('task_type','first_contact','due_at',due),'attempt:'||l.id||':1:1','intake',1::smallint,source||':initial-task');
+  result:=crm_security.result(l.id,source)||jsonb_build_object('submission_id',submission,'contact_candidates',candidates,'contact_version',1);
+
+ else
+  select * into l from public.crm_leads where id=(data->>'lead_id')::uuid for update;
+  if not found then raise exception 'Lead not found' using errcode='22023'; end if;
+  if (data->>'expected_version')::bigint is distinct from l.version then raise exception 'Stale lead version; refresh and retry' using errcode='PT409'; end if;
+  if l.merged_into_lead_id is not null or l.status='CONVERTED' then raise exception 'Lead is not operationally editable' using errcode='22023'; end if;
+  if cmd not in ('add_note','reopen_lead','reassign') and l.status in ('LOST','NOT_QUALIFIED') then raise exception 'Reopen lead before this operation' using errcode='22023'; end if;
+  initial_status:=l.status;
+  if data->>'task_id' is not null then
+   select * into t from public.crm_tasks where id=(data->>'task_id')::uuid and lead_id=l.id for update;
+   if not found or t.status<>'open' then raise exception 'Open task not found on this lead' using errcode='PT409'; end if;
+   if (data->>'expected_task_version')::bigint is distinct from t.version then raise exception 'Stale task version; refresh and retry' using errcode='PT409'; end if;
+  end if;
+  if cmd in ('complete_task','cancel_task') and t.id is null then raise exception 'Task required' using errcode='22023'; end if;
+  happened:=coalesce((data->>'occurred_at')::timestamptz,now());
+  if not isfinite(happened) or happened>now() or happened<l.created_at then raise exception 'Occurrence time must be between lead creation and now' using errcode='22023'; end if;
+  if happened<(select max(occurred_at) from public.crm_activities where lead_id=l.id and event_type='lead_reopened') then
+   raise exception 'Activity predates the latest reopening' using errcode='22023'; end if;
+
+  if cmd='resolve_submission' then
+   -- Private only: future trusted intake can attach an unresolved acquisition
+   -- without rewriting accepted snapshots or the lead's original first touch.
+   perform 1 from public.crm_submissions where id=(data->>'submission_id')::uuid and match_status='needs_review' and lead_id is null for update;
+   if not found then raise exception 'Unresolved submission required' using errcode='22023'; end if;
+   update public.crm_submissions set lead_id=l.id,match_status='resolved',resolved_by=actor,resolved_at=now()
+    where id=(data->>'submission_id')::uuid;
+   update public.crm_leads set latest_submission_id=(data->>'submission_id')::uuid where id=l.id
+    and (select row(occurred_at,id) from public.crm_submissions where id=(data->>'submission_id')::uuid)>
+        (select row(occurred_at,id) from public.crm_submissions where id=l.latest_submission_id);
+   perform crm_security.lifecycle_pending_handoff((data->>'submission_id')::uuid);
+   perform crm_security.event(l.id,'submission_received',source||':submission',submission=>(data->>'submission_id')::uuid);
+  elsif cmd='add_note' then
+   if nullif(btrim(data->>'note'),'') is null then raise exception 'Note required' using errcode='22023'; end if;
+   perform crm_security.event(l.id,'note_added',source||':note',data->>'note');
+
+  elsif cmd='record_call_outcome' then
+   outcome:=data->>'outcome';
+   if outcome is null or outcome<>all(array['no_answer','busy','declined','unreachable','spoke_with_contact','wrong_number']) then raise exception 'Invalid phone outcome' using errcode='22023'; end if;
+   if t.id is not null and t.task_type not in ('first_contact','contact_attempt','callback') then raise exception 'Phone outcome requires a call task' using errcode='22023'; end if;
+   if l.last_attempt_at is not null and happened<l.last_attempt_at then raise exception 'Call time predates last recorded attempt' using errcode='22023'; end if;
+   if outcome='spoke_with_contact' then
+    meaningful:=true;
+    perform crm_security.event(l.id,'conversation_recorded',source||':conversation',data->>'note','phone',outcome,t.id,happened);
+   elsif outcome in ('no_answer','busy','declined','unreachable') and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') then
+    select * into strict p from public.crm_followup_policies where id=l.followup_policy_id;
+    if l.last_attempt_at is not null and happened<l.last_attempt_at+make_interval(mins=>p.minimum_attempt_gap_minutes) then
+     raise exception 'Failed calls must respect the policy minimum spacing' using errcode='22023'; end if;
+    if l.last_conversation_at is not null and happened<l.last_conversation_at then
+     raise exception 'Failed call predates the latest meaningful conversation' using errcode='22023'; end if;
+    count_failed:=crm_security.failed_count(l); ordinal:=(count_failed+1)::smallint;
+    -- Each uninterrupted sequence anchors to its first actual failed call,
+    -- independently of lifecycle and any earlier intake/conversation dates.
+    if count_failed=0 then l.outreach_anchor_date:=(happened at time zone 'Africa/Casablanca')::date; end if;
+    -- The first five need not have a task supplied, but consume the current
+    -- sequence slot exactly once. An explicit call after five is still possible.
+    if t.id is null then
+     select * into t from public.crm_tasks where lead_id=l.id and status='open' and outreach_cycle=l.outreach_cycle and attempt_ordinal=ordinal order by id limit 1 for update;
+    elsif t.attempt_ordinal is not null and (t.outreach_cycle<>l.outreach_cycle or t.attempt_ordinal<>ordinal) then
+     raise exception 'Task is not the current attempt' using errcode='PT409';
+    end if;
+    perform crm_security.event(l.id,'contact_attempted',source||':attempt',data->>'note','phone',outcome,t.id,happened,l.outreach_cycle,ordinal);
+    perform crm_security.event(l.id,'call_'||outcome,source||':outcome',null,'phone',outcome,t.id,happened);
+    if l.status='NEW' then l.status:='CONTACTING'; end if;
+    l.last_attempt_at:=happened;
+    if t.id is not null then perform crm_security.finish_task(t,false,data->>'note',source||':complete'); end if;
+    -- Cancel any obsolete call slot if the operator used a different callback.
+    perform crm_security.cancel_tasks(l.id,'Attempt recorded',source||':obsolete',true);
+    t.id:=null;
+    if ordinal<5 then
+     due:=crm_security.attempt_due(l.followup_policy_id,l.outreach_anchor_date,ordinal+1,happened,now());
+     tid:=crm_security.new_task(l,jsonb_build_object('task_type','contact_attempt','due_at',due),'attempt:'||l.id||':'||l.outreach_cycle||':'||(ordinal+1),'attempt_sequence',(ordinal+1)::smallint,source||':next-attempt');
+    end if;
+   else
+    -- Wrong number never counts as an unreachable attempt.
+    perform crm_security.event(l.id,'call_'||outcome,source||':outcome',data->>'note','phone',outcome,t.id,happened);
+    needs_next:=true;
+   end if;
+   if t.id is not null then perform crm_security.finish_task(t,false,data->>'note',source||':complete'); end if;
+
+  elsif cmd='record_whatsapp' then
+   if (data->>'kind') is null or data->>'kind' not in ('whatsapp_sent','meaningful_whatsapp_conversation') then raise exception 'Invalid WhatsApp activity' using errcode='22023'; end if;
+   meaningful:=data->>'kind'='meaningful_whatsapp_conversation';
+   perform crm_security.event(l.id,case when meaningful then 'whatsapp_conversation' else 'whatsapp_sent' end,source||':whatsapp',data->>'note','whatsapp',null,null,happened);
+   if not meaningful and data ? 'next_task' then raise exception 'WhatsApp sent is activity-only' using errcode='22023'; end if;
+
+  elsif cmd='record_conversation' then
+   if coalesce(data->>'channel','') not in ('phone','whatsapp','in_person') then raise exception 'Conversation channel and evidence required' using errcode='22023'; end if;
+   meaningful:=true;
+   perform crm_security.event(l.id,'conversation_recorded',source||':conversation',data->>'note',data->>'channel',null,null,happened);
+
+  elsif cmd='schedule_task' then
+   next_spec:=data->'task';
+   if t.id is null then tid:=crm_security.new_task(l,next_spec,source||':task');
+   else
+    if jsonb_typeof(next_spec) is distinct from 'object' or next_spec-array['due_at','instructions']<>'{}'::jsonb then raise exception 'Reschedule accepts due_at and instructions only' using errcode='22023'; end if;
+    due:=(next_spec->>'due_at')::timestamptz;
+    if due is null or not isfinite(due) or due<now() then raise exception 'Future due time required' using errcode='22023'; end if;
+    if t.task_type in ('first_contact','contact_attempt','callback') then
+     -- An agreed callback keeps its agreed time; never shift it silently.
+     if t.schedule_kind='appointment' and crm_security.next_window(l.followup_policy_id,due)<>due then
+      raise exception 'Agreed callback time is outside calling hours' using errcode='22023'; end if;
+     due:=crm_security.next_window(l.followup_policy_id,due);
+    end if;
+    if length(next_spec->>'instructions')>4000 then raise exception 'Instructions too long' using errcode='22023'; end if;
+    update public.crm_tasks set due_at=due,scheduled_end_at=null,instructions=case when next_spec ? 'instructions' then next_spec->>'instructions' else instructions end,
+     updated_at=now(),version=version+1 where id=t.id;
+    perform crm_security.event(l.id,'task_rescheduled',source||':rescheduled',data->>'note',null,null,t.id);
+   end if;
+
+  elsif cmd in ('complete_task','cancel_task') then
+   if cmd='complete_task' then
+    if t.task_type in ('first_contact','contact_attempt','callback') then raise exception 'Complete call tasks through record_call_outcome' using errcode='22023'; end if;
+    if nullif(btrim(data->>'outcome'),'') is null or length(data->>'outcome')>200 then raise exception 'Completion outcome required' using errcode='22023'; end if;
+    perform crm_security.finish_task(t,false,data->>'outcome',source||':complete');
+   else perform crm_security.finish_task(t,true,data->>'reason',source||':cancel'); end if;
+   needs_next:=true;
+
+  elsif cmd='qualify_lead' then
+   if l.status not in ('NEW','CONTACTING','ENGAGED') then raise exception 'Lead must be unqualified and active' using errcode='22023'; end if;
+   if data->>'conversation_channel' is not null then
+    if data->>'conversation_channel' not in ('phone','whatsapp','in_person') then raise exception 'Conversation evidence required' using errcode='22023'; end if;
+    perform crm_security.event(l.id,'conversation_recorded',source||':conversation',data->>'note',data->>'conversation_channel');
+    meaningful:=true;
+   elsif l.last_conversation_at is null or not exists(select 1 from public.crm_activities where lead_id=l.id and event_type in ('conversation_recorded','whatsapp_conversation')) then
+    raise exception 'Qualification requires meaningful conversation evidence' using errcode='22023';
+   end if;
+   target:=data->>'qualification_step';
+   if target is null or target not in ('placement_test','center_visit','enrollment','other') or (target='other' and nullif(btrim(data->>'note'),'') is null) then raise exception 'Valid qualification step and explanation required' using errcode='22023'; end if;
+   if data->'next_task' is null or data->'next_task'='null'::jsonb then raise exception 'Qualification next task required' using errcode='22023'; end if;
+   if (target='placement_test' and data->'next_task'->>'task_type' is distinct from 'confirm_placement_test')
+    or (target='center_visit' and data->'next_task'->>'task_type' is distinct from 'center_visit')
+    or (target='enrollment' and data->'next_task'->>'task_type' is distinct from 'enrollment_followup') then raise exception 'Task must match qualification step' using errcode='22023'; end if;
+   l.qualification_step:=target;
+
+  elsif cmd in ('close_lost','close_not_qualified') then
+   reason:=data->>'reason'; target:=case when cmd='close_lost' then 'LOST' else 'NOT_QUALIFIED' end;
+   if reason is null or (target='LOST' and reason<>all(array['unreachable','not_interested','price','schedule','location','chose_competitor','postponed','other']))
+    or (target='NOT_QUALIFIED' and reason<>all(array['age_not_suitable','program_not_suitable','invalid_spam','duplicate','outside_scope','other']))
+    or (reason='other' and nullif(btrim(data->>'note'),'') is null) then raise exception 'Valid closure reason and explanation required' using errcode='22023'; end if;
+   if reason='unreachable' and (l.status not in ('CONTACTING','ENGAGED','QUALIFIED') or crm_security.failed_count(l)<5) then raise exception 'Unreachable requires five current-cycle failed phone calls' using errcode='22023'; end if;
+   perform crm_security.event(l.id,case when target='LOST' then 'lead_lost' else 'lead_not_qualified' end,source||':closed',data->>'note',null,reason,null,null,null,null,l.status,target);
+   l.status:=target;l.closure_reason:=reason;l.closure_note:=data->>'note';l.closed_at:=now();
+   perform crm_security.cancel_tasks(l.id,'Lead closed: '||reason,source||':cancel');
+
+  elsif cmd='reopen_lead' then
+   if l.status not in ('LOST','NOT_QUALIFIED') or nullif(btrim(data->>'reason'),'') is null then raise exception 'Closed lead and reopen reason required' using errcode='22023'; end if;
+   l.status:=case when exists(select 1 from public.crm_activities where lead_id=l.id and event_type in ('conversation_recorded','whatsapp_conversation')) then 'ENGAGED' else 'CONTACTING' end;
+   l.outreach_cycle:=l.outreach_cycle+1;l.outreach_anchor_date:=null;l.last_attempt_at:=null;
+   l.closure_reason:=null;l.closure_note:=null;l.closed_at:=null;l.qualification_step:=null;
+   if data->'next_task' is null or data->'next_task'='null'::jsonb then raise exception 'Explicit reopen task required' using errcode='22023'; end if;
+   perform crm_security.event(l.id,'lead_reopened',source||':reopened',data->>'reason',null,null,null,null,null,null,initial_status,l.status);
+   needs_next:=true;
+
+  elsif cmd='reassign' then
+   if not(data ? 'owner_id') and not(data ? 'assigned_to') then raise exception 'Explicit reassignment required' using errcode='22023'; end if;
+   if data ? 'owner_id' then
+    perform crm_security.assert_staff((data->>'owner_id')::uuid);l.owner_id:=(data->>'owner_id')::uuid;
+    perform crm_security.event(l.id,'lead_reassigned',source||':lead-owner',data->>'note');
+   end if;
+   if data ? 'assigned_to' then
+    if t.id is null then raise exception 'Task required for task reassignment' using errcode='22023'; end if;
+    perform crm_security.assert_staff((data->>'assigned_to')::uuid);
+    update public.crm_tasks set assigned_to=(data->>'assigned_to')::uuid,version=version+1,updated_at=now() where id=t.id;
+    perform crm_security.event(l.id,'task_reassigned',source||':task-owner',data->>'note',null,null,t.id);
+   end if;
+  end if;
+
+  if meaningful then
+   if happened<greatest(l.last_conversation_at,l.last_attempt_at) then
+    raise exception 'Conversation predates the latest outreach evidence' using errcode='22023'; end if;
+   l.last_conversation_at:=happened;
+   -- A conversation interrupts outreach even for an already qualified lead.
+   l.outreach_cycle:=l.outreach_cycle+1;l.outreach_anchor_date:=null;l.last_attempt_at:=null;
+   if l.status in ('NEW','CONTACTING') then
+    perform crm_security.event(l.id,'lead_engaged',source||':engaged',null,null,null,null,null,null,null,l.status,'ENGAGED');
+    l.status:='ENGAGED';
+   end if;
+   perform crm_security.cancel_tasks(l.id,'Meaningful conversation ended outreach',source||':cancel-attempt',true);
+   needs_next:=true;
+  end if;
+  if cmd='qualify_lead' then
+   perform crm_security.event(l.id,'lead_qualified',source||':qualified',data->>'note',null,null,null,null,null,null,'ENGAGED','QUALIFIED');
+   l.status:='QUALIFIED';needs_next:=true;
+  end if;
+  if data ? 'next_task' and data->'next_task'<>'null'::jsonb then tid:=crm_security.new_task(l,data->'next_task',source||':next-task'); end if;
+  if needs_next and not exists(select 1 from public.crm_tasks where lead_id=l.id and status='open') then raise exception 'Active lead requires a next actionable task' using errcode='22023'; end if;
+  update public.crm_leads set status=l.status,owner_id=l.owner_id,qualification_step=l.qualification_step,
+   closure_reason=l.closure_reason,closure_note=l.closure_note,closed_at=l.closed_at,outreach_cycle=l.outreach_cycle,
+   outreach_anchor_date=l.outreach_anchor_date,last_attempt_at=l.last_attempt_at,last_conversation_at=l.last_conversation_at,
+   version=version+1,updated_at=now() where id=l.id;
+  result:=crm_security.result(l.id,source);
+ end if;
+ insert into public.crm_command_requests(actor_scope,command_name,request_key,payload_hash,result) values(actor::text,cmd,request,digest,result);
+ return result;
+exception
+ when deadlock_detected then raise exception 'Concurrent CRM change; refresh and retry' using errcode='PT409';
+ when invalid_text_representation or invalid_datetime_format or datetime_field_overflow or numeric_value_out_of_range or check_violation then
+  raise exception 'Invalid CRM command input' using errcode='22023';
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.enrollment_year(e enrollments)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+ select coalesce(e.school_year,y::text||'/'||(y+1)::text) from (
+ select extract(year from coalesce(e.date_inscription,(e.created_at at time zone 'Africa/Casablanca')::date))::integer
+ - case when extract(month from coalesce(e.date_inscription,(e.created_at at time zone 'Africa/Casablanca')::date))<9 then 1 else 0 end y)x
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.opportunity_card(lead uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+ select jsonb_build_object('id',l.id,'contact_id',l.contact_id,'contact_name',c.display_name,
+ 'learner_name',l.learner_name,'learner_age',l.learner_age,'program',coalesce(nullif(l.session_type,''),nullif(l.program_interest_text,'')),
+ 'status',l.status,'version',l.version,'created_at',l.created_at,'owner_id',l.owner_id,
+ 'owner_display_label',crm_security.staff_display_label(l.owner_id),
+ 'owner_name',case when l.owner_id is not null then coalesce(nullif(o.full_name,''),'Équipe accueil') end,
+ 'source_label',s.source_label,'channel',s.channel,'failed_attempts',crm_security.failed_count(l),
+ 'closure_reason',l.closure_reason,'closed_at',l.closed_at,
+ 'next_task',case when t.id is not null then jsonb_build_object('id',t.id,'task_type',t.task_type,'due_at',t.due_at,
+ 'version',t.version,'assigned_to',t.assigned_to,'assignee_display_label',crm_security.staff_display_label(t.assigned_to),'attempt_ordinal',t.attempt_ordinal,
+ 'schedule_kind',t.schedule_kind,'followup_reason',t.followup_reason)||crm_security.scheduled_civil(t.due_at) end,
+ 'next_placement',case when p.id is not null then jsonb_build_object('id',p.id,'scheduled_for',(p.date_test+crm_security.calendar_time(p.heure)) at time zone 'Africa/Casablanca','status',p.status,'local_date',p.date_test,'local_time',crm_security.calendar_time(p.heure)) end,
+ 'last_activity_at',(select a.occurred_at from public.crm_activities a where a.lead_id=l.id order by a.occurred_at desc,a.id desc limit 1))
+ from public.crm_leads l join public.crm_contacts c on c.id=l.contact_id
+ join public.crm_submissions s on s.id=l.first_submission_id left join public.profiles o on o.id=l.owner_id
+ left join lateral(select t.id,t.task_type,t.due_at,t.version,t.assigned_to,t.attempt_ordinal,t.schedule_kind,t.followup_reason from public.crm_tasks t where t.lead_id=l.id and t.status='open' order by t.due_at,t.id limit 1)t on true
+ left join lateral(select p.id,p.date_test,p.heure,p.status from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié' limit 1)p on true
+ where l.id=lead
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.reminder_due(policy uuid, preset text)
+ RETURNS timestamp with time zone
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare p public.crm_followup_policies%rowtype; today date; target timestamptz;
+begin
+ select * into strict p from public.crm_followup_policies where id=policy;
+ today:=(now() at time zone p.timezone)::date;
+ target:=case preset
+  when 'in_2_hours' then now()+interval '2 hours'
+  when 'tomorrow' then (today+1)::timestamp at time zone p.timezone
+  when 'in_2_days' then (today+2)::timestamp at time zone p.timezone
+  when 'in_3_days' then (today+3)::timestamp at time zone p.timezone
+  when 'next_week' then (today+7)::timestamp at time zone p.timezone
+ end;
+ if target is null then raise exception 'Unknown reminder preset' using errcode='22023'; end if;
+ return crm_security.next_window(policy,target);
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.opportunity_ids(v text, q text, contact uuid, owner_mode text, owner uuid, channel text, source text, program_kind text, program text, as_of timestamp with time zone)
+ RETURNS TABLE(id uuid, status text, created_at timestamp with time zone)
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+ SET plan_cache_mode TO 'force_custom_plan'
+AS $function$
+begin return query
+ select l.id,l.status,l.created_at from public.crm_leads l
+ join public.crm_contacts c on c.id=l.contact_id
+ join public.crm_submissions s on s.id=l.first_submission_id
+ where l.merged_into_lead_id is null
+ and ($3 is null or l.contact_id=$3)
+ and ($4='all' or $4='me' and l.owner_id=auth.uid()
+   or $4='unassigned' and l.owner_id is null or $4='staff' and l.owner_id=$5)
+ and ($6 is null or s.channel=$6) and ($7 is null or s.source_label=$7)
+ and ($8='all' or $8='session' and nullif(l.session_type,'')=$9
+   or $8='interest' and nullif(l.session_type,'') is null and nullif(l.program_interest_text,'')=$9
+   or $8='unspecified' and nullif(l.session_type,'') is null and nullif(l.program_interest_text,'') is null)
+ and ($2='' or strpos(lower(c.display_name),lower($2))>0 or strpos(lower(coalesce(l.learner_name,'')),lower($2))>0
+   or (crm_security.normalize_phone($2) is not null and (c.phone_e164=crm_security.normalize_phone($2) or c.whatsapp_e164=crm_security.normalize_phone($2)))
+   or (length(regexp_replace($2,'[^0-9]','','g'))>=3 and strpos(coalesce(c.phone_e164,c.phone_raw,''),regexp_replace($2,'[^0-9]','','g'))>0))
+ and case $1
+ when 'all' then true
+ when 'mine' then l.owner_id=auth.uid()
+ when 'new_today' then l.created_at>=(($10 at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca'
+   and l.created_at<((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'
+ when 'qualified' then l.status='QUALIFIED'
+ when 'closed' then l.status in ('LOST','NOT_QUALIFIED')
+ when 'no_response' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and crm_security.failed_count(l)>0
+ when 'follow_up_today' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and exists(
+   select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open'
+   and t.due_at>=(($10 at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca'
+   and t.due_at<((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca')
+ when 'placement' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and
+   (exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')
+    or exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type in ('confirm_placement_test','post_test_followup')))
+ when 'attention' then l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and (
+   exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.due_at<$10)
+   or l.status='NEW' and exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type='first_contact')
+   or (select t.due_at from public.crm_tasks t where t.lead_id=l.id and t.status='open' order by t.due_at,t.id limit 1)
+      <((($10 at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'
+   or not exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')
+      and not exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié' and (p.date_test+crm_security.calendar_time(p.heure)) at time zone 'Africa/Casablanca'>=$10)
+   or l.status='CONTACTING' and coalesce(l.last_attempt_at,l.created_at)<$10-make_interval(mins=>(select p.stale_contacting_minutes from public.crm_followup_policies p where p.id=l.followup_policy_id)))
+ else false end;
+end
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.work_boundaries(stamp timestamp with time zone)
+ RETURNS TABLE(d0 timestamp with time zone, d1 timestamp with time zone, d2 timestamp with time zone)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+ select local_day::timestamp at time zone 'Africa/Casablanca',
+ (local_day+1)::timestamp at time zone 'Africa/Casablanca',
+ (local_day+2)::timestamp at time zone 'Africa/Casablanca'
+ from (select (stamp at time zone 'Africa/Casablanca')::date as local_day)x
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.placement_integrity()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare student uuid; begin
+ if tg_op='DELETE' then
+  if old.crm_lead_id is not null then raise exception 'CRM-linked placement history cannot be deleted' using errcode='42501'; end if;
+  return old;
+ end if;
+ if tg_op='UPDATE' and new.crm_lead_id is distinct from old.crm_lead_id then
+  raise exception 'CRM placement link is immutable' using errcode='42501'; end if;
+ if new.crm_lead_id is null then return new; end if;
+ select student_id into student from public.crm_leads where id=new.crm_lead_id for update;
+ if new.student_id is not null and new.student_id is distinct from student then
+  raise exception 'Placement student must match linked CRM student' using errcode='22023'; end if;
+ if new.status is null or new.heure is null or new.heure !~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' or not isfinite(new.date_test)
+ or length(new.examinateur)>200 or length(new.notes)>4000 then raise exception 'Valid placement date, time and bounded notes required' using errcode='22023'; end if;
+ if new.status='Planifié' and new.niveau_recommande is not null then
+  raise exception 'A planned CRM test must not contain a result' using errcode='22023'; end if;
+ if new.status in ('Résultat saisi','Affecté') and nullif(btrim(new.niveau_recommande),'') is null then
+  raise exception 'Recommended level required for a placement result' using errcode='22023'; end if;
+ if new.status='Planifié' and (tg_op='INSERT' or new.date_test is distinct from old.date_test or new.heure is distinct from old.heure)
+ and (new.date_test+new.heure::time) at time zone 'Africa/Casablanca'<=now() then
+  raise exception 'Future placement appointment required' using errcode='22023'; end if;
+ return new;
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.placement_summary(p placement_tests)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+ select jsonb_build_object('id',p.id,'is_crm',true,'student_name',p.student_name,'date_test',p.date_test,'heure',p.heure,
+ 'scheduled_for',(p.date_test+crm_security.calendar_time(p.heure)) at time zone 'Africa/Casablanca','local_date',p.date_test,'local_time',crm_security.calendar_time(p.heure),
+ 'examinateur',p.examinateur,'status',p.status,
+ 'niveau_recommande',case when p.status in ('Résultat saisi','Affecté') then p.niveau_recommande end,
+ 'score',case when p.status in ('Résultat saisi','Affecté') then p.score end,'notes',p.notes,'updated_at',p.updated_at)
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.scheduled_civil(stamp timestamp with time zone)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+ select jsonb_build_object('local_date',(stamp at time zone 'Africa/Casablanca')::date,
+ 'local_time',(stamp at time zone 'Africa/Casablanca')::time)
+$function$;
+
+CREATE OR REPLACE FUNCTION crm_security.next_window(policy uuid, target timestamp with time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare p public.crm_followup_policies%rowtype; d date; w jsonb; opens timestamptz; closes timestamptz; i integer;
+begin
+  select * into strict p from public.crm_followup_policies where id=policy;
+  if target is null or not isfinite(target) then raise exception 'Finite due time required' using errcode='22023'; end if;
+  d:=(target at time zone p.timezone)::date;
+  for i in 0..370 loop
+    for w in select value from jsonb_array_elements(p.weekly_hours->extract(isodow from d)::integer::text) loop
+      opens:=(d+(w->>0)::time) at time zone p.timezone;
+      closes:=(d+(w->>1)::time) at time zone p.timezone;
+      if greatest(target,opens)<closes then return greatest(target,opens); end if;
+    end loop;
+    d:=d+1;
+  end loop;
+  raise exception 'Policy has no available calling window' using errcode='22023';
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.attempt_due(policy uuid, anchor date, ordinal integer, last_call timestamp with time zone, as_of timestamp with time zone)
+ RETURNS timestamp with time zone
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare p public.crm_followup_policies%rowtype; target timestamptz;
+begin
+ select * into strict p from public.crm_followup_policies where id=policy;
+ if ordinal not between 1 and 5 or anchor is null or as_of is null then raise exception 'Invalid attempt scheduling input' using errcode='22023'; end if;
+ target:=(anchor+p.attempt_offsets[ordinal])::timestamp at time zone p.timezone;
+ target:=greatest(target,as_of,coalesce(last_call,as_of)+make_interval(mins=>p.minimum_attempt_gap_minutes));
+ return crm_security.next_window(policy,target);
+end $function$;
+
+CREATE OR REPLACE FUNCTION crm_security.accept_external_submission(sid uuid, contact uuid DEFAULT NULL::uuid, lead uuid DEFAULT NULL::uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare s public.crm_submissions;l public.crm_leads;p public.crm_followup_policies;
+ d jsonb;due timestamptz;tid uuid;actor_kind text:=case when auth.uid() is null then 'integration' else 'user' end;begin
+ if not crm_security.lifecycle_has_barrier(true) then raise exception 'Outermost identity barrier required' using errcode='42501';end if;
+ select * into strict s from public.crm_submissions where id=sid for update;
+ if s.match_status<>'needs_review' then raise exception 'Unresolved intake required' using errcode='PT409';end if;
+ d:=s.core_fields;
+ if lead is null then
+  select * into p from public.crm_followup_policies where effective_from<=now() and (retired_at is null or retired_at>now()) order by version desc limit 1;
+  if not found then raise exception 'missing_policy' using errcode='P0001';end if;
+  if nullif(btrim(d->>'contact_name'),'') is null or nullif(btrim(d->>'program_interest_text'),'') is null
+   or (nullif(btrim(d->>'learner_name'),'') is null and not crm_security.mapping_learner_optional(s.id))
+   then raise exception 'Contact, program and permitted learner identity required' using errcode='22023';end if;
+  if nullif(btrim(d->>'learner_name'),'') is null and crm_security.normalize_phone(d->>'phone') is null and nullif(lower(btrim(d->>'email')),'') is null
+   then raise exception 'Contact method required' using errcode='22023';end if;
+  if contact is null then
+   insert into public.crm_contacts(display_name,contact_kind,phone_raw,phone_e164,whatsapp_raw,whatsapp_e164,email_raw,email_normalized,created_by)
+   values(d->>'contact_name','unknown',d->>'phone',crm_security.normalize_phone(d->>'phone'),d->>'whatsapp',crm_security.normalize_phone(d->>'whatsapp'),d->>'email',nullif(lower(btrim(d->>'email')),''),auth.uid()) returning id into contact;
+  else
+   perform 1 from public.crm_contacts where id=contact and merged_into_contact_id is null for update;
+   if not found then raise exception 'Contact unavailable' using errcode='PT409';end if;
+  end if;
+  due:=crm_security.next_window(p.id,greatest(now(),s.received_at+make_interval(mins=>p.first_contact_sla_minutes)));
+  insert into public.crm_leads(contact_id,learner_name,learner_name_normalized,learner_age,age_recorded_at,learner_birth_date,session_type,program_interest_text,
+   first_submission_id,latest_submission_id,followup_policy_id,outreach_anchor_date)
+  values(contact,case when nullif(btrim(d->>'learner_name'),'') is null then null else d->>'learner_name' end,
+   lower(nullif(btrim(d->>'learner_name'),'')),(d->>'learner_age')::integer,case when d->>'learner_age' is not null then s.received_at end,
+   (d->>'learner_birth_date')::date,d->>'session_type',d->>'program_interest_text',s.id,s.id,p.id,(due at time zone p.timezone)::date) returning * into l;
+  insert into public.crm_activities(lead_id,occurred_at,actor_id,actor_kind,event_type,source_key,to_status)
+  values(l.id,now(),auth.uid(),actor_kind,'lead_created','external-intake:'||s.id||':lead','NEW');
+  insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key,policy_id,outreach_cycle,attempt_ordinal)
+  values(l.id,'first_contact',due,'intake','attempt:'||l.id||':1:1',p.id,1,1) returning id into tid;
+  insert into public.crm_activities(lead_id,occurred_at,actor_id,actor_kind,event_type,source_key,task_id)
+  values(l.id,now(),auth.uid(),actor_kind,'task_created','external-intake:'||s.id||':task',tid);
+ else
+  select * into l from public.crm_leads where id=lead for update;
+  if not found or l.merged_into_lead_id is not null or l.status not in ('NEW','CONTACTING','ENGAGED','QUALIFIED') then raise exception 'Active lead required' using errcode='PT409';end if;
+  update public.crm_leads set latest_submission_id=case when row(s.occurred_at,s.received_at,s.id)>
+   (select x.occurred_at,x.received_at,x.id from public.crm_submissions x where x.id=l.latest_submission_id) then s.id else latest_submission_id end,
+   version=version+1,updated_at=now() where id=l.id;
+ end if;
+ update public.crm_submissions set lead_id=l.id,match_status='resolved',resolved_by=auth.uid(),resolved_at=now() where id=s.id;
+ insert into public.crm_activities(lead_id,occurred_at,actor_id,actor_kind,event_type,source_key,submission_id)
+ values(l.id,now(),auth.uid(),actor_kind,'submission_received','external-intake:'||s.id||':submission',s.id);
+ perform crm_security.lifecycle_pending_handoff(s.id);
+ return l.id;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.create_charge_payment_financial(p_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_actor uuid := auth.uid();
+  v_student public.students%rowtype;
+  v_charge public.charges%rowtype;
+  v_receipt public.receipts%rowtype;
+  v_existing public.financial_requests%rowtype;
+  v_student_id uuid := nullif(p_payload->>'student_id','')::uuid;
+  v_charge_id uuid := nullif(p_payload->>'charge_id','')::uuid;
+  v_key uuid := (p_payload->>'idempotency_key')::uuid;
+  v_session text := nullif(btrim(p_payload->>'session_type'),'');
+  v_school_year text := nullif(btrim(p_payload->>'school_year'),'');
+  v_service_detail text := nullif(btrim(p_payload->>'service_detail'),'');
+  v_service text;
+  v_receipt_service text;
+  -- Replay compatibility only: the payload plan value, normalized exactly as
+  -- migration 096 did, feeds the request fingerprint of a new Yearly charge so
+  -- a request committed before 113 replays. It is never stored or validated.
+  v_fingerprint_plan text := nullif(btrim(p_payload->>'plan_type'),'');
+  v_level text := nullif(btrim(p_payload->>'level'),'');
+  v_student_name text := nullif(btrim(p_payload->>'student_name'),'');
+  v_phone text := nullif(btrim(p_payload->>'phone'),'');
+  v_student_email text := nullif(lower(btrim(p_payload->>'student_email')),'');
+  v_parent_email text := nullif(lower(btrim(p_payload->>'parent_email')),'');
+  v_update_contacts boolean := coalesce((p_payload->>'update_contacts')::boolean, false);
+  v_request_email boolean := coalesce((p_payload->>'request_email')::boolean, false);
+  v_email_recipient text := nullif(lower(btrim(p_payload->>'email_recipient')),'');
+  v_gross numeric(12,2) := round(coalesce(nullif(p_payload->>'gross_amount','')::numeric, 0), 2);
+  v_discount numeric(12,2) := round(coalesce(nullif(p_payload->>'discount_amount','')::numeric, 0), 2);
+  v_payment numeric(12,2) := round(coalesce(nullif(p_payload->>'payment_amount','')::numeric, 0), 2);
+  v_due_date date := nullif(p_payload->>'due_date','')::date;
+  v_payment_date date := coalesce(nullif(p_payload->>'payment_date','')::date,public.business_date());
+  v_payment_method text := nullif(btrim(p_payload->>'payment_method'),'');
+  v_transaction_reference text := nullif(btrim(p_payload->>'transaction_reference'),'');
+  v_note text := nullif(btrim(p_payload->>'note'),'');
+  v_reason_code text := nullif(btrim(p_payload->>'discount_reason_code'),'');
+  v_reason text := nullif(btrim(p_payload->>'discount_reason'),'');
+  v_role text;
+  v_today date := public.business_date();
+  v_back_days integer;
+  v_normalized_request jsonb;
+  v_request_fingerprint text;
+  v_paid numeric(12,2);
+  v_net numeric(12,2);
+  v_balance numeric(12,2);
+  v_status text;
+  v_actor_name text;
+  v_new_charge boolean := false;
+begin
+  perform operational_security.require_capability('manage_finance_operations');
+  if v_key is null then raise exception 'An idempotency key is required.'; end if;
+  if v_payment < 0 then raise exception 'Payment amount cannot be negative.'; end if;
+  if v_payment = 0 then
+    v_request_email := false;
+    v_email_recipient := null;
+  end if;
+  if not v_request_email then v_email_recipient := null; end if;
+  if v_request_email and (
+    v_email_recipient is null
+    or v_email_recipient !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+  ) then
+    raise exception 'A valid email recipient is required when email delivery is requested.';
+  end if;
+  v_normalized_request := jsonb_strip_nulls(jsonb_build_object(
+    'student_id',v_student_id,
+    'student_name',case when v_student_id is null then v_student_name end,
+    'phone',case when v_student_id is null or v_update_contacts then v_phone end,
+    'student_email',case when v_student_id is null or v_update_contacts then v_student_email end,
+    'parent_email',case when v_student_id is null or v_update_contacts then v_parent_email end,
+    'update_contacts',case when v_student_id is not null then v_update_contacts else false end,
+    'charge_id',v_charge_id,
+    'session_type',case when v_charge_id is null then v_session end,
+    'school_year',case when v_charge_id is null then v_school_year end,
+    'service_detail',case when v_charge_id is null and v_session = 'Other' then v_service_detail end,
+    'plan_type',case when v_charge_id is null and v_session = 'Yearly' then v_fingerprint_plan end,
+    'level',case when v_charge_id is null then v_level end,
+    'gross_amount',case when v_charge_id is null then v_gross end,
+    'discount_amount',case when v_charge_id is null then v_discount end,
+    'discount_reason_code',case when v_charge_id is null then v_reason_code end,
+    'discount_reason',case when v_charge_id is null then v_reason end,
+    'due_date',case when v_charge_id is null then v_due_date end,
+    'payment_amount',v_payment,
+    'payment_date',v_payment_date,
+    'payment_method',v_payment_method,
+    'transaction_reference',v_transaction_reference,
+    'note',v_note,
+    'request_email',v_request_email,
+    'email_recipient',case when v_request_email then v_email_recipient end
+  ));
+  v_request_fingerprint := encode(extensions.digest(v_normalized_request::text, 'sha256'), 'hex');
+
+  perform pg_advisory_xact_lock(hashtext(v_key::text));
+  select * into v_existing from public.financial_requests where idempotency_key = v_key;
+  if found then
+    if v_existing.actor_id is distinct from v_actor then
+      raise exception 'Idempotency key conflict: this key belongs to another actor.';
+    end if;
+    if v_existing.request_fingerprint is distinct from v_request_fingerprint then
+      raise exception 'Idempotency key conflict: request contents changed.';
+    end if;
+    return jsonb_build_object('charge_id',v_existing.charge_id,'receipt_id',v_existing.receipt_id,'replayed',true);
+  end if;
+
+  -- E-2 desk guardrails (P3.1–P3.3), after the replay above. The role is the stored one.
+  v_role := public.get_my_role();
+  if v_charge_id is null and v_discount > 0 then
+    -- Q2 = A: a reason from the short list; free text for "Autre".
+    if v_reason_code is null then
+      raise exception 'Indiquez le motif de la remise.' using errcode = '22023';
+    end if;
+    if v_reason_code not in ('sibling','former_student','promotion','director_approval','other') then
+      raise exception 'Motif de remise inconnu.' using errcode = '22023';
+    end if;
+    if v_reason_code = 'other' and char_length(coalesce(v_reason,'')) < 3 then
+      raise exception 'Précisez le motif de la remise « Autre ».' using errcode = '22023';
+    end if;
+    if char_length(coalesce(v_reason,'')) > 200 then
+      raise exception 'Le motif de la remise ne doit pas dépasser 200 caractères.' using errcode = '22023';
+    end if;
+    -- Q3 = B: reception gives at most 10 % without the director.
+    if v_role = 'receptionist' and v_gross > 0 and v_discount > 0.10 * v_gross then
+      raise exception 'Remise supérieure à 10 %% : demandez au directeur.' using errcode = '22023';
+    end if;
+  end if;
+  if v_charge_id is not null or v_discount = 0 then
+    -- A reason belongs to a new discount only.
+    v_reason_code := null; v_reason := null;
+  end if;
+  if v_payment > 0 then
+    -- Q4 = A: never in the future; reception 7 days back, admin and director 31.
+    -- Names the Casablanca date: a browser with time-zone data older than tzdata 2026c
+    -- (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00.
+    if v_payment_date > v_today then
+      raise exception 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : %).',
+        to_char(v_today, 'DD/MM/YYYY') using errcode = '22023';
+    end if;
+    v_back_days := case when v_role = 'receptionist' then 7 else 31 end;
+    if v_payment_date < v_today - v_back_days then
+      raise exception 'La date du paiement ne peut pas être antérieure de plus de % jours.', v_back_days
+        using errcode = '22023';
+    end if;
+  end if;
+
+  if v_student_id is null then
+    if char_length(coalesce(v_student_name,'')) < 2 then raise exception 'Student name is required.'; end if;
+    insert into public.students(full_name, telephone, email, parent_email, status)
+    values (v_student_name, v_phone, v_student_email, v_parent_email, 'Prospect')
+    returning * into v_student;
+    v_student_id := v_student.id;
+  else
+    select * into v_student from public.students where id = v_student_id and deleted_at is null;
+    if not found then raise exception 'Student not found.'; end if;
+    if v_update_contacts then
+      if public.get_my_role()='receptionist' and
+        (v_student_email is distinct from v_student.email or v_parent_email is distinct from v_student.parent_email) then
+        raise exception 'Contact identity cannot be changed' using errcode='42501';
+      end if;
+      update public.students set telephone=v_phone,email=v_student_email,parent_email=v_parent_email
+      where id=v_student_id returning * into v_student;
+    end if;
+  end if;
+
+  if v_charge_id is null then
+    if v_session is null or v_school_year is null then
+      raise exception 'Session and school year are required for a new charge.';
+    end if;
+    if v_school_year !~ '^[0-9]{4}/[0-9]{4}$' then raise exception 'Invalid school year.'; end if;
+    if v_session = 'Other' and char_length(coalesce(v_service_detail,'')) < 3 then
+      raise exception 'A service description is required for Other.';
+    end if;
+    if char_length(coalesce(v_service_detail,'')) > 120 then raise exception 'Service description is too long.'; end if;
+    if v_gross < 0 or v_discount < 0 or v_discount > v_gross then raise exception 'Invalid price or discount.'; end if;
+
+    v_service := case
+      when v_session = 'Other' then concat_ws(' · ', 'Autre', v_service_detail, v_school_year)
+      else concat_ws(' · ', v_session, v_school_year)
+    end;
+    insert into public.charges(student_id,session_type,school_year,service_description,plan_type,
+      level,gross_amount,discount_amount,due_date,created_by)
+    -- charges_yearly_formula_check still requires a value for Yearly; it is a
+    -- fixed, inert server value that no screen reads.
+    values (v_student_id,v_session,v_school_year,v_service,
+      case when v_session = 'Yearly' then 'Standard' end,
+      v_level,v_gross,v_discount,v_due_date,v_actor)
+    returning * into v_charge;
+    v_new_charge := true;
+    if v_reason_code is not null then
+      insert into public.charge_discount_reasons(charge_id, reason_code, reason)
+      values (v_charge.id, v_reason_code, case when v_reason_code = 'other' then v_reason end);
+    end if;
+  else
+    select * into v_charge from public.charges
+    where id=v_charge_id and student_id=v_student_id and voided_at is null for update;
+    if not found then raise exception 'Open charge not found for this student.'; end if;
+  end if;
+
+  v_net := v_charge.gross_amount - v_charge.discount_amount;
+  select coalesce(sum(montant_paye),0) into v_paid from public.receipts
+  where charge_id=v_charge.id and voided_at is null and deleted_at is null;
+  v_balance := round(v_net-v_paid,2);
+  if v_payment > v_balance then raise exception 'Payment exceeds the remaining balance of % MAD.', v_balance; end if;
+
+  insert into public.financial_requests(idempotency_key,actor_id,request_fingerprint,charge_id)
+  values (v_key,v_actor,v_request_fingerprint,v_charge.id);
+  if v_new_charge then
+    insert into public.financial_events(event_type,charge_id,actor_id,metadata)
+    values ('charge_created',v_charge.id,v_actor,jsonb_build_object('gross_amount',v_charge.gross_amount,'discount_amount',v_charge.discount_amount,'school_year',v_charge.school_year)
+      || jsonb_strip_nulls(jsonb_build_object('discount_reason_code',v_reason_code,'discount_reason',case when v_reason_code = 'other' then v_reason end)));
+  end if;
+  if v_payment = 0 then
+    return jsonb_build_object('charge_id',v_charge.id,'receipt_id',null,'balance',v_balance,'replayed',false);
+  end if;
+
+  v_balance := round(v_balance-v_payment,2);
+  v_status := case when v_balance=0 then 'Soldé' when v_charge.due_date<v_today then 'En retard' else 'Acompte versé' end;
+  select coalesce(full_name,email) into v_actor_name from public.profiles where id=v_actor;
+  -- A receipt on a dated non-legacy Yearly charge gets its text from session
+  -- type and school year, never from the charge text; every other charge
+  -- (undated Yearly, legacy balance, other sessions) keeps copying its own
+  -- text. Receipts never store a plan.
+  v_receipt_service := case
+    when v_charge.session_type = 'Yearly' and not v_charge.legacy and v_charge.school_year is not null
+      then concat_ws(' · ', 'Yearly', v_charge.school_year)
+    else v_charge.service_description
+  end;
+  insert into public.receipts(
+    student_id,charge_id,date,nom_prenom,telephone,email,date_naissance,
+    session_type,plan_type,niveau,school_year_snapshot,service_description,montant_total,remise,
+    montant_paye,mode_paiement,statut_paiement,transaction_reference,payment_note,observation,
+    actor_id,actor_name,gross_amount_snapshot,discount_amount_snapshot,net_amount_snapshot,
+    paid_before_snapshot,balance_after_snapshot,idempotency_key,email_delivery_status
+  ) values (
+    v_student.id,v_charge.id,v_payment_date,v_student.full_name,v_student.telephone,
+    coalesce(v_email_recipient,v_student.parent_email,v_student.email),v_student.date_naissance,
+    v_charge.session_type,null,v_charge.level,v_charge.school_year,v_receipt_service,
+    v_charge.gross_amount,case when v_charge.gross_amount=0 then 0 else round(v_charge.discount_amount*100/v_charge.gross_amount,2) end,
+    v_payment,v_payment_method,v_status,v_transaction_reference,v_note,v_note,v_actor,v_actor_name,
+    v_charge.gross_amount,v_charge.discount_amount,v_net,v_paid,v_balance,v_key,
+    case when v_request_email then 'pending' else 'skipped' end
+  ) returning * into v_receipt;
+  update public.financial_requests set receipt_id=v_receipt.id where idempotency_key=v_key;
+  insert into public.financial_events(event_type,charge_id,receipt_id,actor_id,metadata)
+  values ('payment_recorded',v_charge.id,v_receipt.id,v_actor,jsonb_build_object('amount',v_payment,'balance_after',v_balance,'email_requested',v_request_email));
+  return jsonb_build_object('charge_id',v_charge.id,'receipt_id',v_receipt.id,'balance',v_balance,'replayed',false);
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.crm_start_enrollment(p_request_key uuid, p_data jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare actor uuid:=auth.uid(); digest text; prior public.crm_command_requests%rowtype; l public.crm_leads%rowtype; c public.crm_contacts%rowtype;
+ s public.students%rowtype; e public.enrollments%rowtype; g public.groups%rowtype; a uuid; t public.crm_tasks%rowtype; keep_task uuid;
+ learner text; birth date; session text; year text; level text; initial_status text; due timestamptz; result jsonb;
+ followup_at timestamptz; followup_task uuid; followup jsonb; begin
+ perform crm_security.require_reader(false);
+ if p_request_key is null or jsonb_typeof(p_data) is distinct from 'object' or octet_length(p_data::text)>16000
+ or p_data-array['lead_id','expected_version','student_choice','student_id','learner_name','birth_date','candidate_review','confirm_new','enrollment_id','expected_enrollment_updated_at','session_type','school_year','level','group_id','initial_status','followup_at','notes']<>'{}'::jsonb then
+  raise exception 'Valid bounded enrollment request required' using errcode='22023',hint='crm_enrollment.request_invalid'; end if;
+ -- E9: hint only the helper's own lock collision, at its original position.
+ -- Every other error, including a malformed student_id cast, propagates as before.
+ begin
+  perform crm_security.lock_enrollment_intent(nullif(p_data->>'student_id','')::uuid);
+ exception when sqlstate 'PT409' then
+  if sqlerrm='Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.' then
+   raise exception 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.' using errcode='PT409',hint='crm_enrollment.enrollment_in_progress'; end if;
+  raise;
+ end;
+ digest:=encode(sha256(convert_to(p_data::text,'UTF8')),'hex');
+ perform pg_advisory_xact_lock(hashtextextended('crm:request:'||actor||':start_enrollment:'||p_request_key,0));
+ select * into prior from public.crm_command_requests where actor_scope=actor::text and command_name='start_enrollment' and request_key=p_request_key;
+ if found then
+  if prior.payload_hash<>digest then raise exception 'Request key payload conflict' using errcode='22023',hint='crm_enrollment.request_conflict'; end if;return prior.result;
+ end if;
+ select * into l from public.crm_leads where id=(p_data->>'lead_id')::uuid for update;
+ -- E1: one reason per condition of the former combined lead check.
+ if not found or l.merged_into_lead_id is not null then raise exception 'Qualified unlinked lead required' using errcode='22023',hint='crm_enrollment.lead_unavailable'; end if;
+ if l.enrollment_id is not null then raise exception 'Qualified unlinked lead required' using errcode='22023',hint='crm_enrollment.lead_already_enrolled'; end if;
+ if l.status<>'QUALIFIED' then raise exception 'Qualified unlinked lead required' using errcode='22023',hint='crm_enrollment.lead_not_qualified'; end if;
+ if l.version is distinct from (p_data->>'expected_version')::bigint then raise exception 'Stale lead version; refresh and retry' using errcode='PT409',hint='crm_enrollment.lead_changed'; end if;
+ select * into strict c from public.crm_contacts where id=l.contact_id;
+ learner:=btrim(p_data->>'learner_name');
+ -- E3: same cast at the same position; only its cast errors gain a reason.
+ begin
+  birth:=nullif(p_data->>'birth_date','')::date;
+ exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
+  raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.birth_date_invalid';
+ end;
+ session:=p_data->>'session_type';year:=p_data->>'school_year';level:=nullif(p_data->>'level','');initial_status:=coalesce(p_data->>'initial_status','Submitted');
+ -- E2: the former combined program/year/notes check, split in its original order.
+ if session is null or session<>all(array['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other','Online','Online One-to-One']) then
+  raise exception 'Invalid enrollment program or school year' using errcode='22023',hint='crm_enrollment.program_invalid'; end if;
+ if year is null or year!~'^[0-9]{4}/[0-9]{4}$' or right(year,4)::integer<>left(year,4)::integer+1 then
+  raise exception 'Invalid enrollment program or school year' using errcode='22023',hint='crm_enrollment.school_year_invalid'; end if;
+ if length(p_data->>'notes')>2000 then raise exception 'Invalid enrollment program or school year' using errcode='22023',hint='crm_enrollment.notes_too_long'; end if;
+ if initial_status not in ('Submitted','Trial') then raise exception 'Only pre-confirmation enrollment initiation is permitted' using errcode='42501',hint='crm_enrollment.initial_status_not_permitted'; end if;
+ if p_data->>'student_choice'='new' then
+  -- E3: the same rejected set as 084, one reason per condition. A birth date is
+  -- bounded by the Casablanca civil date (enrollment initiation only).
+  if l.student_id is not null then raise exception 'Invalid new learner' using errcode='22023',hint='crm_enrollment.learner_already_linked'; end if;
+  if p_data->>'student_id' is not null or p_data->>'enrollment_id' is not null then raise exception 'Invalid new learner' using errcode='22023',hint='crm_enrollment.request_invalid'; end if;
+  if learner is null or length(learner) not between 2 and 120 then raise exception 'Invalid new learner' using errcode='22023',hint='crm_enrollment.learner_name_invalid'; end if;
+  if not isfinite(birth) then raise exception 'Invalid new learner' using errcode='22023',hint='crm_enrollment.birth_date_invalid'; end if;
+  if birth>(now() at time zone 'Africa/Casablanca')::date then raise exception 'Invalid new learner' using errcode='22023',hint='crm_enrollment.birth_date_future'; end if;
+  -- Serializes new-student decisions for equal names, including separate leads.
+  perform pg_advisory_xact_lock(hashtextextended('crm:new-student:'||lower(learner),0));
+  if p_data->>'candidate_review' is distinct from crm_security.candidate_token(l.id,learner,birth) then raise exception 'Student candidates changed; review again' using errcode='PT409',hint='crm_enrollment.candidates_changed'; end if;
+  if exists(select 1 from crm_security.student_candidates(l.id,learner,birth)) and coalesce((p_data->>'confirm_new')::boolean,false) is not true then raise exception 'Explicit new learner decision required' using errcode='22023',hint='crm_enrollment.new_learner_confirmation_required'; end if;
+  insert into public.students(full_name,date_naissance,telephone,email,parent_email,status,session_type,niveau_cefr,notes)
+  values(learner,birth,coalesce(c.phone_e164,c.phone_raw),case when c.contact_kind='adult_learner' then c.email_normalized end,
+   case when c.contact_kind<>'adult_learner' then c.email_normalized end,'Prospect',session,level,
+   case when c.contact_kind<>'adult_learner' then 'Contact : '||coalesce(c.display_name,'Non renseigné') end) returning * into s;
+ elsif p_data->>'student_choice'='existing' then
+  select * into s from public.students where id=(p_data->>'student_id')::uuid and deleted_at is null for update;
+  -- E4: the former combined check, split by linkage.
+  if not found then
+   if l.student_id is not null and l.student_id=(p_data->>'student_id')::uuid then raise exception 'Student unavailable or inconsistent' using errcode='22023',hint='crm_enrollment.linked_learner_unavailable'; end if;
+   if l.student_id is not null then raise exception 'Student unavailable or inconsistent' using errcode='22023',hint='crm_enrollment.learner_link_mismatch'; end if;
+   raise exception 'Student unavailable or inconsistent' using errcode='22023',hint='crm_enrollment.learner_unavailable';
+  end if;
+  if l.student_id is not null and l.student_id<>s.id then raise exception 'Student unavailable or inconsistent' using errcode='22023',hint='crm_enrollment.learner_link_mismatch'; end if;
+ else raise exception 'Explicit student choice required' using errcode='22023',hint='crm_enrollment.learner_choice_required'; end if;
+ if p_data->>'enrollment_id' is not null then
+  select * into e from public.enrollments where id=(p_data->>'enrollment_id')::uuid for update;
+  -- E5: the former combined check, split into incompatibility and linkage.
+  if not found or e.student_id is distinct from s.id or e.status is null or e.status in ('Rejected','Ended')
+  or coalesce(e.session_type,s.session_type) is distinct from session or crm_security.enrollment_year(e) is distinct from year then
+   raise exception 'Enrollment unavailable or incompatible' using errcode='22023',hint='crm_enrollment.enrollment_incompatible'; end if;
+  if exists(select 1 from public.crm_leads where enrollment_id=e.id) then raise exception 'Enrollment unavailable or incompatible' using errcode='22023',hint='crm_enrollment.enrollment_already_linked'; end if;
+  if e.group_id is not null then
+   select * into g from public.groups where id=e.group_id for share;
+   if not found or g.session_type is distinct from session or (e.level is not null and g.niveau is distinct from e.level) then
+    raise exception 'Enrollment group must match session and level' using errcode='22023',hint='crm_enrollment.enrollment_group_incompatible'; end if;
+  end if;
+  if e.updated_at is distinct from (p_data->>'expected_enrollment_updated_at')::timestamptz then raise exception 'Stale enrollment; refresh and retry' using errcode='PT409',hint='crm_enrollment.enrollment_changed'; end if;
+ else
+  if exists(select 1 from public.enrollments x where x.student_id=s.id and x.status is null and coalesce(x.session_type,s.session_type)=session and crm_security.enrollment_year(x)=year) then
+   raise exception 'Existing enrollment status requires review' using errcode='22023',hint='crm_enrollment.existing_enrollment_needs_review'; end if;
+  -- E6: same condition and message; the hint says whether any match is still selectable.
+  if exists(select 1 from public.enrollments x where x.student_id=s.id and x.status not in ('Rejected','Ended') and coalesce(x.session_type,s.session_type)=session and crm_security.enrollment_year(x)=year) then
+   raise exception 'Existing enrollment requires explicit selection' using errcode='22023',hint=case when exists(select 1 from public.enrollments x where x.student_id=s.id and x.status not in ('Rejected','Ended')
+    and coalesce(x.session_type,s.session_type)=session and crm_security.enrollment_year(x)=year and not exists(select 1 from public.crm_leads where enrollment_id=x.id))
+    then 'crm_enrollment.existing_enrollment_requires_selection' else 'crm_enrollment.existing_enrollment_linked_elsewhere' end; end if;
+  if p_data->>'group_id' is not null then
+   select * into g from public.groups where id=(p_data->>'group_id')::uuid for share;
+   if not found or g.session_type is distinct from session or (level is not null and g.niveau is distinct from level) then raise exception 'Enrollment group must match session and level' using errcode='22023',hint='crm_enrollment.group_incompatible'; end if;
+   level:=g.niveau;
+  end if;
+  if not crm_security.valid_enrollment_level(session,level) and not coalesce(g.id is not null or s.session_type=session and s.niveau_cefr=level and p_data->>'student_choice'='existing',false) then raise exception 'Invalid level for selected program' using errcode='22023',hint='crm_enrollment.level_invalid'; end if;
+  -- E6: the 072 trigger's only remaining outcome for this row (23514), raised
+  -- with the handler's mapped message after every earlier check has run.
+  if initial_status='Trial' and g.id is null then raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.trial_requires_group'; end if;
+  -- EGC (I3): a concurrent duplicate on the one-live-enrollment index is a
+  -- record conflict (PT409, egc.duplicate_enrollment), not a raw 23505.
+  begin
+   insert into public.enrollments(student_id,session_type,school_year,level,group_id,status,date_inscription,notes)
+   values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes') returning * into e;
+  exception when unique_violation then
+   perform academic_security.duplicate();
+  end;
+ end if;
+ update public.crm_leads set student_id=s.id,enrollment_id=e.id,version=version+1,updated_at=now() where id=l.id;
+ insert into public.crm_activities(lead_id,enrollment_id,occurred_at,actor_id,actor_kind,event_type,source_key,body)
+ values(l.id,e.id,now(),actor,'user','enrollment_started','enrollment-started:'||l.id||':'||e.id,'Inscription rattachée à l’apprenant.') returning id into a;
+ perform crm_security.evaluate_conversion(l.id,statement_timestamp());
+ if (select status from public.crm_leads where id=l.id)<>'CONVERTED' then
+  -- Keep the earliest appropriate follow-up, cancel only redundant enrollment tasks.
+  select * into t from public.crm_tasks where lead_id=l.id and task_type='enrollment_followup' and status='open' order by due_at,id limit 1 for update;
+  if t.id is null then
+   -- E7: pre-checks logically identical to next_window and new_task, in their
+   -- order; new_task still validates. An empty string stays a parse error.
+   begin
+    followup_at:=(p_data->>'followup_at')::timestamptz;
+   exception when invalid_text_representation or invalid_datetime_format or datetime_field_overflow then
+    raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.followup_invalid';
+   end;
+   if not isfinite(followup_at) then raise exception 'Finite due time required' using errcode='22023',hint='crm_enrollment.followup_invalid'; end if;
+   begin
+    due:=crm_security.next_window(l.followup_policy_id,coalesce(followup_at,now()+interval '1 day'));
+   exception when invalid_parameter_value then
+    if sqlerrm='Policy has no available calling window' then
+     raise exception 'Policy has no available calling window' using errcode='22023',hint='crm_enrollment.followup_policy_unavailable'; end if;
+    raise;
+   end;
+   if due<now() then raise exception 'Valid future task required' using errcode='22023',hint='crm_enrollment.followup_in_past'; end if;
+   if l.owner_id is not null and not exists(select 1 from public.profiles where id=l.owner_id and role in ('director','admin','receptionist')) then
+    raise exception 'Assignee must be operational staff' using errcode='22023',hint='crm_enrollment.owner_not_operational'; end if;
+   followup_task:=crm_security.new_task(l,jsonb_build_object('task_type','enrollment_followup','due_at',due,'instructions','Finaliser l’inscription avec le parent.'),'enrollment-followup:'||l.id||':'||e.id,'enrollment');
+   followup:=jsonb_build_object('id',followup_task,'created',true);
+  else
+   keep_task:=t.id;
+   for t in select * from public.crm_tasks where lead_id=l.id and task_type='enrollment_followup' and status='open' and id<>keep_task order by id for update loop
+    perform crm_security.finish_task(t,true,'Suivi de cette inscription déjà prévu','enrollment-duplicate:'||e.id||':'||t.id);
+   end loop;
+   followup_task:=keep_task;followup:=jsonb_build_object('id',keep_task,'created',false);
+  end if;
+  -- E8: the created or retained task, read by id; never the loop variable.
+  followup:=followup||crm_security.scheduled_civil((select due_at from public.crm_tasks where id=followup_task));
+ end if;
+ result:=crm_security.result(l.id,'enrollment-started:'||l.id||':'||e.id)||jsonb_build_object('enrollment',crm_security.enrollment_summary(e),'enrollment_followup',followup);
+ insert into public.crm_command_requests(actor_scope,command_name,request_key,payload_hash,result) values(actor::text,'start_enrollment',p_request_key,digest,result);
+ return result;
+exception
+ when deadlock_detected or unique_violation then raise exception 'Concurrent enrollment change; refresh and retry' using errcode='PT409',hint='crm_enrollment.concurrent_change';
+ when invalid_text_representation or invalid_datetime_format or datetime_field_overflow or check_violation or not_null_violation then raise exception 'Invalid enrollment fields or incompatible group' using errcode='22023',hint='crm_enrollment.record_rejected';
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.save_receptionist_enrollment(p_student uuid, p_enrollment uuid DEFAULT NULL::uuid, p_group uuid DEFAULT NULL::uuid, p_status text DEFAULT 'Submitted'::text, p_level text DEFAULT NULL::text, p_date date DEFAULT CURRENT_DATE, p_notes text DEFAULT NULL::text, p_session text DEFAULT NULL::text, p_school_year text DEFAULT NULL::text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare s public.students%rowtype; e public.enrollments%rowtype; g public.groups%rowtype;
+  result uuid; effective_session text; effective_level text; effective_year text; v_constraint text;
+begin
+  perform operational_security.require_receptionist();
+  select * into s from public.students where id=p_student and deleted_at is null for update;
+  if not found then raise exception 'Student unavailable' using errcode='23514'; end if;
+  if p_enrollment is not null then
+    select * into e from public.enrollments where id=p_enrollment for update;
+    if not found or e.student_id is distinct from p_student then
+      raise exception 'Enrollment unavailable' using errcode='23514'; end if;
+  end if;
+  if e.id is not null and (
+    (e.session_type is not null and p_session is not null and p_session<>e.session_type) or
+    (e.school_year is not null and p_school_year is not null and p_school_year<>e.school_year)) then
+    raise exception 'Existing enrollment session/year is immutable' using errcode='42501'; end if;
+  effective_session:=coalesce(e.session_type,p_session,s.session_type);
+  effective_year:=coalesce(e.school_year,p_school_year);
+  effective_level:=coalesce(p_level,e.level,case
+    when operational_security.valid_session_level(effective_session,s.niveau_cefr)
+    then s.niveau_cefr end);
+  if effective_session not in ('Yearly','Adults','Summer Camp','Communication Junior',
+      'Communication Adult','One-to-One','Mise à niveau','Other','Online','Online One-to-One') or
+    (effective_year is not null and effective_year !~ '^[0-9]{4}/[0-9]{4}$') then
+    raise exception 'Invalid enrollment session/year' using errcode='22023'; end if;
+  if operational_security.valid_session_level(effective_session,effective_level) is not true then
+    raise exception 'Invalid enrollment session/level' using errcode='23514'; end if;
+  if p_group is not null then
+    select * into g from public.groups where id=p_group for share;
+    if not found or g.session_type is distinct from effective_session then
+      raise exception 'Enrollment group must match its session and level' using errcode='23514'; end if;
+    effective_level:=coalesce(effective_level,g.niveau);
+    if g.niveau is distinct from effective_level then
+      raise exception 'Enrollment group must match its session and level' using errcode='23514'; end if;
+  end if;
+  if effective_year is not null and exists(select 1 from public.enrollments x where x.student_id=p_student
+    and x.session_type=effective_session and x.school_year=effective_year and x.status not in ('Rejected','Ended')
+    and x.id is distinct from e.id) then
+    perform academic_security.duplicate(); end if;
+  begin
+  if e.status in ('Confirmed','Validated') then
+    if p_group is null or p_status not in ('Confirmed','Validated') then
+      raise exception 'Only group assignment is permitted' using errcode='42501'; end if;
+    update public.enrollments set group_id=p_group,level=effective_level,
+      session_type=effective_session,status='Validated'
+    where id=e.id returning id into result;
+  else
+    if p_status is null or p_status not in ('Submitted','Under Review','Trial') or
+      (p_enrollment is not null and e.status not in ('Submitted','Under Review','Trial')) then
+      raise exception 'Only operational pre-enrollment is permitted' using errcode='42501'; end if;
+    if p_enrollment is null then
+      insert into public.enrollments(student_id,group_id,status,level,date_inscription,notes,session_type,school_year)
+      values(p_student,p_group,p_status,effective_level,p_date,p_notes,effective_session,effective_year)
+      returning id into result;
+    else
+      update public.enrollments set group_id=p_group,status=p_status,level=effective_level,
+        session_type=effective_session,school_year=effective_year,date_inscription=p_date,notes=p_notes
+      where id=e.id returning id into result;
+    end if;
+  end if;
+  exception when unique_violation then
+    get stacked diagnostics v_constraint = constraint_name;
+    if v_constraint = 'enrollments_one_active_programme_year' then perform academic_security.duplicate(); end if;
+    raise;
+  end;
+  return result;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.crm_enrollment_groups(p_session text, p_level text DEFAULT NULL::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare result jsonb; begin
+ perform crm_security.require_reader(false);perform crm_security.check_page(p_limit,p_offset);
+ with eligible as(select id,name,niveau,session_type from public.groups where session_type=p_session and (p_level is null or niveau=p_level)),
+ page as(select * from eligible order by name,id limit p_limit offset p_offset)
+ select jsonb_build_object('total',(select count(*) from eligible),'rows',coalesce((select jsonb_agg(to_jsonb(p) order by name,id) from page p),'[]'::jsonb)) into result;
+ return result;
+end $function$;
+
+CREATE OR REPLACE FUNCTION public.business_date(p_at timestamp with time zone DEFAULT now())
+ RETURNS date
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ select (p_at at time zone 'Africa/Casablanca')::date $function$;
+
+-- END GENERATED FUNCTIONS
+
+drop function academic_security.guard_enrollment_group_year();
+drop function academic_security.guard_group_year();
+drop function academic_security.check_group_year(text, text, text);
+drop function public.centre_school_year(date);
+drop function public.centre_utc_offset();
+
+commit;

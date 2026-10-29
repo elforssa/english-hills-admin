@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -31,7 +32,7 @@ export default function ReceiptDeletions() {
     <Link href="/receipts" className="inline-flex min-h-10 items-center text-sm text-primary">← Reçus</Link>
     <div><h1 className="text-xl font-bold">Historique des suppressions</h1><p className="mt-2 text-sm text-muted-foreground">Ces reçus sont exclus des encaissements. Leurs montants dus associés sont annulés.</p></div>
     {loading ? <p role="status">Chargement…</p> : error ? <p role="alert">Impossible de charger l’historique. Rechargez la page.</p> : rows.length === 0 ? <p className="text-sm text-muted-foreground">Aucune suppression enregistrée.</p> : rows.map((event) => <article key={event.id} className="space-y-2 rounded-xl border bg-card p-4 text-sm">
-      <div className="flex flex-wrap justify-between gap-2"><b>{event.metadata.receipt_number || event.receipt_id}</b><time>{new Date(event.created_at).toLocaleString('fr-FR', { timeZone: 'Africa/Casablanca' })}</time></div>
+      <div className="flex flex-wrap justify-between gap-2"><b>{event.metadata.receipt_number || event.receipt_id}</b><time>{formatCentre(event.created_at, 'fr-FR', { dateStyle: 'short', timeStyle: 'medium' })}</time></div>
       <p className="whitespace-pre-wrap break-words">{event.metadata.reason}</p>
       <p>Montant du reçu : {money(event.metadata.amount)} MAD · Retiré des encaissements : {money(event.metadata.removed_from_collected)} MAD</p>
       <p className="break-all text-xs text-muted-foreground">Identifiant du directeur : {event.actor_id}</p>

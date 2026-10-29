@@ -1,5 +1,6 @@
 'use client';
 
+import { centreDate, formatCentre } from '@/lib/centreClock.mjs';
 import { useEffect, useState } from 'react';
 import { entities, integrations } from '@/lib/entities';
 import { Plus, CheckCircle, ClipboardList } from 'lucide-react';
@@ -11,8 +12,8 @@ import { ACTIVE_STUDENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
-const schoolDate = (value) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
-const schoolTime = (value) => new Intl.DateTimeFormat('fr-MA', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+const schoolDate = (value) => centreDate(new Date(value));
+const schoolTime = (value) => formatCentre(value, 'fr-MA', { hour: '2-digit', minute: '2-digit' });
 
 export default function Dismissal() {
   const [logs, setLogs] = useState([]);

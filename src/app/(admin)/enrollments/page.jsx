@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import { ENROLLMENT_STATUS_COLORS } from '@/lib/statusColors';
+import ProgrammePill from '@/components/operational/ProgrammePill';
 import PersonLink from '@/components/PersonLink';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
@@ -196,7 +197,7 @@ export default function Enrollments() {
                         {st?.age_category && <p className="text-xs text-muted-foreground">{st.age_category}</p>}
                         <button disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Pré-inscription du {e.date_inscription || '—'}</button>
                         <p className="text-xs text-muted-foreground mt-1">{groupName(e.group_id)}</p>
-                        {(e.session_type || e.school_year) && <p className="text-xs text-muted-foreground">{e.session_type || 'Session non renseignée'} · {e.school_year || 'Année non renseignée'} · {e.level || 'Niveau à définir'}</p>}
+                        {(e.session_type || e.school_year) && <p className="text-xs text-muted-foreground">{e.session_type ? <ProgrammePill sessionType={e.session_type} /> : 'Session non renseignée'} · {e.school_year || 'Année non renseignée'} · {e.level || 'Niveau à définir'}</p>}
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span>
                     </div>
@@ -231,7 +232,7 @@ export default function Enrollments() {
                           <div>{st?.telephone || '—'}</div>
                           {st?.age_category && <div className="text-muted-foreground/70">{st.age_category}</div>}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">{e.session_type || '—'} · {e.school_year || '—'} · {e.level || 'Niveau à définir'}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">{e.session_type ? <ProgrammePill sessionType={e.session_type} /> : '—'} · {e.school_year || '—'} · {e.level || 'Niveau à définir'}</td>
                         <td className="px-4 py-3 text-muted-foreground">{groupName(e.group_id)}</td>
                         <td className="px-4 py-3"><button disabled={isReceptionist && e.status === 'Rejected'} onClick={() => setModal(e)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{e.date_inscription || '—'}</button></td>
                         <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${ENROLLMENT_STATUS_COLORS[e.status] || ''}`}>{enrollmentLabel(e.status)}</span></td>

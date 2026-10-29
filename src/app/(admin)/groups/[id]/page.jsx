@@ -15,7 +15,8 @@ import { toast } from 'sonner';
 import { ArrowLeft, Users, UserSearch, UserPlus, X, Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS } from '@/lib/statusColors';
+import { STUDENT_STATUS_COLORS } from '@/lib/statusColors';
+import ProgrammePill from '@/components/operational/ProgrammePill';
 import ContextLink from '@/components/ContextLink';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import { getTeacherRoster, rosterToAcademicRows } from '@/lib/portal';
@@ -276,11 +277,11 @@ export default function GroupDetail() {
                     <td className="px-4 py-3 text-muted-foreground">{s.age_category || '—'}</td>
                     <td className="px-4 py-3">
                       {group.session_type
-                        ? <span className={`text-xs font-medium px-2 py-0.5 rounded ${SESSION_TYPE_COLORS[group.session_type] || 'bg-gray-100 text-gray-600'}`}>{group.session_type}</span>
+                        ? <ProgrammePill sessionType={group.session_type} />
                         : '—'}
                     </td>
                     <td className="px-4 py-3">
-                      {group.niveau ? <span className="inline-block text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{group.niveau}</span> : '—'}
+                      {group.niveau ? <span className="inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold text-white bg-primary">{group.niveau}</span> : '—'}
                     </td>
                     {canManage && <td className="px-4 py-3 text-muted-foreground">{s.telephone || '—'}</td>}
                     <td className="px-4 py-3">

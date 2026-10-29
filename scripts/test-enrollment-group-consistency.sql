@@ -730,8 +730,22 @@ select pg_temp.fails(format('delete from public.enrollments where id = %L', (pg_
 select pg_temp.owner();
 select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year) values (%L, 'Ended', 'Adults', '2026/2027')$$,
   pg_temp.id(221)), '23514');
-select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year, group_id, level) values (%L, 'Trial', 'Yearly', null, %L, 'Child 1')$$,
-  pg_temp.id(221), pg_temp.id(301)), '23514');
+-- Batch H (H5): a placement without a year takes its group's year (asserted, then undone);
+-- without a group the I9 check still refuses a missing year.
+do $$ begin
+  begin
+    insert into public.enrollments(student_id, status, session_type, school_year, group_id, level)
+      values (pg_temp.id(221), 'Trial', 'Yearly', null, pg_temp.id(301), 'Child 1');
+    if not exists (select 1 from public.enrollments where student_id = pg_temp.id(221) and group_id = pg_temp.id(301)
+        and school_year = academic_security.school_year_of((select annee from public.groups where id = pg_temp.id(301)))) then
+      raise exception 'FAIL: H5 a placement without a year takes its group''s year';
+    end if;
+    raise exception using errcode = 'P0099', message = 'undo';
+  exception when sqlstate 'P0099' then null;
+  end;
+end $$;
+select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year, level) values (%L, 'Confirmed', 'Yearly', null, 'Child 1')$$,
+  pg_temp.id(221)), '23514');
 
 -- ===========================================================================
 -- ACA-8 / I8: archive ends enrollments; restore keeps them Ended.

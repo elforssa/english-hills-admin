@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession, isOnlineSessionType } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
+import ProgrammePill from '@/components/operational/ProgrammePill';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
@@ -33,7 +34,12 @@ function groupSaveErrorMessage(error) {
 }
 
 function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCount = 0 }) {
-  const [form, setForm] = useState(group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: groupYear(currentSchoolYear()) });
+  // The year is edited as 2026/2027 and stored as 2026-2027 (D-H5a: a new group
+  // proposes the school year of today's centre date).
+  const [form, setForm] = useState(() => {
+    const initial = group || { name: '', session_type: 'Yearly', niveau: 'Pre-Child', categorie: 'Enfants', teacher_id: '', salle: '', jours: '', horaire: '', capacite_max: 12, terme: 'Sept–Déc', annee: groupYear(currentSchoolYear()) };
+    return { ...initial, school_year: (initial.annee || '').replace('-', '/') };
+  });
   const levelLocked = Boolean(form.id) && memberCount > 0;
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -55,7 +61,7 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
     const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
       niveau: form.niveau, teacher_id: online ? null : form.teacher_id || null, salle: online ? null : form.salle || null,
       jours: form.jours || null, horaire: form.horaire || null, capacite_max: form.capacite_max,
-      terme: form.terme || null, annee: form.annee || null, categorie: form.categorie || null };
+      terme: form.terme || null, annee: groupYear(form.school_year.trim()) || null, categorie: form.categorie || null };
     if (levelLocked) { delete payload.session_type; delete payload.niveau; }
     const { error } = receptionist
       ? await getBrowserClient().rpc('save_receptionist_group', {
@@ -114,6 +120,11 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
               <select className={inputClass} value={form.terme} onChange={e => set('terme', e.target.value)}>
                 {['Sept–Déc','Jan–Mar','Avr–Juin','Été'].map(t => <option key={t}>{t}</option>)}
               </select>
+            </div>
+            {/* H5: the school year (1 September to 31 August); placement checks it. */}
+            <div><label htmlFor="group-school-year" className={labelClass}>Année scolaire *</label>
+              <input id="group-school-year" required className={inputClass} placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}"
+                value={form.school_year} onChange={e => set('school_year', e.target.value)} />
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -239,12 +250,12 @@ export default function Groups() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <ContextLink href={`/groups/${g.id}`} className="font-semibold text-sm text-primary hover:underline">{g.name}</ContextLink>
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · {g.session_type || 'Yearly'} · {g.categorie}</p>
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users size={11} /> {counts[g.id] || 0} apprenant{(counts[g.id] || 0) > 1 ? 's' : ''} · <ProgrammePill sessionType={g.session_type || 'Yearly'} /> · {g.categorie}</p>
                       <PersonLink kind="teacher" id={g.teacher_id} className="text-xs">{teacherName(g.teacher_id)}</PersonLink>
                       <p className="text-xs text-muted-foreground">{g.jours} {g.horaire} {g.salle ? `· ${g.salle}` : ''}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span>
+                      <span className="inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold text-white bg-primary">{g.niveau}</span>
                       <span className="text-xs text-muted-foreground">{g.terme}</span>
                     </div>
                   </div>
@@ -279,8 +290,8 @@ export default function Groups() {
                       <td className="px-4 py-3 text-muted-foreground">
                         <span className="inline-flex items-center gap-1"><Users size={13} /> {counts[g.id] || 0}</span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{g.session_type || 'Yearly'}</td>
-                      <td className="px-4 py-3"><span className="text-xs font-bold text-white px-2 py-0.5 rounded bg-primary">{g.niveau}</span></td>
+                      <td className="px-4 py-3 text-muted-foreground"><ProgrammePill sessionType={g.session_type || 'Yearly'} /></td>
+                      <td className="px-4 py-3"><span className="inline-block whitespace-nowrap rounded-full px-2 py-1 text-xs font-bold text-white bg-primary">{g.niveau}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">{g.categorie}</td>
                       <td className="px-4 py-3 text-muted-foreground"><PersonLink kind="teacher" id={g.teacher_id}>{teacherName(g.teacher_id)}</PersonLink></td>
                       <td className="px-4 py-3 text-muted-foreground">{g.jours} {g.horaire}</td>

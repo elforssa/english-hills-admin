@@ -34,12 +34,13 @@ assert.equal(groupMemberIds([student],registrations,'adults').size,0);
 assert.equal(groupMemberIds([student],[{student_id:'s',status:'Ended',group_id:null,ended_group_id:'adults'}],'adults').size,0);
 assert.equal(groupMemberIds([{...student,deleted_at:'2026-10-01'}],registrations,'yearly').size,0);
 assert.equal(groupMemberIds([], registrations, 'yearly').size, 0, 'only the learners passed in (RLS-visible) count');
-// School year: September start, Casablanca civil date; fixed-offset zones at the boundary.
-assert.equal(currentSchoolYear(new Date('2026-08-31T23:30:00Z'), 'UTC'), '2025/2026');
-assert.equal(currentSchoolYear(new Date('2026-08-31T23:30:00Z'), 'Etc/GMT-1'), '2026/2027', 'UTC+1 is already 1 September');
-assert.equal(currentSchoolYear(new Date('2026-09-01T00:00:00Z'), 'UTC'), '2026/2027');
-assert.equal(currentSchoolYear(new Date('2027-01-15T12:00:00Z'), 'UTC'), '2026/2027');
-assert.equal(currentSchoolYear(new Date('2026-08-31T23:59:59Z'), 'Etc/GMT+1'), '2025/2026', 'UTC-1 is still 31 August');
+// H8 (D-8): enrollment-only; a file group without a membership enrollment is nobody's roster.
+assert.equal(groupMemberIds([{...student,groupe_id:'other'}],[],'other').size,0,'the file group alone is not a membership');
+// School year: 1 September to 31 August on the centre clock (UTC+0, plan AFU-r1).
+assert.equal(currentSchoolYear(new Date('2026-08-31T23:30:00Z')), '2025/2026', '23:30 on 31 August is still August');
+assert.equal(currentSchoolYear(new Date('2026-09-01T00:00:00Z')), '2026/2027');
+assert.equal(currentSchoolYear(new Date('2027-01-15T12:00:00Z')), '2026/2027');
+assert.equal(currentSchoolYear(new Date('2027-07-10T12:00:00Z')), '2026/2027', 'July belongs to the ending year');
 assert.match(currentSchoolYear(), /^\d{4}\/\d{4}$/);
 assert.equal(groupYear('2026/2027'), '2026-2027');
 console.log('PASS enrollment queue, placement reporting, roster rule, import defaults and school year');

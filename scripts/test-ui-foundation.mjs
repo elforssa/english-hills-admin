@@ -18,7 +18,7 @@ assert.equal(failedRead({state:'loading'}).state,'error');
 assert.equal(failedRead({scope:'current-period',state:'ready',data:{total_encaisse:0}}).scope,'current-period','refresh failure preserves scope for the next retry');
 for(const [query,options,state] of [[{isPending:true},{},'loading'],[{data:[],isFetching:true},{},'refreshing'],[{data:[],isError:true},{},'stale'],[{isError:true},{},'error'],[{data:[]},{empty:true},'empty'],[{data:[]},{empty:true,filtered:true},'filtered-empty'],[{data:null},{},'unavailable'],[{data:0},{},'ready']]) assert.equal(queryReadState(query,options),state);
 assert.equal(programmeLabel('Yearly'),'Programme annuel');assert.equal(programmeLabel(null),'Programme à préciser');
-assert.equal(displayLabel(DOSSIER_LABELS,'Enrolled'),'Inscrit (dossier)');assert.equal(displayLabel(ENROLLMENT_LABELS,'Confirmed'),'Inscrit — groupe à affecter');assert.equal(displayLabel(DOSSIER_LABELS,'unknown'),'Non précisé');
+assert.equal(displayLabel(DOSSIER_LABELS,'Enrolled'),'Inscrit');assert.equal(displayLabel(ENROLLMENT_LABELS,'Confirmed'),'Inscrit — groupe à affecter');assert.equal(displayLabel(DOSSIER_LABELS,'unknown'),'Non précisé');
 const answers=[{label:'Autre',value:'reste accessible'},{label:'Tranche d’âge',display_value:'13–17'},{label:'Déplacement au centre',value:true},{label:'Programme souhaité',value:['Annuel','Adultes']}];
 assert.deepEqual(inquirySummary({answers}).map(a=>answerValue(a)),['13–17','Oui','Annuel · Adultes']);assert.equal(answers.length,4,'summary never mutates full answers');
 // Render real presentation components, including zero/empty and field associations.

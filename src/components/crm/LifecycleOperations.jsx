@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Ban, Clock3, RefreshCw, RotateCcw, ShieldCheck, TriangleAlert } from 'lucide-react';
@@ -7,7 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 
-const when = value => value ? new Intl.DateTimeFormat('fr-MA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Casablanca' }).format(new Date(value)) : 'Jamais';
+const when = value => value ? formatCentre(value, 'fr-MA', { dateStyle: 'medium', timeStyle: 'short' }) : 'Jamais';
 const input = 'mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-slate-900';
 const badge = status => ({ sent: 'bg-emerald-100 text-emerald-800', blocked: 'bg-amber-100 text-amber-800', dead: 'bg-rose-100 text-rose-800', suppressed: 'bg-slate-200 text-slate-700', retry: 'bg-blue-100 text-blue-800', unknown: 'bg-violet-100 text-violet-800', sending: 'bg-cyan-100 text-cyan-800', pending: 'bg-sky-100 text-sky-800' })[status] || 'bg-slate-100 text-slate-700';
 // Comma-separated entries are strings; a JSON array preserves booleans/numbers.
