@@ -13,13 +13,13 @@ if(plans) {
 reset role;set auto_explain.log_min_duration=0;set auto_explain.log_analyze=on;set auto_explain.log_buffers=on;set auto_explain.log_nested_statements=on;set client_min_messages=log;set role postgres;
 explain (analyze,buffers) select public.crm_get_work_queue(p_assignee_mode=>'all');
 explain (analyze,buffers) select public.crm_get_work_queue(p_bucket=>'overdue');
-explain (analyze,buffers) select public.crm_get_admissions_calendar((now() at time zone 'Africa/Casablanca')::date,(now() at time zone 'Africa/Casablanca')::date+7);
+explain (analyze,buffers) select public.crm_get_admissions_calendar((now() at time zone public.centre_utc_offset())::date,(now() at time zone public.centre_utc_offset())::date+7);
 rollback;`;
 } else {
  if(process.argv.includes('--performance'))source+=`
 set local statement_timeout='5min';
 create temp table timings(kind text,n int,ms numeric);
-do $$ declare v text;i int;started timestamptz;r jsonb;c jsonb;day date:=(now() at time zone 'Africa/Casablanca')::date;begin
+do $$ declare v text;i int;started timestamptz;r jsonb;c jsonb;day date:=(now() at time zone public.centre_utc_offset())::date;begin
  for v in select unnest(array['overdue','today','tomorrow','upcoming','all_staff','owner_and_assignee','unassigned','work_cursor','calendar','placement','completed','visits','calendar_cursor','max_range']) loop
   for i in 0..20 loop
    started:=clock_timestamp();

@@ -574,6 +574,54 @@ Branch `feat/audit-follow-ups`, rebased on `origin/main` `a3d4202` (this plan me
 
 `test-finance-batch-e.sql` asserts the centre clock and the uncapped reception discount instead of the zone name and the cap.
 
+**CI correction (run 40815669660 on `8ef8813`, six database shards failed).**
+
+- **Cause of the time failures.**
+  - The CI runner's PostgreSQL (`supabase/postgres:17.6.1.165`, CLI 2.116.0) reads `Africa/Casablanca` as **+01:00** on 2026-10-29; this was measured locally on that exact image.
+  - The private stack used for the first evidence ran `17.11.0.004`, which reads +00:00. So tests that computed their expected value with the zone name agreed with the centre clock locally but not in CI.
+  - The re-check below runs on the CI image.
+- **Ledger ceilings.** Six upgrade checks were bumped from 124 to 125 (ceiling, version list, count), the same files Batch G bumped:
+  - `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`;
+  - `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`;
+  - `test-premium-retirement-upgrade-113-current.sql`, `test-conflicts-without-retry-upgrade.mjs`.
+
+  `scripts/ci/test_verify.py` pins no ceiling.
+- **Expected values on the centre clock.** In 22 test files, expected values computed with `AT TIME ZONE 'Africa/Casablanca'`, with `AT TIME ZONE p.timezone`, or as `'… Africa/Casablanca'` literals now use `AT TIME ZONE public.centre_utc_offset()` (114 substitutions). `scripts/fixtures/crm-work-calendar.sql`, which upgrade rehearsals also load at 107–111, uses a session helper instead: the centre clock once `public.centre_utc_offset()` exists, the zone reading before, so the fixture matches the functions of the version it seeds. The RCC-A2 browser wall clock uses `CENTRE_UTC_OFFSET_MINUTES`. No assertion was relaxed. (The plan's `centre_instant`/`centre_local` helpers do not exist, see deviation 1; the interval form is the same computation.)
+
+  Kept with the zone name on purpose:
+  - **Meta ad-account settings and labels:** Insights configurations, `account_timezone`, `attributionDay` and the JSON `timezone` label.
+  - **`test-crm-phase7.sql`:** loaded by upgrade tests at 108–112, where the functions under test still read the zone.
+  - **`egc-revert-m1.sql`:** a historical body.
+  - **`test-report-data.mjs`:** loops machine zones.
+  - **The forced-disagreement Intl override in `test-crm-work-calendar-browser.mjs`.**
+- **Expected instants before → after, as the CI PostgreSQL computed them:**
+
+  | Test | Before (zone name, CI) | After (centre clock) |
+  | --- | --- | --- |
+  | `test-crm-phase5.sql` input « 2026-09-22 11:30 » | 2026-09-22 10:30Z | 11:30Z |
+  | « 120 minute SLA rolls over lunch » | 2026-09-22 14:20Z | 15:20Z |
+  | « SLA rolls after closing » | 2026-09-23 09:00Z | 10:00Z |
+  | « SLA rolls closed Sunday » | 2026-09-28 14:00Z | 15:00Z |
+  | `test-crm-rcc-a1.sql` « preset in_2_hours resolves to configured Casablanca opening » (CI run at 04:07Z on a Thursday; first opening 10:00) | 09:00Z | 10:00Z |
+  | `test-crm-phase4-browser.mjs` « stored callback moves from lunch to the configured Casablanca opening » (next Tuesday 15:20) | 14:20Z | 15:20Z |
+
+  In each case the function under test (migration 125) returned the "after" value; the oracle was one hour early.
+- **Year-mismatch fixtures.** In each case the year came from a literal in the fixture, not from an application path. Each enrollment now goes into a group of its own year:
+  - **`test-batch3b-security.mjs`:** staff enrollments of 2027/2028 and 2028/2029 are now validated into groups of those years.
+  - **`test-receptionist-browser.mjs`:** the 2027/2028 Under Review enrollment is placed in a 2027-2028 group, created and removed with the fixture.
+  - **`test-crm-phase6.sql`:** the 2027/2028 Validated enrollment uses a 2027-2028 group.
+- **Two date-specific expectations of the former time-zone switches** (`test-crm-work-calendar.sql`) follow the approved fixed offset (D-TZ = A); they are not relaxed:
+  - **Day length:** « 23/25 hour Casablanca day » becomes an exact 86,400 s for 2026-02-15 and 2026-03-22.
+  - **Appointment instant:** « 10:30 on 2026-03-22 » is expected at 10:30Z instead of 09:30Z.
+- **The CI log records the server's reading.** `test-audit-follow-ups.sql` prints it: `01:00:00` on the CI image, against the centre clock's `00:00:00`.
+- **Re-check on the CI image** (`17.6.1.165`, private stack, the job's steps replayed from `verify.yml` with remapped ports):
+  - `sql-and-concurrency`: 12 of 12 steps pass.
+  - `upgrades-from-097-to-105`: 8 of 8.
+  - `upgrades-from-106-to-111`: 6 of 6, Work and Calendar after the fixture fix.
+  - `upgrades-from-112-to-116`: 11 of 11.
+  - `browser-security`: 13 of 13.
+  - `browser-crm`: every step except one run of the RCC-B1 suite, which recorded `ChunkLoadError` page errors in its deliberate failed-chunk scenario. The same suite then passed twice in full in Chromium and WebKit. It is treated as a load flake to be confirmed by CI.
+
 **Local evidence** (private Supabase stack on remapped ports, synthetic data only):
 
 - **Unit, lint and build:** `npm test`, lint and build pass.

@@ -61,7 +61,7 @@ do $$ declare p public.crm_followup_policies%rowtype; h jsonb; v jsonb; before_c
 end $$;
 \echo PASS director policy bootstrap, schedule validation, role denial and immutable publication
 
--- Expected local-clock results: calendar arithmetic, including Casablanca DST.
+-- Expected local-clock results: calendar arithmetic on the centre clock (fixed offset, no DST).
 do $$ declare p uuid:=(select id from phase3_policy); item record; got timestamptz; raw text; begin
  for item in select * from (values
  ('2026-09-21 16:00','2026-09-21 16:00'),
@@ -73,15 +73,15 @@ do $$ declare p uuid:=(select id from phase3_policy); item record; got timestamp
  ('2026-09-26 20:01','2026-09-28 15:00'),
  ('2026-09-27 11:00','2026-09-28 15:00'),
  ('2026-02-15 10:00','2026-02-16 15:00')) v(input,expected) loop
-  got:=crm_security.next_window(p,item.input::timestamp at time zone 'Africa/Casablanca');
-  perform pg_temp.ok(got=item.expected::timestamp at time zone 'Africa/Casablanca','window '||item.input);
+  got:=crm_security.next_window(p,item.input::timestamp at time zone public.centre_utc_offset());
+  perform pg_temp.ok(got=item.expected::timestamp at time zone public.centre_utc_offset(),'window '||item.input);
  end loop;
- got:=crm_security.attempt_due(p,'2026-09-21',2,'2026-09-21 15:15 Africa/Casablanca','2026-09-21 15:15 Africa/Casablanca');
- perform pg_temp.ok(got='2026-09-21 18:15 Africa/Casablanca'::timestamptz,'180 minute first day gap');
- got:=crm_security.attempt_due(p,'2026-09-21',2,'2026-09-21 18:15 Africa/Casablanca','2026-09-21 18:15 Africa/Casablanca');
- perform pg_temp.ok(got='2026-09-22 10:00 Africa/Casablanca'::timestamptz,'late day-one roll forward');
- got:=crm_security.attempt_due(p,'2026-09-21',3,'2026-09-25 18:30 Africa/Casablanca','2026-09-25 18:30 Africa/Casablanca');
- perform pg_temp.ok(got='2026-09-26 10:00 Africa/Casablanca'::timestamptz,'late attempt no catchup burst');
+ got:=crm_security.attempt_due(p,'2026-09-21',2,('2026-09-21 15:15'::timestamp at time zone public.centre_utc_offset()),('2026-09-21 15:15'::timestamp at time zone public.centre_utc_offset()));
+ perform pg_temp.ok(got=('2026-09-21 18:15'::timestamp at time zone public.centre_utc_offset()),'180 minute first day gap');
+ got:=crm_security.attempt_due(p,'2026-09-21',2,('2026-09-21 18:15'::timestamp at time zone public.centre_utc_offset()),('2026-09-21 18:15'::timestamp at time zone public.centre_utc_offset()));
+ perform pg_temp.ok(got=('2026-09-22 10:00'::timestamp at time zone public.centre_utc_offset()),'late day-one roll forward');
+ got:=crm_security.attempt_due(p,'2026-09-21',3,('2026-09-25 18:30'::timestamp at time zone public.centre_utc_offset()),('2026-09-25 18:30'::timestamp at time zone public.centre_utc_offset()));
+ perform pg_temp.ok(got=('2026-09-26 10:00'::timestamp at time zone public.centre_utc_offset()),'late attempt no catchup burst');
  foreach raw in array array['0612345678','612345678','+212612345678','00212612345678','06 12-34.56(78)'] loop
   perform pg_temp.ok(crm_security.normalize_phone(raw)='+212612345678','phone vector '||raw);
  end loop;
@@ -116,7 +116,7 @@ end $$;
 -- Backdate only synthetic lead creation to record genuine historical timestamps.
 do $$ declare l uuid:=pg_temp.intake(); r jsonb; i integer; at_time timestamptz:=now()-interval '10 days'; t uuid; v bigint;
 begin
- update public.crm_leads set created_at=now()-interval '11 days',outreach_anchor_date=(at_time at time zone 'Africa/Casablanca')::date where id=l;
+ update public.crm_leads set created_at=now()-interval '11 days',outreach_anchor_date=(at_time at time zone public.centre_utc_offset())::date where id=l;
  for i in 1..5 loop
   if i<5 then perform pg_temp.denied(format('select pg_temp.act(''close_lost'',%L,''{"reason":"unreachable"}'')',l)); end if;
   r:=pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome',(array['no_answer','busy','declined','unreachable','no_answer'])[i],'occurred_at',at_time));
@@ -249,10 +249,10 @@ do $$ declare l uuid; wanted text; r jsonb; i integer; old_history jsonb;
    end if;
    if i=0 then
     select outreach_anchor_date,followup_policy_id into anchor_day,policy from public.crm_leads where id=l;
-    perform pg_temp.ok(anchor_day=(fresh_call at time zone 'Africa/Casablanca')::date,'weeks-later call establishes fresh anchor');
+    perform pg_temp.ok(anchor_day=(fresh_call at time zone public.centre_utc_offset())::date,'weeks-later call establishes fresh anchor');
     perform pg_temp.ok(exists(select 1 from public.crm_activities where lead_id=l and outreach_cycle=2 and attempt_ordinal=1),'new cycle starts ordinal one');
     perform pg_temp.ok(crm_security.attempt_due(policy,anchor_day,3,fresh_call,fresh_call)=
-      crm_security.next_window(policy,greatest((anchor_day+1)::timestamp at time zone 'Africa/Casablanca',fresh_call+interval '180 minutes')),'new anchor controls Day 2 scheduling');
+      crm_security.next_window(policy,greatest((anchor_day+1)::timestamp at time zone public.centre_utc_offset(),fresh_call+interval '180 minutes')),'new anchor controls Day 2 scheduling');
    end if;
   end loop;
   perform pg_temp.ok((r->>'unreachable_eligible')::boolean,'fifth new-cycle failure enables closure for '||wanted);

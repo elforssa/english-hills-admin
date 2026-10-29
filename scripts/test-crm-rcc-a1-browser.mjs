@@ -75,7 +75,7 @@ try {
  await dialog().getByText('Prochaine action · Rappel · En réflexion',{exact:true}).waitFor();await dialog().getByText('Rappel interne',{exact:true}).waitFor();
  await done();
  let saved=detail(lead);assert.equal(saved.status,'ENGAGED');assert.equal(saved.next_task.followup_reason,'considering');assert.equal(saved.next_task.schedule_kind,'reminder');
- assert.equal(sql(`select t.due_at=crm_security.next_window(l.followup_policy_id,((now() at time zone 'Africa/Casablanca')::date+2)::timestamp at time zone 'Africa/Casablanca') from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.id=${quote(saved.next_task.id)}`),'t','server resolved the preset against the Casablanca policy');
+ assert.equal(sql(`select t.due_at=crm_security.next_window(l.followup_policy_id,((now() at time zone public.centre_utc_offset())::date+2)::timestamp at time zone public.centre_utc_offset()) from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.id=${quote(saved.next_task.id)}`),'t','server resolved the preset against the Casablanca policy');
  const nextSection=page.getByRole('dialog').first().locator('section').filter({has:page.getByText('Prochaine action',{exact:true})});
  await nextSection.getByText('Rappel · En réflexion',{exact:true}).waitFor();await nextSection.getByText('Rappel interne',{exact:true}).waitFor();
  await page.getByRole('dialog').first().getByText('En discussion',{exact:true}).first().waitFor();
@@ -121,7 +121,7 @@ try {
  await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(agreed);await save();await done();
  saved=detail(lead);const generic=saved.open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type));
  assert.equal(generic.length,1);assert.equal(generic[0].schedule_kind,'appointment');assert.notEqual(generic[0].id,genericBefore[0].id,'latest decision replaced the previous follow-up');
- assert.equal(sql(`select due_at=(${quote(agreed)}::timestamp at time zone 'Africa/Casablanca') from public.crm_tasks where id=${quote(generic[0].id)}`),'t','agreed callback kept its exact time');
+ assert.equal(sql(`select due_at=(${quote(agreed)}::timestamp at time zone public.centre_utc_offset()) from public.crm_tasks where id=${quote(generic[0].id)}`),'t','agreed callback kept its exact time');
  assert(saved.open_tasks.some(t=>t.task_type==='center_visit'),'center visit preserved');
  console.log('PASS agreed callback outside hours rejected, exact compatible time kept, previous follow-up replaced, visit preserved');
  // Presentation labels; stored values unchanged.

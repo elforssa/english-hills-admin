@@ -2,7 +2,7 @@
 do $$ declare r jsonb; b jsonb; c jsonb; v text; n bigint; bounds record;
  seen uuid[]:=array[]::uuid[]; ids uuid[]; keys text[]:=array[]::text[]; page_keys text[]; i integer;
  appointment uuid; scheduling_day date; future_found boolean:=false;
- day date:=(now() at time zone 'Africa/Casablanca')::date; stamp timestamptz;
+ day date:=(now() at time zone public.centre_utc_offset())::date; stamp timestamptz;
 begin
  perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000003',true);
  r:=public.crm_get_work_queue(p_assignee_mode=>'all');
@@ -24,11 +24,13 @@ begin
  b:=public.crm_get_work_queue(p_assignee_mode=>'staff',p_assignee=>'a3000000-0000-0000-0000-000000000002',p_owner_mode=>'unassigned');
  perform pg_temp.ok(b->'counts'='{"overdue":1,"today":1,"tomorrow":1,"upcoming":1}'::jsonb,'real read half-open boundaries and overdue earlier today');
  delete from public.crm_tasks where source_key like 'boundary:%';
- -- SQL is the timezone oracle, independent of Node/browser ICU and host TZ.
+ -- SQL is the timezone oracle, independent of Node/browser ICU and host TZ. The centre clock
+ -- (plan AFU-r1, D-TZ = A) has a fixed offset: dates that were the tz-data offset switches
+ -- (2026-02-15, 2026-03-22) are plain 24-hour days with midnight boundaries.
  for stamp in select unnest(array['2026-02-15 00:00+01'::timestamptz,'2026-03-22 00:00+00'::timestamptz]) loop
   select * into bounds from crm_security.work_boundaries(stamp);
-  perform pg_temp.ok((bounds.d0 at time zone 'Africa/Casablanca')::time='00:00' and (bounds.d1 at time zone 'Africa/Casablanca')::time='00:00' and (bounds.d2 at time zone 'Africa/Casablanca')::time='00:00','midnights around offset transition');
-  perform pg_temp.ok(extract(epoch from bounds.d1-bounds.d0) in (82800,90000),'23/25 hour Casablanca day');
+  perform pg_temp.ok((bounds.d0 at time zone public.centre_utc_offset())::time='00:00' and (bounds.d1 at time zone public.centre_utc_offset())::time='00:00' and (bounds.d2 at time zone public.centre_utc_offset())::time='00:00','midnights around offset transition');
+  perform pg_temp.ok(extract(epoch from bounds.d1-bounds.d0)=86400 and extract(epoch from bounds.d2-bounds.d1)=86400,'24-hour centre day on a former offset switch');
  end loop;
  r:=public.crm_get_work_queue();
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'assigned_to'<>'a3000000-0000-0000-0000-000000000003'),'default task assignee me');
@@ -65,7 +67,7 @@ begin
  end loop;
  perform pg_temp.ok(i>1,'calendar continuation beyond 100');
  select count(*) into n from public.placement_tests p where p.date_test>=day and p.date_test<day+7 and p.status='Planifié';
- select n+count(*) into n from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.task_type='center_visit' and t.status='open' and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=day::timestamp at time zone 'Africa/Casablanca' and t.due_at<(day+7)::timestamp at time zone 'Africa/Casablanca';
+ select n+count(*) into n from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.task_type='center_visit' and t.status='open' and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=day::timestamp at time zone public.centre_utc_offset() and t.due_at<(day+7)::timestamp at time zone public.centre_utc_offset();
  perform pg_temp.ok(cardinality(keys)=n,'exact sources, no preparation/result/callback appointments');
  r:=public.crm_get_admissions_calendar(day,day+7,p_kind=>'placement',p_include_completed=>true);
  perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at'],'fixed event projection');
@@ -112,8 +114,8 @@ begin
   r:=public.crm_get_admissions_calendar(scheduling_day,scheduling_day+1,p_kind=>'placement');
   perform pg_temp.ok((select count(*) from jsonb_array_elements(r->'rows')x where x->>'display_name'='Safe-time regression' and x->'local_time'='null'::jsonb and x->'starts_at'='null'::jsonb)=4,'each unknown time remains truthful Calendar Time unspecified');
   perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'display_name'='Safe-time regression' and (x->>'local_time')::time='10:30'::time
-   and (x->>'starts_at')::timestamptz=(scheduling_day+'10:30'::time) at time zone 'Africa/Casablanca'
-   and (x->>'starts_at')::timestamptz=case scheduling_day when '2026-02-15'::date then '2026-02-15 10:30+00'::timestamptz else '2026-03-22 09:30+00'::timestamptz end),'valid Casablanca appointment unchanged across offsets');
+   and (x->>'starts_at')::timestamptz=(scheduling_day+'10:30'::time) at time zone public.centre_utc_offset()
+   and (x->>'starts_at')::timestamptz=case scheduling_day when '2026-02-15'::date then '2026-02-15 10:30+00'::timestamptz else '2026-03-22 10:30+00'::timestamptz end),'valid centre-clock appointment: 10:30 is 10:30Z on both former offset dates');
  end loop;
  -- Cross-surface regression remains mandatory after the new-read assertions.
  raise notice 'PASS new work/calendar read assertions; required Needs Attention regression follows';
@@ -127,7 +129,7 @@ begin
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(b->'pages'->'list'->'rows')x where x->>'id'=(select f.lead::text from fixture f where f.i=4)),'valid future planned placement still suppresses taskless Needs Attention');
  r:=public.crm_get_admissions_calendar(day+1,day+2,p_kind=>'placement');
  loop
-  future_found:=future_found or exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'id'=appointment::text and (x->>'starts_at')::timestamptz=((day+1)+'13:15'::time) at time zone 'Africa/Casablanca');
+  future_found:=future_found or exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'id'=appointment::text and (x->>'starts_at')::timestamptz=((day+1)+'13:15'::time) at time zone public.centre_utc_offset());
   exit when not (r->>'has_more')::boolean;
   r:=public.crm_get_admissions_calendar(day+1,day+2,p_kind=>'placement',p_cursor=>r->'next_cursor');
  end loop;

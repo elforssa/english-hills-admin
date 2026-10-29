@@ -46,7 +46,7 @@ create function pg_temp.qualified() returns uuid language plpgsql as $$ declare 
 end $$;
 create function pg_temp.booking(l uuid) returns jsonb language sql as $$
  select jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
- 'date_test',((now() at time zone 'Africa/Casablanca')::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
+ 'date_test',((now() at time zone public.centre_utc_offset())::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
  'task_id',(select id from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1),
  'expected_task_version',(select version from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1))
 $$;
@@ -150,9 +150,9 @@ do $$ declare l uuid; p uuid; r jsonb; state text; req uuid; d jsonb; student uu
 end $$;
 
 do $$ declare policy uuid:=(select id from phase3_policy); l uuid:=pg_temp.qualified(); p uuid; q jsonb; fn regprocedure; begin
- perform pg_temp.ok(crm_security.placement_followup_due(policy,'2026-09-22 11:30 Africa/Casablanca')='2026-09-22 15:20 Africa/Casablanca'::timestamptz,'120 minute SLA rolls over lunch');
- perform pg_temp.ok(crm_security.placement_followup_due(policy,'2026-09-22 19:30 Africa/Casablanca')='2026-09-23 10:00 Africa/Casablanca'::timestamptz,'SLA rolls after closing');
- perform pg_temp.ok(crm_security.placement_followup_due(policy,'2026-09-27 10:00 Africa/Casablanca')='2026-09-28 15:00 Africa/Casablanca'::timestamptz,'SLA rolls closed Sunday');
+ perform pg_temp.ok(crm_security.placement_followup_due(policy,('2026-09-22 11:30'::timestamp at time zone public.centre_utc_offset()))=('2026-09-22 15:20'::timestamp at time zone public.centre_utc_offset()),'120 minute SLA rolls over lunch');
+ perform pg_temp.ok(crm_security.placement_followup_due(policy,('2026-09-22 19:30'::timestamp at time zone public.centre_utc_offset()))=('2026-09-23 10:00'::timestamp at time zone public.centre_utc_offset()),'SLA rolls after closing');
+ perform pg_temp.ok(crm_security.placement_followup_due(policy,('2026-09-27 10:00'::timestamp at time zone public.centre_utc_offset()))=('2026-09-28 15:00'::timestamp at time zone public.centre_utc_offset()),'SLA rolls closed Sunday');
  p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
  -- A new global policy cannot change this lead's frozen policy.
  perform pg_temp.actor(1);
@@ -162,7 +162,7 @@ do $$ declare policy uuid:=(select id from phase3_policy); l uuid:=pg_temp.quali
  perform pg_temp.ok((select policy_id=policy and due_at=crm_security.placement_followup_due(policy,now()) from public.crm_tasks where placement_test_id=p),'result uses frozen lead policy');
  -- Appointment appears once in Casablanca agenda, not as a confirmation task.
  l:=pg_temp.qualified();p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
- update public.placement_tests set date_test=(now() at time zone 'Africa/Casablanca')::date,heure='23:59' where id=p;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date,heure='23:59' where id=p;
  q:=public.crm_get_today(100);
  perform pg_temp.ok((select count(*)=1 from jsonb_array_elements(q->'today_schedule')x where x->>'id'=p::text and x->>'kind'='placement'),'one placement in agenda');
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(q->'needs_attention')x where x->>'id'=l::text),'today appointment does not invent missing task');

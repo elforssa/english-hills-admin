@@ -46,7 +46,7 @@ create function pg_temp.qualified() returns uuid language plpgsql as $$ declare 
 end $$;
 create function pg_temp.booking(l uuid) returns jsonb language sql as $$
  select jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
- 'date_test',((now() at time zone 'Africa/Casablanca')::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
+ 'date_test',((now() at time zone public.centre_utc_offset())::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
  'task_id',(select id from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1),
  'expected_task_version',(select version from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1))
 $$;
@@ -87,6 +87,8 @@ do $$ declare l uuid:=pg_temp.qualified(); d jsonb:=pg_temp.start_data(l); key u
  perform pg_temp.ok((select event_type='lead_converted' and enrollment_id=e and attribution_submission_id=(select first_submission_id from crm_leads where id=l) from crm_activities where id=a),'trusted first-touch evidence');
  perform pg_temp.ok(not exists(select 1 from crm_tasks where lead_id=l and status='open'),'conversion cancels all sales tasks');
  insert into groups(id,name,session_type,niveau) values('84000000-0000-0000-0000-000000000001','Phase6 child group','Yearly','Child 2');
+ -- The 2027/2028 enrollment below is placed in a group of its own school year (Batch H, H5).
+ insert into groups(id,name,session_type,niveau,annee) values('84000000-0000-0000-0000-000000000002','Phase6 child group 2027','Yearly','Child 2','2027-2028');
  update enrollments set group_id='84000000-0000-0000-0000-000000000001' where id=e;
  update enrollments set status='Validated',notes='Again' where id=e;
  perform pg_temp.ok((select status='Validated' from enrollments where id=e),'Confirmed plus group validation retained');
@@ -131,7 +133,7 @@ do $$ declare l uuid; r jsonb; d jsonb; e uuid; s uuid; other uuid; before_stude
  l:=pg_temp.qualified();d:=pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e));
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d));
  -- Explicitly chosen Validated enrollment, with matching group.
- insert into enrollments(student_id,status,session_type,school_year,level,group_id) values(s,'Validated','Yearly','2027/2028','Child 2','84000000-0000-0000-0000-000000000001') returning id into e;
+ insert into enrollments(student_id,status,session_type,school_year,level,group_id) values(s,'Validated','Yearly','2027/2028','Child 2','84000000-0000-0000-0000-000000000002') returning id into e;
  d:=d||jsonb_build_object('enrollment_id',e,'school_year','2027/2028','expected_enrollment_updated_at',(select updated_at from enrollments where id=e));
  r:=public.crm_start_enrollment(gen_random_uuid(),d);perform pg_temp.ok(r->'lead'->>'status'='CONVERTED','direct Validated existing link converts');
  -- Same-name different DOB never auto-merges.

@@ -499,7 +499,7 @@ update e2 set v = v || jsonb_build_object('result', pg_temp.pay(3, v->'payload')
 select pg_temp.owner();
 do $$ declare r jsonb; begin
   create or replace function public.business_date(p_at timestamptz default now()) returns date language sql stable
-    set search_path = pg_catalog, pg_temp as $f$ select (p_at at time zone 'Africa/Casablanca')::date + 20 $f$;
+    set search_path = pg_catalog, pg_temp as $f$ select (p_at at time zone public.centre_utc_offset())::date + 20 $f$;
   r := pg_temp.pay(3, (select v->'payload' from e2 where k = 'windowed'));
   perform pg_temp.owner();
   perform pg_temp.ok((r->>'replayed')::boolean and r->>'receipt_id' = (select v->'result'->>'receipt_id' from e2 where k = 'windowed'),
@@ -565,10 +565,10 @@ do $$ declare m date := date_trunc('month', public.business_date())::date; befor
   -- Created one second before the business month starts (business_date of created_at is the previous month).
   insert into public.charges(id, student_id, session_type, school_year, service_description, gross_amount, created_by, created_at)
   values (pg_temp.id(962), pg_temp.id(136), 'Other', '2026/2027', 'Autre · x', 900, pg_temp.id(2),
-    (m::timestamp at time zone 'Africa/Casablanca') - interval '1 second');
+    (m::timestamp at time zone public.centre_utc_offset()) - interval '1 second');
   perform pg_temp.act(2); after := public.get_monthly_finance_summary(m); perform pg_temp.owner();
   perform pg_temp.ok(after->'total' = before->'total', 'a charge from the previous business month is not counted');
-  update public.charges set created_at = (m::timestamp at time zone 'Africa/Casablanca') where id = pg_temp.id(962);
+  update public.charges set created_at = (m::timestamp at time zone public.centre_utc_offset()) where id = pg_temp.id(962);
   perform pg_temp.act(2); after := public.get_monthly_finance_summary(m); perform pg_temp.owner();
   perform pg_temp.ok((after->>'total')::numeric = (before->>'total')::numeric + 900, 'a charge at the business month start is counted');
   perform pg_temp.act(2);

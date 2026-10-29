@@ -92,7 +92,7 @@ insert into enrollments(id,student_id,status,session_type,school_year) values(ge
 insert into fx select 'enrollment', id::text from enrollments where student_id=(select v::uuid from fx where k='student');
 set request.jwt.claim.role='authenticated'; set request.jwt.claim.sub=${q(director.id)};
 select online_save_course((select v::uuid from fx where k='online_group'),null,jsonb_build_object('teacher_id',(select id from teachers where email='nrc-online@example.invalid'),
-  'audience','adult','term_start',(now() at time zone 'Africa/Casablanca')::date-7,'term_end',(now() at time zone 'Africa/Casablanca')::date+70));
+  'audience','adult','term_start',(now() at time zone public.centre_utc_offset())::date-7,'term_end',(now() at time zone public.centre_utc_offset())::date+70));
 reset request.jwt.claim.role; reset request.jwt.claim.sub;
 insert into online_lessons(id,group_id,starts_at,ends_at,teacher_id,status,is_substitute)
 select gen_random_uuid(),(select v::uuid from fx where k='online_group'),now()+interval '2 days',now()+interval '2 days 1 hour',id,'scheduled',false from teachers where email='nrc-online@example.invalid';

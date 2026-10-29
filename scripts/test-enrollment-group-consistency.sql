@@ -547,7 +547,7 @@ select pg_temp.act(1);
 do $$ declare g uuid; begin
   foreach g in array array[pg_temp.id(307), pg_temp.id(308)] loop
     perform public.online_save_course(g, null, jsonb_build_object('teacher_id', pg_temp.id(101), 'audience', 'adult', 'capacity', 1,
-      'term_start', (now() at time zone 'Africa/Casablanca')::date - 7, 'term_end', (now() at time zone 'Africa/Casablanca')::date + 60));
+      'term_start', (now() at time zone public.centre_utc_offset())::date - 7, 'term_end', (now() at time zone public.centre_utc_offset())::date + 60));
   end loop;
 end $$;
 select pg_temp.owner();

@@ -133,7 +133,7 @@ end $$;
 select 'PASS lead/payload/program/status/choice/name reasons, winning-error order and access denial without hint';
 
 -- Birth date: Casablanca civil date for enrollment initiation, any session TimeZone.
-do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time zone 'Africa/Casablanca')::date; l uuid; r jsonb; s uuid; begin
+do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time zone public.centre_utc_offset())::date; l uuid; r jsonb; s uuid; begin
  l:=pg_temp.lead();
  foreach zone in array array['Pacific/Kiritimati','Pacific/Pago_Pago','UTC'] loop
   perform set_config('TimeZone',zone,true);

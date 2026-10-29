@@ -1,6 +1,7 @@
 // RCC-A2 local Auth + real UI acceptance. Synthetic fixtures are removed in finally.
 // No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
+import { CENTRE_UTC_OFFSET_MINUTES } from '../src/lib/centreClock.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -36,11 +37,11 @@ async function start(id){await open(id);await page.getByRole('button',{name:"Com
 async function newLearner(){await button('Créer un nouvel apprenant').click();await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();}
 async function toReview(){await button('Continuer').click();await dialog().getByText('3 / 3 · Vérification').waitFor();}
 async function noRaw(){const text=await page.locator('body').innerText();assert(!/crm_enrollment|SQLSTATE|\b22023\b|\bPT409\b|\b40001\b|\b42501\b|Invalid new learner|Qualified unlinked|Student unavailable|Enrollment (unavailable|group)|Valid future task|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text),'no raw server text, hint, SQLSTATE or identifier rendered');}
-// Casablanca wall clock from the browser's own clock and tz data, which the dialog uses;
-// Node and browser tz data may disagree on Morocco's offset.
-const wall=(delta=0)=>page.evaluate(ms=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Casablanca',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(Date.now()+ms)).map(x=>[x.type,x.value]));return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;},delta);
+// The centre's wall clock (plan AFU-r1, H7) from the browser's own clock, as the dialog
+// computes it: the fixed centre offset, never the browser's time-zone data.
+const wall=(delta=0)=>page.evaluate(([ms,offset])=>new Date(Date.now()+ms+offset*60000).toISOString().slice(0,16),[delta,CENTRE_UTC_OFFSET_MINUTES]);
 const focused=()=>page.evaluate(()=>({field:document.activeElement?.getAttribute('data-field'),id:document.activeElement?.id,invalid:document.activeElement?.getAttribute('aria-invalid')}));
-const civil=task=>{const [d,t]=sql(`select to_char(due_at at time zone 'Africa/Casablanca','DD/MM/YYYY'),to_char(due_at at time zone 'Africa/Casablanca','HH24:MI') from public.crm_tasks where id='${task}'`).split('|');return `${d} à ${t}`;};
+const civil=task=>{const [d,t]=sql(`select to_char(due_at at time zone public.centre_utc_offset(),'DD/MM/YYYY'),to_char(due_at at time zone public.centre_utc_offset(),'HH24:MI') from public.crm_tasks where id='${task}'`).split('|');return `${d} à ${t}`;};
 const startCalls=[];
 function watch(target){target.on('request',request=>{if(request.url().endsWith('/rpc/crm_start_enrollment'))startCalls.push(request.postDataJSON());});}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}

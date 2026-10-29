@@ -37,6 +37,8 @@ const submittedStudent = randomUUID(), reviewStudent = randomUUID(), confirmedSt
 const validatedStudent = randomUUID(), validatedEnrollment = randomUUID();
 const submittedEnrollment = randomUUID(), reviewEnrollment = randomUUID(), confirmedEnrollment = randomUUID();
 const multipleSubmitted = randomUUID(), multipleReview = randomUUID(), incompatibleGroup = randomUUID(), wrongLevelGroup = randomUUID();
+// The 2027/2028 enrollment is placed in a group of its own school year (Batch H, H5).
+const nextYearGroup = randomUUID();
 const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const submittedName = run + ' submitted', reviewName = run + ' review';
@@ -52,7 +54,8 @@ try {
     insert into public.groups(id,name,session_type,niveau,annee) values
       ('${group}','${run}','Yearly','Child 1','2026-2027'),
       ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027'),
-      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027');
+      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027'),
+      ('${nextYearGroup}','${run} next year','Yearly','Child 1','2027-2028');
     -- Status follows enrollments (EGC): learners with a pre-enrollment are
     -- prospects; the two Enrolled files without any enrollment (paid on a historical
     -- receipt) are seeded as Production holds them, with triggers bypassed.
@@ -296,14 +299,14 @@ try {
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${multipleStudent}' and group_id is not null`), '0');
   await chooser.getByRole('button', { name: new RegExp(`En cours d’examen.*${multipleReview.slice(0, 8)}`) }).click();
   const chosenDialog = page.getByRole('dialog');
-  await chosenDialog.locator('#enrollment-group').selectOption(group);
+  await chosenDialog.locator('#enrollment-group').selectOption(nextYearGroup);
   const chosenSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
   await chosenDialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   const chosenResponse = await chosenSave;
   assert.equal(chosenResponse.status(), 200, await chosenResponse.text());
   assert.equal(chosenResponse.request().postDataJSON().p_enrollment, multipleReview);
   await chosenDialog.waitFor({ state: 'hidden' });
-  assert.equal(sql(`select group_id from public.enrollments where id='${multipleReview}'`), group);
+  assert.equal(sql(`select group_id from public.enrollments where id='${multipleReview}'`), nextYearGroup);
   assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${multipleSubmitted}'`), 'unset');
   console.log('PASS enrollment-aware assignment: Submitted, Under Review, Confirmed, explicit multiple choice and incompatible denials');
 
@@ -539,14 +542,14 @@ try {
         '${readyStudent}'::uuid,'${unsetStudent}'::uuid,'${submittedStudent}'::uuid,
         '${reviewStudent}'::uuid,'${confirmedStudent}'::uuid,'${multipleStudent}'::uuid,
         '${validatedStudent}'::uuid,'${teacher}'::uuid,'${group}'::uuid,
-        '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid]);
+        '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid,'${nextYearGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}','${submittedStudent}',
       '${reviewStudent}','${confirmedStudent}','${multipleStudent}','${validatedStudent}','${readyStudent}','${unsetStudent}');
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
       '${submittedStudent}','${reviewStudent}','${confirmedStudent}','${multipleStudent}',
       '${validatedStudent}');
-    delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}');
+    delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}','${nextYearGroup}');
     delete from public.teachers where id='${teacher}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);

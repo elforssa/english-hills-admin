@@ -177,10 +177,14 @@ try {
     // arbitrary path.
     // Another school year than the child's live Yearly enrollment (EGC I3), with the
     // programme a validation needs (I9).
+    const year=staff===admin?'2027/2028':'2028/2029';
     const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:[],session_type:'Yearly',
-      school_year:staff===admin?'2027/2028':'2028/2029'},staff);
+      school_year:year},staff);
+    // Batch H (H5): a placement's school year is its group's, so this enrollment is
+    // validated into a group of its own year.
+    const yearGroup=await create('groups',{name:run+' Group '+year,niveau:'A1',teacher_id:t1.id,annee:year.replace('/','-')});
     for(const status of ['Validated','Rejected']) {
-      assert.equal(ok(await request(staff,'enrollments','PATCH',{status,group_id:group.id},'?id=eq.'+e.id))[0].status,status); checks++;
+      assert.equal(ok(await request(staff,'enrollments','PATCH',{status,group_id:yearGroup.id},'?id=eq.'+e.id))[0].status,status); checks++;
     }
     const l=await create('leave_requests',{...leave,status:'Approuvé',remplacant:t2.full_name},staff);
     for(const status of ['Refusé','Approuvé']) {

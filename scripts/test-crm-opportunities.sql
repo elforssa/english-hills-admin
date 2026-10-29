@@ -52,7 +52,7 @@ do $$ declare r jsonb; b jsonb; c jsonb; l uuid:=(select lead from fixture f whe
  r:=public.crm_get_opportunities(p_view=>'attention',p_layout=>'list');
  perform pg_temp.ok((r->>'total')::int=(public.crm_get_today()->>'attention_total')::int,'attention matches current 083 semantics');
  r:=public.crm_get_opportunities(p_view=>'follow_up_today',p_layout=>'list');
- perform pg_temp.ok((r->>'total')::int=(select count(distinct t.lead_id) from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=((now() at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca' and t.due_at<(((now() at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'),'follow-up includes today only');
+ perform pg_temp.ok((r->>'total')::int=(select count(distinct t.lead_id) from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=((now() at time zone public.centre_utc_offset())::date)::timestamp at time zone public.centre_utc_offset() and t.due_at<(((now() at time zone public.centre_utc_offset())::date)+1)::timestamp at time zone public.centre_utc_offset()),'follow-up includes today only');
  perform pg_temp.ok((public.crm_get_opportunities(p_view=>'mine',p_owner_mode=>'staff',p_owner=>'a3000000-0000-0000-0000-000000000002')->>'total')::int=0,'mine AND other owner zero');
  perform pg_temp.ok((public.crm_get_opportunities(p_owner_mode=>'unassigned')->>'total')::int=3333,'unassigned owner');
  perform pg_temp.ok((public.crm_get_opportunities(p_channel=>'website')->>'total')::int=3334,'first channel exact filter');

@@ -205,7 +205,7 @@ try {
   await page.getByRole('link', { name: new RegExp(`${run} adultes`) }).click();
   await page.waitForURL(new RegExp(`/online/${ids.group}$`));
   await page.getByRole('heading', { name: `${run} adultes` }).waitFor();
-  const laterTime = sql(`select to_char(starts_at at time zone 'Africa/Casablanca', 'HH24:MI') from public.online_lessons where id='${ids.later}'`);
+  const laterTime = sql(`select to_char(starts_at at time zone public.centre_utc_offset(), 'HH24:MI') from public.online_lessons where id='${ids.later}'`);
   const laterRow = page.locator('tr', { hasText: `${laterTime}–` });
   await laterRow.getByRole('button', { name: 'Annuler' }).click();
   await page.getByLabel('Motif (envoyé aux familles)').fill('Enseignante absente');

@@ -140,7 +140,7 @@ try {
  sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${rich}','center_visit',now()+interval '4 days','${actor}','manual',${quote(run+':second')})`);
  // Tâches: an overdue task assigned to the receptionist. Calendar: a booked placement tomorrow.
  const taskLead=intake('B1 tâche en retard');sql(`update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${taskLead}' and status='open'`);
- const day=sql("select to_char((now() at time zone 'Africa/Casablanca')::date+1,'YYYY-MM-DD')");
+ const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
  const calendarLead=intake('B1 calendrier');act('qualify_lead',calendarLead,{conversation_channel:'phone',note:'Test souhaité',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'10:00',examinateur:'Examinateur B1'});}
  // I1: a deliberately long learner identity beside the overflow trigger (En discussion column).

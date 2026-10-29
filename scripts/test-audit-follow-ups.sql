@@ -53,6 +53,11 @@ update public.profiles set role = (array['director','admin','receptionist'])[rig
 -- H7: the centre clock
 -- ===========================================================================
 select pg_temp.ok(public.centre_utc_offset() = interval '0', 'UTC+0');
+-- Recorded in the CI log: what this server's time-zone data says about Casablanca. The centre
+-- clock does not read it; it shows why expected values never use the zone name.
+select 'tzdata reading of Africa/Casablanca on this server: '
+  || ((now() at time zone 'Africa/Casablanca') - (now() at time zone 'UTC'))::text
+  || ' (centre clock: ' || public.centre_utc_offset()::text || ')' as tz_note;
 select pg_temp.ok(public.business_date(timestamptz '2026-10-29 23:30:00+00') = date '2026-10-29', '23:30 UTC is still today');
 select pg_temp.ok(public.business_date(timestamptz '2026-10-30 00:00:00+00') = date '2026-10-30', 'midnight UTC is tomorrow');
 select pg_temp.ok(public.centre_school_year(date '2026-08-31') = '2025/2026' and public.centre_school_year(date '2026-09-01') = '2026/2027'
