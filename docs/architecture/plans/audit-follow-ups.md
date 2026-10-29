@@ -1,6 +1,6 @@
 # Audit follow-ups (Batch H) — architecture, revision AFU-r1
 
-**Status: PROPOSED — awaiting owner approval. Not implemented, merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
+**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). Not implemented, merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
 
 **Scope.** Eight follow-ups left after Batches A–G and the 2026-10-24 audit, delivered as **one outcome**: one implementation PR, one migration, one release. Every item below was checked against the code at the baseline; file and line references are to that commit.
 
@@ -505,4 +505,15 @@ Each step needs the approvals named in [AGENTS](../../../AGENTS.md); this plan a
 
 # Approval record
 
-_Empty until the owner approves. Records the approver, channel, time, the exact plan head and the answers to D-TZ, D-TZ-2, D-H5a, D-H5b and D-H5c. The dry run, implementation, merge, migration, any data step and the release each need their own approval._
+- **Approved by:** Maroine (owner), in chat with Claude, relayed by the coordinating session, **2026-10-29 about 11:10 Asia/Shanghai** (03:10 UTC).
+- **Plan head approved:** revision AFU-r1 at exact head `d02a305245d88e3945bbe4b1e9a80cab10b8f022` (PR #174).
+- **Verbatim:** "approve H plan, D-TZ A, D-TZ-2 A, D-H5a A, D-H5b A, D-H5c A."
+- **Answers:**
+  - **D-TZ = A:** one centre clock with a fixed offset, UTC+0.
+  - **D-TZ-2 = A:** keep stored task instants; count open future tasks at R0; reception re-checks open appointments.
+  - **D-H5a = A:** the school year containing today's centre date (1 September – 31 August).
+  - **D-H5b = A:** a group without a valid year refuses placement; a populated group's year is locked against other-year members.
+  - **D-H5c = A:** a trigger on `enrollments`, plus early checks in the three named functions.
+- **Also approved in the same message:** the read-only H5 Production dry run "exactly as written in the plan (summary + problem-group detail, read-only transaction, group names/years/counts only, no learner data)". The STOP condition stays binding: any non-zero problem count goes back to the owner with the correction proposal, and the year-check section stays out until approved.
+- **Implementation:** the owner asked for the H1–H8 implementation PR to start from a fresh `origin/main` after this plan merges, on the full CI lane.
+- **Not approved by this decision:** the merge of this plan (done by the owner), any correction data step, the migration, the merge of the implementation PR and every release step. Each needs its own approval.
