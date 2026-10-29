@@ -25,7 +25,7 @@
 
 import { toast } from 'sonner';
 import { getBrowserClient } from './supabase';
-import { paginateAll } from './paginateAll.mjs';
+import { applyKeyset, keysetReadAll } from './keysetRead.mjs';
 
 // -----------------------------------------------------------------------------
 // Entity name → Supabase table name
@@ -87,6 +87,29 @@ function mapRows(rows) {
   return Array.isArray(rows) ? rows.map(withVirtualDates) : rows;
 }
 
+/** Applies equality criteria: arrays become IN clauses, null/undefined IS NULL. */
+function applyCriteria(query, criteria) {
+  let q = query;
+  for (const [key, value] of Object.entries(criteria || {})) {
+    if (value === null || value === undefined) q = q.is(key, null);
+    else if (Array.isArray(value)) q = q.in(key, value);
+    else q = q.eq(key, value);
+  }
+  return q;
+}
+
+/**
+ * Every matching row in the database's order, by keyset (plan SCG-r1, REL-3):
+ * no exact count, and a concurrent insert or delete no longer aborts the read.
+ */
+async function readAll(table, criteria, orderBy) {
+  const { column, ascending } = parseOrderBy(orderBy);
+  return keysetReadAll(({ last, limit }) => applyKeyset(
+    applyCriteria(getBrowserClient().from(table).select('*'), criteria),
+    { column, ascending, last },
+  ).limit(limit));
+}
+
 /** Strips fields that the DB owns (id on create, timestamps always). */
 function sanitize(data, { allowId = false } = {}) {
   if (!data) return {};
@@ -140,14 +163,7 @@ function makeEntity(entityName) {
 
     async listAll(orderBy) {
       try {
-        const { column, ascending } = parseOrderBy(orderBy);
-        const rows = await paginateAll((from, to) => {
-          let query = getBrowserClient().from(table).select('*', { count: 'exact' })
-            .order(column, { ascending });
-          if (column !== 'id') query = query.order('id', { ascending: true });
-          return query.range(from, to);
-        });
-        return mapRows(rows);
+        return mapRows(await readAll(table, {}, orderBy));
       } catch (error) {
         reportError('listAll', entityName, error);
         throw error;
@@ -189,19 +205,7 @@ function makeEntity(entityName) {
 
     async filterAll(criteria, orderBy) {
       try {
-        const { column, ascending } = parseOrderBy(orderBy);
-        const rows = await paginateAll((from, to) => {
-          let query = getBrowserClient().from(table).select('*', { count: 'exact' });
-          for (const [key, value] of Object.entries(criteria || {})) {
-            if (value === null || value === undefined) query = query.is(key, null);
-            else if (Array.isArray(value)) query = query.in(key, value);
-            else query = query.eq(key, value);
-          }
-          query = query.order(column, { ascending });
-          if (column !== 'id') query = query.order('id', { ascending: true });
-          return query.range(from, to);
-        });
-        return mapRows(rows);
+        return mapRows(await readAll(table, criteria, orderBy));
       } catch (error) {
         reportError('filterAll', entityName, error);
         throw error;

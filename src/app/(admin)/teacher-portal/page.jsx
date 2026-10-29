@@ -18,6 +18,17 @@ import { getLevelsForSession } from '@/lib/academicPrograms';
 import { createAttendanceSessionManager } from '@/lib/attendanceSession.mjs';
 import { getBrowserClient } from '@/lib/supabase';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
+import ReadState from '@/components/operational/ReadState';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
+
+// Plan SCG-r1 (REL-3): the portal reads its own groups' rows, never whole tables.
+const chunks = (values, size = 100) => Array.from({ length: Math.ceil(values.length / size) }, (_, i) => values.slice(i * size, (i + 1) * size));
+async function readByIds(entity, column, ids, orderBy) {
+  const rows = (await Promise.all(chunks([...new Set(ids)]).map(chunk => entity.filterAll({ [column]: chunk }, orderBy)))).flat();
+  return [...new Map(rows.map(row => [row.id, row])).values()];
+}
+const assessmentsOfGroups = groups => readByIds(entities.Assessment, 'group_id', groups.map(g => g.id), '-created_date');
 
 const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
 
@@ -162,9 +173,7 @@ function NotesTab({ groups, students, assessments: initialAssessments, setAssess
 
   const reload = async () => {
     if (!groups.length) return;
-    const groupIds = groups.map(g => g.id);
-    const all = await entities.Assessment.listAll('-created_date');
-    const filtered = all.filter(a => groupIds.includes(a.group_id));
+    const filtered = await assessmentsOfGroups(groups);
     setLocalAssessments(filtered);
     setAssessments(filtered);
   };
@@ -222,13 +231,23 @@ const KOLB_COLORS = {
   Converging: 'bg-green-50 text-green-700', Accommodating: 'bg-orange-50 text-orange-700',
 };
 
-function LearningTab({ groups, students, enrollments = [] }) {
+function LearningTab({ groups, students, enrollments = [], scoped }) {
   const [assessments, setLearning] = useState([]);
   const [filterGroup, setFilterGroup] = useState('');
-  useEffect(() => { entities.LearningAssessment.listAll('-created_date').then(setLearning); }, []);
+  const [learningError, setLearningError] = useState(false);
+  const [learningAttempt, setLearningAttempt] = useState(0);
+  // A teacher reads their learners' rows; a director viewing the portal reads all.
+  useEffect(() => {
+    setLearningError(false);
+    (scoped ? readByIds(entities.LearningAssessment, 'student_id', students.map(s => s.id), '-created_date')
+      : entities.LearningAssessment.listAll('-created_date'))
+      .then(setLearning).catch(() => setLearningError(true));
+  }, [scoped, students, learningAttempt]);
 
   const groupStudentIds = filterGroup ? [...groupMemberIds(students, enrollments, filterGroup)] : null;
   const filtered = assessments.filter(a => !groupStudentIds || groupStudentIds.includes(a.student_id));
+
+  if (learningError) return <ReadState state="error" onRetry={() => setLearningAttempt(value => value + 1)} />;
 
   return (
     <div className="space-y-4">
@@ -422,19 +441,22 @@ export default function TeacherPortal() {
   const [office, setOffice] = useState(null);
   const [tab, setTab] = useState('groups');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    setLoadError(false);
     Promise.resolve(sessionUser).then(async (u) => {
       setUser(u);
       const me = await getMyTeacher();
       setTeacher(me);
-      const allGroups = await entities.Group.listAll('name');
       // A matched teacher sees their groups. A director viewing this portal
       // (no teachers row) sees all groups. An unmatched teacher sees none —
       // the empty-state banner below tells them to contact the office.
       const myGroups = me
-        ? allGroups.filter(g => g.teacher_id === me.id)
-        : (u?.role === 'director' ? allGroups : []);
+        ? await entities.Group.filterAll({ teacher_id: me.id }, 'name')
+        : (u?.role === 'director' ? await entities.Group.listAll('name') : []);
       setGroups(myGroups);
       // Personal notifications (keyed by account) + unread messages + office contact.
       entities.Notification.filterAll({ recipient_profile_id: u?.id }, '-created_date')
@@ -454,24 +476,19 @@ export default function TeacherPortal() {
         setStudents(allStudents);
         // Validated enrollments let us include students enrolled in a group even
         // if their student.groupe_id wasn't set — matches the /attendance roster.
-        const activeEnrollments = await entities.Enrollment.listAll('-created_date');
-        setEnrollments(activeEnrollments.filter(e => ['Validated','Trial'].includes(e.status)));
+        setEnrollments(await entities.Enrollment.filterAll({ status: ['Validated', 'Trial'] }, '-created_date'));
       }
       // RLS scopes announcements to what this teacher may see (audience 'all',
       // 'teachers', and their groups). No client-side audience filter needed.
       const ann = await entities.Announcement.list('-created_date', 10);
       setAnnouncements(ann);
-      if (myGroups.length > 0) {
-        const groupIds = myGroups.map(g => g.id);
-        const allAssessments = await entities.Assessment.listAll('-created_date');
-        setAssessments(allAssessments.filter(a => groupIds.includes(a.group_id)));
-      }
+      if (myGroups.length > 0) setAssessments(await assessmentsOfGroups(myGroups));
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { setLoadError(true); setLoading(false); });
   // Identity comes from AuthContext, resolved by the admin layout before this page
-  // renders; this load runs once on mount, as before.
+  // renders; this load runs on mount and on retry.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
 
   const memberIds = groupMemberIds(students, enrollments, selectedGroup);
   const groupStudents = students.filter(s => memberIds.has(s.id));
@@ -497,6 +514,7 @@ export default function TeacherPortal() {
   const handleSave = async () => {
     const result = await sessionManager.current.save(selectedGroup, sessionDate, groupStudents);
     if (result.skipped) return;
+    invalidateAfterLearnerSave(queryClientInstance);
     const label = `${result.date}`;
     if (result.failed === 0 && !result.refreshFailed) toast.success(`Présences enregistrées : ${label}`);
     else toast.error(`Présences non confirmées (${label}). Rechargez la séance avant une nouvelle saisie.`);
@@ -512,6 +530,16 @@ export default function TeacherPortal() {
             <div key={i} className="bg-card border border-border rounded-xl p-5 h-32" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  // A failed load is a connection problem, never an empty portal (REL-9).
+  if (loadError) {
+    return (
+      <div className="p-4 lg:p-8 max-w-5xl mx-auto">
+        <ReadState state="error" message="Impossible de charger votre espace enseignant. Vérifiez la connexion puis réessayez."
+          onRetry={() => setAttempt(value => value + 1)} />
       </div>
     );
   }
@@ -666,7 +694,7 @@ export default function TeacherPortal() {
       )}
 
       {tab === 'learning' && (
-        <LearningTab groups={groups} students={students} enrollments={enrollments} />
+        <LearningTab groups={groups} students={students} enrollments={enrollments} scoped={Boolean(teacher)} />
       )}
 
       {tab === 'leave' && (

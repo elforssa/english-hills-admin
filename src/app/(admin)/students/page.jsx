@@ -27,6 +27,7 @@ import { listHref, recordHref } from '@/lib/navigation.mjs';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { listArchivedStudents, membershipErrorMessage, restoreStudent } from '@/lib/academic/membershipActions.mjs';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 // Director (ACA-8): archived files, restored with their enrollments kept Ended.
 function ArchivedStudentsDialog({ onClose, onRestored }) {
@@ -108,12 +109,12 @@ export default function StudentsPage() {
           p_student: student.id, p_expected_updated_at: student.updated_at, p_changes: data,
         });
         if (error) throw error;
-        await queryClient.invalidateQueries({ queryKey: ['Student'] });
       } else await update.mutateAsync({ id: student.id, data });
+      await invalidateAfterLearnerSave(queryClient);
     } catch (error) {
       if (role !== 'receptionist') return;
       // Changed in the meantime (ADR-009): reload the list for review.
-      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); await queryClient.invalidateQueries({ queryKey: ['Student'] }); }
+      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); await invalidateAfterLearnerSave(queryClient); }
       else toast.error(membershipErrorMessage(error));
     }
   };
@@ -282,7 +283,7 @@ export default function StudentsPage() {
             </Link>
           </Button>
       </>}/>
-      {archived && <ArchivedStudentsDialog onClose={() => setArchived(false)} onRestored={() => queryClient.invalidateQueries({ queryKey: ['Student'] })} />}
+      {archived && <ArchivedStudentsDialog onClose={() => setArchived(false)} onRestored={() => invalidateAfterLearnerSave(queryClient)} />}
       <FilterBar activeCount={activeFilterCount} onReset={resetFilters} search={<SearchField label="Rechercher un apprenant" className="flex-1 basis-60" placeholder="Nom ou téléphone…" maxLength={120} value={search} onChange={value=>{setSearch(value);setPage(1);}}/>} more={<>
 <div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par paiement"><select aria-label="Filtrer par paiement" className="operational-control" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
           <option value="">Paiements : tous</option>
@@ -330,13 +331,11 @@ export default function StudentsPage() {
           : placement.enrollment ? <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
               setPlacement(null);
-              queryClient.invalidateQueries({ queryKey: ['Student'] });
-              queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+              invalidateAfterLearnerSave(queryClient);
             }} /> : <DossierGroupPlacement student={placement.student} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
               setPlacement(null);
-              queryClient.invalidateQueries({ queryKey: ['Student'] });
-              queryClient.invalidateQueries({ queryKey: ['Enrollment'] });
+              invalidateAfterLearnerSave(queryClient);
             }} />)}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <ReadState state={!urlReady ? 'loading' : queryReadState(listRead, {empty: matchedCount === 0, filtered: activeFilterCount > 0})} message={result && matchedCount === 0 && !isError && !loading ? activeFilterCount ? 'Aucun apprenant correspondant à ces filtres.' : 'Aucun dossier dans le périmètre actif. Choisissez Tous les statuts ou ajoutez un apprenant.' : undefined} onRetry={isError || (!result && !loading) ? refetch : undefined} onReset={activeFilterCount ? resetFilters : undefined}>

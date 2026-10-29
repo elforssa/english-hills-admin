@@ -27,11 +27,11 @@ import { toast } from 'sonner';
 import { ArrowLeft, Upload, FileText, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { parseCsv } from '@/utils/parseCsv';
-import { entityKeys } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
 import { createStudentOnce } from '@/lib/studentCreate.mjs';
 import { IDENTICAL_FILE_WARNING, IMPORT_FINISHED, csvLine, failedLines, importFailureReason, importFinished, rowIdentities, rowStatus, rowsToSend } from '@/lib/studentImport.mjs';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 const CATEGORIES = ['Young Learners (6-12)','Teens (13-17)','Adults (18+)','Corporate'];
 const STATUSES = ['Prospect','Enrolled','Trial','Inactive','Alumni'];
@@ -234,7 +234,7 @@ export default function StudentImportPage() {
     }
 
     setImporting(false);
-    queryClient.invalidateQueries({ queryKey: entityKeys.all('Student') });
+    invalidateAfterLearnerSave(queryClient);
 
     if (failed === 0) toast.success(`${done} apprenant(s) importé(s).`);
     else toast.error(`${done - failed} importé(s), ${failed} échec(s). Relancez l’import pour réessayer les lignes en échec.`);

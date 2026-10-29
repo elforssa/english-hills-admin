@@ -18,6 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { loadTeacherAcademicRows } from '@/lib/portal';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -128,7 +129,7 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
 export default function Groups() {
   const queryClient = useQueryClient();
   // N7: other screens' cached groups, learners and enrollments follow a group change.
-  const invalidate = () => ['Group', 'Student', 'Enrollment'].forEach(key => queryClient.invalidateQueries({ queryKey: [key] }));
+  const invalidate = () => invalidateAfterLearnerSave(queryClient);
   const { role } = useAuth();
   const [groups, setGroups] = useState([]);
   const [teachers, setTeachers] = useState([]);

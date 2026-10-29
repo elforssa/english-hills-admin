@@ -324,6 +324,15 @@ jobs:
           supabase db reset --local --version 122 --no-seed
           node scripts/test-portal-readiness-upgrade.mjs corrective
           supabase db reset --local --no-seed
+      - name: Speed as the centre grows 123 to 124 generator, read/write equivalence, restore and budgets
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 123 --no-seed
+          node scripts/generate-rls-role-evaluation.mjs --check
+          node scripts/test-speed-as-the-centre-grows-local.mjs upgrade
+          supabase db reset --local --no-seed
+          node scripts/test-speed-as-the-centre-grows-local.mjs budget
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression

@@ -9,19 +9,27 @@
 //   • Finance     — monthly encaissé and facturé side by side (different sets: no rate).
 //   • Paie        — payroll YTD per teacher (brut/net) for the chosen year.
 //
-// Year/period selectors are local state; the data fetch reuses the
-// React Query hooks added in Fix 9 so other pages benefit from the cache.
+// Year/period selectors are local state. Plan SCG-r1 (REL-3, REL-6): the
+// database returns small totals (report_* functions, the caller's own RLS)
+// instead of whole tables, and the attendance days and current year are
+// Casablanca civil dates computed by the database; the browser does no date
+// arithmetic, so its time-zone table cannot move a day.
 // =============================================================================
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, Legend,
   ResponsiveContainer, CartesianGrid, AreaChart, Area, PieChart, Pie, Cell,
 } from 'recharts';
 import { TrendingUp, Users, CreditCard, Briefcase, Calendar } from 'lucide-react';
 import { useEntityAll } from '@/lib/queries';
+import { entities } from '@/lib/entities';
 import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
 import { getBrowserClient } from '@/lib/supabase';
+import {
+  attendanceSeries as toAttendanceSeries, attendanceTotals as toAttendanceTotals, loadAcademicSources, reportYears,
+} from '@/lib/reportData.mjs';
 
 // Brand palette — matches the rest of the platform.
 const COLORS = {
@@ -46,16 +54,6 @@ const PRESET_RANGES = [
   { id: 30,  label: '30 jours' },
   { id: 90,  label: '90 jours' },
 ];
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function fmtDay(d) {
-  return d.toISOString().slice(0, 10);
-}
 
 function fmtMonth(monthIdx, year) {
   return new Date(year, monthIdx, 1).toLocaleDateString('fr-MA', {
@@ -102,73 +100,36 @@ function StatCard({ label, value, hint, color = COLORS.primary }) {
   );
 }
 
+async function rpc(name, args) {
+  const { data, error } = await getBrowserClient().rpc(name, args);
+  if (error) throw error;
+  return data;
+}
+
 export default function ReportsPage() {
   const [days, setDays]   = useState(30);
-  const currentYear       = String(new Date().getFullYear());
-  const [year, setYear]   = useState(currentYear);
-  const [financeRows, setFinanceRows] = useState([]);
-  const [financeLoading, setFinanceLoading] = useState(true);
-  const [financeError, setFinanceError] = useState(false);
-  const [financeAttempt, setFinanceAttempt] = useState(0);
+  const [chosenYear, setYear] = useState(null);
 
-  // Complete pages are fetched with stable ordering; move large aggregate
-  // reports into SQL when the dataset size warrants it.
-  const { data: attendance = [], isLoading: attLoading, isError: attError } = useEntityAll('Attendance', '-session_date');
-  const { data: receipts   = [], isLoading: recLoading, isError: recError } = useEntityAll('Receipt', '-date');
-  const { data: payroll    = [], isLoading: payLoading, isError: payError } = useEntityAll('Payroll', '-created_date');
-  const { data: students   = [], isLoading: studentsLoading, isError: studentsError } = useEntityAll('Student', 'full_name');
-  const { data: teachers   = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
+  const yearsQuery = useQuery({ queryKey: ['report', 'years'], queryFn: () => rpc('report_years') });
+  const { years: availableYears, current: currentYear } = reportYears(yearsQuery.data);
+  const year = chosenYear || currentYear;
+  const attendanceQuery = useQuery({ queryKey: ['report', 'attendance', days], queryFn: () => rpc('report_attendance_daily', { p_days: days }) });
+  const financeQuery = useQuery({ queryKey: ['report', 'finance', year], enabled: Boolean(year),
+    queryFn: () => rpc('get_finance_year_months', { p_year: Number(year) }) });
+  const payrollQuery = useQuery({ queryKey: ['report', 'payroll', year], enabled: Boolean(year),
+    queryFn: () => rpc('report_payroll_by_teacher', { p_year: Number(year) }) });
+  const mixQuery = useQuery({ queryKey: ['report', 'student-mix'], queryFn: () => rpc('report_student_mix') });
+  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError } = useEntityAll('Group', 'name');
-  const { data: enrollments = [], isLoading: enrollmentsLoading, isError: enrollmentsError } = useEntityAll('Enrollment', '-created_date');
+  const academicQuery = useQuery({ queryKey: ['report', 'academic-sources', groups.map(g => g.id)], enabled: !groupsLoading && !groupsError,
+    queryFn: () => loadAcademicSources(entities, groups) });
+  const students = academicQuery.data?.students ?? [];
+  const enrollments = academicQuery.data?.enrollments ?? [];
+  const financeRows = useMemo(() => (Array.isArray(financeQuery.data) ? financeQuery.data : []), [financeQuery.data]);
 
-  useEffect(() => {
-    let active = true;
-    setFinanceLoading(true);
-    setFinanceError(false);
-    getBrowserClient().rpc('get_finance_year_months', { p_year: Number(year) })
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error || !Array.isArray(data)) setFinanceError(true);
-        else setFinanceRows(data);
-        setFinanceLoading(false);
-      }).catch(() => { if (active) { setFinanceError(true); setFinanceLoading(false); } });
-    return () => { active = false; };
-  }, [year, financeAttempt]);
-
-  // ── attendance roll-up: build {date, Présent, Absent, Retard, Justifié} ──
-  const attendanceSeries = useMemo(() => {
-    const end = startOfDay(new Date());
-    const start = new Date(end);
-    start.setDate(end.getDate() - (days - 1));
-
-    const bucket = {};
-    for (let i = 0; i < days; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      bucket[fmtDay(d)] = { date: fmtDay(d), 'Présent': 0, 'Absent': 0, 'Retard': 0, 'Justifié': 0 };
-    }
-
-    for (const a of attendance) {
-      if (!a.session_date || !bucket[a.session_date]) continue;
-      const status = a.status || 'Présent';
-      if (status in bucket[a.session_date]) bucket[a.session_date][status]++;
-    }
-
-    return Object.values(bucket);
-  }, [attendance, days]);
-
-  const attendanceTotals = useMemo(() => {
-    const t = { 'Présent': 0, 'Absent': 0, 'Retard': 0, 'Justifié': 0 };
-    for (const row of attendanceSeries) {
-      t['Présent']  += row['Présent'];
-      t['Absent']   += row['Absent'];
-      t['Retard']   += row['Retard'];
-      t['Justifié'] += row['Justifié'];
-    }
-    const total = t['Présent'] + t['Absent'] + t['Retard'] + t['Justifié'];
-    const rate = total > 0 ? Math.round(((t['Présent'] + t['Justifié']) / total) * 100) : 0;
-    return { ...t, total, rate };
-  }, [attendanceSeries]);
+  // ── attendance roll-up: {date, Présent, Absent, Retard, Justifié} per Casablanca day ──
+  const attendanceSeries = useMemo(() => toAttendanceSeries(attendanceQuery.data), [attendanceQuery.data]);
+  const attendanceTotals = useMemo(() => toAttendanceTotals(attendanceSeries), [attendanceSeries]);
 
   // ── finance: monthly encaissé vs facturé for selected year ──
   const financeMonthly = useMemo(() => {
@@ -190,23 +151,10 @@ export default function ReportsPage() {
     encaisse: financeMonthly.reduce((s, m) => s + m.encaisse, 0),
   }), [financeMonthly]);
 
-  // ── payroll: YTD per teacher for selected year ──
-  const payrollByTeacher = useMemo(() => {
-    const m = new Map();
-    for (const p of payroll) {
-      if (String(p.annee) !== year) continue;
-      const key = p.teacher_id || p.teacher_name || 'unknown';
-      const entry = m.get(key) || {
-        name: p.teacher_name || '—',
-        brut: 0, net: 0, count: 0,
-      };
-      entry.brut  += Number(p.salaire_brut || 0);
-      entry.net   += Number(p.salaire_net  || 0);
-      entry.count += 1;
-      m.set(key, entry);
-    }
-    return Array.from(m.values()).sort((a, b) => b.net - a.net);
-  }, [payroll, year]);
+  // ── payroll: YTD per teacher for selected year (largest net first) ──
+  const payrollByTeacher = useMemo(() => (payrollQuery.data || []).map(row => ({
+    name: row.teacher_name, brut: Number(row.brut || 0), net: Number(row.net || 0), count: Number(row.n || 0),
+  })), [payrollQuery.data]);
 
   // Totals cover every teacher; only the chart is limited to the top 12.
   const payrollTotals = useMemo(() => ({
@@ -216,43 +164,22 @@ export default function ReportsPage() {
   const payrollChart = useMemo(() => payrollByTeacher.slice(0, 12), [payrollByTeacher]);
 
   // ── student status mix — useful sanity check on the active pipeline ──
-  const studentMix = useMemo(() => {
-    const counts = {};
-    for (const s of students) {
-      const k = s.status || 'Prospect';
-      counts[k] = (counts[k] || 0) + 1;
-    }
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [students]);
+  const studentMix = useMemo(() => (mixQuery.data || []).map(row => ({ name: row.status, value: Number(row.n) })), [mixQuery.data]);
 
   const studentMixColors = [COLORS.success, COLORS.teal, COLORS.warning, COLORS.purple, '#94a3b8'];
 
-  // ── available years (current + previous 2, plus anything we have data for)
-  const availableYears = useMemo(() => {
-    const ys = new Set([currentYear,
-      String(parseInt(currentYear, 10) - 1),
-      String(parseInt(currentYear, 10) - 2),
-    ]);
-    for (const r of receipts) {
-      if (r.date) ys.add(String(new Date(r.date).getFullYear()));
-    }
-    for (const p of payroll) {
-      if (p.annee) ys.add(String(p.annee));
-    }
-    return Array.from(ys).filter(y => /^\d{4}$/.test(y)).sort().reverse();
-  }, [receipts, payroll, currentYear]);
+  const loading = attendanceQuery.isLoading || financeQuery.isLoading || payrollQuery.isLoading || yearsQuery.isLoading;
+  const academicLoading = teachersLoading || groupsLoading || academicQuery.isLoading;
+  const queries = [yearsQuery, attendanceQuery, financeQuery, payrollQuery, mixQuery, academicQuery];
+  const dataError = teachersError || groupsError || queries.some(q => q.isError);
 
-  const loading = attLoading || recLoading || payLoading || financeLoading;
-  const academicLoading = studentsLoading || teachersLoading || groupsLoading || enrollmentsLoading || recLoading;
-  const dataError = attError || recError || payError || studentsError || teachersError || groupsError
-    || enrollmentsError;
-
-  if (dataError || financeError) return (
+  if (dataError) return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto" role="alert">
       <h1 className="text-2xl font-bold">Rapports indisponibles</h1>
       <p className="mt-2 text-sm text-muted-foreground">Une source de données n’a pas pu être chargée. Aucun total partiel n’est affiché.</p>
       <button className="mt-4 rounded-md border border-border px-4 py-2 text-sm font-semibold text-primary" onClick={() => {
-        if (dataError) window.location.reload(); else setFinanceAttempt((value) => value + 1);
+        if (teachersError || groupsError) window.location.reload();
+        else queries.filter(q => q.isError).forEach(q => q.refetch());
       }}>Réessayer</button>
     </div>
   );
@@ -436,7 +363,7 @@ export default function ReportsPage() {
         {/* ── Student funnel ────────────────────────────────────────── */}
         <Panel
           title="Apprenants"
-          subtitle={`${students.length} au total · répartition par statut`}
+          subtitle={`${studentMix.reduce((sum, m) => sum + m.value, 0)} au total · répartition par statut`}
           icon={TrendingUp}
         >
           {studentMix.length === 0 ? (

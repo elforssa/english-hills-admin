@@ -107,6 +107,19 @@ Meta Insights has reporting/snapshot architecture, fixture processing and, from 
 
 Deliberate conflicts (stale version, lost lease, busy lock, translated deadlock) raise `PT409`, never the retryable `40001` ([ADR-009](../architecture/decisions/ADR-009-conflicts-never-retryable.md)); the browser reads them only through `src/lib/conflictErrors.mjs`. CI enforces it on new migration files, on `src/` and on the cumulative catalog. Implemented by migration 119 ([plan NRC-r2](../architecture/plans/conflicts-without-retry-loops.md#implementation-record)), PR #158; released to Production on 2026-10-24 ([release record](../architecture/evidence/conflicts-without-retry-production-2026-10-24.md)).
 
+## Read performance at scale
+
+Plan [SCG-r1](../architecture/plans/speed-as-the-centre-grows.md) ([ADR-013](../architecture/decisions/ADR-013-policies-once-per-statement-keyset-reads.md)) is implemented on a branch with migration 124; it is not merged or deployed.
+
+- **Policies:** role helpers are evaluated once per statement, and the per-row teacher check runs only for teachers.
+- **Students list:** `search_students_page` prices only the page, or the filtered candidates.
+- **Activity log:** paged by keyset through `list_activity_log` (50 per page, filters in the database, `before`/`after` on expand).
+- **Reports:** read `report_*` totals with Casablanca days from `business_date()`.
+- **Pages:** the group page and teacher portal read only their own rows.
+- **Full reads:** entity full reads use keyset (`src/lib/keysetRead.mjs`) instead of offset plus count.
+- **Cache:** every finance command and learner save refreshes dependent caches through `src/lib/cacheInvalidation.mjs`.
+- **Connection failures:** an unreachable Auth or a failed profile read in middleware is a 503 retry page. In the browser, a failed profile read is a retry screen (`AuthContext`), never "pending". A failed Auth read in the browser is still treated as signed out.
+
 ## Infrastructure and security
 
 [Session clients](../../src/lib/supabase.js) and the [server-only privileged client](../../src/lib/supabase-admin.js) have different authority. Secrets resolve transiently on the server, never from database payloads or browser bundles. SECURITY DEFINER RPCs require explicit actor/role validation, fixed search paths and restricted grants. Storage access uses the asset registry and authorized signing/finalization rather than public dossier URLs.

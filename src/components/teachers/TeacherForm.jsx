@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
 import { ADULT_LEVELS, LEGACY_LEVELS, YEARLY_LEVELS } from '@/lib/academicPrograms';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -69,7 +70,7 @@ export default function TeacherForm() {
         await entities.Teacher.create(data);
         toast.success('Enseignant créé');
       }
-      qc.invalidateQueries({ queryKey: ['Teacher'] });
+      invalidateAfterLearnerSave(qc);
       router.push('/teachers');
     } catch {
       // entities.js already toasted — stay on the form for retry.

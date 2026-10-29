@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
 import { ENROLLMENT_STATUS_COLORS } from '@/lib/statusColors';
 import PersonLink from '@/components/PersonLink';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 const PAGE_SIZE = 20;
 const enrollmentLabel = (status) => status === 'Confirmed' ? 'Inscrit — groupe à affecter' : status === 'Ended' ? displayLabel(ENROLLMENT_LABELS, status) : status;
@@ -76,6 +77,8 @@ export default function Enrollments() {
   const [page, setPage] = useState(1);
   const [yearClose, setYearClose] = useState(false);
 
+  // After any save here, cached learners, groups and reports follow it (REL-8).
+  const refreshAfterSave = () => { invalidateAfterLearnerSave(queryClient); return load(); };
   const load = async () => {
     setLoading(true);
     setLoadError(false);
@@ -104,7 +107,7 @@ export default function Enrollments() {
     if (!enrollment?.group_id) { toast.error('Choisissez un groupe avant de valider cette inscription.'); return; }
     // ACA-5: a command with the loaded version; a placed pre-enrollment becomes Validated.
     const { error } = await saveEnrollmentChanges(getBrowserClient(), enrollment, { status: 'Validated' });
-    if (error) { toast.error(membershipErrorMessage(error)); load(); return; }
+    if (error) { toast.error(membershipErrorMessage(error)); refreshAfterSave(); return; }
     const student = enrollment ? students.find(s => s.id === enrollment.student_id) : null;
 
     // Notify both the student (if they have an email) AND the parent. For
@@ -131,14 +134,14 @@ export default function Enrollments() {
       }
     }
     toast.success('Validée' + (emailSent ? ' — Email de confirmation envoyé' : ''));
-    load();
+    refreshAfterSave();
   };
   const handleReject = async (id) => {
     const enrollment = enrollments.find(e => e.id === id);
     const { error } = await saveEnrollmentChanges(getBrowserClient(), enrollment, { status: 'Rejected' });
-    if (error) { toast.error(membershipErrorMessage(error)); load(); return; }
+    if (error) { toast.error(membershipErrorMessage(error)); refreshAfterSave(); return; }
     toast.success('Refusée');
-    load();
+    refreshAfterSave();
   };
   // Only Submitted, Under Review and Rejected rows can be deleted (I10); the
   // database refuses the others with a French message.
@@ -147,8 +150,7 @@ export default function Enrollments() {
     const { error } = await getBrowserClient().from('enrollments').delete().eq('id', id);
     if (error) { toast.error(membershipErrorMessage(error)); return; }
     // N7: cached learners and groups follow the deleted enrollment.
-    ['Enrollment', 'Student', 'Group'].forEach(key => queryClient.invalidateQueries({ queryKey: [key] }));
-    await load();
+    await refreshAfterSave();
   };
 
   const filtered = enrollments.filter(e => {
@@ -252,8 +254,8 @@ export default function Enrollments() {
         )}
       </div>
       <Pagination page={page} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
-      {modal !== null && <EnrollmentModal enrollment={modal.id ? modal : null} students={students} groups={groups} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
-      {yearClose && <YearCloseDialog onClose={() => setYearClose(false)} onDone={() => { setYearClose(false); load(); }} />}
+      {modal !== null && <EnrollmentModal enrollment={modal.id ? modal : null} students={students} groups={groups} onSave={() => { setModal(null); refreshAfterSave(); }} onClose={() => setModal(null)} />}
+      {yearClose && <YearCloseDialog onClose={() => setYearClose(false)} onDone={() => { setYearClose(false); refreshAfterSave(); }} />}
     </div>
   );
 }

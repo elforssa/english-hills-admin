@@ -7,6 +7,8 @@ import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
 import { getTeacherOperations } from '@/lib/teacher-directory';
 import { ADULT_LEVELS, LEGACY_LEVELS, YEARLY_LEVELS } from '@/lib/academicPrograms';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 const levels = [...new Set([...YEARLY_LEVELS, ...ADULT_LEVELS, ...LEGACY_LEVELS])];
 const input = 'w-full border border-border rounded-md px-3 py-2 text-sm bg-white';
@@ -44,10 +46,12 @@ export default function ReceptionistTeacherForm() {
     if (error && isRecordConflict(error)) {
       // Changed in the meantime (ADR-009): reload the latest profile for review.
       toast.error(recordConflictMessage());
+      invalidateAfterLearnerSave(queryClientInstance);
       await getTeacherOperations({ id }).then(([teacher]) => show(teacher)).catch(() => {});
       return;
     }
     if (error) { toast.error(error.message); return; }
+    invalidateAfterLearnerSave(queryClientInstance);
     toast.success('Enseignant mis à jour');
     router.push(`/teachers/${id}`);
   };

@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { LAST_PAYMENT_NOTICE, correctionErrorMessage, isLastLivePaymentOfConfirmedEnrollment } from '@/lib/financeCorrections.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { ArrowLeft, Ban, ShieldCheck } from 'lucide-react';
+import { invalidateAfterFinance } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 export default function ReceiptCorrection() {
   const { id } = useParams();
@@ -38,9 +40,10 @@ export default function ReceiptCorrection() {
     if (error) {
       toast.error(correctionErrorMessage(error, 'Annulation non confirmée. Réessayez.')); setSaving(false);
       // ADR-009: a conflict reloads the record so the notice below reflects the current state.
-      if (isRecordConflict(error)) setReload((value) => value + 1);
+      if (isRecordConflict(error)) { invalidateAfterFinance(queryClientInstance); setReload((value) => value + 1); }
       return;
     }
+    invalidateAfterFinance(queryClientInstance);
     toast.success(data.already_voided ? 'Ce reçu était déjà annulé.'
       : data.enrollment_without_live_payment ? 'Paiement annulé. L’inscription reste confirmée et apparaît dans « Inscriptions confirmées sans paiement actif ».'
         : 'Paiement annulé. La trace originale est conservée.');

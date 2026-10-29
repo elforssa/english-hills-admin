@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { getTeacherOperations } from '@/lib/teacher-directory';
+import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 export default function TeacherProfile() {
   const { role } = useAuth();
@@ -34,6 +36,7 @@ function TeacherProfileForRole({ role }) {
     if (!confirm('Archiver cet enseignant ? Sa fiche sera masquée mais conservée.')) return;
     const { error } = await getBrowserClient().rpc('soft_delete_teacher', { p_teacher_id: id });
     if (error) { toast.error(error.message || "Échec de l’archivage de l’enseignant."); return; }
+    invalidateAfterLearnerSave(queryClientInstance);
     toast.success('Enseignant archivé');
     router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'));
   };

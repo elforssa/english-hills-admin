@@ -5,11 +5,8 @@ import Link from 'next/link';
 import {
   AlertTriangle, ArrowUpRight, CalendarCheck2, GraduationCap, UsersRound,
 } from 'lucide-react';
-import { ACTIVE_STUDENT_STATUSES as ACTIVE, groupMemberIds, isPendingPreEnrollment, studentNeedsGroup } from '@/lib/enrollmentWorkflow.mjs';
+import { academicOperationsData } from '@/lib/reportData.mjs';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
-
-// Active learners: Inscrit and Essai (EGC); members through the shared roster helper.
-const ACTIVE_STUDENT_STATUSES = new Set(ACTIVE);
 
 function Metric({ icon: Icon, label, value, note, tone = 'slate' }) {
   const tones = {
@@ -66,49 +63,11 @@ export default function AcademicOperationsReport({
 }) {
   const [sessionFilter, setSessionFilter] = useState('');
 
-  const data = useMemo(() => {
-    const studentsById = new Map(students.map((student) => [student.id, student]));
-    const membersByGroup = new Map(groups.map((group) => [group.id, groupMemberIds(students, enrollments, group.id)]));
-
-    const sessionGroups = groups.filter((group) => !sessionFilter || (group.session_type || 'Yearly') === sessionFilter);
-    const activeStudents = students.filter((student) => ACTIVE_STUDENT_STATUSES.has(student.status));
-    const sessionStudents = activeStudents.filter((student) => !sessionFilter || (student.session_type || 'Yearly') === sessionFilter);
-    const unassignedGroups = sessionGroups
-      .filter((group) => !group.teacher_id)
-      .map((group) => ({ id: group.id, label: `${group.name} · ${group.session_type || 'Yearly'} · ${group.niveau}` }));
-    const studentsWithoutGroup = activeStudents
-      .filter((student) => studentNeedsGroup(student, enrollments, sessionFilter))
-      .map((student) => {
-        const pending = enrollments.filter(e => e.student_id === student.id && e.status === 'Confirmed' && !e.group_id
-          && (!sessionFilter || (e.session_type || student.session_type || 'Yearly') === sessionFilter));
-        const sessions = pending.map(e => [e.session_type || student.session_type || 'Yearly', e.school_year].filter(Boolean).join(' · '));
-        return { id: student.id, label: `${student.full_name} · ${sessions.length ? sessions.join(' / ') : student.session_type || 'Yearly'}` };
-      });
-    const enrollmentsToReview = enrollments
-      .filter(isPendingPreEnrollment)
-      .filter((enrollment) => !sessionFilter || (enrollment.session_type || studentsById.get(enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
-      .map((enrollment) => ({ id: enrollment.id, label: `${studentsById.get(enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
-
-    const sessionRows = SESSION_TYPES.map((sessionType) => {
-      const rowGroups = groups.filter((group) => (group.session_type || 'Yearly') === sessionType);
-      const rowStudents = activeStudents.filter((student) => (student.session_type || 'Yearly') === sessionType);
-      const assigned = rowGroups.filter((group) => group.teacher_id).length;
-      const capacity = rowGroups.reduce((sum, group) => sum + Number(group.capacite_max || 0), 0);
-      const occupied = rowGroups.reduce((sum, group) => sum + (membersByGroup.get(group.id)?.size || 0), 0);
-      return { sessionType, groups: rowGroups.length, students: rowStudents.length, assigned, capacity, occupied };
-    }).filter((row) => row.groups || row.students);
-
-    const teacherRows = teachers.map((teacher) => {
-      const teacherGroups = sessionGroups.filter((group) => group.teacher_id === teacher.id);
-      const regularStudents = new Set(teacherGroups.flatMap((group) => [...(membersByGroup.get(group.id) || [])]));
-      return { id: teacher.id, name: teacher.full_name, groups: teacherGroups.length, students: regularStudents.size };
-    }).filter((row) => row.groups).sort((a, b) => b.students - a.students);
-
-    return {
-      sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, enrollmentsToReview,
-      sessionRows, teacherRows,
-    };
-  }, [students, teachers, groups, enrollments, sessionFilter]);
+  // Active learners: Inscrit and Essai (EGC); members through the shared roster helper.
+  const data = useMemo(
+    () => academicOperationsData({ students, teachers, groups, enrollments, sessionFilter, sessionTypes: SESSION_TYPES }),
+    [students, teachers, groups, enrollments, sessionFilter],
+  );
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">

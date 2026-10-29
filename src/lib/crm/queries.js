@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { shouldRetryRead } from '@/lib/queryRetry.mjs';
+import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 export async function crmRpc(name, args) {
   const {
     data,
@@ -31,6 +32,7 @@ export function useCrmRefresh() {
   const client = useQueryClient();
   return () => {
     window.dispatchEvent(new Event('crm:refresh'));
-    return client.invalidateQueries({ queryKey: ['crm'] });
+    // A CRM command may create a learner, an enrollment or a charge (REL-8).
+    return Promise.all([client.invalidateQueries({ queryKey: ['crm'] }), invalidateAfterLearnerSave(client), invalidateAfterFinance(client)]);
   };
 }

@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { money } from '@/lib/receiptFinance';
+import { invalidateAfterFinance } from '@/lib/cacheInvalidation.mjs';
+import { queryClientInstance } from '@/lib/query-client';
 
 export default function ChargeCorrection() {
   const { id } = useParams();
@@ -46,6 +48,7 @@ export default function ChargeCorrection() {
       setSaving(false);
       return;
     }
+    invalidateAfterFinance(queryClientInstance);
     toast.success(data.already_voided ? 'Cet engagement était déjà annulé.' : 'Engagement annulé avec sa trace de correction.');
     router.push('/finance');
   };

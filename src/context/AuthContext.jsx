@@ -10,6 +10,11 @@
 //      apply that role to the profile and delete the PendingRole row.
 //
 // Public surface (kept minimal per spec): { user, role, isLoading, logout }.
+//
+// A profile read that FAILS (network, timeout, server error) is a connection
+// problem, never "no profile": the provider shows a retry screen with no role,
+// no children and no navigation, and does not call recover_missing_profile
+// (plan SCG-r1, REL-9, owner decision D3 = B). "No row" behaves as before.
 // =============================================================================
 
 'use client';
@@ -24,37 +29,11 @@ import {
   useState,
 } from 'react';
 import { getBrowserClient } from '@/lib/supabase';
+import { usePathname } from 'next/navigation';
 import { queryClientInstance } from '@/lib/query-client';
+import { resolveProfile, showsUnavailable } from '@/lib/sessionProfile.mjs';
 
 const AuthContext = createContext(null);
-
-async function loadOrCreateProfile(sb, authUser) {
-  // Try to read first.
-  const { data: existing, error: readErr } = await sb
-    .from('profiles')
-    .select('*')
-    .eq('id', authUser.id)
-    .maybeSingle();
-
-  if (readErr) {
-    // eslint-disable-next-line no-console
-    console.error('profiles read failed:', readErr);
-  }
-  if (existing) return existing;
-
-  // Authenticated clients cannot insert profiles under the current grants.
-  // The narrow RPC derives the identity from auth.uid() and auth.users.
-  const { error: recoveryErr } = await sb.rpc('recover_missing_profile');
-  if (recoveryErr) {
-    // eslint-disable-next-line no-console
-    console.error('profiles recovery failed:', recoveryErr);
-    return null;
-  }
-  const { data: recovered, error: rereadErr } = await sb.from('profiles')
-    .select('*').eq('id', authUser.id).maybeSingle();
-  if (rereadErr) return null;
-  return recovered;
-}
 
 /**
  * Calls the apply_pending_role() SECURITY DEFINER RPC. The RPC looks up
@@ -77,6 +56,7 @@ export function AuthProvider({ children }) {
   const [user,      setUser]      = useState(null);
   const [role,      setRole]      = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [unavailable, setUnavailable] = useState(false);
   const identityRef = useRef(null);
   const requestRef = useRef(0);
 
@@ -96,11 +76,26 @@ export function AuthProvider({ children }) {
       identityRef.current = null;
       setUser(null);
       setRole(null);
+      setUnavailable(false);
       setIsLoading(false);
       return;
     }
 
-    let profile = await loadOrCreateProfile(sb, authUser);
+    // eslint-disable-next-line no-console
+    const resolved = await resolveProfile(sb, authUser, (...args) => console.error(...args));
+    if (resolved.status === 'unavailable') {
+      if (requestId !== requestRef.current) return;
+      // Fail closed: no role is kept or granted while the profile is unreadable.
+      queryClientInstance.clear();
+      identityRef.current = null;
+      setUser(null);
+      setRole(null);
+      setUnavailable(true);
+      setIsLoading(false);
+      return;
+    }
+    setUnavailable(false);
+    let { profile } = resolved;
     if (profile) {
       profile = await applyPendingRoleIfAny(sb, profile);
     }
@@ -144,6 +139,7 @@ export function AuthProvider({ children }) {
         identityRef.current = null;
         setUser(null);
         setRole(null);
+        setUnavailable(false);
       } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         loadSession({ silent: true });
       }
@@ -170,7 +166,37 @@ export function AuthProvider({ children }) {
     [user, role, isLoading, logout, loadSession]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // The retry screen never covers the sign-in pages.
+  const pathname = usePathname() || '';
+  return (
+    <AuthContext.Provider value={value}>
+      {showsUnavailable(unavailable, pathname) ? <ConnectionProblem onRetry={() => loadSession()} onSignOut={logout} /> : children}
+    </AuthContext.Provider>
+  );
+}
+
+function ConnectionProblem({ onRetry, onSignOut }) {
+  return (
+    <main className="min-h-screen flex items-center justify-center p-6 bg-background" role="alert">
+      <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-lg font-semibold">Connexion impossible</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Votre compte n’a pas pu être chargé à cause d’un problème de connexion. Vos accès ne sont pas modifiés.
+          Vérifiez la connexion puis réessayez.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button type="button" onClick={onRetry}
+            className="inline-flex min-h-10 items-center rounded-md border border-border px-4 text-sm font-semibold text-primary hover:bg-muted">
+            Réessayer
+          </button>
+          <button type="button" onClick={onSignOut}
+            className="inline-flex min-h-10 items-center rounded-md px-4 text-sm font-medium text-muted-foreground hover:bg-muted">
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 export function useAuth() {
