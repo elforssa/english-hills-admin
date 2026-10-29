@@ -44,7 +44,7 @@ Only trusted linked enrollment reaching `Confirmed` or `Validated` converts a le
 RCC-A2 (migration 112; deployed and Production verified on 2026-10-07):
 
 - For **enrollment initiation** (`crm_start_enrollment`), a new learner's birth date cannot be after today's **Casablanca civil date**. Today is valid, and there is no minimum age.
-- Manual lead creation keeps its existing database `current_date` check, so this is **not** a universal CRM birth-date rule.
+- Manual lead creation keeps its own database date check (the session `current_date`, the business date since Batch H's review correction N6, identical at UTC+0), so this is **not** a universal CRM birth-date rule.
 - An opportunity linked to a learner can only enroll that learner.
 - A pre-enrollment shows **Continuer l'inscription**. It is not conversion, and the opportunity stays QUALIFIED.
 

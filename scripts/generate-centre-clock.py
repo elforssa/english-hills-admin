@@ -9,7 +9,9 @@ Every body starts from pg_get_functiondef, its latest cumulative definition:
 - H7: 'Africa/Casablanca' and the CRM policy timezone column (which may only hold
   that name) in AT TIME ZONE / timezone() become public.centre_utc_offset(); the
   number of substitutions per function is fixed below and asserted;
-- H1/H5: five functions with the exact edits listed in EDITS.
+- H1/H5/N3: five functions with the exact edits listed in EDITS;
+- H7: the session-zone `current_date` in re-created functions becomes
+  public.business_date() (AFTER_H7 for crm_security.command, EDITS otherwise).
 The restore block holds the 124 body of every function the migration replaces.
 Port: AFU_PORT (default 54322).
 """
@@ -72,6 +74,12 @@ H7 = {
 # Kept on purpose: the Meta ad account's own time zone, and the consumed Batch D clean-up.
 KEPT = {'academic_security.egc_cleanup_c1', 'public.crm_get_marketing_cohort'}
 
+# Further edits applied after the H7 substitution (the review's N6).
+AFTER_H7 = {
+    'crm_security.command': [("if (data->>'learner_birth_date')::date>current_date then",
+                              "if (data->>'learner_birth_date')::date>public.business_date() then")],
+}
+
 def convert(name, body):
     found = (len(AT_LIT.findall(body)), len(AT_COL.findall(body)), len(TZ_FN.findall(body)))
     assert found == H7[name], (name, found, H7[name])
@@ -79,6 +87,10 @@ def convert(name, body):
     body = AT_COL.sub(lambda m: f'{m.group(1)} {OFFSET}', body)
     body = TZ_FN.sub(f'timezone({OFFSET}, ', body)
     assert not re.search(r"at time zone\s+('Africa|p\.timezone)", body, re.I) and "timezone('Africa" not in body, name
+    for old, new in AFTER_H7.get(name, []):
+        assert body.count(old) == 1, (name, old[:60], body.count(old))
+        body = body.replace(old, new)
+    assert not re.search(r'\bcurrent_date\b', body, re.I), name
     return body
 
 EDITS = {
@@ -91,13 +103,17 @@ EDITS = {
 """)]),
     'public.crm_start_enrollment': ('H7 + H5: the centre date for the birth-date check, and the group year (latest definition: 120).', [
         ("if birth>(now() at time zone 'Africa/Casablanca')::date then", "if birth>public.business_date() then"),
+        ("values(s.id,session,year,level,g.id,initial_status,current_date,p_data->>'notes')",
+         "values(s.id,session,year,level,g.id,initial_status,public.business_date(),p_data->>'notes')"),
         ("""   level:=g.niveau;
   end if;""", """   level:=g.niveau;
    -- Batch H (H5): the enrollment year must be the group's (22023: the handler
    -- below turns 23514 into a generic refusal).
    perform academic_security.check_group_year(g.annee, year, '22023');
   end if;""")]),
-    'public.save_receptionist_enrollment': ('H5: the year comes from the group (latest definition: 120).', [(
+    'public.save_receptionist_enrollment': ('H5: the year comes from the group; H7: the date defaults to the business date (latest definition: 120).', [
+        ("p_date date DEFAULT CURRENT_DATE", "p_date date DEFAULT public.business_date()"),
+        (
         """    if g.niveau is distinct from effective_level then
       raise exception 'Enrollment group must match its session and level' using errcode='23514'; end if;
   end if;""", """    if g.niveau is distinct from effective_level then
@@ -106,6 +122,9 @@ EDITS = {
     effective_year:=coalesce(effective_year,academic_security.school_year_of(g.annee));
     perform academic_security.check_group_year(g.annee, effective_year);
   end if;""")]),
+    'public.save_receptionist_group': ('N3: a replayed create without a year matches the year the guard gave the group (latest definition: 119).', [(
+        "g.terme is distinct from p_changes->>'terme' or g.annee is distinct from p_changes->>'annee' or",
+        "g.terme is distinct from p_changes->>'terme' or g.annee is distinct from coalesce(nullif(btrim(p_changes->>'annee'),''),g.annee) or")]),
     'public.crm_enrollment_groups': ('H5: each group with its school year, so the CRM form takes the enrollment year from it.', [(
         "with eligible as(select id,name,niveau,session_type from public.groups",
         "with eligible as(select id,name,niveau,session_type,annee from public.groups")]),
@@ -115,6 +134,7 @@ def edit(name, body):
     for old, new in EDITS[name][1]:
         assert body.count(old) == 1, (name, old[:60], body.count(old))
         body = body.replace(old, new)
+    assert not re.search(r'\bcurrent_date\b', body, re.I), name
     return body
 
 def generate():

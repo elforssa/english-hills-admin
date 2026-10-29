@@ -85,7 +85,7 @@ const catalog125 = catalog();
 const changed = Object.keys({ ...catalog124, ...catalog125 }).filter(k => catalog124[k] !== catalog125[k]).map(k => k.replace(/\(.*$/, '')).sort();
 const expected = ['academic_security.check_group_year', 'academic_security.guard_enrollment_group_year', 'academic_security.guard_group_year',
   'public.centre_school_year', 'public.centre_utc_offset', 'public.business_date', 'public.create_charge_payment_financial',
-  'public.crm_start_enrollment', 'public.save_receptionist_enrollment', 'public.crm_enrollment_groups',
+  'public.crm_start_enrollment', 'public.save_receptionist_enrollment', 'public.crm_enrollment_groups', 'public.save_receptionist_group',
   ...['academic_security.today', 'online_security.today', 'online_security.local_date', 'online_security.local_time', 'online_security.french_when',
     'online_security.pattern_slots', 'public.online_update_lesson', 'public.attendance_student_in_group', 'public.count_today_dismissals',
     'public.enforce_dismissal_integrity', 'public.create_public_registration', 'public.guard_premium_homework_write',

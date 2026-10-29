@@ -60,8 +60,13 @@ export function currentSchoolYear(date = new Date()) {
 // groups.annee stores the school year as 'YYYY-YYYY'.
 // The enrollment school year 'YYYY/YYYY' of a group, or '' (plan AFU-r1, H5).
 export function schoolYearOfGroup(group) {
-  const value = String(group?.annee || '').trim();
-  return /^\d{4}[-/]\d{4}$/.test(value) ? value.replace('-', '/') : '';
+  const value = String(group?.annee || '').trim().replace('-', '/');
+  return isSchoolYear(value) ? value : '';
+}
+// 'YYYY/YYYY' with consecutive years, the format the year fields ask for.
+export function isSchoolYear(value) {
+  const match = /^(\d{4})\/(\d{4})$/.exec(String(value || ''));
+  return Boolean(match) && Number(match[2]) === Number(match[1]) + 1;
 }
 export function groupYear(schoolYear) {
   return schoolYear ? schoolYear.replace('/', '-') : '';

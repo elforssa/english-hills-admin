@@ -1593,6 +1593,80 @@ begin
   return result;
 end $function$;
 
+CREATE OR REPLACE FUNCTION public.save_receptionist_group(p_group uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)
+ RETURNS TABLE(id uuid, updated_at timestamp with time zone)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare g public.groups%rowtype;
+  v_teacher uuid; v_session text; v_level text; begin
+  perform operational_security.require_receptionist();
+  if p_group is null then raise exception 'Stable group id required' using errcode='22023'; end if;
+  perform operational_security.assert_keys(p_changes,array['name','langue','session_type','niveau','teacher_id',
+    'salle','jours','horaire','capacite_max','terme','annee','categorie']);
+  v_teacher:=nullif(p_changes->>'teacher_id','')::uuid;
+  if p_changes ? 'teacher_id' and v_teacher is not null and not exists(
+    select 1 from public.teachers t where t.id=v_teacher and t.deleted_at is null) then
+    raise exception 'Teacher unavailable' using errcode='23514'; end if;
+  if p_expected_updated_at is null then
+    if nullif(btrim(p_changes->>'name'),'') is null or p_changes->>'niveau' is null then
+      raise exception 'Group name and level required' using errcode='22023'; end if;
+    if operational_security.valid_session_level(coalesce(p_changes->>'session_type','Yearly'),
+      p_changes->>'niveau') is not true then
+      raise exception 'Invalid group session/level' using errcode='22023'; end if;
+    insert into public.groups(id,name,langue,session_type,niveau,teacher_id,salle,jours,horaire,
+      capacite_max,terme,annee,categorie)
+    values(p_group,p_changes->>'name',coalesce(p_changes->>'langue','Anglais'),
+      coalesce(p_changes->>'session_type','Yearly'),p_changes->>'niveau',v_teacher,
+      p_changes->>'salle',p_changes->>'jours',p_changes->>'horaire',
+      coalesce((p_changes->>'capacite_max')::integer,12),p_changes->>'terme',
+      p_changes->>'annee',p_changes->>'categorie') on conflict on constraint groups_pkey do nothing
+    returning groups.id,groups.updated_at into id,updated_at;
+    if id is null then
+      select * into g from public.groups where groups.id=p_group for update;
+      if g.name is distinct from p_changes->>'name' or
+        g.langue is distinct from coalesce(p_changes->>'langue','Anglais') or
+        g.session_type is distinct from coalesce(p_changes->>'session_type','Yearly') or
+        g.niveau is distinct from p_changes->>'niveau' or g.teacher_id is distinct from v_teacher or
+        g.salle is distinct from p_changes->>'salle' or g.jours is distinct from p_changes->>'jours' or
+        g.horaire is distinct from p_changes->>'horaire' or
+        g.capacite_max is distinct from coalesce((p_changes->>'capacite_max')::integer,12) or
+        g.terme is distinct from p_changes->>'terme' or g.annee is distinct from p_changes->>'annee' or
+        g.categorie is distinct from p_changes->>'categorie' then
+        raise exception 'Group create identity conflict' using errcode='23505'; end if;
+      id:=g.id; updated_at:=g.updated_at;
+    end if;
+  else
+    if p_changes='{}'::jsonb then raise exception 'No changes' using errcode='22023'; end if;
+    select * into g from public.groups where groups.id=p_group for update;
+    if not found or g.updated_at is distinct from p_expected_updated_at then
+      raise exception 'Group unavailable or stale' using errcode='PT409'; end if;
+    v_session:=case when p_changes ? 'session_type' then p_changes->>'session_type' else g.session_type end;
+    v_level:=case when p_changes ? 'niveau' then p_changes->>'niveau' else g.niveau end;
+    if (v_session is distinct from g.session_type or v_level is distinct from g.niveau) and
+      operational_security.valid_session_level(v_session,v_level) is not true then
+      raise exception 'Invalid group session/level' using errcode='22023'; end if;
+    if (v_session is distinct from g.session_type or v_level is distinct from g.niveau) and (
+      exists(select 1 from public.enrollments e where e.group_id=p_group)
+      or exists(select 1 from public.students s where s.groupe_id=p_group and s.deleted_at is null)) then
+      raise exception 'Reassign learners before changing group session or level' using errcode='23514'; end if;
+    update public.groups set
+      name=case when p_changes ? 'name' then p_changes->>'name' else g.name end,
+      langue=case when p_changes ? 'langue' then p_changes->>'langue' else g.langue end,
+      session_type=v_session,niveau=v_level,
+      teacher_id=case when p_changes ? 'teacher_id' then v_teacher else g.teacher_id end,
+      salle=case when p_changes ? 'salle' then p_changes->>'salle' else g.salle end,
+      jours=case when p_changes ? 'jours' then p_changes->>'jours' else g.jours end,
+      horaire=case when p_changes ? 'horaire' then p_changes->>'horaire' else g.horaire end,
+      capacite_max=case when p_changes ? 'capacite_max' then (p_changes->>'capacite_max')::integer else g.capacite_max end,
+      terme=case when p_changes ? 'terme' then p_changes->>'terme' else g.terme end,
+      annee=case when p_changes ? 'annee' then p_changes->>'annee' else g.annee end,
+      categorie=case when p_changes ? 'categorie' then p_changes->>'categorie' else g.categorie end
+    where groups.id=p_group returning groups.id,groups.updated_at into id,updated_at;
+  end if;
+  return next;
+end $function$;
+
 CREATE OR REPLACE FUNCTION public.crm_enrollment_groups(p_session text, p_level text DEFAULT NULL::text, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0)
  RETURNS jsonb
  LANGUAGE plpgsql

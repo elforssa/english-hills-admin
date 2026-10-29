@@ -1,6 +1,6 @@
 'use client';
 
-import { currentSchoolYear, groupMemberIds, groupYear } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, groupMemberIds, groupYear, isSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
 import { EGC_REASON_TEXT, groupDeleteErrorMessage, membershipErrorMessage } from '@/lib/academic/membershipActions.mjs';
 
 import { useEffect, useState } from 'react';
@@ -57,7 +57,13 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
     }));
   };
   const handleSubmit = async (e) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    // H5: the same rule as the database (two consecutive years).
+    if (!isSchoolYear(form.school_year.trim())) {
+      toast.error('Année scolaire invalide : utilisez le format 2026/2027 (deux années consécutives).');
+      return;
+    }
+    setSaving(true);
     const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
       niveau: form.niveau, teacher_id: online ? null : form.teacher_id || null, salle: online ? null : form.salle || null,
       jours: form.jours || null, horaire: form.horaire || null, capacite_max: form.capacite_max,

@@ -34,6 +34,13 @@ assert.equal(centreSchoolYear(at('2026-09-01T00:00:00Z')), '2026/2027');
 assert.equal(centreSchoolYear(at('2027-05-15T12:00:00Z')), '2026/2027');
 assert.equal(centreSchoolYear(at('2027-07-10T12:00:00Z')), '2026/2027', 'a July Summer Camp belongs to the ending year');
 
+// An invalid date throws, as the former Intl helpers did.
+for (const bad of [new Date('invalid'), 'not a date', NaN]) {
+  assert.throws(() => centreDate(bad), RangeError);assert.throws(() => centreSchoolYear(bad), RangeError);
+  assert.throws(() => formatCentre(bad, 'fr-FR'), RangeError);
+}
+assert.throws(() => localBusinessDate(new Date('invalid')), RangeError);
+
 // Wall clock to instant and back: 10:00 on the centre clock is 10:00Z.
 assert.equal(centreInstant('2026-10-29T10:00'), '2026-10-29T10:00:00.000Z');
 assert.equal(centreInstant('2026-12-31T23:30'), '2026-12-31T23:30:00.000Z');

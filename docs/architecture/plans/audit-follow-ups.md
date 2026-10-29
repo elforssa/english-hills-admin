@@ -558,7 +558,7 @@ Branch `feat/audit-follow-ups`, rebased on `origin/main` `a3d4202` (this plan me
 
 1. **H7, two helpers instead of four.** `AT TIME ZONE` accepts an `interval` (ISO sign, verified), so each substitution keeps the original expression and only the zone token changes. The planned `centre_local`/`centre_instant` helpers were unnecessary.
 2. **H7, labels kept.** The JSON `timezone` label in four CRM read models and the task command's label check still say `Africa/Casablanca`. They are labels, not time computation. The guards check computation, not labels.
-3. **H7, the generator owns every re-created body.** `scripts/generate-centre-clock.py --write|--check` reads the 124 catalog. It also holds the four H1/H5 edits, so a reviewer can regenerate every re-created function. CI runs `--check` at 124.
+3. **H7, the generator owns every re-created body.** `scripts/generate-centre-clock.py --write|--check` reads the 124 catalog. It also holds the H1/H5 edits and the review's N3/N6 edits (five edited functions), so a reviewer can regenerate every re-created function. CI runs `--check` at 124.
 4. **H5, a missing year on group insert.**
    - A group inserted without a year takes the current school year in the trigger, not through a column default. This is because the reception command passes an explicit NULL.
    - The year trigger steps aside only for the consumed Batch D clean-up revert, which alone sets both `eh.membership_sync` and `eh.enrollment_command`.
@@ -621,6 +621,62 @@ Branch `feat/audit-follow-ups`, rebased on `origin/main` `a3d4202` (this plan me
   - `upgrades-from-112-to-116`: 11 of 11.
   - `browser-security`: 13 of 13.
   - `browser-crm`: every step except one run of the RCC-B1 suite, which recorded `ChunkLoadError` page errors in its deliberate failed-chunk scenario. The same suite then passed twice in full in Chromium and WebKit. It is treated as a load flake to be confirmed by CI.
+
+**Independent review corrections (review of `b55ab3b`, CHANGES REQUIRED).** Fixed on the same branch; no rule is weakened.
+
+Database:
+
+- **B1 (blocker), reactivation bypass.** `guard_enrollment_group_year` also fires on `status`. A grouped row that becomes live again (from Rejected, Ended or no status) is checked like a new placement, as the capacity guard treats leaving Rejected. `test-audit-follow-ups.sql` adds three paths and the reverse order:
+  - the director RPC `save_enrollment_changes` from Rejected;
+  - a direct write from Rejected;
+  - a direct write from no status;
+  - the reverse order: same-year reactivation is accepted, then the group's year is locked.
+- **S1.** The portal-readiness "NULL school-year membership" fixture seeds with the year trigger disabled, and asserts the year is still NULL.
+- **N1.** A test of the wall-clock → instant direction at UTC+1, using a temporarily replaced clock: the 09:00 opening is 08:00Z and 23:30Z is already the next day.
+- **N2.** A test that one clean-up flag alone does not bypass the year check; both are needed.
+- **N3.**
+  - An update can no longer clear a group's year (`egc.group_year_missing`).
+  - The invalid-year message uses « 2026/2027 ».
+  - The 23505 on a replayed reception group create without a year came from `save_receptionist_group` (latest definition: 119). It compared the replayed NULL with the year the guard stored. The generator now re-creates it so that a NULL year matches the stored one (fifth edited function).
+- **N4, deviations recorded:**
+  - `academic_security.place` has no early year check; the trigger raises it with the same hint.
+  - The CRM early check in `crm_start_enrollment` uses 22023, not 23514, because its handler turns 23514 into a generic refusal.
+  - The generator now really edits five functions, matching its docstring.
+- **N5, not inlined (kept).** `public.centre_utc_offset()` keeps `SET search_path`; removing it would trip Supabase's `function_search_path_mutable` lint. Measured on 200k rows (local, CI image):
+  - with `SET`: 282–295 ms;
+  - without `SET` (inlined): 27 ms;
+  - the former zone literal: 56 ms.
+
+  That is about 1.3 µs per row. Batch G's budget test passes in CI. Wrapping the call as `(SELECT public.centre_utc_offset())` (one evaluation per statement) is left as an optional follow-up.
+- **N6.**
+  - `crm_security.command` (manual-lead birth date), `crm_start_enrollment` (enrollment date) and `save_receptionist_enrollment` (parameter default) now use `public.business_date()` instead of the session `current_date`.
+  - The generator asserts that no re-created body contains `current_date`, and the SQL suite has a catalog guard for it.
+  - Two Premium workshop functions (`save_receptionist_premium_membership`, `sync_premium_membership_entitlement`) still use `current_date`. They are not converted and are removed by Release B.
+- **N7, recorded.** The "no row changes" check of the upgrade test runs on a near-empty database.
+- **N8, recorded.** The zone guard catches only the literal zone name.
+
+Application:
+
+- **S1.**
+  - In the CRM enrollment dialog, the year field is read-only while a group with a year is chosen.
+  - `egc.school_year_mismatch` and `egc.group_year_missing` map to their own French text, with no « Réessayez » (`YEAR_REASONS`), with unit cases.
+- **S2.**
+  - `test-ui-foundation-browser.mjs` checks, for receptionist and director, the single-line programme pill and the « — » for an Ancien apprenant or Prospect file.
+  - For the director it also checks the pill's title and link and that the editable select carries the pill classes.
+  - The « Inscrit » assertion is scoped to the status pill.
+  - This suite is not wired into CI (known load-sensitive). It ran locally on the CI image.
+- **S3, deviation recorded (owner decision: `search_students_page` unchanged).** For director/admin the Groupe cell can show « Groupe à affecter » for an Inscrit file whose only live enrollment is Submitted or Under Review.
+- **N1.** The student page's new-enrollment date is the business date (`localBusinessDate`). Five export file names still use the UTC date, which equals the centre date at UTC+0; recorded.
+- **N3.**
+  - The group form checks consecutive years (`isSchoolYear`).
+  - `schoolYearOfGroup` rejects non-consecutive years.
+- **N4.**
+  - `EnrollmentModal` offers only groups of the enrollment's school year when it is known.
+  - The group page's learner picker already filtered by the group's year.
+- **N5.** The group page shows « Programme » as a pill and the school year on its own line.
+- **N6, recorded.** The Sentry checks live in `test-audit-follow-ups-ui.mjs`, not in a separate `test-sentry-instrumentation.mjs`.
+- **N7.** The Sentry scrubber also redacts phone numbers written with spaces, dots or dashes (eight digits or more; ISO dates kept), with unit cases.
+- **N9.** `centreParts`/`centreDate`/`formatCentre` throw `RangeError` on an invalid date, as the former Intl helpers did.
 
 **Local evidence** (private Supabase stack on remapped ports, synthetic data only):
 

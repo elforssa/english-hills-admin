@@ -5,7 +5,7 @@ import { getTeacherDirectory } from '@/lib/teacher-directory';
 import { useParams, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
-import { currentSchoolYear, groupMemberIds, isMembership } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, groupMemberIds, isMembership, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -198,13 +198,14 @@ export default function GroupDetail() {
   if (!group) return <div className="p-8 text-center text-muted-foreground text-sm">Groupe introuvable.</div>;
 
   const meta = [
-    ['Session', group.session_type || 'Yearly'],
+    ['Programme', <ProgrammePill key="programme" sessionType={group.session_type || 'Yearly'} />],
     ['Niveau', group.niveau],
     ['Catégorie', group.categorie],
     ['Enseignant', teacher?.full_name || '—'],
     ['Horaire', `${group.jours || ''} ${group.horaire || ''}`.trim() || '—'],
     ['Salle', group.salle || '—'],
-    ['Terme', `${group.terme || '—'}${group.annee ? ` · ${group.annee}` : ''}`],
+    ['Terme', group.terme || '—'],
+    ['Année scolaire', schoolYearOfGroup(group) || '—'],
   ];
   return (
     <div className="p-4 lg:p-8">

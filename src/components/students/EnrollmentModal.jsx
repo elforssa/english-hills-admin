@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { getLevelsForSession, groupMatchesEnrollment, SESSION_TYPES } from '@/lib/academicPrograms';
-import { currentSchoolYear, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, isSchoolYear, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { displayLabel, ENROLLMENT_LABELS } from '@/lib/ui/presentation.mjs';
 import { changedEnrollmentFields, createEnrollment, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup,
@@ -40,11 +40,12 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const selectedStudent = students.find(s => s.id === form.student_id);
   const selectedGroup = groups.find(g => g.id === form.group_id);
   const effectiveSession = form.session_type || selectedStudent?.session_type || 'Yearly';
+  // H5: when the enrollment's school year is known, only groups of that year (or the
+  // current one) are offered; a group without a year cannot take a placement.
+  const yearOk = group => !isSchoolYear(form.school_year) || schoolYearOfGroup(group) === form.school_year;
   const availableGroups = groups.filter(group => (
-    !selectedStudent
-    || groupMatchesEnrollment(group, form, selectedStudent)
-    || group.id === form.group_id
-  ));
+    (!selectedStudent || groupMatchesEnrollment(group, form, selectedStudent)) && yearOk(group)
+  ) || group.id === form.group_id);
   // A trial needs its group; so does a validation chosen here. Removing the group of
   // an existing Validated enrollment is allowed (it becomes Confirmed).
   const needsGroup = form.status === 'Trial' || (!isReceptionist && !statusLocked && form.status === 'Validated');

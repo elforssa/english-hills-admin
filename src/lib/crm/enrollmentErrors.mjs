@@ -42,6 +42,12 @@ export const ENROLLMENT_REASONS = {
   concurrent_change: { message: 'Ce prospect a changé pendant l’enregistrement. Les informations sont actualisées.', step: null, field: null, submit: true, recovery: 'refresh' },
   record_rejected: { message: 'Ces informations n’ont pas pu être enregistrées. Vérifiez le programme, le niveau et le groupe ; si le problème persiste, contactez la direction.', step: 2, field: null, submit: true, recovery: 'correct' }
 };
+// Batch H (H5): the placement year check answers with an egc.* hint (no "Réessayez":
+// the group or the year must change).
+export const YEAR_REASONS = {
+  school_year_mismatch: { message: 'L’année scolaire de l’inscription doit être celle du groupe. Choisissez un groupe de cette année ou une autre année.', step: 2, field: 'group', submit: true, recovery: 'correct' },
+  group_year_missing: { message: 'Ce groupe n’a pas d’année scolaire. Choisissez un autre groupe ou demandez à la direction de la renseigner.', step: 2, field: 'group', submit: true, recovery: 'correct' },
+};
 // Programming-error reasons and the stale lead version keep the generic or
 // existing behavior; they are recognised but have no dedicated text.
 export const FALLBACK_REASONS = ['request_invalid', 'request_conflict', 'lead_changed'];
@@ -64,6 +70,8 @@ export function enrollmentFailure(error) {
   if (!isDefiniteRejection(error)) return { definite: false, reason: null, message: UNCERTAIN_MESSAGE, step: null, field: null, submit: true, recovery: 'uncertain' };
   const reason = enrollmentReason(error), known = ENROLLMENT_REASONS[reason];
   if (known) return { definite: true, reason, ...known };
+  const year = /^egc\.(school_year_mismatch|group_year_missing)$/.exec(typeof error?.hint === 'string' ? error.hint : '');
+  if (year) return { definite: true, reason: year[1], ...YEAR_REASONS[year[1]] };
   if (isRecordConflict(error)) return { definite: true, reason, message: commandError(error), step: null, field: null, submit: true, recovery: 'refresh' };
   if (error.code === '42501' && !reason) return { definite: true, reason, message: commandError(error), step: null, field: null, submit: true, recovery: 'correct' };
   const legacy = reason ? null : commandError(error);

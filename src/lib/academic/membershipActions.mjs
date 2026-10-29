@@ -37,7 +37,7 @@ export const EGC_REASON_TEXT = {
   // Batch H (H5): the group school year.
   school_year_mismatch: 'L’année scolaire de l’inscription ne correspond pas à celle du groupe.',
   group_year_missing: 'Renseignez l’année scolaire du groupe.',
-  group_year_invalid: 'Année scolaire du groupe invalide : utilisez le format 2026-2027.',
+  group_year_invalid: 'Année scolaire du groupe invalide : utilisez le format 2026/2027.',
   group_year_locked: 'Réaffectez les apprenants avant de changer l’année scolaire du groupe.',
 };
 

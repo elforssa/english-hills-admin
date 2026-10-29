@@ -21,6 +21,9 @@ const task={id:taskId,lead_id:leadId,task_type:'center_visit',version:1,assigned
 const card={id:leadId,contact_id:contactId,contact_name:longName,learner_name:'Apprenant distinct · أحمد',learner_age:null,program,status:'NEW',owner_id:null,owner_name:null,source_label:'Site web',next_task:task,failed_attempts:0};
 const lead={...card,version:1,phone:'+212612345678',contact:{phone_e164:'+212612345678',whatsapp_e164:'+212698765432',email:null},open_tasks:[task],open_task_count:1,placement_count:0,enrollment:null,unreachable_eligible:false};
 const student={id:studentId,full_name:longName,status:'Enrolled',session_type:'Yearly',niveau_cefr:'Child 1',payment_status:'Soldé',payment_balance:0,plan_type:'Standard',pending_enrollments:[],groupe_id:null};
+// Batch H (H2, H4): a grouped file (read-only programme pill), a former learner and a prospect without a group.
+const pillRows=[{...student,id:randomUUID(),full_name:'UIF grouped learner',session_type:'Mise à niveau',niveau_cefr:'A2',groupe_id:randomUUID(),group_name:'UIF groupe A2'},
+ {...student,id:randomUUID(),full_name:'UIF former learner',status:'Alumni'},{...student,id:randomUUID(),full_name:'UIF prospect file',status:'Prospect'}];
 const answers={total:6,rows:[{id:randomUUID(),source_label:'Site web · Demande synthétique',occurred_at:'2026-10-01T10:00:00Z',answers:[{label:'Tranche d’âge',display_value:'13–17 ans'},{label:'Déplacement au centre',value:'Possible le mercredi'},{label:'Programme souhaité',value:program},{label:'Question complémentaire',value:'Réponse complète conservée'}]}]};
 let browser,page,phase,hold=null;
 // Drain the previous route's reads/prefetches before replacing its document.
@@ -73,6 +76,27 @@ try {
  for(const engine of (process.argv.includes('--webkit-only')?[webkit]:[chromium,webkit])) {
   browser=await engine.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
   const errors=[],transportErrors=[],cancelled=[],external=[],requests=[];let crmMode='ready',studentMode='ready',detailMode='ready',placementMode='ready',financeMode='ready',monthlyMode='ready',rejectDashboard=false;hold=null;
+// Batch H (H2, H4): single-line programme pills, the editable programme select drawn as a
+// pill, and « — » in the Groupe column for files that do not await a group.
+const studentPills=async role=>{
+ phase=engine.name()+' '+role+' Students pills';studentMode='pills';await page.setViewportSize({width:1440,height:900});await navigate(app+'/students?status=all_shown');
+ const row=name=>page.locator('tr').filter({has:page.getByRole('link',{name,exact:true})});
+ await row('UIF grouped learner').waitFor();
+ const pill=row('UIF grouped learner').locator('span.rounded-full').filter({hasText:/^Mise à niveau$/});
+ const shape=await pill.evaluate(el=>({nowrap:getComputedStyle(el).whiteSpace,lines:el.getClientRects().length,link:el.closest('a')?.getAttribute('href')||null,title:el.closest('[title]')?.getAttribute('title')||null}));
+ assert.equal(shape.nowrap,'nowrap',phase+' programme pill wraps');assert.equal(shape.lines,1,phase+' programme pill on one line');
+ if(role==='director'){
+  assert.match(shape.link||'',/^\/students\//,phase+' pill links to the learner');assert.equal(shape.title,'Le programme suit le groupe : modifiez l’inscription');
+  const select=row(longName).getByRole('combobox',{name:`Session de ${longName}`});
+  const classes=await select.getAttribute('class');for(const c of ['rounded-full','whitespace-nowrap','text-xs'])assert(classes.split(/\s+/).includes(c),phase+' select lacks '+c);
+ } else assert.equal(shape.link,null,phase+' reception sees the programme read-only');
+ for(const name of ['UIF former learner','UIF prospect file']){
+  await row(name).getByLabel('Aucun groupe',{exact:true}).waitFor();assert.equal(await row(name).getByText('Groupe à affecter',{exact:false}).count(),0,phase+' '+name);
+ }
+ assert(await row(longName).getByText('Groupe à affecter',{exact:true}).count()===1,phase+' the active file without a group still awaits one');
+ assert.equal(await row(longName).locator('span.rounded-full').filter({hasText:/^Inscrit$/}).count(),1,phase+' Inscrit status pill');
+ studentMode='ready';
+};
   await ctx.route(u=>!['localhost','127.0.0.1'].includes(u.hostname),r=>{external.push(new URL(r.request().url()).hostname);return r.abort();});
   await ctx.route('**/monitoring**',route=>route.fulfill({status:200,body:'{}'}));
   await ctx.route('**/rest/v1/**',async route=>{
@@ -104,7 +128,7 @@ try {
      if(hold)await hold;
      if(studentMode==='error')return failure();
      if(studentMode==='unavailable')return json(null);
-     const rows=studentMode==='empty'||args.p_search==='absent'?[]:[student];return json({rows,count:rows.length?41:0,total:41});
+     const rows=studentMode==='empty'||args.p_search==='absent'?[]:studentMode==='pills'?[student,...pillRows]:[student];return json({rows,count:rows.length?41:0,total:41});
     }
     if(name==='get_finance_charge_summary'||name==='get_monthly_finance_summary') {
      const mode=name==='get_finance_charge_summary'?financeMode:monthlyMode;
@@ -155,12 +179,13 @@ try {
   crmMode='unavailable';await navigate(app+'/crm/leads?layout=list&q=missing');await page.getByText('Informations indisponibles.',{exact:true}).waitFor();
   crmMode='empty';await navigate(app+'/crm/leads?layout=list');await page.getByText('Aucun prospect enregistré. Ajoutez un prospect pour commencer le suivi.',{exact:true}).waitFor();
   crmMode='ready';await navigate(app+'/crm/leads?layout=list&q=absent');await page.getByText('Aucun prospect correspondant à cette vue et ces filtres.',{exact:true}).waitFor();
-  console.log('PASS '+engine.name()+' CRM read states and bounded drawer');phase=engine.name()+' Students context';await navigate(app+'/students?status=all_shown&page=2');await page.getByRole('link',{name:longName,exact:true}).first().click();await page.getByRole('heading',{name:longName,exact:true}).waitFor();await page.getByText('Inscrit',{exact:true}).first().waitFor();await page.getByText(/Aucune inscription enregistrée/).waitFor();await page.getByText(/solde après ce paiement/).waitFor();assert.equal(await page.getByRole('button',{name:'Archiver',exact:true}).count(),0);assert.equal(await page.getByRole('link',{name:/Corriger/}).count(),0);assert((await page.locator('body').innerText()).includes('700 MAD'));
+  console.log('PASS '+engine.name()+' CRM read states and bounded drawer');phase=engine.name()+' Students context';await navigate(app+'/students?status=all_shown&page=2');await page.getByRole('link',{name:longName,exact:true}).first().click();await page.getByRole('heading',{name:longName,exact:true}).waitFor();await page.locator('span.rounded-full').filter({hasText:/^Inscrit$/}).waitFor();await page.getByText(/Aucune inscription enregistrée/).waitFor();await page.getByText(/solde après ce paiement/).waitFor();assert.equal(await page.getByRole('button',{name:'Archiver',exact:true}).count(),0);assert.equal(await page.getByRole('link',{name:/Corriger/}).count(),0);assert((await page.locator('body').innerText()).includes('700 MAD'));
   await page.getByRole('button',{name:'Retour',exact:true}).click();await page.waitForURL(u=>u.pathname==='/students'&&u.searchParams.get('page')==='2');await page.getByRole('button',{name:'Page précédente'}).click();await page.waitForURL(u=>!u.searchParams.has('page')||u.searchParams.get('page')==='1');
   await page.getByLabel('Rechercher un apprenant').fill('absent');await page.getByText('Aucun apprenant correspondant à ces filtres.',{exact:true}).waitFor();await page.getByRole('button',{name:'Effacer les filtres',exact:true}).first().click();await page.getByRole('link',{name:longName,exact:true}).first().waitFor();
   studentMode='error';await navigate(app+'/students?q=failure');await page.clock.fastForward(3000);await page.getByRole('alert').filter({hasText:'Impossible de charger'}).waitFor();assert.equal(await page.getByRole('link',{name:longName,exact:true}).count(),0);studentMode='ready';await page.getByRole('button',{name:'Réessayer',exact:true}).click();await page.getByRole('link',{name:longName,exact:true}).first().waitFor();
   detailMode='error';await navigate(app+'/students/'+studentId);await page.getByText('Impossible de charger la fiche complète.',{exact:true}).waitFor();assert.equal(await page.getByText(/Aucune inscription enregistrée/).count(),0);detailMode='ready';await page.getByRole('button',{name:'Réessayer',exact:true}).click();await page.getByRole('heading',{name:longName,exact:true}).waitFor();
   detailMode='missing';await navigate(app+'/students/'+studentId);await page.getByText('Apprenant introuvable ou archivé.',{exact:true}).waitFor();detailMode='ready';
+  await studentPills('receptionist');
   console.log('PASS '+engine.name()+' Students context/read states');  phase=engine.name()+' Tasks read truth';crmMode='ready';await drainReads();hold=new Promise(r=>{release=r;});await navigate(app+'/crm/today');await page.getByText('Chargement…',{exact:true}).first().waitFor();release();hold=null;await page.getByTestId('work-row').waitFor();
   await drainReads();hold=new Promise(r=>{release=r;});const workRefresh=page.waitForRequest(r=>r.url().endsWith('/rpc/crm_get_work_queue'));await page.clock.fastForward(61000);await workRefresh;await page.getByText('Actualisation…',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),1);crmMode='error';release();hold=null;await page.clock.fastForward(3000);await page.getByRole('alert').filter({hasText:'Actualisation impossible'}).waitFor();assert.equal(await page.getByTestId('work-row').count(),1);
   crmMode='error';await navigate(app+'/crm/today?bucket=upcoming');await page.clock.fastForward(3000);await page.getByRole('alert').filter({hasText:'Impossible de charger'}).first().waitFor();assert.equal(await page.getByTestId('work-row').count(),0);
@@ -202,6 +227,7 @@ try {
   await touchTargets();
   phase=engine.name()+' Placement read truth';placementMode='error';await navigate(app+'/placement-tests');await page.getByRole('alert').filter({hasText:'Impossible de charger'}).waitFor();assert.equal(await page.getByText('Aucun test de niveau enregistré.',{exact:false}).count(),0);assert(await page.getByRole('button',{name:'Planifier un test'}).isDisabled());placementMode='ready';await page.getByRole('button',{name:'Réessayer',exact:true}).click();await page.getByText('Aucun test de niveau enregistré. Planifiez un test pour un apprenant existant.',{exact:true}).waitFor();
   await ctx.clearCookies();await page.evaluate(()=>localStorage.clear());await login(users[1]);
+  await studentPills('director');
   phase=engine.name()+' Dashboard read truth';await navigate(app+'/dashboard');await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'));
   for(const mode of ['error','missing','malformed']) {
    financeMode=mode;monthlyMode=mode;await navigate(app+'/dashboard');await page.getByText(mode==='error' ? 'Impossible de charger les totaux financiers.' : 'Totaux financiers indisponibles.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('Indisponible'));assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);assert.equal(await page.getByText('0 MAD',{exact:true}).count(),0,'failure never numeric zero');

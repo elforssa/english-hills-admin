@@ -134,7 +134,7 @@ end $$;
 
 -- D-H5b: the group year is locked while a live learner of another year is in it.
 select pg_temp.fails(format($$update public.groups set annee = '2027-2028' where id = %L$$, pg_temp.id(302)), '23514', 'egc.group_year_locked');
-select pg_temp.fails(format($$update public.groups set annee = null where id = %L$$, pg_temp.id(302)), '23514', 'egc.group_year_locked');
+select pg_temp.fails(format($$update public.groups set annee = null where id = %L$$, pg_temp.id(302)), '22023', 'egc.group_year_missing');
 update public.groups set annee = '2026-2027' where id = pg_temp.id(302);
 select pg_temp.ok((select annee from public.groups where id = pg_temp.id(302)) = '2026-2027', 'the same year in the other form is accepted');
 update public.groups set annee = '2028-2029' where id = pg_temp.id(304);
@@ -195,6 +195,116 @@ select pg_temp.act(1);
 select public.end_learner(pg_temp.id(211), pg_temp.su(pg_temp.id(211)), 'Alumni', 'Fin de parcours', array[pg_temp.id(420)]);
 select pg_temp.owner();
 select pg_temp.ok((pg_temp.enr(pg_temp.id(420))).status = 'Ended', 'a legacy mismatch can still end');
+
+-- ===========================================================================
+-- Review B1: a grouped row that becomes live again is a placement (no bypass through
+-- Rejected or a missing status while the group's year changes).
+-- ===========================================================================
+insert into public.groups(id, name, session_type, niveau, annee) values
+  (pg_temp.id(320), 'AFU reactivation RPC', 'Yearly', 'Child 1', '2025-2026'),
+  (pg_temp.id(321), 'AFU reactivation direct', 'Yearly', 'Child 1', '2025-2026'),
+  (pg_temp.id(322), 'AFU reactivation null status', 'Yearly', 'Child 1', '2025-2026'),
+  (pg_temp.id(323), 'AFU reactivation same year', 'Yearly', 'Child 1', '2025-2026');
+insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(430), pg_temp.id(212), pg_temp.id(320), 'Submitted', 'Yearly', '2025/2026', 'Child 1'),
+  (pg_temp.id(431), pg_temp.id(206), pg_temp.id(321), 'Rejected', 'Yearly', '2025/2026', 'Child 1'),
+  (pg_temp.id(432), pg_temp.id(208), pg_temp.id(322), null, 'Yearly', '2025/2026', 'Child 1'),
+  (pg_temp.id(433), pg_temp.id(210), pg_temp.id(323), 'Rejected', 'Yearly', '2025/2026', 'Child 1');
+-- Director RPC: Submitted → Rejected (keeps the group), the group moves to 2026-2027, back to live.
+select pg_temp.act(1);
+select public.save_enrollment_changes(pg_temp.id(430), pg_temp.eu(pg_temp.id(430)), '{"status":"Rejected"}');
+select pg_temp.owner();
+select pg_temp.ok((pg_temp.enr(pg_temp.id(430))).status = 'Rejected' and (pg_temp.enr(pg_temp.id(430))).group_id = pg_temp.id(320),
+  'fixture: a rejected row keeps its group');
+update public.groups set annee = '2026-2027' where id in (pg_temp.id(320), pg_temp.id(321), pg_temp.id(322));
+select pg_temp.act(1);
+select pg_temp.fails(format($$select public.save_enrollment_changes(%L, %L, '{"status":"Under Review"}')$$, pg_temp.id(430),
+  pg_temp.eu(pg_temp.id(430))), '23514', 'egc.school_year_mismatch');
+select pg_temp.owner();
+-- Direct writes, every role (here the owner): Rejected → Validated, and no status → Submitted.
+select pg_temp.fails(format($$update public.enrollments set status = 'Validated' where id = %L$$, pg_temp.id(431)),
+  '23514', 'egc.school_year_mismatch');
+select pg_temp.fails(format($$update public.enrollments set status = 'Submitted' where id = %L$$, pg_temp.id(432)),
+  '23514', 'egc.school_year_mismatch');
+-- Reverse order: the same year reactivates; then the group's year is locked.
+update public.enrollments set status = 'Submitted' where id = pg_temp.id(433);
+select pg_temp.ok((pg_temp.enr(pg_temp.id(433))).status = 'Submitted', 'a same-year row becomes live again');
+select pg_temp.fails(format($$update public.groups set annee = '2026-2027' where id = %L$$, pg_temp.id(323)), '23514', 'egc.group_year_locked');
+-- A live-to-live status change is not a placement, and a non-live change is not checked.
+update public.enrollments set status = 'Rejected' where id = pg_temp.id(430);
+select pg_temp.ok((pg_temp.enr(pg_temp.id(430))).status = 'Rejected', 'a non-live change is not a year check');
+
+-- ===========================================================================
+-- Review N2: the step-aside needs both clean-up flags; one alone does not bypass.
+-- ===========================================================================
+do $do$ begin
+  perform set_config('eh.membership_sync', 'on', true);
+  perform pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
+    values (%L, %L, 'Validated', 'Yearly', '2025/2026', 'Child 1')$$, pg_temp.id(207), pg_temp.id(302)), '23514', 'egc.school_year_mismatch');
+  perform set_config('eh.membership_sync', '', true);
+  perform set_config('eh.enrollment_command', 'on', true);
+  perform pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
+    values (%L, %L, 'Validated', 'Yearly', '2025/2026', 'Child 1')$$, pg_temp.id(207), pg_temp.id(302)), '23514', 'egc.school_year_mismatch');
+  perform set_config('eh.enrollment_command', '', true);
+  begin
+    perform set_config('eh.membership_sync', 'on', true);
+    perform set_config('eh.enrollment_command', 'on', true);
+    insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
+      values (pg_temp.id(207), pg_temp.id(302), 'Validated', 'Yearly', '2025/2026', 'Child 1');
+    raise exception using errcode = 'P0099', message = 'undo';
+  exception when sqlstate 'P0099' then null;
+  end;
+  perform set_config('eh.membership_sync', '', true);
+  perform set_config('eh.enrollment_command', '', true);
+end $do$;
+
+-- ===========================================================================
+-- Review N3: a group's year is never cleared; a replayed reception create without a
+-- year returns the same group.
+-- ===========================================================================
+select pg_temp.fails(format($$update public.groups set annee = '' where id = %L$$, pg_temp.id(304)), '22023', 'egc.group_year_missing');
+select pg_temp.fails(format($$update public.groups set annee = null where id = %L$$, pg_temp.id(304)), '22023', 'egc.group_year_missing');
+select pg_temp.act(3);
+create temp table afu_replay as select * from public.save_receptionist_group(pg_temp.id(330), null,
+  '{"name":"AFU replay","session_type":"Yearly","niveau":"Child 1"}');
+select pg_temp.ok((select r.id = (select id from afu_replay) from public.save_receptionist_group(pg_temp.id(330), null,
+  '{"name":"AFU replay","session_type":"Yearly","niveau":"Child 1"}') r),
+  'a replayed reception create without a year returns the same group');
+select pg_temp.owner();
+select pg_temp.ok((select annee from public.groups where id = pg_temp.id(330)) = replace(public.centre_school_year(), '/', '-'),
+  'the replayed group keeps the current school year');
+
+-- ===========================================================================
+-- Review N1: the wall-clock → instant direction at a non-zero offset. With the centre
+-- clock at UTC+1, 09:00 on the centre clock is 08:00Z and 23:30Z is already tomorrow.
+-- ===========================================================================
+insert into public.crm_followup_policies(id, version, weekly_hours, date_exceptions, stale_contacting_minutes, effective_from, created_by)
+  values (pg_temp.id(340), 9101, '{"1":[["09:00","19:00"]],"2":[["09:00","19:00"]],"3":[["09:00","19:00"]],"4":[["09:00","19:00"]],
+    "5":[["09:00","19:00"]]}', '[]', 1440, now(), pg_temp.id(1));
+do $$ declare clock text := pg_get_functiondef('public.centre_utc_offset()'::regprocedure); begin
+  begin
+    execute replace(clock, 'interval ''0 hours''', 'interval ''1 hour''');
+    perform pg_temp.ok(crm_security.next_window(pg_temp.id(340), timestamptz '2026-10-29 07:30:00+00') = timestamptz '2026-10-29 08:00:00+00',
+      'UTC+1: the 09:00 opening is 08:00Z (wall clock to instant)');
+    perform pg_temp.ok(crm_security.next_window(pg_temp.id(340), timestamptz '2026-10-29 18:30:00+00') = timestamptz '2026-10-30 08:00:00+00',
+      'UTC+1: 18:30Z is 19:30 on the centre clock, after closing; next opening 08:00Z');
+    perform pg_temp.ok(crm_security.scheduled_civil(timestamptz '2026-10-29 08:00:00+00') = jsonb_build_object('local_date', date '2026-10-29', 'local_time', time '09:00'),
+      'UTC+1: 08:00Z reads 09:00 (instant to wall clock)');
+    perform pg_temp.ok(public.business_date(timestamptz '2026-12-31 23:30:00+00') = date '2027-01-01', 'UTC+1: 23:30Z is already tomorrow');
+    raise exception using errcode = 'P0099', message = 'undo';
+  exception when sqlstate 'P0099' then null;
+  end;
+end $$;
+select pg_temp.ok(crm_security.next_window(pg_temp.id(340), timestamptz '2026-10-29 07:30:00+00') = timestamptz '2026-10-29 09:00:00+00',
+  'UTC+0 again: the 09:00 opening is 09:00Z');
+
+-- ===========================================================================
+-- Review N6: no re-created function reads the session-zone current_date.
+-- ===========================================================================
+select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname not in ('pg_catalog','information_schema')
+    and (p.prosrc ~ 'centre_utc_offset\(\)|business_date\(\)' or pg_get_function_arguments(p.oid) ~ 'business_date\(\)')
+    and (p.prosrc ~* '\mcurrent_date\M' or pg_get_function_arguments(p.oid) ~* '\mcurrent_date\M')), 'no current_date beside the centre clock');
 
 rollback;
 \echo 'PASS Batch H: centre clock, group year and placement year check on every path'

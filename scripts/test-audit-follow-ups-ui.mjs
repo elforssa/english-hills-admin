@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { PILL_CLASS, PILL_SELECT_CLASS } from '../src/lib/ui/pill.mjs';
 import { DOSSIER_LABELS, displayLabel } from '../src/lib/ui/presentation.mjs';
-import { fileAwaitsGroup, groupMemberIds, schoolYearOfGroup, studentNeedsGroup } from '../src/lib/enrollmentWorkflow.mjs';
+import { fileAwaitsGroup, groupMemberIds, isSchoolYear, schoolYearOfGroup, studentNeedsGroup } from '../src/lib/enrollmentWorkflow.mjs';
 import { EGC_REASON_TEXT, membershipErrorMessage } from '../src/lib/academic/membershipActions.mjs';
 
 const read = path => readFileSync(path, 'utf8');
@@ -48,22 +48,35 @@ assert.equal(schoolYearOfGroup({ annee: '2026-2027' }), '2026/2027');
 assert.equal(schoolYearOfGroup({ annee: ' 2026/2027 ' }), '2026/2027');
 assert.equal(schoolYearOfGroup({ annee: '2026' }), '');
 assert.equal(schoolYearOfGroup(null), '');
+assert.equal(schoolYearOfGroup({ annee: '2026-2028' }), '', 'review N3: non-consecutive years are no school year');
+assert.equal(schoolYearOfGroup({ annee: '2027/2026' }), '');
+assert.equal(isSchoolYear('2026/2027'), true);
+for (const bad of ['2026-2027', '2026/2028', '2026/2026', '26/27', '', null]) assert.equal(isSchoolYear(bad), false, String(bad));
 const mismatch = 'L’année scolaire de l’inscription (2025/2026) ne correspond pas à celle du groupe (2026/2027).';
 assert.equal(membershipErrorMessage({ code: '23514', hint: 'egc.school_year_mismatch', message: mismatch }), mismatch);
 assert.equal(membershipErrorMessage({ code: '23514', hint: 'egc.school_year_mismatch', message: 'x' }), EGC_REASON_TEXT.school_year_mismatch);
 assert.equal(membershipErrorMessage({ code: '23514', hint: 'egc.group_year_missing' }), 'Renseignez l’année scolaire du groupe.');
 assert.equal(membershipErrorMessage({ code: '23514', hint: 'egc.group_year_locked' }), 'Réaffectez les apprenants avant de changer l’année scolaire du groupe.');
-assert.equal(membershipErrorMessage({ code: '22023', hint: 'egc.group_year_invalid' }), 'Année scolaire du groupe invalide : utilisez le format 2026-2027.');
+assert.equal(membershipErrorMessage({ code: '22023', hint: 'egc.group_year_invalid' }), 'Année scolaire du groupe invalide : utilisez le format 2026/2027.');
 const migration = read('supabase/migrations/125_audit_follow_ups.sql');
 for (const text of ['Renseignez l’année scolaire du groupe.', 'Réaffectez les apprenants avant de changer l’année scolaire du groupe.',
-  'Année scolaire du groupe invalide : utilisez le format 2026-2027.', 'L’année scolaire de l’inscription (%) ne correspond pas à celle du groupe (%).']) {
+  'Année scolaire du groupe invalide : utilisez le format 2026/2027.', 'L’année scolaire de l’inscription (%) ne correspond pas à celle du groupe (%).']) {
   assert.ok(migration.includes(text), text);
 }
 const groups = read('src/app/(admin)/groups/page.jsx');
 assert.match(groups, /id="group-school-year" required/, 'the group form shows the year, required');
 assert.match(groups, /annee: groupYear\(form\.school_year\.trim\(\)\) \|\| null/);
-assert.match(read('src/components/students/EnrollmentModal.jsx'), /school_year: schoolYearOfGroup\(group\)/);
-assert.match(read('src/components/crm/CrmEnrollmentDialog.jsx'), /year: schoolYearOfGroup\(g\)/);
+const enrollmentModal = read('src/components/students/EnrollmentModal.jsx');
+assert.match(enrollmentModal, /school_year: schoolYearOfGroup\(group\)/);
+assert.match(enrollmentModal, /const yearOk = group => !isSchoolYear\(form\.school_year\) \|\| schoolYearOfGroup\(group\) === form\.school_year;/,
+  'review N4: the group picker offers the enrollment year only');
+assert.match(groups, /if \(!isSchoolYear\(form\.school_year\.trim\(\)\)\)/, 'review N3: the group form checks consecutive years');
+assert.match(read('src/app/(admin)/groups/[id]/page.jsx'), /\['Programme', <ProgrammePill key="programme"/, 'review N5: group page programme pill');
+const crmDialog = read('src/components/crm/CrmEnrollmentDialog.jsx');
+assert.match(crmDialog, /year: schoolYearOfGroup\(g\)/);
+assert.match(crmDialog, /value=\{form\.year\} readOnly=\{Boolean\(schoolYearOfGroup\(selectedGroup\)\)\}/, 'review S1: the CRM year follows the chosen group');
+assert.match(read('src/app/(admin)/students/[id]/page.jsx'), /localBusinessDate\(\)/, 'review N1: the student page uses the business date');
+assert.doesNotMatch(read('src/app/(admin)/students/[id]/page.jsx'), /new Date\(\)\.toISOString\(\)\.slice\(0, ?10\)/);
 
 // H1: no cap anywhere on the client.
 assert.doesNotMatch(read('src/lib/financeCorrections.mjs'), /RECEPTION_DISCOUNT_CAP|Remise supérieure/);

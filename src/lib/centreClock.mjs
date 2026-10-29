@@ -11,6 +11,8 @@ const onCentreClock = value => new Date(new Date(value).getTime() + OFFSET_MS);
 
 export function centreParts(now = new Date()) {
   const d = onCentreClock(now);
+  // As the former Intl helpers: an invalid date is an error, never a NaN date string.
+  if (Number.isNaN(d.getTime())) throw new RangeError('Invalid time value');
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes() };
 }
 // 'YYYY-MM-DD', the business date (receipts, payment dates, attendance, reports).
