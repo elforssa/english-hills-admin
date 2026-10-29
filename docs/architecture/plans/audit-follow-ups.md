@@ -517,3 +517,15 @@ Each step needs the approvals named in [AGENTS](../../../AGENTS.md); this plan a
 - **Also approved in the same message:** the read-only H5 Production dry run "exactly as written in the plan (summary + problem-group detail, read-only transaction, group names/years/counts only, no learner data)". The STOP condition stays binding: any non-zero problem count goes back to the owner with the correction proposal, and the year-check section stays out until approved.
 - **Implementation:** the owner asked for the H1–H8 implementation PR to start from a fresh `origin/main` after this plan merges, on the full CI lane.
 - **Not approved by this decision:** the merge of this plan (done by the owner), any correction data step, the migration, the merge of the implementation PR and every release step. Each needs its own approval.
+
+## H5 dry-run record
+
+- **Run:** 2026-10-29 about 03:15 UTC (11:15 Asia/Shanghai), under the approval above. The run used the read-only operator path (`supabase db query --linked`, the CLI's standard short-lived login role). The query was the plan's text, with `set transaction read only` first and `transaction_read_only` returned as `on`. It was validated first on a local synthetic stack.
+- **Summary:**
+  - 8 groups;
+  - 0 without a year and 0 with an unreadable year;
+  - 0 groups with live members of another year;
+  - 0 live enrollments of another year and 0 without a year;
+  - 0 populated groups without a valid year.
+- **Detail:** 0 problem rows.
+- **Consequence:** the STOP condition is met with nothing to correct. No R1 correction step is needed, and the year check ships in the implementation migration. Release R0 re-reads the summary; any difference goes back to the owner.
