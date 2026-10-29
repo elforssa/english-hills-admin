@@ -677,4 +677,3 @@ Each step requires its own owner approval.
 - **R2:** PR #172 squash-merged 01:41:05 as `3e02efaa59b2940ddc8657e094e2eb11a8f877ad`; GitHub Production deployment `7401818691` success 01:42:38.
 - **R3:** ledger 001–124; catalog diff exactly the manifest (6 new functions, `search_students_page` re-created, 157 policies rewritten with metadata unchanged, one new index, `jit=off` on `report_attendance_daily`); the generator's rewrite replayed against the Production text: 157 rewritten, 6 unchanged, 0 mismatches; 0 `'40001'`; rolled-back role probe as expected; `pg_stat_statements` 369 calls, mean 1,224.2 ms; logs clean; `/` and `/crm/leads` redirect to `/login`; 30 minutes of observation clean.
 - **Open:** `pg_stat_statements` after one reception day; the restore stays unapplied.
-
