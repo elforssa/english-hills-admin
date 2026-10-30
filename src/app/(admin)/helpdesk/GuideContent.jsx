@@ -12,8 +12,8 @@ export default function GuideContent() {
 <h1>Guide Accueil</h1>
 <p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 2.0</li>
-<li>16 octobre 2026</li>
+<li>Version 2.1</li>
+<li>30 octobre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
 </ul>
@@ -58,6 +58,20 @@ export default function GuideContent() {
 </ul>
 <div className="callout warn">
 <strong>Pas de changement de mot de passe dans «&nbsp;Mon compte&nbsp;»</strong><p>La page <span className="menu">Mon compte</span> permet de modifier votre nom et votre téléphone seulement. Pour un nouveau mot de passe, passez par <span className="ui">Mot de passe oublié&nbsp;?</span> ou demandez à la direction.</p>
+</div>
+<h4 id="connexion-impossible">L’écran «&nbsp;Connexion impossible&nbsp;»</h4>
+<p>Il apparaît quand la plateforme n’arrive pas à charger votre compte à cause d’un problème de connexion (Internet coupé ou lent, serveur momentanément indisponible). Vos accès ne sont pas modifiés et rien n’est enregistré tant que l’écran est affiché.</p>
+<ol className="steps">
+<li><p>Vérifiez votre connexion Internet (Wi-Fi, câble).</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Réessayer</span>. Si la connexion est revenue, la page s’affiche normalement.</p>
+</li>
+<li><p>Si l’écran revient, cliquez sur <span className="ui">Se déconnecter</span>, puis reconnectez-vous. Si cela continue, prévenez la direction.</p>
+</li>
+</ol>
+<p>Une variante s’affiche parfois en ouvrant une page&nbsp;: «&nbsp;Connexion impossible, nouvel essai…&nbsp;». Elle réessaie toute seule après quelques secondes&nbsp;; vous pouvez aussi cliquer sur <span className="ui">Réessayer maintenant</span>.</p>
+<div className="callout warn">
+<strong>Un paiement était en cours&nbsp;?</strong><p>Si l’écran est apparu juste après un clic sur <span className="ui">Enregistrer et générer le reçu</span>, ne ressaisissez pas le paiement&nbsp;: une fois reconnectée, ouvrez d’abord les reçus de l’apprenant (<a href="#q6">Q6</a>).</p>
 </div>
 <h3 id="menu">Votre page d’accueil et votre menu</h3>
 <figure className="fig">
@@ -266,7 +280,7 @@ export default function GuideContent() {
 </li>
 <li><b>Un reçu ne se modifie pas.</b><p>En cas d’erreur de montant, de personne ou de prix, la direction annule le paiement. Vous le ressaisissez ensuite.</p>
 </li>
-<li><b>Un paiement confirme l’inscription.</b><p>Sans paiement (montant 0), l’inscription n’est pas confirmée. Après un paiement, il reste à affecter le groupe.</p>
+<li><b>Un paiement confirme l’inscription.</b><p>Sans paiement (montant 0), l’inscription n’est pas confirmée. Un premier paiement inférieur à 10&nbsp;% du prix net donne un reçu, mais l’inscription attend la direction (<a href="#regles-paiement">règles de paiement</a>). Après la confirmation, il reste à affecter le groupe.</p>
 </li>
 <li><b>Après un clic sur Enregistrer, ne recommencez pas.</b><p>Si un message dit «&nbsp;Impossible de confirmer l’enregistrement&nbsp;», relancez <span className="ui">Enregistrer</span> sans rien modifier. Pour un paiement, vérifiez d’abord les reçus de l’apprenant.</p>
 </li>
@@ -607,7 +621,7 @@ export default function GuideContent() {
 <ol className="flow">
 <li><b>Prospect Qualifié</b><small>le projet est qualifié</small></li>
 <li><b>Pré-inscription</b><small>«&nbsp;Commencer l&apos;inscription&nbsp;»&nbsp;: le prospect reste Qualifié</small></li>
-<li><b>Paiement</b><small>«&nbsp;Nouveau reçu&nbsp;»&nbsp;: inscription confirmée</small></li>
+<li><b>Paiement</b><small>«&nbsp;Nouveau reçu&nbsp;»&nbsp;: inscription confirmée dès 10&nbsp;% du prix net</small></li>
 <li><b>Groupe affecté</b><small>«&nbsp;Groupe à affecter&nbsp;»&nbsp;: inscription validée</small></li>
 </ol>
 <h4>Temps 1&nbsp;: créer la pré-inscription</h4>
@@ -617,6 +631,7 @@ export default function GuideContent() {
 <li><p><b>Étape 1/3, Apprenant.</b> Saisissez le <span className="ui">Nom de l’apprenant</span> et, si vous la connaissez, la date de naissance (pas dans le futur). La plateforme cherche les apprenants déjà connus&nbsp;: <span className="ui">Utiliser cet apprenant</span> s’il s’agit de lui, sinon <span className="ui">Créer un nouvel apprenant</span> et cochez «&nbsp;J’ai vérifié les correspondances&nbsp;: il s’agit d’un autre apprenant&nbsp;».</p>
 </li>
 <li><p><b>Étape 2/3, Inscription.</b> Programme, année scolaire, niveau proposé, groupe (ou «&nbsp;À affecter plus tard&nbsp;») et <span className="ui">Démarrage</span>&nbsp;: <span className="ui">Pré-inscription</span> ou <span className="ui">Essai (groupe requis)</span>.</p>
+<p><b>L’année scolaire suit le groupe.</b> Dès que vous choisissez un groupe, son année scolaire remplit le champ <span className="ui">Année scolaire</span>, qui ne se modifie plus («&nbsp;L’année scolaire suit le groupe choisi.&nbsp;»). Pour une autre année, choisissez un groupe de cette année. Avec «&nbsp;À affecter plus tard&nbsp;», vérifiez vous-même l’année (format 2026/2027).</p>
 </li>
 <li><p><b>Étape 3/3, Vérification.</b> Relisez, puis <span className="ui">Créer la pré-inscription</span>. Un panneau confirme «&nbsp;Pré-inscription créée&nbsp;» et rappelle que <b>le prospect reste qualifié, l’inscription n’est pas encore confirmée</b>.</p>
 </li>
@@ -626,10 +641,11 @@ export default function GuideContent() {
 <ol className="legend">
 <li><span className="ui">Programme</span>&nbsp;: «&nbsp;Programme annuel&nbsp;», «&nbsp;Adultes&nbsp;», «&nbsp;Stage d’été&nbsp;»…</li>
 <li><span className="ui">Niveau proposé</span>&nbsp;: «&nbsp;À définir&nbsp;» si le test n’a pas eu lieu.</li>
-<li><span className="ui">Groupe</span>&nbsp;: seuls les groupes compatibles sont proposés.</li>
+<li><span className="ui">Groupe</span>&nbsp;: seuls les groupes du programme choisi (et du niveau, s’il est choisi) sont proposés. Le groupe choisi fixe l’année scolaire.</li>
 <li><span className="ui">Démarrage</span>&nbsp;: une pré-inscription n’engage rien, un essai exige un groupe.</li>
 </ol>
 </figure>
+<p>Si l’enregistrement répond «&nbsp;L’année scolaire de l’inscription doit être celle du groupe. Choisissez un groupe de cette année ou une autre année.&nbsp;», revenez à l’étape 2 et choisissez un groupe de l’année voulue. «&nbsp;Ce groupe n’a pas d’année scolaire…&nbsp;»&nbsp;: choisissez un autre groupe ou demandez à la direction de la renseigner.</p>
 <h4>Temps 2&nbsp;: encaisser et confirmer</h4>
 <ol className="steps">
 <li><p>Dans la fiche, cliquez sur <span className="ui">Continuer l&apos;inscription</span>&nbsp;: la fiche de l’apprenant s’ouvre avec l’inscription mise en évidence («&nbsp;Inscription liée au prospect CRM&nbsp;»).</p>
@@ -638,9 +654,10 @@ export default function GuideContent() {
 </li>
 <li><p>Choisissez la <span className="ui">Session</span> (par exemple Yearly), puis, dans <span className="ui">Inscription à rattacher</span>, <b>sélectionnez l’inscription «&nbsp;Inscription CRM · Submitted…&nbsp;»</b>. C’est obligatoire&nbsp;: la plateforme refuse le paiement sinon, pour éviter un doublon.</p>
 </li>
-<li><p>Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle, le <span className="ui">Montant payé aujourd’hui</span> et le mode de paiement, puis <span className="ui">Enregistrer et générer le reçu</span>.</p>
+<li><p>Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle avec son <span className="ui">Motif de la remise</span>, le <span className="ui">Montant payé aujourd’hui</span>, la <span className="ui">Date du paiement</span> et le mode de paiement, puis <span className="ui">Enregistrer et générer le reçu</span>. Les règles de remise, de date et d’acompte sont dans le <a href="#regles-paiement">scénario Q3</a>.</p>
 </li>
 <li><p>Le message «&nbsp;Paiement enregistré. Apprenant inscrit — groupe à affecter.&nbsp;» s’affiche et le reçu s’ouvre. Le prospect passe en <span className="st st-conv">Inscription confirmée</span> et ses tâches sont fermées.</p>
+<p>Si le paiement est inférieur à 10&nbsp;% du prix net, le message est différent&nbsp;: «&nbsp;Acompte inférieur à 10&nbsp;%&nbsp;: reçu émis, inscription en attente de confirmation par la direction.&nbsp;» Le reçu s’ouvre quand même, mais le prospect reste <span className="st st-qual">Qualifié</span> et l’inscription n’est pas confirmée.</p>
 </li>
 <li><p>Terminez par l’affectation du groupe&nbsp;: <a href="#q9">scénario Q9</a>.</p>
 </li>
@@ -826,9 +843,9 @@ export default function GuideContent() {
 </li>
 <li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>.</p>
 </li>
-<li><p><b>Étape 3.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> et l’<span className="ui">Échéance</span> si besoin, le <span className="ui">Montant payé aujourd’hui</span>, la date et le <span className="ui">Mode de paiement</span> (Espèces par défaut, Carte bancaire, Virement, Chèque).</p>
+<li><p><b>Étape 3.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> (avec son motif) et l’<span className="ui">Échéance</span> si besoin, le <span className="ui">Montant payé aujourd’hui</span>, la <span className="ui">Date du paiement</span> et le <span className="ui">Mode de paiement</span> (Espèces par défaut, Carte bancaire, Virement, Chèque). Les règles sont juste en dessous.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">Enregistrer et générer le reçu</span>. Le message «&nbsp;Apprenant inscrit — groupe à affecter&nbsp;» s’affiche et le reçu s’ouvre.</p>
+<li><p>Cliquez sur <span className="ui">Enregistrer et générer le reçu</span>. Le message «&nbsp;Apprenant inscrit — groupe à affecter&nbsp;» s’affiche et le reçu s’ouvre. Sous 10&nbsp;% du prix net, le message dit que l’inscription attend la direction (règles ci-dessous).</p>
 </li>
 <li><p>Imprimez avec <span className="ui">Imprimer A5</span> ou téléchargez avec <span className="ui">PDF A5</span>, puis passez au <a href="#q9">scénario Q9</a> pour le groupe.</p>
 </li>
@@ -845,6 +862,44 @@ export default function GuideContent() {
 </figure>
 <div className="callout info">
 <strong>Imprimer</strong><p>Le reçu est au format A5. Dans le lecteur PDF qui s’ouvre, choisissez A5 et l’échelle réelle (100 %).</p>
+</div>
+<h4 id="regles-paiement">Remise, date et acompte&nbsp;: les règles</h4>
+<p>Elles valent pour tout paiement&nbsp;: <span className="menu">Nouveau reçu</span>, <span className="ui">Encaisser</span> depuis la fiche de l’apprenant, ou paiement d’une inscription venue du CRM (<a href="#c6">C6</a>).</p>
+<div className="scroll">
+<table>
+<thead>
+<tr>
+<th>Règle</th>
+<th>Ce que vous voyez</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><b>Toute remise a un motif.</b> Dès que <span className="ui">Remise (MAD)</span> dépasse 0, le champ <span className="ui">Motif de la remise</span> apparaît et devient obligatoire&nbsp;: Fratrie, Ancien élève, Promotion/offre, Accord de la direction ou Autre. Avec «&nbsp;Autre&nbsp;», précisez en quelques mots dans <span className="ui">Précisez le motif</span> (3 à 200 caractères).</td>
+<td>Sans motif&nbsp;: «&nbsp;Indiquez le motif de la remise.&nbsp;» «&nbsp;Autre&nbsp;» sans précision&nbsp;: «&nbsp;Précisez le motif de la remise «&nbsp;Autre&nbsp;».&nbsp;»</td>
+</tr>
+<tr>
+<td><b>Pas de plafond pour vous.</b> Vous pouvez accorder la remise convenue, quel que soit son montant, du moment qu’elle a un motif. La direction voit chaque nouvelle remise dans sa liste «&nbsp;Contrôles&nbsp;».</td>
+<td>Rien de plus à faire. Le motif reste interne&nbsp;: il n’est jamais imprimé sur le reçu ni envoyé à la famille.</td>
+</tr>
+<tr>
+<td><b>La date du paiement</b> n’est jamais dans le futur, et au plus 7 jours en arrière pour vous. Le rappel est écrit sous le champ&nbsp;: «&nbsp;Jamais dans le futur&nbsp;; au plus 7 jours en arrière.&nbsp;»</td>
+<td>«&nbsp;La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca&nbsp;: …).&nbsp;» ou «&nbsp;… antérieure de plus de 7 jours.&nbsp;» Pour un paiement plus ancien, demandez à la direction.</td>
+</tr>
+<tr>
+<td><b>Acompte de moins de 10&nbsp;%.</b> Tant que les paiements sur un engagement n’atteignent pas 10&nbsp;% de son prix net, le reçu est émis mais l’inscription attend la confirmation de la direction.</td>
+<td>Avant d’enregistrer, un encadré jaune l’annonce&nbsp;; après, le même message&nbsp;: «&nbsp;Acompte inférieur à 10&nbsp;%&nbsp;: reçu émis, inscription en attente de confirmation par la direction.&nbsp;» Le reçu s’ouvre normalement. Voir ci-dessous.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div className="callout warn">
+<strong>Après un acompte de moins de 10&nbsp;%</strong><ul className="tight">
+<li>Le reçu est valable&nbsp;: imprimez-le et remettez-le comme d’habitude.</li>
+<li>L’inscription n’est <b>pas</b> confirmée&nbsp;: elle garde son statut (Soumise, En cours d’examen ou Essai), ou elle est créée «&nbsp;En cours d’examen&nbsp;» (Under Review dans <span className="menu">Inscriptions</span>).</li>
+<li>Le dossier ne passe pas «&nbsp;Inscrit&nbsp;», il n’y a pas encore de groupe à affecter, et un prospect du CRM reste <span className="st st-qual">Qualifié</span>.</li>
+<li>Deux façons d’avancer&nbsp;: un paiement suivant qui porte le total à 10&nbsp;% ou plus confirme l’inscription (<a href="#q4">Q4</a>)&nbsp;; sinon, la direction décide.</li>
+</ul>
 </div>
 <div className="callout warn">
 <strong>Terminez ensuite le dossier</strong><p>Un apprenant créé depuis le reçu n’a que son nom et ses contacts. Complétez la date de naissance et la catégorie depuis sa fiche (<span className="ui">Modifier</span>, <a href="#q2">Q2</a>).</p>
@@ -873,9 +928,10 @@ export default function GuideContent() {
 </li>
 <li><p>Les conditions de l’engagement sont verrouillées. Vous voyez <b>Prix net</b>, <b>Déjà payé</b> et <b>Solde</b>.</p>
 </li>
-<li><p>Saisissez le montant payé aujourd’hui, qui ne peut pas dépasser le solde (sinon&nbsp;: «&nbsp;Le paiement dépasse le solde de … MAD&nbsp;»), puis <span className="ui">Enregistrer et générer le reçu</span>.</p>
+<li><p>Saisissez le montant payé aujourd’hui, qui ne peut pas dépasser le solde (sinon&nbsp;: «&nbsp;Le paiement dépasse le solde de … MAD&nbsp;»), et vérifiez la <span className="ui">Date du paiement</span> (jamais dans le futur, au plus 7 jours en arrière). Puis <span className="ui">Enregistrer et générer le reçu</span>.</p>
 </li>
 </ol>
+<p>Pas de champ remise ici&nbsp;: la remise fait partie des conditions de l’engagement, fixées à sa création. Si l’inscription attendait la direction après un acompte de moins de 10&nbsp;%, le paiement qui porte le total payé à 10&nbsp;% du prix net ou plus la confirme (<a href="#regles-paiement">règles de paiement</a>).</p>
 <p>Chaque paiement donne un nouveau reçu. Les reçus précédents ne changent jamais&nbsp;: le «&nbsp;restant historique&nbsp;» est le solde à la date de chaque reçu, alors que «&nbsp;Situation des paiements&nbsp;» montre le solde d’aujourd’hui.</p>
 <p>Pour retrouver ensuite le reçu ou la liste des impayés&nbsp;: <a href="#q6">Q6</a> et <a href="#q5">Q5</a>.</p>
 <p>Les états de paiement&nbsp;: <b>Soldé</b>, <b>Acompte versé</b>, <b>En attente</b> (rien de payé, échéance pas dépassée), <b>En retard</b> (échéance dépassée), <b>Aucun engagement</b>.</p>
@@ -997,19 +1053,25 @@ export default function GuideContent() {
 </li>
 <li><p>Renseignez la <span className="ui">Salle</span>, les <span className="ui">Jours</span> (par exemple «&nbsp;Lun, Mer, Ven&nbsp;»), l’<span className="ui">Horaire</span> (par exemple «&nbsp;18h – 19h30&nbsp;»), la <span className="ui">Capacité max</span> et le <span className="ui">Terme</span>.</p>
 </li>
+<li><p>Vérifiez l’<span className="ui">Année scolaire</span>&nbsp;: elle est obligatoire et proposée automatiquement (l’année en cours, du 1<sup>er</sup> septembre au 31 août). Pour un groupe de la rentrée suivante, changez-la. Format&nbsp;: deux années qui se suivent, avec une barre, par exemple <b>2026/2027</b>.</p>
+</li>
 <li><p>Cliquez sur <span className="ui">Enregistrer</span>&nbsp;: le message «&nbsp;Groupe créé&nbsp;» s’affiche.</p>
 </li>
 </ol>
 <figure className="fig narrow">
-<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027 et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Nom du groupe</span>&nbsp;: obligatoire.</li>
 <li><span className="ui">Enseignant</span>&nbsp;: obligatoire. Il choisit parmi les enseignants existants.</li>
 <li><span className="ui">Jours</span>&nbsp;: du texte libre, mais l’<b>Emploi du temps</b> s’en sert (écrivez Lun, Mar, Mer, Jeu, Ven, Sam, Dim).</li>
+<li><span className="ui">Année scolaire</span>&nbsp;: obligatoire, proposée automatiquement, au format 2026/2027.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
 <h4>Modifier un groupe, changer d’enseignant</h4>
-<p>Dans la liste, cliquez sur l’icône de modification à droite de la ligne du groupe. La fenêtre «&nbsp;Modifier le groupe&nbsp;» s’ouvre&nbsp;: changez l’<span className="ui">Enseignant</span>, l’horaire, la salle ou la capacité, puis <span className="ui">Enregistrer</span> («&nbsp;Groupe mis à jour&nbsp;»). La page du groupe (clic sur son nom) montre ses apprenants (<a href="#q10">Q10</a>).</p>
+<p>Dans la liste, cliquez sur l’icône de modification à droite de la ligne du groupe. La fenêtre «&nbsp;Modifier le groupe&nbsp;» s’ouvre&nbsp;: changez l’<span className="ui">Enseignant</span>, l’horaire, la salle ou la capacité, puis <span className="ui">Enregistrer</span> («&nbsp;Groupe mis à jour&nbsp;»). La page du groupe (clic sur son nom) montre ses apprenants et son année scolaire (<a href="#q10">Q10</a>).</p>
+<div className="callout warn">
+<strong>L’année scolaire d’un groupe avec des apprenants</strong><p>Un groupe ne reçoit que des inscriptions de son année. Tant qu’il compte des apprenants inscrits pour une autre année que celle que vous saisissez, son année ne change pas&nbsp;: «&nbsp;Réaffectez les apprenants avant de changer l’année scolaire du groupe.&nbsp;» En pratique, corrigez l’année d’un groupe avant d’y placer des apprenants. Pour la rentrée suivante, créez plutôt un nouveau groupe avec la nouvelle année. Le programme et le niveau d’un groupe déjà utilisé ne changent pas non plus.</p>
+</div>
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant se demande à la direction (<a href="#q12">Q12</a>).</li>
@@ -1030,11 +1092,19 @@ export default function GuideContent() {
 </li>
 <li><p>Dans la colonne <b>Groupe</b>, cliquez sur le lien bleu <span className="ui">Groupe à affecter · …</span> de la personne.</p>
 </li>
-<li><p>Dans la fenêtre <b>Affecter un groupe</b>, vérifiez le niveau et choisissez le <span className="ui">Groupe</span>. Seuls les groupes de la même session et du même niveau sont proposés.</p>
+<li><p>Dans la fenêtre <b>Affecter un groupe</b>, le haut rappelle la session, l’année et le niveau de l’inscription. Vérifiez le niveau et choisissez le <span className="ui">Groupe</span>. Seuls les groupes du <b>même programme, du même niveau et de la même année scolaire</b> sont proposés.</p>
 </li>
 <li><p>Cliquez sur <span className="ui">Enregistrer</span> («&nbsp;Mis à jour&nbsp;»). L’inscription passe à <b>Inscription validée</b>.</p>
 </li>
 </ol>
+<div className="callout warn">
+<strong>Le bon groupe n’est pas dans la liste, ou «&nbsp;L’année scolaire de l’inscription… ne correspond pas…&nbsp;»</strong><p>Le message complet est&nbsp;: «&nbsp;L’année scolaire de l’inscription (2025/2026) ne correspond pas à celle du groupe (2026/2027).&nbsp;» (avec les années de votre cas). Un groupe n’accepte que les inscriptions de son année&nbsp;: rien n’est enregistré.</p>
+<ul className="tight">
+<li>Comparez l’année de l’inscription (en haut de la fenêtre) et celle du groupe (sur sa page, ligne <b>Année scolaire</b>).</li>
+<li>Si le groupe de la bonne année existe, choisissez-le. S’il n’existe pas, créez-le avec cette année (<a href="#q8">Q8</a>), puis affectez.</li>
+<li>Si c’est l’année de l’inscription qui est fausse, vous ne pouvez pas la changer&nbsp;: demandez à la direction.</li>
+</ul>
+</div>
 <figure className="fig narrow">
 <Image src="/helpdesk/s13-students-filter.jpg" width={1700} height={1075} alt="Liste des apprenants filtrée sur Groupe à affecter" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Plus de filtres</span> donne accès au filtre d’affectation.</li>
@@ -1044,13 +1114,14 @@ export default function GuideContent() {
 <figure className="fig narrow">
 <Image src="/helpdesk/s14-assign.jpg" width={1700} height={1075} alt="Fenêtre Affecter un groupe avec le niveau et le groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Niveau de cette inscription</span>.</li>
-<li><span className="ui">Groupe</span>&nbsp;: filtré par session et niveau.</li>
+<li><span className="ui">Groupe</span>&nbsp;: filtré par session, niveau et année scolaire.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
+<li>Dans la colonne <b>Groupe</b>, «&nbsp;Groupe à affecter&nbsp;» n’apparaît que pour un dossier actif ou une inscription en attente de groupe. Un dossier <b>Prospect</b>, <b>Ancien apprenant</b> ou <b>Inactif</b> sans inscription en cours affiche «&nbsp;—&nbsp;»&nbsp;: il n’y a rien à affecter. Pour l’inscrire, ouvrez sa fiche › <span className="ui">Nouvelle pré-inscription</span> (<a href="#q7">Q7</a>), puis encaissez.</li>
 <li>Pas de niveau sur le dossier&nbsp;? La plateforme vous demande de créer une pré-inscription avec un niveau depuis la fiche apprenant.</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
@@ -1068,17 +1139,18 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez la fiche de l’apprenant (<a href="#q1">Q1</a>). Dans <b>Inscriptions et groupes</b>, cliquez sur <span className="ui">Modifier l’inscription</span> à côté de l’inscription concernée.</p>
 </li>
-<li><p>Dans la fenêtre <b>Affecter un groupe</b>, choisissez le nouveau <span className="ui">Groupe</span>. L’encadré vert rappelle l’horaire, le jour, la salle et la capacité.</p>
+<li><p>Dans la fenêtre <b>Affecter un groupe</b>, choisissez le nouveau <span className="ui">Groupe</span>. Seuls les groupes du même programme, du même niveau et de la même année scolaire que l’inscription sont proposés. L’encadré vert rappelle l’horaire, le jour, la salle et la capacité.</p>
 </li>
 <li><p>Cliquez sur <span className="ui">Enregistrer</span>.</p>
 </li>
 </ol>
 <figure className="fig narrow">
 <Image src="/helpdesk/q10-changer-groupe.jpg" width={1700} height={1075} alt="Fenêtre Affecter un groupe ouverte depuis la fiche d’un apprenant déjà inscrit, avec le choix du groupe" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li><span className="ui">Groupe</span>&nbsp;: filtré par session et niveau de l’inscription.</li>
+<li><span className="ui">Groupe</span>&nbsp;: filtré par session, niveau et année scolaire de l’inscription.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
+<p>Le groupe voulu n’apparaît pas, ou l’enregistrement répond «&nbsp;L’année scolaire de l’inscription (…) ne correspond pas à celle du groupe (…).&nbsp;»&nbsp;: le groupe est d’une autre année. Choisissez un groupe de l’année de l’inscription, ou créez-le (<a href="#q8">Q8</a>)&nbsp;; si c’est l’année de l’inscription qui est fausse, demandez à la direction. Détail en <a href="#q9">Q9</a>.</p>
 <h4>Le retirer d’un groupe</h4>
 <p>Ouvrez la page du groupe (<span className="menu">Groupes &amp; niveaux</span>, clic sur le nom) et cliquez sur <span className="ui">Retirer</span> à droite de l’apprenant. Une inscription validée redevient «&nbsp;Inscrit — groupe à affecter&nbsp;» (<a href="#q9">Q9</a>).</p>
 <figure className="fig narrow">
@@ -1210,7 +1282,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p><b>Enseignants</b>&nbsp;: chacun est dans la liste, avec ses niveaux et ses certifications à jour (<a href="#q12">Q12</a>). Un nouvel enseignant se demande à la direction.</p>
 </li>
-<li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité et terme (<a href="#q8">Q8</a>).</p>
+<li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité, terme et la nouvelle <b>année scolaire</b> (<a href="#q8">Q8</a>). Un groupe de l’an dernier ne reçoit pas les inscriptions de la nouvelle année.</p>
 </li>
 <li><p><b>Emploi du temps</b>&nbsp;: relisez la grille, aucun groupe ne manque (<a href="#q13">Q13</a>).</p>
 </li>
@@ -1381,7 +1453,7 @@ export default function GuideContent() {
 <div className="cols">
 <div className="card">
 <h4>Inscriptions</h4>
-<p>Voir <a href="#q7">Q7</a>. Page «&nbsp;Pré-inscriptions&nbsp;»&nbsp;: seulement les pré-inscriptions (Submitted, Under Review, Trial, Rejected). Les inscriptions confirmées ou validées n’y figurent pas.</p>
+<p>Voir <a href="#q7">Q7</a>. Page «&nbsp;Pré-inscriptions&nbsp;»&nbsp;: seulement les pré-inscriptions (Submitted, Under Review, Trial, Rejected), et les inscriptions <b>Terminée</b> avec le filtre du même nom. Les inscriptions confirmées ou validées n’y figurent pas.</p>
 <ul className="tight">
 <li><span className="ui">Nouvelle inscription</span>&nbsp;: statut limité à Submitted, Under Review ou Trial. Une inscription «&nbsp;Trial&nbsp;» exige un groupe.</li>
 <li>Pas de valider, refuser ni supprimer.</li>
@@ -1394,8 +1466,9 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Liste des apprenants</h4>
-<p>L’écran de travail&nbsp;: statut du dossier, paiement (Soldé, Acompte versé, En attente, En retard, Aucun engagement), groupe, niveau. 20 apprenants par page.</p>
+<p>L’écran de travail&nbsp;: statut du dossier (<b>Inscrit</b>, Essai (dossier), Prospect, Ancien apprenant, Inactif), paiement (Soldé, Acompte versé, En attente, En retard, Aucun engagement), groupe, niveau. 20 apprenants par page.</p>
 <ul className="tight">
+<li>Colonne <b>Groupe</b>&nbsp;: le groupe, ou le lien <span className="ui">Groupe à affecter</span> pour un dossier actif ou une inscription en attente de groupe. «&nbsp;—&nbsp;» pour un Prospect, un Ancien apprenant ou un Inactif sans inscription en cours&nbsp;: pour l’inscrire, fiche › <span className="ui">Nouvelle pré-inscription</span>.</li>
 <li>La recherche porte sur le nom et l’email, pas sur le téléphone (alors que le champ dit «&nbsp;Nom ou téléphone&nbsp;»).</li>
 <li>La catégorie d’âge se change directement dans la liste, sans confirmation.</li>
 <li>Pas d’import, d’export ni d’archivage.</li>
@@ -1403,7 +1476,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Ajouter un apprenant</h4>
-<p>Seul le <span className="ui">Nom complet</span> est obligatoire. L’apprenant est créé tout de suite avec le statut «&nbsp;Prospect&nbsp;», <b>sans inscription ni groupe</b>. Il devient «&nbsp;Inscrit&nbsp;» dès qu’une inscription est confirmée (paiement ou affectation à un groupe).</p>
+<p>Seul le <span className="ui">Nom complet</span> est obligatoire. L’apprenant est créé tout de suite avec le statut «&nbsp;Prospect&nbsp;», <b>sans inscription ni groupe</b>. Il devient «&nbsp;Inscrit&nbsp;» dès qu’une inscription est confirmée, en pratique par un paiement d’au moins 10&nbsp;% du prix net (<a href="#regles-paiement">règles de paiement</a>).</p>
 <ul className="tight">
 <li>Aucune détection de doublon&nbsp;: cherchez-le avant.</li>
 <li>Après une erreur, un nouvel envoi peut créer un second apprenant&nbsp;: vérifiez la liste avant de recommencer.</li>
@@ -1414,12 +1487,13 @@ export default function GuideContent() {
 <p>Niveau, taux de présence, solde actuel, situation des paiements, informations, inscriptions et groupes (avec <span className="ui">Ajouter un document</span>, 10 Mo, JPEG, PNG ou PDF), adultes autorisés au retrait, paiements historiques, notes.</p>
 <ul className="tight">
 <li>Les emails de l’apprenant et du parent sont en lecture seule pour vous.</li>
-<li>Pas de bouton Archiver.</li>
+<li>Pas de bouton Archiver ni «&nbsp;Ancien apprenant&nbsp;»&nbsp;: c’est la direction qui termine un parcours.</li>
+<li>Une inscription <b>Terminée</b> affiche son motif, sa date et son ancien groupe. Elle ne se modifie plus&nbsp;: pour un retour, créez une <span className="ui">Nouvelle pré-inscription</span>.</li>
 </ul>
 </div>
 <div className="card">
 <h4>Groupes &amp; niveaux</h4>
-<p>Liste des groupes (session, niveau, enseignant, horaire, salle, terme). Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant (<a href="#q8">Q8</a>).</p>
+<p>Liste des groupes (programme, niveau, enseignant, horaire, salle, terme). Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant et d’une année scolaire (<a href="#q8">Q8</a>)&nbsp;; sa page affiche l’année.</p>
 <p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span> (<a href="#q10">Q10</a>).</p>
 <figure className="fig" style={{ marginBottom: '10px' }}>
 <Image src="/helpdesk/s17-groups.jpg" width={1700} height={1075} alt="Liste des groupes et niveaux" unoptimized tabIndex={0} role="button" /></figure>
@@ -1541,6 +1615,43 @@ export default function GuideContent() {
 <li><b>Inscription validée</b><small>groupe affecté</small></li>
 </ol>
 <p>«&nbsp;Essai&nbsp;» est une inscription à l’essai, avec groupe obligatoire. «&nbsp;Refusée&nbsp;» est décidée par la direction.</p>
+<p><b>Terminée</b>&nbsp;: une inscription finie (fin de parcours, départ, clôture de l’année ou d’un cours en ligne). Elle garde son motif, sa date de fin et le groupe qu’elle a quitté, et reste dans l’historique de la fiche. L’apprenant sort du groupe&nbsp;; ses présences d’avant la date de fin restent. Vous ne pouvez ni la modifier ni la rouvrir&nbsp;: la direction peut la rouvrir. Si la personne revient, créez une nouvelle pré-inscription.</p>
+<h3>Le statut du dossier d’un apprenant</h3>
+<p>Il est calculé par la plateforme à partir des inscriptions&nbsp;: vous ne le choisissez pas.</p>
+<div className="scroll">
+<table>
+<thead>
+<tr>
+<th>Statut</th>
+<th>Signification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><b>Prospect</b></td>
+<td>Dossier sans inscription confirmée&nbsp;: nouveau dossier, pré-inscription, ou acompte de moins de 10&nbsp;% en attente de la direction.</td>
+</tr>
+<tr>
+<td><b>Essai (dossier)</b></td>
+<td>Seulement une inscription à l’essai.</td>
+</tr>
+<tr>
+<td><b>Inscrit</b></td>
+<td>Au moins une inscription confirmée («&nbsp;Inscrit — groupe à affecter&nbsp;») ou validée.</td>
+</tr>
+<tr>
+<td><b>Ancien apprenant</b></td>
+<td>A terminé son programme&nbsp;: la direction a terminé ses inscriptions avec «&nbsp;Ancien apprenant&nbsp;». Il n’est plus dans aucun groupe. Son solde éventuel reste dû, ses reçus et présences ne changent pas.</td>
+</tr>
+<tr>
+<td><b>Inactif</b></td>
+<td>A arrêté en cours de route (même commande de la direction).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>La clôture de l’année scolaire ou d’un cours en ligne, faite par la direction, termine aussi des inscriptions et peut donner ces deux derniers statuts.</p>
+<p>Un Ancien apprenant ou un Inactif n’apparaît pas dans la liste par défaut (choisissez <span className="ui">Tous les statuts</span>) et sa colonne Groupe affiche «&nbsp;—&nbsp;». Pour une réinscription&nbsp;: sa fiche › <span className="ui">Nouvelle pré-inscription</span>, puis le paiement.</p>
 <h3>Glossaire des mots anglais</h3>
 <p>Quelques mots restent en anglais dans la plateforme. Voici leur sens.</p>
 <div className="scroll">
@@ -1575,6 +1686,10 @@ export default function GuideContent() {
 <tr>
 <td>Rejected</td>
 <td>Refusée</td>
+</tr>
+<tr>
+<td>Ended</td>
+<td>Terminée</td>
 </tr>
 <tr>
 <td>Enrolled · Prospect · Inactive · Alumni</td>
@@ -1663,6 +1778,38 @@ export default function GuideContent() {
 <td>Vous avez essayé d’ajouter à un groupe, depuis la page du groupe, quelqu’un qui en a déjà un. Ouvrez sa fiche › <span className="ui">Modifier l’inscription</span> (<a href="#q10">Q10</a>).</td>
 </tr>
 <tr>
+<td>«&nbsp;Indiquez le motif de la remise.&nbsp;» ou «&nbsp;Précisez le motif de la remise «&nbsp;Autre&nbsp;».&nbsp;»</td>
+<td>Choisissez le <span className="ui">Motif de la remise</span>&nbsp;; avec «&nbsp;Autre&nbsp;», écrivez quelques mots (<a href="#regles-paiement">règles de paiement</a>).</td>
+</tr>
+<tr>
+<td>«&nbsp;La date du paiement ne peut pas être dans le futur…&nbsp;» ou «&nbsp;… antérieure de plus de 7 jours.&nbsp;»</td>
+<td>Mettez la date réelle du paiement, entre aujourd’hui et 7 jours en arrière. Plus ancien&nbsp;: demandez à la direction.</td>
+</tr>
+<tr>
+<td>«&nbsp;Acompte inférieur à 10&nbsp;%&nbsp;: reçu émis, inscription en attente de confirmation par la direction.&nbsp;»</td>
+<td>Ce n’est pas une erreur&nbsp;: le reçu est valable, l’inscription attend (<a href="#regles-paiement">règles de paiement</a>).</td>
+</tr>
+<tr>
+<td>«&nbsp;L’année scolaire de l’inscription (…) ne correspond pas à celle du groupe (…).&nbsp;» ou, dans le CRM, «&nbsp;L’année scolaire de l’inscription doit être celle du groupe…&nbsp;»</td>
+<td>Choisissez un groupe de la même année scolaire que l’inscription, ou créez-le (<a href="#q9">Q9</a>, <a href="#c6">C6</a>).</td>
+</tr>
+<tr>
+<td>«&nbsp;Réaffectez les apprenants avant de changer l’année scolaire du groupe.&nbsp;»</td>
+<td>Le groupe a des apprenants d’une autre année que celle saisie. Gardez son année, ou créez un nouveau groupe (<a href="#q8">Q8</a>).</td>
+</tr>
+<tr>
+<td>«&nbsp;Année scolaire invalide&nbsp;: utilisez le format 2026/2027 (deux années consécutives).&nbsp;»</td>
+<td>Écrivez l’année avec une barre et deux années qui se suivent, par exemple 2026/2027.</td>
+</tr>
+<tr>
+<td>«&nbsp;Renseignez l’année scolaire du groupe.&nbsp;»</td>
+<td>Le groupe n’a pas d’année. Choisissez un autre groupe, ou ouvrez le groupe et renseignez son année (<a href="#q8">Q8</a>).</td>
+</tr>
+<tr>
+<td>L’écran «&nbsp;Connexion impossible&nbsp;»</td>
+<td><span className="ui">Réessayer</span>, puis si besoin <span className="ui">Se déconnecter</span> et reconnectez-vous (<a href="#connexion-impossible">détail</a>).</td>
+</tr>
+<tr>
 <td>«&nbsp;Forbidden&nbsp;»</td>
 <td>Vous n’avez pas le droit de faire cette action. Demandez à la direction.</td>
 </tr>
@@ -1684,7 +1831,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Un apprenant que je viens de créer n’apparaît pas dans la liste</summary>
-<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant reste «&nbsp;Prospect&nbsp;», donc masqué, tant qu’aucune inscription n’est confirmée (par un paiement ou une affectation à un groupe), par exemple après un paiement à 0&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
+<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant reste «&nbsp;Prospect&nbsp;», donc masqué, tant qu’aucune inscription n’est confirmée, par exemple après un paiement à 0 ou un acompte de moins de 10&nbsp;%&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
 </details>
 <details className="faq">
 <summary>Le prospect est resté «&nbsp;Qualifié&nbsp;» alors que j’ai créé son inscription</summary>
@@ -1711,8 +1858,16 @@ export default function GuideContent() {
 <p>La page n’est pas dans votre espace. Voir «&nbsp;Ce que vous ne verrez pas&nbsp;» plus haut.</p>
 </details>
 <details className="faq">
-<summary>La date d’un test ou d’une inscription semble décalée d’un jour</summary>
-<p>Dans les fenêtres de test de niveau et de pré-inscription, la date proposée par défaut peut être celle de la veille entre minuit et 1 h du matin. Vérifiez toujours la date avant d’enregistrer.</p>
+<summary>J’ai encaissé, mais l’apprenant n’est pas «&nbsp;Inscrit&nbsp;» et le prospect reste «&nbsp;Qualifié&nbsp;»</summary>
+<p>Le paiement était inférieur à 10&nbsp;% du prix net&nbsp;: le reçu est émis, mais l’inscription attend la confirmation de la direction. Un paiement suivant qui porte le total à 10&nbsp;% ou plus la confirme (<a href="#regles-paiement">règles de paiement</a>).</p>
+</details>
+<details className="faq">
+<summary>Je ne trouve pas le bon groupe dans «&nbsp;Affecter un groupe&nbsp;»</summary>
+<p>La liste ne propose que les groupes du même programme, du même niveau et de la même année scolaire que l’inscription. Vérifiez l’année du groupe sur sa page&nbsp;; s’il manque un groupe pour cette année, créez-le (<a href="#q8">Q8</a>).</p>
+</details>
+<details className="faq">
+<summary>Un apprenant affiche «&nbsp;—&nbsp;» dans la colonne Groupe</summary>
+<p>Son dossier est Prospect, Ancien apprenant ou Inactif, sans inscription en cours&nbsp;: il n’y a pas de groupe à affecter. Pour l’inscrire, ouvrez sa fiche › <span className="ui">Nouvelle pré-inscription</span>, puis encaissez.</p>
 </details>
 </section>
 <section className="part" id="direction">
@@ -1791,7 +1946,7 @@ export default function GuideContent() {
 <ul className="tight">
 <li><span className="ui">Commencer l&apos;inscription</span>&nbsp;: le prospect reste Qualifié.</li>
 <li><span className="ui">Nouveau reçu</span>&nbsp;: choisir «&nbsp;Inscription CRM…&nbsp;».</li>
-<li>Paiement &gt; 0&nbsp;: inscription confirmée.</li>
+<li>Paiement d’au moins 10&nbsp;% du prix net&nbsp;: inscription confirmée. Moins&nbsp;: reçu émis, la direction confirme.</li>
 <li>Ensuite&nbsp;: <span className="ui">Groupe à affecter</span>.</li>
 </ul>
 </div>
@@ -1801,6 +1956,7 @@ export default function GuideContent() {
 <li><span className="menu">Nouveau reçu</span> › <span className="ui">Nouvel apprenant</span>.</li>
 <li>Regarder «&nbsp;Dossiers ressemblants&nbsp;».</li>
 <li>Montant 0 = pas de reçu, pas d’inscription.</li>
+<li>Remise&nbsp;: toujours un motif. Date&nbsp;: pas dans le futur, 7 jours en arrière au plus.</li>
 <li>Un reçu ne se modifie pas&nbsp;: direction.</li>
 </ul>
 </div>
@@ -1815,7 +1971,8 @@ export default function GuideContent() {
 <div className="card mini">
 <h4>Groupes et enseignants</h4>
 <ul className="tight">
-<li><span className="ui">Nouveau groupe</span>&nbsp;: l’enseignant est obligatoire.</li>
+<li><span className="ui">Nouveau groupe</span>&nbsp;: l’enseignant et l’année scolaire sont obligatoires.</li>
+<li>Un groupe ne reçoit que les inscriptions de son année.</li>
 <li><span className="ui">Jours</span> alimente l’emploi du temps.</li>
 <li>Nouvel enseignant&nbsp;: direction.</li>
 </ul>
@@ -1840,6 +1997,7 @@ export default function GuideContent() {
 <h4>En cas de doute</h4>
 <ul className="tight">
 <li>Message «&nbsp;Impossible de confirmer…&nbsp;»&nbsp;: relancer sans rien changer.</li>
+<li>Écran «&nbsp;Connexion impossible&nbsp;»&nbsp;: <span className="ui">Réessayer</span>, sinon <span className="ui">Se déconnecter</span>.</li>
 <li>Paiement douteux&nbsp;: vérifier les reçus avant de ressaisir.</li>
 <li>Page qui renvoie à l’accueil&nbsp;: hors de votre espace.</li>
 <li>Sinon&nbsp;: contacter la direction.</li>
@@ -1847,7 +2005,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 2.0, 16 octobre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.1, 30 octobre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );
