@@ -114,7 +114,7 @@ Plan [SCG-r1](../architecture/plans/speed-as-the-centre-grows.md) ([ADR-013](../
 - **Policies:** role helpers are evaluated once per statement, and the per-row teacher check runs only for teachers.
 - **Students list:** `search_students_page` prices only the page, or the filtered candidates.
 - **Activity log:** paged by keyset through `list_activity_log` (50 per page, filters in the database, `before`/`after` on expand).
-- **Reports:** read `report_*` totals with Casablanca days from `business_date()`.
+- **Reports:** read `report_*` totals with centre days from `business_date()` (one centre clock since Batch H, [ADR-014](../architecture/decisions/ADR-014-one-centre-clock.md)).
 - **Pages:** the group page and teacher portal read only their own rows.
 - **Full reads:** entity full reads use keyset (`src/lib/keysetRead.mjs`) instead of offset plus count.
 - **Cache:** every finance command and learner save refreshes dependent caches through `src/lib/cacheInvalidation.mjs`.
@@ -156,7 +156,7 @@ This document does not design SaaS/multi-tenancy or management agents.
 
 ## Adopted scheduled operational display contract
 
-The deployed post-Outcome-3 migration 109 establishes server/database Casablanca civil date/time fields as the adopted scheduled operational display contract. Scheduled CRM reads project these values in PostgreSQL; browser displays consume them directly without independently reinterpreting the appointment through browser timezone data. Raw UTC instants remain the ordering/write/concurrency identity. Scheduling and authorization semantics remain unchanged. [CURRENT_STATE](CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout) owns current release status and links the dated compatibility evidence; completed O3-r2 remains the 107–108 architecture record.
+The deployed post-Outcome-3 migration 109 establishes server/database Casablanca civil date/time fields as the adopted scheduled operational display contract (Batch H computes them with the one centre clock, [ADR-014](../architecture/decisions/ADR-014-one-centre-clock.md), instead of the zone name). Scheduled CRM reads project these values in PostgreSQL; browser displays consume them directly without independently reinterpreting the appointment through browser timezone data. Raw UTC instants remain the ordering/write/concurrency identity. Scheduling and authorization semantics remain unchanged. [CURRENT_STATE](CURRENT_STATE.md#post-outcome-3-receptionist-ux-correction-production-closeout) owns current release status and links the dated compatibility evidence; completed O3-r2 remains the 107–108 architecture record.
 
 ## Operational presentation foundation
 

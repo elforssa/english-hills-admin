@@ -79,8 +79,10 @@ select pg_temp.open_to_api('e2');
 -- ===========================================================================
 select pg_temp.ok(pg_temp.counter() >= coalesce((select max((substring(receipt_number from '^EH-[0-9]{4}-([0-9]+)$'))::bigint)
   from public.receipts), 0), 'the counter is never behind the largest issued number');
-select pg_temp.ok(pg_get_functiondef('public.business_date(timestamptz)'::regprocedure) ~ 'Africa/Casablanca'
-  and pg_get_functiondef('public.business_date(timestamptz)'::regprocedure) !~ '\+0[01]', 'business date by zone name, never a fixed offset');
+-- Batch H (H7, D-TZ = A): the business date reads the one centre clock, never a zone name.
+select pg_temp.ok(pg_get_functiondef('public.business_date(timestamptz)'::regprocedure) ~ 'public\.centre_utc_offset\(\)'
+  and pg_get_functiondef('public.business_date(timestamptz)'::regprocedure) !~ 'Africa/Casablanca', 'business date by the centre clock');
+select pg_temp.ok(public.centre_utc_offset() = interval '0', 'the centre clock is UTC+0');
 select pg_temp.ok(not exists(select 1 from unnest(array['anon','authenticated','service_role']) r,
   unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE']) p where has_table_privilege(r, 'public.receipt_number_counters', p)),
   'no API privilege on the counter');
@@ -161,27 +163,28 @@ do $$ declare v uuid := (select (v->>'receipt_id')::uuid from e2 where k = 'firs
   delete from public.receipts where id = h;
   set local english_hills.receipt_test_cleanup = 'off';
 end $$;
--- 23:30 UTC on 31 December: the real business_date body with its zone swapped for a
--- fixed offset (no dependence on the installed tzdata; Morocco is UTC+0 since
--- 2026-09-20, so with tzdata 2026c Africa/Casablanca itself gives 2026-12-31).
-do $$ declare body text := pg_get_functiondef('public.business_date(timestamptz)'::regprocedure); r jsonb; begin
-  perform pg_temp.ok(body ~ '''Africa/Casablanca''', 'business_date names the zone');
-  execute replace(replace(body, 'public.business_date(', 'pg_temp.business_date_fixed('), '''Africa/Casablanca''', '''Etc/GMT-1''');
-  perform pg_temp.ok(pg_temp.business_date_fixed(timestamptz '2026-12-31 23:30:00+00') = date '2027-01-01', 'UTC+1: 23:30 UTC on 31 December is 2027-01-01');
-  execute replace(replace(body, 'public.business_date(', 'pg_temp.business_date_utc('), '''Africa/Casablanca''', '''Etc/GMT''');
-  perform pg_temp.ok(pg_temp.business_date_utc(timestamptz '2026-12-31 23:30:00+00') = date '2026-12-31', 'UTC+0: still 2026-12-31');
-  -- The receipt number takes its year from that date: with the UTC+1 body in place, a
-  -- receipt issued at 23:30 UTC on 31 December would be EH-2027.
-  execute replace(body, '(p_at at time zone ''Africa/Casablanca'')', '(timestamptz ''2026-12-31 23:30:00+00'' at time zone ''Etc/GMT-1'')');
+-- 23:30 UTC on 31 December is still 31 December on the centre clock (UTC+0), whatever
+-- the server's time-zone data says about Casablanca; the one setting moves it.
+select pg_temp.ok(public.business_date(timestamptz '2026-12-31 23:30:00+00') = date '2026-12-31', 'UTC+0: 23:30 UTC on 31 December is 2026-12-31');
+select pg_temp.ok(public.business_date(timestamptz '2027-01-01 00:00:00+00') = date '2027-01-01', 'midnight UTC starts the next day');
+do $$ declare clock text := pg_get_functiondef('public.centre_utc_offset()'::regprocedure);
+  body text := pg_get_functiondef('public.business_date(timestamptz)'::regprocedure); r jsonb; begin
+  -- Were the setting UTC+1, the same instant would be 2027-01-01 (interval sign: east positive).
+  execute replace(clock, 'interval ''0 hours''', 'interval ''1 hour''');
+  perform pg_temp.ok(public.business_date(timestamptz '2026-12-31 23:30:00+00') = date '2027-01-01', 'the one setting moves the business date');
+  execute clock;
+  -- The receipt number takes its year from the business date of issue: issued at 23:30
+  -- UTC on 31 December, the receipt is EH-2026.
+  execute replace(body, '(p_at at time zone public.centre_utc_offset())', '(timestamptz ''2026-12-31 23:30:00+00'' at time zone public.centre_utc_offset())');
   r := pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(104), 'session_type', 'Adults', 'school_year', '2026/2027',
     'gross_amount', 100, 'payment_amount', 10, 'payment_date', '2026-12-31'));
   perform pg_temp.owner();
-  perform pg_temp.ok(pg_temp.num((r->>'receipt_id')::uuid) like 'EH-2027-%', 'issue year at 23:30 UTC on 31 December (UTC+1): ' || pg_temp.num((r->>'receipt_id')::uuid));
+  perform pg_temp.ok(pg_temp.num((r->>'receipt_id')::uuid) like 'EH-2026-%', 'issue year at 23:30 UTC on 31 December (UTC+0): ' || pg_temp.num((r->>'receipt_id')::uuid));
   raise exception 'rollback' using errcode = 'P0099';
 exception when sqlstate 'P0099' then null;
 end $$;
 select pg_temp.owner();
-select pg_temp.ok(public.business_date() = (now() at time zone 'Africa/Casablanca')::date, 'business_date restored after the fixed-offset check');
+select pg_temp.ok(public.business_date() = (now() at time zone 'UTC')::date, 'business_date restored after the fixed-instant check');
 -- Five digits at least, never truncated; the year comes from the business date of issue.
 do $$ declare r jsonb; begin
   update public.receipt_number_counters set last_value = 99999 where series = 'EH';
@@ -193,7 +196,7 @@ do $$ declare r jsonb; begin
 exception when sqlstate 'P0099' then null;
 end $$;
 select pg_temp.owner();
-select pg_temp.ok(public.business_date() = (now() at time zone 'Africa/Casablanca')::date, 'business_date restored');
+select pg_temp.ok(public.business_date() = (now() at time zone 'UTC')::date, 'business_date restored');
 -- A receipt changed under a void is a PT409 conflict with a stable hint (not P0001).
 select pg_temp.ok(prosrc ~ 'Le reçu a changé\. Rechargez la page\.'' using errcode=''PT409'', hint=''finance\.receipt_changed''', proname || ': changed receipt is PT409')
 from pg_proc where proname in ('void_financial_receipt', 'delete_mistaken_receipt') and pronamespace = 'public'::regnamespace;
@@ -450,10 +453,17 @@ insert into e2 select 'no_discount', pg_temp.pay(2, jsonb_build_object('student_
 select pg_temp.owner();
 select pg_temp.ok(not exists(select 1 from public.charge_discount_reasons where charge_id = (select (v->>'charge_id')::uuid from e2 where k = 'no_discount')),
   'no reason without a discount');
--- Q3: reception at most 10 %; admin and director no cap.
-select pg_temp.fails(pg_temp.new_charge(3, 122, '{"discount_amount":100.01,"discount_reason_code":"sibling"}'), '22023',
-  'Remise supérieure à 10 % : demandez au directeur.');
+-- Batch H (H1): reception may give any discount with a reason (no 10 % cap); the
+-- reason stays mandatory and the director's review list shows it.
+select pg_temp.fails(pg_temp.new_charge(3, 122, '{"discount_amount":500}'), '22023', 'Indiquez le motif de la remise.');
 select pg_temp.owner();
+insert into e2 select 'reception_half', pg_temp.pay(3, jsonb_build_object('student_id', pg_temp.id(122), 'session_type', 'Adults',
+  'school_year', '2026/2027', 'gross_amount', 1000, 'discount_amount', 500, 'discount_reason_code', 'sibling', 'payment_amount', 200));
+select pg_temp.owner();
+select pg_temp.ok(exists(select 1 from jsonb_array_elements(pg_temp.queue()->'discounts') x
+  where x->>'charge_id' = (select v->>'charge_id' from e2 where k = 'reception_half') and (x->>'discount_percent')::numeric = 50.0),
+  'a 50 % reception discount is listed for the director');
+select pg_temp.ok(not exists(select 1 from pg_proc where proname = 'create_charge_payment_financial' and prosrc ~ 'Remise supérieure'), 'no cap left');
 select pg_temp.pay(3, jsonb_build_object('student_id', pg_temp.id(122), 'session_type', 'Adults', 'school_year', '2026/2027',
   'gross_amount', 1000, 'discount_amount', 100, 'discount_reason_code', 'sibling', 'payment_amount', 200));
 select pg_temp.pay(i, jsonb_build_object('student_id', pg_temp.id(122 + i), 'session_type', 'Adults', 'school_year', '2026/2027',
@@ -489,7 +499,7 @@ update e2 set v = v || jsonb_build_object('result', pg_temp.pay(3, v->'payload')
 select pg_temp.owner();
 do $$ declare r jsonb; begin
   create or replace function public.business_date(p_at timestamptz default now()) returns date language sql stable
-    set search_path = pg_catalog, pg_temp as $f$ select (p_at at time zone 'Africa/Casablanca')::date + 20 $f$;
+    set search_path = pg_catalog, pg_temp as $f$ select (p_at at time zone public.centre_utc_offset())::date + 20 $f$;
   r := pg_temp.pay(3, (select v->'payload' from e2 where k = 'windowed'));
   perform pg_temp.owner();
   perform pg_temp.ok((r->>'replayed')::boolean and r->>'receipt_id' = (select v->'result'->>'receipt_id' from e2 where k = 'windowed'),
@@ -555,10 +565,10 @@ do $$ declare m date := date_trunc('month', public.business_date())::date; befor
   -- Created one second before the business month starts (business_date of created_at is the previous month).
   insert into public.charges(id, student_id, session_type, school_year, service_description, gross_amount, created_by, created_at)
   values (pg_temp.id(962), pg_temp.id(136), 'Other', '2026/2027', 'Autre · x', 900, pg_temp.id(2),
-    (m::timestamp at time zone 'Africa/Casablanca') - interval '1 second');
+    (m::timestamp at time zone public.centre_utc_offset()) - interval '1 second');
   perform pg_temp.act(2); after := public.get_monthly_finance_summary(m); perform pg_temp.owner();
   perform pg_temp.ok(after->'total' = before->'total', 'a charge from the previous business month is not counted');
-  update public.charges set created_at = (m::timestamp at time zone 'Africa/Casablanca') where id = pg_temp.id(962);
+  update public.charges set created_at = (m::timestamp at time zone public.centre_utc_offset()) where id = pg_temp.id(962);
   perform pg_temp.act(2); after := public.get_monthly_finance_summary(m); perform pg_temp.owner();
   perform pg_temp.ok((after->>'total')::numeric = (before->>'total')::numeric + 900, 'a charge at the business month start is counted');
   perform pg_temp.act(2);

@@ -1,5 +1,6 @@
 'use client';
 
+import { centreDate } from '@/lib/centreClock.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { getMyTeacher } from '@/lib/teacher-directory';
 import { entities } from '@/lib/entities';
@@ -30,7 +31,7 @@ async function readByIds(entity, column, ids, orderBy) {
 }
 const assessmentsOfGroups = groups => readByIds(entities.Assessment, 'group_id', groups.map(g => g.id), '-created_date');
 
-const todayInCasablanca = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Africa/Casablanca' });
+const todayInCasablanca = () => centreDate();
 
 const NOTIF_TYPE_LABELS = {
   absence: 'Absence', payment_reminder: 'Rappel paiement', report_card: 'Bulletin',

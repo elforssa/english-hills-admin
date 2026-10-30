@@ -9,11 +9,11 @@ begin
  for stamp in select unnest(array['2026-10-07 09:35Z'::timestamptz,'2026-02-15 02:35Z'::timestamptz,'2026-03-22 02:35Z'::timestamptz]) loop
   insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key)
   values(l,'center_visit',stamp,'a3000000-0000-0000-0000-000000000001','manual','ux-display:'||stamp) returning id into t;
-  day:=(stamp at time zone 'Africa/Casablanca')::date;
+  day:=(stamp at time zone public.centre_utc_offset())::date;
   bucket:=case when stamp<now() then 'overdue' when stamp<(select d1 from crm_security.work_boundaries(now())) then 'today'
     when stamp<(select d2 from crm_security.work_boundaries(now())) then 'tomorrow' else 'upcoming' end;
   civil:=crm_security.scheduled_civil(stamp);
-  perform pg_temp.ok(civil->>'local_date'=day::text and civil->>'local_time'=((stamp at time zone 'Africa/Casablanca')::time)::text,'PostgreSQL business oracle');
+  perform pg_temp.ok(civil->>'local_date'=day::text and civil->>'local_time'=((stamp at time zone public.centre_utc_offset())::time)::text,'PostgreSQL business oracle');
   tasks:=public.crm_list_open_tasks(l,null,100,0);
   select x into item from jsonb_array_elements(tasks)x where x->>'id'=t::text;
   perform pg_temp.ok(item @> civil and (item->>'due_at')::timestamptz=stamp,'open tasks civil fields, raw UTC preserved');

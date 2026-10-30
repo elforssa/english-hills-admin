@@ -269,10 +269,10 @@ Plan: [enrollment and group consistency](../architecture/plans/enrollment-group-
 - **Release R4–R5 — APPROVED and DONE (2026-10-26).** Channel: chat, relayed by the coordinating session. 13:11 Asia/Shanghai: prepare R4, read-only dry run only. 13:33 Asia/Shanghai, owner's words verbatim: "approve cleanup: C1 43 (12 links), C1b 1, C2 7, C3 98, C4 2, C5 10 then M2 if C6 matches". A fresh manual backup preceded the step. All stages ran with the approved counts 05:36–05:38 UTC, C6 matched (Enrolled + Trial 112, "Groupe à affecter" 28), and migration 121 was applied 05:42:45 UTC ([release evidence](../architecture/evidence/egc-r2-r4-r5-production-2026-10-26.md)). R6 followed (below).
 - **Release R6 — APPROVED and DONE (2026-10-26).** Owner's words, verbatim, 14:32 Asia/Shanghai, relayed by the coordinating session: "approve R6" (docs-only closeout). Batch D is **done**: membership derives from enrollments in every reader, and since the clean-up no learner falls under the temporary pre-M2 exception of implementation decision 1.
 - **Open follow-ups (each a separate outcome needing its own approval):**
-  1. Make the group school year editable, then restore a placement year check (decision 5) and default an enrollment's year from the chosen group.
+  1. Make the group school year editable, then restore a placement year check (decision 5) and default an enrollment's year from the chosen group. *(Batch H, H5: implemented on a branch, not merged or deployed.)*
   2. Keep past rosters when an online course closes (plan implementation note 2) and refuse placement into a closed online course (review DB-N3).
-  3. The Students list shows « Groupe à affecter » in the Groupe column for « Ancien apprenant » rows; show « — » instead.
-  4. Simplify the application's `groupMemberIds` to enrollment-only (allowed by D-8 after C6).
+  3. The Students list shows « Groupe à affecter » in the Groupe column for « Ancien apprenant » rows; show « — » instead. *(Batch H, H4: implemented on a branch, not merged or deployed.)*
+  4. Simplify the application's `groupMemberIds` to enrollment-only (allowed by D-8 after C6). *(Batch H, H8: implemented on a branch, not merged or deployed.)*
   5. No teacher is assigned to any group yet; assigning them is required before teacher invitations (Batch F).
 
 ## Payment corrections and receipts (Batch E) — APPROVED (2026-10-24)
@@ -313,12 +313,22 @@ Plan: [speed as the centre grows](../architecture/plans/speed-as-the-centre-grow
 - **Released 2026-10-29:** migration 124 applied 01:40:58 UTC, PR #172 merged as `3e02efa…` and deployed 01:42:38 UTC ([release evidence](../architecture/evidence/batch-g-r0-r3-production-2026-10-29.md)).
 - **Open:** `pg_stat_statements` after one reception day; D4 = A (other client-side Casablanca dates) stays a separate follow-up; the restore needs its own approval. Owner check suggested: PostgreSQL places Africa/Casablanca at +01:00 while the owner uses UTC+0, so report day boundaries follow PostgreSQL's time-zone data.
 
+## Audit follow-ups (Batch H) — AFU-r1 APPROVED (2026-10-29)
+
+Plan: [audit follow-ups](../architecture/plans/audit-follow-ups.md#approval-record), revision AFU-r1 at head `d02a305` (Tier 3). Channel: chat with Claude, relayed by the coordinating session.
+
+- **Earlier owner decisions it carries out:** 2026-10-28, verbatim: "Remove the cap for reception but not now until we finish with everything" (H1); 2026-10-29 10:41 Asia/Shanghai, verbatim: "do all these fixes in one go … for the square (a pill) so all matches and consistent design … only inscrit" (H1–H8 in one batch, programme pill, « Inscrit »).
+- **Plan approval:** 2026-10-29 about 11:10 Asia/Shanghai, verbatim: "approve H plan, D-TZ A, D-TZ-2 A, D-H5a A, D-H5b A, D-H5c A." D-TZ = A: one centre clock at UTC+0 ([ADR-014](../architecture/decisions/ADR-014-one-centre-clock.md)); D-TZ-2 = A: stored CRM task instants are kept; D-H5a = A: a new group's year is the school year of today (1 September to 31 August); D-H5b = A: a group without a valid year refuses placement and a populated group's year is locked; D-H5c = A: the year check is a trigger on every path.
+- **H5 Production dry run:** approved in the same message and run read-only on 2026-10-29 about 03:11 UTC: 8 groups, all with a valid year, no live enrollment of another year or without a year ([record](../architecture/plans/audit-follow-ups.md#h5-dry-run-record)). Nothing to correct.
+- **Delivers** (on branch `feat/audit-follow-ups`, migration 125; not merged or deployed): Batch D follow-ups 1 (editable group year, placement year check, year from the group), 3 (« — » for Ancien apprenant) and 4 (enrollment-only `groupMemberIds`); Batch G D4 = A (client-side Casablanca dates); the deferred item "Browser Casablanca timezone reliability".
+- **Not approved by this decision:** the merge, the migration, the release and its steps; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
 
 - **D6** — universal ordinary communication follow-up consolidation across every task-creation path.
-- Browser Casablanca timezone reliability (`casablancaInstant` uses browser tz data).
+- ~~Browser Casablanca timezone reliability (`casablancaInstant` uses browser tz data).~~ Addressed by Batch H (H7, [ADR-014](../architecture/decisions/ADR-014-one-centre-clock.md)); on a branch, not merged or deployed.
 - Director correction tool for wrongly linked learners.
 - Nouvelle pré-inscription duplicate-risk behavior (no D8).
 - Possible sidebar icon-rail / intermediate sidebar, as a future UI Foundation outcome.

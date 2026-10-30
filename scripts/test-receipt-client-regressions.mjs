@@ -157,23 +157,22 @@ assert.match(receiptForm, /request_email/);
 assert.doesNotMatch(receiptForm, /\[charges, form\.charge_id, initialData\.charge_id\]/);
 
 const finance = await readFile(new URL('../src/lib/receiptFinance.js', import.meta.url), 'utf8');
-const { receiptAmounts } = await import(`data:text/javascript,${encodeURIComponent(finance)}`);
+// The data: URL module cannot resolve a relative import; point it at the file.
+const financeModule = finance.replace("from './centreClock.mjs'", `from '${new URL('../src/lib/centreClock.mjs', import.meta.url)}'`);
+const { receiptAmounts } = await import(`data:text/javascript,${encodeURIComponent(financeModule)}`);
 assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00Z' }).payment, 125,
   'a voided receipt must still display its original issued amount');
 
 // Batch E, release E-1 (PCR-r2 P2.6, P4, P5, P6).
 {
-  const { BUSINESS_TIME_ZONE, businessMonthStart, financeExportRows, localBusinessDate, receiptNumberLabel, receiptStatus } = await import(`data:text/javascript,${encodeURIComponent(finance)}`);
-  // Day boundaries: the zone name, never a fixed offset; boundaries proven with fixed-offset zones
-  // so the test does not depend on the installed tzdata (Morocco is UTC+0 since 2026-09-20).
-  assert.equal(BUSINESS_TIME_ZONE, 'Africa/Casablanca');
-  assert.doesNotMatch(finance, /\+0[01]:00/);
+  const { businessMonthStart, financeExportRows, localBusinessDate, receiptNumberLabel, receiptStatus } = await import(`data:text/javascript,${encodeURIComponent(financeModule)}`);
+  // Day boundaries: the centre clock (UTC+0, plan AFU-r1 D-TZ = A), never a zone table.
+  assert.doesNotMatch(finance, /Africa\/Casablanca/);
   const lateNewYearsEve = new Date('2026-12-31T23:30:00Z');
-  assert.equal(localBusinessDate(lateNewYearsEve, 'Etc/GMT-1'), '2027-01-01', 'UTC+1: already the next day');
-  assert.equal(localBusinessDate(lateNewYearsEve, 'Etc/GMT'), '2026-12-31', 'UTC+0: still the same day');
-  assert.equal(localBusinessDate(new Date('2026-10-01T00:30:00Z'), 'Etc/GMT+1'), '2026-09-30', 'UTC-1: still the previous day');
-  assert.equal(businessMonthStart(new Date('2026-10-31T23:30:00Z'), 'Etc/GMT-1'), '2026-11-01');
-  assert.equal(businessMonthStart(new Date('2026-10-31T23:30:00Z'), 'Etc/GMT'), '2026-10-01');
+  assert.equal(localBusinessDate(lateNewYearsEve), '2026-12-31', '23:30 on 31 December is still 31 December');
+  assert.equal(localBusinessDate(new Date('2027-01-01T00:00:00Z')), '2027-01-01');
+  assert.equal(businessMonthStart(new Date('2026-10-31T23:30:00Z')), '2026-10-01');
+  assert.equal(businessMonthStart(new Date('2026-11-01T00:00:00Z')), '2026-11-01');
 
   // "En retard" compares with the business date it is given, not the UTC date.
   const due = { due_date: '2026-10-26', net_amount_snapshot: 100, paid_before_snapshot: 0, montant_paye: 10, balance_after_snapshot: 90 };
@@ -319,13 +318,12 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(guard({ discount: 50, reasonCode: 'other', reasonText: ' x ' }), 'Précisez le motif de la remise « Autre ».');
   assert.equal(guard({ discount: 50, reasonCode: 'other', reasonText: 'x'.repeat(201) }), 'Le motif de la remise ne doit pas dépasser 200 caractères.');
   assert.equal(guard({ discount: 50, reasonCode: 'sibling', newCharge: false }), null, 'an existing charge needs no reason');
+  // Batch H (H1): reception may give any discount with a reason.
   assert.equal(guard({ role: 'receptionist', discount: 100, reasonCode: 'sibling' }), null, 'reception: 10 % is allowed');
-  assert.equal(guard({ role: 'receptionist', discount: 100.01, reasonCode: 'sibling' }), 'Remise supérieure à 10 % : demandez au directeur.');
+  assert.equal(guard({ role: 'receptionist', discount: 500, reasonCode: 'sibling' }), null, 'reception: 50 % is allowed');
+  assert.equal(guard({ role: 'receptionist', discount: 500 }), 'Indiquez le motif de la remise.', 'reception: the reason stays mandatory');
   assert.equal(guard({ discount: 778, reasonCode: 'director_approval' }), null, 'admin: no cap');
   assert.equal(guard({ paymentDate: '2026-10-27' }), 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 26/10/2026).');
-  // Integer centimes: 0.1 + 0.2 style float noise never decides the 10 % cap.
-  assert.equal(guard({ role: 'receptionist', gross: 0.3, discount: 0.03, reasonCode: 'sibling' }), null, '3 centimes of 30 is exactly 10 %');
-  assert.equal(guard({ role: 'receptionist', gross: 1000.01, discount: 100, reasonCode: 'sibling' }), null);
   // An old browser (Morocco as UTC+1) proposes tomorrow between 23:00 and 24:00: the server's
   // own refusal reaches the user word for word.
   assert.equal(paymentErrorMessage({ code: '22023', message: 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 26/10/2026).' }),
@@ -361,7 +359,10 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
     'Le motif de la remise ne doit pas dépasser 200 caractères.', 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ']) {
     assert.ok(migration122.includes(message) && corrections.includes(message), message);
   }
-  assert.ok(migration122.includes('Remise supérieure à 10 %% : demandez au directeur.'), 'RAISE escapes the percent sign');
+  const migration125 = await readFile(new URL('../supabase/migrations/125_audit_follow_ups.sql', import.meta.url), 'utf8');
+  assert.doesNotMatch(migration125, /Remise supérieure/, 'H1: no reception discount cap');
+  assert.doesNotMatch(corrections, /Remise supérieure|RECEPTION_DISCOUNT_CAP/, 'H1: no client cap');
+  assert.doesNotMatch(receiptForm, /Au-delà de 10 % du prix/, 'H1: no cap hint');
   assert.doesNotMatch(migration122, /40001/);
   assert.match(receiptForm, /deskGuardError\(\{ role, newCharge: !form\.charge_id/);
   assert.match(receiptForm, /discount_reason_code: needsDiscountReason \? form\.discount_reason_code : ''/);

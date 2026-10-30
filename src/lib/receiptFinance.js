@@ -1,3 +1,5 @@
+import { centreDate, centreMonthStart } from './centreClock.mjs';
+
 export const PAYMENT_METHODS = ['Espèces', 'Carte bancaire', 'Virement', 'Chèque'];
 
 export function money(value) {
@@ -45,18 +47,14 @@ export function receiptStatus(receipt, today = localBusinessDate()) {
   return paidBefore + payment > 0 ? 'Acompte versé' : 'En attente';
 }
 
-// The centre's business day follows the zone name, never a fixed offset
-// (Morocco has been UTC+0 since 2026-09-20). Tests pass fixed-offset zones.
-export const BUSINESS_TIME_ZONE = 'Africa/Casablanca';
-
-export function localBusinessDate(now = new Date(), timeZone = BUSINESS_TIME_ZONE) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(now);
+// The centre's business day comes from the centre clock (plan AFU-r1, D-TZ = A),
+// never from a time-zone table; it matches public.business_date().
+export function localBusinessDate(now = new Date()) {
+  return centreDate(now);
 }
 
-export function businessMonthStart(now = new Date(), timeZone = BUSINESS_TIME_ZONE) {
-  return `${localBusinessDate(now, timeZone).slice(0, 7)}-01`;
+export function businessMonthStart(now = new Date()) {
+  return centreMonthStart(now);
 }
 
 // Export order: main EH-YYYY- series, then EH-HIST-, then other numbers, then

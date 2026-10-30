@@ -41,10 +41,10 @@ $$;
 create function pg_temp.opening(policy uuid,target timestamptz) returns timestamptz language plpgsql as $$
 declare p public.crm_followup_policies%rowtype; d date; w jsonb; opens timestamptz; closes timestamptz; begin
  select * into strict p from public.crm_followup_policies where id=policy;
- d:=(target at time zone p.timezone)::date;
+ d:=(target at time zone public.centre_utc_offset())::date;
  for i in 0..14 loop
   for w in select value from jsonb_array_elements(p.weekly_hours->extract(isodow from d)::integer::text) loop
-   opens:=(d+(w->>0)::time) at time zone p.timezone; closes:=(d+(w->>1)::time) at time zone p.timezone;
+   opens:=(d+(w->>0)::time) at time zone public.centre_utc_offset(); closes:=(d+(w->>1)::time) at time zone public.centre_utc_offset();
    if greatest(target,opens)<closes then return greatest(target,opens); end if;
   end loop; d:=d+1;
  end loop;
@@ -61,7 +61,7 @@ insert into a1_policy select (public.crm_create_followup_policy(gen_random_uuid(
 -- An agreed callback must sit inside a calling window: 16:00 on the given day when
 -- open, otherwise the next opening (oracle above, independent of next_window).
 create function pg_temp.slot(days integer) returns timestamptz language sql as $$
- select pg_temp.opening((select id from a1_policy),(((now() at time zone 'Africa/Casablanca')::date+days)::timestamp+time '16:00') at time zone 'Africa/Casablanca')
+ select pg_temp.opening((select id from a1_policy),(((now() at time zone public.centre_utc_offset())::date+days)::timestamp+time '16:00') at time zone public.centre_utc_offset())
 $$;
 select pg_temp.actor(3);
 
@@ -116,14 +116,14 @@ end $$;
 \echo PASS routine structured conversations need no prose; standalone note, Other, cancel and reopen still require explanation
 
 -- Bounded reminder presets resolve on the server through the lead's Casablanca policy.
-do $$ declare l uuid; r jsonb; req uuid; preset text; due timestamptz; expected timestamptz; today date:=(now() at time zone 'Africa/Casablanca')::date; policy uuid:=(select id from a1_policy); task public.crm_tasks%rowtype; begin
+do $$ declare l uuid; r jsonb; req uuid; preset text; due timestamptz; expected timestamptz; today date:=(now() at time zone public.centre_utc_offset())::date; policy uuid:=(select id from a1_policy); task public.crm_tasks%rowtype; begin
  l:=pg_temp.intake();
  foreach preset in array array['in_2_hours','tomorrow','in_2_days','in_3_days','next_week'] loop
   req:=gen_random_uuid();
   r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','whatsapp_followup','due_preset',preset,'schedule_kind','reminder')),req);
   task:=pg_temp.created(req);
   expected:=pg_temp.opening(policy,case preset when 'in_2_hours' then now()+interval '2 hours'
-   else (today+case preset when 'tomorrow' then 1 when 'in_2_days' then 2 when 'in_3_days' then 3 else 7 end)::timestamp at time zone 'Africa/Casablanca' end);
+   else (today+case preset when 'tomorrow' then 1 when 'in_2_days' then 2 when 'in_3_days' then 3 else 7 end)::timestamp at time zone public.centre_utc_offset() end);
   perform pg_temp.ok(task.due_at=expected,'preset '||preset||' resolves to configured Casablanca opening');
   perform pg_temp.ok(task.schedule_kind='reminder' and task.followup_reason is null,'preset '||preset||' is an internal reminder');
  end loop;
@@ -144,13 +144,13 @@ do $$ declare l uuid; r jsonb; req uuid; preset text; due timestamptz; expected 
  perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',now()+interval '1 day','followup_reason','busy')))));
  perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',now()-interval '1 minute')))));
  -- Explicit-date compatibility: legacy payloads keep NULL kind and calling-window adjustment.
- due:=pg_temp.opening(policy,((today+8)::timestamp+time '12:45') at time zone 'Africa/Casablanca');
+ due:=pg_temp.opening(policy,((today+8)::timestamp+time '12:45') at time zone public.centre_utc_offset());
  req:=gen_random_uuid();
- r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',((today+8)::timestamp+time '12:45') at time zone 'Africa/Casablanca')),req);
+ r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',((today+8)::timestamp+time '12:45') at time zone public.centre_utc_offset())),req);
  task:=pg_temp.created(req);
  perform pg_temp.ok(task.due_at=due and task.schedule_kind is null and task.followup_reason is null,'legacy explicit callback keeps window adjustment and NULL kind');
- r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',((today+9)::timestamp+time '11:00') at time zone 'Africa/Casablanca')));
- perform pg_temp.ok((select schedule_kind='appointment' and due_at=((today+9)::timestamp+time '11:00') at time zone 'Africa/Casablanca' from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open'),'explicit agreed appointment keeps its exact agreed time');
+ r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',((today+9)::timestamp+time '11:00') at time zone public.centre_utc_offset())));
+ perform pg_temp.ok((select schedule_kind='appointment' and due_at=((today+9)::timestamp+time '11:00') at time zone public.centre_utc_offset() from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open'),'explicit agreed appointment keeps its exact agreed time');
  -- Rescheduling keeps the identity, kind and reason; presets are not a reschedule input.
  select * into task from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open';
  perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task_id',task.id,'task',jsonb_build_object('due_preset','tomorrow')))));
@@ -266,15 +266,15 @@ end $$;
 \echo PASS one active generic follow-up across callback and WhatsApp; unrelated tasks preserved
 
 -- Agreed callbacks keep their exact time or are rejected; reminders still resolve.
-do $$ declare l uuid; t public.crm_tasks%rowtype; req uuid; today date:=(now() at time zone 'Africa/Casablanca')::date; lunch timestamptz; policy uuid:=(select id from a1_policy); begin
+do $$ declare l uuid; t public.crm_tasks%rowtype; req uuid; today date:=(now() at time zone public.centre_utc_offset())::date; lunch timestamptz; policy uuid:=(select id from a1_policy); begin
  l:=pg_temp.intake();
  -- 13:00 on the next open weekday is inside the 12:30-15:20 closure (Monday opens at 15:00).
- lunch:=(select ((today+d)::timestamp+time '13:00') at time zone 'Africa/Casablanca' from generate_series(1,8) d where extract(isodow from today+d) between 1 and 6 order by d limit 1);
+ lunch:=(select ((today+d)::timestamp+time '13:00') at time zone public.centre_utc_offset() from generate_series(1,8) d where extract(isodow from today+d) between 1 and 6 order by d limit 1);
  req:=gen_random_uuid();
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','callback','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(2),'schedule_kind','appointment')),req);
  perform pg_temp.ok((select due_at=pg_temp.slot(2) and schedule_kind='appointment' from public.crm_tasks where lead_id=l and status='open' and task_type='callback'),'agreed callback inside the window preserved exactly');
  perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('decision','callback','next_task',jsonb_build_object('task_type','callback','due_at',lunch,'schedule_kind','appointment')))));
- perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',((today+3)::timestamp+time '23:00') at time zone 'Africa/Casablanca','schedule_kind','appointment')))));
+ perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',((today+3)::timestamp+time '23:00') at time zone public.centre_utc_offset(),'schedule_kind','appointment')))));
  perform pg_temp.ok((select count(*)=1 and min(due_at)=pg_temp.slot(2) from public.crm_tasks where lead_id=l and status='open' and task_type='callback'),'rejected agreed time changes nothing');
  -- Rescheduling an agreed callback outside hours is rejected; inside hours is exact.
  select * into t from public.crm_tasks where lead_id=l and status='open' and task_type='callback';
@@ -287,7 +287,7 @@ do $$ declare l uuid; t public.crm_tasks%rowtype; req uuid; today date:=(now() a
  perform pg_temp.ok((pg_temp.created(req)).due_at=pg_temp.opening(policy,lunch) and (pg_temp.created(req)).due_at<>lunch,'explicit internal reminder resolves to the next window');
  req:=gen_random_uuid();
  perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_preset','in_3_days')),req);
- perform pg_temp.ok((pg_temp.created(req)).due_at=pg_temp.opening(policy,(today+3)::timestamp at time zone 'Africa/Casablanca'),'reminder preset resolves through the Casablanca policy');
+ perform pg_temp.ok((pg_temp.created(req)).due_at=pg_temp.opening(policy,(today+3)::timestamp at time zone public.centre_utc_offset()),'reminder preset resolves through the Casablanca policy');
 end $$;
 \echo PASS agreed callbacks preserved exactly or rejected outside hours; reminders still resolve through policy
 

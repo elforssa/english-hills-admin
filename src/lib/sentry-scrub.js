@@ -19,6 +19,13 @@ const PII_KEY = /(email|full_name|nom|prenom|name|telephone|phone|iban|naissance
 
 const EMAIL_RE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 const LONGNUM_RE = /\b\d{6,}\b/g; // phones, IBAN digits, ids
+// Phone numbers written with spaces, dots or dashes (+212 6 12 34 56 78, 06-12-34-56-78):
+// eight digits or more in one run; an ISO date (2026-10-29) is kept.
+const PHONE_RE = /\+?\d[\d .-]{6,}\d/g;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function redactPhone(match) {
+  return ISO_DATE_RE.test(match) || match.replace(/\D/g, '').length < 8 ? match : '[number]';
+}
 const JWT_RE = /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
 const BEARER_RE = /\bBearer\s+[^\s,;]+/gi;
 
@@ -33,6 +40,7 @@ function redactText(value) {
     .replace(JWT_RE, '[token]')
     .replace(BEARER_RE, '[token]')
     .replace(EMAIL_RE, '[email]')
+    .replace(PHONE_RE, redactPhone)
     .replace(LONGNUM_RE, '[number]');
 }
 

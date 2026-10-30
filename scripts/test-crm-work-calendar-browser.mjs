@@ -43,7 +43,7 @@ try {
  actor=users[1].id;const hours=Object.fromEntries([1,2,3,4,5,6,7].map(i=>[i,[['09:00','20:00']]]));rpc('create_followup_policy',{weekly_hours:hours},users[0].id);
  const lead=intake('Parent · '+'NomLong'.repeat(18)),taskless=intake('Sans prochaine action'),closed=intake('Rendez-vous clos');
  act('qualify_lead',closed,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
- const day=sql("select to_char((now() at time zone 'Africa/Casablanca')::date+1,'YYYY-MM-DD')");
+ const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
  const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:day,heure:'10:00',examinateur:'Libellé examinateur'});
  act('close_lost',closed,{reason:'price'});
  sql(`update public.crm_leads set owner_id='${users[0].id}',conversion_review_required=true where id='${lead}';
@@ -53,13 +53,13 @@ try {
  const taskIds=[];
  for(let i=0;i<40;i++)taskIds.push(sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${lead}',${quote(types[i%8])},now()-interval '1 hour'+make_interval(secs=>${i}),'${actor}','manual',${quote(run+':task:'+i)}) returning id`));
  sql(`insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key) values('${lead}','callback',now()-interval '1 minute','manual',${quote(run+':unassigned')});`);
- for(const [bucket,expr] of [['today',"now()+(((((now() at time zone 'Africa/Casablanca')::date+1)::timestamp at time zone 'Africa/Casablanca')-now())/2)"],['tomorrow',"((now() at time zone 'Africa/Casablanca')::date+1)::timestamp at time zone 'Africa/Casablanca'"],['upcoming',"((now() at time zone 'Africa/Casablanca')::date+2)::timestamp at time zone 'Africa/Casablanca'"]])
+ for(const [bucket,expr] of [['today',"now()+(((((now() at time zone public.centre_utc_offset())::date+1)::timestamp at time zone public.centre_utc_offset())-now())/2)"],['tomorrow',"((now() at time zone public.centre_utc_offset())::date+1)::timestamp at time zone public.centre_utc_offset()"],['upcoming',"((now() at time zone public.centre_utc_offset())::date+2)::timestamp at time zone public.centre_utc_offset()"]])
   sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${lead}','center_visit',${expr},'${actor}','manual',${quote(run+':'+bucket)})`);
  for(let i=0;i<114;i++)legacyIds.push(sql(`insert into public.placement_tests(student_name,date_test,heure,status,notes,examinateur) values(${quote('Legacy appointment '+i)},${i<3?quote(day):`(${quote(day)}::date+2)`},${i===0?'null':i===1?quote('invalid'):quote('11:00')},${quote(i===2?'Passé':'Planifié')},'PRIVATE EXCLUDED NOTE','Examiner label') returning id`));
  const legacy=legacyIds[0],completed=legacyIds[2];
  const visitLead=intake('UX scheduled visit');
- const visit=sql(`update public.crm_tasks set task_type='center_visit',due_at=(${quote(day)}::date+time '10:35') at time zone 'Africa/Casablanca',
- scheduled_end_at=(${quote(day)}::date+time '11:05') at time zone 'Africa/Casablanca',assigned_to='${actor}' where lead_id='${visitLead}' and status='open' returning id`);
+ const visit=sql(`update public.crm_tasks set task_type='center_visit',due_at=(${quote(day)}::date+time '10:35') at time zone public.centre_utc_offset(),
+ scheduled_end_at=(${quote(day)}::date+time '11:05') at time zone public.centre_utc_offset(),assigned_to='${actor}' where lead_id='${visitLead}' and status='open' returning id`);
  const visitTask=detail(visitLead).next_task;
  const {scheduledLabel}=await import('../src/lib/crm/presentation.mjs');
  const expected=scheduledLabel(visitTask);

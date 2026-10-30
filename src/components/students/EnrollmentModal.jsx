@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { getLevelsForSession, groupMatchesEnrollment, SESSION_TYPES } from '@/lib/academicPrograms';
-import { currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, isSchoolYear, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { displayLabel, ENROLLMENT_LABELS } from '@/lib/ui/presentation.mjs';
 import { changedEnrollmentFields, createEnrollment, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup,
@@ -40,11 +40,12 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const selectedStudent = students.find(s => s.id === form.student_id);
   const selectedGroup = groups.find(g => g.id === form.group_id);
   const effectiveSession = form.session_type || selectedStudent?.session_type || 'Yearly';
+  // H5: when the enrollment's school year is known, only groups of that year (or the
+  // current one) are offered; a group without a year cannot take a placement.
+  const yearOk = group => !isSchoolYear(form.school_year) || schoolYearOfGroup(group) === form.school_year;
   const availableGroups = groups.filter(group => (
-    !selectedStudent
-    || groupMatchesEnrollment(group, form, selectedStudent)
-    || group.id === form.group_id
-  ));
+    (!selectedStudent || groupMatchesEnrollment(group, form, selectedStudent)) && yearOk(group)
+  ) || group.id === form.group_id);
   // A trial needs its group; so does a validation chosen here. Removing the group of
   // an existing Validated enrollment is allowed (it becomes Confirmed).
   const needsGroup = form.status === 'Trial' || (!isReceptionist && !statusLocked && form.status === 'Validated');
@@ -168,7 +169,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           {!form.id && <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>Session *<select className={inputClass} required value={effectiveSession} onChange={e => setForm(v => ({ ...v, session_type: e.target.value, level: null, group_id: '' }))}>
               {SESSION_TYPES.map(session => <option key={session}>{session}</option>)}</select></label>
-            <label className={labelClass}>Année scolaire *<input className={inputClass} required placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}" value={form.school_year || ''} onChange={e => set('school_year', e.target.value)} /></label>
+            <label className={labelClass}>Année scolaire *<input className={inputClass} required placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}" value={form.school_year || ''} readOnly={Boolean(schoolYearOfGroup(selectedGroup))} title={schoolYearOfGroup(selectedGroup) ? 'L’année scolaire suit le groupe choisi.' : undefined} onChange={e => set('school_year', e.target.value)} /></label>
           </div>}
           <div>
             <label htmlFor="enrollment-student" className={labelClass}>Apprenant *</label>
@@ -203,7 +204,9 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
             <label htmlFor="enrollment-group" className={labelClass}>Groupe</label>
             <select id="enrollment-group" className={inputClass} value={form.group_id || ''} onChange={e => {
               const group = groups.find(g => g.id === e.target.value);
-              setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
+              // H5: a new enrollment takes its group's school year.
+              setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null,
+                ...(!f.id && schoolYearOfGroup(group) ? { school_year: schoolYearOfGroup(group) } : {}) }));
             }} required={operationalAssignmentOnly || needsGroup}>
               <option value="">— Choisir un groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}

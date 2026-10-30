@@ -1,3 +1,4 @@
+import { centreFormatter, centreInstant } from '../centreClock.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 
 export const STATUS = {
@@ -163,8 +164,8 @@ export const EVENTS = {
 export const ACTIVE = ['NEW', 'CONTACTING', 'ENGAGED', 'QUALIFIED'];
 export const CALL_TASKS = ['first_contact', 'contact_attempt', 'callback'];
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const operationalDateFormatter = new Intl.DateTimeFormat('fr-MA', {
-  timeZone:'Africa/Casablanca',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'
+const operationalDateFormatter = centreFormatter('fr-MA', {
+  day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'
 });
 export function dateLabel(value) {
   return value ? operationalDateFormatter.format(new Date(value)) : 'À planifier';
@@ -191,28 +192,10 @@ export function phoneLinks(contact) {
     whatsapp: wa ? `https://wa.me/${wa.slice(1)}` : null
   };
 }
-// Interpret wall-clock input in Casablanca, independently of the browser zone.
+// Interpret wall-clock input on the centre's clock, independently of the browser zone.
 // This converts time only; calling windows remain exclusively server-authoritative.
 export function casablancaInstant(value) {
-  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(value)) throw new Error('Choisissez une date et une heure.');
-  const target = Date.parse(value + 'Z');
-  let guess = target;
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Casablanca',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  });
-  const wall = ms => {
-    const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).map(x => [x.type, x.value]));
-    return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
-  };
-  for (let i = 0; i < 4; i++) guess += target - Date.parse(wall(guess) + 'Z');
-  if (wall(guess) !== value) throw new Error('Cette heure locale n’existe pas. Choisissez une autre heure.');
-  return new Date(guess).toISOString();
+  return centreInstant(value);
 }
 export function commandError(error) {
   if (isRecordConflict(error)) return 'Ce prospect a changé depuis son ouverture. Les informations sont actualisées. Vérifiez puis réessayez.';

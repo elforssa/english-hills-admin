@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -18,7 +19,9 @@ import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from 
 import { ArrowLeft, Edit, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
-import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import ProgrammePill from '@/components/operational/ProgrammePill';
+import { PILL_CLASS } from '@/lib/ui/pill.mjs';
+import { localBusinessDate, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
@@ -213,7 +216,7 @@ function StudentDetail() {
 
   return (
     <PageFrame width="detail" className="break-words">
-      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`rounded-full px-2 py-1 text-xs ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{isManagement && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
+      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{isManagement && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
       <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
@@ -262,7 +265,7 @@ function StudentDetail() {
             ['Téléphone', student.telephone],
             ['Email', student.email],
             ['Catégorie', student.age_category],
-            ['Programme du dossier', programmeLabel(student.session_type)],
+            ['Programme du dossier', <ProgrammePill key="programme" sessionType={student.session_type} />],
             ['Comment connu le centre', student.referral_source || '—'],
           ].map(([label, val]) => (
             <div key={label}>
@@ -285,17 +288,17 @@ function StudentDetail() {
 
       <Section title="Inscriptions et groupes">
         {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception prépare les pré-inscriptions. La confirmation suit le parcours autorisé ; contactez la direction pour les opérations restreintes.</p>}
-        {(role === 'receptionist' || isManagement) && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: new Date().toISOString().slice(0, 10) })}>{role === 'receptionist' ? 'Nouvelle pré-inscription' : 'Nouvelle inscription'}</button>}
+        {(role === 'receptionist' || isManagement) && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: localBusinessDate() })}>{role === 'receptionist' ? 'Nouvelle pré-inscription' : 'Nouvelle inscription'}</button>}
         {/* The main group is the database's copy of one membership; each enrollment shows its own group. */}
         {student.groupe_id && <p className="mb-3 text-sm">Groupe principal : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
         {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. Une affectation de groupe passe par une inscription.</p> : (
           <div className="space-y-3">{enrollments.map(enrollment => (
             <div key={enrollment.id} {...(enrollment.id === highlightedEnrollmentId ? { id: `enrollment-${enrollment.id}`, tabIndex: -1 } : {})} className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm ${enrollment.id === highlightedEnrollmentId ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-border'}`}>
-              <div>{enrollment.id === highlightedEnrollmentId && <p className="mb-1 text-xs font-semibold text-primary">Inscription liée au prospect CRM</p>}<p className="font-semibold">{programmeLabel(enrollment.session_type || student.session_type)} · {enrollment.school_year || 'Année non renseignée'}</p>
+              <div>{enrollment.id === highlightedEnrollmentId && <p className="mb-1 text-xs font-semibold text-primary">Inscription liée au prospect CRM</p>}<p className="font-semibold"><ProgrammePill sessionType={enrollment.session_type || student.session_type} /> · {enrollment.school_year || 'Année non renseignée'}</p>
                 <p className="text-xs text-muted-foreground">{enrollment.level || 'Niveau à définir'} · {enrollment.status === 'Ended'
                   ? `Ancien groupe : ${groups.find(g => g.id === enrollment.ended_group_id)?.name || '—'}`
                   : enrollment.group_id ? groups.find(g => g.id === enrollment.group_id)?.name || 'Groupe affecté' : 'Groupe à affecter'}</p>
-                <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}{enrollment.status === 'Ended' && <> · {enrollment.end_reason || 'Motif non renseigné'}{enrollment.ended_at ? ` · ${new Date(enrollment.ended_at).toLocaleDateString('fr-FR', { timeZone: 'Africa/Casablanca' })}` : ''}</>}</p>
+                <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}{enrollment.status === 'Ended' && <> · {enrollment.end_reason || 'Motif non renseigné'}{enrollment.ended_at ? ` · ${formatCentre(enrollment.ended_at, 'fr-FR')}` : ''}</>}</p>
               </div>
               <div className="flex items-center gap-3">
                 {isManagement && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}

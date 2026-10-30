@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { commandError, casablancaInstant } from '../src/lib/crm/presentation.mjs';
-import { ENROLLMENT_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, discardsRequestKey } from '../src/lib/crm/enrollmentErrors.mjs';
+import { ENROLLMENT_REASONS, YEAR_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, discardsRequestKey } from '../src/lib/crm/enrollmentErrors.mjs';
 import { casablancaToday, casablancaNowInput, birthDateReason, followupReason, submitReason, enrollmentAction, continueHref, studentHref, enrollmentParam, enrollmentSuccess, followupNotice } from '../src/lib/crm/enrollmentActions.mjs';
 
 // The closed plan §1 vocabulary, the migration's hints and the browser table agree.
@@ -182,4 +182,11 @@ for (const status of ['Submitted','Trial','Under Review','Confirmed']) {
 }
 assert.equal(enrollmentSuccess(base, 'discovered').followup, 'Le suivi d’inscription apparaît dans Prochaine action.');
 assert.equal(followupNotice({ local_date: '2026-10-09', local_time: '10:00:00' }), 'Un suivi d’inscription est déjà prévu le 09/10/2026 à 10:00. Il est conservé.');
+// Batch H (H5): the placement year check (egc.* hint) has its own French text, no "Réessayez".
+for (const [hint, message] of [['egc.school_year_mismatch', 'L’année scolaire de l’inscription (2025/2026) ne correspond pas à celle du groupe (2026/2027).'],
+  ['egc.group_year_missing', 'Renseignez l’année scolaire du groupe.']]) {
+  const failure = enrollmentFailure({ code: '22023', message, hint });
+  assert.equal(failure.definite, true, hint);assert.equal(failure.field, 'group', hint);assert.equal(failure.recovery, 'correct', hint);
+  assert.equal(failure.message, YEAR_REASONS[hint.slice(4)].message, hint);assert.doesNotMatch(failure.message, /Réessayez|egc\./, hint);
+}
 console.log('PASS RCC-A2 reason table/vocabulary, definite vs uncertain, legacy compatibility, Casablanca bounds, contextual actions and result origin');

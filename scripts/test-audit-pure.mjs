@@ -27,6 +27,13 @@ assert.equal(event.request.headers.Authorization, '[redacted]');
 assert.equal(event.request.headers['x-eh-visitor-token'], '[redacted]');
 assert(!serialized.includes('MjAzLjAuMTEzLjk'), 'Telemetry retained the signed visitor IP');
 
+// H6 turns server reporting on: phone numbers with separators are redacted too, dates kept.
+for (const phone of ['+212 6 12 34 56 78', '06-12-34-56-78', '06.12.34.56.78', '0612 345 678', '+212612345678']) {
+  const scrubbed = JSON.stringify(scrubEvent({ message: `Rappeler ${phone} demain`, extra: { note: `tel ${phone}` } }));
+  assert(!scrubbed.includes(phone) && !/\d{2}[ .-]\d{2}[ .-]\d{2}/.test(scrubbed), `Telemetry retained ${phone}`);
+}
+assert.equal(scrubEvent({ message: 'Échéance 2026-10-29 à 10:30' }).message, 'Échéance 2026-10-29 à 10:30', 'an ISO date is not a phone number');
+
 const crumb = scrubBreadcrumb({
   message: 'student@example.invalid',
   data: { url: 'https://school.example/path?token=secret#code', body: 'secret', Authorization: 'Bearer secret' },

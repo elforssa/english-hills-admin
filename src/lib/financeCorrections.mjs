@@ -11,8 +11,6 @@ export const DISCOUNT_REASONS = [
   { code: 'other', label: 'Autre' },
 ];
 export const DISCOUNT_REASON_MAX_LENGTH = 200;
-// Q3 = B: reception gives at most 10 % without the director.
-export const RECEPTION_DISCOUNT_CAP = 0.10;
 // Q5 = B: a reception payment confirms an enrollment only from 10 % of the net price.
 export const RECEPTION_CONFIRMATION_THRESHOLD = 0.10;
 // Q4 = A: how far back a payment may be dated.
@@ -55,7 +53,6 @@ export function deskGuardError({ role, newCharge, gross, discount, reasonCode, r
     const text = (reasonText || '').trim();
     if (reasonCode === 'other' && text.length < 3) return 'Précisez le motif de la remise « Autre ».';
     if (text.length > DISCOUNT_REASON_MAX_LENGTH) return 'Le motif de la remise ne doit pas dépasser 200 caractères.';
-    if (role === 'receptionist' && centimes(gross) > 0 && centimes(discount) * 10 > centimes(gross)) return 'Remise supérieure à 10 % : demandez au directeur.';
   }
   if (payment > 0 && paymentDate) {
     if (paymentDate > today) return `La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : ${frenchDate(today)}).`;

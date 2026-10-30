@@ -145,7 +145,7 @@ insert into public.enrollments(id, student_id, group_id, status, session_type, s
   (pg_temp.id(402), pg_temp.id(202), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(403), pg_temp.id(203), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(404), pg_temp.id(204), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
-  (pg_temp.id(413), pg_temp.id(213), pg_temp.id(301), 'Validated', 'Yearly', '2025/2026', 'Child 1', null),
+  (pg_temp.id(413), pg_temp.id(213), pg_temp.id(301), 'Validated', 'Yearly', '2026/2027', 'Child 1', null),
   (pg_temp.id(414), pg_temp.id(214), pg_temp.id(303), 'Validated', 'Adults', '2026/2027', 'Beginning 1', null);
 select pg_temp.act(1);
 select public.end_learner(pg_temp.id(213), (select updated_at from public.students where id = pg_temp.id(213)), 'Alumni',
@@ -554,8 +554,13 @@ select pg_temp.owner();
 alter table public.enrollments drop constraint enrollments_confirmed_has_programme;
 insert into public.students(id, full_name, status, age_category, session_type) values
   (pg_temp.id(215), 'Null Year Learner', 'Prospect', 'Young Learners (6-12)', 'Yearly');
+-- ... and before Batch H's group year check (H5), which would give it its group's year.
+alter table public.enrollments disable trigger enrollment_group_year_guard;
 insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
   values (pg_temp.id(215), pg_temp.id(301), 'Validated', 'Yearly', null, 'Child 1');
+alter table public.enrollments enable trigger enrollment_group_year_guard;
+select pg_temp.ok((select school_year is null from public.enrollments where student_id = pg_temp.id(215)),
+  'T-26 fixture: the membership really has no school year');
 select pg_temp.act(4);
 select pg_temp.ok(exists (select 1 from public.portal_teacher_roster() where student_id = pg_temp.id(215))
   and public.teacher_can_access_student_group(pg_temp.id(215), pg_temp.id(301)), 'T-26 the NULL school-year membership is visible');

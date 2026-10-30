@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useAuth } from '@/context/AuthContext';
 import ReadState from '@/components/operational/ReadState';
 import { financeReadResult, failedRead } from '@/lib/ui/readResults.mjs';
@@ -181,7 +182,7 @@ export default function Dashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <div>
             <h2 className="font-semibold text-sm text-foreground">
-              Paiements — {new Date().toLocaleDateString('fr-MA', { month: 'long', year: 'numeric', timeZone: 'Africa/Casablanca' })}
+              Paiements — {formatCentre(new Date(), 'fr-MA', { month: 'long', year: 'numeric' })}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">{monthlyData ? monthlyData.count : '—'} reçu(s) ce mois</p>
           </div>

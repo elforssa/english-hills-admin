@@ -1,4 +1,5 @@
 // Operational labels only. Enrollment permission and conversion stay in SQL.
+import { centreSchoolYear } from '../centreClock.mjs';
 export const ENROLLMENT_STATUS = {
   Submitted: 'Pré-inscription créée · En attente',
   'Under Review': 'Inscription en cours d’examen',
@@ -14,7 +15,5 @@ export const PROGRAMS = {
   Online: 'Cours en ligne', 'Online One-to-One': 'Cours individuel en ligne'
 };
 export function enrollmentSchoolYear(now = new Date()) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: 'numeric' }).formatToParts(now).map(p => [p.type, p.value]));
-  const start = Number(parts.year) - (Number(parts.month) < 9 ? 1 : 0);
-  return `${start}/${start + 1}`;
+  return centreSchoolYear(now);
 }

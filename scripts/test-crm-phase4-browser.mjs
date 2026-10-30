@@ -76,14 +76,14 @@ try {
  await page.getByRole('button',{name:'WhatsApp',exact:true}).click();await dialog().getByLabel('Que souhaitez-vous enregistrer ?').selectOption('meaningful_whatsapp_conversation');await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('callback');await dialog().getByLabel('Rappel interne',{exact:true}).check();await dialog().getByLabel('Note',{exact:true}).fill('Conversation réelle enregistrée explicitement');await fillTask();await save();await done();assert.equal(detail(lead).status,'ENGAGED');assert.equal(detail(lead).failed_attempts,0);
  // PostgreSQL owns window adjustment. Compare the returned instant with the
  // configured Tuesday opening, without a second Node/ICU timezone oracle.
- const expectedDueMs=Number(sql(`select extract(epoch from (${quote(future.slice(0,10)+'T15:20')}::timestamp at time zone p.timezone))*1000 from public.crm_followup_policies p join public.crm_leads l on l.followup_policy_id=p.id where l.id=${quote(lead)}`));
+ const expectedDueMs=Number(sql(`select extract(epoch from (${quote(future.slice(0,10)+'T15:20')}::timestamp at time zone public.centre_utc_offset()))*1000 from public.crm_followup_policies p join public.crm_leads l on l.followup_policy_id=p.id where l.id=${quote(lead)}`));
  const scheduledTask=detail(lead).next_task;
- const stored=JSON.parse(sql(`select jsonb_build_object('due_at',due_at,'weekday',extract(isodow from due_at at time zone 'Africa/Casablanca'),'time',to_char(due_at at time zone 'Africa/Casablanca','HH24:MI')) from public.crm_tasks where id=${quote(scheduledTask.id)}`));
+ const stored=JSON.parse(sql(`select jsonb_build_object('due_at',due_at,'weekday',extract(isodow from due_at at time zone public.centre_utc_offset()),'time',to_char(due_at at time zone public.centre_utc_offset(),'HH24:MI')) from public.crm_tasks where id=${quote(scheduledTask.id)}`));
  assert.equal(Date.parse(stored.due_at),expectedDueMs,'stored callback moves from lunch to the configured Casablanca opening');
  assert.equal(Date.parse(scheduledTask.due_at),expectedDueMs,'returned timestamp matches the authoritative stored callback');
  assert.equal(stored.weekday,2,'lunch callback remains on Tuesday');assert.equal(stored.time,'15:20');
  await page.getByRole('dialog').locator('section').filter({has:page.getByText('Prochaine action',{exact:true})}).getByText(/15:20$/).waitFor();
- console.log(`PASS lunch closure: raw stored due_at=${stored.due_at}; PostgreSQL Tuesday ${stored.time} Africa/Casablanca; browser 15:20`);
+ console.log(`PASS lunch closure: raw stored due_at=${stored.due_at}; PostgreSQL Tuesday ${stored.time} on the centre clock; browser 15:20`);
  console.log('PASS stale lead refresh, exact retry after lost response, WhatsApp conversation and server lunch adjustment');
  // Task optimistic version, reschedule same identity.
  const task=detail(lead).next_task;await page.getByRole('button',{name:'Replanifier',exact:true}).first().click();await fillTask();sql(`update public.crm_tasks set version=version+1 where id='${task.id}'`);await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').filter({hasText:'actualisées'}).waitFor();await save();await done();assert.equal(detail(lead).next_task.id,task.id);

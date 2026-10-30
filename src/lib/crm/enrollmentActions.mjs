@@ -3,19 +3,16 @@
 import { casablancaInstant } from './presentation.mjs';
 import { ENROLLMENT_STATUS, PROGRAMS } from './enrollment.mjs';
 import { recordHref } from '../navigation.mjs';
+import { centreDate, centreDateTimeInput } from '../centreClock.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const casablancaParts = now => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca', year: 'numeric', month: '2-digit', day: '2-digit',
-  hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map(p => [p.type, p.value]));
-// Casablanca civil today, the same calendar the server compares birth dates with.
+// Centre civil today, the same calendar the server compares birth dates with.
 export function casablancaToday(now = new Date()) {
-  const p = casablancaParts(now);
-  return `${p.year}-${p.month}-${p.day}`;
+  return centreDate(now);
 }
-// Casablanca wall-clock minute, the datetime-local lower bound for a follow-up.
+// Centre wall-clock minute, the datetime-local lower bound for a follow-up.
 export function casablancaNowInput(now = new Date()) {
-  const p = casablancaParts(now);
-  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+  return centreDateTimeInput(now);
 }
 export function birthDateReason(value, now = new Date()) {
   if (!value) return null;

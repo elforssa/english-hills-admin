@@ -2,6 +2,8 @@
 // Group membership derives from enrollments (plan EGC-r2, ADR-010): a learner is a
 // member of a group through a Validated or Trial enrollment in it. The learner-file
 // group (students.groupe_id) is the database's "main group" copy.
+import { centreSchoolYear } from './centreClock.mjs';
+
 export const PENDING_PRE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review'];
 export const MEMBERSHIP_STATUSES = ['Validated', 'Trial'];
 export const LIVE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review', 'Confirmed', 'Validated', 'Trial'];
@@ -28,15 +30,18 @@ export function studentNeedsGroup(student, enrollments, session = '') {
   return !student.groupe_id && !own.some(isMembership)
     && !own.some(e => ['Submitted', 'Under Review', 'Confirmed'].includes(e.status));
 }
-// Roster of a group among the given (non-archived) learners: the file group or a
-// membership. After the clean-up both sides agree (I2), so this equals the
-// enrollment-only rule the database enforces.
+// The Groupe column's fallback for a file with no group and no enrollment to place
+// (plan AFU-r1, H4): « Groupe à affecter » only for an active file (Inscrit or Essai),
+// as the « Groupe à affecter » filter; an Ancien apprenant, Inactif or Prospect shows « — ».
+export function fileAwaitsGroup(student) {
+  return !student.groupe_id && ACTIVE_STUDENT_STATUSES.includes(student.status);
+}
+// Roster of a group among the given (non-archived) learners: a Validated or Trial
+// enrollment in it, the rule the database enforces (D-8, after the C6 check).
 export function groupMemberIds(students, enrollments, groupId) {
   const visible = new Set(students.filter(s => !s.deleted_at).map(s => s.id));
-  return new Set([
-    ...students.filter(s => !s.deleted_at && s.groupe_id === groupId).map(s => s.id),
-    ...enrollments.filter(e => e.group_id === groupId && isMembership(e) && visible.has(e.student_id)).map(e => e.student_id),
-  ]);
+  return new Set(enrollments.filter(e => e.group_id === groupId && isMembership(e) && visible.has(e.student_id))
+    .map(e => e.student_id));
 }
 // The groups a learner is a member of, main group first.
 export function studentGroupIds(student, enrollments) {
@@ -48,15 +53,21 @@ export function studentGroupIds(student, enrollments) {
 export function importedStudentStatus(status) {
   return ['Alumni', 'Inactive', 'Prospect'].includes(status) ? status : 'Prospect';
 }
-// School year of a civil date in Casablanca (September start). The time zone is a
-// parameter so tests use fixed offsets; Morocco has been on UTC+0 since 2026-09-20.
-export function currentSchoolYear(date = new Date(), timeZone = 'Africa/Casablanca') {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: 'numeric' })
-    .formatToParts(date).map(part => [part.type, part.value]));
-  const start = Number(parts.year) - (Number(parts.month) < 9 ? 1 : 0);
-  return `${start}/${start + 1}`;
+// School year (1 September to 31 August) of an instant on the centre clock.
+export function currentSchoolYear(date = new Date()) {
+  return centreSchoolYear(date);
 }
 // groups.annee stores the school year as 'YYYY-YYYY'.
+// The enrollment school year 'YYYY/YYYY' of a group, or '' (plan AFU-r1, H5).
+export function schoolYearOfGroup(group) {
+  const value = String(group?.annee || '').trim().replace('-', '/');
+  return isSchoolYear(value) ? value : '';
+}
+// 'YYYY/YYYY' with consecutive years, the format the year fields ask for.
+export function isSchoolYear(value) {
+  const match = /^(\d{4})\/(\d{4})$/.exec(String(value || ''));
+  return Boolean(match) && Number(match[2]) === Number(match[1]) + 1;
+}
 export function groupYear(schoolYear) {
   return schoolYear ? schoolYear.replace('/', '-') : '';
 }

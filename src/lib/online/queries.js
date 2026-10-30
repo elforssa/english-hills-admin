@@ -2,6 +2,7 @@
 
 // TanStack hooks over the online RPCs (migration 117) and the gated online routes.
 // Reads run as the signed-in user; the database decides what each role may see.
+import { formatCentre } from '../centreClock.mjs';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getBrowserClient } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -56,7 +57,7 @@ export function civilDate(localDate) {
 
 export function casablancaTime(instant) {
   if (!instant) return '';
-  return new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit' }).format(new Date(instant));
+  return formatCentre(instant, 'fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
 
 // Display only: the server re-checks the window when a pass is requested.

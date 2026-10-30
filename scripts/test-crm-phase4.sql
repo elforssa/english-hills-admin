@@ -46,7 +46,7 @@ insert into queue_fixture select name,pg_temp.intake() from unnest(array['overdu
 update public.crm_leads set status='ENGAGED' where id in(select id from queue_fixture where kind in ('overdue','due','taskless'));
 update public.crm_leads set status='CONTACTING',created_at=now()-interval '4 days' where id in(select id from queue_fixture where kind='stale');
 update public.crm_tasks set task_type='callback',due_at=now()-interval '2 hours' where lead_id in(select id from queue_fixture where kind='overdue');
-update public.crm_tasks set task_type='center_visit',due_at=(((now() at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'-interval '1 second' where lead_id in(select id from queue_fixture where kind='due');
+update public.crm_tasks set task_type='center_visit',due_at=(((now() at time zone public.centre_utc_offset())::date)+1)::timestamp at time zone public.centre_utc_offset()-interval '1 second' where lead_id in(select id from queue_fixture where kind='due');
 update public.crm_tasks set due_at=now()+interval '2 days' where lead_id in(select id from queue_fixture where kind in ('new','stale'));
 -- Model a legacy missing-action exception without weakening production commands.
 do $$ declare t public.crm_tasks%rowtype; begin for t in select * from public.crm_tasks where lead_id in(select id from queue_fixture where kind='taskless') loop perform crm_security.finish_task(t,true,'Synthetic missing-action fixture',gen_random_uuid()::text);end loop;end $$;
@@ -59,7 +59,7 @@ do $$ declare result jsonb; l uuid:=(select id from queue_fixture where kind='ne
  perform pg_temp.ok((select array_agg((x->>'priority')::integer order by n) from jsonb_array_elements(result->'needs_attention') with ordinality a(x,n))=array[1,2,3,4,5],'deterministic priority order');
  perform pg_temp.ok((result->'counts'->>'overdue')::integer=1,'overdue count');
  perform pg_temp.ok((result->'counts'->>'new')::integer=1,'new count');
- perform pg_temp.ok((result->'counts'->>'due_today')::integer=(select count(*) from public.crm_tasks where status='open' and due_at>=((now() at time zone 'Africa/Casablanca')::date)::timestamp at time zone 'Africa/Casablanca' and due_at<(((now() at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'),'Casablanca calendar bounds');
+ perform pg_temp.ok((result->'counts'->>'due_today')::integer=(select count(*) from public.crm_tasks where status='open' and due_at>=((now() at time zone public.centre_utc_offset())::date)::timestamp at time zone public.centre_utc_offset() and due_at<(((now() at time zone public.centre_utc_offset())::date)+1)::timestamp at time zone public.centre_utc_offset()),'Casablanca calendar bounds');
  perform pg_temp.ok(jsonb_array_length(public.crm_get_today(1,1,0)->'needs_attention')=1,'bounded queue page');
  perform pg_temp.ok((public.crm_search_leads('0612345678')->>'total')::integer=6,'Moroccan normalized phone search');
  perform pg_temp.ok((public.crm_search_leads('Synthetic learner')->>'total')::integer=6,'learner name search');
@@ -106,7 +106,7 @@ do $$ declare k text; answer jsonb; l uuid; newer uuid; older uuid; r jsonb; r2 
  older:=pg_temp.intake(); newer:=pg_temp.intake();
  update public.crm_leads set created_at=now()-interval '3 days' where id=older;
  update public.crm_leads set created_at=now()-interval '2 days' where id=newer;
- update public.crm_tasks set due_at=(((now() at time zone 'Africa/Casablanca')::date)+1)::timestamp at time zone 'Africa/Casablanca'-interval '1 microsecond' where lead_id=older;
+ update public.crm_tasks set due_at=(((now() at time zone public.centre_utc_offset())::date)+1)::timestamp at time zone public.centre_utc_offset()-interval '1 microsecond' where lead_id=older;
  update public.crm_tasks set due_at=now()+interval '2 days' where lead_id=newer;
  r:=public.crm_get_today(100,0,0);
  perform pg_temp.ok((select array_agg(x->>'id' order by n) from jsonb_array_elements(r->'needs_attention') with ordinality a(x,n) where x->>'id' in(older::text,newer::text))=array[older::text,newer::text],'NEW oldest first independent of due time');

@@ -13,6 +13,7 @@
 // opened. Dates are Casablanca civil dates.
 // =============================================================================
 
+import { formatCentre } from '@/lib/centreClock.mjs';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { getBrowserClient } from '@/lib/supabase';
@@ -30,13 +31,10 @@ const ACTION_COLORS = {
   DELETE: 'bg-red-100 text-red-700',
 };
 
-// Casablanca time, like the Du/Au filters (the zone name; the browser's zone table
-// resolves it).
+// The centre's clock, like the Du/Au filters (centreClock, never a zone table).
 function fmt(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleString('fr-MA', {
-    timeZone: 'Africa/Casablanca', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  return formatCentre(iso, 'fr-MA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function targetHref(row) {

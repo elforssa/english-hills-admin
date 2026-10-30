@@ -129,6 +129,9 @@ insert into public.groups(id, name, session_type, niveau) values
   (pg_temp.id(310), 'OL CRM B1', 'Online', 'B1'),
   (pg_temp.id(311), 'OL CRM Solo B1', 'Online One-to-One', 'B1'),
   (pg_temp.id(312), 'OL Notices B1', 'Online', 'B1');
+-- Batch H (H5): a placement's school year is its group's; these courses run in other years.
+update public.groups set annee = case id when pg_temp.id(312) then '2025-2026' when pg_temp.id(308) then '2027-2028'
+  else '2028-2029' end where id in (pg_temp.id(312), pg_temp.id(308), pg_temp.id(309));
 select pg_temp.fails(format($$insert into public.groups(name, session_type, niveau, teacher_id) values ('T', 'Online', 'B1', %L)$$, pg_temp.id(101)),
   '23514', 'online.teacher_on_course');
 select pg_temp.fails(format($$update public.groups set teacher_id = %L where id = %L$$, pg_temp.id(101), pg_temp.id(301)),
@@ -151,7 +154,7 @@ do $$ declare g uuid; r jsonb; begin
     r := public.online_save_course(g, null, jsonb_build_object('teacher_id', case when g = pg_temp.id(303) then pg_temp.id(103) else pg_temp.id(101) end,
       'audience', case when g = pg_temp.id(302) then 'child' else 'adult' end,
       'capacity', case when g = pg_temp.id(305) then 2 when g = pg_temp.id(301) then 5 else null end,
-      'term_start', (now() at time zone 'Africa/Casablanca')::date - 7, 'term_end', (now() at time zone 'Africa/Casablanca')::date + 70));
+      'term_start', (now() at time zone public.centre_utc_offset())::date - 7, 'term_end', (now() at time zone public.centre_utc_offset())::date + 70));
     perform pg_temp.ok((r->>'version')::bigint = 1 and r->>'status' = 'draft', 'course created as draft');
   end loop;
 end $$;
@@ -502,7 +505,7 @@ select pg_temp.act(3);
 select pg_temp.ok((public.online_save_attendance(pg_temp.id(507), pg_temp.lesson_version(pg_temp.id(507)),
   jsonb_build_array(jsonb_build_object('student_id', pg_temp.id(202), 'status', 'Justifié')))) ? 'version', 'receptionist records attendance');
 select pg_temp.ok((public.online_update_lesson(pg_temp.id(509), pg_temp.lesson_version(pg_temp.id(509)),
-  jsonb_build_object('start_time', to_char((now() + interval '3 days 2 hours') at time zone 'Africa/Casablanca', 'HH24:MI')), 'this')) ? 'version',
+  jsonb_build_object('start_time', to_char((now() + interval '3 days 2 hours') at time zone public.centre_utc_offset(), 'HH24:MI')), 'this')) ? 'version',
   'receptionist moves one lesson');
 select pg_temp.fails(format($$select public.online_update_lesson(%L, %s, '{"minutes":60}', 'following')$$, pg_temp.id(509), pg_temp.lesson_version(pg_temp.id(509))),
   '42501', 'online.forbidden');
@@ -563,7 +566,7 @@ select pg_temp.ok(pg_temp.join_reason(8, 507) = 'online.course_inactive', 'no re
 -- ---------------------------------------------------------------------------
 -- Pattern → lessons, this-only / following edits, overlap, stale (D3).
 -- ---------------------------------------------------------------------------
-create temp table ol_dates as select (now() at time zone 'Africa/Casablanca')::date + 1 as from_date,
+create temp table ol_dates as select (now() at time zone public.centre_utc_offset())::date + 1 as from_date,
   (select term_end from public.online_courses where group_id = pg_temp.id(306)) as term_end;
 select pg_temp.open_to_api('ol_dates');
 select pg_temp.act(1);
@@ -579,7 +582,7 @@ select pg_temp.owner();
 select pg_temp.ok((select count(*) from public.online_lessons where group_id = pg_temp.id(306)) =
   (select count(*) from generate_series((select from_date from ol_dates), (select term_end from ol_dates), interval '1 day') d
    where extract(dow from d) in (1, 3)), 'one lesson per Monday and Wednesday of the term');
-select pg_temp.ok((select bool_and(to_char(starts_at at time zone 'Africa/Casablanca', 'HH24:MI') = '18:00'
+select pg_temp.ok((select bool_and(to_char(starts_at at time zone public.centre_utc_offset(), 'HH24:MI') = '18:00'
   and ends_at - starts_at = interval '90 minutes' and teacher_id = pg_temp.id(101) and status = 'scheduled')
   from public.online_lessons where group_id = pg_temp.id(306)), '18:00 Casablanca, 90 minutes, course teacher');
 select pg_temp.ok((select jours = 'Lun, Mer' and horaire = '18:00–19:30' from public.groups where id = pg_temp.id(306)), 'derived group schedule text');
@@ -598,15 +601,15 @@ create temp table ol_wed as select array_agg(l.id order by l.starts_at) ids from
 select pg_temp.open_to_api('ol_mon'); select pg_temp.open_to_api('ol_wed');
 select pg_temp.act(1);
 select public.online_update_lesson((select id from ol_mon), pg_temp.lesson_version((select id from ol_mon)),
-  jsonb_build_object('date', ((select starts_at from ol_mon) at time zone 'Africa/Casablanca')::date + 1, 'start_time', '17:00'), 'following');
+  jsonb_build_object('date', ((select starts_at from ol_mon) at time zone public.centre_utc_offset())::date + 1, 'start_time', '17:00'), 'following');
 select pg_temp.owner();
 select pg_temp.ok(not exists (select 1 from public.online_lessons where group_id = pg_temp.id(306) and starts_at >= (select starts_at from ol_mon)
-  and extract(dow from starts_at at time zone 'Africa/Casablanca') = 1), 'no Monday lesson from that date on');
+  and extract(dow from starts_at at time zone public.centre_utc_offset()) = 1), 'no Monday lesson from that date on');
 select pg_temp.ok(exists (select 1 from public.online_lessons where group_id = pg_temp.id(306) and starts_at > (select starts_at from ol_mon)
-  and extract(dow from starts_at at time zone 'Africa/Casablanca') = 2
-  and to_char(starts_at at time zone 'Africa/Casablanca', 'HH24:MI') = '17:00'), 'Tuesday 17:00 lessons generated');
+  and extract(dow from starts_at at time zone public.centre_utc_offset()) = 2
+  and to_char(starts_at at time zone public.centre_utc_offset(), 'HH24:MI') = '17:00'), 'Tuesday 17:00 lessons generated');
 select pg_temp.ok((select count(*) from public.online_lessons where group_id = pg_temp.id(306) and starts_at < (select starts_at from ol_mon)
-  and extract(dow from starts_at at time zone 'Africa/Casablanca') = 1) = 1, 'the earlier Monday is kept');
+  and extract(dow from starts_at at time zone public.centre_utc_offset()) = 1) = 1, 'the earlier Monday is kept');
 select pg_temp.ok((select ids from ol_wed) <@ (select array_agg(id) from public.online_lessons where group_id = pg_temp.id(306)), 'Wednesday lessons untouched');
 select pg_temp.ok((select jours from public.groups where id = pg_temp.id(306)) = 'Lun, Mar, Mer', 'derived text follows the patterns');
 select pg_temp.ok((select count(*) from public.notifications where type = 'online_lesson_rescheduled' and recipient_email in ('seat5@example.test', 'seat5p@example.test')) = 2,
@@ -618,7 +621,7 @@ create temp table ol_following as select count(*) n from public.online_lessons w
 select pg_temp.open_to_api('ol_wed1'); select pg_temp.open_to_api('ol_following');
 select pg_temp.act(3);
 select pg_temp.fails(format($$select public.online_update_lesson(%L, %s, %L, 'this')$$, (select ids[2] from ol_wed),
-  pg_temp.lesson_version((select ids[2] from ol_wed)), jsonb_build_object('date', ((select starts_at from ol_wed1) at time zone 'Africa/Casablanca')::date,
+  pg_temp.lesson_version((select ids[2] from ol_wed)), jsonb_build_object('date', ((select starts_at from ol_wed1) at time zone public.centre_utc_offset())::date,
   'start_time', '20:00')), '23514', 'online.lesson_overlap');
 select pg_temp.fails(format($$select public.online_update_lesson(%L, %s, '{"date":"2000-01-01"}', 'this')$$,
   (select ids[2] from ol_wed), pg_temp.lesson_version((select ids[2] from ol_wed))), '23514', 'online.lesson_past');

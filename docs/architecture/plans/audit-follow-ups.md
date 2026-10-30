@@ -1,6 +1,6 @@
 # Audit follow-ups (Batch H) — architecture, revision AFU-r1
 
-**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). Not implemented, merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
+**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). **Implemented** on branch `feat/audit-follow-ups` with migration `125_audit_follow_ups.sql` ([implementation record](#implementation-record)); not merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
 
 **Scope.** Eight follow-ups left after Batches A–G and the 2026-10-24 audit, delivered as **one outcome**: one implementation PR, one migration, one release. Every item below was checked against the code at the baseline; file and line references are to that commit.
 
@@ -529,3 +529,163 @@ Each step needs the approvals named in [AGENTS](../../../AGENTS.md); this plan a
   - 0 populated groups without a valid year.
 - **Detail:** 0 problem rows.
 - **Consequence:** the STOP condition is met with nothing to correct. No R1 correction step is needed, and the year check ships in the implementation migration. Release R0 re-reads the summary; any difference goes back to the owner.
+
+## Implementation record
+
+Branch `feat/audit-follow-ups`, rebased on `origin/main` `a3d4202` (this plan merged as PR #174). Migration `125_audit_follow_ups.sql`: the recorded Production ledger is 001–124, and no open PR adds a migration. Restore: `scripts/rollback/125_audit_follow_ups_restore.sql`, prepared and tested locally, not run.
+
+**What was built, per item:**
+
+- **H1:** `create_charge_payment_financial` (latest definition: 122), re-created without the Q3 block. The client cap, its message and the reception hint in the receipt form are removed.
+- **H2:**
+  - `ProgrammePill` (`src/components/operational/ProgrammePill.jsx`) and one pill shape (`src/lib/ui/pill.mjs`).
+  - Used on the Students list (table and phone card), the student page, the enrollments page, the groups list and the group page.
+  - The editable programme select is drawn as the same pill.
+- **H3:** `DOSSIER_LABELS.Enrolled` = « Inscrit »; the guide and tests are updated.
+- **H4:** `fileAwaitsGroup` decides the Groupe column's fallback (« Groupe à affecter » for an active file, otherwise « — »).
+- **H5:**
+  - Three triggers and helper functions in `academic_security`: `check_group_year`, `guard_enrollment_group_year` on `enrollments`, and `guard_group_year` on `groups`.
+  - Early year checks in `save_receptionist_enrollment` and `crm_start_enrollment`; `crm_enrollment_groups` returns `annee`.
+  - A required year in the group form; a new enrollment takes its year from the chosen group in `EnrollmentModal` and `CrmEnrollmentDialog`.
+- **H6:** `src/instrumentation.js`, moved from the root.
+- **H7:**
+  - `public.centre_utc_offset()`, `public.centre_school_year()` and a new body for `public.business_date()`.
+  - 28 functions re-created from the 124 catalog with only the zone substitution.
+  - `src/lib/centreClock.mjs` behind every client date and time helper.
+- **H8:** `groupMemberIds` is enrollment-only.
+
+**Deviations from the plan text** (within the approved decisions):
+
+1. **H7, two helpers instead of four.** `AT TIME ZONE` accepts an `interval` (ISO sign, verified), so each substitution keeps the original expression and only the zone token changes. The planned `centre_local`/`centre_instant` helpers were unnecessary.
+2. **H7, labels kept.** The JSON `timezone` label in four CRM read models and the task command's label check still say `Africa/Casablanca`. They are labels, not time computation. The guards check computation, not labels.
+3. **H7, the generator owns every re-created body.** `scripts/generate-centre-clock.py --write|--check` reads the 124 catalog. It also holds the H1/H5 edits and the review's N3/N6 edits (five edited functions), so a reviewer can regenerate every re-created function. CI runs `--check` at 124.
+4. **H5, a missing year on group insert.**
+   - A group inserted without a year takes the current school year in the trigger, not through a column default. This is because the reception command passes an explicit NULL.
+   - The year trigger steps aside only for the consumed Batch D clean-up revert, which alone sets both `eh.membership_sync` and `eh.enrollment_command`.
+5. **H5, an old year-less enrollment placed in a group now takes the group's year.** This applies to an old Confirmed enrollment row without a year, which the I9 check used to refuse. Status-only updates, ends and the year close are not year checks.
+6. **H2, level badges are pills too.** The group list and group page level badges get the same pill shape (owner: "all matches and consistent design").
+7. **H3, guide screenshots not retaken.** Three guide screenshots (`s12`, `s13`, `q02b` in `public/helpdesk`) still show « Inscrit (dossier) » and the former programme style. Retaking them is left to the documentation closeout.
+
+**Test fixtures changed for the new rule.** Several existing fixtures placed enrollments of different school years in one group. They now use a group of the right year, or seed legacy rows with the year trigger disabled, as they already drop the I9 check. No assertion was weakened:
+- `test-receptionist-security.sql`;
+- `test-online-learning.sql`;
+- `test-portal-readiness.sql`;
+- `test-enrollment-group-consistency.sql`.
+
+`test-finance-batch-e.sql` asserts the centre clock and the uncapped reception discount instead of the zone name and the cap.
+
+**CI correction (run 40815669660 on `8ef8813`, six database shards failed).**
+
+- **Cause of the time failures.**
+  - The CI runner's PostgreSQL (`supabase/postgres:17.6.1.165`, CLI 2.116.0) reads `Africa/Casablanca` as **+01:00** on 2026-10-29; this was measured locally on that exact image.
+  - The private stack used for the first evidence ran `17.11.0.004`, which reads +00:00. So tests that computed their expected value with the zone name agreed with the centre clock locally but not in CI.
+  - The re-check below runs on the CI image.
+- **Ledger ceilings.** Six upgrade checks were bumped from 124 to 125 (ceiling, version list, count), the same files Batch G bumped:
+  - `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`;
+  - `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`;
+  - `test-premium-retirement-upgrade-113-current.sql`, `test-conflicts-without-retry-upgrade.mjs`.
+
+  `scripts/ci/test_verify.py` pins no ceiling.
+- **Expected values on the centre clock.** In 22 test files, expected values computed with `AT TIME ZONE 'Africa/Casablanca'`, with `AT TIME ZONE p.timezone`, or as `'… Africa/Casablanca'` literals now use `AT TIME ZONE public.centre_utc_offset()` (114 substitutions). `scripts/fixtures/crm-work-calendar.sql`, which upgrade rehearsals also load at 107–111, uses a session helper instead: the centre clock once `public.centre_utc_offset()` exists, the zone reading before, so the fixture matches the functions of the version it seeds. The RCC-A2 browser wall clock uses `CENTRE_UTC_OFFSET_MINUTES`. No assertion was relaxed. (The plan's `centre_instant`/`centre_local` helpers do not exist, see deviation 1; the interval form is the same computation.)
+
+  Kept with the zone name on purpose:
+  - **Meta ad-account settings and labels:** Insights configurations, `account_timezone`, `attributionDay` and the JSON `timezone` label.
+  - **`test-crm-phase7.sql`:** loaded by upgrade tests at 108–112, where the functions under test still read the zone.
+  - **`egc-revert-m1.sql`:** a historical body.
+  - **`test-report-data.mjs`:** loops machine zones.
+  - **The forced-disagreement Intl override in `test-crm-work-calendar-browser.mjs`.**
+- **Expected instants before → after, as the CI PostgreSQL computed them:**
+
+  | Test | Before (zone name, CI) | After (centre clock) |
+  | --- | --- | --- |
+  | `test-crm-phase5.sql` input « 2026-09-22 11:30 » | 2026-09-22 10:30Z | 11:30Z |
+  | « 120 minute SLA rolls over lunch » | 2026-09-22 14:20Z | 15:20Z |
+  | « SLA rolls after closing » | 2026-09-23 09:00Z | 10:00Z |
+  | « SLA rolls closed Sunday » | 2026-09-28 14:00Z | 15:00Z |
+  | `test-crm-rcc-a1.sql` « preset in_2_hours resolves to configured Casablanca opening » (CI run at 04:07Z on a Thursday; first opening 10:00) | 09:00Z | 10:00Z |
+  | `test-crm-phase4-browser.mjs` « stored callback moves from lunch to the configured Casablanca opening » (next Tuesday 15:20) | 14:20Z | 15:20Z |
+
+  In each case the function under test (migration 125) returned the "after" value; the oracle was one hour early.
+- **Year-mismatch fixtures.** In each case the year came from a literal in the fixture, not from an application path. Each enrollment now goes into a group of its own year:
+  - **`test-batch3b-security.mjs`:** staff enrollments of 2027/2028 and 2028/2029 are now validated into groups of those years.
+  - **`test-receptionist-browser.mjs`:** the 2027/2028 Under Review enrollment is placed in a 2027-2028 group, created and removed with the fixture.
+  - **`test-crm-phase6.sql`:** the 2027/2028 Validated enrollment uses a 2027-2028 group.
+- **Two date-specific expectations of the former time-zone switches** (`test-crm-work-calendar.sql`) follow the approved fixed offset (D-TZ = A); they are not relaxed:
+  - **Day length:** « 23/25 hour Casablanca day » becomes an exact 86,400 s for 2026-02-15 and 2026-03-22.
+  - **Appointment instant:** « 10:30 on 2026-03-22 » is expected at 10:30Z instead of 09:30Z.
+- **The CI log records the server's reading.** `test-audit-follow-ups.sql` prints it: `01:00:00` on the CI image, against the centre clock's `00:00:00`.
+- **Re-check on the CI image** (`17.6.1.165`, private stack, the job's steps replayed from `verify.yml` with remapped ports):
+  - `sql-and-concurrency`: 12 of 12 steps pass.
+  - `upgrades-from-097-to-105`: 8 of 8.
+  - `upgrades-from-106-to-111`: 6 of 6, Work and Calendar after the fixture fix.
+  - `upgrades-from-112-to-116`: 11 of 11.
+  - `browser-security`: 13 of 13.
+  - `browser-crm`: every step except one run of the RCC-B1 suite, which recorded `ChunkLoadError` page errors in its deliberate failed-chunk scenario. The same suite then passed twice in full in Chromium and WebKit. It is treated as a load flake to be confirmed by CI.
+
+**Independent review corrections (review of `b55ab3b`, CHANGES REQUIRED).** Fixed on the same branch; no rule is weakened.
+
+Database:
+
+- **B1 (blocker), reactivation bypass.** `guard_enrollment_group_year` also fires on `status`. A grouped row that becomes live again (from Rejected, Ended or no status) is checked like a new placement, as the capacity guard treats leaving Rejected. `test-audit-follow-ups.sql` adds three paths and the reverse order:
+  - the director RPC `save_enrollment_changes` from Rejected;
+  - a direct write from Rejected;
+  - a direct write from no status;
+  - the reverse order: same-year reactivation is accepted, then the group's year is locked.
+- **S1.** The portal-readiness "NULL school-year membership" fixture seeds with the year trigger disabled, and asserts the year is still NULL.
+- **N1.** A test of the wall-clock → instant direction at UTC+1, using a temporarily replaced clock: the 09:00 opening is 08:00Z and 23:30Z is already the next day.
+- **N2.** A test that one clean-up flag alone does not bypass the year check; both are needed.
+- **N3.**
+  - An update can no longer clear a group's year (`egc.group_year_missing`).
+  - The invalid-year message uses « 2026/2027 ».
+  - The 23505 on a replayed reception group create without a year came from `save_receptionist_group` (latest definition: 119). It compared the replayed NULL with the year the guard stored. The generator now re-creates it so that a NULL year matches the stored one (fifth edited function).
+- **N4, deviations recorded:**
+  - `academic_security.place` has no early year check; the trigger raises it with the same hint.
+  - The CRM early check in `crm_start_enrollment` uses 22023, not 23514, because its handler turns 23514 into a generic refusal.
+  - The generator now really edits five functions, matching its docstring.
+- **N5, not inlined (kept).** `public.centre_utc_offset()` keeps `SET search_path`; removing it would trip Supabase's `function_search_path_mutable` lint. Measured on 200k rows (local, CI image):
+  - with `SET`: 282–295 ms;
+  - without `SET` (inlined): 27 ms;
+  - the former zone literal: 56 ms.
+
+  That is about 1.3 µs per row. Batch G's budget test passes in CI. Wrapping the call as `(SELECT public.centre_utc_offset())` (one evaluation per statement) is left as an optional follow-up.
+- **N6.**
+  - `crm_security.command` (manual-lead birth date), `crm_start_enrollment` (enrollment date) and `save_receptionist_enrollment` (parameter default) now use `public.business_date()` instead of the session `current_date`.
+  - The generator asserts that no re-created body contains `current_date`, and the SQL suite has a catalog guard for it.
+  - Two Premium workshop functions (`save_receptionist_premium_membership`, `sync_premium_membership_entitlement`) still use `current_date`. They are not converted and are removed by Release B.
+- **N7, recorded.** The "no row changes" check of the upgrade test runs on a near-empty database.
+- **N8, recorded.** The zone guard catches only the literal zone name.
+
+Application:
+
+- **S1.**
+  - In the CRM enrollment dialog, the year field is read-only while a group with a year is chosen.
+  - `egc.school_year_mismatch` and `egc.group_year_missing` map to their own French text, with no « Réessayez » (`YEAR_REASONS`), with unit cases.
+- **S2.**
+  - `test-ui-foundation-browser.mjs` checks, for receptionist and director, the single-line programme pill and the « — » for an Ancien apprenant or Prospect file.
+  - For the director it also checks the pill's title and link and that the editable select carries the pill classes.
+  - The « Inscrit » assertion is scoped to the status pill.
+  - This suite is not wired into CI (known load-sensitive). It ran locally on the CI image.
+- **S3, deviation recorded (owner decision: `search_students_page` unchanged).** For director/admin the Groupe cell can show « Groupe à affecter » for an Inscrit file whose only live enrollment is Submitted or Under Review.
+- **N1.** The student page's new-enrollment date is the business date (`localBusinessDate`). Five export file names still use the UTC date, which equals the centre date at UTC+0; recorded.
+- **N3.**
+  - The group form checks consecutive years (`isSchoolYear`).
+  - `schoolYearOfGroup` rejects non-consecutive years.
+- **N4.**
+  - `EnrollmentModal` offers only groups of the enrollment's school year when it is known.
+  - The group page's learner picker already filtered by the group's year.
+- **N5.** The group page shows « Programme » as a pill and the school year on its own line.
+- **N6, recorded.** The Sentry checks live in `test-audit-follow-ups-ui.mjs`, not in a separate `test-sentry-instrumentation.mjs`.
+- **N7.** The Sentry scrubber also redacts phone numbers written with spaces, dots or dashes (eight digits or more; ISO dates kept), with unit cases.
+- **N9.** `centreParts`/`centreDate`/`formatCentre` throw `RangeError` on an invalid date, as the former Intl helpers did.
+
+**Local evidence** (private Supabase stack on remapped ports, synthetic data only):
+
+- **Unit, lint and build:** `npm test`, lint and build pass.
+- **SQL suites:** the 33 rollback-only SQL suites of the CI `sql-and-concurrency` shard pass. So does the new `test-audit-follow-ups.sql`.
+- **Concurrency:** the placement and portal concurrency suites pass.
+- **Upgrade test:** `test-audit-follow-ups-upgrade.mjs` passes. It shows that the 124 bodies read at UTC equal the 125 bodies over 13 instants, that the catalog changes only in the listed functions with their security posture and grants kept, that no row changes, and that a restore then reapply round trip works.
+- **Browser:** `test-ui-foundation-browser.mjs` passes in Chromium and WebKit. A visual check of the Students list, group form and student page was done on a local build.
+- **Sentry (H6), local only:**
+  - The built app now contains `.next/server/instrumentation.js`.
+  - A synthetic route-handler error reached a local capture listener. The e-mail and phone number were redacted, the cookie redacted and the query string removed.
+  - No error was sent to the real DSN or triggered on Production.
