@@ -1,6 +1,6 @@
 # Audit follow-ups (Batch H) — architecture, revision AFU-r1
 
-**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). **Implemented** on branch `feat/audit-follow-ups` with migration `125_audit_follow_ups.sql` ([implementation record](#implementation-record)); not merged or released.** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
+**Status: APPROVED FOR IMPLEMENTATION — revision AFU-r1 at exact head `d02a305`, approved by the owner on 2026-10-29 about 11:10 Asia/Shanghai with D-TZ = A, D-TZ-2 = A, D-H5a = A, D-H5b = A, D-H5c = A, and the read-only H5 dry run ([approval record](#approval-record)). **Implemented** with migration `125_audit_follow_ups.sql` ([implementation record](#implementation-record)). **RELEASED 2026-10-30:** migration 125 applied 05:01 UTC, PR #175 squash-merged as `858e5ee` and deployed 05:17 UTC ([release record](#release-record-r0r3)).** Tier 3: it changes a finance function (the reception discount limit), placement integrity (the school-year check on every placement path), the business date behind receipt numbers, payment-date windows and reports, and the server error reporting. Baseline: `origin/main` `ec63d32a57554e0005eb476944354ae0498b826e`, Production migration ledger 001–124 (recorded in [CURRENT_STATE](../../ai/CURRENT_STATE.md)).
 
 **Scope.** Eight follow-ups left after Batches A–G and the 2026-10-24 audit, delivered as **one outcome**: one implementation PR, one migration, one release. Every item below was checked against the code at the baseline; file and line references are to that commit.
 
@@ -689,3 +689,63 @@ Application:
   - The built app now contains `.next/server/instrumentation.js`.
   - A synthetic route-handler error reached a local capture listener. The e-mail and phone number were redacted, the cookie redacted and the query string removed.
   - No error was sent to the real DSN or triggered on Production.
+
+# Release record (R0–R3)
+
+**R0, R2 and R3 DONE (2026-10-30); R1 not needed; restore not run.** A fresh release session received the owner's release approval at about 04:14 UTC. Verbatim: "approve H release now: R0 and R2 only. No R1 (the H5 dry run was clean: 8 groups, all zeros)."
+
+- **Reviewed artifact:** PR #175 head `a3950e75180a514567c9a3ca1d012071fc0998c3`; `125_audit_follow_ups.sql` with MD5 `110098f92be6543c46a9fd844a590004` and blob `3c233cb097f06eab1927f38d9802ca5bc50c7341`.
+- **Restore script:** `125_audit_follow_ups_restore.sql`, MD5 `15bc47db78c24fb9411b07a34bc68d2d`; not approved to run.
+- **Merge (R3):** the owner told the coordinating session to merge after R2, as the approval set out.
+
+Times are UTC on 2026-10-30. Counts and hashes only, no personal data.
+
+- **Before Production:**
+  - The PR head was unchanged, `required` was green, and the file's MD5 and blob matched the approved values.
+  - `main` was `a3d4202`.
+  - All of this was re-checked at 05:00:32.
+- **R0 (04:15–04:18, read-only):**
+  - **Ledger:** exactly 001–124; rows 122–124 have their recorded MD5s.
+  - **Catalog:** equal to a clean local 124 build.
+    - All 467 functions matched one by one on body, owner, ACL, security mode and settings, including the 34 that 125 replaces.
+    - Relations, columns, constraints, policies, triggers, indexes and schemas also matched.
+    - The only difference is D1's `receipts_number_required` constraint, from the approved data step of 2026-10-28.
+  - **Clock:** PostgreSQL 17.6, server `TimeZone` UTC; `Africa/Casablanca` still reads as **+01:00**.
+  - **H5:** the dry-run summary re-read unchanged: 8 groups, all zeros.
+  - **D-TZ-2:** **1** open future CRM task, a manual `center_visit` appointment, plus 46 overdue open tasks (47 open in all). D-TZ-2 = A keeps the stored instants.
+  - **Safety copy:** a targeted catalog export into the owner's private backup folder (folder 700, files 600, not uploaded or committed). It holds:
+    - definitions, owners and ACLs of the 34 replaced functions, as JSON and SQL;
+    - the 14 triggers on `enrollments` and `groups`;
+    - `SHA256SUMS`.
+
+    Migration 125 changes no row data.
+- **R1:** not run; the H5 dry run found nothing to correct.
+- **R2 (guarded wrapper, [method](../../ai/WORKFLOWS.md#guarded-release-wrapper)):**
+  - **Rehearsal:** both wrapper files ran first on a private local stack: dry run, apply, and a second apply refused with `R2_PRE_LEDGER`.
+  - **Dry run (05:00:39–05:00:47):** ended in `DRYRUN_OK all 125 guards passed`. A re-read afterwards showed ledger 124 and every digest unchanged.
+  - **Apply (05:01:08–05:01:14):** committed, exit 0. Wrapper SHA-256 `3098beb4…`; it differs from the dry run only in its header line and in ending with `commit` instead of the sentinel.
+  - **Read-only checks (05:01:30):**
+    - **Ledger:** 001–125. Row 125 `audit_follow_ups` has stored MD5 `110098f92be6543c46a9fd844a590004`, equal to the reviewed file, and `created_by` copied from row 124.
+    - **Clock:** `centre_utc_offset()` is `00:00:00`, `business_date()` is 2026-10-30 (the UTC date) and `centre_school_year()` is 2026/2027.
+    - **Zone name:** no function body uses `Africa/Casablanca` in a time calculation. The name remains only in:
+      - the two functions kept on purpose, `crm_get_marketing_cohort` and `egc_cleanup_c1`;
+      - text labels in five CRM functions ([deviation 2](#implementation-record)).
+    - **Triggers:** `enrollment_group_year_guard` is enabled, `BEFORE INSERT OR UPDATE OF group_id, school_year, status` on `enrollments`. `groups_year_guard` is enabled, `BEFORE INSERT OR UPDATE OF annee` on `groups`.
+    - **Payment function:** `create_charge_payment_financial` has no reception cap.
+    - **Catalog:** all nine digests equal a clean local 125 build.
+      - Functions 467 → 472: 5 added, none dropped.
+      - Exactly the 34 expected functions changed, each keeping its owner, ACL, security mode and settings.
+      - Triggers 168 → 170; nothing else changed.
+- **R3:**
+  - PR #175 was squash-merged at 05:15:17 as `858e5eec980331b91407e8a6b83880f3d1533f3b`.
+  - GitHub `Production` deployment `7431321529` reported `success` at 05:17:07.
+  - Between 05:01 and 05:17 the previous application ran on the new database, which [Rollout](#rollout) shows is safe.
+- **R4 (this docs closeout):**
+  - CURRENT_STATE, the plans index, OWNER_DECISIONS and ADR-014 are updated.
+  - The guide screenshots s12, s13 and q02b were retaken. They now show the « Inscrit » status pill, the programme pills and « Groupe principal ».
+  - The retake used the released build on a private local stack with synthetic data, at the same sizes and with the same call-outs.
+- **Not recorded:** Vercel runtime errors (not readable from these sessions), an HTTP probe of the deployed application and an observation window.
+- **Open:**
+  - The owner's first morning check: a reception discount above 10 %, the programme pills, the group year, and that the one open future appointment shows the right time.
+  - The restore script stays unapplied and needs its own approval.
+- **Process note:** the release brief pointed to a "guarded release wrapper" section of [WORKFLOWS](../../ai/WORKFLOWS.md), which did not exist. The release session followed the method of the [Batch G release record](speed-as-the-centre-grows.md#release-record-r0r3). This closeout adds a short [Guarded release wrapper](../../ai/WORKFLOWS.md#guarded-release-wrapper) section describing that method as it was used for 125.

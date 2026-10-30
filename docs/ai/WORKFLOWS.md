@@ -105,3 +105,46 @@ The [deployed UX corrections](../architecture/evidence/receptionist-production-u
 ## UIF-r1a staff identity — deployed workflow
 
 Under deployed [UIF-r1a](../architecture/plans/english-hills-ui-foundation.md#uif-r1a--owner-approved-stable-row-staff-identity), Opportunities Board/List, My Work and drawer current owner/assignee displays use safe labels projected by existing bounded reads. Moving an independent staff picker between pages does not change unchanged row identity. Current reassignment labels remain visible outside the picker page; prospect owner and task assignee remain separate. Migration 110 and the matching frontend are deployed; Production is recorded through 110 in [CURRENT_STATE](CURRENT_STATE.md#ui-foundation-production-closeout--2026-10-06).
+
+## Guarded release wrapper
+
+How a release/operator session applies a reviewed migration to Production. This is the method used for migration 125 (Batch H, [release record](../architecture/plans/audit-follow-ups.md#release-record-r0r3)), and the one the ledger records in [CURRENT_STATE](CURRENT_STATE.md) for migrations 117–124. It grants no approval: each step runs only as the owner's release approval names it, under [AGENTS](../../AGENTS.md).
+
+**Transport.** `supabase db query --linked --project-ref <ref> -f <file>`. It runs as `postgres`, returns only the last statement's rows and drops notices. Read-only files:
+- start with `set transaction read only;`;
+- run one query each;
+- print counts and hashes only, never personal data.
+
+**Before Production:**
+- The PR head equals the reviewed SHA and `required` is green.
+- The migration file's MD5 and git blob equal the approved values.
+- The ledger is exactly the expected ceiling, with the previous rows' recorded MD5s.
+- Production's catalog digest equals a clean local build at that ceiling. The digest covers functions (body, owner, ACL, security mode, settings), relations, columns, constraints, policies, triggers, indexes and schemas. Every difference must be explained.
+- Instead of a dump, the objects to be replaced are exported to the owner's private backup folder (folder 700, files 600, with `SHA256SUMS`). The export is never uploaded or committed.
+
+**The wrapper.** Two files, generated from the reviewed file and checked against its MD5 and blob. Each is one transaction:
+1. `begin`, `lock_timeout` 5 s and a `statement_timeout`.
+2. Precondition blocks that raise named errors (`R2_PRE_*`):
+   - ledger count and maximum version;
+   - MD5 of the previous rows;
+   - the new objects are absent;
+   - the catalog digest equals the pre-image.
+3. The migration body, verbatim, without its own `begin`/`commit`.
+4. The ledger row: `statements = array[<file text>]`, `created_by` copied from the previous row.
+5. Postcondition blocks that raise named errors (`R2_POST_*`):
+   - ledger count;
+   - stored MD5 equals the reviewed file;
+   - `created_by`;
+   - functional probes;
+   - the catalog digest equals a clean local build at the new ceiling.
+6. The ending differs between the two files:
+   - the **dry run** ends with `raise exception 'DRYRUN_OK …'` and `rollback`; the sentinel is the only proof every guard passed, because notices are dropped;
+   - the **apply** ends with `commit`.
+
+**Order:**
+1. Rehearse both files on a private local stack: dry run, apply, then a second apply, which the ledger guard must refuse.
+2. Run the Production dry run, which must end in `DRYRUN_OK`. Re-read the ledger and digests to show nothing changed.
+3. Apply inside the approved window.
+4. Run the read-only checks and stop to report.
+
+Merge and deploy only as the approval says, normally within minutes, with the old application compatible with the new database. Any guard failure or surprise means stop and report. Never edit the migration body, and never run the prepared restore without its own approval. A docs closeout PR records the evidence: the plan's release record and CURRENT_STATE.

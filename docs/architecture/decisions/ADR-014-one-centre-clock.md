@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted for implementation** (Maroine, 2026-10-29 about 11:10 Asia/Shanghai) as decision D-TZ = A of the [audit follow-ups plan](../plans/audit-follow-ups.md), revision AFU-r1 at head `d02a305`. **Implementation:** migration `125_audit_follow_ups.sql` (number taken at merge) and `src/lib/centreClock.mjs` on branch `feat/audit-follow-ups`; not merged, not applied in Production. [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns release evidence once it exists.
+**Accepted for implementation** (Maroine, 2026-10-29 about 11:10 Asia/Shanghai) as decision D-TZ = A of the [audit follow-ups plan](../plans/audit-follow-ups.md), revision AFU-r1 at head `d02a305`. **Implementation:** migration `125_audit_follow_ups.sql` and `src/lib/centreClock.mjs` (PR #175). **Live since 2026-10-30:** 125 was applied in Production at 05:01 UTC and the application deployed at 05:17 UTC ([release record](../plans/audit-follow-ups.md#release-record-r0r3)). [CURRENT_STATE](../../ai/CURRENT_STATE.md) owns release evidence.
 
 ## Date
 
