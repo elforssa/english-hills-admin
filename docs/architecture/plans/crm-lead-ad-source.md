@@ -36,7 +36,7 @@ One forward migration, `126_crm_lead_ad_source.sql`: `create or replace` of `crm
 
 ## Rollout risk
 
-Low. The read is additive inside its existing envelope; a failure of the read hides only its own lines (existing behaviour). Release: migration 126 first, then the application; rollback by re-creating the 107 body (restore script not needed: the 107 text is in the repository).
+Low. The read is additive inside its existing envelope; a failure of the read hides only its own lines (existing behaviour). Release: migration 126 first, then the application; rollback by re-creating the 107 body **and** `drop function crm_security.inquiry_ad_source(uuid)` (restore script not needed: the 107 text is in the repository).
 
 # Design
 
@@ -76,7 +76,7 @@ The lead list card, analytics per ad set or ad, any change to stored attribution
 
 # Release steps (for the release session; each needs its own approval)
 
-1. **R0** read-only: Production ledger is 001–125 and the two function bodies match the 107 text.
+1. **R0** read-only: the Production ledger is 001–125, the body of `crm_get_operational_acquisition_summary(uuid)` equals the 107 text, and `crm_security.inquiry_ad_source(uuid)` does not exist.
 2. **R1** apply migration 126 through the [guarded release wrapper](../../ai/WORKFLOWS.md#guarded-release-wrapper); verify the ledger row 126, the two catalog entries (posture and grants as in the upgrade rehearsal) and no row change.
 3. **R2** merge the PR; Vercel deploys the application.
 4. **R3** read-only check: open one website lead and one Instant Form lead on the panel as reception and read the names; record the closeout in [CURRENT_STATE](../../ai/CURRENT_STATE.md).
