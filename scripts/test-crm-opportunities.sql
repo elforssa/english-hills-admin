@@ -78,7 +78,8 @@ do $$ declare r jsonb; b jsonb; c jsonb; l uuid:=(select lead from fixture f whe
  update public.crm_leads set conversion_review_required=true where id=l;
  r:=public.crm_get_operational_acquisition_summary(l);
  perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r)k)=array['first_inquiry','latest_inquiry'],'exact acquisition envelope flagged fixture');
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'first_inquiry')k)=array['channel','occurred_at','source_label'] and (select array_agg(k order by k) from jsonb_object_keys(r->'latest_inquiry')k)=array['channel','occurred_at','source_label'],'six allowed inquiry values only');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'first_inquiry')k)=array['ad','channel','occurred_at','source_label'] and (select array_agg(k order by k) from jsonb_object_keys(r->'latest_inquiry')k)=array['ad','channel','occurred_at','source_label'],'six allowed inquiry values plus the 126 ad object only');
+ perform pg_temp.ok(r->'latest_inquiry'->'ad'='null'::jsonb and not (r::text ~* '(utm|fbclid|fbc|fbp|landing|referrer|raw_payload|consent)'),'126: a latest row without attribution gives ad null and nothing technical leaves');
  perform pg_temp.ok(not (public.crm_get_workspace_detail(l)->>'conversion_review_required')::boolean,'workspace masks flag');
  perform pg_temp.denied(format('select public.crm_get_submission_attribution(%L)',(select first_touch from fixture f where f.i=1)),'42501');
  perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000001',true);

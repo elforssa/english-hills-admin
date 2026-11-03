@@ -118,7 +118,8 @@ const studentPills=async role=>{
     }
     if(name==='crm_get_work_queue') { if(hold)await hold;if(crmMode==='error')return failure();if(crmMode==='unavailable')return json(null);return json({rows:crmMode==='empty'?[]:[{...task,lead:card}],counts:{overdue:0,today:1,tomorrow:0,upcoming:0},has_more:false,boundaries:{d1:'2030-06-15T00:00:00Z'}}); }
     if(name==='crm_get_workspace_detail')return json(lead);
-    if(name==='crm_get_operational_acquisition_summary')return json({first_inquiry:{channel:'website',source_label:'Site web',occurred_at:'2026-10-01T10:00:00Z'},latest_inquiry:{channel:'website',source_label:'Site web',occurred_at:'2026-10-01T10:00:00Z'}});
+    // Migration 126: the latest inquiry names its Meta ad; the first one is identical and omitted.
+    if(name==='crm_get_operational_acquisition_summary')return json({first_inquiry:{channel:'website',source_label:'Site web',occurred_at:'2026-10-01T10:00:00Z',ad:{campaign_name:'UIF campagne',adset_name:'UIF ensemble',ad_name:'UIF publicité',campaign_id:'1',adset_id:'2',ad_id:'3'}},latest_inquiry:{channel:'website',source_label:'Site web',occurred_at:'2026-10-01T10:00:00Z',ad:{campaign_name:'UIF campagne',adset_name:'UIF ensemble',ad_name:'UIF publicité',campaign_id:'1',adset_id:'2',ad_id:'3'}}});
     if(name==='crm_get_form_answers')return json(args.p_offset===0?answers:{rows:[{...answers.rows[0],id:randomUUID(),source_label:'Demande antérieure'}],total:6});
     if(name==='crm_list_open_tasks')return json([task]);
     if(name==='crm_get_timeline'||name==='crm_list_placements'||name==='crm_list_intake_review')return json({rows:[],total:0,has_more:false});
@@ -161,6 +162,7 @@ const studentPills=async role=>{
   if(!process.argv.includes('--responsive-only')) {
   phase=engine.name()+' reset/debounce';await navigate(app+'/crm/leads?view=mine&layout=list&contact='+contactId+'&lead='+leadId);await page.getByRole('dialog').getByText('Résumé de la dernière demande',{exact:true}).waitFor();
   await sheet.getByText('13–17 ans',{exact:true}).waitFor();
+  await sheet.getByText('Publicité · ',{exact:true}).waitFor();const demande=await sheet.innerText();assert(demande.includes('Publicité · UIF ensemble › UIF publicité') && demande.includes('UIF campagne'),'migration 126: ad set › ad then the campaign under Dernière demande');assert.equal(await sheet.getByText('Première demande · ',{exact:true}).count(),0);
   assert(await sheet.getByText('WhatsApp +212698765432',{exact:true}).count(),'RCC-B1 header destinations: Tél. … · WhatsApp …');assert((await sheet.innerText()).includes('+212698765432'));assert((await sheet.innerText()).includes('+212612345678'));
   const summaryBox=await sheet.getByRole('heading',{name:'Résumé de la dernière demande'}).boundingBox(),placementBox=await sheet.getByRole('heading',{name:'Test de niveau',exact:true}).boundingBox();assert(summaryBox.y<placementBox.y,'answer summary precedes downstream panels');
   await sheet.getByRole('button',{name:'WhatsApp',exact:true}).click();const action=page.getByRole('dialog').last();await action.getByText('WhatsApp : +212698765432',{exact:true}).waitFor();assert.equal(await action.getByRole('link',{name:'Ouvrir WhatsApp'}).getAttribute('href'),'https://wa.me/212698765432');

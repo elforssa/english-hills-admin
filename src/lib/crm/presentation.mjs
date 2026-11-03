@@ -313,3 +313,15 @@ export function restoredScroll(saved, filterKey, { scrollWidth, clientWidth, scr
   const clamp = (value, max) => Math.max(0, Math.min(Number(value) || 0, Math.max(0, max)));
   return { left: clamp(saved.left, scrollWidth - clientWidth), top: clamp(saved.top, scrollHeight - clientHeight) };
 }
+// Reception sees the Meta ad behind an inquiry as names (migration 126, owner decision
+// 2026-11-03): "ad set › ad" with the campaign as a muted suffix, the campaign alone
+// when no ad set or ad name exists, nothing when the read gives no name (ids alone
+// never show).
+export function adSourceLabel(ad) {
+  if (!ad || typeof ad !== 'object') return null;
+  const text = value => (typeof value === 'string' && value.trim() ? value.trim() : null);
+  const main = [text(ad.adset_name), text(ad.ad_name)].filter(Boolean).join(' › ');
+  const campaign = text(ad.campaign_name);
+  if (!main && !campaign) return null;
+  return main ? { main, campaign } : { main: campaign, campaign: null };
+}

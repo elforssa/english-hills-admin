@@ -340,6 +340,12 @@ jobs:
           python3 scripts/generate-centre-clock.py --check
           node scripts/test-audit-follow-ups-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Lead ad source 125 to 126 upgrade and read acceptance
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 125 --no-seed
+          node scripts/test-crm-lead-ad-source-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression
@@ -367,6 +373,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-online-learning.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-portal-readiness.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-lead-ad-source.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
       - name: Payment, receipt deletion and receptionist rollback-only regression
         if: matrix.shard == 'sql-and-concurrency'
