@@ -170,6 +170,26 @@ rejectMinimatch('boolean fix on the advisory root', ({ report: r }) => { r.vulne
 rejectMinimatch('boolean fix with a non-empty fix plan', ({ fixPlan: f }) => { f.changed = 1; });
 rejectMinimatch('boolean fix with an invalid fix plan', (inputs) => { inputs.fixPlan = { added: 0, removed: 0, changed: 0 }; });
 rejectMinimatch('unassessed major fix metadata', ({ report: r }) => { r.vulnerabilities.eslint.fixAvailable = { name: 'eslint', version: '9.0.0', isSemVerMajor: true }; });
+// CI (Node 22.23.4, npm 10.9.9) reported eslint-config-next 12.0.4 where a local run of the
+// same npm had reported 0.2.4: any major downgrade suggestion of the two roots is the
+// same non-fix; an upgrade, the installed major, another package or a malformed version
+// is not.
+const ciShape = structuredClone(minimatchReport);
+for (const name of Object.keys(ciShape.vulnerabilities)) {
+  if (ciShape.vulnerabilities[name].fixAvailable?.name === 'eslint-config-next') ciShape.vulnerabilities[name].fixAvailable = { name: 'eslint-config-next', version: '12.0.4', isSemVerMajor: true };
+}
+ciShape.vulnerabilities['eslint-plugin-react'].fixAvailable = true;
+assert.equal(check(ciShape).permitted, 18, 'the CI metadata shape is accepted');
+for (const fix of [{ name: 'eslint-config-next', version: '14.2.35', isSemVerMajor: true }, { name: 'eslint', version: '7.32.0', isSemVerMajor: true }]) {
+  const downgrade = structuredClone(minimatchReport);
+  downgrade.vulnerabilities.eslint.fixAvailable = fix;
+  assert.equal(check(downgrade).permitted, 18, `${fix.name} ${fix.version} downgrade suggestion accepted`);
+}
+for (const fix of [{ name: 'eslint-config-next', version: '15.6.0', isSemVerMajor: true }, { name: 'eslint-config-next', version: '16.0.0', isSemVerMajor: true },
+  { name: 'eslint', version: '8.57.2', isSemVerMajor: true }, { name: 'minimatch', version: '11.0.4', isSemVerMajor: true }, { name: 'eslint-config-next', version: 'not-a-version', isSemVerMajor: true },
+  { name: 'eslint-config-next', version: '12.0.4', isSemVerMajor: false }, { name: 'eslint-config-next', isSemVerMajor: true }]) {
+  rejectMinimatch(`fix metadata ${fix.name} ${fix.version} ${fix.isSemVerMajor}`, ({ report: r }) => { r.vulnerabilities.eslint.fixAvailable = fix; });
+}
 rejectMinimatch('approved tooling version changed', ({ lock: l }) => { l.packages[node('eslint')].version = '8.57.2'; });
 rejectMinimatch('approved copy version changed', ({ lock: l }) => { l.packages[node('minimatch')].version = '3.1.4'; });
 rejectMinimatch('registry failure', (inputs) => { inputs.minimatchVersions = {}; });

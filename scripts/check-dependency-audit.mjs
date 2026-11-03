@@ -113,13 +113,16 @@ const minimatchEdges = [
   [node('rimraf'), 'dependencies', 'glob', node('rimraf/node_modules/glob')],
   [node('rimraf/node_modules/glob'), 'dependencies', 'minimatch', node('minimatch')],
 ];
-// npm's fix metadata on 2026-11-03: the two major "fixes" are downgrade suggestions
-// (ESLint 4, eslint-config-next 0.2) and do not count. npm also marks one or two
-// propagated entries `fixAvailable: true` (the entry varies between runs) although
-// `npm audit fix --dry-run` changes nothing, so a bare `true` is accepted only on a
-// propagated entry and only while that dry-run plan is empty; a real compatible fix
-// shows up in the plan and retires the exception.
-const minimatchFixMetadata = [['eslint', '4.0.0'], ['eslint-config-next', '0.2.4']];
+// npm's fix metadata on 2026-11-03: the "fixes" it reports are major DOWNGRADE
+// suggestions of the two dev roots (eslint 4.0.0; eslint-config-next 0.2.4 or 12.0.4,
+// the version varies between runs of the same npm) and do not count. Such metadata is
+// accepted only for these two roots and only when the suggested major is below the
+// installed one; an upgrade suggestion or any other package requires reassessment.
+// npm also marks one or two propagated entries `fixAvailable: true` (the entry varies
+// between runs) although `npm audit fix --dry-run` changes nothing, so a bare `true`
+// is accepted only on a propagated entry and only while that dry-run plan is empty; a
+// real compatible fix shows up in the plan and retires the exception.
+const minimatchFixRoots = ['eslint', 'eslint-config-next'];
 // Stable releases newer than the approved copies in their lines that were assessed and
 // found still inside the advisory range (10.2.6, assessed 2026-11-03). Any other newer
 // stable release in a 3.x or 10.x line requires reassessment and fails closed.
@@ -292,7 +295,9 @@ export function validateAudit(report, lock, manifest, publishedBracesVersions, p
     } else {
       assert.ok(entry.fixAvailable === false || (object(entry.fixAvailable) && entry.fixAvailable.isSemVerMajor === true), 'Compatible minimatch advisory fix available; remove exception');
       if (object(entry.fixAvailable)) {
-        assert.ok(minimatchFixMetadata.some(([fixName, fixVersion]) => fixName === entry.fixAvailable.name && fixVersion === entry.fixAvailable.version), 'Unassessed minimatch fix metadata changed');
+        const fix = entry.fixAvailable;
+        const installed = minimatchFixRoots.includes(fix.name) ? minimatchConsumers[node(fix.name)] : undefined;
+        assert.ok(installed && typeof fix.version === 'string' && semver.valid(fix.version) && semver.major(fix.version) < semver.major(installed), 'Unassessed minimatch fix metadata changed');
       }
     }
     assert.ok(Array.isArray(entry.via) && entry.via.length > 0, 'Missing advisory provenance');
