@@ -328,6 +328,14 @@ Plan: [audit follow-ups](../architecture/plans/audit-follow-ups.md#approval-reco
   - The owner's first morning check: a reception discount above 10 %, the programme pills, the group year, and the one open future CRM appointment (D-TZ-2).
   - The restore script needs its own approval.
 
+## Dependency audit — minimatch dev-only exception — APPROVED (2026-11-03)
+
+Policy: [dependency audit policy](../security/dependency-audit-policy.md#temporary-dev-only-minimatch-exception) (Tier 2, PR #179). Channel: chat with Claude, relayed by the coordinating session.
+
+- **Approval:** 2026-11-03, verbatim: "approve audit exception". The full dependency gate (`npm run audit:policy`) accepts the moderate advisory GHSA-g3hv-75wg-m249 (`minimatch <11.0.1`) for the two dev-only copies under ESLint 8, typescript-eslint and rimraf, exactly as installed on 2026-11-03, modelled on the existing braces exception: exact advisory, package, severity, range and node paths; every consumer pinned and dev-only; any production node, new consumer, other advisory, severity or range change, compatible fix or unassessed new stable release fails.
+- **Unchanged:** the production gate (`npm audit --omit=dev --audit-level=moderate`, no exceptions), the braces exception and every dev tool version.
+- **Retirement:** when ESLint tooling moves to minimatch ≥ 11.0.1 (an ESLint 9 / typescript-eslint upgrade is its own decision) or the registry publishes a compatible fix.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
