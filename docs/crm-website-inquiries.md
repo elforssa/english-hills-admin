@@ -85,7 +85,7 @@ Website fields are unverified observations: landing_page, referrer, the five UTM
 
 No campaign_id, adset_id, ad_id, Page ID or Meta lead ID is inferred or accepted. No Meta request is made because a click ID exists. Website attribution is `partial` when observations exist, otherwise `unavailable`, never provider-verified `complete`. `captured_at`, submission received time and website occurrence time are server receipt time; client timestamps cannot manipulate touch ordering. Raw browser objects/headers/cookies/IPs are not copied into attribution. Consent records only acceptance and server receipt time.
 
-All tracking stays in protected attribution/job data, outside operational answers and receptionist projections. `retention_until` remains NULL; a formal database/job retention policy and future controlled cleanup remain activation dependencies.
+All tracking stays in protected attribution/job data, outside operational answers and receptionist projections. Since the website release of 2026-11-03 the three UTM fields carry Meta ids (`utm_campaign` = campaign, `utm_term` = ad set, `utm_content` = ad); migration 126 ([plan](architecture/plans/crm-lead-ad-source.md); on a branch, not released) resolves them to names at read time for the lead panel, by id against the synced Insights objects, without changing the stored row or exposing the UTM values themselves. `retention_until` remains NULL; a formal database/job retention policy and future controlled cleanup remain activation dependencies.
 
 ## Director configuration
 

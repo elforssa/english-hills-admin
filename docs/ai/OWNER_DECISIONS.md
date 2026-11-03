@@ -335,6 +335,13 @@ Policy: [dependency audit policy](../security/dependency-audit-policy.md#tempora
 - **Approval:** 2026-11-03, verbatim: "approve audit exception". The full dependency gate (`npm run audit:policy`) accepts the moderate advisory GHSA-g3hv-75wg-m249 (`minimatch <11.0.1`) for the two dev-only copies under ESLint 8, typescript-eslint and rimraf, exactly as installed on 2026-11-03, modelled on the existing braces exception: exact advisory, package, severity, range and node paths; every consumer pinned and dev-only; any production node, new consumer, other advisory, severity or range change, compatible fix or unassessed new stable release fails.
 - **Unchanged:** the production gate (`npm audit --omit=dev --audit-level=moderate`, no exceptions), the braces exception and every dev tool version.
 - **Retirement:** when ESLint tooling moves to minimatch ≥ 11.0.1 (an ESLint 9 / typescript-eslint upgrade is its own decision) or the registry publishes a compatible fix.
+## Lead ad source on the CRM panel — APPROVED (2026-11-03)
+
+Plan: [lead ad source](../architecture/plans/crm-lead-ad-source.md#approval-record), revision LAS-r1 (Tier 3). Channel: chat with Claude, relayed by the coordinating session.
+
+- **Approval:** 2026-11-03, verbatim: "approve ad names". Reception, admin and director see on the lead panel which Meta campaign, ad set and ad brought the inquiry, as readable names (« Publicité · ad set › ad », campaign muted), under « Dernière demande » and, when it differs, « Première demande ». This lifts the Outcome-3 exclusion of campaign/ad names from reception for these names only; raw UTMs, click ids, landing page, referrer, raw payload and consent evidence stay out of every reception read.
+- **Delivers** (migration 126, PR #178, implemented on a branch): Instant Form leads show their stored name snapshots; website leads, whose UTMs carry Meta ids since the website release of 2026-11-03, are resolved by id at read time against the synced Insights objects. No stored row changes.
+- **Not approved by this decision:** the lead list card, analytics per ad set or ad, any change to stored attribution rows, the merge, the migration and the deployment; each release step needs its own approval.
 
 ## Deferred backlog after RCC-r1
 

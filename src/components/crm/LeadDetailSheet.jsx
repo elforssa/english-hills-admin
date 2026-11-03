@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
-import { ACTIVE, CALL_TASKS, EVENTS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, dateLabel, scheduledLabel, activityBody, historySummary, phoneLinks, taskTitle } from '@/lib/crm/presentation.mjs';
+import { ACTIVE, CALL_TASKS, EVENTS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, adSourceLabel, dateLabel, scheduledLabel, activityBody, historySummary, phoneLinks, taskTitle } from '@/lib/crm/presentation.mjs';
 import { programmeLabel, CHANNEL_LABELS, answerValue, inquirySummary } from '@/lib/ui/presentation.mjs';
 import { LifecycleBadge, Pager, ReadState } from './CrmShared';
 import CrmActionDialog from './CrmActionDialog';
@@ -17,6 +17,13 @@ import PlacementTestModal from '@/components/placement/PlacementTestModal';
 import { useGuardedLayer, useNestedLayerEscapeGuard } from './useNestedLayerEscapeGuard';
 const inquiryLabel = inquiry => `${inquiry?.source_label || CHANNEL_LABELS[inquiry?.channel] || 'Origine non précisée'} · ${dateLabel(inquiry?.occurred_at)}`;
 const sameInquiry = (a, b) => JSON.stringify([a?.source_label, a?.channel, a?.occurred_at]) === JSON.stringify([b?.source_label, b?.channel, b?.occurred_at]);
+// The Meta ad behind an inquiry (migration 126): "Publicité · ad set › ad", the campaign
+// as small muted text after it; nothing when the read gives no name. Wraps on phones.
+function AdSource({ ad }) {
+  const label = adSourceLabel(ad);
+  if (!label) return null;
+  return <div className="break-words"><dt className="inline text-muted-foreground">Publicité · </dt><dd className="inline">{label.main}{label.campaign && <span className="ml-1 text-xs text-muted-foreground">{label.campaign}</span>}</dd></div>;
+}
 function HistoryItem({ item }) {
   return <li><p className="text-xs text-muted-foreground">{dateLabel(item.occurred_at)}{item.actor_name && <span className="ml-2" title={item.actor_name}>{/synthe|receptionist|director|admin|system|service_role/i.test(item.actor_name) ? 'Équipe' : item.actor_name}</span>}</p><p className="mt-1 text-sm font-medium">{EVENTS[item.event_type] || 'Activité enregistrée'}{item.outcome && !item.event_type.startsWith('call_') ? ` · ${OUTCOMES[item.outcome] || LOST[item.outcome] || NOT_QUALIFIED[item.outcome] || 'Mise à jour'}` : ''}</p>{item.body && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">{activityBody(item.body)}</p>}</li>;
 }
@@ -105,7 +112,7 @@ export default function LeadDetailSheet({
   {(lead.closure_reason || ['LOST', 'NOT_QUALIFIED'].includes(lead.status)) && <section className="space-y-3">{lead.closure_reason && <p className="text-sm text-slate-600">{LOST[lead.closure_reason] || NOT_QUALIFIED[lead.closure_reason] || 'Clôturé'}{lead.closure_note ? ` · ${lead.closure_note}` : ''}</p>}{['LOST', 'NOT_QUALIFIED'].includes(lead.status) && <Button onClick={() => open('reopen')}>Rouvrir le prospect</Button>}</section>}
   <section aria-labelledby={`${historyId}-demande`} className="space-y-3 border-t pt-4"><h3 id={`${historyId}-demande`} className="text-base leading-6 font-semibold">Demande</h3>
    <dl className="text-sm"><div><dt className="inline text-muted-foreground">Origine du prospect · </dt><dd className="inline break-words">{lead.source_label || 'Origine à préciser'}</dd></div></dl>
-   <ReadState query={acquisition}>{acquisition.data && <dl className="space-y-1 text-sm"><div><dt className="inline text-muted-foreground">Dernière demande · </dt><dd className="inline break-words">{inquiryLabel(latest)}</dd></div>{first && !sameInquiry(first, latest) && <div><dt className="inline text-muted-foreground">Première demande · </dt><dd className="inline break-words">{inquiryLabel(first)}</dd></div>}</dl>}</ReadState>
+   <ReadState query={acquisition}>{acquisition.data && <dl className="space-y-1 text-sm"><div><dt className="inline text-muted-foreground">Dernière demande · </dt><dd className="inline break-words">{inquiryLabel(latest)}</dd></div><AdSource ad={latest?.ad} />{first && !sameInquiry(first, latest) && <><div><dt className="inline text-muted-foreground">Première demande · </dt><dd className="inline break-words">{inquiryLabel(first)}</dd></div><AdSource ad={first?.ad} /></>}</dl>}</ReadState>
    <dl className="text-sm"><div><dt className="inline text-muted-foreground">Intérêt déclaré · </dt><dd className="inline break-words">{programmeLabel(lead.program)}</dd></div></dl>
    <div><h4 className="mb-1 text-sm font-medium">Résumé de la dernière demande</h4><ReadState query={summaryForms} empty="Aucune réponse complémentaire enregistrée.">{summaryForms.data?.rows?.length ? <div className="space-y-3">{summaryForms.data.rows.slice(0,1).map(sub => <div key={sub.id}><p className="text-xs text-muted-foreground">{sub.source_label || 'Demande'} · {dateLabel(sub.occurred_at)}</p><dl className="mt-2 space-y-2">{inquirySummary(sub).map((answer,i)=><div key={i}><dt className="text-xs text-muted-foreground">{answer.label || answer.key}</dt><dd className="break-words text-sm">{answerValue(answer)}</dd></div>)}</dl></div>)}</div> : null}</ReadState></div>
    <details onToggle={e => setFormsOpen(e.currentTarget.open)}><summary className="cursor-pointer py-2 text-sm font-semibold">Toutes les réponses aux formulaires</summary>{formsOpen && <ReadState query={forms} empty="Aucune réponse enregistrée.">{forms.data?.rows?.length ? forms.data.rows.map(sub => <section key={sub.id} className="mb-4 rounded-lg bg-slate-50 p-4"><p className="text-sm font-medium">{sub.source_label || 'Demande'}</p><p className="mb-3 text-xs text-muted-foreground">{dateLabel(sub.occurred_at)}</p><dl className="space-y-3">{sub.answers.map((answer, i) => <div key={i}><dt className="text-xs text-slate-500">{answer.label || answer.key}</dt><dd className="mt-1 break-words text-sm">{answerValue(answer)}</dd></div>)}</dl>{!sub.answers.length && <p className="text-sm text-slate-500">Aucune réponse complémentaire.</p>}</section>) : null}</ReadState>}<Pager offset={formOffset} total={forms.data?.total || 0} size={5} onChange={setFormOffset} /></details>
