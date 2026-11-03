@@ -60,7 +60,7 @@ Production migrations, provider activation, secrets, scheduler and Vercel config
 
 ## Dependency audit gates
 
-Production dependency advisories at moderate or above remain CI-blocking without exceptions. The full dependency gate retains a temporary exact advisory/path/version exception for unpatched build/lint-only braces exposure, with fail-closed metadata, path and compatible-fix checks. See the [dependency audit policy](../security/dependency-audit-policy.md) for the approved graph, retirement triggers and validation commands. This source policy is not merge or release authorization.
+Production dependency advisories at moderate or above remain CI-blocking without exceptions. The full dependency gate retains two temporary exact advisory/path/version exceptions, each with fail-closed metadata, path and compatible-fix checks: the unpatched build/lint-only braces exposure, and, since the owner decision of 2026-11-03 ([OWNER_DECISIONS](OWNER_DECISIONS.md#dependency-audit--minimatch-dev-only-exception--approved-2026-11-03); PR #179, on a branch), the moderate `minimatch <11.0.1` advisory for the two dev-only copies under ESLint 8, typescript-eslint and rimraf. The production copy of minimatch (11.0.4 under the Sentry bundler plugins, after the glob 14 override) is outside the range and is not an exception. See the [dependency audit policy](../security/dependency-audit-policy.md) for the approved graphs, retirement triggers and validation commands. This source policy is not merge or release authorization.
 
 ## UIF-r1a safe-label projection boundary
 

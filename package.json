@@ -109,6 +109,9 @@
     "@zoom/videosdk-ui-toolkit": {
       "react": "$react",
       "react-dom": "$react-dom"
+    },
+    "@sentry/bundler-plugins": {
+      "glob": "14.0.3"
     }
   }
 }
