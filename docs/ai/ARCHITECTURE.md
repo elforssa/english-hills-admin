@@ -109,7 +109,7 @@ Deliberate conflicts (stale version, lost lease, busy lock, translated deadlock)
 
 ## Read performance at scale
 
-Plan [SCG-r1](../architecture/plans/speed-as-the-centre-grows.md) ([ADR-013](../architecture/decisions/ADR-013-policies-once-per-statement-keyset-reads.md)) is implemented on a branch with migration 124; it is not merged or deployed.
+Plan [SCG-r1](../architecture/plans/speed-as-the-centre-grows.md) ([ADR-013](../architecture/decisions/ADR-013-policies-once-per-statement-keyset-reads.md)) is implemented with migration 124, released 2026-10-29.
 
 - **Policies:** role helpers are evaluated once per statement, and the per-row teacher check runs only for teachers.
 - **Students list:** `search_students_page` prices only the page, or the filtered candidates.

@@ -335,13 +335,18 @@ Policy: [dependency audit policy](../security/dependency-audit-policy.md#tempora
 - **Approval:** 2026-11-03, verbatim: "approve audit exception". The full dependency gate (`npm run audit:policy`) accepts the moderate advisory GHSA-g3hv-75wg-m249 (`minimatch <11.0.1`) for the two dev-only copies under ESLint 8, typescript-eslint and rimraf, exactly as installed on 2026-11-03, modelled on the existing braces exception: exact advisory, package, severity, range and node paths; every consumer pinned and dev-only; any production node, new consumer, other advisory, severity or range change, compatible fix or unassessed new stable release fails.
 - **Unchanged:** the production gate (`npm audit --omit=dev --audit-level=moderate`, no exceptions), the braces exception and every dev tool version.
 - **Retirement:** when ESLint tooling moves to minimatch ≥ 11.0.1 (an ESLint 9 / typescript-eslint upgrade is its own decision) or the registry publishes a compatible fix.
+- **Merged 2026-11-03:** PR #179 (reviewed head `a8dcc57…`) squash-merged at 05:42:21 UTC as `288d178…`; deployment `7511424950` `success` at 05:44:56 UTC. No migration and no Production step.
+
 ## Lead ad source on the CRM panel — APPROVED (2026-11-03)
 
 Plan: [lead ad source](../architecture/plans/crm-lead-ad-source.md#approval-record), revision LAS-r1 (Tier 3). Channel: chat with Claude, relayed by the coordinating session.
 
 - **Approval:** 2026-11-03, verbatim: "approve ad names". Reception, admin and director see on the lead panel which Meta campaign, ad set and ad brought the inquiry, as readable names (« Publicité · ad set › ad », campaign muted), under « Dernière demande » and, when it differs, « Première demande ». This lifts the Outcome-3 exclusion of campaign/ad names from reception for these names only; raw UTMs, click ids, landing page, referrer, raw payload and consent evidence stay out of every reception read.
-- **Delivers** (migration 126, PR #178, implemented on a branch): Instant Form leads show their stored name snapshots; website leads, whose UTMs carry Meta ids since the website release of 2026-11-03, are resolved by id at read time against the synced Insights objects. No stored row changes.
+- **Delivers** (migration 126, PR #178; released 2026-11-03): Instant Form leads show their stored name snapshots; website leads, whose UTMs carry Meta ids since the website release of 2026-11-03, are resolved by id at read time against the synced Insights objects. No stored row changes.
 - **Not approved by this decision:** the lead list card, analytics per ad set or ad, any change to stored attribution rows, the merge, the migration and the deployment; each release step needs its own approval.
+- **Release approval:** recorded in the release session's notes as "approve R1" (2026-11-03); the chat is not in the repository. The owner merged PR #178 themselves.
+- **Released 2026-11-03:** migration 126 applied 06:56:41 UTC; PR #178 merged as `8b57cd9…` at 07:10:27 and deployed 07:12:15 UTC ([release record](../architecture/plans/crm-lead-ad-source.md#release-record-r0r2)).
+- **Open:** R3, a reception look at one website lead and one Instant Form lead on the panel.
 
 ## Deferred backlog after RCC-r1
 
