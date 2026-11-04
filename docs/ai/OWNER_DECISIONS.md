@@ -348,6 +348,21 @@ Plan: [lead ad source](../architecture/plans/crm-lead-ad-source.md#approval-reco
 - **Released 2026-11-03:** migration 126 applied 06:56:41 UTC; PR #178 merged as `8b57cd9…` at 07:10:27 and deployed 07:12:15 UTC ([release record](../architecture/plans/crm-lead-ad-source.md#release-record-r0r2)).
 - **Open:** R3, a reception look at one website lead and one Instant Form lead on the panel.
 
+## Enrollment at payment — retire pré-inscription and essai — PLANNED / NOT APPROVED (2026-11-04)
+
+Plan: [enrollment at payment](../architecture/plans/enrollment-at-payment.md), revision EAP-r1 (Tier 3; [ADR-015, proposed](../architecture/decisions/ADR-015-enrollment-at-payment.md)). Owner decisions given with the architecture brief on **2026-11-04** (Maroine), recorded as stated:
+
+1. Reception handles everything. There is no director confirmation step and no « Pré-inscriptions » page for admin or director.
+2. Remove the 10 % rule (withdraws Batch E Q5 = B): any payment > 0 confirms the enrollment. The remaining balance stays tracked as today (« Acompte versé », « En retard »).
+3. Remove « Essai »: the centre gives no trial sessions.
+4. One reception flow, for walk-ins and CRM prospects: « Inscrire et encaisser » (programme, school year, level, group optional, price, discount with reason, payment) creates a confirmed enrollment and the receipt in one step. A CRM prospect becomes « Converti » at that moment, and its « Finaliser l'inscription » task closes.
+5. Existing data: counts first. Unpaid pré-inscriptions and essais are archived (ended with a reason such as « Pré-inscription abandonnée » / « Essai terminé »), never deleted. Enrollments with any live payment become confirmed.
+6. Retire rather than drop: stop creating Submitted / Under Review / Trial everywhere (reception, CRM « Commencer l'inscription », public `/inscription` form and `/api/public/inscription`, any portal re-enrollment path, online module), add a database guard, remove the screens and labels; keep the old values readable for history. Dropping them is a later optional release.
+7. Website: turn off self sign-up. Keep the CRM contact/inquiry form (`/api/public/crm-inquiry`), and the website shows call / WhatsApp / visit. The eh-website repo change is a separate small PR.
+
+- **Open (plan Q1–Q10, each with a recommendation):** free enrollment at 100 % discount (recommended: reception may confirm it with a reason, listed in « Contrôles »); management enrollment without payment; placement from the group page without an enrollment; learner-file status after archiving; « Refusée »; detaching prospects from archived pré-inscriptions; where « Clôturer l'année » lives; the parent portal request; the online guest « Essai » label; the confirmation e-mail.
+- **Not approved by this record:** the plan revision, implementation, the migration, the Production count query, the archive step, the merge, the deployment and the website PR; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
