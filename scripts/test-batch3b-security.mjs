@@ -48,6 +48,14 @@ async function denyInsert(actor,table,body,query='',prefer) {
   const before=count(table); const r=await request(actor,table,'POST',body,query,prefer);
   assert.ok([401,403].includes(r.status),JSON.stringify(r)); assert.equal(count(table),before); checks++;
 }
+// EAP (127): a retired status (Submitted, Under Review, Trial, Rejected) is refused by the
+// guard trigger before RLS runs, for every role; nothing is written either way.
+async function denyRetired(actor,table,body) {
+  const before=count(table); const r=await request(actor,table,'POST',body);
+  assert.equal(r.status,400,JSON.stringify(r)); assert.equal(r.data?.hint,'eap.status_retired',JSON.stringify(r));
+  assert.equal(count(table),before); checks++;
+}
+const RETIRED=['Submitted','Under Review','Trial','Rejected'];
 async function denyMutation(actor,table,id,method,body) {
   const before=row(table,id); const r=await request(actor,table,method,body,'?id=eq.'+id);
   if(r.ok) assert.deepEqual(r.data,[]); else assert.ok([401,403].includes(r.status),JSON.stringify(r));
@@ -88,7 +96,9 @@ try {
   // A Validated enrollment carries its programme and school year (EGC I9).
   for(const child of children) enrollments.push(await create('enrollments',{student_id:child.id,status:'Validated',group_id:group.id,
     session_type:'Yearly',level:'A1',school_year:'2026/2027'}));
-  const enrollment={student_id:children[0].id,status:'Submitted',date_inscription:'2026-09-08',notes:'Synthetic request'};
+  // EAP (127): the attempted insert is a Confirmed row (Submitted is retired); RLS must refuse
+  // it for every portal role, before the programme check (a constraint) would.
+  const enrollment={student_id:children[0].id,status:'Confirmed',date_inscription:'2026-09-08',notes:'Synthetic request'};
   const leave={teacher_id:t1.id,teacher_name:t1.full_name,date_debut:'2026-10-01',date_fin:'2026-10-02',type_conge:'Personnel',status:'En attente',notes:'Synthetic request'};
   const l1=await create('leave_requests',leave,teacher);
   const l2=await create('leave_requests',{...leave,teacher_id:t2.id,teacher_name:t2.full_name},otherTeacher);
@@ -122,11 +132,13 @@ try {
       if(actor!==teacher) await denyInsert(actor,'leave_requests',leave);
     }
   }
-  // The re-enrollment request (PRF-r2 D2) inserts the same Submitted row for a linked child only.
+  // EAP (127): the re-enrollment request is retired (« contactez l'accueil »): refused for a
+  // linked child, nothing written; an unlinked child is still refused as not linked first.
   for(const child of children.slice(0,2)) {
-    const id=ok(await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:child.id}));
-    (records.enrollments??=[]).push(id);
-    assert.equal(sql(`select status||'|'||coalesce(group_id::text,'-')||'|'||(documents_urls is null) from public.enrollments where id='${id}'`),'Submitted|-|true');
+    const before=count('enrollments');
+    const r=await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:child.id});
+    assert.equal(r.status,403,JSON.stringify(r)); assert.equal(r.data?.hint,'eap.status_retired',JSON.stringify(r));
+    assert.equal(count('enrollments'),before);
   }
   checks+=2;
   for(const target of [children[2].id]) {
@@ -139,8 +151,9 @@ try {
     const r=await request(parent,'rpc/portal_request_reenrollment','POST',{p_student_id:archived.id});
     assert.equal(r.status,403,JSON.stringify(r)); checks++;
   }
+  // The column default is still Submitted: an insert without a status meets the guard.
   const {status: _enrollmentStatus,...defaultEnrollment}=enrollment;
-  await denyInsert(parent,'enrollments',defaultEnrollment);
+  await denyRetired(parent,'enrollments',defaultEnrollment);
   const {status: _leaveStatus,...defaultLeave}=leave;
   assert.equal((await create('leave_requests',defaultLeave,teacher)).status,'En attente'); checks++;
   // Migrations 070/072 added a BEFORE trigger that rejects (23514) an active
@@ -149,7 +162,7 @@ try {
   // from RLS: since PRF-r2 no portal role has an enrollment insert policy.
   for(const patch of [{status:'Under Review'},{status:'Validated',group_id:group.id},{status:'Rejected'},{status:'Trial',group_id:group.id},{status:null},{group_id:group.id},
     {student_id:children[2].id},{documents_urls:['https://example.invalid/forged']},{created_at:'2000-01-01'},{updated_at:'2000-01-01'}])
-    await denyInsert(parent,'enrollments',{...enrollment,...patch});
+    await (RETIRED.includes(patch.status)?denyRetired:denyInsert)(parent,'enrollments',{...enrollment,...patch});
   {
     const before=count('enrollments');
     const r=await request(parent,'enrollments','POST',{...enrollment,student_id:null});
@@ -178,13 +191,20 @@ try {
     // Another school year than the child's live Yearly enrollment (EGC I3), with the
     // programme a validation needs (I9).
     const year=staff===admin?'2027/2028':'2028/2029';
-    const e=await create('enrollments',{...enrollment,status:'Under Review',documents_urls:[],session_type:'Yearly',
+    // EAP (127): staff create a Confirmed row (Under Review is retired) and validate it.
+    await denyRetired(staff,'enrollments',{...enrollment,status:'Under Review',documents_urls:[],session_type:'Yearly',school_year:year});
+    const e=await create('enrollments',{...enrollment,status:'Confirmed',documents_urls:[],session_type:'Yearly',
       school_year:year},staff);
     // Batch H (H5): a placement's school year is its group's, so this enrollment is
     // validated into a group of its own year.
     const yearGroup=await create('groups',{name:run+' Group '+year,niveau:'A1',teacher_id:t1.id,annee:year.replace('/','-')});
-    for(const status of ['Validated','Rejected']) {
-      assert.equal(ok(await request(staff,'enrollments','PATCH',{status,group_id:yearGroup.id},'?id=eq.'+e.id))[0].status,status); checks++;
+    assert.equal(ok(await request(staff,'enrollments','PATCH',{status:'Validated',group_id:yearGroup.id},'?id=eq.'+e.id))[0].status,'Validated'); checks++;
+    // A refusal is retired too; the row then becomes a legacy Rejected row (fixture only,
+    // two-flag exemption) so that the staff deletion of a closed row stays covered.
+    {
+      const r=await request(staff,'enrollments','PATCH',{status:'Rejected'},'?id=eq.'+e.id);
+      assert.equal(r.status,400,JSON.stringify(r)); assert.equal(r.data?.hint,'eap.status_retired'); checks++;
+      sql(`begin;set local eh.membership_sync=on;set local eh.enrollment_command=on;update public.enrollments set status='Rejected' where id='${e.id}';commit;`);
     }
     const l=await create('leave_requests',{...leave,status:'Approuvé',remplacant:t2.full_name},staff);
     for(const status of ['Refusé','Approuvé']) {

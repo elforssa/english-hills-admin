@@ -56,27 +56,53 @@ $$;
 create function pg_temp.start_data(l uuid) returns jsonb language sql as $$
  select jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
  'student_choice','new','learner_name','Phase6 learner','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2',
- 'candidate_review',crm_security.candidate_token(l,'Phase6 learner','2014-05-10'),'confirm_new',true)
+ 'candidate_review',crm_security.candidate_token(l,'Phase6 learner','2014-05-10'),'confirm_new',true,'initial_status','Confirmed')
 $$;
+-- EAP (127): crm_start_enrollment creates only Confirmed enrollments (the lead converts at
+-- creation) and has no API grant: « Inscrire et encaisser » (crm_enroll_and_collect) is its
+-- only caller, so these cases call it from the postgres session. A pre-127 waiting
+-- enrollment (Submitted, Under Review, Trial) exists only as a legacy fixture row, written
+-- under the two-flag exemption and then linked explicitly.
+create function pg_temp.legacy(statement text) returns void language plpgsql as $$ begin
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
+ execute statement;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
+end $$;
+create function pg_temp.legacy_link(l uuid,status text default 'Submitted',grp uuid default null) returns jsonb language plpgsql as $$ declare s uuid; e uuid; begin
+ insert into public.students(full_name,date_naissance,status,session_type) values('Phase6 legacy learner','2014-05-10','Prospect','Yearly') returning id into s;
+ e:=gen_random_uuid();
+ perform pg_temp.legacy(format('insert into public.enrollments(id,student_id,status,session_type,school_year,level,group_id) values(%L,%L,%L,''Yearly'',''2026/2027'',''Child 2'',%L)',e,s,status,grp));
+ return public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,
+  'expected_enrollment_updated_at',(select updated_at from public.enrollments where id=e)));
+end $$;
 create function pg_temp.finances() returns jsonb language sql as $$ select jsonb_build_array((select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events)) $$;
 
 do $$ declare l uuid:=pg_temp.qualified(); d jsonb:=pg_temp.start_data(l); key uuid:=gen_random_uuid(); r jsonb; e uuid; s uuid; counts jsonb:=pg_temp.finances(); ns bigint; ne bigint; a uuid; converted timestamptz; begin
  select count(*) into ns from students;select count(*) into ne from enrollments;
+ -- EAP (127): no API grant; a pre-127 initiation status is refused.
  execute 'set local role authenticated';
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',key,d),'42501');
+ execute 'reset role';
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',key,d-'initial_status'),'42501');
  r:=public.crm_start_enrollment(key,d);e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
  perform pg_temp.ok(public.crm_start_enrollment(key,d)=r,'exact request replay');
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',key,d||'{"notes":"changed"}'));
- execute 'reset role';
  perform pg_temp.ok((select count(*)=ns+1 from students) and (select count(*)=ne+1 from enrollments),'one explicit student and enrollment');
  perform pg_temp.ok(pg_temp.finances()=counts,'no finance at enrollment start');
- perform pg_temp.ok((select status='Prospect' and niveau_cefr='Child 2' and parent_email is null from students where id=s),'correct new Prospect student');
+ perform pg_temp.ok((select niveau_cefr='Child 2' and parent_email is null from students where id=s),'correct new student');
+ perform pg_temp.ok((select status='Confirmed' from enrollments where id=e) and (select student_id=s and enrollment_id=e and status='CONVERTED' from crm_leads where id=l),'Confirmed initiation converts');
+ perform pg_temp.ok(not exists(select 1 from crm_tasks where lead_id=l and status='open'),'no follow-up after a Confirmed initiation');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),pg_temp.start_data(l)));
+ -- A legacy waiting row linked to a lead keeps the pre-127 conversion rules.
+ l:=pg_temp.qualified();r:=pg_temp.legacy_link(l);e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
  perform pg_temp.ok((select student_id=s and enrollment_id=e and status='QUALIFIED' from crm_leads where id=l),'Submitted does not convert');
  perform pg_temp.ok((select count(*)=1 from crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open'),'one enrollment followup');
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),pg_temp.start_data(l)));
  update enrollments set status=null where id=e;
  perform pg_temp.ok((select status='QUALIFIED' from crm_leads where id=l),'NULL enrollment status never converts');
- update enrollments set status='Under Review' where id=e;
+ perform pg_temp.legacy(format('update enrollments set status=''Under Review'' where id=%L',e));
  perform pg_temp.ok((select status='QUALIFIED' from crm_leads where id=l),'Under Review does not convert');
+ perform pg_temp.denied(format('update enrollments set status=''Submitted'' where id=%L',e),'23514');
  -- The learner status follows enrollments (EGC I7); write it on the sync's own path
  -- (every other trigger stays active) to prove a status change alone never converts.
  perform set_config('eh.membership_sync','on',true);update students set status='Enrolled' where id=s;perform set_config('eh.membership_sync','',true);
@@ -94,8 +120,8 @@ do $$ declare l uuid:=pg_temp.qualified(); d jsonb:=pg_temp.start_data(l); key u
  perform pg_temp.ok((select status='Validated' from enrollments where id=e),'Confirmed plus group validation retained');
  perform pg_temp.ok((select conversion_activity_id=a and converted_at=converted from crm_leads where id=l),'conversion timestamp and activity once');
  perform pg_temp.ok((select count(*)=1 from crm_activities where lead_id=l and event_type='lead_converted'),'exactly one conversion');
- update enrollments set status='Rejected' where id=e;
- update enrollments set status='Rejected',notes='Repeated' where id=e;
+ perform pg_temp.legacy(format('update enrollments set status=''Rejected'' where id=%L',e));
+ perform pg_temp.legacy(format('update enrollments set status=''Rejected'',notes=''Repeated'' where id=%L',e));
  perform pg_temp.ok((select status='CONVERTED' and conversion_review_required and conversion_activity_id=a from crm_leads where id=l),'downgrade preserves conversion and requests review');
  perform pg_temp.ok((select count(*)=1 from crm_activities where lead_id=l and event_type='conversion_review_required'),'one review per actual downgrade');
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(public.crm_get_today(100)->'needs_attention')x where x->>'id'=l::text),'converted not sales queue');
@@ -122,7 +148,7 @@ do $$ declare l uuid; r jsonb; d jsonb; e uuid; s uuid; other uuid; before_stude
  update enrollments set status=null where id=e;
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d));
  perform pg_temp.ok((select count(*)=1 from enrollments where student_id=other),'unknown legacy status cannot allow a duplicate enrollment');
- update enrollments set status='Submitted' where id=e;
+ perform pg_temp.legacy(format('update enrollments set status=''Submitted'' where id=%L',e));
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||jsonb_build_object('enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e))));
  -- A genuinely separate enrollment exists before CRM linkage.
  insert into enrollments(student_id,status,session_type,school_year,level) values(s,'Confirmed','Yearly','2026/2027','Child 2') returning id into e;
@@ -151,7 +177,7 @@ end $$;
 
 do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; state text; a uuid; begin
  foreach state in array array['LOST','NOT_QUALIFIED'] loop
-  l:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));e:=(r->'enrollment'->>'id')::uuid;
+  l:=pg_temp.qualified();r:=pg_temp.legacy_link(l);e:=(r->'enrollment'->>'id')::uuid;
   perform pg_temp.act(case when state='LOST' then 'close_lost' else 'close_not_qualified' end,l,jsonb_build_object('reason',case when state='LOST' then 'price' else 'outside_scope' end));
   select id into a from crm_activities where lead_id=l and event_type=case when state='LOST' then 'lead_lost' else 'lead_not_qualified' end;
   update enrollments set status='Confirmed' where id=e;
@@ -161,10 +187,12 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; state text; a uuid; begi
   perform pg_temp.ok(not(public.crm_get_workspace_detail(l)->>'conversion_review_required')::boolean,'review flag hidden from receptionist');
   perform pg_temp.actor(1);perform pg_temp.ok((public.crm_get_workspace_detail(l)->>'conversion_review_required')::boolean,'director sees review flag');perform pg_temp.actor(3);
  end loop;
- -- Trial respects existing group rules and never converts.
+ -- Trial initiation is refused (127); a legacy Trial row in a group never converts.
  l:=pg_temp.qualified();d:=pg_temp.start_data(l)||'{"initial_status":"Trial"}';
- perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d));
- r:=public.crm_start_enrollment(gen_random_uuid(),d||'{"group_id":"84000000-0000-0000-0000-000000000001"}');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d),'42501');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"group_id":"84000000-0000-0000-0000-000000000001"}'));
+ -- (a group is never chosen at initiation since 127: it is placed after the payment, D3)
+ r:=pg_temp.legacy_link(l,'Trial','84000000-0000-0000-0000-000000000001');
  perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED' and r->'enrollment'->>'status'='Trial','Trial is not conversion');
  perform pg_temp.ok((select status='Trial' from students where id=(r->'enrollment'->>'student_id')::uuid),'Trial student follows existing sync');
  -- No need for auth.uid during legitimate system confirmation/task cleanup.
@@ -181,7 +209,8 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; p uuid; state text; fn r
   perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),pg_temp.start_data(l)));
  end loop;
  l:=pg_temp.qualified();d:=pg_temp.start_data(l);
- perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"initial_status":"Confirmed"}'),'42501');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"initial_status":"Submitted"}'),'42501');
+ perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"initial_status":"Under Review"}'),'42501');
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"initial_status":"Validated"}'),'42501');
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"school_year":"2026/2030"}'));
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),d||'{"session_type":"Adults","level":"Child 2"}'));
@@ -199,7 +228,7 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; p uuid; state text; fn r
  p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
  update placement_tests set status='Résultat saisi',niveau_recommande='Child 2' where id=p;
  perform pg_temp.ok(public.crm_get_enrollment_context(l)->>'recommended_level'='Child 2','trusted placement result available for prefill');
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
+ r:=pg_temp.legacy_link(l);e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
  perform pg_temp.ok((select crm_lead_id=l and student_id is null and niveau_recommande='Child 2' from placement_tests where id=p),'placement lineage preserved; nullable student deliberately unchanged');
  -- Existing financial RPC remains the only financial writer; enrollment transition is the signal.
  perform pg_temp.actor(1);
@@ -213,7 +242,11 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; p uuid; state text; fn r
  perform pg_temp.ok((select count(*)=1 from crm_activities where lead_id=l and event_type='lead_converted'),'payment conversion once');
  perform pg_temp.ok(not exists(select 1 from crm_activities where lead_id=l and (receipt_id is not null or financial_event_id is not null)),'no revenue attribution');
  alter table public.receipts enable trigger on_receipt_created;
- foreach fn in array array['public.crm_start_enrollment(uuid,jsonb)'::regprocedure,'public.crm_find_student_candidates(uuid,text,date,integer,integer)'::regprocedure,'public.crm_find_enrollment_candidates(uuid,text,text,integer,integer)'::regprocedure,'public.crm_enrollment_groups(text,text,integer,integer)'::regprocedure,'public.crm_get_enrollment_context(uuid)'::regprocedure] loop
+ -- EAP (127): crm_start_enrollment has no API grant; the wrapper is the authenticated entry.
+ perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.crm_start_enrollment(uuid,jsonb)'::regprocedure)
+  and not has_function_privilege('authenticated','public.crm_start_enrollment(uuid,jsonb)','execute') and not has_function_privilege('anon','public.crm_start_enrollment(uuid,jsonb)','execute')
+  and not has_function_privilege('service_role','public.crm_start_enrollment(uuid,jsonb)','execute'),'crm_start_enrollment pinned definer without API grant');
+ foreach fn in array array['public.crm_enroll_and_collect(uuid,jsonb)'::regprocedure,'public.crm_find_student_candidates(uuid,text,date,integer,integer)'::regprocedure,'public.crm_find_enrollment_candidates(uuid,text,text,integer,integer)'::regprocedure,'public.crm_enrollment_groups(text,text,integer,integer)'::regprocedure,'public.crm_get_enrollment_context(uuid)'::regprocedure] loop
   perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid=fn),'pinned definer '||fn);
   perform pg_temp.ok(has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute') and not has_function_privilege('service_role',fn,'execute'),'RPC grants '||fn);
  end loop;
@@ -221,7 +254,7 @@ do $$ declare l uuid; d jsonb; r jsonb; e uuid; s uuid; p uuid; state text; fn r
 end $$;
 -- Payment intent safeguard: rejected commands must undo ALL inner writes.
 do $$ declare l uuid:=pg_temp.qualified(); r jsonb; d jsonb; e uuid; s uuid; b uuid; before_rows jsonb; before_student jsonb; key uuid:=gen_random_uuid(); begin
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
+ r:=pg_temp.legacy_link(l);e:=(r->'enrollment'->>'id')::uuid;s:=(r->'enrollment'->>'student_id')::uuid;
  perform pg_temp.actor(1);
  alter table public.receipts disable trigger on_receipt_created;
  d:=jsonb_build_object('student_id',s,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1000,'payment_amount',100,'payment_method','Espèces','idempotency_key',key);
@@ -245,12 +278,12 @@ do $$ declare l uuid:=pg_temp.qualified(); r jsonb; d jsonb; e uuid; s uuid; b u
  -- One live enrollment per programme and school year (EGC I3): each one has its year.
  for i in 0..1 loop
   b:=gen_random_uuid();
-  insert into enrollments(id,student_id,status,session_type,school_year) values(b,s,'Submitted','Adults',(2027+i)||'/'||(2028+i));
+  perform pg_temp.legacy(format('insert into enrollments(id,student_id,status,session_type,school_year) values(%L,%L,''Submitted'',''Adults'',%L)',b,s,(2027+i)||'/'||(2028+i)));
   r:=public.create_charge_payment(d||jsonb_build_object('session_type','Adults','school_year',(2027+i)||'/'||(2028+i),'plan_type',null,'enrollment_id',b,'idempotency_key',gen_random_uuid()));
   perform pg_temp.ok((r->>'enrollment_id')::uuid=b and (select status='QUALIFIED' and enrollment_id=e from crm_leads where id=l),'explicit unrelated enrollment does not convert or relink A');
  end loop;
  -- The separate same-programme enrollment is in another school year (EGC I3).
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2029/2030') returning id into b;
+ b:=gen_random_uuid();perform pg_temp.legacy(format('insert into enrollments(id,student_id,status,session_type,school_year) values(%L,%L,''Submitted'',''Yearly'',''2029/2030'')',b,s));
  r:=public.create_charge_payment(d||jsonb_build_object('enrollment_id',b,'school_year','2029/2030','idempotency_key',gen_random_uuid()));
  perform pg_temp.ok((r->>'enrollment_id')::uuid=b and (select status='QUALIFIED' from crm_leads where id=l),'explicit same-program separate enrollment allowed without converting A');
  -- Zero CRM intent in another year preserves implicit creation.
@@ -285,7 +318,7 @@ do $$ declare l uuid; r jsonb; e uuid; first_student uuid; second_student uuid; 
   perform pg_temp.actor(i);l:=pg_temp.qualified();
   perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '2 days')));
   perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '3 days')));
-  r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));
+  r:=pg_temp.legacy_link(l);
   perform pg_temp.ok((select count(*)=1 from crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open'),'one reconciled enrollment followup for each operational role');
   perform pg_temp.ok(not(r->'enrollment' ?| array['charges','receipts','balance','financial_events','attribution','documents_urls']),'safe enrollment summary');
  end loop;

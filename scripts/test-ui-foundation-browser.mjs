@@ -93,7 +93,14 @@ const studentPills=async role=>{
  for(const name of ['UIF former learner','UIF prospect file']){
   await row(name).getByLabel('Aucun groupe',{exact:true}).waitFor();assert.equal(await row(name).getByText('Groupe à affecter',{exact:false}).count(),0,phase+' '+name);
  }
- assert(await row(longName).getByText('Groupe à affecter',{exact:true}).count()===1,phase+' the active file without a group still awaits one');
+ if(role==='director') assert(await row(longName).getByText('Groupe à affecter',{exact:true}).count()===1,phase+' the active file without a group still awaits one');
+ else {
+  // EAP (Q3 = B): reception places a paid enrollment only; without one, the cell sends to « Inscrire et encaisser ».
+  const enrol=row(longName).getByRole('link',{name:'Inscrire et encaisser',exact:true});
+  assert.equal(await enrol.count(),1,phase+' the active file without a paid enrollment offers Inscrire et encaisser');
+  assert.equal(await enrol.getAttribute('href'),`/receipts/new?student_id=${studentId}`,phase+' Inscrire et encaisser opens the receipt form for that learner');
+  assert.equal(await row(longName).getByText('Groupe à affecter',{exact:false}).count(),0,phase+' reception is not offered a placement without a paid enrollment');
+ }
  assert.equal(await row(longName).locator('span.rounded-full').filter({hasText:/^Inscrit$/}).count(),1,phase+' Inscrit status pill');
  studentMode='ready';
 };

@@ -67,6 +67,8 @@ function assertNoContacts(bodies, viewer) {
 }
 async function composerOptions(page) {
   await page.getByRole('button', { name: /Nouveau message/ }).click();
+  // The recipient list loads asynchronously; every caller expects at least one recipient.
+  await page.locator('select#portal-message-to option').first().waitFor({ state: 'attached' });
   const options = await page.locator('#portal-message-to option').allTextContents();
   await page.getByRole('button', { name: 'Fermer' }).click();
   return options;

@@ -33,7 +33,7 @@ const enroll=(enrollment,who=actor)=>rpc('enroll_and_collect',{enrollment,paymen
 // A desk payment (receipt form command) that confirms an enrollment of the learner.
 const collect=(studentId,who=actor)=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(who)};set local role authenticated;select public.create_charge_payment(${quote(JSON.stringify({student_id:studentId,session_type:'Yearly',school_year:enrollmentSchoolYear(),...PAYMENT,idempotency_key:randomUUID()}))}::jsonb);commit;`));
 // A retired-status row exists only as history; the journalled-revert flags let the fixture write one.
-const legacy=(lead,studentId,status)=>{const id=randomUUID();sql(`begin;set local eh.membership_sync=on;set local eh.enrollment_command=on;insert into public.enrollments(id,student_id,session_type,school_year,status) values('${id}','${studentId}','Yearly','${enrollmentSchoolYear()}','${status}');update public.crm_leads set student_id='${studentId}',enrollment_id='${id}',version=version+1 where id='${lead}';commit;`);return id;};
+const legacy=(lead,studentId,status,group=null)=>{const id=randomUUID();sql(`begin;set local eh.membership_sync=on;set local eh.enrollment_command=on;insert into public.enrollments(id,student_id,session_type,school_year,status,group_id) values('${id}','${studentId}','Yearly','${enrollmentSchoolYear()}','${status}',${group?`'${group}'`:'null'});update public.crm_leads set student_id='${studentId}',enrollment_id='${id}',version=version+1 where id='${lead}';commit;`);return id;};
 const receipts=studentId=>sql(`select count(*) from public.receipts where student_id='${studentId}' and voided_at is null`);
 const year=enrollmentSchoolYear();
 const UNCERTAIN='Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon.';
@@ -85,11 +85,16 @@ try {
  await dialog().getByLabel('Motif de la remise',{exact:true}).selectOption('sibling');
  await dialog().getByRole('note').filter({hasText:PAYMENT_REQUIRED}).waitFor();
  const paymentDate=dialog().getByLabel('Date du paiement',{exact:true});assert.equal(await paymentDate.getAttribute('max'),today,'payment date max is the business date');
+ // The payment-date guard applies to a positive payment (Batch E Q4, shared with the receipt form).
+ await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('100');
  await paymentDate.fill((await wall(-8*86400000)).slice(0,10));await dialog().getByRole('note').filter({hasText:'La date du paiement ne peut pas être antérieure de plus de 7 jours.'}).waitFor();
+ // The date input carries min/max like the receipt form: the browser blocks the submit and
+ // focuses the field before the dialog's own guard (which repeats the same rule) runs.
  startCalls.length=0;await button('Inscrire et encaisser').click();
- await dialog().getByRole('alert').filter({hasText:'La date du paiement ne peut pas être antérieure de plus de 7 jours.'}).waitFor();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('data-field')==='paymentDate');
+ assert.equal(await paymentDate.evaluate(el=>el.validity.rangeUnderflow),true,'an 8-day backdate is out of range');
  assert.equal((await focused()).field,'paymentDate','the desk-guard field is focused');assert.equal(startCalls.length,0,'nothing sent');
- await paymentDate.fill(today);await button('Inscrire et encaisser').click();
+ await paymentDate.fill(today);await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('0');await button('Inscrire et encaisser').click();
  await dialog().getByRole('alert').filter({hasText:PAYMENT_REQUIRED}).waitFor();assert.equal((await focused()).field,'amount');assert.equal(startCalls.length,0,'a zero payment is never sent');
  await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
  await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu \S+$/).waitFor();
@@ -163,9 +168,11 @@ try {
  assert(!('group_id' in startCalls[0].p_data.enrollment),'the group is never sent with the enrollment');
  await dialog().getByText('Groupe : A2 groupe enfants',{exact:true}).waitFor();await done();
  const placedEnrollment=detail(lead4).enrollment;assert.equal(sql(`select status||'|'||group_id from public.enrollments where id='${placedEnrollment.id}'`),`Validated|${group}`);
+ // The refusal case uses an empty group of its own: a group with members cannot change level (EGC).
+ const refusedGroup=randomUUID();fixtureGroups.push(refusedGroup);sql(`insert into public.groups(id,name,session_type,niveau,annee) values('${refusedGroup}','A2 groupe refusé','Yearly','Child 2','${year}')`);
  const lead4b=makeLead('A2 parent groupe refusé','A2 Yasmine groupe');await start(lead4b);await newLearner();
- await dialog().getByLabel('Niveau proposé',{exact:true}).selectOption('Child 2');await dialog().getByLabel('Groupe (facultatif)',{exact:true}).selectOption(group);await toPayment();await pay();
- sql(`update public.groups set niveau='Child 3' where id='${group}'`);
+ await dialog().getByLabel('Niveau proposé',{exact:true}).selectOption('Child 2');await dialog().getByLabel('Groupe (facultatif)',{exact:true}).selectOption(refusedGroup);await toPayment();await pay();
+ sql(`update public.groups set niveau='Child 3' where id='${refusedGroup}'`);
  await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
  await dialog().getByText('Groupe non affecté : Le groupe doit correspondre au programme et au niveau de l’inscription. Apprenant inscrit — groupe à affecter.',{exact:true}).waitFor();
  const refusedEnrollment=detail(lead4b).enrollment;assert.equal(sql(`select status||'|'||coalesce(group_id::text,'') from public.enrollments where id='${refusedEnrollment.id}'`),'Confirmed|','paid, not placed');
@@ -244,7 +251,11 @@ try {
  assert.deepEqual(startCalls[1],startCalls[0],'uncertain retry resends the identical request with the same key');
  await dialog().getByRole('alert').filter({hasText:'La date de naissance ne peut pas être dans le futur.'}).waitFor();
  const birth8=dialog().getByLabel('Date de naissance (si connue)',{exact:true});assert.equal((await focused()).field,'birth');assert.equal(await birth8.getAttribute('aria-invalid'),'true');
- await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toPayment();await button('Inscrire et encaisser').click();
+ // The server's discount-reason refusal arrives for a discounted payment whose reason passed
+ // the local check; the reason select exists only while a discount is entered.
+ await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toPayment();
+ await dialog().getByLabel('Remise (MAD)',{exact:true}).fill('500');await dialog().getByLabel('Motif de la remise',{exact:true}).selectOption('sibling');
+ await button('Inscrire et encaisser').click();
  await dialog().getByRole('alert').filter({hasText:'Indiquez le motif de la remise.'}).waitFor();await dialog().getByText('3 / 3 · Paiement').waitFor();assert.equal((await focused()).field,'reasonCode','the server desk-guard text focuses its field');
  await button('Inscrire et encaisser').click();
  await dialog().getByRole('alert').filter({hasText:'L’inscription n’a pas pu être créée et rien n’a été enregistré. Réessayez ; si le problème persiste, contactez la direction.'}).waitFor();
@@ -262,7 +273,9 @@ try {
  const historical=makeLead('A2 parent historique','A2 Lou historique');legacy(historical,student('A2 Lou historique'),'Submitted');text=await sectionText(historical);
  assert.match(text,/Pré-inscription créée · En attente|Soumise/);assert.match(text,/Ancienne pré-inscription archivée ; relancez « Inscrire et encaisser » si le prospect s’inscrit\./);
  assert.match(text,/Ouvrir l'apprenant/);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);assert.equal(await page.getByRole('button',{name:'Inscrire et encaisser'}).count(),0);
- const trial=makeLead('A2 parent essai','A2 Zoé essai');legacy(trial,student('A2 Zoé essai'),'Trial');act('close_lost',trial,{reason:'not_interested'});text=await sectionText(trial);
+ // A trial row always had a group (check_enrollment_student_sync); this one gets an empty group of its own.
+ const trialGroup=randomUUID();fixtureGroups.push(trialGroup);sql(`insert into public.groups(id,name,session_type,niveau,annee) values('${trialGroup}','A2 groupe essai','Yearly','Child 2','${year}')`);
+ const trial=makeLead('A2 parent essai','A2 Zoé essai');legacy(trial,student('A2 Zoé essai'),'Trial',trialGroup);act('close_lost',trial,{reason:'not_interested'});text=await sectionText(trial);
  assert.match(text,/Ancienne pré-inscription archivée/);assert.doesNotMatch(text,/Continuer l'inscription/);
  const refused=makeLead('A2 parent refusée','A2 Zoe refusée');legacy(refused,student('A2 Zoe refusée'),'Rejected');
  text=await sectionText(refused);assert.match(text,/Inscription refusée\. Ce prospect reste rattaché à cette inscription/);assert.doesNotMatch(text,/Finaliser|Continuer l'inscription/);
@@ -289,10 +302,12 @@ try {
  console.log('PASS lost response replayed with the same key; exactly one student, enrollment, receipt and activity');
  // B1 regression: a real refetch that already reflects the committed request must not
  // change the frozen request, its presentation or its uncertain-retry message.
+ await page.clock.setFixedTime(new Date());
  const leadFrozen=makeLead('A2 parent gel','A2 Lucas gel');await start(leadFrozen);await newLearner();await toPayment();await pay();
  drop=true;await page.route('**/rest/v1/rpc/crm_enroll_and_collect',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
  startCalls.length=0;await button('Inscrire et encaisser').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
  assert.equal(sql(`select count(*) from public.students where full_name='A2 Lucas gel'`),'1','the first request committed');
+ await page.clock.setFixedTime(new Date(Date.now()+10*60000));
  const refetched=page.waitForResponse(response=>response.url().endsWith('/rpc/crm_get_enrollment_context'));
  const drawerRefetched=page.waitForResponse(response=>response.url().endsWith('/rpc/crm_get_workspace_detail'));
  await page.evaluate(()=>window.dispatchEvent(new Event('visibilitychange')));
@@ -317,12 +332,14 @@ try {
 } finally {
  if(browser)await browser.close();
  if(users.length){const ids=users.map(u=>quote(u.id)).join(',');const linkedStudents=JSON.parse(sql(`select coalesce(json_agg(student_id) filter(where student_id is not null),'[]') from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))`));const studentIds=[...new Set([...fixtureStudents,...linkedStudents])].map(quote).join(',')||'null';const groupIds=fixtureGroups.map(quote).join(',')||'null';sql(`begin;
- lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks in access exclusive mode;
+ lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks,public.crm_revenue_entries in access exclusive mode;
  alter table public.placement_tests disable trigger crm_placement_integrity;alter table public.crm_activities disable trigger crm_activities_immutable;alter table public.crm_submissions disable trigger crm_submission_immutable;alter table public.crm_command_requests disable trigger crm_requests_immutable;alter table public.crm_followup_policies disable trigger crm_policy_immutable;
+ -- EAP (127): every CRM enrollment now collects a payment, so its lead has revenue entries.
+ alter table public.crm_revenue_entries disable trigger crm_revenue_immutable;delete from public.crm_revenue_entries where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));alter table public.crm_revenue_entries enable trigger crm_revenue_immutable;
  with removed_placements as(delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
  alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
- set local english_hills.receipt_test_cleanup = 'on';delete from public.financial_events where actor_id in(${ids});delete from public.financial_requests where actor_id in(${ids});delete from public.receipts where student_id in(${studentIds});delete from public.charges where student_id in(${studentIds});
+ set local english_hills.receipt_test_cleanup = 'on';delete from public.financial_events where actor_id in(${ids});delete from public.financial_requests where actor_id in(${ids});delete from public.receipts where student_id in(${studentIds});delete from public.charge_discount_reasons where charge_id in(select id from public.charges where student_id in(${studentIds}));delete from public.charges where student_id in(${studentIds});
  set local eh.enrollment_command = on; set local eh.membership_sync = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});delete from public.groups where id in(${groupIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
  console.log('PASS synthetic browser fixtures removed; history guards restored');
 }

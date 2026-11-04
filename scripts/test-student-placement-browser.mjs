@@ -245,7 +245,10 @@ try {
   await reception.getByRole('button',{name:'Ajouter des apprenants',exact:true}).first().click();
   await reception.getByRole('option').filter({hasText:run+' reception paid two'}).click();
   await expect.poll(() => sql(`select status||':'||group_id from public.enrollments where student_id='${recPaid2Id}'`).trim()).toBe(`Validated:${groupId}`);
-  const refused=reception.waitForResponse(response => response.url().includes('/rest/v1/rpc/assign_receptionist_student_group'));
+  // Match this learner's request: the previous placement's response can still be in flight
+  // after its database row is visible.
+  const refused=reception.waitForResponse(response => response.url().includes('/rest/v1/rpc/assign_receptionist_student_group')
+    && response.request().postDataJSON()?.p_student===recUnpaidId);
   await reception.getByRole('option').filter({hasText:run+' reception unpaid'}).click();
   const refusal=await refused;
   assert.ok(refusal.status()>=400,'an unpaid placement by reception was accepted');

@@ -250,7 +250,8 @@ try {
   ok(await patch(admin, 'teachers', t.id, { photo_url: `asset:${teacherPhoto.id}` }));
   for (const actor of [admin, director]) { ok(await rpc(actor, 'resolve_storage_asset', { p_asset_id: teacherPhoto.id })); checks++; }
   for (const actor of [teacher, parent, student]) await denied(() => rpc(actor, 'resolve_storage_asset', { p_asset_id: teacherPhoto.id }));
-  const enrollment = await create('enrollments', { student_id: child.id, status: 'Submitted' });
+  // EAP (127): Submitted is retired; the document belongs to a Confirmed enrollment of its own year.
+  const enrollment = await create('enrollments', { student_id: child.id, status: 'Confirmed', session_type: 'Yearly', school_year: '2029/2030' });
   const document = await reserve(admin, 'enrollment_document', child.id, null, enrollment.id); await ready(admin, document);
   ok(await patch(admin, 'enrollments', enrollment.id, { documents_urls: [`asset:${document.id}`] }));
   for (const actor of [admin, director]) { ok(await rpc(actor, 'resolve_storage_asset', { p_asset_id: document.id })); checks++; }
