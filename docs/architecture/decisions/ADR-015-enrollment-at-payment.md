@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-04) with the [enrollment-at-payment plan](../plans/enrollment-at-payment.md), revision EAP-r2 (EAP-r1 was reviewed CHANGES REQUIRED the same day; EAP-r2 applies the findings). Owner decisions 1–7 of 2026-11-04 are recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--planned--not-approved-2026-11-04); the coordinator's proposed answers to the plan's open questions are recorded there as proposed; the plan itself is not approved. Nothing is implemented.
+**Proposed** (2026-11-04) with the [enrollment-at-payment plan](../plans/enrollment-at-payment.md), revision EAP-r3 (EAP-r1 and EAP-r2 were reviewed CHANGES REQUIRED the same day; EAP-r3 applies the findings). Owner decisions 1–7 of 2026-11-04 are recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--planned--not-approved-2026-11-04); the coordinator's proposed answers to the plan's open questions are recorded there as proposed; the plan itself is not approved. Nothing is implemented.
 
 ## Date
 
