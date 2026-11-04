@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-04) with the [enrollment-at-payment plan](../plans/enrollment-at-payment.md), revision EAP-r4 (EAP-r1 to EAP-r3 were reviewed CHANGES REQUIRED the same day; EAP-r4 applies the findings). Owner decisions 1–7 of 2026-11-04 are recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--planned--not-approved-2026-11-04); the coordinator's proposed answers to the plan's open questions are recorded there as proposed; the plan itself is not approved. Nothing is implemented.
+**Accepted for implementation planning** (Maroine, 2026-11-04) with the [enrollment-at-payment plan](../plans/enrollment-at-payment.md), revision EAP-r4 approved at exact head `6d515611d6ca565725373d99fff6bdfc37977af7` after the independent plan review returned READY FOR OWNER APPROVAL (EAP-r1 to EAP-r3 were reviewed CHANGES REQUIRED the same day). Answers: Q1 A, Q2 A, Q3 B, Q4–Q13 A, recorded verbatim in the plan's approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--approved-for-implementation-2026-11-04). Implementation, the migration, the archive step and every Production step need their own approval. Nothing is implemented.
 
 ## Date
 
@@ -18,7 +18,7 @@ Since migration 001 an enrollment is born in a waiting state (Submitted, Under R
 2. **The pre-confirmation statuses are retired, not dropped.** Submitted, Under Review and Trial (and Rejected, per the plan's Q5) remain valid values for history and readable on old rows; a database guard trigger refuses any new row or transition into them, for every role and path. Dropping the values is a later optional release.
 3. **Conversion keeps its single authority.** A CRM prospect converts through the existing `evaluate_conversion` on its linked Confirmed/Validated enrollment; the new CRM wrapper composes the existing enrollment command (restricted to Confirmed, no longer callable directly) and the existing payment command, and adds no conversion path.
 4. **Every other creation path is closed**: the reception and management modals, the « Pré-inscriptions » page, the public self sign-up form and endpoint, and the parent portal request. Existing waiting rows are archived (ended with a reason, never reopenable) or confirmed (when paid) by a counted, journalled data step; prospects linked to an archived row are detached so they can be enrolled again.
-5. **Reception never creates an enrollment through placement** (plan Q3 = B, proposed): placing a learner in a group needs a paid enrollment of that programme and year; director and admin may still place without one, with a logged reason that the director's « Contrôles » lists until handled.
+5. **Reception never creates an enrollment through placement** (plan Q3 = B, approved): placing a learner in a group needs a paid enrollment of that programme and year; director and admin may still place without one, with a logged reason that the director's « Contrôles » lists until handled.
 
 ## Consequences
 
