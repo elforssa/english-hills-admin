@@ -8,6 +8,7 @@ import { getBrowserClient } from '@/lib/supabase';
 import { localBusinessDate, money } from '@/lib/receiptFinance';
 import { ROLE_LABELS, addDays, discountReasonLabel, unpaidOriginLabel } from '@/lib/financeCorrections.mjs';
 import { recordHref } from '@/lib/navigation.mjs';
+import { ENROLLMENT_LABELS, displayLabel } from '@/lib/ui/presentation.mjs';
 
 const PERIODS = [30, 90, 365];
 
@@ -46,7 +47,7 @@ export default function FinanceReviewQueue() {
           <ReviewList title="Inscriptions confirmées sans paiement actif" empty="Aucune inscription confirmée sans paiement actif." rows={data.unpaid_confirmed}
             render={(row) => <>
               <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
-              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status}{row.learner_archived ? ' · dossier archivé' : ''}{row.lead_status ? ` · CRM ${row.lead_status}${row.lead_review_required ? ' (à vérifier)' : ''}` : ''}</span>
+              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {displayLabel(ENROLLMENT_LABELS, row.enrollment_status)}{row.learner_archived ? ' · dossier archivé' : ''}{row.lead_status ? ` · CRM ${row.lead_status}${row.lead_review_required ? ' (à vérifier)' : ''}` : ''}</span>
             </>} />
           <ReviewList title="Remises accordées" empty="Aucune remise sur la période." rows={data.discounts}
             render={(row) => <>
@@ -61,13 +62,13 @@ export default function FinanceReviewQueue() {
           <ReviewList title="Inscriptions confirmées sans aucun paiement" empty="Aucune inscription confirmée sans aucun paiement." rows={data.unpaid_never}
             render={(row) => <>
               <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
-              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · Origine : {unpaidOriginLabel(row.origin)}</span>
+              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {displayLabel(ENROLLMENT_LABELS, row.enrollment_status)} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · Origine : {unpaidOriginLabel(row.origin)}</span>
             </>} />
           <ReviewList title="Inscriptions payées hors rattachement" empty="Aucune inscription payée sur un reçu non rattaché." rows={data.paid_unlinked}
             note="Pour information : l’apprenant a payé sur un reçu non rattaché à l’inscription. Aucune action n’est attendue."
             render={(row) => <>
               <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
-              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · {row.receipt_count} reçu{Number(row.receipt_count) > 1 ? 's' : ''} hors rattachement</span>
+              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {displayLabel(ENROLLMENT_LABELS, row.enrollment_status)} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · {row.receipt_count} reçu{Number(row.receipt_count) > 1 ? 's' : ''} hors rattachement</span>
             </>} />
         </div>}
       </ReadState>

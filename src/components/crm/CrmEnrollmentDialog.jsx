@@ -1,7 +1,7 @@
 'use client';
 import { Children, cloneElement, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -67,6 +67,11 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   const pending = useRef(null), locked = useRef(false), formRef = useRef(null), refresh = useCrmRefresh(), queryClient = useQueryClient();
   const candidates = useCrmRead('crm_find_student_candidates', { p_lead: lead.id, p_name: form.name.trim(), p_birth_date: form.birth || null, p_limit: 5, p_offset: offset }, !linked && form.name.trim().length >= 2);
   const enrollments = useCrmRead('crm_find_enrollment_candidates', { p_student: form.student?.id, p_session: form.session, p_year: form.year, p_limit: 5, p_offset: enrollmentOffset }, form.choice === 'existing' && !!form.student && step >= 2);
+  // The learner's live charges, as the receipt form reads them: an enrollment that
+  // already has one is collected on that charge, never charged a second time.
+  const charges = useQuery({ queryKey: ['crm-enrollment-charges', form.student?.id], enabled: form.choice === 'existing' && !!form.student && step >= 2,
+    queryFn: async () => { if (!form.student?.id) return [];const { data, error } = await getBrowserClient().from('charge_balances').select('id,enrollment_id,balance').eq('student_id', form.student.id).is('voided_at', null).not('enrollment_id', 'is', null); if (error) throw error; return data || []; } });
+  const liveCharge = en => charges.data?.find(c => c.enrollment_id === en.id) || null;
   const groups = useCrmRead('crm_enrollment_groups', { p_session: form.session, p_level: form.level || null, p_limit: 50, p_offset: groupOffset }, step >= 2);
   const linkedId = live.linkedActive ? liveLinked.id : null, linkedName = liveLinked?.name, linkedBirth = liveLinked?.birth_date, isFrozen = !!frozen;
   // A linkage discovered after a rejection moves the dialog to the linked presentation,
@@ -156,15 +161,15 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
         if (latest?.enrollment) { setResult({ data: { lead: latest, enrollment: latest.enrollment }, origin: 'discovered' });await refresh();return; }
         if (latest) setVersion(latest.version);
         if (next.recovery === 'linked') await refetchContext();
-        else if (next.recovery === 'enrollments') { await enrollments.refetch();setForm(f => ({ ...f, enrollment: null, mode: 'pay' })); }
+        else if (next.recovery === 'enrollments') { await Promise.all([enrollments.refetch(), charges.refetch()]);setForm(f => ({ ...f, enrollment: null, mode: 'pay' })); }
         else if (isRecordConflict(err) && next.recovery !== 'retry') {
           if (!linked) await candidates.refetch();if (form.choice === 'existing') await enrollments.refetch();
           setForm(f => linkedActive ? { ...f, enrollment: null, mode: 'pay' } : { ...f, choice: '', student: null, enrollment: null, mode: 'pay', confirmNew: false });target = 1;
         }
         await refresh();
       } else if (next.recovery === 'enrollments' || next.recovery === 'reselect') {
-        if (form.choice === 'existing' && form.student) await enrollments.refetch();
-        setForm(f => next.recovery === 'reselect' ? { ...f, choice: '', student: null, enrollment: null, mode: 'pay' } : ['enrollment_changed', 'enrollment_incompatible', 'enrollment_already_linked'].includes(next.reason) ? { ...f, enrollment: null, mode: 'pay' } : f);
+        if (form.choice === 'existing' && form.student) await Promise.all([enrollments.refetch(), charges.refetch()]);
+        setForm(f => next.recovery === 'reselect' ? { ...f, choice: '', student: null, enrollment: null, mode: 'pay' } : ['enrollment_changed', 'enrollment_incompatible', 'enrollment_already_linked', 'enrollment_already_charged'].includes(next.reason) ? { ...f, enrollment: null, mode: 'pay' } : f);
       }
       fail(next, target);
     } finally { locked.current = false;setSaving(false);setBusy(false); }
@@ -192,7 +197,10 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
         <div className="grid gap-3 sm:grid-cols-2"><Field label="Programme" name="session" failure={shown}><select className={input} value={form.session} onChange={e => { setForm(f => ({ ...f, session: e.target.value, level: '', group: '', enrollment: null, mode: 'pay' }));setGroupOffset(0);setEnrollmentOffset(0);setFailure(null); }}>{ENROLLABLE.map(s => <option key={s} value={s}>{PROGRAMS[s]}</option>)}</select></Field><Field label="Année scolaire" name="year" failure={shown}><input className={input} required pattern="[0-9]{4}/[0-9]{4}" value={form.year} readOnly={Boolean(schoolYearOfGroup(selectedGroup))} title={schoolYearOfGroup(selectedGroup) ? 'L’année scolaire suit le groupe choisi.' : undefined} onChange={e => { setForm(f => ({ ...f, year: e.target.value, enrollment: null, mode: 'pay' }));setEnrollmentOffset(0);setFailure(null); }} /></Field></div>
         {form.choice === 'existing' && <ReadState query={enrollments}><div className="space-y-2">{rows.map(en => <div key={en.id} className="rounded-lg border p-3 text-sm"><p className="font-medium">{ENROLLMENT_STATUS[en.status] || 'Statut à vérifier'}</p><p>{en.school_year}{en.level ? ` · ${en.level}` : ''}{en.group_name ? ` · ${en.group_name}` : ''}</p>
           {CLOSED_ENROLLMENT_STATUSES.includes(en.status) ? <p className="mt-2 text-slate-500">Historique : une nouvelle inscription peut être encaissée.</p> : en.already_linked ? <Button type="button" size="sm" variant="outline" className="mt-2" disabled>Déjà rattachée à un prospect</Button>
-            : <div className="mt-2 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => choose(en, 'pay')}>{form.enrollment?.id === en.id && form.mode === 'pay' ? 'Encaissement sur cette inscription' : 'Encaisser sur cette inscription'}</Button>{PAID_ENROLLMENT_STATUSES.includes(en.status) && <Button type="button" size="sm" variant="outline" onClick={() => choose(en, 'link')}>{form.enrollment?.id === en.id && form.mode === 'link' ? 'Inscription payée sélectionnée' : 'Rattacher cette inscription payée'}</Button>}</div>}</div>)}
+            : !charges.isSuccess ? <p className="mt-2 text-slate-500">{charges.isError ? <>Montants indisponibles. <button type="button" className="underline" onClick={() => charges.refetch()}>Réessayer</button></> : 'Vérification des montants…'}</p>
+            : <div className="mt-2 space-y-2">{liveCharge(en) && <p>Un montant est déjà enregistré sur cette inscription · reste {money(liveCharge(en).balance)} MAD</p>}<div className="flex flex-wrap gap-2">{liveCharge(en)
+              ? Number(liveCharge(en).balance) > 0 && <Button asChild size="sm" variant="outline"><Link href={`/receipts/new?student_id=${form.student.id}&charge_id=${liveCharge(en).id}`}>Encaisser sur ce montant</Link></Button>
+              : <Button type="button" size="sm" variant="outline" onClick={() => choose(en, 'pay')}>{form.enrollment?.id === en.id && form.mode === 'pay' ? 'Encaissement sur cette inscription' : 'Encaisser sur cette inscription'}</Button>}{PAID_ENROLLMENT_STATUSES.includes(en.status) && <Button type="button" size="sm" variant="outline" onClick={() => choose(en, 'link')}>{form.enrollment?.id === en.id && form.mode === 'link' ? 'Inscription payée sélectionnée' : 'Rattacher cette inscription payée'}</Button>}</div></div>}</div>)}
           {liveRows.length > 0 && !form.enrollment && <p className="text-sm">{linkedElsewhere ? ENROLLMENT_REASONS.existing_enrollment_linked_elsewhere.message : 'Choisissez l’inscription existante pour éviter un doublon.'}</p>}</div></ReadState>}
         <Pager offset={enrollmentOffset} total={enrollments.data?.total || 0} size={5} onChange={setEnrollmentOffset} />
         {!form.enrollment && <Field label="Niveau proposé" name="level" failure={shown}><select className={input} value={form.level} onChange={e => { setForm(f => ({ ...f, level: e.target.value, group: '' }));setGroupOffset(0);setFailure(null); }}><option value="">À définir</option>{levels.map(l => <option key={l}>{l}</option>)}</select></Field>}

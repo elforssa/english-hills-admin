@@ -365,17 +365,22 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(paymentResultMessage({ ...paid, enrollment_confirmation_pending: true, group_pending: true }), GROUP_PENDING_MESSAGE,
     'a stale pending key is ignored');
   assert.equal(paymentResultMessage({ receipt_id: 'r1', replayed: true }), 'Paiement déjà enregistré — reçu existant affiché.');
+  // A replay keeps the chosen group and says what happened to it.
+  assert.equal(paymentResultMessage({ receipt_id: 'r1', replayed: true }, { placed: true }), 'Paiement déjà enregistré — reçu existant affiché. Groupe affecté.');
+  assert.equal(paymentResultMessage({ receipt_id: 'r1', replayed: true }, { placementError: 'Ce groupe est complet.' }),
+    'Paiement déjà enregistré — reçu existant affiché. Groupe non affecté : Ce groupe est complet. Apprenant inscrit — groupe à affecter.');
   assert.equal(paymentResultMessage({ receipt_id: 'r1', student_enrolled: false }), 'Paiement enregistré et reçu émis.', 'an Other service');
   assert.equal(paymentResultMessage({ charge_id: 'c1', receipt_id: null, balance: 1000 }), 'Solde à payer enregistré. Aucun reçu émis.');
   assert.equal(paymentResultMessage({ receipt_id: null, enrollment_id: 'e1', free_enrollment: true, group_pending: true }), FREE_ENROLLMENT_MESSAGE);
   assert.equal(paymentResultMessage({ receipt_id: null, enrollment_id: 'e1', free_enrollment: true }, { placementError: 'Ce groupe est complet.' }),
     `${FREE_ENROLLMENT_MESSAGE} Groupe non affecté : Ce groupe est complet.`);
-  // The candidate list hides history: retired statuses and Ended rows, unless CRM-linked.
+  // The candidate list hides history: retired statuses unless CRM-linked, and Ended rows always
+  // (the server refuses a payment on an Ended enrollment, CRM-linked or not).
   assert.deepEqual(RETIRED_ENROLLMENT_STATUSES, ['Submitted', 'Under Review', 'Trial', 'Rejected']);
   for (const status of ['Confirmed', 'Validated']) assert.equal(isPayableEnrollmentCandidate({ status }), true, status);
   for (const status of ['Submitted', 'Under Review', 'Trial', 'Rejected', 'Ended']) {
     assert.equal(isPayableEnrollmentCandidate({ status }), false, status);
-    assert.equal(isPayableEnrollmentCandidate({ status, crm_linked: true }), true, `${status} CRM-linked`);
+    assert.equal(isPayableEnrollmentCandidate({ status, crm_linked: true }), status !== 'Ended', `${status} CRM-linked`);
   }
   assert.match(receiptForm, /enrollments\.filter\(\(row\) => isPayableEnrollmentCandidate\(row\)/);
   assert.match(receiptForm, /row\.crm_linked && !\['Rejected', 'Ended'\]\.includes\(row\.status\)/, 'the CRM marker mirrors the server check');
@@ -471,8 +476,10 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(newPage, /const message = paymentResultMessage\(data, placement\);/);
   // D3: after the payment, fresh versions of the enrollment and the learner, then the placement
   // with the enrollment; a refusal is a message, never an undo of the payment.
-  assert.match(newPage, /const placement = groupId && data\.enrollment_id && !data\.replayed\n\s+\? await placeAfterPayment\(client, data\.enrollment_id, groupId\) : \{\};/);
-  assert.match(newPage, /from\('enrollments'\)\s*\.select\('id,updated_at,student_id'\)\.eq\('id', enrollmentId\)/);
+  assert.match(newPage, /const placement = groupId && data\.enrollment_id\n\s+\? await placeAfterPayment\(client, data\.enrollment_id, groupId\) : \{\};/);
+  assert.match(newPage, /from\('enrollments'\)\s*\.select\('id,updated_at,student_id,group_id'\)\.eq\('id', enrollmentId\)/);
+  // A replay whose lost first response already placed the learner is not placed twice.
+  assert.match(newPage, /if \(enrollment\.group_id === groupId\) return \{ placed: true \};\n\s+if \(enrollment\.group_id\) return \{\};/);
   assert.match(newPage, /from\('students'\)\s*\.select\('id,updated_at'\)\.eq\('id', enrollment\.student_id\)/);
   assert.match(newPage, /placeLearnerInGroup\(client, \{ student, group: groupId, enrollment \}\)/);
   assert.match(newPage, /if \(error\) return \{ placementError: membershipErrorMessage\(error\) \};\n\s+await invalidateAfterLearnerSave\(queryClient\);/,

@@ -79,7 +79,8 @@ export function paymentResultMessage(result, { placed = false, placementError = 
     if (result?.free_enrollment) return [FREE_ENROLLMENT_MESSAGE, refused].filter(Boolean).join(' ');
     return 'Solde à payer enregistré. Aucun reçu émis.';
   }
-  if (result.replayed) return 'Paiement déjà enregistré — reçu existant affiché.';
+  if (result.replayed) return ['Paiement déjà enregistré — reçu existant affiché.',
+    refused ? `${refused} Apprenant inscrit — groupe à affecter.` : placed ? 'Groupe affecté.' : ''].filter(Boolean).join(' ');
   if (refused) return `Paiement enregistré. ${refused} Apprenant inscrit — groupe à affecter.`;
   if (placed) return ENROLLMENT_CONFIRMED_MESSAGE;
   if (result.group_pending) return GROUP_PENDING_MESSAGE;
@@ -89,10 +90,12 @@ export function paymentResultMessage(result, { placed = false, placementError = 
 }
 
 // The receipt form's enrollment candidates: a retired (pré-inscription, essai, refusée)
-// or ended row is history and is never selected for a new payment, unless CRM-linked.
+// or ended row is history and is never selected for a new payment; a CRM-linked retired
+// row stays payable (it confirms), an ended one never (it takes payments only on its own
+// charge, chosen as an existing balance).
 export const RETIRED_ENROLLMENT_STATUSES = ['Submitted', 'Under Review', 'Trial', 'Rejected'];
 export function isPayableEnrollmentCandidate(row) {
-  return Boolean(row) && (row.crm_linked || !(RETIRED_ENROLLMENT_STATUSES.includes(row.status) || row.status === 'Ended'));
+  return Boolean(row) && row.status !== 'Ended' && (row.crm_linked || !RETIRED_ENROLLMENT_STATUSES.includes(row.status));
 }
 
 // The author roles the director's « Contrôles » lists name.

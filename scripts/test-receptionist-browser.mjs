@@ -232,22 +232,23 @@ try {
   assert.equal(sql(`select status||':'||group_id from public.enrollments where id='${walkInGrouped.enrollment_id}'`), `Validated:${group}`);
   console.log('PASS « Inscrire et encaisser »: learner file with group, walk-ins without and with group, any amount confirms, no status select');
 
-  // Q3 = B: an unpaid learner is never placed by reception. The group picker offers
-  // the matching file and the database refuses it with the French message.
+  // Q3 = B: an unpaid learner is never placed by reception. The group picker lists the
+  // matching file greyed out with its reason; the database refusal itself is checked below
+  // with a direct request (eap.paid_enrollment_required).
   await page.goto(app + `/groups/${group}`);
   await page.getByRole('heading', { name: run, exact: true }).waitFor();
   await page.getByRole('button', { name: 'Ajouter des apprenants' }).click();
   const picker = page.getByRole('dialog');
   await picker.getByText(readyName, { exact: true }).waitFor();
   assert.equal(await picker.getByText(unsetName, { exact: true }).count(), 0);
-  const refusedPick = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/assign_receptionist_student_group'));
-  await picker.getByRole('option').filter({ hasText: readyName }).click();
-  const refusedPickResponse = await refusedPick;
-  assert(refusedPickResponse.status() >= 400, 'an unpaid placement was accepted');
-  assert.equal((await refusedPickResponse.json()).hint, 'eap.paid_enrollment_required');
-  await page.getByText('Inscrivez et encaissez d’abord : l’affectation suit une inscription payée.').first().waitFor();
+  await picker.getByText('Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.', { exact: true }).waitFor();
+  const unpaidOption = picker.getByRole('option').filter({ hasText: readyName });
+  assert.equal(await unpaidOption.getAttribute('aria-disabled'), 'true', 'an unpaid learner cannot be picked');
+  assert.match(await unpaidOption.innerText(), /sans inscription payée/);
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${readyStudent}'`), '0');
-  console.log('PASS group picker offers matching level, excludes unset-level dossier and refuses an unpaid learner');
+  assert.equal(sql(`select coalesce(groupe_id::text,'unset') from public.students where id='${readyStudent}'`), 'unset');
+  await page.keyboard.press('Escape');
+  console.log('PASS group picker offers matching level, excludes unset-level dossier and greys out an unpaid learner');
 
   await page.goto(app + '/students');
   await page.getByLabel('Rechercher un apprenant').fill(readyName);

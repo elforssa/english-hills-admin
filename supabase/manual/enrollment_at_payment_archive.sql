@@ -29,7 +29,8 @@
 -- Plain SQL, one call through the guarded transport (it runs as postgres):
 --   supabase db query --linked --project-ref <ref> -f supabase/manual/enrollment_at_payment_archive.sql
 -- First with eap.dry_run 'on' (expects the DRYRUN_OK error), then with 'off' on the
--- owner's go. Reverse: supabase/manual/enrollment_at_payment_archive_revert.sql (restores
+-- owner's go. A second run after a successful one finds no row left: every declared
+-- count must then be set to 0 (any other value is refused as "counts differ"). Reverse: supabase/manual/enrollment_at_payment_archive_revert.sql (restores
 -- enrollment rows, learner statuses and lead links; never the conversions).
 begin;
 set local lock_timeout = '5s';

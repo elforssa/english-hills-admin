@@ -27,8 +27,11 @@ export default function ReceiptNew() {
   const placeAfterPayment = async (client, enrollmentId, groupId) => {
     try {
       const { data: enrollment, error: enrollmentError } = await client.from('enrollments')
-        .select('id,updated_at,student_id').eq('id', enrollmentId).single();
+        .select('id,updated_at,student_id,group_id').eq('id', enrollmentId).single();
       if (enrollmentError) throw enrollmentError;
+      // A replayed payment whose first response was lost may already be placed.
+      if (enrollment.group_id === groupId) return { placed: true };
+      if (enrollment.group_id) return {};
       const { data: student, error: studentError } = await client.from('students')
         .select('id,updated_at').eq('id', enrollment.student_id).single();
       if (studentError) throw studentError;
@@ -51,7 +54,8 @@ export default function ReceiptNew() {
       return;
     }
     clearPendingPayment();
-    const placement = groupId && data.enrollment_id && !data.replayed
+    // A replay keeps the chosen group: placed now if the lost first response never got to it.
+    const placement = groupId && data.enrollment_id
       ? await placeAfterPayment(client, data.enrollment_id, groupId) : {};
     await Promise.all([
       invalidateAfterFinance(queryClient),

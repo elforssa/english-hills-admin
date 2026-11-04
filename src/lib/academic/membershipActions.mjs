@@ -50,6 +50,7 @@ export const EAP_REASON_TEXT = {
   placement_reason_required: 'Motif requis pour affecter sans inscription payée (200 caractères au plus).',
   archived_not_reopenable: 'Une pré-inscription archivée ne se rouvre pas : inscrivez et encaissez.',
   program_not_enrollable: 'Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.',
+  enrollment_already_charged: 'Cette inscription a déjà un montant enregistré : encaissez sur ce montant depuis le reçu, ou rattachez-la si elle est payée.',
   public_registration_retired: 'Les inscriptions en ligne sont fermées. Contactez le centre.',
 };
 

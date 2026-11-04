@@ -370,7 +370,9 @@ begin
         from public.activity_log a left join public.profiles p on p.id = a.actor_id
         where a.target_table = 'enrollments' and a.target_id = e.id
           and a.after->>'kind' in ('placement_without_enrollment','reopen','capacity_override')
-        order by a.created_at desc, a.id desc limit 1) o on true
+        -- A placement without enrollment explains the unpaid row even when the same
+        -- placement also overrode a full group (both are logged in one command).
+        order by (a.after->>'kind' = 'placement_without_enrollment') desc, a.created_at desc, a.id desc limit 1) o on true
       where e.status in ('Confirmed','Validated')
         and not exists (select 1 from public.receipts r where r.enrollment_id = e.id
           or r.charge_id in (select c.id from public.charges c where c.enrollment_id = e.id))
@@ -570,7 +572,11 @@ revoke execute on function public.crm_start_enrollment(uuid, jsonb) from public,
 -- derived from the caller and the request key, never taken from the client. On a
 -- first run the wrapper raises unless a receipt was issued, the enrollment is free
 -- (100 % with a reason, Q1) or, without a payment object, the linked enrollment is
--- already paid (Q12); a raise rolls everything back. A replay skips that check.
+-- already paid (Q12); a raise rolls everything back. A replay skips that check but
+-- must carry a payment exactly when the first run did (crm_enrollment.request_conflict).
+-- A payment never opens a second tuition charge on an enrollment that already has a
+-- live charge or receipt (eap.enrollment_already_charged): that balance is collected
+-- on its own charge from the receipt form, or a paid row is linked (Q12).
 create function public.crm_enroll_and_collect(p_request_key uuid, p_data jsonb)
 returns jsonb language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 declare
@@ -612,6 +618,16 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('crm:request:'||v_actor||':start_enrollment:'||p_request_key, 0));
   v_replayed := exists (select 1 from public.crm_command_requests where actor_scope = v_actor::text
     and command_name = 'start_enrollment' and request_key = p_request_key);
+  v_bytes := substring(sha256(convert_to('eap:payment:'||v_actor::text||':'||p_request_key::text, 'UTF8')) from 1 for 16);
+  v_bytes := set_byte(v_bytes, 6, (get_byte(v_bytes, 6) & 15) | 80);
+  v_bytes := set_byte(v_bytes, 8, (get_byte(v_bytes, 8) & 63) | 128);
+  v_key := encode(v_bytes, 'hex')::uuid;
+  -- A replay carries a payment exactly when the first run did: a Q12 link replayed
+  -- with a payment, or a paid request replayed without one, is a payload conflict.
+  if v_replayed and (v_payment is not null) is distinct from
+      exists (select 1 from public.financial_requests where idempotency_key = v_key) then
+    raise exception 'Request key payload conflict' using errcode = '22023', hint = 'crm_enrollment.request_conflict';
+  end if;
   if not v_replayed and v_payment is not null then
     v_gross := round(coalesce(nullif(v_payment->>'gross_amount','')::numeric, 0), 2);
     v_discount := round(coalesce(nullif(v_payment->>'discount_amount','')::numeric, 0), 2);
@@ -623,13 +639,18 @@ begin
   end if;
   -- (i) Lead, learner, Confirmed enrollment (or the Q12 link), conversion.
   v_start := public.crm_start_enrollment(p_request_key, v_enrollment || jsonb_build_object('initial_status', 'Confirmed'));
+  -- An existing enrollment that already has a live charge or receipt is never charged
+  -- again here (first run; the CRM step holds the learner's enrollment lock).
+  if not v_replayed and v_payment is not null and nullif(v_enrollment->>'enrollment_id', '') is not null and (
+      exists (select 1 from public.charges c where c.enrollment_id = (v_start->'enrollment'->>'id')::uuid and c.voided_at is null)
+      or exists (select 1 from public.receipts r where r.enrollment_id = (v_start->'enrollment'->>'id')::uuid
+        and r.voided_at is null and r.deleted_at is null)) then
+    raise exception 'Cette inscription a déjà un montant enregistré : encaissez sur ce montant depuis le reçu, ou rattachez-la si elle est payée.'
+      using errcode = '22023', hint = 'eap.enrollment_already_charged';
+  end if;
   -- (ii) The payment on that enrollment, from the stored enrollment summary so a
   -- replay sends the same request.
   if v_payment is not null then
-    v_bytes := substring(sha256(convert_to('eap:payment:'||v_actor::text||':'||p_request_key::text, 'UTF8')) from 1 for 16);
-    v_bytes := set_byte(v_bytes, 6, (get_byte(v_bytes, 6) & 15) | 80);
-    v_bytes := set_byte(v_bytes, 8, (get_byte(v_bytes, 8) & 63) | 128);
-    v_key := encode(v_bytes, 'hex')::uuid;
     v_pay := public.create_charge_payment(v_payment || jsonb_build_object(
       'student_id', v_start->'enrollment'->'student_id', 'enrollment_id', v_start->'enrollment'->'id',
       'session_type', v_start->'enrollment'->'session_type', 'school_year', v_start->'enrollment'->'school_year',

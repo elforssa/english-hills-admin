@@ -35,6 +35,9 @@ export function enrollmentAction({ status, enrollment }) {
     return { row: 7, action: null, note: 'Statut d’inscription à vérifier par l’administration.' };
   }
   if (['Confirmed', 'Validated'].includes(enrollment.status)) return { row: 1, action: 'open', note: null };
+  // An enrollment ended after its confirmation is a normal departure: the server raises
+  // no review for it (evaluate_conversion, 120), so the note does not claim one.
+  if (status === 'CONVERTED' && enrollment.status === 'Ended') return { row: 2, action: 'open', note: 'Inscription terminée après sa confirmation. Le prospect reste converti.' };
   if (status === 'CONVERTED') return { row: 2, action: 'open', note: 'Cette inscription a changé après sa confirmation. Elle est signalée pour vérification par la direction.' };
   if (PRE_CONFIRMATION.includes(enrollment.status)) return { row: 3, action: 'open', note: ARCHIVED_PRE_ENROLLMENT_NOTE };
   if (enrollment.status === 'Rejected') return { row: 6, action: 'open', note: 'Inscription refusée. Ce prospect reste rattaché à cette inscription ; pour une nouvelle demande, contactez la direction.' };

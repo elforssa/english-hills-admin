@@ -58,6 +58,9 @@ export const YEAR_REASONS = {
 export const EAP_REASONS = {
   payment_required: { message: EAP_REASON_TEXT.payment_required, step: 3, field: 'amount', submit: true, recovery: 'correct' },
   program_not_enrollable: { message: EAP_REASON_TEXT.program_not_enrollable, step: 2, field: 'session', submit: true, recovery: 'correct' },
+  // The chosen enrollment already has a charge: step 2 re-reads the enrollments, which
+  // then offer « Encaisser sur ce montant » (receipt form) or the Q12 link.
+  enrollment_already_charged: { message: EAP_REASON_TEXT.enrollment_already_charged, step: 2, field: null, submit: true, recovery: 'enrollments' },
 };
 export const PAID_LINK_REFUSED_MESSAGE = 'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.';
 // Payment refusals of create_charge_payment (122) carry no hint. The desk guard answers

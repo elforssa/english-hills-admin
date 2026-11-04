@@ -23,7 +23,8 @@ assert.doesNotMatch(page, /['"]use client['"]|useState|useEffect|next\/script|tu
 assert.doesNotMatch(page, /\/api\/public\/inscription/, 'the page never posts');
 assert.match(page, /tel:\+212664239091/, 'phone');
 assert.match(page, /const WEBSITE = 'https:\/\/english-hills\.com';/);
-assert.match(page, /`\$\{WEBSITE\}\/contact-camp`/, 'the website WhatsApp redirect');
+assert.match(page, /const WHATSAPP_HREF = 'https:\/\/wa\.me\/212664239091';/, 'a neutral WhatsApp link');
+assert.doesNotMatch(page, /contact-camp/, 'never the camp redirect');
 assert.match(page, /`\$\{WEBSITE\}\/contact`/, 'the website contact page');
 assert.match(page, /Almaz 2, Hills Business Center/, 'address');
 assert.match(page, /Horaires/, 'opening hours');

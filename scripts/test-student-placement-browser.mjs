@@ -97,7 +97,7 @@ try {
   assert.deepEqual(headers.slice(1,4), ['Catégorie','Groupe','Programme']);
   // EAP: the status filter no longer offers « Essai (dossier) »; « Clôturer l’année » is the director's only.
   const statusOptions=await page.getByRole('combobox',{name:'Filtrer par statut'}).locator('option').allTextContents();
-  assert.deepEqual(statusOptions,['Dossiers actifs (inscrits, essai)','Tous les statuts','Inscrit','Prospect','Ancien apprenant','Inactif']);
+  assert.deepEqual(statusOptions,['Dossiers actifs','Tous les statuts','Inscrit','Prospect','Ancien apprenant','Inactif']);
   await expect(page.getByRole('button',{name:'Clôturer l’année',exact:true})).toHaveCount(0);
   // The pre-registration page is retired: the learner file enrols at the payment.
   await page.goto(`http://localhost:3101/students/${paidId}`);
@@ -245,18 +245,16 @@ try {
   await reception.getByRole('button',{name:'Ajouter des apprenants',exact:true}).first().click();
   await reception.getByRole('option').filter({hasText:run+' reception paid two'}).click();
   await expect.poll(() => sql(`select status||':'||group_id from public.enrollments where student_id='${recPaid2Id}'`).trim()).toBe(`Validated:${groupId}`);
-  // Match this learner's request: the previous placement's response can still be in flight
-  // after its database row is visible.
-  const refused=reception.waitForResponse(response => response.url().includes('/rest/v1/rpc/assign_receptionist_student_group')
-    && response.request().postDataJSON()?.p_student===recUnpaidId);
-  await reception.getByRole('option').filter({hasText:run+' reception unpaid'}).click();
-  const refusal=await refused;
-  assert.ok(refusal.status()>=400,'an unpaid placement by reception was accepted');
-  assert.equal((await refusal.json()).hint,'eap.paid_enrollment_required');
-  await reception.getByText('Inscrivez et encaissez d’abord : l’affectation suit une inscription payée.').first().waitFor();
+  // An unpaid learner is listed greyed out with its reason and cannot be picked; the database
+  // refusal (eap.paid_enrollment_required) is covered by the SQL suites and the receptionist
+  // browser suite's direct request.
+  await reception.getByText('Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.',{exact:true}).waitFor();
+  const unpaidOption=reception.getByRole('option').filter({hasText:run+' reception unpaid'});
+  await expect(unpaidOption).toHaveAttribute('aria-disabled','true');
+  await expect(unpaidOption).toContainText('sans inscription payée');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${recUnpaidId}'`).trim(),'0');
   assert.equal(sql(`select coalesce(groupe_id::text,'unset') from public.students where id='${recUnpaidId}'`).trim(),'unset');
-  console.log('PASS browser: Prospect creation and placement at creation with its reason, list placement, second programme (+1) with its reason, history editing, group page commands, capacity override plus the separate EAP reason, Ancien apprenant, CSV defaults; reception places paid learners and is refused on an unpaid one');
+  console.log('PASS browser: Prospect creation and placement at creation with its reason, list placement, second programme (+1) with its reason, history editing, group page commands, capacity override plus the separate EAP reason, Ancien apprenant, CSV defaults; reception places paid learners and cannot pick an unpaid one');
 } finally {
   if(browser) await browser.close();
   sql(`begin;

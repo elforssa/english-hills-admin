@@ -257,6 +257,11 @@ select pg_temp.refused(format('select public.crm_enroll_and_collect(%L, %L)', pg
   jsonb_set(pg_temp.get('body2'), '{payment,payment_amount}', '2')), 'P0001', null, 'changed payment payload (122 fingerprint conflict)');
 select pg_temp.owner();
 select pg_temp.ok((select count(*) = 1 from public.receipts where student_id = (pg_temp.get('r2')->'enrollment'->>'student_id')::uuid), 'conflict: still one receipt');
+-- N1: the same key without its payment is a payload conflict too, never a bare link.
+select pg_temp.act(3);
+select pg_temp.refused(format('select public.crm_enroll_and_collect(%L, %L)', pg_temp.uid_of('k2'), pg_temp.get('body2') - 'payment'),
+  '22023', 'crm_enrollment.request_conflict', 'paid request replayed without its payment');
+select pg_temp.owner();
 
 -- Existing learner, free enrollment through the wrapper, and its replay (R1 for free).
 select pg_temp.put('l3', to_jsonb(pg_temp.lead(3)));
@@ -314,9 +319,25 @@ select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_u
   pg_temp.id(632))), '22023', 'eap.payment_required', 'Q12 reopened unpaid row');
 select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.link(pg_temp.uid_of('l4'), pg_temp.id(623),
   pg_temp.id(633))), '22023', null, 'Q12 ended row');
-select pg_temp.put('r4', public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.link(pg_temp.uid_of('l4'), pg_temp.id(620),
-  (pg_temp.get('p620')->>'enrollment_id')::uuid)));
+-- An enrollment that already has a live charge is never charged a second time by the wrapper.
+select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.link(pg_temp.uid_of('l4'), pg_temp.id(620),
+  (pg_temp.get('p620')->>'enrollment_id')::uuid) || jsonb_build_object('payment', pg_temp.pay(500))), '22023', 'eap.enrollment_already_charged',
+  'second charge on a charged enrollment');
 select pg_temp.owner();
+select pg_temp.ok((select count(*) = 1 from public.charges where enrollment_id = (pg_temp.get('p620')->>'enrollment_id')::uuid)
+  and (select count(*) = 1 from public.receipts where student_id = pg_temp.id(620))
+  and (select status = 'QUALIFIED' and enrollment_id is null from public.crm_leads where id = pg_temp.uid_of('l4')), 'charged refusal: nothing written');
+select pg_temp.put('k4', to_jsonb(gen_random_uuid()));
+select pg_temp.put('body4', pg_temp.link(pg_temp.uid_of('l4'), pg_temp.id(620), (pg_temp.get('p620')->>'enrollment_id')::uuid));
+select pg_temp.act(3);
+select pg_temp.put('r4', public.crm_enroll_and_collect(pg_temp.uid_of('k4'), pg_temp.get('body4')));
+-- N1: the Q12 link replayed with a payment is a payload conflict and issues nothing; the exact replay still answers.
+select pg_temp.refused(format('select public.crm_enroll_and_collect(%L, %L)', pg_temp.uid_of('k4'),
+  pg_temp.get('body4') || jsonb_build_object('payment', pg_temp.pay(500))), '22023', 'crm_enrollment.request_conflict', 'Q12 link replayed with a payment');
+select pg_temp.put('r4b', public.crm_enroll_and_collect(pg_temp.uid_of('k4'), pg_temp.get('body4')));
+select pg_temp.owner();
+select pg_temp.ok((select (v->>'replayed_enrollment')::boolean and v->>'receipt_id' is null and v->'enrollment'->>'id' = pg_temp.get('r4')->'enrollment'->>'id'
+  from fx where k = 'r4b'), 'Q12 exact replay answers the link');
 select pg_temp.ok((select v->>'receipt_id' is null and v->>'charge_id' is null and v->'enrollment'->>'id' = pg_temp.get('p620')->>'enrollment_id'
     from fx where k = 'r4') and (select status = 'CONVERTED' from public.crm_leads where id = pg_temp.uid_of('l4'))
   and (select count(*) = 1 from public.receipts where student_id = pg_temp.id(620)), 'Q12 paid row: linked, converted, nothing issued');
@@ -374,7 +395,15 @@ select pg_temp.refused(format('select public.place_learner_in_group(p_student =>
 select pg_temp.ok(public.place_learner_in_group(p_student => pg_temp.id(600), p_group => pg_temp.id(500), p_student_updated_at => pg_temp.upd(pg_temp.id(600)),
   p_enrollment => pg_temp.id(601), p_enrollment_updated_at => pg_temp.eupd(pg_temp.id(601)), p_without_enrollment_reason => 'Place réservée') = pg_temp.id(601),
   'admin places a Submitted row with reason');
+-- S2: a placement without enrollment into a full group logs both reasons; Contrôles (d) shows the placement.
+insert into public.students(id, full_name, status, session_type) values (pg_temp.id(641), 'EAP T full-group placement', 'Prospect', 'Yearly');
+select pg_temp.act(1);
+select pg_temp.ok(public.place_learner_in_group(p_student => pg_temp.id(641), p_group => pg_temp.id(501), p_student_updated_at => pg_temp.upd(pg_temp.id(641)),
+  p_capacity_override_reason => 'Place ajoutée', p_without_enrollment_reason => 'Bourse pleine') is not null, 'director places without enrollment into a full group');
 select pg_temp.owner();
+select pg_temp.ok((select count(distinct after->>'kind') = 2 from public.activity_log where target_table = 'enrollments'
+  and target_id = (select id from public.enrollments where student_id = pg_temp.id(641))
+  and after->>'kind' in ('placement_without_enrollment', 'capacity_override')), 'full-group placement logs both kinds on the enrollment');
 select pg_temp.ok((select count(*) = 1 from public.activity_log where target_table = 'enrollments' and after->>'kind' = 'placement_without_enrollment'
   and after->>'student_id' = pg_temp.id(640)::text and after->>'reason' = 'Bourse EAP' and after->>'author_role' = 'admin'), 'placement logged with reason and role');
 select pg_temp.ok((select count(*) = 1 from public.activity_log where target_table = 'enrollments' and after->>'kind' = 'placement_without_enrollment'
@@ -409,7 +438,13 @@ insert into public.students(id, full_name, status, session_type) values
   (pg_temp.id(672), 'EAP T C5 shape', 'Prospect', 'Mise à niveau'),
   (pg_temp.id(673), 'EAP T C1 outside window', 'Prospect', 'Yearly'),
   (pg_temp.id(674), 'EAP T C1 other programme', 'Prospect', 'Yearly'),
-  (pg_temp.id(675), 'EAP T C5 outside window', 'Prospect', 'Mise à niveau');
+  (pg_temp.id(675), 'EAP T C5 outside window', 'Prospect', 'Mise à niveau'),
+  (pg_temp.id(676), 'EAP T L2 shape', 'Prospect', 'Yearly');
+-- N5: a legacy unpaid Submitted row whose learner paid on an unlinked receipt (the R0 L2 shape).
+select set_config('eh.enrollment_command', 'on', true), set_config('eh.membership_sync', 'on', true);
+insert into public.enrollments(id, student_id, status, session_type, school_year, level) values
+  (pg_temp.id(686), pg_temp.id(676), 'Submitted', 'Yearly', '2026/2027', 'Child 2');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 insert into public.enrollments(id, student_id, status, session_type, school_year, level, group_id, created_at) values
   (pg_temp.id(680), pg_temp.id(670), 'Confirmed', 'Yearly', '2024/2025', 'Child 2', null, '2024-09-01'),
   (pg_temp.id(681), pg_temp.id(671), 'Validated', 'Yearly', '2026/2027', 'Child 2', pg_temp.id(500), now()),
@@ -424,13 +459,15 @@ insert into public.charges(id, student_id, session_type, school_year, level, pla
   (pg_temp.id(691), pg_temp.id(672), 'Mise à niveau', null, 'A1', null, 1000, 0, true, 'EAP legacy balance', null),
   (pg_temp.id(692), pg_temp.id(673), 'Yearly', null, 'Child 2', 'Standard', 3000, 0, false, 'EAP undated', pg_temp.id(1)),
   (pg_temp.id(693), pg_temp.id(674), 'Adults', null, 'B1', null, 3000, 0, false, 'EAP undated other', pg_temp.id(1)),
-  (pg_temp.id(694), pg_temp.id(675), 'Mise à niveau', null, 'A1', null, 1000, 0, true, 'EAP legacy balance', null);
+  (pg_temp.id(694), pg_temp.id(675), 'Mise à niveau', null, 'A1', null, 1000, 0, true, 'EAP legacy balance', null),
+  (pg_temp.id(689), pg_temp.id(676), 'Yearly', null, 'Child 2', 'Standard', 3000, 0, false, 'EAP undated L2', pg_temp.id(1));
 insert into public.receipts(id, student_id, charge_id, date, nom_prenom, montant_total, montant_paye, mode_paiement, session_type) values
   (pg_temp.id(695), pg_temp.id(671), pg_temp.id(690), '2026-07-01', 'EAP T C1 shape', 3000, 500, 'Espèces', 'Yearly'),
   (pg_temp.id(696), pg_temp.id(672), pg_temp.id(691), '2027-08-31', 'EAP T C5 shape', 1000, 500, 'Espèces', 'Mise à niveau'),
   (pg_temp.id(697), pg_temp.id(673), pg_temp.id(692), '2026-05-31', 'EAP T C1 outside window', 3000, 500, 'Espèces', 'Yearly'),
   (pg_temp.id(698), pg_temp.id(674), pg_temp.id(693), '2026-07-01', 'EAP T C1 other programme', 3000, 500, 'Espèces', 'Adults'),
-  (pg_temp.id(699), pg_temp.id(675), pg_temp.id(694), '2027-09-01', 'EAP T C5 outside window', 1000, 500, 'Espèces', 'Mise à niveau');
+  (pg_temp.id(699), pg_temp.id(675), pg_temp.id(694), '2027-09-01', 'EAP T C5 outside window', 1000, 500, 'Espèces', 'Mise à niveau'),
+  (pg_temp.id(688), pg_temp.id(676), pg_temp.id(689), '2026-07-01', 'EAP T L2 shape', 3000, 500, 'Espèces', 'Yearly');
 set local session_replication_role = origin;
 select pg_temp.act(1);
 select pg_temp.put('queue', public.get_finance_review_queue(null));
@@ -449,6 +486,9 @@ select pg_temp.ok(pg_temp.in_list('paid_unlinked', pg_temp.id(682)) and not pg_t
 select pg_temp.ok(pg_temp.in_list('unpaid_never', pg_temp.id(683)) and not pg_temp.in_list('paid_unlinked', pg_temp.id(683)), 'C1 outside the window in (d)');
 select pg_temp.ok(pg_temp.in_list('unpaid_never', pg_temp.id(684)) and not pg_temp.in_list('paid_unlinked', pg_temp.id(684)), 'C1 other programme in (d)');
 select pg_temp.ok(pg_temp.in_list('unpaid_never', pg_temp.id(685)) and not pg_temp.in_list('paid_unlinked', pg_temp.id(685)), 'C5 outside the window in (d)');
+select pg_temp.ok((select x->'origin'->>'kind' = 'placement_without_enrollment' and x->'origin'->>'reason' = 'Bourse pleine'
+    from jsonb_array_elements(pg_temp.get('queue')->'unpaid_never') x
+    where x->>'enrollment_id' = (select id from public.enrollments where student_id = pg_temp.id(641))::text), '(d) S2: placement wins over the capacity override');
 select pg_temp.ok((select x->'origin'->>'kind' = 'placement_without_enrollment' and x->'origin'->>'reason' = 'Bourse EAP'
     from jsonb_array_elements(pg_temp.get('queue')->'unpaid_never') x
     where x->>'enrollment_id' = (select id from public.enrollments where student_id = pg_temp.id(640))::text
@@ -480,7 +520,28 @@ select pg_temp.ok((select count(*) from public.enrollments e where e.id in (sele
   = (select count(*) from jsonb_array_elements(pg_temp.get('queue')->'paid_unlinked') x
       where coalesce(x->>'enrollment_id', x->>'id')::uuid in (select id from k_fixture)), 'K3 statement = (e) on the fixture');
 select pg_temp.ok((select count(*) from public.enrollments e where e.id in (select id from k_fixture)
-    and finance_security.unlinked_payment_count(e.student_id, e.session_type, e.school_year) > 0) = 2, 'helper: the C1 and C5 shapes only');
+    and finance_security.unlinked_payment_count(e.student_id, e.session_type, e.school_year) > 0) = 3, 'helper: the C1, C5 and L2 shapes only');
+-- N5: the L2 statement of the R0 count query, restricted to this fixture, finds exactly the retired
+-- unpaid rows the helper sees as paid elsewhere (the L2 shape, 686).
+select pg_temp.ok((with live as (
+    select e.id, e.student_id, e.session_type, e.school_year,
+      (select coalesce(sum(r.montant_paye), 0) from public.receipts r
+        where r.voided_at is null and r.deleted_at is null
+          and (r.enrollment_id = e.id or r.charge_id in (select c.id from public.charges c where c.enrollment_id = e.id))) as paid
+    from public.enrollments e where e.status in ('Submitted', 'Under Review', 'Trial') and e.id in (select id from k_fixture))
+  select array_agg(x.id order by x.id) from live x
+  where x.paid = 0 and exists (select 1 from public.receipts r join public.charges c on c.id = r.charge_id
+    where r.student_id = x.student_id and r.voided_at is null and r.deleted_at is null and r.montant_paye > 0
+      and r.enrollment_id is null and c.enrollment_id is null
+      and ((not c.legacy and c.school_year is not null and c.session_type = x.session_type and c.school_year = x.school_year)
+        or ((c.legacy or c.school_year is null) and (c.legacy or c.session_type = x.session_type)
+          and x.school_year is not null
+          and r.date between make_date(left(x.school_year, 4)::integer, 6, 1) and make_date(left(x.school_year, 4)::integer + 1, 8, 31)))))
+  = (select array_agg(e.id order by e.id) from public.enrollments e where e.id in (select id from k_fixture)
+      and e.status in ('Submitted', 'Under Review', 'Trial')
+      and finance_security.unlinked_payment_count(e.student_id, e.session_type, e.school_year) > 0)
+  and (select array_agg(e.id) from public.enrollments e where e.id in (select id from k_fixture) and e.status in ('Submitted', 'Under Review', 'Trial')
+      and finance_security.unlinked_payment_count(e.student_id, e.session_type, e.school_year) > 0) = array[pg_temp.id(686)], 'L2 statement = helper on the fixture');
 -- Reception does not read the queue.
 select pg_temp.act(3);
 select pg_temp.refused('select public.get_finance_review_queue(null)', '42501', null, 'queue refused for reception');
@@ -504,6 +565,41 @@ select pg_temp.ok((select proacl::text from pg_proc where oid = 'academic_securi
 select pg_temp.ok((select relrowsecurity and relacl::text = '{postgres=arwdDxtm/postgres}' from pg_class where oid = 'maintenance.eap_archive_journal'::regclass),
   'journal: RLS on, owner only');
 select pg_temp.ok((select prosecdef from pg_proc where oid = 'crm_security.protect_enrollment_link()'::regprocedure) is false, 'protect_enrollment_link stays invoker');
+
+-- ── 8. S1: the detach exemption of protect_enrollment_link (D7) ───────────────
+-- A non-converted lead linked to a learner's enrollment; owner writes, as the archive step does.
+insert into public.students(id, full_name, status, session_type) values (pg_temp.id(900), 'EAP T detach', 'Prospect', 'Yearly');
+-- A legacy Submitted row: live, and linking it converts nothing.
+select set_config('eh.enrollment_command', 'on', true), set_config('eh.membership_sync', 'on', true);
+insert into public.enrollments(id, student_id, status, session_type, school_year, level) values
+  (pg_temp.id(901), pg_temp.id(900), 'Submitted', 'Yearly', '2026/2027', 'Child 2');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
+insert into public.students(id, full_name, status, session_type) values (pg_temp.id(902), 'EAP T detach other', 'Prospect', 'Yearly');
+insert into public.enrollments(id, student_id, status, session_type, school_year, level) values
+  (pg_temp.id(903), pg_temp.id(900), 'Confirmed', 'Adults', '2026/2027', 'B1');
+select pg_temp.put('l9', to_jsonb(pg_temp.lead(9)));
+select set_config('eh.crm_detach', 'on', true);
+update public.crm_leads set student_id = pg_temp.id(900), enrollment_id = pg_temp.id(901) where id = pg_temp.uid_of('l9');
+select pg_temp.ok((select status <> 'CONVERTED' and converted_at is null from public.crm_leads where id = pg_temp.uid_of('l9')), 'S1 fixture: linked, not converted');
+-- Flag on, live enrollment: refused.
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = null where id = %L', pg_temp.uid_of('l9')), '42501', null, 'S1 detach from a live enrollment');
+select academic_security.end_enrollment(pg_temp.id(901), 'Départ EAP');
+-- Flag off, ended enrollment: refused.
+select set_config('eh.crm_detach', '', true);
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = null where id = %L', pg_temp.uid_of('l9')), '42501', null, 'S1 detach without the flag');
+select set_config('eh.crm_detach', 'on', true);
+-- Flag on, ended enrollment, but a retarget or a learner change: refused.
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = %L where id = %L', pg_temp.id(903), pg_temp.uid_of('l9')), '42501', null, 'S1 retarget to another enrollment');
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = null, student_id = %L where id = %L', pg_temp.id(902), pg_temp.uid_of('l9')), '42501', null, 'S1 learner change');
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = null, student_id = null where id = %L', pg_temp.uid_of('l9')), '42501', null, 'S1 learner cleared');
+-- Flag on, converted lead whose enrollment ended: refused (l4 converted on the paid 620 row).
+select academic_security.end_enrollment((pg_temp.get('p620')->>'enrollment_id')::uuid, 'Départ EAP');
+select pg_temp.ok((select status = 'CONVERTED' and converted_at is not null from public.crm_leads where id = pg_temp.uid_of('l4')), 'S1 converted lead');
+select pg_temp.refused(format('update public.crm_leads set enrollment_id = null where id = %L', pg_temp.uid_of('l4')), '42501', null, 'S1 detach a converted lead');
+-- The one admitted shape: flag on, ended enrollment, same learner, not converted.
+update public.crm_leads set enrollment_id = null where id = pg_temp.uid_of('l9');
+select pg_temp.ok((select enrollment_id is null and student_id = pg_temp.id(900) from public.crm_leads where id = pg_temp.uid_of('l9')), 'S1 admitted detach keeps the learner');
+select set_config('eh.crm_detach', '', true);
 
 select 'PASS enrollment at payment' as result;
 rollback;

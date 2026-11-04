@@ -633,7 +633,7 @@ export default function GuideContent() {
 </li>
 <li><p><b>Étape 3/3, Paiement.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle avec son motif, le <span className="ui">Montant payé aujourd’hui</span>, la date et le mode de paiement (les règles sont dans le <a href="#regles-paiement">scénario Q3</a>), puis <span className="ui">Inscrire et encaisser</span>.</p>
 </li>
-<li><p>Le message «&nbsp;Paiement enregistré. Inscription confirmée.&nbsp;» (avec un groupe) ou «&nbsp;Paiement enregistré. Apprenant inscrit — groupe à affecter.&nbsp;» (sans groupe) s’affiche, avec <span className="ui">Ouvrir le reçu</span>. Le prospect passe aussitôt en <span className="st st-conv">Inscription confirmée</span> et ses tâches sont fermées. Sans groupe, terminez plus tard par le <a href="#q9">scénario Q9</a>.</p>
+<li><p>La fenêtre affiche «&nbsp;Inscription confirmée · reçu&nbsp;…&nbsp;» (avec le numéro du reçu), puis la ligne «&nbsp;Groupe&nbsp;: …&nbsp;» (avec le nom du groupe choisi) ou «&nbsp;Groupe à affecter&nbsp;» (sans groupe), et le bouton <span className="ui">Ouvrir le reçu</span>. Avec une remise de 100&nbsp;%, le titre est «&nbsp;Inscription confirmée sans paiement (remise 100&nbsp;%)&nbsp;» et aucun reçu n’est émis. Le prospect passe aussitôt en <span className="st st-conv">Inscription confirmée</span> et ses tâches sont fermées. Sans groupe, terminez plus tard par le <a href="#q9">scénario Q9</a>.</p>
 </li>
 </ol>
 <figure className="fig narrow">
@@ -646,12 +646,12 @@ export default function GuideContent() {
 </ol>
 </figure>
 <p>Si l’enregistrement répond «&nbsp;L’année scolaire de l’inscription doit être celle du groupe. Choisissez un groupe de cette année ou une autre année.&nbsp;», revenez à l’étape 2 et choisissez un groupe de l’année voulue. «&nbsp;Ce groupe n’a pas d’année scolaire…&nbsp;»&nbsp;: choisissez un autre groupe ou demandez à la direction de la renseigner.</p>
-<p>Si le groupe ne peut pas être affecté (complet entre-temps, par exemple), le paiement reste enregistré&nbsp;: «&nbsp;Paiement enregistré. Groupe non affecté&nbsp;: …&nbsp;Apprenant inscrit — groupe à affecter.&nbsp;» Affectez un autre groupe avec le <a href="#q9">scénario Q9</a>.</p>
+<p>Si le groupe ne peut pas être affecté (complet entre-temps, par exemple), le paiement reste enregistré et la fenêtre l’indique&nbsp;: «&nbsp;Groupe non affecté&nbsp;: …&nbsp;Apprenant inscrit — groupe à affecter.&nbsp;» Affectez un autre groupe avec le <a href="#q9">scénario Q9</a>.</p>
 <div className="callout stop">
 <strong>Montant à 0&nbsp;: refusé</strong><p>Sans paiement, la fenêtre répond «&nbsp;L’inscription se confirme à l’encaissement&nbsp;: saisissez un paiement.&nbsp;» et rien n’est créé&nbsp;: ni apprenant, ni inscription, ni conversion. Seule exception&nbsp;: une remise de 100&nbsp;% avec son motif (inscription gratuite, visible par la direction dans <span className="ui">Contrôles</span>).</p>
 </div>
 <div className="callout info">
-<strong>Le prospect a déjà payé à l’accueil&nbsp;?</strong><p>À l’étape 2, choisissez son inscription existante («&nbsp;Inscription payée sélectionnée&nbsp;») puis <span className="ui">Rattacher cette inscription payée</span>&nbsp;: l’étape 3 devient une vérification, sans nouveau paiement. Une inscription non payée ne peut pas être rattachée.</p>
+<strong>Le prospect a déjà payé à l’accueil&nbsp;?</strong><p>À l’étape 2, choisissez son inscription existante («&nbsp;Inscription payée sélectionnée&nbsp;») puis <span className="ui">Rattacher cette inscription payée</span>&nbsp;: l’étape 3 devient une vérification, sans nouveau paiement, et la fenêtre affiche «&nbsp;Inscription payée rattachée&nbsp;». Une inscription non payée ne peut pas être rattachée.</p><p>Si un montant est déjà enregistré sur cette inscription («&nbsp;Un montant est déjà enregistré sur cette inscription · reste … MAD&nbsp;»), la fenêtre ne crée jamais un deuxième montant&nbsp;: <span className="ui">Encaisser sur ce montant</span> ouvre le formulaire de reçu sur ce solde. Une fois payée, revenez rattacher l’inscription.</p>
 </div>
 </article>
 <article className="scn" id="c7">
@@ -818,7 +818,7 @@ export default function GuideContent() {
 </li>
 <li><p>Regardez le bloc <b>Dossiers ressemblants</b> qui s’affiche. Si c’est la même personne, cliquez sur le dossier. Sinon continuez&nbsp;: un homonyme est autorisé. Un téléphone déjà utilisé affiche seulement un avertissement (une famille peut partager un numéro).</p>
 </li>
-<li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>. Une fois le niveau choisi, <span className="ui">Groupe (facultatif)</span> propose les groupes de ce programme, de ce niveau et de cette année, avec les places libres&nbsp;; un groupe complet n’est pas proposé. Vous pouvez aussi affecter le groupe plus tard (<a href="#q9">Q9</a>).</p>
+<li><p><b>Étape 2.</b> Choisissez la <span className="ui">Session</span> et l’<span className="ui">Année scolaire</span> (2026/2027 par défaut), puis éventuellement le <span className="ui">Niveau</span>. Une fois le niveau choisi, <span className="ui">Groupe (facultatif)</span> propose les groupes de ce programme, de ce niveau et de cette année, avec les places libres&nbsp;; un groupe complet apparaît grisé («&nbsp;complet&nbsp;») et ne peut pas être choisi. Vous pouvez aussi affecter le groupe plus tard (<a href="#q9">Q9</a>).</p>
 </li>
 <li><p><b>Étape 3.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> (avec son motif) et l’<span className="ui">Échéance</span> si besoin, le <span className="ui">Montant payé aujourd’hui</span>, la <span className="ui">Date du paiement</span> et le <span className="ui">Mode de paiement</span> (Espèces par défaut, Carte bancaire, Virement, Chèque). Les règles sont juste en dessous.</p>
 </li>
@@ -942,7 +942,7 @@ export default function GuideContent() {
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
 <li>Les filtres se cumulent&nbsp;: ajoutez une session, un niveau ou une catégorie pour réduire la liste. <span className="ui">Effacer les filtres</span> remet tout à zéro.</li>
-<li>Par défaut, seuls les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;» sont listés&nbsp;: choisissez <span className="ui">Tous les statuts</span> pour voir les autres.</li>
+<li>Par défaut, seuls les «&nbsp;Dossiers actifs&nbsp;» sont listés&nbsp;: choisissez <span className="ui">Tous les statuts</span> pour voir les autres.</li>
 <li>Le solde affiché est celui d’aujourd’hui. Un reçu garde le solde de sa date (<a href="#q4">Q4</a>).</li>
 </ul>
 </div>
@@ -1004,7 +1004,7 @@ export default function GuideContent() {
 <figure className="fig narrow">
 <Image src="/helpdesk/q07b-encaisser-groupe.jpg" width={1700} height={1075} alt="Formulaire Encaisser un paiement avec la session, l’année scolaire, le niveau et le champ Groupe facultatif" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Session</span>, <span className="ui">Année scolaire</span> et <span className="ui">Niveau</span>&nbsp;: le programme de l’inscription.</li>
-<li><span className="ui">Groupe (facultatif)</span>&nbsp;: les places libres sont indiquées&nbsp;; un groupe complet n’est pas proposé.</li>
+<li><span className="ui">Groupe (facultatif)</span>&nbsp;: les places libres sont indiquées&nbsp;; un groupe complet apparaît grisé («&nbsp;complet&nbsp;») et ne peut pas être choisi.</li>
 <li><span className="ui">Montant payé aujourd’hui</span>&nbsp;: tout montant supérieur à zéro confirme.</li>
 </ol>
 </figure>
@@ -1097,9 +1097,9 @@ export default function GuideContent() {
 </figure>
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
-<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
+<li>La liste ne montre par défaut que les «&nbsp;Dossiers actifs&nbsp;». Pour voir aussi les prospects, choisissez <span className="ui">Tous les statuts</span>.</li>
 <li>Dans la colonne <b>Groupe</b>, «&nbsp;Groupe à affecter&nbsp;» n’apparaît que pour une inscription payée sans groupe («&nbsp;Inscrit — groupe à affecter&nbsp;»). Un dossier <b>Prospect</b>, <b>Ancien apprenant</b> ou <b>Inactif</b> sans inscription en cours affiche «&nbsp;—&nbsp;»&nbsp;: il n’y a rien à affecter. Pour l’inscrire, ouvrez sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</li>
-<li>Un dossier actif sans inscription payée affiche <span className="ui">Inscrire et encaisser</span>&nbsp;: l’affectation suit toujours une inscription payée. Si vous essayez quand même depuis la page du groupe, la plateforme répond «&nbsp;Inscrivez et encaissez d’abord&nbsp;: l’affectation suit une inscription payée.&nbsp;»</li>
+<li>Un dossier actif sans inscription payée affiche <span className="ui">Inscrire et encaisser</span>&nbsp;: l’affectation suit toujours une inscription payée. Sur la page du groupe, ce dossier apparaît grisé avec «&nbsp;sans inscription payée&nbsp;» et ne peut pas être choisi («&nbsp;Un apprenant grisé n’a pas d’inscription payée&nbsp;: inscrire et encaisser d’abord.&nbsp;»). Si l’affectation est tentée autrement, la plateforme répond «&nbsp;Inscrivez et encaissez d’abord&nbsp;: l’affectation suit une inscription payée.&nbsp;»</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
 <li>La capacité d’un groupe est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant (seule la direction peut dépasser, avec un motif). Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
@@ -1794,7 +1794,7 @@ export default function GuideContent() {
 <td>Vous n’avez pas le droit de faire cette action. Demandez à la direction.</td>
 </tr>
 <tr>
-<td>«&nbsp;Only operational pre-enrollment is permitted&nbsp;» ou «&nbsp;Only group assignment is permitted&nbsp;»</td>
+<td>«&nbsp;Only group assignment is permitted&nbsp;»</td>
 <td>Vous essayez de confirmer, valider ou modifier une inscription déjà confirmée. Seule l’affectation de groupe est possible pour vous.</td>
 </tr>
 </tbody>
@@ -1811,7 +1811,7 @@ export default function GuideContent() {
 </details>
 <details className="faq">
 <summary>Un apprenant que je viens de créer n’apparaît pas dans la liste</summary>
-<p>La liste affiche par défaut les «&nbsp;Dossiers actifs (inscrits, essai)&nbsp;». Un apprenant reste «&nbsp;Prospect&nbsp;», donc masqué, tant qu’aucune inscription n’est payée, par exemple après un paiement à 0&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
+<p>La liste affiche par défaut les «&nbsp;Dossiers actifs&nbsp;». Un apprenant reste «&nbsp;Prospect&nbsp;», donc masqué, tant qu’aucune inscription n’est payée, par exemple après un paiement à 0&nbsp;: choisissez <span className="ui">Tous les statuts</span>.</p>
 </details>
 <details className="faq">
 <summary>Le prospect est resté «&nbsp;Qualifié&nbsp;» alors que j’ai encaissé son inscription</summary>

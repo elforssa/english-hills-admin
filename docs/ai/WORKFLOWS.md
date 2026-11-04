@@ -75,7 +75,7 @@ RCC-A2 (deployed and Production verified on 2026-10-07; [record](../architecture
 - **Clôturer l’année** (director, on Pré-inscriptions; on the Students list header once migration 127's release ships, Q7 = A) shows the live count of active enrollments of a school year, then ends them with a reason; the command refuses if the count changed meanwhile. Learners left with nothing active become Alumni.
 - **Online course close** ends the course's enrollments (reason « Cours en ligne clôturé »), so the learner can take another online course the same year.
 - **Archive and restore:** archiving a learner ends their enrollments first. **Dossiers archivés** (director, on the Students list) lists archived files and restores one; its enrollments stay ended and the status is recomputed (normally Inactive, no group).
-- **Students list:** the default « Dossiers actifs (inscrits, essai) » shows Enrolled and Trial files; « Groupe à affecter » lists a Confirmed enrollment without group, or an active file with no membership and no pending enrollment, for every role.
+- **Students list:** the default « Dossiers actifs » shows Enrolled files (and legacy Trial files until they are archived); « Groupe à affecter » lists a Confirmed enrollment without group, or an active file with no membership and no pending enrollment, for every role.
 - **Payment:** a payment confirms the learner's single matching enrollment instead of creating a duplicate, asks to select when several match, and never sets the learner status by itself.
 
 ## Enrollment at payment (EAP-r4) — on a branch

@@ -168,6 +168,8 @@ for (const [lead, row, action] of rows) {
 }
 assert.equal(ARCHIVED_PRE_ENROLLMENT_NOTE, 'Ancienne pré-inscription archivée ; relancez « Inscrire et encaisser » si le prospect s’inscrit.');
 assert.match(enrollmentAction({ status: 'CONVERTED', enrollment: e('Submitted') }).note, /vérification par la direction/);
+// An enrollment ended after its confirmation raises no server review: its note claims none.
+assert.deepEqual(enrollmentAction({ status: 'CONVERTED', enrollment: e('Ended') }), { row: 2, action: 'open', note: 'Inscription terminée après sa confirmation. Le prospect reste converti.' });
 assert.match(enrollmentAction({ status: 'QUALIFIED', enrollment: e('Rejected') }).note, /Inscription refusée/);
 const back = '/crm/leads?lead=a2000000-0000-0000-0000-000000000001';
 assert.equal(studentHref({ student_id: 's1' }, back), '/students/s1?returnTo=%2Fcrm%2Fleads%3Flead%3Da2000000-0000-0000-0000-000000000001');

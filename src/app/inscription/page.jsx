@@ -13,7 +13,8 @@ export const metadata = {
 const WEBSITE = 'https://english-hills.com';
 const PHONE_LABEL = '+212 6 64 23 90 91';
 const PHONE_HREF = 'tel:+212664239091';
-const WHATSAPP_HREF = `${WEBSITE}/contact-camp`;
+// A neutral WhatsApp chat with the centre's number (not a campaign redirect).
+const WHATSAPP_HREF = 'https://wa.me/212664239091';
 const CONTACT_HREF = `${WEBSITE}/contact`;
 const linkClass = 'font-semibold text-primary underline hover:opacity-80';
 

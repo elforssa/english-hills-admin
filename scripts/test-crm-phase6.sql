@@ -89,7 +89,7 @@ do $$ declare l uuid:=pg_temp.qualified(); d jsonb:=pg_temp.start_data(l); key u
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',key,d||'{"notes":"changed"}'));
  perform pg_temp.ok((select count(*)=ns+1 from students) and (select count(*)=ne+1 from enrollments),'one explicit student and enrollment');
  perform pg_temp.ok(pg_temp.finances()=counts,'no finance at enrollment start');
- perform pg_temp.ok((select niveau_cefr='Child 2' and parent_email is null from students where id=s),'correct new student');
+ perform pg_temp.ok((select status='Enrolled' and niveau_cefr='Child 2' and parent_email is null from students where id=s),'correct new Enrolled student');
  perform pg_temp.ok((select status='Confirmed' from enrollments where id=e) and (select student_id=s and enrollment_id=e and status='CONVERTED' from crm_leads where id=l),'Confirmed initiation converts');
  perform pg_temp.ok(not exists(select 1 from crm_tasks where lead_id=l and status='open'),'no follow-up after a Confirmed initiation');
  perform pg_temp.denied(format('select public.crm_start_enrollment(%L,%L)',gen_random_uuid(),pg_temp.start_data(l)));

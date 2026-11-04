@@ -376,7 +376,7 @@ export default function StudentsPage() {
           {SOURCES.map(s => <option key={s} value={s}>{programmeLabel(s)}</option>)}
         </select></FormField></div>
       </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-          <option value="">Dossiers actifs (inscrits, essai)</option>
+          <option value="">Dossiers actifs</option>
           <option value="all_shown">Tous les statuts</option>
           {DOSSIER_FILTER_STATUSES.map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
         </select></FormField></div>}</FilterBar>

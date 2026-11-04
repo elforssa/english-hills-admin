@@ -322,6 +322,9 @@ export default function GroupDetail() {
             <DialogHeader className="px-4 pt-4">
               <DialogTitle>Ajouter des apprenants à « {group.name} »</DialogTitle>
             </DialogHeader>
+            {role === 'receptionist' && (
+              <p className="px-4 text-xs text-muted-foreground">Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.</p>
+            )}
             <Command>
               <CommandInput placeholder="Rechercher un apprenant…" />
               <CommandList className="max-h-80">
@@ -332,11 +335,11 @@ export default function GroupDetail() {
                       key={s.id}
                       value={`${s.full_name} ${s.telephone || ''}`}
                       onSelect={() => addToGroup(s)}
-                      disabled={busyId === s.id || (full && !canOverride)}
+                      disabled={busyId === s.id || (full && !canOverride) || (role === 'receptionist' && !matchingPending(s).length)}
                     >
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
-                      <span className="flex-1 truncate">{s.full_name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">
+                      <span className="min-w-0 flex-1 truncate">{s.full_name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground ml-2">
                         {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
                         {!matchingPending(s).length && ' · sans inscription payée'}
                       </span>

@@ -222,6 +222,11 @@ try {
  const deskPaid=student('A2 Rim payée');collect(deskPaid);const deskEnrollment=sql(`select id from public.enrollments where student_id='${deskPaid}'`);
  const leadPaid=makeLead('A2 parent payé','A2 Rim payée');await start(leadPaid);
  await dialog().getByText('A2 Rim payée',{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
+ // A charged enrollment is never charged a second time: its balance goes to the receipt form, the paid row to the link.
+ const deskCharge=sql(`select id from public.charges where enrollment_id='${deskEnrollment}'`);
+ await dialog().getByText(/^Un montant est déjà enregistré sur cette inscription · reste .+ MAD$/).waitFor();
+ assert.equal(await button('Encaisser sur cette inscription').count(),0,'no second charge offered on a charged enrollment');
+ assert.equal(await dialog().getByRole('link',{name:'Encaisser sur ce montant',exact:true}).getAttribute('href'),`/receipts/new?student_id=${deskPaid}&charge_id=${deskCharge}`,'the balance is collected on its own charge');
  await button('Rattacher cette inscription payée').click();await button('Continuer').click();await dialog().getByText('3 / 3 · Vérification').waitFor();
  assert.equal(await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).count(),0,'no payment step for a paid link');
  startCalls.length=0;await button('Rattacher cette inscription payée').click();await dialog().getByText('Inscription payée rattachée',{exact:true}).waitFor();
@@ -230,6 +235,8 @@ try {
  const unpaid=student('A2 Hind impayée'),unpaidEnrollment=randomUUID();sql(`insert into public.enrollments(id,student_id,session_type,school_year,status) values('${unpaidEnrollment}','${unpaid}','Yearly','${year}','Confirmed')`);
  const leadUnpaid=makeLead('A2 parent impayé','A2 Hind impayée');await start(leadUnpaid);
  await dialog().getByText('A2 Hind impayée',{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
+ // The row's charges are read first (« Vérification des montants… »); then the payment is offered once.
+ await button('Encaisser sur cette inscription').waitFor();assert.equal(await button('Encaisser sur cette inscription').count(),1,'an enrollment without any charge is offered the payment');
  await button('Rattacher cette inscription payée').click();await button('Continuer').click();startCalls.length=0;await button('Rattacher cette inscription payée').click();
  await dialog().getByRole('alert').filter({hasText:'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.'}).waitFor();
  await dialog().getByText('3 / 3 · Paiement').waitFor();assert.equal(detail(leadUnpaid).status,'QUALIFIED','the refused link rolled back the conversion');
@@ -237,7 +244,7 @@ try {
  assert.equal(startCalls[1].p_data.enrollment.enrollment_id,unpaidEnrollment);assert(startCalls[1].p_data.payment,'the payment is sent on the same enrollment');
  assert.equal(startCalls[1].p_request_key,startCalls[0].p_request_key,'one request key per dialog opening');
  assert.equal(detail(leadUnpaid).status,'CONVERTED');assert.equal(receipts(unpaid),'1');await noRaw();await done();
- console.log('PASS Q12 paid enrollment linked without a payment; an unpaid one is refused and collected on the payment step');
+ console.log('PASS Q12 paid enrollment linked without a payment (its charge offered on the receipt form, never a second charge); an unpaid one is refused and collected on the payment step');
 
  // Uncertain transport failure, hinted, desk-guard and hint-less definite rejections (stubbed).
  const lead8=makeLead('A2 parent erreurs','A2 Rania erreurs');await start(lead8);await newLearner();await toPayment();await pay();
@@ -283,8 +290,15 @@ try {
  text=await sectionText(changed);assert.match(text,/Ouvrir l'apprenant/);assert.doesNotMatch(text,/Cette inscription a changé/);
  sql(`begin;set local request.jwt.claim.sub='${users[2].id}';set local eh.enrollment_command=on;update public.enrollments set status='Ended',ended_at=now(),group_id=null where id='${changedEnrollment}';commit;`);
  assert.equal(detail(changed).status,'CONVERTED');
- text=await sectionText(changed);assert.match(text,/Cette inscription a changé après sa confirmation\. Elle est signalée pour vérification par la direction\./);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
- console.log('PASS contextual actions: NEW, historical pré-inscription and essai (one row), refused and changed-after-confirmation states');
+ // An enrollment ended after its confirmation raises no review (evaluate_conversion, 120): the note says so, and claims no flag.
+ assert.equal(sql(`select conversion_review_required from public.crm_leads where id='${changed}'`),'f','the server raises no review for an ended enrollment');
+ text=await sectionText(changed);assert.match(text,/Inscription terminée après sa confirmation\. Le prospect reste converti\./);assert.doesNotMatch(text,/signalée pour vérification|Direction : cette conversion nécessite une vérification/);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
+ // A confirmed enrollment moved back to a retired status (only the journalled revert can) is flagged by the server.
+ const reverted=makeLead('A2 parent revert','A2 Ines revert');enroll(newPayload(reverted,'A2 Ines revert'));const revertedEnrollment=detail(reverted).enrollment.id;
+ sql(`begin;set local request.jwt.claim.sub='${users[2].id}';set local eh.membership_sync=on;set local eh.enrollment_command=on;update public.enrollments set status='Submitted' where id='${revertedEnrollment}';commit;`);
+ assert.equal(detail(reverted).status,'CONVERTED');assert.equal(sql(`select conversion_review_required from public.crm_leads where id='${reverted}'`),'t','server flags director review');
+ text=await sectionText(reverted);assert.match(text,/Cette inscription a changé après sa confirmation\. Elle est signalée pour vérification par la direction\./);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
+ console.log('PASS contextual actions: NEW, historical pré-inscription and essai (one row), refused, ended and changed-after-confirmation states');
  assert.deepEqual(pageErrors,[]);await context.close();
 
  // A lost response is replayed with the same key: one learner, enrollment, receipt and activity.

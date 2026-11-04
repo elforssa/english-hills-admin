@@ -600,6 +600,70 @@ Updated for the retired statuses, the 10 % rule, the revoked `crm_start_enrollme
 
 Local evidence (private stack, CI image `supabase/postgres 17.6.1.165`, synthetic data only): every step of the six `local-database` shards of `verify.yml` was replayed on a private full-service stack (Auth, REST, Storage and mail) with the CI environment (`GITHUB_EVENT_NAME=pull_request`). On the final tree, `sql-and-concurrency`, `upgrades-from-097-to-105`, `upgrades-from-106-to-111`, `upgrades-from-112-to-116` (with the new 126 → 127 step) and `browser-security` pass in full. In `browser-crm`, every step and every suite passes, with one exception: the final « no browser errors » check of `test-crm-rcc-b1-browser.mjs` in WebKit. It collects three « access control checks » rejections from Opportunities reads (`crm_list_staff`, `crm_get_opportunity_filter_options`, `crm_get_opportunities`) that are aborted by the overlay-chunk navigation. The same check fails the same way on this machine at main `8d5f99f` (migration 126, suite unchanged), so it comes from the local WebKit, not this change; the remote CI lane is the reference. The steps after the opportunities step were replayed separately once the `test-ui-foundation-browser.mjs` update was in place. `npm test` (with the absence guard), `npm run lint`, `npm run build` (empty Sentry DSN), `scripts/ci/test_verify.py`, the SQLSTATE source scan and the docs check also pass.
 
+## Independent review fixes (reviews of #182 at `92b8842`, 2026-11-04)
+
+Both independent reviews (database and application) returned CHANGES REQUIRED with no blocker. The fixes are on the same branch. No rule was weakened.
+
+**Application**
+1. **No second tuition charge from the CRM dialog.**
+   - In step 2, the dialog reads the learner's live charges from `charge_balances`, as the receipt form does.
+   - « Encaisser sur cette inscription » is offered only for an enrollment with no live charge.
+   - An enrollment that already has a charge shows « Un montant est déjà enregistré sur cette inscription · reste … MAD ». « Encaisser sur ce montant » opens the receipt form on that charge (`/receipts/new?student_id=…&charge_id=…`). A paid row keeps « Rattacher cette inscription payée » (Q12).
+   - The server refuses the same case: `crm_enroll_and_collect` raises `22023` / `eap.enrollment_already_charged` on a first run that sends a payment for an existing enrollment with a live charge or receipt. That refusal is mapped in French and re-reads step 2.
+   - Covered by `test-enrollment-at-payment.sql` (refusal, nothing written) and `test-crm-rcc-a2-browser.mjs` (the charged row offers its own charge and the link, never the payment; a row without any charge still offers it).
+2. **C6 quotes the dialog's own messages:** « Inscription confirmée · reçu … », « Groupe : … » or « Groupe à affecter », « Groupe non affecté : … Apprenant inscrit — groupe à affecter. », « Inscription payée rattachée », and the 100 % title.
+3. **`test-crm-rcc-a2-browser.mjs`.** An enrollment ended after confirmation is not flagged by the server (`evaluate_conversion`, 120). Its note now says so: « Inscription terminée après sa confirmation. Le prospect reste converti. » The test asserts `conversion_review_required = false`. A case that the server does flag is checked separately: a confirmed row moved back by the journalled revert, asserted `true`, with the review sentence.
+4. **Nits:**
+   - A replayed receipt payment keeps the chosen group: it is placed if the lost first response never got to it, and the message says so.
+   - Reception's group picker greys out learners without a paid enrollment (« sans inscription payée ») and says once, above the list, « Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord. ». The receptionist and placement browser suites now assert the disabled row. The database refusal stays covered by the SQL suites and by the receptionist suite's direct request.
+   - The Students list default filter reads « Dossiers actifs », in the guide and in `docs/ai/WORKFLOWS.md` too. It still lists legacy Trial files until they are archived.
+   - The guide says that a full group is shown greyed out (« complet »), and drops « Only operational pre-enrollment is permitted » from its message table.
+   - The receipt form never offers an Ended enrollment as a candidate, even a CRM-linked one.
+   - Contrôles shows French enrollment statuses.
+   - The `/inscription` WhatsApp link is a neutral `https://wa.me/212664239091`, not the camp redirect.
+
+**Database**
+- **S1:** negative tests for the `protect_enrollment_link` detach exemption. Each of these is refused:
+  - the flag off;
+  - a live enrollment;
+  - a converted lead;
+  - a retarget to another enrollment;
+  - a learner change or clear.
+
+  The one admitted shape is checked too.
+- **S2:** in Contrôles (d), the origin ordering gives `placement_without_enrollment` priority over `capacity_override`. It is tested with a director placement into a full group, which logs both kinds.
+- **N1:** a replay must carry a payment exactly when the first run did. A Q12 link replayed with a payment, or a paid request replayed without one, raises `crm_enrollment.request_conflict` and issues nothing. The exact replay still answers.
+- **N2:** `test-crm-phase6.sql` asserts the new learner is `Enrolled`.
+- **N3, known gap (recorded, not changed):** director and admin direct RLS inserts can still create an unpaid Confirmed enrollment without a reason. Such a row is not hidden: it appears in Contrôles (d) with no origin.
+- **N4:** the archive step's header and the release steps below state that a second run needs every declared count set to 0.
+- **N5:** the suite cross-checks the R0 L2 statement against `finance_security.unlinked_payment_count` on a legacy Submitted row whose learner paid on an unlinked receipt.
+
+`crm_enroll_and_collect` and `get_finance_review_queue` stay the only bodies changed, both already in the 127 manifest. The restore script is unchanged: it drops the wrapper and restores the 122 queue body.
+
+Local evidence for these fixes comes from the same private stack and CI image, with synthetic data only. Replayed again on the fixed tree:
+- `sql-and-concurrency` (with `test-enrollment-at-payment.sql` and `test-crm-phase6.sql`): pass.
+- `upgrades-from-112-to-116` (126 → 127, archive, revert and restore): pass.
+- `browser-security`: pass.
+- `browser-crm`: every step and suite passes, including the new rcc-a2 cases, except the same local-WebKit « no browser errors » check of `test-crm-rcc-b1-browser.mjs` described above. This time it collected chunk-load aborts, which come from the same navigation.
+
+`npm test` and `npm run lint` pass.
+
+The replay itself found four test-side defects, all fixed:
+- an S1 fixture id that collided with an earlier section;
+- an rcc-a2 count taken before the charges were read;
+- the placement suite expecting the old filter label;
+- the reception picker's first, longer note, which hid the learner's name on the row.
+
+Three intermediate failures were load timeouts, with a load average up to 99 from other stacks on this machine: a speed budget, a storage health check, and a page load. Each passed on rerun with no change.
+
 ## Production steps deferred to the release task
 
-R0 again just before the archive step; the migration; the application deployment within minutes; the archive step (dry run, then the run with the declared counts); the post-checks; the eh-website PR (D8) after the admin release. Each needs its own approval.
+These steps run in this order:
+1. R0 again, just before the archive step.
+2. The migration.
+3. The application deployment, within minutes.
+4. The archive step: a dry run, then the run with the declared counts. A re-run after a successful run needs every declared count set to 0.
+5. The post-checks.
+6. The eh-website PR (D8), after the admin release.
+
+Each step needs its own approval.
