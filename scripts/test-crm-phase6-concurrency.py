@@ -61,15 +61,31 @@ try:
     def payload(lead,version,name):
         token=sql(f"select crm_security.candidate_token('{lead}',{quote(name)},null)").stdout.strip()
         return {'lead_id':lead,'expected_version':version,'student_choice':'new','learner_name':name,'candidate_review':token,'session_type':'Yearly','school_year':'2026/2027','level':'Child 2'}
+    # EAP (127): crm_start_enrollment lost its API grant; « Inscrire et encaisser »
+    # (crm_enroll_and_collect) creates the Confirmed enrollment and takes this payment in one transaction.
+    collect={'gross_amount':1000,'payment_amount':100,'payment_method':'Espèces'}
+    def receipts(student):return sql(f"select count(*) from public.receipts where student_id='{student}'").stdout.strip()
+    def paid(body):
+        # A committed payment (fixtures): the enrollment exists only once paid.
+        out=sql(f"begin;set local request.jwt.claim.sub='{actor}';set local role authenticated;select public.create_charge_payment({quote(json.dumps({'payment_method':'Espèces','idempotency_key':str(uuid.uuid4()),**body}))}::jsonb);commit;")
+        return json.loads(out.stdout.strip())
     for same_key in (True,False):
         lead,version=qualified();data=payload(lead,version,'New learner '+str(uuid.uuid4()));key=str(uuid.uuid4())
-        results=race('start_enrollment',[(key,data),(key if same_key else str(uuid.uuid4()),data)])
-        if same_key: assert results[0]==results[1] and 'error' not in results[0],results
+        request={'enrollment':data,'payment':collect}
+        results=race('enroll_and_collect',[(key,request),(key if same_key else str(uuid.uuid4()),request)])
+        if same_key:
+            # The waiting caller replays both commands: the stored result, flagged as replayed
+            # (the financial replay carries no balance).
+            same=lambda r:{k:v for k,v in r.items() if not k.startswith('replayed_') and k!='balance'}
+            assert all('error' not in r for r in results) and sorted(r['replayed_enrollment'] for r in results)==[False,True] and same(results[0])==same(results[1]),results
         else: assert sum('error' in r for r in results)==1,results
         result=next(r for r in results if 'enrollment' in r);enrollment=result['enrollment']['id']
         assert sql(f"select count(*) from public.students where full_name={quote(data['learner_name'])}").stdout.strip()=='1'
         assert sql(f"select count(*) from public.enrollments where student_id='{result['enrollment']['student_id']}'").stdout.strip()=='1'
-        assert sql(f"select count(*) from public.crm_tasks where lead_id='{lead}' and task_type='enrollment_followup' and status='open'").stdout.strip()=='1'
+        assert receipts(result['enrollment']['student_id'])=='1'
+        # EAP (127): the Confirmed enrollment converts the lead at creation; no follow-up stays open.
+        assert sql(f"select count(*) from public.crm_tasks where lead_id='{lead}' and task_type='enrollment_followup' and status='open'").stdout.strip()=='0'
+        # Re-confirming concurrently writes no second conversion.
         def confirm(_):return sql(f"begin;set local request.jwt.claim.sub='{actor}';update public.enrollments set status='Confirmed' where id='{enrollment}';commit;",False)
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool: outcomes=list(pool.map(confirm,range(2)))
         assert all(r.returncode==0 for r in outcomes),[r.stderr for r in outcomes]
@@ -78,34 +94,45 @@ try:
         print('PASS same/different-key enrollment race and concurrent confirmation; same_key='+str(same_key),flush=True)
     # Separate CRM opportunities cannot silently create the same reviewed identity.
     first=qualified();second=qualified();name='Shared identity '+str(uuid.uuid4())
-    results=race('start_enrollment',[(str(uuid.uuid4()),payload(*first,name)),(str(uuid.uuid4()),payload(*second,name))])
+    results=race('enroll_and_collect',[(str(uuid.uuid4()),{'enrollment':payload(*first,name),'payment':collect}),(str(uuid.uuid4()),{'enrollment':payload(*second,name),'payment':collect})])
     assert sum('error' in r for r in results)==1,results
     assert sql(f"select count(*) from public.students where full_name={quote(name)}").stdout.strip()=='1'
+    assert sql(f"select count(*) from public.receipts r join public.students s on s.id=r.student_id where s.full_name={quote(name)}").stdout.strip()=='1'
     print('PASS separate-lead duplicate identity race requires renewed explicit review',flush=True)
     # Linking and confirmation cross in separate sessions. A stale/deadlocked caller
     # retries using fresh authoritative versions, never silently overwrites fields.
+    # EAP (127): the fixture enrollment is Confirmed through a committed payment; the lead
+    # links to it through the wrapper without a payment (Q12: already paid) while a second
+    # payment on that enrollment (the confirmation step now) commits in another session.
     for i in range(3):
-        lead,version=qualified();student=str(uuid.uuid4());enrollment=str(uuid.uuid4());extra_students.append(student)
-        sql(f"insert into public.students(id,full_name,status,session_type) values('{student}','Link race','Prospect','Yearly');insert into public.enrollments(id,student_id,status,session_type,school_year) values('{enrollment}','{student}','Submitted','Yearly','2026/2027');")
+        lead,version=qualified();student=str(uuid.uuid4());extra_students.append(student)
+        sql(f"insert into public.students(id,full_name,status,session_type) values('{student}','Link race','Prospect','Yearly');")
+        enrollment=paid({'student_id':student,'session_type':'Yearly','school_year':'2026/2027','plan_type':'Standard','gross_amount':1000,'payment_amount':100})['enrollment_id']
         data={'lead_id':lead,'expected_version':version,'student_choice':'existing','student_id':student,'enrollment_id':enrollment,'session_type':'Yearly','school_year':'2026/2027','expected_enrollment_updated_at':sql(f"select updated_at::text from public.enrollments where id='{enrollment}'").stdout.strip()}
         key=str(uuid.uuid4())
+        second_payment={'student_id':student,'enrollment_id':enrollment,'session_type':'Yearly','school_year':'2026/2027','plan_type':'Standard','gross_amount':500,'payment_amount':50,'payment_method':'Espèces'}
+        def confirm_payment():
+            return sql(f"begin;set local request.jwt.claim.sub='{actor}';set local role authenticated;select public.create_charge_payment({quote(json.dumps({**second_payment,'idempotency_key':str(uuid.uuid4())}))}::jsonb);commit;",False)
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-            link=pool.submit(command,'start_enrollment',key,data);confirmation=pool.submit(sql,f"begin;set local request.jwt.claim.sub='{actor}';update public.enrollments set status='Confirmed' where id='{enrollment}';commit;",False)
+            link=pool.submit(command,'enroll_and_collect',key,{'enrollment':data});confirmation=pool.submit(confirm_payment)
             result=link.result();confirmed=confirmation.result()
-        if confirmed.returncode: sql(f"begin;set local request.jwt.claim.sub='{actor}';update public.enrollments set status='Confirmed' where id='{enrollment}';commit;")
+        if confirmed.returncode:
+            assert 'paiement en cours' in confirmed.stderr,confirmed.stderr
+            assert confirm_payment().returncode==0
         if 'error' in result:
             data['expected_enrollment_updated_at']=sql(f"select updated_at::text from public.enrollments where id='{enrollment}'").stdout.strip()
             data['expected_version']=int(sql(f"select version from public.crm_leads where id='{lead}'").stdout.strip())
-            result=command('start_enrollment',key,data)
+            result=command('enroll_and_collect',key,{'enrollment':data})
         assert 'error' not in result,result
         assert sql(f"select status from public.crm_leads where id='{lead}'").stdout.strip()=='CONVERTED'
         assert sql(f"select count(*) from public.crm_activities where lead_id='{lead}' and event_type='lead_converted'").stdout.strip()=='1'
+        assert receipts(student)=='2' and sql(f"select count(*) from public.enrollments where student_id='{student}'").stdout.strip()=='1'
     print('PASS concurrent confirmation/link: exactly one conversion and safe stale retries',flush=True)
     # Financial race transactions roll back after checking their actual effects.
     # Existing fixtures are committed; separate sessions exercise real locks.
     assert sql("select count(*) from vault.secrets where name in ('receipt_webhook_url','receipt_webhook_token')").stdout.strip()=='0'
     lead,version=qualified();data=payload(lead,version,'Payment race '+str(uuid.uuid4()))
-    linked=command('start_enrollment',str(uuid.uuid4()),data);student=linked['enrollment']['student_id'];enrollment=linked['enrollment']['id']
+    linked=command('enroll_and_collect',str(uuid.uuid4()),{'enrollment':data,'payment':collect});student=linked['enrollment']['student_id'];enrollment=linked['enrollment']['id']
     payment={'student_id':student,'session_type':'Yearly','school_year':'2026/2027','plan_type':'Standard','gross_amount':1000,'payment_amount':100,'payment_method':'Espèces'}
     def pay(extra=None, hold=False):
         body={**payment,'idempotency_key':str(uuid.uuid4()),**(extra or {})}
@@ -133,7 +160,8 @@ try:
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool: same_results=list(pool.map(committed_payment,range(2)))
     assert all(r.returncode==0 for r in same_results),[r.stderr for r in same_results]
     ids=[json.loads(r.stdout.strip())['receipt_id'] for r in same_results];assert ids[0]==ids[1]
-    assert sql(f"select count(*) from public.receipts where student_id='{student}'").stdout.strip()=='1'
+    # EAP (127): the wrapper's own receipt plus exactly one for the two identical requests.
+    assert sql(f"select count(*) from public.receipts where student_id='{student}'").stdout.strip()=='2'
     assert sql(f"select count(*) from public.crm_activities where lead_id='{lead}' and event_type='lead_converted'").stdout.strip()=='1'
     print('PASS simultaneous identical financial requests both succeed with one receipt/conversion',flush=True)
 
@@ -141,11 +169,14 @@ try:
     # the competing operation must fail with PT409 rather than commit divergence.
     import time
     for winner in ('link','payment'):
-        pending_lead,pending_version=qualified();new_student=str(uuid.uuid4());pending_enrollment=str(uuid.uuid4());extra_students.append(new_student)
-        sql(f"insert into public.students(id,full_name,status,session_type) values('{new_student}','Payment link race','Prospect','Yearly');insert into public.enrollments(id,student_id,status,session_type,school_year) values('{pending_enrollment}','{new_student}','Submitted','Yearly','2026/2027');")
+        pending_lead,pending_version=qualified();new_student=str(uuid.uuid4());extra_students.append(new_student)
+        # EAP (127): the learner's enrollment is Confirmed through a committed payment; the link
+        # goes through the wrapper (Q12 path, no payment), the competing payment reuses it.
+        sql(f"insert into public.students(id,full_name,status,session_type) values('{new_student}','Payment link race','Prospect','Yearly');")
+        pending_enrollment=paid({**payment,'student_id':new_student})['enrollment_id']
         link_data={'lead_id':pending_lead,'expected_version':pending_version,'student_choice':'existing','student_id':new_student,'enrollment_id':pending_enrollment,'session_type':'Yearly','school_year':'2026/2027','expected_enrollment_updated_at':sql(f"select updated_at::text from public.enrollments where id='{pending_enrollment}'").stdout.strip()}
         money={**payment,'student_id':new_student,'idempotency_key':str(uuid.uuid4())}
-        statement=(f"select public.crm_start_enrollment('{uuid.uuid4()}',{quote(json.dumps(link_data))}::jsonb);" if winner=='link' else f"select public.create_charge_payment({quote(json.dumps(money))}::jsonb);")
+        statement=(f"select public.crm_enroll_and_collect('{uuid.uuid4()}',{quote(json.dumps({'enrollment':link_data}))}::jsonb);" if winner=='link' else f"select public.create_charge_payment({quote(json.dumps(money))}::jsonb);")
         proc=subprocess.Popen(ARGS,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env=ENV)
         proc.stdin.write(f"begin;set local request.jwt.claim.sub='{actor}';{statement}select 'LOCK_READY';\n");proc.stdin.flush()
         while proc.stdout.readline().strip()!='LOCK_READY':
@@ -154,7 +185,7 @@ try:
             loser=sql(f"\\set VERBOSITY verbose\nbegin;set local request.jwt.claim.sub='{actor}';select public.create_charge_payment({quote(json.dumps(money))}::jsonb);rollback;",False)
             assert loser.returncode and 'ERROR:  PT409: ' in loser.stderr and 'paiement en cours' in loser.stderr,loser.stderr
         else:
-            loser=sql(f"\\set VERBOSITY verbose\nbegin;set local request.jwt.claim.sub={quote(actor)};set local role authenticated;select public.crm_start_enrollment({quote(str(uuid.uuid4()))}::uuid,{quote(json.dumps(link_data))}::jsonb);rollback;",False)
+            loser=sql(f"\\set VERBOSITY verbose\nbegin;set local request.jwt.claim.sub={quote(actor)};set local role authenticated;select public.crm_enroll_and_collect({quote(str(uuid.uuid4()))}::uuid,{quote(json.dumps({'enrollment':link_data}))}::jsonb);rollback;",False)
             assert loser.returncode and 'ERROR:  PT409: ' in loser.stderr and 'paiement en cours' in loser.stderr and 'crm_enrollment.enrollment_in_progress' in loser.stderr,loser.stderr
         proc.stdin.write('rollback;\n');proc.stdin.close();proc.wait(timeout=10)
         assert proc.returncode==0,proc.stderr.read()

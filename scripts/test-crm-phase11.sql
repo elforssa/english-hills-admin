@@ -55,9 +55,10 @@ select pg_temp.ok(pg_temp.report(null,'source')->'summary'->>'unattributed_leads
 -- Real linked enrollment, collected receipts and a reversal drive metrics.
 alter table receipts disable trigger on_receipt_created;
 do $$ declare r jsonb;l uuid:=pg_temp.lead('lead1');s uuid;e uuid;receipt uuid;begin
- r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase11 child','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase11 child','2014-05-10'),'confirm_new',true));
- s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
- r:=create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));receipt:=(r->>'receipt_id')::uuid;
+ -- EAP (127): enroll and collect in one step (replaces crm_start_enrollment + create_charge_payment).
+ r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase11 child','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase11 child','2014-05-10'),'confirm_new',true),
+  'payment',jsonb_build_object('gross_amount',1500,'payment_amount',500,'payment_method','Espèces')));
+ s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;receipt:=(r->>'receipt_id')::uuid;
  set constraints all immediate;set constraints all deferred;
  perform pg_temp.ok(pg_temp.report()->'summary'->>'converted'='1' and (pg_temp.report()->'summary'->>'revenue')::numeric=500,'trusted conversion and collected revenue');
  perform pg_temp.ok((pg_temp.report()->'summary'->>'cac')::numeric=180 and abs((pg_temp.report()->'summary'->>'roas')::numeric-500.0/180)<0.000001,'CAC and ROAS ratios');
@@ -187,9 +188,10 @@ create function pg_temp.live_intake() returns uuid language plpgsql as $$ declar
 insert into fx values('live_lead',to_jsonb(pg_temp.live_intake()));
 select pg_temp.act('qualify_lead',pg_temp.lead('live_lead'),jsonb_build_object('conversation_channel','phone','note','Qualified','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
 do $$ declare r jsonb;l uuid:=pg_temp.lead('live_lead');s uuid;e uuid;begin
- r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase11 livechild','birth_date','2015-03-12','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase11 livechild','2015-03-12'),'confirm_new',true));
+ -- EAP (127): enroll and collect in one step (replaces crm_start_enrollment + create_charge_payment).
+ r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase11 livechild','birth_date','2015-03-12','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase11 livechild','2015-03-12'),'confirm_new',true),
+  'payment',jsonb_build_object('gross_amount',1500,'payment_amount',600,'payment_method','Espèces')));
  s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
- perform create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',600,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
  set constraints all immediate;set constraints all deferred;
 end $$;
 insert into fx values('d',to_jsonb(crm_request_insights_sync(pg_temp.live(),gen_random_uuid(),'2026-01-01','2026-01-02')));

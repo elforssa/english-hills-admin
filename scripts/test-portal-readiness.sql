@@ -915,19 +915,22 @@ delete from public.premium_groups where id = pg_temp.id(931);
 select pg_temp.ok('premium tables are not empty' <> all(portal_security.readiness_failures()), 'T-47 empty Premium tables pass');
 
 -- Re-enrollment request replaces the parent insert policy.
+-- EAP (127, Q8 = A): after its parent and link checks, the request is refused; a
+-- re-enrollment goes through reception (« Inscrire et encaisser »).
 select pg_temp.act(7);
-insert into pr_ids select 'reenrollment', array[public.portal_request_reenrollment(pg_temp.id(201))];
-select pg_temp.ok(pg_temp.none(format('select * from public.enrollments where id = %L', (select ids[1] from pr_ids where name = 'reenrollment'))),
-  'the parent cannot read the enrollment it requested');
+select pg_temp.fails(format('select public.portal_request_reenrollment(%L)', pg_temp.id(201)), '42501', 'eap.status_retired');
 select pg_temp.owner();
-select pg_temp.ok((select count(*) from public.enrollments where student_id = pg_temp.id(201) and status = 'Submitted' and group_id is null) = 1,
-  'portal_request_reenrollment inserts one Submitted request');
+select pg_temp.ok((select count(*) from public.enrollments where student_id = pg_temp.id(201) and status = 'Submitted') = 0,
+  'portal_request_reenrollment inserts no Submitted request');
 select pg_temp.act(9);
 select pg_temp.fails(format('select public.portal_request_reenrollment(%L)', pg_temp.id(201)), '42501', 'portal.not_linked');
 select pg_temp.act(10);
 select pg_temp.fails(format('select public.portal_request_reenrollment(%L)', pg_temp.id(204)), '42501', 'portal.forbidden');
 select pg_temp.act(7);
-select pg_temp.fails(format($$insert into public.enrollments(student_id, status) values (%L, 'Submitted')$$, pg_temp.id(201)), '42501');
+-- EAP (127): a Submitted row now meets enrollments_retired_status_guard (a BEFORE trigger,
+-- ahead of the row-level policy check); a Confirmed row still proves the parent has no insert policy.
+select pg_temp.fails(format($$insert into public.enrollments(student_id, status) values (%L, 'Submitted')$$, pg_temp.id(201)), '23514', 'eap.status_retired');
+select pg_temp.fails(format($$insert into public.enrollments(student_id, status) values (%L, 'Confirmed')$$, pg_temp.id(201)), '42501');
 
 -- Re-created functions keep their signatures, owner, security mode and grants.
 select pg_temp.owner();

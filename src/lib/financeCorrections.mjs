@@ -11,14 +11,11 @@ export const DISCOUNT_REASONS = [
   { code: 'other', label: 'Autre' },
 ];
 export const DISCOUNT_REASON_MAX_LENGTH = 200;
-// Q5 = B: a reception payment confirms an enrollment only from 10 % of the net price.
-export const RECEPTION_CONFIRMATION_THRESHOLD = 0.10;
 // Q4 = A: how far back a payment may be dated.
 export function paymentBackdateDays(role) {
   return role === 'receptionist' ? 7 : 31;
 }
 
-export const PENDING_CONFIRMATION_MESSAGE = 'Acompte inférieur à 10 % : reçu émis, inscription en attente de confirmation par la direction.';
 export const LAST_PAYMENT_NOTICE = 'L’inscription restera confirmée. Elle apparaîtra dans « Inscriptions confirmées sans paiement actif » et la conversion CRM sera signalée pour vérification.';
 export const CORRECTION_BUSY_MESSAGE = 'Paiement en cours pour cet apprenant : actualisez puis réessayez.';
 
@@ -62,13 +59,56 @@ export function deskGuardError({ role, newCharge, gross, discount, reasonCode, r
   return null;
 }
 
-// Preview of P3.4: would this reception payment leave the enrollment waiting? Only a
-// new enrollment or a Submitted / Under Review / Trial one can wait; an enrollment
-// already confirmed (or one whose status the form cannot see) shows no preview.
-export function receptionConfirmationPending({ role, sessionType, net, paidBefore, payment, enrollmentStatus = null }) {
-  if (role !== 'receptionist' || !(payment > 0) || !sessionType || sessionType === 'Other') return false;
-  if (enrollmentStatus !== null && !['Submitted', 'Under Review', 'Trial'].includes(enrollmentStatus)) return false;
-  return (centimes(paidBefore) + centimes(payment)) * 10 < centimes(net);
+// EAP (migration 127, D2): any payment confirms the enrollment (Validated once placed).
+// Q1 = A: a new tuition charge discounted at 100 % with its reason confirms it without
+// a receipt. Mirrors create_charge_payment for the form's wording; the server decides.
+export function isFreeEnrollment({ newCharge, sessionType, gross, discount, reasonCode, payment }) {
+  return Boolean(newCharge && sessionType && sessionType !== 'Other' && reasonCode && !(Number(payment) > 0)
+    && centimes(gross) > 0 && centimes(discount) === centimes(gross));
+}
+
+export const ENROLLMENT_CONFIRMED_MESSAGE = 'Paiement enregistré. Inscription confirmée.';
+export const GROUP_PENDING_MESSAGE = 'Paiement enregistré. Apprenant inscrit — groupe à affecter.';
+export const FREE_ENROLLMENT_MESSAGE = 'Remise de 100 % : inscription confirmée sans paiement (visible dans Contrôles).';
+
+// The receipt page's message after create_charge_payment and, when a group was chosen,
+// the placement that follows it (D3). A placement refusal never undoes the payment.
+export function paymentResultMessage(result, { placed = false, placementError = '' } = {}) {
+  const refused = placementError ? `Groupe non affecté : ${String(placementError).replace(/[.\s]+$/, '')}.` : '';
+  if (!result?.receipt_id) {
+    if (result?.free_enrollment) return [FREE_ENROLLMENT_MESSAGE, refused].filter(Boolean).join(' ');
+    return 'Solde à payer enregistré. Aucun reçu émis.';
+  }
+  if (result.replayed) return 'Paiement déjà enregistré — reçu existant affiché.';
+  if (refused) return `Paiement enregistré. ${refused} Apprenant inscrit — groupe à affecter.`;
+  if (placed) return ENROLLMENT_CONFIRMED_MESSAGE;
+  if (result.group_pending) return GROUP_PENDING_MESSAGE;
+  if (result.enrollment_confirmed) return ENROLLMENT_CONFIRMED_MESSAGE;
+  if (result.student_enrolled) return 'Paiement enregistré. Apprenant inscrit.';
+  return 'Paiement enregistré et reçu émis.';
+}
+
+// The receipt form's enrollment candidates: a retired (pré-inscription, essai, refusée)
+// or ended row is history and is never selected for a new payment, unless CRM-linked.
+export const RETIRED_ENROLLMENT_STATUSES = ['Submitted', 'Under Review', 'Trial', 'Rejected'];
+export function isPayableEnrollmentCandidate(row) {
+  return Boolean(row) && (row.crm_linked || !(RETIRED_ENROLLMENT_STATUSES.includes(row.status) || row.status === 'Ended'));
+}
+
+// The author roles the director's « Contrôles » lists name.
+export const ROLE_LABELS = { director: 'Direction', admin: 'Administration', receptionist: 'Accueil' };
+
+// EAP (D5): why an enrollment is confirmed without any payment, when the academic log
+// knows it (get_finance_review_queue, unpaid_never.origin); else an older row.
+export function unpaidOriginLabel(origin) {
+  const reason = origin?.reason ? ` — ${origin.reason}` : '';
+  if (origin?.kind === 'placement_without_enrollment') {
+    const role = origin.author_role ? ` (${ROLE_LABELS[origin.author_role] || origin.author_role})` : '';
+    return `Affectation sans inscription payée${reason}${role}`;
+  }
+  if (origin?.kind === 'reopen') return 'Réouverture';
+  if (origin?.kind === 'capacity_override') return `Dépassement de capacité${reason}`;
+  return 'antérieure à cette version';
 }
 
 export const RECEIPT_CHANGED_MESSAGE = 'Le reçu a changé entre-temps : la page est actualisée, vérifiez puis recommencez.';

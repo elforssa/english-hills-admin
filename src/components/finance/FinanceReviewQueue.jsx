@@ -6,13 +6,12 @@ import { ShieldAlert } from 'lucide-react';
 import ReadState from '@/components/operational/ReadState';
 import { getBrowserClient } from '@/lib/supabase';
 import { localBusinessDate, money } from '@/lib/receiptFinance';
-import { addDays, discountReasonLabel } from '@/lib/financeCorrections.mjs';
+import { ROLE_LABELS, addDays, discountReasonLabel, unpaidOriginLabel } from '@/lib/financeCorrections.mjs';
 import { recordHref } from '@/lib/navigation.mjs';
 
 const PERIODS = [30, 90, 365];
-const ROLE_LABELS = { director: 'Direction', admin: 'Administration', receptionist: 'Accueil' };
 
-// Director-only review list (plan PCR-r2 P1.6), read from get_finance_review_queue.
+// Director-only review list (plan PCR-r2 P1.6, EAP D5), read from get_finance_review_queue.
 export default function FinanceReviewQueue() {
   const [days, setDays] = useState(30);
   const [read, setRead] = useState({ state: 'loading' });
@@ -33,7 +32,7 @@ export default function FinanceReviewQueue() {
     <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between lg:px-6">
       <div>
         <h2 id="finance-review-title" className="flex items-center gap-2 font-semibold"><ShieldAlert size={16} className="text-amber-600" /> Contrôles</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">Réservé à la direction. La première liste est toujours à jour ; les autres couvrent la période choisie.</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Réservé à la direction. Les listes d’inscriptions sont toujours à jour ; les remises et les paiements antidatés couvrent la période choisie.</p>
       </div>
       <label className="flex items-center gap-2 text-xs font-medium">Période
         <select className="rounded-md border border-border bg-white px-2 py-1.5 text-xs" value={days} onChange={(event) => setDays(Number(event.target.value))}>
@@ -59,10 +58,16 @@ export default function FinanceReviewQueue() {
               <Link href={recordHref(`/receipts/${row.receipt_id}/print`, '/finance')} className="font-semibold text-primary hover:underline">{row.receipt_number || 'Reçu historique'}</Link>
               <span className="text-xs text-muted-foreground"> · {row.learner_name} · daté du {row.payment_date}, émis le {row.issued_on} ({row.days_back} j) · {money(row.amount)} MAD · {ROLE_LABELS[row.author_role] || 'Auteur inconnu'}{row.voided ? ' · annulé' : ''}</span>
             </>} />
-          <ReviewList title="Acomptes inférieurs à 10 % en attente de confirmation" empty="Aucune inscription en attente après un acompte inférieur à 10 %." rows={data.pending_confirmation}
+          <ReviewList title="Inscriptions confirmées sans aucun paiement" empty="Aucune inscription confirmée sans aucun paiement." rows={data.unpaid_never}
             render={(row) => <>
               <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
-              <span className="text-xs text-muted-foreground"> · {row.session_type} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · payé {money(row.paid)} MAD sur {money(row.net)} MAD · dernier paiement {row.last_payment_date}</span>
+              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · Origine : {unpaidOriginLabel(row.origin)}</span>
+            </>} />
+          <ReviewList title="Inscriptions payées hors rattachement" empty="Aucune inscription payée sur un reçu non rattaché." rows={data.paid_unlinked}
+            note="Pour information : l’apprenant a payé sur un reçu non rattaché à l’inscription. Aucune action n’est attendue."
+            render={(row) => <>
+              <Link href={recordHref(`/students/${row.student_id}`, '/finance')} className="font-semibold text-primary hover:underline">{row.learner_name}</Link>
+              <span className="text-xs text-muted-foreground"> · {row.session_type || 'Programme non renseigné'} · {row.school_year || 'Année non renseignée'} · {row.enrollment_status} · créée le {row.created_on}{row.learner_archived ? ' · dossier archivé' : ''} · {row.receipt_count} reçu{Number(row.receipt_count) > 1 ? 's' : ''} hors rattachement</span>
             </>} />
         </div>}
       </ReadState>
@@ -70,9 +75,10 @@ export default function FinanceReviewQueue() {
   </section>;
 }
 
-function ReviewList({ title, empty, rows = [], render }) {
+function ReviewList({ title, empty, note, rows = [], render }) {
   return <div>
     <h3 className="text-sm font-semibold">{title} <span className="font-normal text-muted-foreground">· {rows.length}{rows.length >= 200 ? '+' : ''}</span></h3>
+    {note && <p className="mt-0.5 text-xs text-muted-foreground">{note}</p>}
     {rows.length === 0 ? <p className="mt-1 text-xs text-muted-foreground">{empty}</p>
       : <ul className="mt-2 divide-y divide-border rounded-md border border-border">{rows.map((row, index) => <li key={row.enrollment_id || row.charge_id || row.receipt_id || index} className="px-3 py-2 text-sm">{render(row)}</li>)}</ul>}
   </div>;

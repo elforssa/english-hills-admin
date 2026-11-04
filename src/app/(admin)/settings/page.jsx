@@ -676,7 +676,7 @@ function Settings() {
             {[
               { role: 'director', label: 'Directeur', desc: 'Accès complet + attribution de tous les rôles', color: '#B91C2E' },
               { role: 'admin', label: 'Admin', desc: 'Gestion complète de la plateforme, présences, sortie des jeunes, inscriptions', color: 'var(--brand)' },
-              { role: 'receptionist', label: 'Accueil', desc: 'Tests de niveau, consultation des apprenants et pré-inscriptions, sans encaissement ni administration', color: '#0369a1' },
+              { role: 'receptionist', label: 'Accueil', desc: 'Tests de niveau, apprenants, inscriptions et encaissements', color: '#0369a1' },
               { role: 'teacher', label: 'Enseignant', desc: 'Ses groupes, présences, notes, portfolios apprenants', color: '#7c3aed' },
               { role: 'parent', label: 'Parent', desc: "Données de son enfant uniquement (présences, notes, paiements, portfolio)", color: '#0891b2' },
               { role: 'student', label: 'Apprenant', desc: 'Sa progression, portfolio, présences', color: '#059669' },

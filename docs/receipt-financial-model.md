@@ -188,10 +188,36 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
   director) days back, by the server's Casablanca date (the future-date refusal names it, for browsers whose time-zone
   data predates tzdata 2026c); all after the idempotent replay. Below 10 % of the net price a reception payment issues
   the receipt but confirms nothing (`enrollment_confirmation_pending`): a linked Submitted, Under Review or Trial
-  enrollment keeps its status and a new one is created as Under Review.
+  enrollment keeps its status and a new one is created as Under Review. The 10 % discount cap was withdrawn by Batch H
+  (migration 125, 2026-10-30); the 10 % confirmation rule is withdrawn by owner decision 2 of 2026-11-04 and removed
+  by migration 127 ([below](#enrollment-at-payment-migration-127-on-a-branch); not yet deployed).
 - **Dates and reports.** `public.business_date()` (zone `Africa/Casablanca`) replaces `current_date` in `charge_balances`,
   the payment functions and the monthly/yearly finance summaries. `get_finance_summary()` and `get_unpaid_receipts(int)`
   are dropped. `get_finance_review_queue` feeds the director's "Contrôles" list on `/finance`.
 - **Data steps** (written, each needs its own approval): `supabase/manual/batch_e_d1_historical_receipt_numbers.sql`
   (EH-HIST-2026 series, then `receipts_number_required`), `batch_e_d2_unpaid_confirmed_enrollments.sql`,
   `batch_e_d3_legacy_rounding.sql`, each with a reverse script.
+
+### Enrollment at payment (migration 127, on a branch)
+
+[Plan EAP-r4](architecture/plans/enrollment-at-payment.md#d2--any-payment-confirms-free-enrollment-owner-decision-2-q1),
+[ADR-015](architecture/decisions/ADR-015-enrollment-at-payment.md). Implemented on branch `feat/enrollment-at-payment`
+with `127_enrollment_at_payment.sql`; **not merged, not deployed, 127 not applied on Production**:
+
+- **Any payment above zero confirms.** `create_charge_payment` (122 body) loses the reception 10 % branch and the
+  `enrollment_confirmation_pending` result key: a live tuition receipt confirms the selected, matching or new enrollment
+  (Confirmed, or Validated when it has a group). The result adds `free_enrollment` and `group_pending`. The legacy
+  mapping of the retired statuses stays for old rows.
+- **Free enrollment (Q1 = A).** When no receipt is issued but the request created a new tuition charge (not « Autre »,
+  not legacy) with `gross_amount > 0`, `discount_amount = gross_amount` and a discount reason, the enrollment is confirmed
+  and linked to the charge with `free_enrollment = true` and no receipt. A plain zero payment, a charge of 0 MAD or a
+  payment on an existing charge keeps the early return: the charge only, no enrollment.
+- **CRM wrapper.** `crm_enroll_and_collect` calls `create_charge_payment` with an idempotency key derived on the server
+  from the caller and the CRM request key, never from the client, so a resend can only replay the same receipt; without a
+  receipt or a free enrollment on a first run it rolls everything back (`eap.payment_required`).
+- **Director « Contrôles ».** `get_finance_review_queue` replaces `pending_confirmation` with `unpaid_never` (Confirmed or
+  Validated enrollments that never had any receipt, have no fully discounted charge and whose learner was not paid on an
+  unlinked or legacy receipt of that programme and school year, whatever their date, with their origin) and adds the
+  informational `paid_unlinked` (those paid on such a receipt, with `receipt_count`). Sections (a)–(c) are unchanged.
+- **Unchanged:** numbering, discounts and their reasons, payment dates, voids and corrections, idempotency, the request
+  fingerprint, events, balances and `create_charge_payment_financial` (125).

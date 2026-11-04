@@ -138,6 +138,11 @@ try {
   const parent = await signIn('parent', '/parent-portal');
   await parent.page.getByText('Sara ' + run).first().waitFor();
   assert.equal(await parent.page.getByText('Lina ' + run).count(), 0, 'another family\'s learner is never listed');
+  // Enrollment at payment D4 (Q8): no re-enrollment request; the family writes to the office instead.
+  await parent.page.getByText('Pour une réinscription, contactez l’accueil').waitFor();
+  assert.equal(await parent.page.getByRole('button', { name: /Demander une réinscription/ }).count(), 0, 'no re-enrollment request button');
+  await parent.page.getByRole('button', { name: 'Écrire à l’accueil' }).click();
+  await parent.page.getByRole('tab', { name: /^Messages/, selected: true }).waitFor();
   await parent.page.getByRole('tab', { name: /^Paiements/ }).click();
   await parent.page.getByText('Aucun paiement enregistré.').waitFor();
   await parent.page.getByRole('tab', { name: /^Messages/ }).click();
@@ -146,7 +151,7 @@ try {
   await parent.page.waitForLoadState('networkidle');
   assertNoContacts(parent.bodies, 'parent');
   await parent.context.close();
-  console.log('PASS parent portal from the projections: linked child only, payments, names-only composer, no contact value received');
+  console.log('PASS parent portal from the projections: linked child only, re-enrollment through the office, payments, names-only composer, no contact value received');
 
   // Student: own record through the self link.
   const student = await signIn('student', '/student-portal');

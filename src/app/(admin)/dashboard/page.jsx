@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { entities, reportError } from '@/lib/entities';
 import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
-import { ACTIVE_STUDENT_STATUSES, PENDING_PRE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { ACTIVE_STUDENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { businessMonthStart, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
@@ -38,7 +38,7 @@ export default function Dashboard() {
   const [authError, setAuthError] = useState(false);
   const [authRetry, setAuthRetry] = useState(0);
   const [userRole, setUserRole] = useState('');
-  const [stats, setStats] = useState({ students: 0, teachers: 0, groups: 0, totalEncaisse: 0, enrollmentsPending: 0, testsPlanifies: 0 });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, groups: 0, totalEncaisse: 0, awaitingGroup: 0, testsPlanifies: 0 });
   const [recentReceipts, setRecentReceipts] = useState([]);
   const [monthlyRead, setMonthlyRead] = useState({state:'loading'});
   const [financeRead, setFinanceRead] = useState({state:'loading'});
@@ -86,11 +86,12 @@ export default function Dashboard() {
       countRows('Teacher', sb.from('teachers').select('id', { count: 'exact', head: true })),
       countRows('Group', sb.from('groups').select('id', { count: 'exact', head: true })),
       entities.Receipt.list('-created_date', 5),
-      countRows('Enrollment', sb.from('enrollments').select('id', { count: 'exact', head: true }).in('status', PENDING_PRE_ENROLLMENT_STATUSES)),
+      // EAP: an enrollment is born at the payment; a paid one waits only for its group.
+      countRows('Enrollment', sb.from('enrollments').select('id', { count: 'exact', head: true }).eq('status', 'Confirmed').is('group_id', null)),
       countRows('PlacementTest', sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
       getBrowserClient().rpc('get_finance_charge_summary'),
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
-    ]).then(([students, teachers, groups, receipts, enrollmentsPending, testsPlanifies, financeResult, monthlyResult]) => {
+    ]).then(([students, teachers, groups, receipts, awaitingGroup, testsPlanifies, financeResult, monthlyResult]) => {
       if (!active) return;
       const finance = financeReadResult(financeResult, ['total_encaisse','total_restant']);
       const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
@@ -101,7 +102,7 @@ export default function Dashboard() {
         teachers,
         groups,
         totalEncaisse: finance.data?.total_encaisse,
-        enrollmentsPending,
+        awaitingGroup,
         testsPlanifies,
       });
       setRecentReceipts(receipts.slice(0, 5));
@@ -155,7 +156,7 @@ export default function Dashboard() {
           { label: 'Groupes actifs', value: stats.groups, icon: BookOpen, href: '/groups', color: '#0891b2', bg: '#ECFEFF' },
           ...(isAdmin ? [
             { label: 'Total encaissé', value: financeRead.data ? `${financeRead.data.total_encaisse.toLocaleString('fr-MA')} MAD` : 'Indisponible', icon: TrendingUp, href: '/finance', color: '#059669', bg: '#ECFDF5' },
-            { label: 'Inscriptions en attente', value: stats.enrollmentsPending, icon: Clock, href: '/enrollments', color: '#d97706', bg: '#FFFBEB' },
+            { label: 'Inscrits — groupe à affecter', value: stats.awaitingGroup, icon: Clock, href: '/students?group=unassigned', color: '#d97706', bg: '#FFFBEB' },
             { label: 'Tests planifiés', value: stats.testsPlanifies, icon: CheckCircle, href: '/placement-tests', color: '#B91C2E', bg: '#FFF1F2' },
           ] : [
             { label: 'Tests planifiés', value: stats.testsPlanifies, icon: CheckCircle, href: '/placement-tests', color: '#B91C2E', bg: '#FFF1F2' },
@@ -247,7 +248,6 @@ export default function Dashboard() {
               { href: '/attendance', label: 'Marquer les présences', icon: ClipboardCheck, color: '#0891b2' },
               { href: '/students-directory', label: 'Annuaire des apprenants', icon: Users, color: '#059669' },
               ...(isAdmin ? [
-                { href: '/enrollments', label: 'Valider des inscriptions', icon: CheckCircle, color: '#d97706' },
                 { href: '/dismissal', label: 'Sortie des jeunes', icon: LogOut, color: '#B91C2E' },
               ] : []),
             ].map(({ href, label, icon: Icon, color }) => (

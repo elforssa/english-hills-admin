@@ -1,35 +1,45 @@
-// Public programme subset (plan online-learning.md I5, owner decision Q15 = A): the
-// anonymous /inscription form and /api/public/inscription accept exactly today's eight
-// programmes; the two online types stay reception-only. Dependency-free; run by npm test.
+// Public registration retired (plan Enrollment at payment, D4; owner decision 6): the
+// anonymous /inscription page offers no programme and no form, only the centre's contact
+// details, and /api/public/inscription refuses every request with 410. Staff screens keep
+// both online programmes. Dependency-free; run by npm test.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { SESSION_TYPES, PUBLIC_SESSION_TYPES, ONLINE_SESSION_TYPES, LEVELS_BY_SESSION, isOnlineSessionType } from '../src/lib/programCatalog.mjs';
-import { InscriptionSchema } from '../src/lib/publicInscription.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { NextResponse } from 'next/server.js';
+import { SESSION_TYPES, ONLINE_SESSION_TYPES, LEVELS_BY_SESSION, isOnlineSessionType } from '../src/lib/programCatalog.mjs';
 
+// Staff screens still offer the online programmes (plan online-learning.md I5, Q3 = A).
 assert.deepEqual(ONLINE_SESSION_TYPES, ['Online', 'Online One-to-One']);
-assert.deepEqual(PUBLIC_SESSION_TYPES, SESSION_TYPES.filter(s => !ONLINE_SESSION_TYPES.includes(s)));
-assert.deepEqual(PUBLIC_SESSION_TYPES, ['Yearly', 'Adults', 'Summer Camp', 'Communication Junior', 'Communication Adult', 'One-to-One', 'Mise à niveau', 'Other']);
 assert.ok(ONLINE_SESSION_TYPES.every(s => SESSION_TYPES.includes(s)), 'staff screens offer both online types');
 assert.ok(ONLINE_SESSION_TYPES.every(s => LEVELS_BY_SESSION[s].join() === 'A1,A2,B1,B2,C1,C2'), 'Q3 = A: CEFR levels');
 assert.equal(isOnlineSessionType('Online'), true);
 assert.equal(isOnlineSessionType('One-to-One'), false);
 
-const valid = { full_name: 'Synthetic Learner', telephone: '0600000000', email: 'learner@example.test', consent: true,
-  idempotency_key: '00000000-0000-4000-8000-000000000001' };
-for (const session of ONLINE_SESSION_TYPES) {
-  const parsed = InscriptionSchema.safeParse({ ...valid, session_type: session });
-  assert.equal(parsed.success, false, `${session} refused by the public schema`);
-  assert.ok(parsed.error.issues.some(issue => issue.path.join('.') === 'session_type'), `${session} refused on session_type`);
-}
-assert.equal(InscriptionSchema.safeParse({ ...valid, session_type: 'Adults' }).success, true, 'Adults accepted');
-assert.equal(InscriptionSchema.safeParse({ ...valid, session_type: 'Adults', niveau_cefr: 'Beginning 1' }).success, true);
-assert.equal(InscriptionSchema.safeParse({ ...valid }).success, true, 'no programme still accepted');
-
-// The public page and route consume the public subset, never the full list.
+// The public page: static contact details, no programme, no form, no client code.
 const page = readFileSync(new URL('../src/app/inscription/page.jsx', import.meta.url), 'utf8');
+assert.match(page, /Inscriptions au centre/, 'title');
+assert.doesNotMatch(page, /SESSION_TYPES|getLevelsForSession|academicPrograms|programCatalog/, 'no programme list');
+assert.doesNotMatch(page, /<form|<input|<select|<textarea|onSubmit|onChange|fetch\(/, 'no form');
+assert.doesNotMatch(page, /['"]use client['"]|useState|useEffect|next\/script|turnstile/i, 'no client script, no Turnstile');
+assert.doesNotMatch(page, /\/api\/public\/inscription/, 'the page never posts');
+assert.match(page, /tel:\+212664239091/, 'phone');
+assert.match(page, /const WEBSITE = 'https:\/\/english-hills\.com';/);
+assert.match(page, /`\$\{WEBSITE\}\/contact-camp`/, 'the website WhatsApp redirect');
+assert.match(page, /`\$\{WEBSITE\}\/contact`/, 'the website contact page');
+assert.match(page, /Almaz 2, Hills Business Center/, 'address');
+assert.match(page, /Horaires/, 'opening hours');
+assert.equal(existsSync(new URL('../src/lib/publicInscription.mjs', import.meta.url)), false, 'the public schema is deleted');
+
+// The route refuses before reading anything: no schema, limiter, Turnstile or registration call.
 const route = readFileSync(new URL('../src/app/api/public/inscription/route.js', import.meta.url), 'utf8');
-assert.match(page, /PUBLIC_SESSION_TYPES\.map/);
-assert.doesNotMatch(page.replaceAll('PUBLIC_SESSION_TYPES', ''), /SESSION_TYPES/);
-assert.match(route, /import \{ InscriptionSchema\b[^}]*\} from '@\/lib\/publicInscription\.mjs'/);
-assert.doesNotMatch(route, /SESSION_TYPES/);
-console.log('PASS public programme subset: online types refused by the public form and API, accepted by staff screens');
+const code = route.replace(/^\s*\/\/.*$/gm, '');
+assert.doesNotMatch(code, /SESSION_TYPES|publicInscription|InscriptionSchema|readBoundedJson|request\.json|check_anon_rate_limit|turnstile|create_public_registration|getServiceRoleClient|rpc\(/i);
+const POST = new Function('NextResponse', code.replace(/^import .*;\n/gm, '').replace('export async function POST', 'async function POST') + '\nreturn POST;')(NextResponse);
+for (const body of [JSON.stringify({ full_name: 'Synthetic Learner', session_type: 'Online', consent: true }), '{', 'x'.repeat(64 * 1024)]) {
+  const request = new Request('https://admin.english-hills.local/api/public/inscription', {
+    method: 'POST', body, headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' } });
+  const response = await POST(request);
+  assert.equal(response.status, 410);
+  assert.deepEqual(await response.json(), { error: 'Les inscriptions en ligne sont fermées. Contactez le centre.' });
+  assert.equal(request.bodyUsed, false, 'the body is never read');
+}
+console.log('PASS public registration retired: the page offers no programme and no form, the route answers 410; staff keep the online programmes');

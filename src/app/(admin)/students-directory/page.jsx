@@ -6,6 +6,7 @@ import { entities, auth } from '@/lib/entities';
 import { Search, Phone, Mail, Users, ArrowRight, BookOpen } from 'lucide-react';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { recordHref } from '@/lib/navigation.mjs';
+import { DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, displayLabel } from '@/lib/ui/presentation.mjs';
 
 const STATUS_CONFIG = {
   Enrolled: { bg: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', dot: 'bg-emerald-500' },
@@ -121,7 +122,7 @@ export default function StudentsDirectory() {
         </div>
         <select aria-label="Filtrer l'annuaire par statut" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">Tous les statuts</option>
-          {['Enrolled','Trial','Prospect','Inactive','Alumni'].map(s => <option key={s}>{s}</option>)}
+          {DOSSIER_FILTER_STATUSES.map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS, s)}</option>)}
         </select>
         <select aria-label="Filtrer l'annuaire par catégorie" className="border border-border rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">Toutes catégories</option>
@@ -192,7 +193,7 @@ export default function StudentsDirectory() {
                 <div className="flex items-center justify-between">
                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sc.bg}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                    {s.status || 'Prospect'}
+                    {displayLabel(DOSSIER_LABELS, s.status || 'Prospect')}
                   </span>
                   <ArrowRight size={12} className="text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-all" />
                 </div>
@@ -234,7 +235,7 @@ export default function StudentsDirectory() {
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sc.bg}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                        {s.status || 'Prospect'}
+                        {displayLabel(DOSSIER_LABELS, s.status || 'Prospect')}
                       </span>
                     </td>
                   </tr>

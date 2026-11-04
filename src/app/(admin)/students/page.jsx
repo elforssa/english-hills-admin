@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Download, Upload } from 'lucide-react';
+import { CircleDollarSign, Plus, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import Pagination from '@/components/ui/pagination';
@@ -15,7 +15,7 @@ import SearchField from '@/components/operational/SearchField';
 import FilterBar from '@/components/operational/FilterBar';
 import FormField from '@/components/operational/FormField';
 import ReadState from '@/components/operational/ReadState';
-import { queryReadState, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
+import { queryReadState, DOSSIER_FILTER_STATUSES, DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
 import { exportToCsv } from '@/utils/exportCsv';
 import { useEntityUpdate, useEntityAll } from '@/lib/queries';
 import { getBrowserClient } from '@/lib/supabase';
@@ -23,14 +23,14 @@ import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mj
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import ProgrammePill from '@/components/operational/ProgrammePill';
-import { fileAwaitsGroup } from '@/lib/enrollmentWorkflow.mjs';
+import { currentSchoolYear, fileAwaitsGroup, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { PILL_CLASS, PILL_SELECT_CLASS } from '@/lib/ui/pill.mjs';
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
 import { listHref, recordHref } from '@/lib/navigation.mjs';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { listArchivedStudents, membershipErrorMessage, restoreStudent } from '@/lib/academic/membershipActions.mjs';
+import { closeSchoolYear, listArchivedStudents, membershipErrorMessage, restoreStudent } from '@/lib/academic/membershipActions.mjs';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 
 // Director (ACA-8): archived files, restored with their enrollments kept Ended.
@@ -63,6 +63,50 @@ function ArchivedStudentsDialog({ onClose, onRestored }) {
           <button className="text-xs font-semibold text-primary hover:underline" onClick={() => restore(row)}>Restaurer</button>
         </li>)}</ul>}
       {data && data.count > 20 && <Pagination page={page} total={data.count} pageSize={20} onChange={setPage} />}
+    </DialogContent>
+  </Dialog>;
+}
+
+// Director (D2-B, moved here from the retired pre-registration page, EAP Q7 = A):
+// ends every active enrollment of a finished school year; learners left with
+// nothing active become Ancien apprenant. The count is the one close_school_year
+// checks (every row not yet ended or refused) and the database refuses if it
+// changed meanwhile.
+function YearCloseDialog({ onClose, onDone }) {
+  const [year, setYear] = useState(() => { const [start] = currentSchoolYear().split('/'); return `${Number(start) - 1}/${start}`; });
+  const [count, setCount] = useState(null);
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const valid = /^[0-9]{4}\/[0-9]{4}$/.test(year);
+  useEffect(() => {
+    setCount(null);
+    if (!valid) return;
+    getBrowserClient().from('enrollments').select('id', { count: 'exact', head: true })
+      .eq('school_year', year).not('status', 'in', '(Ended,Rejected)')
+      .then(({ count: live, error }) => setCount(error ? undefined : live ?? 0));
+  }, [year, valid]);
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    const { data, error } = await closeSchoolYear(getBrowserClient(), { schoolYear: year, expectedCount: count, reason: reason.trim() });
+    setSaving(false);
+    if (error) { toast.error(membershipErrorMessage(error)); onDone(); return; }
+    toast.success(`${data} inscription(s) de ${year} terminée(s).`);
+    onDone();
+  };
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md">
+      <DialogHeader><DialogTitle>Clôturer l’année scolaire</DialogTitle></DialogHeader>
+      <form className="space-y-3" onSubmit={submit}>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Année scolaire
+          <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" value={year} pattern="[0-9]{4}/[0-9]{4}" required onChange={e => setYear(e.target.value)} /></label>
+        <p className="text-sm" role="status">{count === null ? 'Calcul…' : count === undefined ? 'Impossible de compter les inscriptions.'
+          : `${count} inscription(s) active(s) seront terminées. Les apprenants sans autre inscription deviennent « Ancien apprenant ». Paiements et soldes ne changent pas.`}</p>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif *
+          <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" maxLength={200} required value={reason} onChange={e => setReason(e.target.value)} /></label>
+        <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
+          <Button type="submit" disabled={saving || !count || !reason.trim()}>{saving ? '…' : 'Clôturer'}</Button></div>
+      </form>
     </DialogContent>
   </Dialog>;
 }
@@ -103,6 +147,7 @@ export default function StudentsPage() {
   const queryClient = useQueryClient();
   const [placement, setPlacement] = useState(null);
   const [archived, setArchived] = useState(false);
+  const [yearClose, setYearClose] = useState(false);
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError, refetch: reloadGroups } = useEntityAll('Group', 'name', { enabled: Boolean(placement && !placement.choices) });
 
   // Keep the current server value visible until persistence succeeds.
@@ -194,7 +239,7 @@ export default function StudentsPage() {
       const { data, error } = await getBrowserClient().from('enrollments')
         .select('id,student_id,status,group_id,session_type,level,school_year,date_inscription,notes,created_at')
         .in('student_id', studentIds)
-        .in('status', ['Submitted', 'Under Review', 'Trial', 'Confirmed', 'Validated'])
+        .in('status', LIVE_ENROLLMENT_STATUSES)
         .order('created_at', { ascending: true }).order('id', { ascending: true });
       if (error) throw error;
       return data || [];
@@ -226,13 +271,14 @@ export default function StudentsPage() {
       {student.groupe_id && groupLabel(student)}
       {awaitingGroup.length === 1 && <button className="block text-left text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, enrollment: awaitingGroup[0] })}>
-        Groupe à affecter · {displayLabel(ENROLLMENT_LABELS, awaitingGroup[0].status)} · {awaitingGroup[0].session_type || student.session_type || 'Session'}
+        Groupe à affecter · {awaitingGroup[0].session_type || student.session_type || 'Session'}{awaitingGroup[0].school_year ? ` · ${awaitingGroup[0].school_year}` : ''}
       </button>}
       {awaitingGroup.length > 1 && <button className="text-xs font-semibold text-primary hover:underline"
         onClick={() => setPlacement({ student, choices: awaitingGroup })}>Choisir l’inscription à affecter ({awaitingGroup.length})</button>}
+      {/* EAP (Q3 = B): reception places a paid enrollment only; without one, enrol and collect first. */}
       {!student.groupe_id && relevant.length === 0 && (fileAwaitsGroup(student)
-        ? <button className="text-xs font-semibold text-primary hover:underline"
-          onClick={() => setPlacement({ student, enrollment: null })}>Groupe à affecter</button>
+        ? <Link data-touch-target href={`/receipts/new?student_id=${student.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+          title="Aucune inscription payée : inscrivez et encaissez avant d’affecter un groupe"><CircleDollarSign size={12} />Inscrire et encaisser</Link>
         : <span aria-label="Aucun groupe">—</span>)}
       {!student.groupe_id && relevant.length > 0 && awaitingGroup.length === 0 && <Link data-touch-target href={`/students/${student.id}`} className="text-xs text-primary underline">Voir les inscriptions affectées</Link>}
     </div>;
@@ -285,6 +331,8 @@ export default function StudentsPage() {
           </Link>}
           {role === 'director' && <button onClick={() => setArchived(true)}
             className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted">Dossiers archivés</button>}
+          {role === 'director' && <button onClick={() => setYearClose(true)}
+            className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted">Clôturer l’année</button>}
           <Button asChild>
             <Link data-touch-target href="/students/new">
               <Plus size={15} /> Ajouter
@@ -292,6 +340,7 @@ export default function StudentsPage() {
           </Button>
       </>}/>
       {archived && <ArchivedStudentsDialog onClose={() => setArchived(false)} onRestored={() => invalidateAfterLearnerSave(queryClient)} />}
+      {yearClose && <YearCloseDialog onClose={() => setYearClose(false)} onDone={() => { setYearClose(false); invalidateAfterLearnerSave(queryClient); }} />}
       <FilterBar activeCount={activeFilterCount} onReset={resetFilters} search={<SearchField label="Rechercher un apprenant" className="flex-1 basis-60" placeholder="Nom ou téléphone…" maxLength={120} value={search} onChange={value=>{setSearch(value);setPage(1);}}/>} more={<>
 <div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par paiement"><select aria-label="Filtrer par paiement" className="operational-control" value={filterPayment} onChange={e => { setFilterPayment(e.target.value); setPage(1); }}>
           <option value="">Paiements : tous</option>
@@ -329,18 +378,14 @@ export default function StudentsPage() {
       </>}>{<div className="min-w-0 flex-1 basis-48"><FormField label="Filtrer par statut"><select aria-label="Filtrer par statut" className="operational-control" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
           <option value="">Dossiers actifs (inscrits, essai)</option>
           <option value="all_shown">Tous les statuts</option>
-          {['Enrolled','Trial','Alumni','Prospect','Inactive'].map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
+          {DOSSIER_FILTER_STATUSES.map(s => <option key={s} value={s}>{displayLabel(DOSSIER_LABELS,s)}</option>)}
         </select></FormField></div>}</FilterBar>
 
       {placement && (placement.choices ? <EnrollmentChoiceDialog student={placement.student} enrollments={placement.choices}
         onSelect={enrollment => setPlacement({ student: placement.student, enrollment })} onClose={() => setPlacement(null)} />
         : groupsLoading ? <p role="status" className="mb-4 text-sm">Chargement des groupes…</p>
         : groupsError ? <div role="alert" className="mb-4 text-sm">Impossible de charger les groupes. <button className="text-primary underline" onClick={() => reloadGroups()}>Réessayer</button> <button onClick={() => setPlacement(null)}>Annuler</button></div>
-          : placement.enrollment ? <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
-            onClose={() => setPlacement(null)} onSave={() => {
-              setPlacement(null);
-              invalidateAfterLearnerSave(queryClient);
-            }} /> : <DossierGroupPlacement student={placement.student} groups={groups}
+          : <EnrollmentModal key={placement.enrollment.id} assignmentOnly enrollment={placement.enrollment} students={[placement.student]} groups={groups}
             onClose={() => setPlacement(null)} onSave={() => {
               setPlacement(null);
               invalidateAfterLearnerSave(queryClient);
@@ -447,53 +492,6 @@ function EnrollmentChoiceDialog({ student, enrollments, onSelect, onClose }) {
           <span className="text-xs text-muted-foreground">{enrollment.school_year || 'Année non renseignée'} · Réf. {enrollment.id.slice(0, 8)}</span>
         </button>)}
       </div>
-    </DialogContent>
-  </Dialog>;
-}
-
-function DossierGroupPlacement({ student, groups, onClose, onSave }) {
-  const [groupId, setGroupId] = useState('');
-  const [saving, setSaving] = useState(false);
-  const matchingGroups = groups.filter(group => !group.deleted_at
-    && (group.session_type || 'Yearly') === (student.session_type || 'Yearly')
-    && group.niveau === student.niveau_cefr);
-
-  const assign = async (event) => {
-    event.preventDefault();
-    if (!groupId) return;
-    setSaving(true);
-    try {
-      const { error } = await getBrowserClient().rpc('assign_receptionist_student_group', {
-        p_student: student.id, p_enrollment: null, p_group: groupId,
-        p_student_updated_at: student.updated_at, p_enrollment_updated_at: null,
-      });
-      if (error) throw error;
-      toast.success('Groupe affecté');
-      onSave();
-    } catch (error) {
-      // Changed in the meantime (ADR-009): close and reload the list for review.
-      if (isRecordConflict(error)) { toast.error(recordConflictMessage()); onSave(); }
-      else toast.error(membershipErrorMessage(error));
-    }
-    finally { setSaving(false); }
-  };
-
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="max-w-md">
-      <DialogHeader><DialogTitle>Affecter un groupe à {student.full_name}</DialogTitle></DialogHeader>
-      {!student.niveau_cefr
-        ? <p className="text-sm text-muted-foreground">Le niveau doit être défini avant l’affectation directe. Créez une pré-inscription depuis la <Link data-touch-target href={`/students/${student.id}`} className="text-primary underline" onClick={onClose}>fiche apprenant</Link> pour choisir un niveau et un groupe.</p>
-        : <form onSubmit={assign} className="space-y-4">
-          <label className="block text-sm font-medium">Groupe compatible
-            <select aria-label="Groupe compatible" required className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2" value={groupId} onChange={event => setGroupId(event.target.value)}>
-              <option value="">— Choisir un groupe —</option>
-              {matchingGroups.map(group => <option key={group.id} value={group.id}>{group.name} · {group.niveau}</option>)}
-            </select>
-          </label>
-          {matchingGroups.length === 0 && <p className="text-sm text-muted-foreground">Aucun groupe compatible disponible.</p>}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={saving || !groupId}>{saving ? 'Enregistrement…' : 'Affecter'}</Button></div>
-        </form>}
     </DialogContent>
   </Dialog>;
 }

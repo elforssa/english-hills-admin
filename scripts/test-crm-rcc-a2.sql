@@ -1,5 +1,10 @@
 -- RCC-A2 enrollment initiation acceptance: synthetic local fixtures, fully rolled back.
 -- Every reason asserts the unchanged SQLSTATE and message plus the exact hint.
+-- EAP (127): initiation is « Inscrire et encaisser » (crm_enroll_and_collect: Confirmed
+-- enrollment, conversion and payment in one transaction); crm_start_enrollment keeps its
+-- hints but has no API grant, so its own refusals are also asserted from a postgres
+-- session. Pre-127 statuses (Submitted, Under Review, Rejected) exist only as legacy
+-- fixture rows inserted under the two-flag exemption.
 \set ON_ERROR_STOP on
 begin;
 create function pg_temp.ok(value boolean,label text) returns void language plpgsql as $$ begin
@@ -44,20 +49,34 @@ create function pg_temp.student(name text,deleted boolean default false) returns
  insert into public.students(full_name,date_naissance,telephone,status,session_type,deleted_at)
  values(name||' '||nextval('a2_n'),'2015-03-01','07'||lpad((50000000+currval('a2_n'))::text,8,'0'),'Prospect','Yearly',case when deleted then now() end) returning id
 $$;
-create function pg_temp.enrollment(s uuid,status text,session text default 'Yearly',grp uuid default null) returns uuid language sql as $$
- insert into public.enrollments(student_id,session_type,school_year,status,level,group_id) values(s,session,'2026/2027',status,'Child 2',grp) returning id
-$$;
-create function pg_temp.start(data jsonb,request uuid default gen_random_uuid(),who integer default 3) returns jsonb language plpgsql as $$ declare r jsonb; begin
+-- EAP (127): a retired status (legacy row) is inserted under the two-flag exemption, reset at once.
+create function pg_temp.enrollment(s uuid,status text,session text default 'Yearly',grp uuid default null) returns uuid language plpgsql as $$ declare e uuid; begin
+ if status in ('Submitted','Under Review','Trial','Rejected') then
+  perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true); end if;
+ insert into public.enrollments(student_id,session_type,school_year,status,level,group_id) values(s,session,'2026/2027',status,'Child 2',grp) returning id into e;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
+ return e;
+end $$;
+-- EAP (127): the default payment collected with the enrollment.
+create function pg_temp.pay() returns jsonb language sql as $$ select '{"gross_amount":1500,"payment_amount":500,"payment_method":"Espèces"}'::jsonb $$;
+-- EAP (127): reception calls the wrapper as an API role; a NULL payment omits the payment object.
+create function pg_temp.start(data jsonb,request uuid default gen_random_uuid(),who integer default 3,payment jsonb default pg_temp.pay()) returns jsonb language plpgsql as $$ declare r jsonb; begin
  perform pg_temp.actor(who);execute 'set local role authenticated';
- r:=public.crm_start_enrollment(request,data);
+ r:=public.crm_enroll_and_collect(request,jsonb_build_object('enrollment',data)||case when payment is null then '{}'::jsonb else jsonb_build_object('payment',payment) end);
  execute 'reset role';return r;
 end $$;
+-- EAP (127): crm_start_enrollment itself, from a postgres session (its API grant is revoked).
+create function pg_temp.start_direct(data jsonb,request uuid default gen_random_uuid(),who integer default 3) returns jsonb language plpgsql as $$ begin
+ perform pg_temp.actor(who);return public.crm_start_enrollment(request,data);
+end $$;
 -- Asserts the exact SQLSTATE, the unchanged message and the exact hint (or none).
-create function pg_temp.rejects(data jsonb,code text,message text,reason text,request uuid default gen_random_uuid(),who integer default 3) returns void language plpgsql as $$
+-- EAP (127): a reason containing a dot is a full hint (eap.*); direct targets crm_start_enrollment.
+create function pg_temp.rejects(data jsonb,code text,message text,reason text,request uuid default gen_random_uuid(),who integer default 3,
+ payment jsonb default pg_temp.pay(),direct boolean default false) returns void language plpgsql as $$
 declare st text; msg text; h text; begin
- begin perform pg_temp.start(data,request,who);
+ begin if direct then perform pg_temp.start_direct(data,request,who); else perform pg_temp.start(data,request,who,payment); end if;
  exception when others then get stacked diagnostics st=returned_sqlstate,msg=message_text,h=pg_exception_hint;
-  if st is distinct from code or msg is distinct from message or nullif(h,'') is distinct from 'crm_enrollment.'||reason then
+  if st is distinct from code or msg is distinct from message or nullif(h,'') is distinct from (case when reason like '%.%' then reason else 'crm_enrollment.'||reason end) then
    raise exception 'FAIL %: expected % "%", got % "%" [%]',coalesce(reason,'no hint'),code,message,st,msg,h; end if;
   insert into a2_seen values(reason);return;
  end;
@@ -81,25 +100,30 @@ create temp table a2_policy as select (public.crm_create_followup_policy(gen_ran
  '{"weekly_hours":{"1":[["15:00","20:00"]],"2":[["10:00","12:30"],["15:20","20:00"]],"3":[["10:00","12:30"],["15:20","20:00"]],"4":[["10:00","12:30"],["15:20","20:00"]],"5":[["10:00","12:30"],["15:20","20:00"]],"6":[["10:00","12:30"],["15:20","20:00"]],"7":[]},"attempt_offsets":[0,0,1,3,5]}')->>'policy_id')::uuid id;
 
 -- Happy path: a new learner with every optional field blank.
-do $$ declare l uuid:=pg_temp.lead(); d jsonb:=pg_temp.new_data(l); key uuid:=gen_random_uuid(); before jsonb:=pg_temp.counts(); r jsonb; t public.crm_tasks%rowtype; begin
+do $$ declare l uuid:=pg_temp.lead(); d jsonb:=pg_temp.new_data(l); key uuid:=gen_random_uuid(); before jsonb:=pg_temp.counts(); fin jsonb; r jsonb; r2 jsonb; begin
  r:=pg_temp.start(d,key);
- select * into strict t from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open';
- perform pg_temp.ok(r->'enrollment'->>'status'='Submitted' and r->'lead'->>'status'='QUALIFIED','Submitted pre-enrollment keeps the opportunity QUALIFIED');
- perform pg_temp.ok((select status='QUALIFIED' and enrollment_id=(r->'enrollment'->>'id')::uuid and student_id=(r->'enrollment'->>'student_id')::uuid from public.crm_leads where id=l),'lead linked, not converted');
+ -- EAP (127): the enrollment is created Confirmed with its receipt and the opportunity
+ -- converts at once (open tasks closed, no enrollment follow-up created).
+ perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed' and r->'lead'->>'status'='CONVERTED','paid enrollment converts the opportunity');
+ perform pg_temp.ok((select status='CONVERTED' and enrollment_id=(r->'enrollment'->>'id')::uuid and student_id=(r->'enrollment'->>'student_id')::uuid from public.crm_leads where id=l),'lead linked and converted');
  perform pg_temp.ok(exists(select 1 from public.crm_activities where lead_id=l and event_type='enrollment_started'),'enrollment_started activity');
- perform pg_temp.ok(t.due_at=crm_security.next_window((select followup_policy_id from public.crm_leads where id=l),now()+interval '1 day') and t.schedule_kind is null,'default follow-up tomorrow at the next window, no schedule kind');
- perform pg_temp.ok(r->'enrollment_followup'=jsonb_build_object('id',t.id,'created',true)||crm_security.scheduled_civil(t.due_at),'result carries the created follow-up and its civil time');
+ perform pg_temp.ok(r->'enrollment_followup'='null'::jsonb and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'no follow-up; conversion closed the open tasks');
+ perform pg_temp.ok(r->>'receipt_id' is not null and r->>'receipt_number' is not null and r->>'charge_id' is not null and not (r->>'free_enrollment')::boolean
+  and not (r->>'replayed_enrollment')::boolean and not (r->>'replayed_payment')::boolean
+  and (select enrollment_id from public.receipts where id=(r->>'receipt_id')::uuid)=(r->'enrollment'->>'id')::uuid,'receipt issued on the new enrollment');
  perform pg_temp.ok((select date_naissance is null from public.students where id=(r->'enrollment'->>'student_id')::uuid),'blank birth date accepted');
  perform pg_temp.ok(pg_temp.counts()->>0=((before->>0)::int+1)::text and pg_temp.counts()->>1=((before->>1)::int+1)::text,'one student and one enrollment');
- before:=pg_temp.counts();
- perform pg_temp.ok(pg_temp.start(d,key)=r,'exact same-key replay returns the stored result');
- perform pg_temp.ok(pg_temp.counts()=before,'replay writes nothing');
+ before:=pg_temp.counts();fin:=pg_temp.untouched();
+ r2:=pg_temp.start(d,key);
+ -- The financial replay (122) returns no balance, so the replay is compared without it.
+ perform pg_temp.ok(r2-'replayed_enrollment'-'replayed_payment'-'balance'=r-'replayed_enrollment'-'replayed_payment'-'balance' and (r2->>'replayed_enrollment')::boolean and (r2->>'replayed_payment')::boolean,'exact same-key replay returns the stored result, flagged as replayed');
+ perform pg_temp.ok(pg_temp.counts()=before and pg_temp.untouched()=fin,'replay writes nothing');
  -- Replay precedes validation; the lead is now linked yet the same key still replays.
  perform pg_temp.rejects(d||'{"notes":"changed"}','22023','Request key payload conflict','request_conflict',key);
  perform pg_temp.rejects(pg_temp.new_data(l),'22023','Qualified unlinked lead required','lead_already_enrolled');
  perform pg_temp.ok(pg_temp.counts()=before,'rejections write nothing');
 end $$;
-select 'PASS blank optional fields, default follow-up result, exact replay before validation';
+select 'PASS blank optional fields, Confirmed paid enrollment and conversion, exact replay before validation';
 
 -- Lead, payload, program and status reasons; every failure writes nothing.
 do $$ declare l uuid:=pg_temp.lead(); n uuid:=pg_temp.raw_lead(); before jsonb:=pg_temp.counts(); d jsonb; begin
@@ -114,7 +138,13 @@ do $$ declare l uuid:=pg_temp.lead(); n uuid:=pg_temp.raw_lead(); before jsonb:=
  perform pg_temp.rejects(d||'{"school_year":"2026-2027"}','22023','Invalid enrollment program or school year','school_year_invalid');
  perform pg_temp.rejects(d||'{"school_year":"2026/2028"}','22023','Invalid enrollment program or school year','school_year_invalid');
  perform pg_temp.rejects(d||jsonb_build_object('notes',repeat('x',2001)),'22023','Invalid enrollment program or school year','notes_too_long');
- perform pg_temp.rejects(d||'{"initial_status":"Confirmed"}','42501','Only pre-confirmation enrollment initiation is permitted','initial_status_not_permitted');
+ -- EAP (127): the wrapper refuses any initial_status; crm_start_enrollment refuses all but Confirmed.
+ perform pg_temp.rejects(d||'{"initial_status":"Confirmed"}','22023','Valid bounded enrollment request required','request_invalid');
+ perform pg_temp.rejects(d,'42501','Only pre-confirmation enrollment initiation is permitted','initial_status_not_permitted',direct=>true);
+ perform pg_temp.rejects(d||'{"initial_status":"Submitted"}','42501','Only pre-confirmation enrollment initiation is permitted','initial_status_not_permitted',direct=>true);
+ -- EAP (127): the wrapper's own reasons: no payment, and « Autre » is not an enrollment programme.
+ perform pg_temp.rejects(d,'22023','L’inscription se confirme à l’encaissement : saisissez un paiement.','eap.payment_required',payment=>'{"gross_amount":1500,"payment_amount":0}');
+ perform pg_temp.rejects(d||'{"session_type":"Other"}','22023','Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.','eap.program_not_enrollable');
  perform pg_temp.rejects(d-'student_choice','22023','Explicit student choice required','learner_choice_required');
  perform pg_temp.rejects(d||'{"learner_name":"A"}','22023','Invalid new learner','learner_name_invalid');
  perform pg_temp.rejects(d-'learner_name','22023','Invalid new learner','learner_name_invalid');
@@ -123,7 +153,8 @@ do $$ declare l uuid:=pg_temp.lead(); n uuid:=pg_temp.raw_lead(); before jsonb:=
  perform pg_temp.rejects(d||'{"candidate_review":"stale"}','PT409','Student candidates changed; review again','candidates_changed');
  -- Error ordering: the historical winning message, now with its reason.
  perform pg_temp.rejects(d||'{"birth_date":"garbage","session_type":"Bogus"}','22023','Invalid enrollment fields or incompatible group','birth_date_invalid');
- perform pg_temp.rejects(d||'{"initial_status":"Trial","level":"Beginning 1"}','22023','Invalid level for selected program','level_invalid');
+ -- EAP (127): Trial is retired; the initial-status refusal now precedes the level check.
+ perform pg_temp.rejects(d||'{"initial_status":"Trial","level":"Beginning 1"}','42501','Only pre-confirmation enrollment initiation is permitted','initial_status_not_permitted',direct=>true);
  -- A level outside every programme still fails at the student row first, as in 084.
  perform pg_temp.rejects(d||'{"level":"Bogus"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
  -- Access denial keeps today's error and carries no hint.
@@ -148,7 +179,7 @@ do $$ declare zone text:=current_setting('TimeZone'); today date:=(now() at time
  perform pg_temp.ok((select date_naissance=today from public.students where id=(r->'enrollment'->>'student_id')::uuid),'Casablanca today accepted');
  perform set_config('TimeZone','Pacific/Kiritimati',true);
  l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('birth_date',today)));
- perform pg_temp.ok(r->'enrollment'->>'status'='Submitted','Casablanca today accepted ahead of Casablanca');
+ perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed','Casablanca today accepted ahead of Casablanca');
  perform set_config('TimeZone','UTC',true);
  l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,'{"birth_date":"2015-04-02"}'));
  perform pg_temp.ok((select date_naissance='2015-04-02' from public.students where id=(r->'enrollment'->>'student_id')::uuid),'valid past date accepted');
@@ -200,7 +231,8 @@ do $$ declare s uuid:=pg_temp.student('A2 linked'); s2 uuid:=pg_temp.student('A2
  -- I3: the linked path never depends on the lead's learner name or birth date.
  update public.crm_leads set learner_name=null,learner_birth_date=null where id=l;
  r:=pg_temp.start(pg_temp.existing_data(l,s));
- perform pg_temp.ok(r->'enrollment'->>'student_id'=s::text and r->'lead'->>'status'='QUALIFIED','NULL lead name: linked learner enrolled');
+ -- EAP (127): the paid enrollment converts the opportunity.
+ perform pg_temp.ok(r->'enrollment'->>'student_id'=s::text and r->'lead'->>'status'='CONVERTED','NULL lead name: linked learner enrolled');
  perform pg_temp.ok((select count(*) from public.students)=(before->>0)::int,'no learner created on the linked path');
  l:=pg_temp.lead();s:=pg_temp.student('A2 linked short');update public.crm_leads set student_id=s,learner_name='A',learner_birth_date=null where id=l;
  r:=pg_temp.start(pg_temp.existing_data(l,s));
@@ -210,9 +242,10 @@ select 'PASS linked_student projection, linked-learner authority reasons and lin
 
 -- Existing enrollments: selection, linkage elsewhere, staleness and group integrity.
 do $$ declare s uuid:=pg_temp.student('A2 enrolled'); s2 uuid:=pg_temp.student('A2 enrolled second'); e1 uuid; e2 uuid; rej uuid; other uuid; a uuid:=pg_temp.lead(); b uuid:=pg_temp.lead(); r jsonb; g uuid; x uuid; nul uuid; before jsonb; begin
+ -- EAP (127): a legacy Submitted row, linked and paid: the payment confirms it and converts.
  e1:=pg_temp.enrollment(s,'Submitted');
  r:=pg_temp.start(pg_temp.pick(a,s,e1));
- perform pg_temp.ok(r->'enrollment'->>'id'=e1::text and r->'lead'->>'status'='QUALIFIED','unlinked existing enrollment linked');
+ perform pg_temp.ok(r->'enrollment'->>'id'=e1::text and r->'enrollment'->>'status'='Confirmed' and (select status='CONVERTED' and enrollment_id=e1 from public.crm_leads where id=a),'unlinked existing enrollment linked');
  perform pg_temp.actor(3);
  perform pg_temp.ok((select bool_and((row->>'already_linked')::boolean) from jsonb_array_elements(public.crm_find_enrollment_candidates(s,'Yearly','2026/2027')->'rows') row),'candidate read flags the linked enrollment');
  before:=pg_temp.counts();
@@ -229,51 +262,77 @@ do $$ declare s uuid:=pg_temp.student('A2 enrolled'); s2 uuid:=pg_temp.student('
  perform pg_temp.rejects(pg_temp.pick(b,s2,e2)||'{"expected_enrollment_updated_at":"2000-01-01T00:00:00Z"}','PT409','Stale enrollment; refresh and retry','enrollment_changed');
  perform pg_temp.rejects(pg_temp.pick(b,s2,e2)||'{"expected_enrollment_updated_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
  -- An enrollment whose own group no longer matches it (session NULL bypasses the row trigger).
+ -- EAP (127): a legacy Submitted row, inserted under the two-flag exemption.
  insert into public.groups(name,session_type,niveau) values('A2 adults group','Adults','Beginning 1') returning id into g;
- x:=pg_temp.student('A2 mismatched');insert into public.enrollments(student_id,session_type,school_year,status,group_id) values(x,null,'2026/2027','Submitted',g) returning id into e1;
+ x:=pg_temp.student('A2 mismatched');
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
+ insert into public.enrollments(student_id,session_type,school_year,status,group_id) values(x,null,'2026/2027','Submitted',g) returning id into e1;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
  perform pg_temp.rejects(pg_temp.pick(pg_temp.lead(),x,e1),'22023','Enrollment group must match session and level','enrollment_group_incompatible');
  x:=pg_temp.student('A2 statusless');nul:=pg_temp.enrollment(x,null);
  perform pg_temp.rejects(pg_temp.existing_data(pg_temp.lead(),x),'22023','Existing enrollment status requires review','existing_enrollment_needs_review');
  perform pg_temp.ok((pg_temp.counts()->>0)::int=(before->>0)::int+3 and (select enrollment_id is null from public.crm_leads where id=b),'only the three fixture students exist; rejections linked nothing');
+ -- EAP (127, Q12): an unpaid legacy row is never linked without a payment; with one it is
+ -- confirmed and the opportunity converts.
+ perform pg_temp.rejects(pg_temp.pick(b,s2,e2),'22023','L’inscription se confirme à l’encaissement : saisissez un paiement.','eap.payment_required',payment=>null);
+ perform pg_temp.ok((select enrollment_id is null and status='QUALIFIED' from public.crm_leads where id=b) and (select status='Under Review' from public.enrollments where id=e2),'refused link rolled back');
  r:=pg_temp.start(pg_temp.pick(b,s2,e2));
- perform pg_temp.ok(r->'enrollment'->>'status'='Under Review' and r->'lead'->>'status'='QUALIFIED','Under Review enrollment linked without conversion');
+ perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed' and (select status='CONVERTED' from public.crm_leads where id=b),'Under Review enrollment linked, paid and converted');
 end $$;
 select 'PASS existing enrollment selection, linked elsewhere, incompatible, stale and group integrity reasons';
 
 -- Groups, levels and Trial.
+-- EAP (127): a group (placement follows the payment) and Trial are refused, by the
+-- wrapper and by crm_start_enrollment; trial_requires_group and group_incompatible are
+-- no longer reachable (the group is refused before either check).
 do $$ declare l uuid:=pg_temp.lead(); g1 uuid; g2 uuid; d jsonb; r jsonb; begin
  insert into public.groups(name,session_type,niveau) values('A2 child group','Yearly','Child 2') returning id into g1;
  insert into public.groups(name,session_type,niveau) values('A2 adult group','Adults','Beginning 1') returning id into g2;
  d:=pg_temp.new_data(l);
- perform pg_temp.rejects(d||jsonb_build_object('group_id',g2),'22023','Enrollment group must match session and level','group_incompatible');
- perform pg_temp.rejects(d||jsonb_build_object('group_id',gen_random_uuid()),'22023','Enrollment group must match session and level','group_incompatible');
+ perform pg_temp.rejects(d||jsonb_build_object('group_id',g1),'22023','Valid bounded enrollment request required','request_invalid');
+ perform pg_temp.rejects(d||jsonb_build_object('group_id',g2),'22023','Valid bounded enrollment request required','request_invalid');
+ perform pg_temp.rejects(d||jsonb_build_object('initial_status','Confirmed','group_id',g1),'22023','Valid bounded enrollment request required','request_invalid',direct=>true);
+ perform pg_temp.rejects(d||jsonb_build_object('initial_status','Confirmed','group_id',gen_random_uuid()),'22023','Valid bounded enrollment request required','request_invalid',direct=>true);
  perform pg_temp.rejects(d||'{"level":"Beginning 1"}','22023','Invalid level for selected program','level_invalid');
- perform pg_temp.rejects(d||'{"initial_status":"Trial"}','22023','Invalid enrollment fields or incompatible group','trial_requires_group');
- perform pg_temp.rejects(d||'{"initial_status":"Trial","level":"Child 3"}'||jsonb_build_object('group_id',g1),'22023','Enrollment group must match session and level','group_incompatible');
- r:=pg_temp.start(d||jsonb_build_object('initial_status','Trial','group_id',g1));
- perform pg_temp.ok(r->'enrollment'->>'status'='Trial' and r->'enrollment'->>'group_name'='A2 child group' and r->'lead'->>'status'='QUALIFIED','Trial with a group starts without conversion');
+ perform pg_temp.rejects(d||'{"initial_status":"Trial"}','22023','Valid bounded enrollment request required','request_invalid');
+ perform pg_temp.rejects(d||'{"initial_status":"Trial"}','42501','Only pre-confirmation enrollment initiation is permitted','initial_status_not_permitted',direct=>true);
+ perform pg_temp.rejects(d||'{"initial_status":"Trial","level":"Child 3"}'||jsonb_build_object('group_id',g1),'22023','Valid bounded enrollment request required','request_invalid',direct=>true);
+ r:=pg_temp.start(d);
+ perform pg_temp.ok(r->'enrollment'->>'status'='Confirmed' and r->'enrollment'->>'group_name' is null and r->'lead'->>'status'='CONVERTED','paid enrollment created without a group, converted');
 end $$;
-select 'PASS group, level and Trial reasons; Trial with group';
+select 'PASS group, level and Trial refusals; paid enrollment without a group';
 
 -- Follow-up: explicit, past, malformed, empty, infinite, null, kept, duplicates.
-do $$ declare l uuid; r jsonb; t public.crm_tasks%rowtype; target timestamptz:=now()+interval '3 days'; before jsonb; keep uuid; a uuid; c uuid; e uuid; begin
- l:=pg_temp.lead();before:=pg_temp.counts();
- perform pg_temp.rejects(pg_temp.new_data(l,jsonb_build_object('followup_at',now()-interval '30 days')),'22023','Valid future task required','followup_in_past');
- perform pg_temp.rejects(pg_temp.new_data(l,'{"followup_at":"garbage"}'),'22023','Invalid enrollment fields or incompatible group','followup_invalid');
- perform pg_temp.rejects(pg_temp.new_data(l,'{"followup_at":""}'),'22023','Invalid enrollment fields or incompatible group','followup_invalid');
- perform pg_temp.rejects(pg_temp.new_data(l,'{"followup_at":"infinity"}'),'22023','Finite due time required','followup_invalid');
- perform pg_temp.rejects(pg_temp.new_data(l,'{"followup_at":"-infinity"}'),'22023','Finite due time required','followup_invalid');
+-- EAP (127): a new enrollment is Confirmed and converts, so the follow-up branch is
+-- reached only by linking a legacy unconfirmed row. Rejections go through the wrapper;
+-- the follow-up results are read from crm_start_enrollment in a postgres session (the
+-- wrapper's payment then confirms the row and the conversion closes the task).
+create function pg_temp.legacy_pick(l uuid) returns jsonb language plpgsql as $$ declare s uuid:=pg_temp.student('A2 legacy'); begin
+ return pg_temp.pick(l,s,pg_temp.enrollment(s,'Submitted'));
+end $$;
+do $$ declare l uuid; d jsonb; r jsonb; t public.crm_tasks%rowtype; target timestamptz:=now()+interval '3 days'; before jsonb; keep uuid; a uuid; c uuid; e uuid; begin
+ l:=pg_temp.lead();d:=pg_temp.legacy_pick(l);before:=pg_temp.counts();
+ perform pg_temp.rejects(d||jsonb_build_object('followup_at',now()-interval '30 days'),'22023','Valid future task required','followup_in_past');
+ perform pg_temp.rejects(d||'{"followup_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','followup_invalid');
+ perform pg_temp.rejects(d||'{"followup_at":""}','22023','Invalid enrollment fields or incompatible group','followup_invalid');
+ perform pg_temp.rejects(d||'{"followup_at":"infinity"}','22023','Finite due time required','followup_invalid');
+ perform pg_temp.rejects(d||'{"followup_at":"-infinity"}','22023','Finite due time required','followup_invalid');
  perform pg_temp.ok(pg_temp.counts()=before,'follow-up rejections leave no student, enrollment, task or activity');
- r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('followup_at',target)));
+ r:=pg_temp.start_direct(d||jsonb_build_object('followup_at',target,'initial_status','Confirmed'));
  select * into strict t from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open';
  perform pg_temp.ok(t.due_at=crm_security.next_window((select followup_policy_id from public.crm_leads where id=l),target),'explicit time resolved to the calling window');
  perform pg_temp.ok(r->'enrollment_followup'=jsonb_build_object('id',t.id,'created',true)||crm_security.scheduled_civil(t.due_at),'created follow-up and civil time in the result');
- l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l,'{"followup_at":null}'));
+ l:=pg_temp.lead();r:=pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ select * into strict t from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open';
  perform pg_temp.ok((r->'enrollment_followup'->>'created')::boolean,'JSON null keeps the default');
+ perform pg_temp.ok(t.due_at=crm_security.next_window((select followup_policy_id from public.crm_leads where id=l),now()+interval '1 day') and t.schedule_kind is null,'default follow-up tomorrow at the next window, no schedule kind');
+ -- The wrapper's payment confirms the legacy row: the conversion closes the follow-up.
+ l:=pg_temp.lead();r:=pg_temp.start(pg_temp.legacy_pick(l));
+ perform pg_temp.ok((select status='CONVERTED' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'paid legacy link converts and closes the follow-up');
  -- An existing enrollment follow-up is kept; a supplied past value is still ignored.
  l:=pg_temp.lead('enrollment_followup','enrollment');
  select id into keep from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open';
- r:=pg_temp.start(pg_temp.new_data(l,jsonb_build_object('followup_at',now()-interval '30 days')));
+ r:=pg_temp.start_direct(pg_temp.legacy_pick(l)||jsonb_build_object('followup_at',now()-interval '30 days','initial_status','Confirmed'));
  select * into strict t from public.crm_tasks where id=keep;
  perform pg_temp.ok(t.status='open' and r->'enrollment_followup'=jsonb_build_object('id',keep,'created',false)||crm_security.scheduled_civil(t.due_at),'kept follow-up reported with created=false');
  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open'),'still exactly one');
@@ -282,7 +341,7 @@ do $$ declare l uuid; r jsonb; t public.crm_tasks%rowtype; target timestamptz:=n
  perform pg_temp.actor(3);
  keep:=crm_security.new_task((select x from public.crm_leads x where id=l),jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day'),'a2-dup-early:'||l);
  c:=crm_security.new_task((select x from public.crm_leads x where id=l),jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '3 days'),'a2-dup-late:'||l);
- r:=pg_temp.start(pg_temp.new_data(l));e:=(r->'enrollment'->>'id')::uuid;
+ r:=pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"initial_status":"Confirmed"}');e:=(r->'enrollment'->>'id')::uuid;
  perform pg_temp.ok(r->'enrollment_followup'->>'id'=keep::text and not (r->'enrollment_followup'->>'created')::boolean,'earliest retained follow-up reported, never the last cancelled duplicate');
  perform pg_temp.ok(r->'enrollment_followup'=jsonb_build_object('id',keep,'created',false)||crm_security.scheduled_civil((select due_at from public.crm_tasks where id=keep)),'retained task time');
  perform pg_temp.ok((select bool_and(status='cancelled' and cancellation_reason='Suivi de cette inscription déjà prévu') from public.crm_tasks where id in(a,c)),'duplicates cancelled with today''s reason');
@@ -291,31 +350,38 @@ end $$;
 select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept and earliest-retained results';
 
 -- Owner and policy reasons, with no partial writes.
-do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; begin
+-- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.
+do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; d jsonb; begin
  update public.crm_leads set owner_id=pg_temp.uid(4) where id=l;
- before:=pg_temp.counts();
- perform pg_temp.rejects(pg_temp.new_data(l),'22023','Assignee must be operational staff','owner_not_operational');
+ d:=pg_temp.legacy_pick(l);before:=pg_temp.counts();
+ perform pg_temp.rejects(d,'22023','Assignee must be operational staff','owner_not_operational');
  perform pg_temp.ok(pg_temp.counts()=before and (select enrollment_id is null from public.crm_leads where id=l),'owner rejection leaves no partial writes');
  -- validate_policy prevents a policy without windows; only a direct synthetic row reaches it.
  insert into public.crm_followup_policies select (jsonb_populate_record(null::public.crm_followup_policies,to_jsonb(x)||jsonb_build_object('id',gen_random_uuid(),
   'version',(select max(version)+1 from public.crm_followup_policies),'effective_from',now()+interval '100 years','weekly_hours','{"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[]}'::jsonb))).*
  from public.crm_followup_policies x where x.id=(select id from a2_policy) returning id into p;
  l:=pg_temp.lead();update public.crm_leads set followup_policy_id=p where id=l;
- perform pg_temp.rejects(pg_temp.new_data(l),'22023','Policy has no available calling window','followup_policy_unavailable');
+ perform pg_temp.rejects(pg_temp.legacy_pick(l),'22023','Policy has no available calling window','followup_policy_unavailable');
 end $$;
 select 'PASS owner_not_operational and followup_policy_unavailable without partial writes';
 
 -- Linking a confirmed enrollment converts as today; no enrollment follow-up then.
+-- EAP (127, Q12): without a payment object, only an already paid enrollment is linked.
 do $$ declare s uuid:=pg_temp.student('A2 confirmed'); e uuid; l uuid:=pg_temp.lead(); r jsonb; begin
  e:=pg_temp.enrollment(s,'Confirmed');
- r:=pg_temp.start(pg_temp.pick(l,s,e),gen_random_uuid(),2);
- perform pg_temp.ok(r->'lead'->>'status'='CONVERTED' and r->'enrollment_followup'='null'::jsonb,'confirmed link converts; follow-up null');
+ perform pg_temp.rejects(pg_temp.pick(l,s,e),'22023','L’inscription se confirme à l’encaissement : saisissez un paiement.','eap.payment_required',gen_random_uuid(),2,null);
+ perform pg_temp.actor(2);
+ perform public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','gross_amount',1500,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ r:=pg_temp.start(pg_temp.pick(l,s,e),gen_random_uuid(),2,null);
+ perform pg_temp.ok(r->'lead'->>'status'='CONVERTED' and r->'enrollment_followup'='null'::jsonb and r->'receipt_id'='null'::jsonb and not (r->>'replayed_enrollment')::boolean,'paid confirmed link converts without a new payment; follow-up null');
  perform pg_temp.ok((select count(*)=0 from public.crm_tasks where lead_id=l and status='open'),'conversion closed commercial tasks');
+ -- EAP (127): director enroll-and-collect converts like reception's.
  l:=pg_temp.lead();r:=pg_temp.start(pg_temp.new_data(l),gen_random_uuid(),1);
- perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED','director initiation does not convert');
+ perform pg_temp.ok(r->'lead'->>'status'='CONVERTED','director initiation converts');
 end $$;
 
 -- Handler mapping: a unique violation still becomes PT409, now with a reason.
+-- EAP (127): the Submitted row is a legacy fixture (two-flag exemption).
 do $$ declare s uuid:=pg_temp.student('A2 unique'); e uuid; l uuid:=pg_temp.lead(); begin
  e:=pg_temp.enrollment(s,'Submitted');
  insert into public.crm_activities(lead_id,occurred_at,actor_kind,event_type,source_key,body) values(l,now(),'system','note_added','enrollment-started:'||l||':'||e,'A2 synthetic collision');
@@ -323,17 +389,32 @@ do $$ declare s uuid:=pg_temp.student('A2 unique'); e uuid; l uuid:=pg_temp.lead
 end $$;
 
 -- Security, authority and dormancy.
-do $$ declare st text; begin
+do $$ declare st text; msg text; begin
  begin execute 'set local role anon';perform public.crm_start_enrollment(gen_random_uuid(),'{}');
  exception when others then get stacked diagnostics st=returned_sqlstate; end;
  execute 'reset role';
  perform pg_temp.ok(st='42501','anon cannot execute');
+ st:=null;
+ begin execute 'set local role anon';perform public.crm_enroll_and_collect(gen_random_uuid(),'{}');
+ exception when others then get stacked diagnostics st=returned_sqlstate; end;
+ execute 'reset role';
+ perform pg_temp.ok(st='42501','anon cannot execute the wrapper');
+ -- EAP (127): an API role reaches the enrollment command only through the wrapper.
+ st:=null;
+ begin perform pg_temp.actor(3);execute 'set local role authenticated';perform public.crm_start_enrollment(gen_random_uuid(),'{}');
+ exception when others then get stacked diagnostics st=returned_sqlstate,msg=message_text; end;
+ execute 'reset role';
+ perform pg_temp.ok(st='42501' and msg like 'permission denied for function crm_start_enrollment%','authenticated cannot execute crm_start_enrollment: '||coalesce(msg,''));
  perform pg_temp.ok(not exists(select 1 from pg_proc where proname='enrollment_reject'),'no private raise helper added');
- perform pg_temp.ok(has_function_privilege('authenticated','public.crm_start_enrollment(uuid,jsonb)','execute') and not has_function_privilege('anon','public.crm_start_enrollment(uuid,jsonb)','execute')
-  and has_function_privilege('authenticated','public.crm_get_enrollment_context(uuid)','execute') and not has_function_privilege('anon','public.crm_get_enrollment_context(uuid)','execute'),'execution grants unchanged');
- perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.crm_start_enrollment(uuid,jsonb)'::regprocedure),'security definer and search path unchanged');
+ perform pg_temp.ok(not has_function_privilege('authenticated','public.crm_start_enrollment(uuid,jsonb)','execute') and not has_function_privilege('anon','public.crm_start_enrollment(uuid,jsonb)','execute')
+  and not has_function_privilege('service_role','public.crm_start_enrollment(uuid,jsonb)','execute')
+  and has_function_privilege('authenticated','public.crm_enroll_and_collect(uuid,jsonb)','execute') and not has_function_privilege('anon','public.crm_enroll_and_collect(uuid,jsonb)','execute')
+  and has_function_privilege('authenticated','public.crm_get_enrollment_context(uuid)','execute') and not has_function_privilege('anon','public.crm_get_enrollment_context(uuid)','execute'),'execution grants: command revoked from API roles, wrapper for authenticated');
+ perform pg_temp.ok((select bool_and(prosecdef and proconfig=array['search_path=pg_catalog, pg_temp']) from pg_proc where oid in ('public.crm_start_enrollment(uuid,jsonb)'::regprocedure,'public.crm_enroll_and_collect(uuid,jsonb)'::regprocedure)),'security definer and search path unchanged');
  perform pg_temp.ok(not exists(select 1 from cron.job where jobname='crm-lifecycle-primary' and active),'lifecycle cron inactive');
- perform pg_temp.ok(pg_temp.untouched()=(select v from a2_baseline),'no finance, lifecycle intent or external delivery rows from initiation');
+ -- EAP (127): initiation now collects a payment (charges, receipts, financial events by design).
+ perform pg_temp.ok((select jsonb_build_array(u->3,u->4,u->5) from pg_temp.untouched() u)=(select jsonb_build_array(v->3,v->4,v->5) from a2_baseline),'no lifecycle intent or external delivery rows from initiation');
+ perform pg_temp.ok((pg_temp.untouched()->>1)::int>((select v from a2_baseline)->>1)::int,'receipts issued by enroll-and-collect');
 end $$;
 
 -- Closed vocabulary: every server reason except the cross-session intent lock was produced.
@@ -342,10 +423,12 @@ do $$ declare missing text; begin
   'program_invalid','school_year_invalid','notes_too_long','initial_status_not_permitted','learner_already_linked','learner_link_mismatch','linked_learner_unavailable',
   'learner_unavailable','learner_choice_required','learner_name_invalid','birth_date_future','birth_date_invalid','candidates_changed','new_learner_confirmation_required',
   'enrollment_incompatible','enrollment_already_linked','enrollment_group_incompatible','enrollment_changed','existing_enrollment_needs_review',
-  'existing_enrollment_requires_selection','existing_enrollment_linked_elsewhere','group_incompatible','level_invalid','trial_requires_group','followup_invalid',
-  'followup_in_past','owner_not_operational','followup_policy_unavailable','concurrent_change','record_rejected']) r where r not in(select reason from a2_seen where reason is not null);
+  'existing_enrollment_requires_selection','existing_enrollment_linked_elsewhere','level_invalid','followup_invalid',
+  'followup_in_past','owner_not_operational','followup_policy_unavailable','concurrent_change','record_rejected',
+  -- EAP (127): the wrapper's own reasons (trial_requires_group is removed; group_incompatible is unreachable).
+  'eap.payment_required','eap.program_not_enrollable']) r where r not in(select reason from a2_seen where reason is not null);
  perform pg_temp.ok(missing is null,'reasons not produced: '||coalesce(missing,''));
- perform pg_temp.ok((select bool_and(reason~'^[a-z_]+$') from a2_seen where reason is not null),'hints are plain tokens');
+ perform pg_temp.ok((select bool_and(reason~'^[a-z_]+$' or reason~'^eap\.[a-z_]+$') from a2_seen where reason is not null),'hints are plain tokens');
 end $$;
-select 'PASS RCC-A2 SQL acceptance: every reason with unchanged SQLSTATE/message and exact hint; authority, grants and dormancy unchanged';
+select 'PASS RCC-A2 SQL acceptance: every reason with unchanged SQLSTATE/message and exact hint; enroll-and-collect wrapper, authority, grants and dormancy';
 rollback;

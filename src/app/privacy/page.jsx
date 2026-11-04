@@ -30,8 +30,8 @@ export default function PrivacyPolicy() {
           <h2 className="text-lg font-semibold text-gray-900 mt-0">1. Responsable du traitement</h2>
           <p>
             English Hills Language Center, sis à Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca, Maroc,
-            est responsable du traitement de vos données personnelles collectées via le formulaire
-            de pré-inscription et les services associés.
+            est responsable du traitement de vos données personnelles collectées lors de votre inscription
+            au centre et via les services associés.
           </p>
 
           <h2 className="text-lg font-semibold text-gray-900">2. Données collectées</h2>
@@ -39,13 +39,12 @@ export default function PrivacyPolicy() {
             <li>Identité : nom complet, date de naissance, catégorie d&apos;âge</li>
             <li>Coordonnées : téléphone, email apprenant, email parent/tuteur</li>
             <li>Informations pédagogiques : niveau CEFR estimé, message de contact</li>
-            <li>Preuve de consentement à la pré-inscription : date, origine du formulaire et version de cette notice</li>
-            <li>Les pièces jointes ne sont pas acceptées dans le formulaire public de pré-inscription.</li>
+            <li>Pour les demandes reçues par l&apos;ancien formulaire d&apos;inscription en ligne, aujourd&apos;hui fermé : preuve de consentement (date, origine du formulaire et version de cette notice)</li>
           </ul>
 
           <h2 className="text-lg font-semibold text-gray-900">3. Finalités du traitement</h2>
           <ul>
-            <li>Traitement de votre demande de pré-inscription et contact de suivi</li>
+            <li>Traitement de votre demande d&apos;inscription et contact de suivi</li>
             <li>Gestion administrative, pédagogique et financière de votre dossier</li>
             <li>Communication relative aux cours, évaluations et événements</li>
             <li>Obligations légales et comptables</li>
@@ -53,7 +52,8 @@ export default function PrivacyPolicy() {
 
           <h2 className="text-lg font-semibold text-gray-900">4. Base légale</h2>
           <p>
-            Le formulaire de pré-inscription demande votre accord avant l&apos;envoi. Les autres traitements
+            Les inscriptions en ligne sont fermées&nbsp;; l&apos;ancien formulaire en ligne demandait votre accord
+            avant l&apos;envoi. Les autres traitements
             administratifs, pédagogiques et financiers nécessitent une analyse des bases applicables par le centre.
           </p>
 

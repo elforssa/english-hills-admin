@@ -372,6 +372,7 @@ Plan: [enrollment at payment](../architecture/plans/enrollment-at-payment.md), r
 
   Approved: EAP-r4 at exact head `6d515611d6ca565725373d99fff6bdfc37977af7`, Q1 A, Q2 A, Q3 B, Q4–Q13 A. The two reviewer wording nits of instruction 2 are carried into the implementation record.
 - **Not approved by this record:** implementation, the R0 Production count query, the migration, the archive step (the owner accepts the day's G2 permanent conversions and G7 review flags at that approval), the merge, the deployment and the website PR; each needs its own approval. The owner merges PR #181 separately.
+- **Implementation status (2026-11-04):** implemented on branch `feat/enrollment-at-payment` with migration `127_enrollment_at_payment.sql`, applying Q1 A, Q2 A, Q3 B and Q4–Q13 A ([implementation record](../architecture/plans/enrollment-at-payment.md#implementation-record-eap-r4-2026-11-04)); PR pending, not merged, not deployed, 127 not applied on Production. The read-only R0 count ran once on Production on 2026-11-04 at 04:39 UTC (counts in the implementation record). The archive step and its revert are prepared, not run. No new owner decision.
 
 ## Deferred backlog after RCC-r1
 

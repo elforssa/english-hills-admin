@@ -226,10 +226,10 @@ try {
       else await r.arrayBuffer();
       checks++;
     }
-    {
-      // Premium retirement Release A: the retired workshop route has no page and no allowlist entry.
-      // Teachers and receptionists (who could reach it before) are sent home; admin/director get not-found.
-      const retired = '/premium-sessions';
+    // Retired routes with no page and no allowlist entry: Premium retirement Release A (the
+    // workshop route) and Enrollment at payment D6 (the pre-enrollment page). Teachers and
+    // receptionists are sent home; admin/director get not-found.
+    for (const retired of ['/premium-sessions', '/enrollments']) {
       const r = await fetch(app + retired, { headers: { Cookie }, redirect: 'manual' });
       const target = expected(role, retired);
       if (role === 'teacher') assert.equal(target, '/teacher-portal');
@@ -237,6 +237,19 @@ try {
       assert.equal(r.status, target ? 307 : 404, role + ' ' + retired);
       if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target, role + ' ' + retired);
       await r.arrayBuffer(); checks++;
+    }
+    {
+      // Enrollment at payment D4: /inscription stays public for every role (static contact page,
+      // no form) and the retired registration route answers 410 before any parsing.
+      const r = await fetch(app + '/inscription', { headers: { Cookie }, redirect: 'manual' });
+      assert.equal(r.status, 200, role + ' /inscription');
+      const html = await r.text();
+      assert.match(html, /Inscriptions au centre/); assert.doesNotMatch(html, /<form|challenges\.cloudflare\.com/);
+      const closed = await fetch(app + '/api/public/inscription', { method: 'POST', redirect: 'manual',
+        headers: { Cookie, 'Content-Type': 'application/json' }, body: '{' });
+      assert.equal(closed.status, 410, role + ' /api/public/inscription');
+      assert.deepEqual(await closed.json(), { error: 'Les inscriptions en ligne sont fermées. Contactez le centre.' });
+      checks += 2;
     }
     for (const path of ['/dashboard', '/groups/00000000-0000-4000-8000-000000000001']) {
       for (const extras of [{ RSC: '1' }, { RSC: '1', 'Next-Router-Prefetch': '1', purpose: 'prefetch' }]) {

@@ -9,7 +9,8 @@ import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } fro
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
 import { clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
-import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH, PENDING_CONFIRMATION_MESSAGE, addDays, deskGuardError, paymentBackdateDays, receptionConfirmationPending } from '@/lib/financeCorrections.mjs';
+import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH, addDays, deskGuardError, isFreeEnrollment, isPayableEnrollmentCandidate, paymentBackdateDays } from '@/lib/financeCorrections.mjs';
+import { groupSeatsLabel, loadGroupChoices } from '@/lib/receiptGroupChoices.mjs';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
@@ -50,6 +51,9 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const [previousAttempt, setPreviousAttempt] = useState(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  // D3 (EAP): the optional group, placed by the page right after the payment.
+  const [groupId, setGroupId] = useState('');
+  const [groupChoices, setGroupChoices] = useState({ state: 'idle', rows: [], error: '' });
   // A ref, not state: a second click in the same render must see the first one at once.
   const submitting = useRef(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -146,6 +150,18 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     return () => { active = false; };
   }, [form.student_id]);
 
+  const groupSession = form.session_type && form.session_type !== 'Other' ? form.session_type : '';
+  useEffect(() => {
+    setGroupId('');
+    if (!groupSession || !form.level || !form.school_year) { setGroupChoices({ state: 'idle', rows: [], error: '' }); return undefined; }
+    let active = true;
+    setGroupChoices({ state: 'loading', rows: [], error: '' });
+    loadGroupChoices(getBrowserClient(), { sessionType: groupSession, level: form.level, schoolYear: form.school_year })
+      .then((rows) => { if (active) setGroupChoices({ state: 'ready', rows, error: '' }); })
+      .catch((error) => { if (active) setGroupChoices({ state: 'error', rows: [], error: error?.message || 'Groupes indisponibles.' }); });
+    return () => { active = false; };
+  }, [groupSession, form.level, form.school_year, form.student_id]);
+
   useEffect(() => {
     if (mode !== 'new') return undefined;
     const name = form.student_name.trim();
@@ -208,10 +224,12 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   };
 
   const selectedCharge = charges.find((item) => item.id === form.charge_id);
-  const enrollmentChoices = enrollments.filter((row) => row.status !== 'Rejected'
+  // EAP: a retired or ended row is history, never selected for a new payment (unless CRM-linked).
+  const enrollmentChoices = enrollments.filter((row) => isPayableEnrollmentCandidate(row)
     && (!row.session_type || row.session_type === form.session_type)
     && (!row.school_year || !form.school_year || row.school_year === form.school_year));
-  const hasCrmEnrollment = enrollmentChoices.some(row => row.crm_linked);
+  // The server's CRM check counts a linked row unless it is Rejected or Ended.
+  const hasCrmEnrollment = enrollmentChoices.some(row => row.crm_linked && !['Rejected', 'Ended'].includes(row.status));
   const gross = Number(form.gross_amount || 0);
   const discount = Number(form.discount_amount || 0);
   const net = selectedCharge ? Number(selectedCharge.net_amount) : Math.max(0, gross - discount);
@@ -225,9 +243,14 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const today = localBusinessDate();
   const needsDiscountReason = !lockedCharge && discount > 0;
   const targetEnrollmentId = selectedCharge?.enrollment_id || (form.enrollment_id !== 'new' ? form.enrollment_id : '');
-  const targetEnrollmentStatus = targetEnrollmentId ? (enrollments.find((row) => row.id === targetEnrollmentId)?.status || 'unknown') : null;
-  const confirmationPending = receptionConfirmationPending({ role, sessionType: form.session_type, net, paidBefore, payment: todayPayment,
-    enrollmentStatus: targetEnrollmentStatus });
+  const targetEnrollment = targetEnrollmentId ? enrollments.find((row) => row.id === targetEnrollmentId) : null;
+  // EAP (D2): any payment confirms; a new tuition charge at 100 % with its reason too (Q1).
+  const freeEnrollment = isFreeEnrollment({ newCharge: !lockedCharge, sessionType: form.session_type, gross, discount,
+    reasonCode: form.discount_reason_code, payment: todayPayment });
+  const confirmsEnrollment = todayPayment > 0 || freeEnrollment;
+  // D3: a group is offered for a tuition session once programme, level and year are known,
+  // unless the enrollment being paid is already in a group.
+  const groupOffered = Boolean(groupSession && form.level && form.school_year) && !targetEnrollment?.group_id;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -242,12 +265,12 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       reasonText: form.discount_reason, payment: todayPayment, paymentDate: form.payment_date, today });
     if (guard) return toast.error(guard);
     if (todayPayment > net - paidBefore) return toast.error(`Le paiement dépasse le solde de ${money(net - paidBefore)} MAD.`);
-    if (todayPayment > 0 && form.student_id && form.session_type !== 'Other' && !selectedCharge?.enrollment_id
+    if (confirmsEnrollment && form.student_id && form.session_type !== 'Other' && !selectedCharge?.enrollment_id
       && (enrollmentsLoading || enrollmentsError)) return toast.error('Vérifiez les inscriptions existantes avant d’encaisser ce paiement.');
-    if (todayPayment > 0 && form.student_id && form.session_type !== 'Other'
+    if (confirmsEnrollment && form.student_id && form.session_type !== 'Other'
       && !selectedCharge?.enrollment_id && enrollmentChoices.length > 0 && !form.enrollment_id)
       return toast.error('Choisissez une inscription existante ou créez-en une distincte.');
-    if (todayPayment > 0 && !selectedCharge?.enrollment_id && hasCrmEnrollment && (!form.enrollment_id || form.enrollment_id === 'new'))
+    if (confirmsEnrollment && !selectedCharge?.enrollment_id && hasCrmEnrollment && (!form.enrollment_id || form.enrollment_id === 'new'))
       return toast.error('Sélectionnez l’inscription CRM existante avant d’enregistrer le paiement.');
     if (form.enrollment_id && form.enrollment_id !== 'new' && !selectedCharge?.enrollment_id
       && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
@@ -266,7 +289,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
       discount_reason_code: needsDiscountReason ? form.discount_reason_code : '',
       discount_reason: needsDiscountReason && form.discount_reason_code === 'other' ? form.discount_reason.trim() : '',
-      service_description: servicePreview, idempotency_key: idempotencyKey.current() });
+      service_description: servicePreview, idempotency_key: idempotencyKey.current() },
+    { groupId: confirmsEnrollment && groupOffered ? groupId : '' });
   };
 
   const input = 'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground';
@@ -311,7 +335,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {form.student_id && form.session_type && form.session_type !== 'Other' && !selectedCharge?.enrollment_id && <div className="mt-4">
         {enrollmentsLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des inscriptions…</SearchMessage>}
         {enrollmentsError && <SearchMessage icon={AlertCircle} tone="error">Inscriptions indisponibles : {enrollmentsError}</SearchMessage>}
-        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.crm_linked ? 'Inscription CRM · ' : ''}{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new" disabled={hasCrmEnrollment}>Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">{hasCrmEnrollment && <>Une inscription CRM existe pour ce programme et cette année : sélectionnez-la. Pour une inscription réellement distincte, créez-la d’abord dans la fiche apprenant. </>}Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
+        {!enrollmentsLoading && !enrollmentsError && <Field label="Inscription à rattacher"><select className={input} value={form.enrollment_id} onChange={(e) => set('enrollment_id', e.target.value)}><option value="">{enrollmentChoices.length ? 'Choisir une inscription ou créer une autre…' : 'Créer une inscription pour cette session au paiement'}</option>{enrollmentChoices.map((row) => <option key={row.id} value={row.id}>{row.crm_linked ? 'Inscription CRM · ' : ''}{row.status} · {row.session_type || 'session non renseignée'} · {row.school_year || 'année non renseignée'} · {row.date_inscription || row.id.slice(0, 8)}</option>)}{enrollmentChoices.length > 0 && <option value="new" disabled={hasCrmEnrollment}>Créer une inscription distincte</option>}</select><p className="mt-1 text-xs text-muted-foreground">{hasCrmEnrollment && <>Une inscription CRM existe pour ce programme et cette année : sélectionnez-la. </>}Pour un acompte sur une session déjà inscrite, sélectionnez son inscription. Les dossiers historiques sans session ou année ne sont jamais associés automatiquement.</p></Field>}
       </div>}
       {!lockedCharge && <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field label="Session *"><select required className={input} value={form.session_type} onChange={(e) => setForm((c) => ({ ...c, enrollment_id: '', session_type: e.target.value, level: '', service_detail: '' }))}><option value="">Choisir…</option>{SESSION_TYPES.map((session) => <option key={session}>{session}</option>)}</select></Field>
@@ -320,6 +344,11 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
         <Field label="Niveau (facultatif)"><select className={input} value={form.level} onChange={(e) => set('level', e.target.value)}><option value="">Non renseigné</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></Field>
         {servicePreview && <div className="sm:col-span-2 rounded-xl border border-dashed bg-slate-50 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Libellé généré</p><p className="mt-1 text-sm font-bold text-slate-800">{servicePreview}</p></div>}
       </div>}
+      {groupOffered && <div className="mt-4">
+        {groupChoices.state === 'loading' && <SearchMessage icon={LoaderCircle} spin>Chargement des groupes…</SearchMessage>}
+        {groupChoices.state === 'error' && <SearchMessage icon={AlertCircle} tone="error">Groupes indisponibles : {groupChoices.error}</SearchMessage>}
+        {groupChoices.state === 'ready' && <Field label="Groupe (facultatif)"><select className={input} value={groupId} disabled={!confirmsEnrollment || !groupChoices.rows.length} onChange={(e) => setGroupId(e.target.value)}><option value="">{groupChoices.rows.length ? 'Sans groupe — groupe à affecter' : 'Aucun groupe pour ce programme, ce niveau et cette année'}</option>{groupChoices.rows.map((group) => <option key={group.id} value={group.id} disabled={group.free === 0}>{group.name}{group.horaire ? ` · ${group.horaire}` : ''}{group.jours ? ` (${group.jours})` : ''} · {groupSeatsLabel(group.free)}</option>)}</select><p className="mt-1 text-xs text-muted-foreground">{confirmsEnrollment ? 'Le groupe est affecté juste après l’encaissement. S’il est refusé (complet, année, inscription modifiée), le paiement reste enregistré et l’apprenant reste « groupe à affecter ».' : 'Le groupe s’affecte avec un paiement (ou une remise de 100 %).'}</p></Field>}
+      </div>}
     </Step>
 
     <Step number="3" title="Paiement" subtitle="Montant, date et mode d’encaissement">
@@ -327,12 +356,12 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
         {!lockedCharge && <><Field label="Prix brut convenu *"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} placeholder="0" /></Field><Field label="Échéance (facultative)"><input type="date" className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field>{needsDiscountReason && <><Field label="Motif de la remise *"><select required className={input} value={form.discount_reason_code} onChange={(e) => set('discount_reason_code', e.target.value)}><option value="">Choisir…</option>{DISCOUNT_REASONS.map((reason) => <option key={reason.code} value={reason.code}>{reason.label}</option>)}</select></Field>{form.discount_reason_code === 'other' && <div className="sm:col-span-2"><Field label="Précisez le motif *"><input required minLength={3} maxLength={DISCOUNT_REASON_MAX_LENGTH} className={input} value={form.discount_reason} onChange={(e) => set('discount_reason', e.target.value)} /></Field></div>}</>}</>}
         <Field label="Montant payé aujourd’hui *"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement *"><input required type="date" min={addDays(today, -paymentBackdateDays(role))} max={today} className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /><p className="mt-1 text-[11px] font-medium text-muted-foreground">Jamais dans le futur ; au plus {paymentBackdateDays(role)} jours en arrière.</p></Field><Field label="Mode de paiement *"><select required className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select><p className="mt-1 text-[11px] font-medium text-muted-foreground">Espèces est sélectionné par défaut.</p></Field><Field label="Référence (facultative)"><input maxLength={120} className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note interne (non imprimée)"><textarea maxLength={500} rows={2} className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
       </div>
-      {confirmationPending && <p role="note" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">{PENDING_CONFIRMATION_MESSAGE}</p>}
       <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4"><Amount label="Prix net" value={net} /><Amount label="Déjà payé" value={paidBefore} /><Amount label="Payé aujourd’hui" value={todayPayment} accent /><Amount label="Solde restant" value={balanceAfter} warning={balanceAfter > 0} /></div>
-      {todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
+      {todayPayment === 0 && freeEnrollment ? <p role="note" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Remise de 100 % : aucun reçu ne sera émis ; l’inscription sera confirmée sans paiement (visible dans Contrôles).</p>
+        : todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
     </Step>
 
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving || checkingDuplicate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : 'Enregistrer l’engagement'}</button></div>
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving || checkingDuplicate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : freeEnrollment ? 'Enregistrer et confirmer l’inscription' : 'Enregistrer l’engagement'}</button></div>
   </form>;
 }
 

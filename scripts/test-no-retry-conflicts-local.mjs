@@ -88,7 +88,8 @@ insert into fx select 'teacher', id::text from teachers where email='nrc-teacher
 insert into groups(id,name,session_type,niveau) values(gen_random_uuid(),'NRC Yearly','Yearly','Child 1'),(gen_random_uuid(),'NRC Online','Online','B1');
 insert into fx select 'group', id::text from groups where name='NRC Yearly';
 insert into fx select 'online_group', id::text from groups where name='NRC Online';
-insert into enrollments(id,student_id,status,session_type,school_year) values(gen_random_uuid(),(select v::uuid from fx where k='student'),'Submitted','Yearly','2026/2027');
+-- EAP (127): Submitted is retired; the stale-document fixture is a paid-path (Confirmed) row.
+insert into enrollments(id,student_id,status,session_type,school_year) values(gen_random_uuid(),(select v::uuid from fx where k='student'),'Confirmed','Yearly','2026/2027');
 insert into fx select 'enrollment', id::text from enrollments where student_id=(select v::uuid from fx where k='student');
 set request.jwt.claim.role='authenticated'; set request.jwt.claim.sub=${q(director.id)};
 select online_save_course((select v::uuid from fx where k='online_group'),null,jsonb_build_object('teacher_id',(select id from teachers where email='nrc-online@example.invalid'),
@@ -125,7 +126,9 @@ const CASES = [
   ['crm_record_conversation_decision', director, 'crm_record_conversation_decision', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, expected_task_version: 1, decision: 'callback', note: 'NRC', next_task: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
   ['crm_book_placement_test', director, 'crm_book_placement_test', { p_request_key: randomUUID(), p_data: { lead_id: qualified, expected_version: 999, date_test: day(2), heure: '10:30', examinateur: 'NRC', notes: 'NRC' } }, 'Stale lead version; refresh and retry'],
   ['crm_update_placement_test', director, 'crm_update_placement_test', { p_request_key: randomUUID(), p_data: { placement_id: id('placement'), expected_updated_at: old, notes: 'NRC' } }, 'Stale placement version; refresh and retry'],
-  ['crm_start_enrollment', director, 'crm_start_enrollment', { p_request_key: randomUUID(), p_data: { lead_id: qualified, expected_version: 999, student_choice: 'new', learner_name: 'NRC qualified learner', birth_date: '2015-03-04', session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', candidate_review: id('candidate'), confirm_new: true } }, 'Stale lead version; refresh and retry', 'crm_enrollment.lead_changed'],
+  // EAP (127): crm_start_enrollment is no longer callable by API roles; its stale-lead conflict
+  // is reached through crm_enroll_and_collect (enrollment and payment in one transaction).
+  ['crm_enroll_and_collect', director, 'crm_enroll_and_collect', { p_request_key: randomUUID(), p_data: { enrollment: { lead_id: qualified, expected_version: 999, student_choice: 'new', learner_name: 'NRC qualified learner', birth_date: '2015-03-04', session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', candidate_review: id('candidate'), confirm_new: true }, payment: { gross_amount: 3000, payment_amount: 300, payment_method: 'Espèces', payment_date: day(0) } } }, 'Stale lead version; refresh and retry', 'crm_enrollment.lead_changed'],
   ['crm_resolve_meta_intake', director, 'crm_resolve_meta_intake', { p_request: randomUUID(), p_submission: randomUUID(), p_action: 'reject', p_data: {} }, 'Intake already resolved or configuration blocked'],
   ['crm_resolve_external_intake via crm_resolve_meta_intake', director, 'crm_resolve_external_intake', { p_request: randomUUID(), p_submission: randomUUID(), p_action: 'reject', p_data: {} }, 'Intake already resolved or configuration blocked'],
   // Director configuration (stale connection or policy versions) and busy Insights runs.

@@ -36,6 +36,9 @@ insert into public.groups(id,name,session_type,niveau) values
  ('96000000-0000-0000-0000-000000000032','Submitted group','Yearly','Child 1'),
  ('96000000-0000-0000-0000-000000000033','Review group','Yearly','Child 1'),
  ('96000000-0000-0000-0000-000000000035','Rejected group','Yearly','Child 1');
+-- EAP (127): the pre-confirmation and rejected rows are history (old rows), seeded
+-- under the two-flag exemption; no command creates them any more.
+select set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
 insert into public.enrollments(id,student_id,group_id,status,session_type,level,school_year) values
  ('96000000-0000-0000-0000-000000000042','96000000-0000-0000-0000-000000000022',
   '96000000-0000-0000-0000-000000000032','Submitted','Yearly','Child 1','2026/2027'),
@@ -45,6 +48,7 @@ insert into public.enrollments(id,student_id,group_id,status,session_type,level,
   null,'Confirmed','Yearly',null,'2026/2027'),
  ('96000000-0000-0000-0000-000000000045','96000000-0000-0000-0000-000000000028',
   '96000000-0000-0000-0000-000000000035','Rejected','Yearly','Child 1','2026/2027');
+select set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
 insert into public.assessments(id,student_id,group_id,commentaire) values
  ('96000000-0000-0000-0000-000000000060','96000000-0000-0000-0000-000000000020',
   '96000000-0000-0000-0000-000000000030','Read only assessment');
@@ -55,6 +59,26 @@ insert into public.authorized_adults(id,student_id,full_name,telephone,relation)
 create function pg_temp.denied(statement text) returns void language plpgsql as $$ begin
  begin execute statement; exception when insufficient_privilege then return; end;
  raise exception 'Expected permission denial: %',statement;
+end $$;
+-- EAP (127): a retired pre-enrollment command refuses with 42501 and its own hint.
+create function pg_temp.retired(statement text) returns void language plpgsql as $$
+declare v_hint text; begin
+ begin execute statement; exception when insufficient_privilege then
+   get stacked diagnostics v_hint=pg_exception_hint;
+   if v_hint='eap.status_retired' then return; end if;
+   raise exception 'Expected eap.status_retired, got %: %',v_hint,statement;
+ end;
+ raise exception 'Expected retired-status refusal: %',statement;
+end $$;
+-- EAP (127): a reception placement without a paid enrollment is refused.
+create function pg_temp.unpaid(statement text) returns void language plpgsql as $$
+declare v_hint text; begin
+ begin execute statement; exception when check_violation then
+   get stacked diagnostics v_hint=pg_exception_hint;
+   if v_hint='eap.paid_enrollment_required' then return; end if;
+   raise exception 'Expected eap.paid_enrollment_required, got %: %',v_hint,statement;
+ end;
+ raise exception 'Expected paid-enrollment refusal: %',statement;
 end $$;
 create function pg_temp.invalid(statement text) returns void language plpgsql as $$ begin
  begin execute statement; exception when check_violation or invalid_parameter_value or sqlstate 'PT409' then return; end;
@@ -212,26 +236,30 @@ do $$ declare v_group uuid; v_enrollment uuid; before_group jsonb; before_enroll
    'Adults','2026/2027')$q$);
  if exists(select 1 from public.enrollments where student_id='96000000-0000-0000-0000-000000000025') then
    raise exception 'Rejected explicit level persisted'; end if;
- -- Choosing another session without a level clears incompatible dossier
- -- inheritance, as the enrollment form's empty-level option promises.
- v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000025',
-   null,null,'Submitted',null,current_date,null,'Adults','2026/2027');
- if not exists(select 1 from public.enrollments where id=v_new and session_type='Adults'
-   and level is null) or exists(select 1 from public.enrollments where id=v_new
-     and level='Child 1') then raise exception 'Incompatible inherited level was copied'; end if;
- v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000025',
-   null,null,'Submitted',null,current_date,null,'Yearly','2026/2027');
- if not exists(select 1 from public.enrollments where id=v_new and session_type='Yearly'
-   and level='Child 1') then raise exception 'Compatible Yearly inheritance failed'; end if;
- v_new:=public.save_receptionist_enrollment('96000000-0000-0000-0000-000000000026',
-   null,null,'Submitted',null,current_date,null,'Adults','2026/2027');
- if not exists(select 1 from public.enrollments where id=v_new and session_type='Adults'
-   and level='Beginning 1') then raise exception 'Compatible Adults inheritance failed'; end if;
+ -- EAP (127): reception no longer creates a pre-enrollment (Submitted or Trial),
+ -- whatever the level inheritance; an enrollment is born at the payment.
+ perform pg_temp.retired($q$select public.save_receptionist_enrollment(
+   '96000000-0000-0000-0000-000000000025',null,null,'Submitted',null,current_date,null,'Adults','2026/2027')$q$);
+ perform pg_temp.retired($q$select public.save_receptionist_enrollment(
+   '96000000-0000-0000-0000-000000000025',null,null,'Submitted',null,current_date,null,'Yearly','2026/2027')$q$);
+ perform pg_temp.retired($q$select public.save_receptionist_enrollment(
+   '96000000-0000-0000-0000-000000000026',null,null,'Trial',null,current_date,null,'Adults','2026/2027')$q$);
+ if exists(select 1 from public.enrollments where student_id in ('96000000-0000-0000-0000-000000000025',
+   '96000000-0000-0000-0000-000000000026')) then raise exception 'Retired pre-enrollment persisted'; end if;
 
  -- EGC (DAT-2, I4): a placement always goes through an enrollment and the chosen
  -- group defines its level, never the dossier. A dossier without level placed in a
  -- Child 1 group gets a Validated Child 1 enrollment; a paid enrollment without
  -- level takes the group's level; neither touches another enrollment.
+ -- EAP (127): reception places only a paid enrollment, so the dossier is paid first
+ -- (no level on the charge) and the placement takes the group's level.
+ select updated_at into v_student_version from public.students
+   where id='96000000-0000-0000-0000-000000000024';
+ perform pg_temp.unpaid(format('select public.assign_receptionist_student_group(%L,null,%L,%L,null)',
+   '96000000-0000-0000-0000-000000000024','96000000-0000-0000-0000-000000000030',v_student_version));
+ perform public.create_charge_payment(jsonb_build_object('idempotency_key',gen_random_uuid(),
+   'student_id','96000000-0000-0000-0000-000000000024','session_type','Yearly','school_year','2026/2027',
+   'gross_amount',100,'discount_amount',0,'payment_amount',50,'payment_method','Espèces'));
  select updated_at into v_student_version from public.students
    where id='96000000-0000-0000-0000-000000000024';
  perform public.assign_receptionist_student_group('96000000-0000-0000-0000-000000000024',null,
@@ -280,11 +308,19 @@ do $$ declare v_student uuid:='96000000-0000-0000-0000-000000000021';
  select updated_at into v_group_version from public.groups where id=v_new_group;
  perform public.save_receptionist_group(v_new_group,v_group_version,'{"salle":"Room 1"}');
  select updated_at into v_version from public.students where id=v_student;
+ -- EAP (127): the placement follows the payment (refused before it); the payment's
+ -- Confirmed enrollment is validated by the placement and the file group follows it.
+ perform pg_temp.unpaid(format('select public.assign_receptionist_student_group(%L,null,%L,%L,null)',
+   v_student,v_new_group,v_version));
+ perform public.create_charge_payment(jsonb_build_object('idempotency_key',gen_random_uuid(),
+   'student_id',v_student,'session_type','Yearly','school_year','2026/2027','level','Child 1',
+   'gross_amount',100,'discount_amount',0,'payment_amount',50,'payment_method','Espèces'));
+ select updated_at into v_version from public.students where id=v_student;
  perform public.assign_receptionist_student_group(v_student,null,v_new_group,v_version,null);
- -- DAT-2: the placement created a Validated enrollment; the file group follows it.
  if not exists(select 1 from public.students where id=v_student and groupe_id=v_new_group and status='Enrolled')
+   or (select count(*) from public.enrollments where student_id=v_student) <> 1
    or not exists(select 1 from public.enrollments where student_id=v_student and group_id=v_new_group and status='Validated') then
-   raise exception 'Group assignment without enrollment failed'; end if;
+   raise exception 'Group assignment after payment failed'; end if;
  select updated_at into v_version from public.students where id='96000000-0000-0000-0000-000000000020';
  select updated_at into v_enrollment_version from public.enrollments where id='96000000-0000-0000-0000-000000000040';
  perform public.assign_receptionist_student_group('96000000-0000-0000-0000-000000000020',

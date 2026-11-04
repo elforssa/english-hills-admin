@@ -21,7 +21,9 @@ const students = read('src/app/(admin)/students/page.jsx');
 assert.match(students, /<ProgrammePill sessionType=\{s\.session_type\}\s+href=\{canEditProgramme \? studentHref\(s\.id\) : undefined\}\s+title=\{canEditProgramme \? 'Le programme suit le groupe : modifiez l’inscription' : undefined\} \/>/);
 assert.match(students, /base=\{PILL_SELECT_CLASS\}/, 'the editable select is a pill');
 assert.doesNotMatch(students, /max-w-28 break-words/, 'the status pill no longer wraps');
-for (const page of ['students/[id]', 'enrollments', 'groups', 'groups/[id]']) {
+// EAP: the pre-registration page is retired (its « Clôturer l’année » lives on the Students list).
+assert.equal(existsSync('src/app/(admin)/enrollments/page.jsx'), false, 'the retired page is gone');
+for (const page of ['students/[id]', 'groups', 'groups/[id]']) {
   assert.match(read(`src/app/(admin)/${page}/page.jsx`), /<ProgrammePill /, page);
 }
 
@@ -42,6 +44,16 @@ for (const status of ['Enrolled', 'Trial']) {
 }
 assert.equal(fileAwaitsGroup(file('Enrolled', 'g')), false, 'a placed file awaits nothing');
 assert.equal((students.match(/fileAwaitsGroup\(student\)/g) || []).length, 2, 'both Groupe column branches');
+// EAP (Q3 = B): an active file without a paid enrollment is enrolled at the payment, never placed from the list.
+assert.match(students, /fileAwaitsGroup\(student\)\s+\? <Link data-touch-target href=\{`\/receipts\/new\?student_id=\$\{student\.id\}`\}/);
+assert.doesNotMatch(students, /DossierGroupPlacement|p_enrollment: null/, 'no placement without an enrollment from the list');
+// Q7 = A: « Clôturer l’année » (director) beside « Dossiers archivés », counting what close_school_year counts.
+assert.match(students, /\{role === 'director' && <button onClick=\{\(\) => setYearClose\(true\)\}/);
+assert.match(students, /closeSchoolYear\(getBrowserClient\(\), \{ schoolYear: year, expectedCount: count, reason: reason\.trim\(\) \}\)/);
+assert.match(students, /\.eq\('school_year', year\)\.not\('status', 'in', '\(Ended,Rejected\)'\)/);
+// The status filter offers Inscrit, Prospect, Ancien apprenant, Inactif; « Essai (dossier) » stays readable only.
+assert.match(students, /DOSSIER_FILTER_STATUSES\.map/);
+assert.doesNotMatch(students, /'Enrolled','Trial'/);
 
 // H5: a group's year as an enrollment year; refusals in French.
 assert.equal(schoolYearOfGroup({ annee: '2026-2027' }), '2026/2027');
@@ -67,7 +79,11 @@ const groups = read('src/app/(admin)/groups/page.jsx');
 assert.match(groups, /id="group-school-year" required/, 'the group form shows the year, required');
 assert.match(groups, /annee: groupYear\(form\.school_year\.trim\(\)\) \|\| null/);
 const enrollmentModal = read('src/components/students/EnrollmentModal.jsx');
-assert.match(enrollmentModal, /school_year: schoolYearOfGroup\(group\)/);
+// EAP: the dialog edits an existing enrollment only: no status select, no creation.
+assert.doesNotMatch(enrollmentModal, /enrollment-status|createEnrollment|Nouvelle pré-inscription|'Submitted'/);
+assert.match(enrollmentModal, /Motif de l’affectation sans inscription payée \*/);
+assert.match(enrollmentModal, /Motif du dépassement \*/);
+assert.match(enrollmentModal, /withoutEnrollmentReason: needsWithoutEnrollmentReason \? withoutEnrollmentReason\.trim\(\) : null/);
 assert.match(enrollmentModal, /const yearOk = group => !isSchoolYear\(form\.school_year\) \|\| schoolYearOfGroup\(group\) === form\.school_year;/,
   'review N4: the group picker offers the enrollment year only');
 assert.match(groups, /if \(!isSchoolYear\(form\.school_year\.trim\(\)\)\)/, 'review N3: the group form checks consecutive years');
@@ -75,8 +91,26 @@ assert.match(read('src/app/(admin)/groups/[id]/page.jsx'), /\['Programme', <Prog
 const crmDialog = read('src/components/crm/CrmEnrollmentDialog.jsx');
 assert.match(crmDialog, /year: schoolYearOfGroup\(g\)/);
 assert.match(crmDialog, /value=\{form\.year\} readOnly=\{Boolean\(schoolYearOfGroup\(selectedGroup\)\)\}/, 'review S1: the CRM year follows the chosen group');
-assert.match(read('src/app/(admin)/students/[id]/page.jsx'), /localBusinessDate\(\)/, 'review N1: the student page uses the business date');
-assert.doesNotMatch(read('src/app/(admin)/students/[id]/page.jsx'), /new Date\(\)\.toISOString\(\)\.slice\(0, ?10\)/);
+const learnerFile = read('src/app/(admin)/students/[id]/page.jsx');
+assert.doesNotMatch(learnerFile, /new Date\(\)\.toISOString\(\)\.slice\(0, ?10\)/, 'review N1: no browser-clock date');
+// EAP: « Inscrire et encaisser » on the learner file; the receptionist note.
+assert.match(learnerFile, /href=\{`\/receipts\/new\?student_id=\$\{student\.id\}`\}[^>]*>.*Inscrire et encaisser<\/Link>/);
+assert.ok(learnerFile.includes('La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.'));
+assert.doesNotMatch(learnerFile, /Nouvelle pré-inscription|status: 'Submitted'/);
+// Q3 = B on the group page and the management learner form: a separate reason, never the capacity one.
+const groupPage = read('src/app/(admin)/groups/[id]/page.jsx');
+assert.match(groupPage, /Motif de l’affectation sans inscription payée \*/);
+assert.match(groupPage, /Motif du dépassement \*/);
+assert.match(groupPage, /withoutEnrollmentReason: given\.withoutEnrollmentReason \|\| null/);
+const studentForm = read('src/components/students/StudentForm.jsx');
+assert.match(studentForm, /const canPlaceAtCreation = !isEdit && \(role === 'director' \|\| role === 'admin'\);/);
+assert.match(studentForm, /withoutEnrollmentReason: withoutEnrollmentReason\.trim\(\)/);
+assert.match(read('src/app/(admin)/settings/page.jsx'), /desc: 'Tests de niveau, apprenants, inscriptions et encaissements'/);
+// Dashboard: the paid learners awaiting a group, nothing linking to the retired page.
+const dashboard = read('src/app/(admin)/dashboard/page.jsx');
+assert.match(dashboard, /\.eq\('status', 'Confirmed'\)\.is\('group_id', null\)/);
+assert.match(dashboard, /label: 'Inscrits — groupe à affecter'/);
+assert.doesNotMatch(dashboard, /\/enrollments|Inscriptions en attente|Valider des inscriptions/);
 
 // H1: no cap anywhere on the client.
 assert.doesNotMatch(read('src/lib/financeCorrections.mjs'), /RECEPTION_DISCOUNT_CAP|Remise supérieure/);
@@ -100,4 +134,4 @@ for (const config of ['sentry.server.config.js', 'sentry.edge.config.js', 'sentr
 assert.equal(groupMemberIds([{ id: 's', groupe_id: 'g' }], [], 'g').size, 0);
 assert.deepEqual([...groupMemberIds([{ id: 's' }], [{ student_id: 's', group_id: 'g', status: 'Trial' }], 'g')], ['s']);
 
-console.log('PASS audit follow-ups: pills, Inscrit, Groupe column, group year, no cap, Sentry hook, roster');
+console.log('PASS audit follow-ups: pills, Inscrit, Groupe column, group year, no cap, Sentry hook, roster; EAP learner screens, placement reasons, year close, dashboard');

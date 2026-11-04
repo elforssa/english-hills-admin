@@ -22,7 +22,7 @@ export const TOC = [
   { id: 'q4', label: 'Q4 · Acompte ou solde', sub: true },
   { id: 'q5', label: 'Q5 · Suivre les impayés', sub: true },
   { id: 'q6', label: 'Q6 · Reçus : retrouver, imprimer', sub: true },
-  { id: 'q7', label: 'Q7 · Pré-inscriptions', sub: true },
+  { id: 'q7', label: 'Q7 · Inscrire depuis la fiche', sub: true },
   { id: 'q8', label: 'Q8 · Créer ou modifier un groupe', sub: true },
   { id: 'q9', label: 'Q9 · Affecter un groupe', sub: true },
   { id: 'q10', label: 'Q10 · Changer de groupe, retirer', sub: true },

@@ -79,10 +79,15 @@ create function pg_temp.act(cmd text,l uuid,data jsonb) returns jsonb language p
  execute format('select public.crm_%I($1,$2)',cmd) into result using gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l))||data;return result;end $$;
 create function pg_temp.qualify(l uuid) returns void language plpgsql as $$ begin perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','PRIVATE NOTE',
  'qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));end $$;
+-- EAP (127): from 127 on, crm_start_enrollment creates only Confirmed enrollments (this
+-- postgres-session call names it; the lead converts at creation). Older ceilings, used by
+-- the upgrade rehearsals that include this setup, keep their pre-127 payload.
 create function pg_temp.enroll(l uuid) returns uuid language plpgsql as $$ declare result jsonb;begin
  result:=public.crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),'student_choice','new',
  'learner_name','Private learner','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2',
- 'candidate_review',crm_security.candidate_token(l,'Private learner','2014-05-10'),'confirm_new',true));return (result->'enrollment'->>'id')::uuid;end $$;
+ 'candidate_review',crm_security.candidate_token(l,'Private learner','2014-05-10'),'confirm_new',true)
+ ||case when to_regprocedure('public.crm_enroll_and_collect(uuid,jsonb)') is null then '{}'::jsonb else '{"initial_status":"Confirmed"}'::jsonb end);
+ return (result->'enrollment'->>'id')::uuid;end $$;
 create function pg_temp.payload(d public.crm_external_deliveries) returns jsonb language sql as $$ select jsonb_build_object('data',jsonb_build_array(jsonb_build_object(
  'event_name',d.mapping_snapshot->'events'->>d.event_kind,'event_id',d.provider_event_id,'event_time',floor(extract(epoch from d.event_time))::bigint,
  'action_source','system_generated','user_data',jsonb_build_object('lead_id',(select external_submission_id from public.crm_submission_attribution where submission_id=d.attribution_submission_id)),

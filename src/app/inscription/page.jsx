@@ -1,274 +1,84 @@
-'use client';
-
-import { useEffect, useRef, useState } from 'react';
-import Script from 'next/script';
 import Image from 'next/image';
-import { CheckCircle, ArrowLeft } from 'lucide-react';
-import { PUBLIC_SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
+import Link from 'next/link';
+import { ArrowLeft, Clock, MapPin, MessageCircle, Phone } from 'lucide-react';
 
-const inputClass = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
-const labelClass = "block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1";
+// Online pre-registration is closed (plan Enrollment at payment, D4): an
+// enrollment starts at the centre, with a payment. This public page only gives
+// the centre's contact details, as published on the English Hills website.
+export const metadata = {
+  title: 'Inscriptions au centre — English Hills',
+  description: 'Les inscriptions se font au centre English Hills. Téléphone, WhatsApp, adresse et horaires.',
+};
 
-// Public Turnstile site key — safe in the browser. The matching secret is
-// only used server-side in /api/public/inscription.
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
+const WEBSITE = 'https://english-hills.com';
+const PHONE_LABEL = '+212 6 64 23 90 91';
+const PHONE_HREF = 'tel:+212664239091';
+const WHATSAPP_HREF = `${WEBSITE}/contact-camp`;
+const CONTACT_HREF = `${WEBSITE}/contact`;
+const linkClass = 'font-semibold text-primary underline hover:opacity-80';
 
 export default function PublicEnrollment() {
-  const [form, setForm] = useState({
-    full_name: '', date_naissance: '', telephone: '', email: '',
-    age_category: '', session_type: 'Yearly', niveau_cefr: '', notes: '', consent: false,
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState('');
-  const turnstileContainerRef = useRef(null);
-  const turnstileWidgetId = useRef(null);
-  const submissionId = useRef(null);
-
-  const set = (k, v) => {
-    submissionId.current = null;
-    setForm(f => ({ ...f, [k]: v }));
-  };
-
-  // Render the Turnstile widget once the script + DOM are ready.
-  useEffect(() => {
-    if (!TURNSTILE_SITE_KEY) return;
-    let cancelled = false;
-    const render = () => {
-      if (cancelled || !window.turnstile || !turnstileContainerRef.current) return;
-      if (turnstileWidgetId.current) return;
-      turnstileWidgetId.current = window.turnstile.render(
-        turnstileContainerRef.current,
-        {
-          sitekey: TURNSTILE_SITE_KEY,
-          callback: (token) => setTurnstileToken(token),
-          'error-callback': () => setTurnstileToken(''),
-          'expired-callback': () => setTurnstileToken(''),
-          theme: 'light',
-          language: 'fr',
-        },
-      );
-    };
-    if (window.turnstile) render();
-    else {
-      const interval = setInterval(() => {
-        if (window.turnstile) { clearInterval(interval); render(); }
-      }, 200);
-      return () => { cancelled = true; clearInterval(interval); };
-    }
-    return () => { cancelled = true; };
-  }, []);
-
-  const isYoungLearner = form.age_category === 'Young Learners (6-12)';
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (form._hp) return;
-
-    if (!form.consent) {
-      alert('Veuillez accepter la politique de confidentialité pour soumettre votre demande.');
-      return;
-    }
-    if (TURNSTILE_SITE_KEY && !turnstileToken) {
-      alert('Veuillez compléter la vérification anti-robot.');
-      return;
-    }
-
-    setSubmitting(true);
-    if (!submissionId.current) submissionId.current = crypto.randomUUID();
-    try {
-      const res = await fetch('/api/public/inscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name:      form.full_name,
-          date_naissance: form.date_naissance || undefined,
-          telephone:      form.telephone,
-          // Route the single email field to the correct column based on age category.
-          // Young Learners require a parent/guardian email; all others use the student email.
-          email:          isYoungLearner ? undefined : form.email || undefined,
-          parent_email:   isYoungLearner ? form.email || undefined : undefined,
-          age_category:   form.age_category   || undefined,
-          session_type:   form.session_type   || undefined,
-          niveau_cefr:    form.niveau_cefr    || undefined,
-          notes:          form.notes          || undefined,
-          consent:        form.consent,
-          idempotency_key: submissionId.current,
-          turnstileToken: turnstileToken || undefined,
-        }),
-      });
-      if (res.status === 429) {
-        alert('Trop de soumissions depuis votre connexion. Veuillez réessayer dans une heure.');
-        setSubmitting(false);
-        return;
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Une erreur est survenue. Veuillez réessayer.');
-        // Reset the Turnstile widget so the user can retry.
-        if (window.turnstile && turnstileWidgetId.current) {
-          window.turnstile.reset(turnstileWidgetId.current);
-          setTurnstileToken('');
-        }
-        setSubmitting(false);
-        return;
-      }
-      setDone(true);
-    } catch {
-      alert('Erreur réseau. Vérifiez votre connexion et réessayez.');
-      setSubmitting(false);
-    }
-  };
-
-  if (done) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#f0f4fa' }}>
-      <div className="bg-white rounded-2xl p-10 text-center max-w-md shadow-xl">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-primary/10">
-          <CheckCircle size={32} className="text-primary" />
+  return (
+    <div className="min-h-screen py-10 px-4" style={{ backgroundColor: '#f0f4fa' }}>
+      <div className="max-w-xl mx-auto">
+        <div className="mb-4">
+          <a href={WEBSITE} className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors">
+            <ArrowLeft size={14} /> Retour au site English Hills
+          </a>
         </div>
-        <h2 className="text-2xl font-bold mb-2 text-primary">Demande reçue !</h2>
-        <p className="text-gray-600 text-sm">Votre demande de pré-inscription a été soumise. Notre équipe vous contactera dans les 48h pour confirmer votre inscription.</p>
-        <p className="text-xs text-gray-400 mt-4">English Hills Language Center · Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
+
+        <div className="text-center mb-8">
+          <Image src="/eh-logo.png" alt="English Hills" width={140} height={56} priority className="h-14 w-auto mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-primary">Inscriptions au centre</h1>
+          <p className="text-xs text-gray-400 mt-1 italic">&quot;Learn Today, Lead Tomorrow&quot;</p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-lg p-6 space-y-5 text-sm text-gray-700">
+          <p>
+            Les inscriptions en ligne sont fermées. L’inscription se fait au centre, avec notre équipe d’accueil&nbsp;:
+            appelez-nous, écrivez-nous sur WhatsApp ou passez nous voir.
+          </p>
+
+          <ul className="space-y-4">
+            <li className="flex items-start gap-3">
+              <Phone size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Téléphone</p>
+                <a href={PHONE_HREF} className={linkClass}>{PHONE_LABEL}</a>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <MessageCircle size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">WhatsApp</p>
+                <a href={WHATSAPP_HREF} target="_blank" rel="noopener noreferrer" className={linkClass}>Discuter sur WhatsApp</a>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <MapPin size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Adresse</p>
+                <p>English Hills Language Center<br />Almaz 2, Hills Business Center<br />Bâtiment B, Bureau 6<br />Casablanca, Maroc</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <Clock size={18} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Horaires</p>
+                <p>Lun–Dim&nbsp;: 9h – 20h</p>
+              </div>
+            </li>
+          </ul>
+
+          <p className="border-t border-gray-200 pt-4">
+            Une question&nbsp;? Écrivez-nous depuis la <a href={CONTACT_HREF} className={linkClass}>page contact du site</a>.
+          </p>
+        </div>
+
+        <p className="text-xs text-gray-500 text-center mt-4">
+          <Link href="/privacy" className="underline hover:opacity-80">Politique de confidentialité</Link>
+        </p>
       </div>
     </div>
-  );
-
-  return (
-    <>
-      {TURNSTILE_SITE_KEY && (
-        <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-          async
-          defer
-          strategy="afterInteractive"
-        />
-      )}
-      <div className="min-h-screen py-10 px-4" style={{ backgroundColor: '#f0f4fa' }}>
-        <div className="max-w-xl mx-auto">
-          <div className="mb-4">
-            <a href="https://english-hills.com" className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors">
-              <ArrowLeft size={14} /> Retour au site English Hills
-            </a>
-          </div>
-
-          <div className="text-center mb-8">
-            <Image src="/eh-logo.png" alt="English Hills" width={140} height={56} priority className="h-14 w-auto mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-primary">Pré-inscription</h1>
-            <p className="text-gray-500 text-sm mt-1">English Hills Language Center · Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
-            <p className="text-xs text-gray-400 mt-1 italic">&quot;Learn Today, Lead Tomorrow&quot;</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-6 space-y-5">
-            <div>
-              <label htmlFor="full_name" className={labelClass}>Nom complet *</label>
-              <input id="full_name" className={inputClass} value={form.full_name} onChange={e => set('full_name', e.target.value)} required placeholder="Ex: Fatima Zahra Bennani" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="date_naissance" className={labelClass}>Date de naissance</label>
-                <input id="date_naissance" type="date" className={inputClass} value={form.date_naissance} onChange={e => set('date_naissance', e.target.value)} />
-              </div>
-              <div>
-                <label htmlFor="age_category" className={labelClass}>Catégorie *</label>
-                <select id="age_category" className={inputClass} value={form.age_category} onChange={e => set('age_category', e.target.value)} required>
-                  <option value="">— Choisir —</option>
-                  <option>Young Learners (6-12)</option>
-                  <option>Teens (13-17)</option>
-                  <option>Adults (18+)</option>
-                  <option>Corporate</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="telephone" className={labelClass}>Téléphone *</label>
-                <input id="telephone" className={inputClass} value={form.telephone} onChange={e => set('telephone', e.target.value)} required placeholder="+212 6XX-XXXXXX" />
-              </div>
-              <div>
-                <label htmlFor="email" className={labelClass}>
-                  {isYoungLearner ? 'Email parent / tuteur' : 'Email'} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  className={inputClass}
-                  value={form.email}
-                  onChange={e => set('email', e.target.value)}
-                  placeholder={isYoungLearner ? "Email du parent ou tuteur" : "votre@email.com"}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="session_type" className={labelClass}>Session *</label>
-                <select id="session_type" className={inputClass} value={form.session_type} onChange={e => setForm(f => ({ ...f, session_type: e.target.value, niveau_cefr: '' }))} required>
-                  {PUBLIC_SESSION_TYPES.map(session => <option key={session}>{session}</option>)}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="niveau_cefr" className={labelClass}>Niveau estimé (si connu)</label>
-                <select id="niveau_cefr" className={inputClass} value={form.niveau_cefr} onChange={e => set('niveau_cefr', e.target.value)}>
-                  <option value="">— Je ne sais pas / à évaluer —</option>
-                  {getLevelsForSession(form.session_type).map(n => <option key={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <p className="text-xs text-gray-500">Pièces jointes indisponibles en ligne. Vous pouvez vous inscrire sans document et contacter le centre.</p>
-
-            <div>
-              <label htmlFor="notes" className={labelClass}>Message / Précisions (optionnel)</label>
-              <textarea id="notes" className={`${inputClass} h-20 resize-none`} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Horaires préférés, objectifs, questions..." />
-            </div>
-
-            {TURNSTILE_SITE_KEY && (
-              <div className="flex justify-center">
-                <div ref={turnstileContainerRef} />
-              </div>
-            )}
-
-            <div className="flex items-start gap-2">
-              <input
-                id="consent"
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-blue-500"
-                checked={form.consent}
-                onChange={e => set('consent', e.target.checked)}
-                required
-              />
-              <label htmlFor="consent" className="text-xs text-gray-600 leading-relaxed">
-                J&apos;accepte que mes données personnelles soient traitées par English Hills Language Center pour le traitement de cette demande de pré-inscription, conformément à la{' '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:opacity-80">
-                  politique de confidentialité
-                </a>
-                {'. '}Je peux contacter le centre pour exercer mes droits sur ces données.
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting || !form.consent || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
-              className="w-full py-3 text-sm font-bold text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-all bg-primary"
-            >
-              {submitting ? 'Envoi en cours...' : 'Soumettre ma demande'}
-            </button>
-
-            <input
-              type="text"
-              className="hidden"
-              tabIndex={-1}
-              autoComplete="off"
-              value={form._hp || ''}
-              onChange={e => set('_hp', e.target.value)}
-            />
-            <p className="text-xs text-gray-500 text-center">Vos données servent au traitement de votre demande et aux suites décrites dans la politique de confidentialité.</p>
-          </form>
-        </div>
-      </div>
-    </>
   );
 }

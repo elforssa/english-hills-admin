@@ -1,6 +1,6 @@
-// RCC-A2 pure enrollment presentation rules. Conversion, linkage and follow-up
-// scheduling stay server-authoritative; these only choose labels and bounds.
-import { casablancaInstant } from './presentation.mjs';
+// RCC-A2 pure enrollment presentation rules, for « Inscrire et encaisser »
+// (crm_enroll_and_collect, migration 127). Conversion, linkage and payment stay
+// server-authoritative; these only choose labels and bounds.
 import { ENROLLMENT_STATUS, PROGRAMS } from './enrollment.mjs';
 import { recordHref } from '../navigation.mjs';
 import { centreDate, centreDateTimeInput } from '../centreClock.mjs';
@@ -10,7 +10,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function casablancaToday(now = new Date()) {
   return centreDate(now);
 }
-// Centre wall-clock minute, the datetime-local lower bound for a follow-up.
+// Centre wall-clock minute (datetime-local form).
 export function casablancaNowInput(now = new Date()) {
   return centreDateTimeInput(now);
 }
@@ -19,23 +19,14 @@ export function birthDateReason(value, now = new Date()) {
   if (!/^\d{4}-\d\d-\d\d$/.test(value)) return 'birth_date_invalid';
   return value > casablancaToday(now) ? 'birth_date_future' : null;
 }
-// Blocks a past choice before sending; the server still resolves the calling window.
-export function followupReason(value, now = new Date()) {
-  if (!value) return null;
-  try { return Date.parse(casablancaInstant(value)) < now.getTime() ? 'followup_in_past' : null; }
-  catch { return 'followup_invalid'; }
-}
-// Final-submit checks. The birth-date bound always applies, including an uncertain
-// replay (its frozen value can only become more valid). Only follow-up futurity,
-// which time alone can invalidate, is skipped for an exact same-key replay.
-export function submitReason({ birth, due, checkBirth = true, replay = false }, now = new Date()) {
-  return (checkBirth ? birthDateReason(birth, now) : null) || (replay ? null : followupReason(due, now));
-}
 
 const PRE_CONFIRMATION = ['Submitted', 'Under Review', 'Trial'];
 const OPEN_LEAD = ['NEW', 'CONTACTING', 'ENGAGED'];
 const CLOSED_LEAD = ['LOST', 'NOT_QUALIFIED'];
-// Plan §5 rows 1–10, in priority order: at most one action per state.
+export const ARCHIVED_PRE_ENROLLMENT_NOTE = 'Ancienne pré-inscription archivée ; relancez « Inscrire et encaisser » si le prospect s’inscrit.';
+// Plan §5 rows, in priority order: at most one action per state. EAP (D6): former
+// rows 3–5 (a pre-inscription or essai by lead state) are one historical row 3; row 8
+// starts « Inscrire et encaisser ».
 export function enrollmentAction({ status, enrollment }) {
   if (!enrollment) {
     if (status === 'QUALIFIED') return { row: 8, action: 'start', note: null };
@@ -45,47 +36,38 @@ export function enrollmentAction({ status, enrollment }) {
   }
   if (['Confirmed', 'Validated'].includes(enrollment.status)) return { row: 1, action: 'open', note: null };
   if (status === 'CONVERTED') return { row: 2, action: 'open', note: 'Cette inscription a changé après sa confirmation. Elle est signalée pour vérification par la direction.' };
-  if (PRE_CONFIRMATION.includes(enrollment.status)) {
-    if (status === 'QUALIFIED') return { row: 3, action: 'continue', note: 'Pré-inscription en attente de confirmation.' };
-    if (OPEN_LEAD.includes(status)) return { row: 4, action: 'open', note: 'Ce prospect a été rouvert. Qualifiez-le à nouveau pour poursuivre l’inscription.' };
-    if (CLOSED_LEAD.includes(status)) return { row: 5, action: 'open', note: 'Prospect clôturé : l’inscription reste visible dans le dossier de l’apprenant.' };
-  }
+  if (PRE_CONFIRMATION.includes(enrollment.status)) return { row: 3, action: 'open', note: ARCHIVED_PRE_ENROLLMENT_NOTE };
   if (enrollment.status === 'Rejected') return { row: 6, action: 'open', note: 'Inscription refusée. Ce prospect reste rattaché à cette inscription ; pour une nouvelle demande, contactez la direction.' };
   return { row: 7, action: 'open', note: 'Statut d’inscription à vérifier par l’administration.' };
 }
 export function studentHref(enrollment, returnTo) {
   return recordHref(`/students/${enrollment.student_id}`, returnTo);
 }
-// Continuer lands on the learner file with the CRM-linked enrollment highlighted.
-export function continueHref(enrollment, returnTo) {
-  return recordHref(`/students/${enrollment.student_id}?enrollment=${enrollment.id}`, returnTo);
-}
 export function enrollmentParam(value) {
   return typeof value === 'string' && UUID.test(value) ? value.toLowerCase() : null;
 }
 
-const civil = value => {
-  const day = /^(\d{4})-(\d\d)-(\d\d)$/.exec(value?.local_date || ''), time = /^(\d\d:\d\d)/.exec(value?.local_time || '');
-  return day && time ? { date: `${day[3]}/${day[2]}/${day[1]}`, time: time[1] } : null;
-};
-export function followupNotice(task) {
-  const at = civil(task);
-  return at ? `Un suivi d’inscription est déjà prévu le ${at.date} à ${at.time}. Il est conservé.` : 'Un suivi d’inscription est déjà prévu. Il est conservé.';
+// The group line of the success panel. placement: { status: 'placed' | 'failed' |
+// 'none', name?, message? }. A refusal never undoes the payment (D3).
+export function placementLine(placement, enrollment) {
+  if (enrollment?.group_name) return `Groupe : ${enrollment.group_name}`;
+  if (placement?.status === 'placed') return `Groupe : ${placement.name}`;
+  if (placement?.status === 'failed') return `Groupe non affecté : ${String(placement.message || '').replace(/[.\s]+$/, '')}. Apprenant inscrit — groupe à affecter.`;
+  return 'Groupe à affecter';
 }
-const CREATED = { Submitted: 'Pré-inscription créée', Trial: 'Essai démarré' };
 // origin 'request' covers this dialog's own success, including its same-key replay;
 // 'discovered' is a refetch that found another request's or actor's enrollment.
-// linkedExisting: this request linked an enrollment that already existed (owner
-// wording amendment, 2026-10-07): never a creation heading for it.
-export function enrollmentSuccess(result, origin, { linkedExisting = false } = {}) {
+// linkedPaid: this request linked an already paid enrollment without a payment (Q12).
+export function enrollmentSuccess(result, origin, { linkedPaid = false, placement = null } = {}) {
   const enrollment = result.enrollment, converted = result.lead?.status === 'CONVERTED';
   const learner = [enrollment.student_name, PROGRAMS[enrollment.session_type] || 'Programme à préciser', enrollment.school_year].filter(Boolean).join(' · ');
   if (origin === 'discovered') return { heading: 'Inscription déjà rattachée', intro: 'Une inscription a été rattachée à ce prospect entre-temps. Vérifiez-la avant de poursuivre.',
-    status: ENROLLMENT_STATUS[enrollment.status] || 'Statut à vérifier', learner, lead: null, followup: converted ? null : 'Le suivi d’inscription apparaît dans Prochaine action.' };
-  const followup = result.enrollment_followup, at = civil(followup);
-  const confirmedLink = ['Confirmed', 'Validated'].includes(enrollment.status) ? 'Inscription confirmée rattachée' : 'Inscription rattachée';
-  return { heading: linkedExisting ? confirmedLink : CREATED[enrollment.status] || confirmedLink, intro: null, status: null, learner,
-    lead: converted ? 'La confirmation de l’inscription a été vérifiée. Le suivi commercial est terminé.' : 'Le prospect reste qualifié : l’inscription n’est pas encore confirmée. Elle reste à confirmer par le parcours habituel.',
-    followup: converted ? null : !at ? 'Le suivi d’inscription apparaît dans Prochaine action.'
-      : followup.created ? `Suivi « Finaliser l’inscription » prévu le ${at.date} à ${at.time}.` : `Le suivi d’inscription déjà prévu est conservé : ${at.date} à ${at.time}.` };
+    status: ENROLLMENT_STATUS[enrollment.status] || 'Statut à vérifier', learner, lead: null, group: null };
+  const heading = linkedPaid ? 'Inscription payée rattachée'
+    : result.free_enrollment ? 'Inscription confirmée sans paiement (remise 100 %)'
+      : result.receipt_number ? `Inscription confirmée · reçu ${result.receipt_number}` : 'Inscription confirmée';
+  return { heading, intro: result.replayed_enrollment || result.replayed_payment ? 'Cette inscription était déjà enregistrée : rien n’a été saisi deux fois.' : null,
+    status: null, learner,
+    lead: converted ? 'Prospect converti : le suivi commercial est terminé.' : 'Le prospect reste qualifié : vérifiez l’inscription dans le dossier de l’apprenant.',
+    group: placementLine(placement, enrollment) };
 }

@@ -2,6 +2,7 @@
 // Casablanca days verbatim, whatever the browser time zone; and the academic
 // report gives the same result from its reduced reads as from whole tables.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   ACADEMIC_ENROLLMENT_STATUSES, academicOperationsData, attendanceSeries, attendanceTotals, isAcademicSourceStudent, loadAcademicSources,
   reportYears,
@@ -76,4 +77,11 @@ for (let school = 0; school < 200; school += 1) {
     assert.deepEqual(fromLoader, page, `loader: school ${school}, session ${sessionFilter || 'all'}`);
   }
 }
-console.log('PASS report days verbatim under five time zones; academic report identical from the page loader’s reduced reads (200 random schools x 4 sessions)');
+// EAP: no pre-enrollment queue; the academic sources are the paid enrollments plus
+// the memberships the database still counts (a Trial row before the archive step).
+assert.deepEqual(ACADEMIC_ENROLLMENT_STATUSES, ['Confirmed', 'Validated', 'Trial']);
+const reportShape = academicOperationsData({ students: [], teachers: [], groups: [], enrollments: [], sessionTypes: ['Yearly'] });
+assert.equal('enrollmentsToReview' in reportShape, false, 'no « Inscriptions à examiner » list');
+const reportPage = readFileSync('src/components/reports/AcademicOperationsReport.jsx', 'utf8');
+assert.doesNotMatch(reportPage, /Inscriptions à examiner|\/enrollments/);
+console.log('PASS report days verbatim under five time zones; academic report identical from the page loader’s reduced reads (200 random schools x 4 sessions); no « Inscriptions à examiner »');

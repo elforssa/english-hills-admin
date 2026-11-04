@@ -9,7 +9,6 @@ const management = ['director', 'admin'];
 const operations = [...management, 'receptionist'];
 const capabilityRoles = Object.freeze({
   canManageCRM: operations,
-  canManageAdmissions: operations,
   canManagePlacement: operations,
   canManageStudents: operations,
   canManageGroups: operations,
@@ -48,7 +47,7 @@ export function hasCapability(role, capability) {
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const exact = new Map([
   ['/crm/today', 'canManageCRM'], ['/crm/leads', 'canManageCRM'],
-  ['/placement-tests', 'canManagePlacement'], ['/enrollments', 'canManageAdmissions'],
+  ['/placement-tests', 'canManagePlacement'],
   ['/students', 'canManageStudents'], ['/students-directory', 'canManageStudents'],
   ['/students/new', 'canManageStudents'], ['/groups', 'canManageGroups'],
   ['/timetable', 'canManageAcademics'], ['/attendance', 'canRecordAttendance'],

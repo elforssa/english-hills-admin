@@ -106,16 +106,19 @@ select pg_temp.ok(pg_temp.num((select (v->>'receipt_id')::uuid from e2 where k =
   'consecutive numbers in the issue year');
 
 -- A payment that fails after the receipt insert gives its number back.
-insert into public.enrollments(id, student_id, status, session_type, school_year)
-values (pg_temp.id(901), pg_temp.id(140), 'Submitted', 'Adults', '2026/2027');
+-- EAP (127): another learner's enrollment, created Confirmed through a payment
+-- (a Submitted insert is refused by enrollments_retired_status_guard).
+insert into e2 select 'other_learner', pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(140), 'session_type', 'Adults',
+  'school_year', '2026/2027', 'gross_amount', 500, 'payment_amount', 100));
+select pg_temp.owner();
 insert into e2 values ('c1', to_jsonb(pg_temp.counter()));
 select pg_temp.act(2);
 select pg_temp.fails(format($q$select public.create_charge_payment(%L::jsonb)$q$, jsonb_build_object('student_id', pg_temp.id(102),
-  'enrollment_id', pg_temp.id(901), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 500,
+  'enrollment_id', (select v->>'enrollment_id' from e2 where k = 'other_learner'), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 500,
   'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', gen_random_uuid())), 'P0001',
   'Selected enrollment does not match this student, session and school year.');
 select pg_temp.fails(format($q$select public.create_charge_payment(%L::jsonb)$q$, jsonb_build_object('student_id', pg_temp.id(102),
-  'session_type', 'Other', 'service_detail', 'Synthetic service', 'enrollment_id', pg_temp.id(901), 'school_year', '2026/2027',
+  'session_type', 'Other', 'service_detail', 'Synthetic service', 'enrollment_id', (select v->>'enrollment_id' from e2 where k = 'other_learner'), 'school_year', '2026/2027',
   'gross_amount', 500, 'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', gen_random_uuid())), 'P0001',
   'This service cannot be linked to a tuition enrollment.');
 select pg_temp.owner();
@@ -210,8 +213,8 @@ create temp table e2_policy as select (public.crm_create_followup_policy(gen_ran
 select pg_temp.owner();
 create temp sequence e2_n;
 grant usage on sequence e2_n to public;
--- A qualified CRM lead, started as a Submitted enrollment for an existing learner.
-create function pg_temp.crm_enrollment(p_student uuid) returns jsonb language plpgsql as $$
+-- A qualified CRM lead (reception).
+create function pg_temp.qualified_lead() returns uuid language plpgsql as $$
 declare l uuid; n bigint := nextval('e2_n'); begin
   perform pg_temp.act(3);
   l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'Batch E parent ' || n,
@@ -219,10 +222,32 @@ declare l uuid; n bigint := nextval('e2_n'); begin
   perform public.crm_qualify_lead(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,
     'conversation_channel', 'phone', 'note', 'Batch E synthetic', 'qualification_step', 'placement_test',
     'next_task', jsonb_build_object('task_type', 'confirm_placement_test', 'due_at', now() + interval '2 days')));
-  perform public.crm_start_enrollment(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,
-    'student_choice', 'existing', 'student_id', p_student, 'session_type', 'Adults', 'school_year', '2026/2027', 'initial_status', 'Submitted'));
   perform pg_temp.owner();
-  return jsonb_build_object('lead', l, 'enrollment', (pg_temp.lead(l)).enrollment_id);
+  return l;
+end $$;
+-- EAP (127): a qualified CRM lead enrolled and paid in one step (« Inscrire et encaisser »)
+-- by reception for an existing learner: 1000 MAD, 300 paid. The result carries the first
+-- payment's receipt_id and charge_id (formerly a separate admin payment on the enrollment).
+create function pg_temp.crm_enrollment(p_student uuid) returns jsonb language plpgsql as $$
+declare l uuid := pg_temp.qualified_lead(); r jsonb; begin
+  perform pg_temp.act(3);
+  r := public.crm_enroll_and_collect(gen_random_uuid(), jsonb_build_object(
+    'enrollment', jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,
+      'student_choice', 'existing', 'student_id', p_student, 'session_type', 'Adults', 'school_year', '2026/2027'),
+    'payment', jsonb_build_object('gross_amount', 1000, 'payment_amount', 300, 'payment_method', 'Espèces')));
+  perform pg_temp.owner();
+  return jsonb_build_object('lead', l, 'enrollment', (pg_temp.lead(l)).enrollment_id, 'receipt_id', r->'receipt_id', 'charge_id', r->'charge_id');
+end $$;
+-- EAP (127): a legacy state only — a qualified lead linked to a Submitted enrollment, as
+-- crm_start_enrollment created them before 127 — built under the two-flag exemption.
+create function pg_temp.legacy_crm_enrollment(p_student uuid) returns jsonb language plpgsql as $$
+declare l uuid := pg_temp.qualified_lead(); e uuid; begin
+  perform set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
+  insert into public.enrollments(student_id, status, session_type, school_year, date_inscription)
+  values (p_student, 'Submitted', 'Adults', '2026/2027', public.business_date()) returning id into e;
+  perform set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
+  update public.crm_leads set student_id = p_student, enrollment_id = e, version = version + 1, updated_at = now() where id = l;
+  return jsonb_build_object('lead', l, 'enrollment', e);
 end $$;
 create function pg_temp.void(p_receipt uuid, p_action text default 'void_financial_receipt') returns jsonb language plpgsql as $$
 declare r jsonb; begin
@@ -264,9 +289,8 @@ select pg_temp.ok((select count(*) from public.financial_events where event_type
 
 -- CRM-linked conversion: void, then replacement, then the cycle again (two clears).
 insert into e2 select 'crm', pg_temp.crm_enrollment(pg_temp.id(111));
-insert into e2 select 'crm_pay', pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(111), 'enrollment_id',
-  (select v->>'enrollment' from e2 where k = 'crm'), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 300));
-select pg_temp.owner();
+-- EAP (127): the first payment is the one taken with the enrollment.
+insert into e2 select 'crm_pay', v from e2 where k = 'crm';
 select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'crm'))).status = 'CONVERTED'
   and not (pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'crm'))).conversion_review_required, 'payment converts, no flag');
 select pg_temp.void((select (v->>'receipt_id')::uuid from e2 where k = 'crm_pay'));
@@ -329,9 +353,8 @@ select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'cr
 -- A flag raised by an enrollment downgrade (a review activity without the payment reason, as
 -- crm_security.evaluate_conversion writes it) is never cleared, even mixed with a void flag.
 insert into e2 select 'mixed', pg_temp.crm_enrollment(pg_temp.id(112));
-insert into e2 select 'mixed_pay', pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(112), 'enrollment_id',
-  (select v->>'enrollment' from e2 where k = 'mixed'), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 300));
-select pg_temp.owner();
+-- EAP (127): the first payment is the one taken with the enrollment.
+insert into e2 select 'mixed_pay', v from e2 where k = 'mixed';
 select pg_temp.void((select (v->>'receipt_id')::uuid from e2 where k = 'mixed_pay'));
 insert into public.crm_activities(lead_id, enrollment_id, occurred_at, actor_kind, event_type, source_key, body, details)
 select (v->>'lead')::uuid, (v->>'enrollment')::uuid, clock_timestamp(), 'system', 'conversion_review_required', 'conversion-review:batch-e-mixed',
@@ -342,9 +365,8 @@ select pg_temp.owner();
 select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'mixed'))).conversion_review_required
   and pg_temp.reviews((select (v->>'lead')::uuid from e2 where k = 'mixed'), 'conversion_review_cleared') = 0, 'mixed reasons: never cleared');
 insert into e2 select 'downgrade', pg_temp.crm_enrollment(pg_temp.id(113));
-insert into e2 select 'downgrade_pay', pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(113), 'enrollment_id',
-  (select v->>'enrollment' from e2 where k = 'downgrade'), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 300));
-select pg_temp.owner();
+-- EAP (127): the first payment is the one taken with the enrollment.
+insert into e2 select 'downgrade_pay', v from e2 where k = 'downgrade';
 insert into public.crm_activities(lead_id, enrollment_id, occurred_at, actor_kind, event_type, source_key, body, details)
 select (v->>'lead')::uuid, (v->>'enrollment')::uuid, clock_timestamp(), 'system', 'conversion_review_required', 'conversion-review:batch-e-downgrade',
   'Inscription modifiée après confirmation : vérification par la direction.', '{"previous_enrollment_status":"Confirmed","enrollment_status":"Submitted"}'
@@ -358,9 +380,11 @@ select pg_temp.owner();
 select pg_temp.ok((pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'downgrade'))).conversion_review_required, 'a downgrade flag is never cleared');
 -- A flag set when a LOST or NOT_QUALIFIED lead converts (evaluate_conversion sets it with
 -- no review activity) is never cleared, and a later void writes no activity.
+-- EAP (127): since a CRM enrollment converts its lead at creation, only a legacy linked
+-- pre-enrollment can still reach this state.
 do $$ declare s text; i integer := 114; c jsonb; p jsonb; begin
   foreach s in array array['LOST', 'NOT_QUALIFIED'] loop
-    c := pg_temp.crm_enrollment(pg_temp.id(i));
+    c := pg_temp.legacy_crm_enrollment(pg_temp.id(i));  -- EAP (127): legacy linked Submitted row
     perform pg_temp.act(3);
     if s = 'LOST' then
       perform public.crm_close_lost(gen_random_uuid(), jsonb_build_object('lead_id', c->>'lead',
@@ -523,29 +547,32 @@ do $$ declare k uuid := gen_random_uuid(); p jsonb; r jsonb; begin
 end $$;
 select pg_temp.owner();
 
--- Q5 = B 10 %: reception below the threshold issues the receipt, the enrollment waits.
+-- EAP (127, owner decision 2): the Batch E Q5 = B 10 % rule is withdrawn; any reception
+-- payment above zero confirms. 1 MAD of 1000 issues the receipt and confirms the new enrollment.
 insert into e2 select 'below_new', pg_temp.pay(3, jsonb_build_object('student_id', pg_temp.id(131), 'session_type', 'Adults',
-  'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 99.99));
+  'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 1));
 select pg_temp.owner();
-select pg_temp.ok((select v->>'receipt_id' is not null and (v->>'enrollment_confirmation_pending')::boolean
-  and not (v->>'enrollment_confirmed')::boolean and not (v->>'student_enrolled')::boolean from e2 where k = 'below_new'), 'below: pending result');
-select pg_temp.ok((pg_temp.enr((select (v->>'enrollment_id')::uuid from e2 where k = 'below_new'))).status = 'Under Review', 'below: new enrollment Under Review');
-select pg_temp.ok((select status from public.students where id = pg_temp.id(131)) <> 'Enrolled', 'below: learner not Enrolled');
-select pg_temp.ok(exists(select 1 from jsonb_array_elements(pg_temp.queue()->'pending_confirmation') x
-  where x->>'enrollment_id' = (select v->>'enrollment_id' from e2 where k = 'below_new')), 'below: listed for the director (d)');
--- Crossing the threshold confirms as today.
+select pg_temp.ok((select v->>'receipt_id' is not null and not v ? 'enrollment_confirmation_pending' and not (v->>'free_enrollment')::boolean
+  and (v->>'enrollment_confirmed')::boolean and (v->>'student_enrolled')::boolean from e2 where k = 'below_new'), '1 MAD: confirmed result, no pending key');
+select pg_temp.ok((pg_temp.enr((select (v->>'enrollment_id')::uuid from e2 where k = 'below_new'))).status = 'Confirmed', '1 MAD: new enrollment Confirmed');
+select pg_temp.ok((select status from public.students where id = pg_temp.id(131)) = 'Enrolled', '1 MAD: learner Enrolled');
+select pg_temp.ok(pg_temp.queue() ? 'unpaid_never' and not pg_temp.queue() ? 'pending_confirmation'
+  and not exists(select 1 from jsonb_array_elements(pg_temp.queue()->'unpaid_never') x
+    where x->>'enrollment_id' = (select v->>'enrollment_id' from e2 where k = 'below_new')), '1 MAD: paid, not listed for the director (d)');
+-- A further payment on the same charge keeps it confirmed.
 insert into e2 select 'crossing', pg_temp.pay(3, jsonb_build_object('student_id', pg_temp.id(131), 'charge_id',
   (select v->>'charge_id' from e2 where k = 'below_new'), 'payment_amount', 0.01));
 select pg_temp.owner();
-select pg_temp.ok((select (v->>'enrollment_confirmed')::boolean and not (v->>'enrollment_confirmation_pending')::boolean from e2 where k = 'crossing')
-  and (pg_temp.enr((select (v->>'enrollment_id')::uuid from e2 where k = 'below_new'))).status = 'Confirmed', 'crossing 10 % confirms');
--- A linked Submitted CRM enrollment stays Submitted; no conversion.
-insert into e2 select 'below_crm', pg_temp.crm_enrollment(pg_temp.id(132));
+select pg_temp.ok((select (v->>'enrollment_confirmed')::boolean and not v ? 'enrollment_confirmation_pending' from e2 where k = 'crossing')
+  and (pg_temp.enr((select (v->>'enrollment_id')::uuid from e2 where k = 'below_new'))).status = 'Confirmed', 'a further payment stays confirmed');
+-- A legacy linked Submitted CRM enrollment is confirmed by a small reception payment and its lead converts.
+insert into e2 select 'below_crm', pg_temp.legacy_crm_enrollment(pg_temp.id(132));
 insert into e2 select 'below_crm_pay', pg_temp.pay(3, jsonb_build_object('student_id', pg_temp.id(132), 'enrollment_id',
   (select v->>'enrollment' from e2 where k = 'below_crm'), 'session_type', 'Adults', 'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 50));
 select pg_temp.owner();
-select pg_temp.ok((pg_temp.enr((select (v->>'enrollment')::uuid from e2 where k = 'below_crm'))).status = 'Submitted'
-  and (pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'below_crm'))).status = 'QUALIFIED', 'below: linked Submitted stays, no conversion');
+select pg_temp.ok((select (v->>'enrollment_confirmed')::boolean and not v ? 'enrollment_confirmation_pending' from e2 where k = 'below_crm_pay')
+  and (pg_temp.enr((select (v->>'enrollment')::uuid from e2 where k = 'below_crm'))).status = 'Confirmed'
+  and (pg_temp.lead((select (v->>'lead')::uuid from e2 where k = 'below_crm'))).status = 'CONVERTED', '5 %: linked legacy Submitted confirms and converts');
 -- Admin and director are not limited by the threshold.
 select pg_temp.ok((pg_temp.pay(i, jsonb_build_object('student_id', pg_temp.id(132 + i), 'session_type', 'Adults', 'school_year', '2026/2027',
   'gross_amount', 1000, 'payment_amount', 1))->>'enrollment_confirmed')::boolean, 'admin/director: 1 MAD confirms') from unnest(array[1, 2]) i;

@@ -19,6 +19,7 @@ import {
   groupMatchesSelection,
 } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { useAuth } from '@/context/AuthContext';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const inputErrClass = "w-full border border-red-400 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-red-500";
@@ -54,6 +55,12 @@ export default function StudentForm() {
   const router = useRouter();
   const qc = useQueryClient();
   const isEdit = Boolean(id);
+  // EAP (Q3 = B): a new file has no paid enrollment, so a placement at creation is a
+  // management placement with its reason. Reception enrols at the payment (« Inscrire
+  // et encaisser ») and places afterwards; it never places here.
+  const { role } = useAuth();
+  const canPlaceAtCreation = !isEdit && (role === 'director' || role === 'admin');
+  const [withoutEnrollmentReason, setWithoutEnrollmentReason] = useState('');
   // REL-4: one learner id from the first send to a confirmed success, so a retry
   // after a lost answer replays the create instead of inserting a second learner.
   const [newStudentId] = useState(() => createLearnerIdentity());
@@ -195,6 +202,11 @@ export default function StudentForm() {
     };
     if (isEdit && placed) { delete payload.session_type; delete payload.niveau_cefr; }
 
+    if (canPlaceAtCreation && chosenGroup && !withoutEnrollmentReason.trim()) {
+      setErrors({ without_enrollment_reason: ['Indiquez le motif de l’affectation sans inscription payée.'] });
+      toast.error('Indiquez le motif de l’affectation sans inscription payée.');
+      return;
+    }
     setSaving(true);
     const client = getBrowserClient();
     if (isEdit) {
@@ -213,9 +225,11 @@ export default function StudentForm() {
       newStudentId.settle(created.status);
       if (created.status === 'deleted') { toast.error(created.message); setSaving(false); return; }
       if (created.status === 'already_created') { toast.error(created.message); router.push(`/students/${studentId}`); return; }
-      // Optional placement: a Validated enrollment of the group's programme (DAT-2).
-      if (chosenGroup) {
-        const { error } = await placeLearnerInGroup(client, { student: created.row, group: chosenGroup, schoolYear });
+      // Optional placement: a Validated enrollment of the group's programme (DAT-2),
+      // unpaid, so placed with the management reason (logged, listed in Contrôles).
+      if (chosenGroup && canPlaceAtCreation) {
+        const { error } = await placeLearnerInGroup(client, { student: created.row, group: chosenGroup, schoolYear,
+          withoutEnrollmentReason: withoutEnrollmentReason.trim() });
         if (error) {
           toast.error(`Apprenant créé, mais non affecté : ${membershipErrorMessage(error)}`);
           router.push(`/students/${studentId}`);
@@ -333,19 +347,26 @@ export default function StudentForm() {
               {SOURCES.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
-          {!isEdit && <>
+          {canPlaceAtCreation && <>
           <div>
             <label htmlFor="groupe_id" className={labelClass}>Affecter à un groupe (facultatif)</label>
             <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => changeGroup(e.target.value)}>
               <option value="">— Aucun groupe —</option>
               {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
             </select>
-            <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau. L’affectation crée l’inscription.</p>
+            <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau. Sans paiement, l’affectation crée une inscription non payée : préférez « Inscrire et encaisser » depuis la fiche apprenant.</p>
           </div>
           <div>
             <label htmlFor="school_year" className={labelClass}>Année scolaire</label>
             <input id="school_year" className={inputClass} placeholder="2026/2027" pattern="[0-9]{4}/[0-9]{4}" value={schoolYear} onChange={e => setSchoolYear(e.target.value)} disabled={!form.groupe_id} />
           </div>
+          {form.groupe_id && <div className="col-span-2">
+            <label htmlFor="without_enrollment_reason" className={labelClass}>Motif de l’affectation sans inscription payée *</label>
+            <textarea id="without_enrollment_reason" className={`${fieldErr('without_enrollment_reason') ? inputErrClass : inputClass} h-16 resize-none`} maxLength={200}
+              value={withoutEnrollmentReason} onChange={e => { setWithoutEnrollmentReason(e.target.value); setErrors(v => ({ ...v, without_enrollment_reason: undefined })); }} />
+            {fieldErr('without_enrollment_reason') && <p className="text-xs text-red-600 mt-1">{fieldErr('without_enrollment_reason')}</p>}
+            <p className="text-xs text-muted-foreground mt-1">Enregistré dans le journal ; l’inscription apparaît dans « Contrôles » jusqu’au paiement.</p>
+          </div>}
           </>}
           <div className="col-span-2">
             <label htmlFor="notes" className={labelClass}>Notes</label>

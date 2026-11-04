@@ -34,7 +34,7 @@ assert.equal(safeReturnTo(`/crm/today?lead=${studentId}`), `/crm/today?lead=${st
 for (const [role, home] of Object.entries(ROLE_HOME)) assert.equal(loginDestination(role), home);
 assert.equal(loginDestination('pending', '/students'), '/unauthorized');
 for (const path of ['/crm/today', '/crm/leads', '/students', '/students-directory', '/students/new',
-  '/enrollments', '/settings', '/placement-tests', '/groups', '/timetable', '/attendance',
+  '/settings', '/placement-tests', '/groups', '/timetable', '/attendance',
   '/assessments', '/receipts', '/receipts/new', '/teachers', '/helpdesk',
   '/students/00000000-0000-0000-0000-000000000001',
   '/students/00000000-0000-0000-0000-000000000001/edit',
@@ -76,6 +76,37 @@ assert.equal(hasCapability('director', 'canCorrectFinance'), true);
 assert.equal(hasCapability('admin', 'canCorrectFinance'), false);
 assert.equal(hasCapability('director', 'unknown'), false);
 console.log('PASS receptionist login destinations and exact operational route boundaries');
+
+// Enrollment at payment (D6 « Removed »): the pre-enrollment page is gone with its sidebar entry,
+// route policy entry and return-target entry. /enrollments is an unlisted route: the receptionist is
+// sent home by the middleware, admin and director reach Next's not-found (no page file, no rule).
+{
+  const { readFileSync, readdirSync, existsSync } = await import('node:fs');
+  const { RECEPTIONIST_ROUTES } = await import('../src/lib/roleAccess.mjs');
+  const src = new URL('../src/', import.meta.url);
+  assert.equal(existsSync(new URL('app/(admin)/enrollments', src)), false, 'the /enrollments page is deleted');
+  assert.equal(RECEPTIONIST_ROUTES.includes('/enrollments'), false);
+  for (const path of ['/enrollments', '/enrollments/', `/enrollments/${studentId}`, '/enrollments?status=Submitted']) {
+    assert.equal(receptionistCanAccess(path), false, path);
+    assert.equal(loginDestination('receptionist', path), '/crm/leads', path);
+  }
+  for (const role of ['director', 'admin', 'receptionist', 'teacher', 'parent', 'student', 'pending', null]) {
+    assert.equal(hasCapability(role, 'canManageAdmissions'), false, 'the /enrollments-only capability is gone');
+  }
+  assert.equal(safeReturnTo('/enrollments'), '/students', 'never a return target');
+  assert.equal(safeReturnTo('/enrollments?status=Submitted'), '/students');
+  const middleware = readFileSync(new URL('middleware.js', src), 'utf8');
+  assert.doesNotMatch(middleware, /enrollments/, 'no middleware rule: admin/director fall through to not-found');
+  const sidebar = readFileSync(new URL('components/layout/Sidebar.jsx', src), 'utf8');
+  assert.doesNotMatch(sidebar, /Formulaire public|href: '\/inscription'/, 'no « Formulaire public » entry');
+  // No screen links to the retired page (sidebar, dashboard card and quick action, report action list).
+  const files = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory()
+    ? files(new URL(entry.name + '/', dir)) : /\.(?:jsx?|mjs)$/.test(entry.name) ? [new URL(entry.name, dir)] : []);
+  const linking = files(src).filter(file => /['"`]\/enrollments(?:[/?#'"`]|$)/m.test(readFileSync(file, 'utf8')))
+    .map(file => file.pathname.split('/src/')[1]);
+  assert.deepEqual(linking, [], 'no link to /enrollments remains');
+  console.log('PASS /enrollments retired: no page, menu, route, capability or link; unlisted-route behaviour');
+}
 
 // Online learning (plan OL-r4 D13): operations run lessons, management sets up courses,
 // one exact room form for every operational role, a portal online section for families.

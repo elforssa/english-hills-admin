@@ -57,8 +57,8 @@ def place(student, group):
     return (f"select public.place_learner_in_group({quote(student)},{quote(group)},"
             f"(select updated_at from public.students where id={quote(student)}))")
 
-def pay(student, key):
-    payload = json.dumps({'student_id': student, 'session_type': 'Adults', 'school_year': '2026/2027', 'level': 'Beginning 1',
+def pay(student, key, session='Adults', level='Beginning 1'):
+    payload = json.dumps({'student_id': student, 'session_type': session, 'school_year': '2026/2027', 'level': level,
                           'gross_amount': 1000, 'payment_amount': 100, 'payment_method': 'Espèces', 'idempotency_key': key})
     return f"select public.create_charge_payment({quote(payload)}::jsonb)"
 
@@ -108,8 +108,11 @@ commit;""")
     created = True
 
     # I6: two placements into the last seat serialize on the group seat lock.
+    # EAP (127, Q3 = B): placements follow a paid enrollment; both learners pay first.
+    for learner in ('l1', 'l3'):
+        assert 'ok' in attempt(pay(ids[learner], str(uuid.uuid4())))
     holder = Holder(place(ids['l1'], ids['group']))
-    pool, future = later(place(ids['l2'], ids['group']))
+    pool, future = later(place(ids['l3'], ids['group']))
     holder.finish()
     second = future.result(timeout=30); pool.shutdown()
     assert second.get('code') == '23514' and second.get('hint') == 'egc.capacity', second
@@ -117,6 +120,7 @@ commit;""")
     print('PASS concurrent placements into the last seat: the second waits, then the group is full')
 
     # Lock order: placement holds the learner, a payment for the same learner waits, both complete.
+    # EAP (127): the placement takes the learner's paid enrollment; the waiting payment reuses it.
     sql(f"update public.groups set capacite_max=5 where id={quote(ids['group'])}")
     holder = Holder(place(ids['l3'], ids['group']))
     pool, future = later(pay(ids['l3'], str(uuid.uuid4())))
@@ -124,7 +128,7 @@ commit;""")
     paid = future.result(timeout=30); pool.shutdown()
     no_retry_codes(paid)
     assert 'ok' in paid, paid
-    assert value(f"select string_agg(status,',') from public.enrollments where student_id={quote(ids['l3'])}") == 'Validated', 'the payment confirmed the placed enrollment'
+    assert value(f"select string_agg(status,',') from public.enrollments where student_id={quote(ids['l3'])}") == 'Validated', 'the payment kept the one placed enrollment'
     # And the reverse order: the payment holds the learner, the placement waits.
     holder = Holder(pay(ids['l2'], str(uuid.uuid4())))
     pool, future = later(place(ids['l2'], ids['group']))
@@ -132,7 +136,8 @@ commit;""")
     placed = future.result(timeout=30); pool.shutdown()
     no_retry_codes(placed)
     # The payment changed the learner file meanwhile: the waiting placement refuses
-    # its stale precondition at once (PT409), and succeeds when resent.
+    # its stale precondition at once (PT409), and succeeds when resent (EAP: on the
+    # enrollment that payment confirmed).
     assert placed.get('code') == 'PT409' and placed.get('hint') == 'egc.stale', placed
     assert 'ok' in attempt(place(ids['l2'], ids['group']))
     assert value(f"select status from public.enrollments where student_id={quote(ids['l2'])}") == 'Validated'
@@ -143,6 +148,8 @@ commit;""")
       jsonb_build_object('teacher_id',{quote(ids['l5'])},'audience','adult','term_start',current_date-7,'term_end',current_date+60))"""))
     sql(as_admin(f"""select public.online_activate_course({quote(ids['online'])},
       (select version from public.online_courses where group_id={quote(ids['online'])}),'fake','fake-race-{run}')"""))
+    # EAP (127): the online placement follows the learner's paid Online enrollment.
+    assert 'ok' in attempt(pay(ids['l4'], str(uuid.uuid4()), 'Online', 'B1'))
     holder = Holder(place(ids['l4'], ids['online']))
     pool, future = later(f"""select public.online_close_course({quote(ids['online'])},
       (select version from public.online_courses where group_id={quote(ids['online'])}))""")

@@ -197,13 +197,18 @@ select pg_temp.owner();
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
   (pg_temp.id(401), pg_temp.id(201), pg_temp.id(301), 'Validated', 'Online', '2026/2027', 'B1'),
   (pg_temp.id(402), pg_temp.id(202), pg_temp.id(301), 'Confirmed', 'Online', '2026/2027', 'B1'),
-  (pg_temp.id(403), pg_temp.id(204), pg_temp.id(301), 'Trial', 'Online', '2026/2027', 'B1'),
   (pg_temp.id(404), pg_temp.id(206), pg_temp.id(302), 'Validated', 'Online', '2026/2027', 'A1'),
   (pg_temp.id(405), pg_temp.id(207), pg_temp.id(302), 'Validated', 'Online', '2026/2027', 'A1'),
   (pg_temp.id(406), pg_temp.id(203), pg_temp.id(303), 'Validated', 'Online One-to-One', '2026/2027', 'B2'),
   (pg_temp.id(407), pg_temp.id(209), pg_temp.id(304), 'Validated', 'Yearly', '2026/2027', 'Child 1'),
   (pg_temp.id(408), pg_temp.id(210), pg_temp.id(304), 'Validated', 'Yearly', '2026/2027', 'Child 1'),
   (pg_temp.id(409), pg_temp.id(215), pg_temp.id(306), 'Validated', 'Online', '2026/2027', null);
+-- EAP (127): the trial enrolment is history (an old row the unchanged join, roster and
+-- notice readers must still refuse), seeded under the two-flag exemption.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
+insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(403), pg_temp.id(204), pg_temp.id(301), 'Trial', 'Online', '2026/2027', 'B1');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.ok((select status from public.enrollments where id = pg_temp.id(402)) = 'Validated', 'confirmed with a group becomes validated (072)');
 insert into public.online_lessons(id, group_id, starts_at, ends_at, teacher_id, status, cancelled_at, completed_at, is_substitute) values
   (pg_temp.id(501), pg_temp.id(301), now() + interval '14 minutes', now() + interval '74 minutes', pg_temp.id(101), 'scheduled', null, null, false),
@@ -225,9 +230,13 @@ insert into public.online_lessons(id, group_id, starts_at, ends_at, teacher_id, 
 insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
   (pg_temp.id(201), pg_temp.id(312), 'Validated', 'Online', '2025/2026', 'B1'),
   (pg_temp.id(202), pg_temp.id(312), 'Validated', 'Online', '2025/2026', 'B1'),
-  (pg_temp.id(204), pg_temp.id(312), 'Trial', 'Online', '2025/2026', 'B1'),
   (pg_temp.id(201), pg_temp.id(308), 'Validated', 'Online', '2027/2028', 'B1'),
   (pg_temp.id(201), pg_temp.id(309), 'Validated', 'Online', '2028/2029', 'B1');
+-- EAP (127): the trial enrolment is history, seeded under the two-flag exemption.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
+insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(204), pg_temp.id(312), 'Trial', 'Online', '2025/2026', 'B1');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.act(1);
 select public.online_close_course(pg_temp.id(309), pg_temp.course_version(pg_temp.id(309)));
 select pg_temp.owner();
@@ -647,23 +656,33 @@ select pg_temp.ok((select teacher_id from public.online_lessons where id = (sele
 -- ---------------------------------------------------------------------------
 -- Capacity at group assignment on every path (D4, I1, I7), course 305 = 2 seats.
 -- ---------------------------------------------------------------------------
+-- EAP (127): the two seats are Confirmed (paid) enrolments (Validated with the group,
+-- 072) where they were pre-enrolments; the waiting enrolment is Confirmed; the rejected
+-- row is history, seeded under the two-flag exemption.
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
-  (pg_temp.id(601), pg_temp.id(211), pg_temp.id(305), 'Submitted', 'Online', '2026/2027', 'A2'),
-  (pg_temp.id(602), pg_temp.id(212), pg_temp.id(305), 'Under Review', 'Online', '2026/2027', 'A2'),
-  (pg_temp.id(603), pg_temp.id(213), null, 'Submitted', 'Online', '2026/2027', 'A2'),
-  (pg_temp.id(604), pg_temp.id(214), pg_temp.id(305), 'Rejected', 'Online', '2026/2027', 'A2'),
+  (pg_temp.id(601), pg_temp.id(211), pg_temp.id(305), 'Confirmed', 'Online', '2026/2027', 'A2'),
+  (pg_temp.id(602), pg_temp.id(212), pg_temp.id(305), 'Confirmed', 'Online', '2026/2027', 'A2'),
+  (pg_temp.id(603), pg_temp.id(213), null, 'Confirmed', 'Online', '2026/2027', 'A2'),
   (pg_temp.id(605), pg_temp.id(216), null, 'Confirmed', 'Online', '2026/2027', 'A2');
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
+insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
+  (pg_temp.id(604), pg_temp.id(214), pg_temp.id(305), 'Rejected', 'Online', '2026/2027', 'A2');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.act(2);
+-- EAP (127): the retired statuses are refused before the online capacity is read.
 do $do$ declare s text; begin
-  foreach s in array array['Submitted', 'Under Review', 'Confirmed', 'Validated', 'Trial'] loop
+  foreach s in array array['Confirmed', 'Validated'] loop
     perform pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
       values (%L, %L, %L, 'Online', '2026/2027', 'A2')$$, pg_temp.id(217), pg_temp.id(305), s), '23514', 'online.capacity');
   end loop;
+  foreach s in array array['Submitted', 'Under Review', 'Trial', 'Rejected'] loop
+    perform pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
+      values (%L, %L, %L, 'Online', '2026/2027', 'A2')$$, pg_temp.id(217), pg_temp.id(305), s), '23514', 'eap.status_retired');
+  end loop;
 end $do$;
-insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
-  values (pg_temp.id(217), pg_temp.id(305), 'Rejected', 'Online', '2026/2027', 'A2');
 select pg_temp.fails(format('update public.enrollments set group_id = %L where id = %L', pg_temp.id(305), pg_temp.id(603)), '23514', 'online.capacity');
-select pg_temp.fails(format($$update public.enrollments set status = 'Submitted' where id = %L$$, pg_temp.id(604)), '23514', 'online.capacity');
+-- EAP (127): a rejected row comes back live as Confirmed (Submitted is retired).
+select pg_temp.fails(format($$update public.enrollments set status = 'Confirmed' where id = %L$$, pg_temp.id(604)), '23514', 'online.capacity');
 -- Student-form placement: the 074 sync is gone (EGC); a file-group write is refused
 -- before any enrollment is touched, and the placement command meets the online capacity.
 select pg_temp.fails(format('update public.students set groupe_id = %L where id = %L', pg_temp.id(305), pg_temp.id(216)), '23514', 'egc.group_from_enrollment');
@@ -675,17 +694,23 @@ select pg_temp.ok((select groupe_id from public.students where id = pg_temp.id(2
   and (select group_id from public.enrollments where id = pg_temp.id(605)) is null, 'student-form placement left everything unchanged');
 -- Reception commands (096).
 select pg_temp.act(3);
+-- EAP (127): reception no longer creates a pre-enrolment; its group assignment of a
+-- Confirmed enrolment meets the online capacity.
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Submitted', 'A2', current_date, null, 'Online', '2026/2027')$$,
-  pg_temp.id(218), pg_temp.id(305)), '23514', 'online.capacity');
+  pg_temp.id(218), pg_temp.id(305)), '42501', 'eap.status_retired');
+select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, %L, %L, 'Confirmed', 'A2', current_date, null, 'Online', '2026/2027')$$,
+  pg_temp.id(216), pg_temp.id(605), pg_temp.id(305)), '23514', 'online.capacity');
 select pg_temp.fails(format($$select public.assign_receptionist_student_group(%L, %L, %L, %L, %L)$$, pg_temp.id(213), pg_temp.id(603), pg_temp.id(305),
   (select updated_at from public.students where id = pg_temp.id(213)), (select updated_at from public.enrollments where id = pg_temp.id(603))), '23514', 'online.capacity');
 -- The guest command counts enrolments plus guests.
 select pg_temp.fails(format($$select public.online_add_guest(%L, %L, 'trial')$$, pg_temp.id(515), pg_temp.id(218)), '23514', 'online.capacity');
 select pg_temp.owner();
 -- Status-only transitions never evaluate capacity, even over capacity.
+-- EAP (127): the pre-enrolment transition is refused as retired; the payment on a
+-- seated enrolment still passes over capacity.
 update public.online_courses set capacity = 1 where group_id = pg_temp.id(305);
 select pg_temp.act(2);
-update public.enrollments set status = 'Under Review' where id = pg_temp.id(601);
+select pg_temp.fails(format($$update public.enrollments set status = 'Under Review' where id = %L$$, pg_temp.id(601)), '23514', 'eap.status_retired');
 select pg_temp.act(1);
 create temp table ol_paid as select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(212),
   'enrollment_id', pg_temp.id(602), 'session_type', 'Online', 'school_year', '2026/2027', 'gross_amount', 1200,
@@ -715,26 +740,39 @@ select pg_temp.fails(format($$select public.save_receptionist_group(%L, null, '{
   pg_temp.id(321), pg_temp.id(101)), '23514', 'online.teacher_on_course');
 select public.save_receptionist_group(pg_temp.id(322), null, '{"name":"Reception Group","session_type":"Online","niveau":"B1"}');
 select pg_temp.ok((select teacher_id is null and session_type = 'Online' from public.groups where id = pg_temp.id(322)), 'receptionist creates an online group without a teacher');
-create temp table ol_rec as select public.save_receptionist_enrollment(pg_temp.id(220), null, pg_temp.id(322), 'Submitted', 'B1',
-  current_date, null, 'Online', '2026/2027') submitted;
+-- EAP (127): no Submitted or Trial enrolment from reception; the enrolment is born at
+-- the payment (Confirmed) and then placed.
+select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Submitted', 'B1', current_date, null, 'Online', '2026/2027')$$,
+  pg_temp.id(220), pg_temp.id(322)), '42501', 'eap.status_retired');
+select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Trial', 'C1', current_date, null, 'Online One-to-One', '2026/2027')$$,
+  pg_temp.id(222), pg_temp.id(320)), '42501', 'eap.status_retired');
+create temp table ol_rec as select (public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(220), 'session_type', 'Online',
+  'school_year', '2026/2027', 'level', 'B1', 'gross_amount', 1200, 'payment_amount', 300, 'payment_method', 'Espèces',
+  'idempotency_key', pg_temp.id(698)))->>'enrollment_id')::uuid confirmed;
 select pg_temp.open_to_api('ol_rec');
-select pg_temp.ok((select status from public.enrollments where id = (select submitted from ol_rec)) = 'Submitted', 'Submitted enrolment into the online group');
-select public.save_receptionist_enrollment(pg_temp.id(222), null, pg_temp.id(320), 'Trial', 'C1', current_date, null, 'Online One-to-One', '2026/2027');
+select pg_temp.ok((select status = 'Confirmed' and group_id is null from public.enrollments where id = (select confirmed from ol_rec)),
+  'the payment creates a Confirmed online enrolment');
+select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(222), 'session_type', 'Online One-to-One',
+  'school_year', '2026/2027', 'level', 'C1', 'gross_amount', 1200, 'payment_amount', 300, 'payment_method', 'Espèces',
+  'idempotency_key', pg_temp.id(697)));
+select public.assign_receptionist_student_group(pg_temp.id(222), null, pg_temp.id(320),
+  (select updated_at from public.students where id = pg_temp.id(222)), null);
 select pg_temp.owner();
 select pg_temp.ok((select session_type = 'Online One-to-One' and niveau_cefr = 'C1' from public.students where id = pg_temp.id(222)),
   'existing learner moved to Online One-to-One with a CEFR level through enrolment');
-update public.enrollments set status = 'Confirmed', group_id = null where id = (select submitted from ol_rec);
 select pg_temp.act(3);
-select public.save_receptionist_enrollment(pg_temp.id(220), (select submitted from ol_rec), pg_temp.id(322), 'Validated', 'B1',
+select public.save_receptionist_enrollment(pg_temp.id(220), (select confirmed from ol_rec), pg_temp.id(322), 'Validated', 'B1',
   current_date, null, 'Online', '2026/2027');
-select pg_temp.ok((select status = 'Validated' and group_id = pg_temp.id(322) from public.enrollments where id = (select submitted from ol_rec)),
+select pg_temp.ok((select status = 'Validated' and group_id = pg_temp.id(322) from public.enrollments where id = (select confirmed from ol_rec)),
   'Validated assignment of a Confirmed enrolment');
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, null, 'Submitted', 'B1', current_date, null, 'Online Plus', '2026/2027')$$,
   pg_temp.id(220)), '22023');
 select pg_temp.owner();
 
 -- ---------------------------------------------------------------------------
--- CRM path (Q2 = C1): a qualified lead enrolled into an online group converts as before.
+-- CRM path (Q2 = C1): a qualified lead enrolled into an online group converts.
+-- EAP (127): « Inscrire et encaisser » (crm_enroll_and_collect) converts at once and
+-- never places; reception then places the paid enrolment in the online group.
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claim.sub', pg_temp.id(1)::text, true);
 create temp table ol_policy as select (public.crm_create_followup_policy(gen_random_uuid(),
@@ -749,36 +787,46 @@ create function pg_temp.qualified_lead() returns uuid language plpgsql as $$ dec
     'next_task', jsonb_build_object('task_type', 'confirm_placement_test', 'due_at', now() + interval '2 days')));
   return l;
 end $$;
-create function pg_temp.crm_data(l uuid, session text, grp uuid) returns jsonb language sql security definer as $$
-  select jsonb_build_object('lead_id', l, 'expected_version', x.version, 'student_choice', 'new', 'learner_name', x.learner_name,
-    'candidate_review', crm_security.candidate_token(l, x.learner_name, null), 'session_type', session, 'school_year', '2026/2027',
-    'group_id', grp) from public.crm_leads x where x.id = l
+create function pg_temp.crm_data(l uuid, session text, grp uuid default null) returns jsonb language sql security definer as $$
+  select jsonb_build_object('enrollment', jsonb_build_object('lead_id', l, 'expected_version', x.version, 'student_choice', 'new',
+    'learner_name', x.learner_name, 'candidate_review', crm_security.candidate_token(l, x.learner_name, null), 'session_type', session,
+    'school_year', '2026/2027') || case when grp is null then '{}'::jsonb else jsonb_build_object('group_id', grp) end,
+    'payment', jsonb_build_object('gross_amount', 1200, 'payment_amount', 300, 'payment_method', 'Espèces'))
+  from public.crm_leads x where x.id = l
 $$;
+create function pg_temp.lead_student(l uuid) returns uuid language sql security definer as $$
+  select student_id from public.crm_leads where id = l $$;
+create function pg_temp.student_version(p uuid) returns timestamptz language sql security definer as $$
+  select updated_at from public.students where id = p $$;
 create temp table ol_crm as select pg_temp.qualified_lead() lead, pg_temp.qualified_lead() solo, pg_temp.qualified_lead() bad;
 select pg_temp.open_to_api('ol_crm');
 select pg_temp.act(3);
-select public.crm_start_enrollment(gen_random_uuid(), pg_temp.crm_data((select lead from ol_crm), 'Online', pg_temp.id(310)));
-select public.crm_start_enrollment(gen_random_uuid(), pg_temp.crm_data((select solo from ol_crm), 'Online One-to-One', pg_temp.id(311)));
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Adults', pg_temp.id(310))),
-  '22023', 'crm_enrollment.group_incompatible');
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online', pg_temp.id(307))),
-  '22023', 'crm_enrollment.group_incompatible');
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online Plus', pg_temp.id(310))),
+select public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.crm_data((select lead from ol_crm), 'Online'));
+select public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.crm_data((select solo from ol_crm), 'Online One-to-One'));
+select public.place_learner_in_group(pg_temp.lead_student((select lead from ol_crm)), pg_temp.id(310),
+  pg_temp.student_version(pg_temp.lead_student((select lead from ol_crm))));
+select public.place_learner_in_group(pg_temp.lead_student((select solo from ol_crm)), pg_temp.id(311),
+  pg_temp.student_version(pg_temp.lead_student((select solo from ol_crm))));
+-- EAP (127): the CRM command takes no group any more (the group compatibility and the
+-- full group are met by the placement), so each grouped request is refused first.
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Adults', pg_temp.id(310))),
+  '22023', 'crm_enrollment.request_invalid');
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online', pg_temp.id(307))),
+  '22023', 'crm_enrollment.request_invalid');
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online Plus')),
   '22023', 'crm_enrollment.program_invalid');
--- A full online group refuses the CRM path inside its own closed vocabulary (record_rejected).
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online', pg_temp.id(305))),
-  '22023', 'crm_enrollment.record_rejected');
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.crm_data((select bad from ol_crm), 'Online', pg_temp.id(305))),
+  '22023', 'crm_enrollment.request_invalid');
 select pg_temp.owner();
 select pg_temp.ok((select enrollment_id is null from public.crm_leads where id = (select bad from ol_crm)), 'refused CRM attempts wrote nothing');
-select pg_temp.ok((select l.status = 'QUALIFIED' and e.group_id = pg_temp.id(310) and e.session_type = 'Online' and e.status = 'Submitted'
+select pg_temp.ok((select l.status = 'CONVERTED' and e.group_id = pg_temp.id(310) and e.session_type = 'Online' and e.status = 'Validated'
   from public.crm_leads l join public.enrollments e on e.id = l.enrollment_id where l.id = (select lead from ol_crm)),
-  'lead linked to the online enrolment, still Qualified (Continuer l''inscription)');
-select pg_temp.ok((select e.session_type = 'Online One-to-One' from public.crm_leads l join public.enrollments e on e.id = l.enrollment_id
+  'lead linked to the paid online enrolment, converted, then placed in the online group');
+select pg_temp.ok((select e.session_type = 'Online One-to-One' and e.group_id = pg_temp.id(311) from public.crm_leads l join public.enrollments e on e.id = l.enrollment_id
   where l.id = (select solo from ol_crm)), 'one-to-one CRM enrolment');
-update public.enrollments set status = 'Confirmed' where id = (select enrollment_id from public.crm_leads where id = (select lead from ol_crm));
 select pg_temp.ok((select status from public.crm_leads where id = (select lead from ol_crm)) = 'CONVERTED'
   and exists (select 1 from public.crm_activities where lead_id = (select lead from ol_crm) and event_type = 'lead_converted'),
-  'confirmation converts through the unchanged 084 path');
+  'the paid enrolment converts through the unchanged 084 path');
 
 -- ---------------------------------------------------------------------------
 -- Cross-role denial suite (independent review of PR #145, folded in by the

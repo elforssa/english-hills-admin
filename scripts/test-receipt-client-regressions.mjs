@@ -9,7 +9,8 @@ import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/fun
 import { retryingImport } from '../src/lib/retryingImport.mjs';
 import { PENDING_PAYMENT_STORAGE_KEY, clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, readPendingPayment, recoverPendingPayment, savePendingPayment } from '../src/lib/receiptDraftKey.mjs';
 import { PAYROLL_CREATION_ENABLED, PAYROLL_DISABLED_MESSAGE } from '../src/lib/payroll/status.mjs';
-import { CORRECTION_BUSY_MESSAGE, RECEIPT_CHANGED_MESSAGE, DISCOUNT_REASONS, LAST_PAYMENT_NOTICE, PENDING_CONFIRMATION_MESSAGE, addDays, correctionErrorMessage, deskGuardError, discountReasonLabel, paymentBackdateDays, receptionConfirmationPending } from '../src/lib/financeCorrections.mjs';
+import { CORRECTION_BUSY_MESSAGE, RECEIPT_CHANGED_MESSAGE, DISCOUNT_REASONS, ENROLLMENT_CONFIRMED_MESSAGE, FREE_ENROLLMENT_MESSAGE, GROUP_PENDING_MESSAGE, LAST_PAYMENT_NOTICE, RETIRED_ENROLLMENT_STATUSES, addDays, correctionErrorMessage, deskGuardError, discountReasonLabel, isFreeEnrollment, isPayableEnrollmentCandidate, paymentBackdateDays, paymentResultMessage, unpaidOriginLabel } from '../src/lib/financeCorrections.mjs';
+import { groupSeatsLabel, loadGroupChoices } from '../src/lib/receiptGroupChoices.mjs';
 import { EVENTS, MEANINGFUL_EVENTS } from '../src/lib/crm/presentation.mjs';
 
 let generated = 0;
@@ -269,13 +270,17 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
     'app/(admin)/learning-assessments/page.jsx']) {
     const source = await readFile(new URL(`../src/${path}`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /new Date\(\)\.toISOString\(\)\.split\('T'\)\[0\]/, path);
-    assert.match(source, /localBusinessDate\(\)/, path);
+    // EAP (migration 127): EnrollmentModal no longer creates an enrollment, so it proposes
+    // no date at all; the others still default to the Casablanca date.
+    if (path === 'components/students/EnrollmentModal.jsx') assert.doesNotMatch(source, /new Date\(\)/, path);
+    else assert.match(source, /localBusinessDate\(\)/, path);
   }
   // The parent's re-enrollment request is dated by the server since portal readiness
   // (PRF-r2 D2): the page sends only the learner, the function stamps the Casablanca date.
   const parentPortal = await readFile(new URL('../src/app/(admin)/parent-portal/page.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(parentPortal, /date_inscription|Enrollment\.create/, 'parent portal sends no client date');
-  assert.match(parentPortal, /requestReenrollment\(selectedStudent\.id\)/);
+  // EAP (Q8): the portal no longer requests a re-enrollment; the parent writes to the desk.
+  assert.doesNotMatch(parentPortal, /requestReenrollment|portal_request_reenrollment/);
   const portalMigration = (await readdir(new URL('../supabase/migrations/', import.meta.url))).find(name => /_portal_readiness\.sql$/.test(name));
   const portalSql = await readFile(new URL(`../supabase/migrations/${portalMigration}`, import.meta.url), 'utf8');
   const reenrollment = portalSql.slice(portalSql.indexOf('function public.portal_request_reenrollment'));
@@ -333,16 +338,101 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.equal(guard({ paymentDate: '2026-09-25' }), null);
   assert.equal(guard({ paymentDate: '2026-09-24' }), 'La date du paiement ne peut pas être antérieure de plus de 31 jours.');
   assert.equal(guard({ payment: 0, paymentDate: '2026-01-01' }), null, 'a zero payment has no date window');
-  const pending = (change) => receptionConfirmationPending({ role: 'receptionist', sessionType: 'Adults', net: 1000, paidBefore: 0, payment: 99.99, ...change });
-  assert.equal(pending({}), true);
-  assert.equal(pending({ payment: 100 }), false, '10 % confirms');
-  assert.equal(pending({ paidBefore: 50, payment: 50 }), false, 'earlier payments count');
-  assert.equal(pending({ role: 'admin' }), false);
-  assert.equal(pending({ sessionType: 'Other' }), false, 'an Other service confirms nothing');
-  assert.equal(pending({ net: 0.3, payment: 0.03 }), false, '10 % exactly, in centimes, confirms');
-  for (const status of ['Submitted', 'Under Review', 'Trial']) assert.equal(pending({ enrollmentStatus: status }), true, status);
-  for (const status of ['Confirmed', 'Validated', 'Ended', 'unknown']) assert.equal(pending({ enrollmentStatus: status }), false, status);
-  assert.equal(PENDING_CONFIRMATION_MESSAGE, 'Acompte inférieur à 10 % : reçu émis, inscription en attente de confirmation par la direction.');
+  // EAP (migration 127, D2): any payment confirms; the reception 10 % rule is withdrawn.
+  const corrections127 = await readFile(new URL('../src/lib/financeCorrections.mjs', import.meta.url), 'utf8');
+  for (const [name, source] of [['financeCorrections', corrections127], ['ReceiptForm', receiptForm]]) {
+    assert.doesNotMatch(source, /RECEPTION_CONFIRMATION_THRESHOLD|PENDING_CONFIRMATION_MESSAGE|receptionConfirmationPending|Acompte inférieur|10 %/, `${name}: no 10 % rule`);
+  }
+  // Q1 = A: a new tuition charge at 100 % with its reason confirms without a receipt.
+  const free = (change) => isFreeEnrollment({ newCharge: true, sessionType: 'Adults', gross: 1000, discount: 1000, reasonCode: 'director_approval', payment: 0, ...change });
+  assert.equal(free({}), true);
+  assert.equal(free({ discount: 999.99 }), false, 'a 99.99 % discount is a commitment');
+  assert.equal(free({ gross: 0.3, discount: 0.3 }), true, 'compared in centimes');
+  assert.equal(free({ gross: 0, discount: 0 }), false, 'a zero price is not an agreement');
+  assert.equal(free({ reasonCode: '' }), false, 'the reason is part of the agreement');
+  assert.equal(free({ sessionType: 'Other' }), false, 'an Other service confirms nothing');
+  assert.equal(free({ newCharge: false }), false, 'only a new charge');
+  assert.equal(free({ payment: 10 }), false);
+  assert.equal(FREE_ENROLLMENT_MESSAGE, 'Remise de 100 % : inscription confirmée sans paiement (visible dans Contrôles).');
+  assert.equal(ENROLLMENT_CONFIRMED_MESSAGE, 'Paiement enregistré. Inscription confirmée.');
+  assert.equal(GROUP_PENDING_MESSAGE, 'Paiement enregistré. Apprenant inscrit — groupe à affecter.');
+  const paid = { receipt_id: 'r1', enrollment_id: 'e1', enrollment_confirmed: true, student_enrolled: true, free_enrollment: false };
+  assert.equal(paymentResultMessage({ ...paid, group_pending: false }), ENROLLMENT_CONFIRMED_MESSAGE);
+  assert.equal(paymentResultMessage({ ...paid, group_pending: true }), GROUP_PENDING_MESSAGE);
+  assert.equal(paymentResultMessage({ ...paid, group_pending: true }, { placed: true }), ENROLLMENT_CONFIRMED_MESSAGE, 'placed after the payment');
+  assert.equal(paymentResultMessage({ ...paid, group_pending: true }, { placementError: 'Ce groupe est complet.' }),
+    'Paiement enregistré. Groupe non affecté : Ce groupe est complet. Apprenant inscrit — groupe à affecter.');
+  assert.equal(paymentResultMessage({ ...paid, enrollment_confirmation_pending: true, group_pending: true }), GROUP_PENDING_MESSAGE,
+    'a stale pending key is ignored');
+  assert.equal(paymentResultMessage({ receipt_id: 'r1', replayed: true }), 'Paiement déjà enregistré — reçu existant affiché.');
+  assert.equal(paymentResultMessage({ receipt_id: 'r1', student_enrolled: false }), 'Paiement enregistré et reçu émis.', 'an Other service');
+  assert.equal(paymentResultMessage({ charge_id: 'c1', receipt_id: null, balance: 1000 }), 'Solde à payer enregistré. Aucun reçu émis.');
+  assert.equal(paymentResultMessage({ receipt_id: null, enrollment_id: 'e1', free_enrollment: true, group_pending: true }), FREE_ENROLLMENT_MESSAGE);
+  assert.equal(paymentResultMessage({ receipt_id: null, enrollment_id: 'e1', free_enrollment: true }, { placementError: 'Ce groupe est complet.' }),
+    `${FREE_ENROLLMENT_MESSAGE} Groupe non affecté : Ce groupe est complet.`);
+  // The candidate list hides history: retired statuses and Ended rows, unless CRM-linked.
+  assert.deepEqual(RETIRED_ENROLLMENT_STATUSES, ['Submitted', 'Under Review', 'Trial', 'Rejected']);
+  for (const status of ['Confirmed', 'Validated']) assert.equal(isPayableEnrollmentCandidate({ status }), true, status);
+  for (const status of ['Submitted', 'Under Review', 'Trial', 'Rejected', 'Ended']) {
+    assert.equal(isPayableEnrollmentCandidate({ status }), false, status);
+    assert.equal(isPayableEnrollmentCandidate({ status, crm_linked: true }), true, `${status} CRM-linked`);
+  }
+  assert.match(receiptForm, /enrollments\.filter\(\(row\) => isPayableEnrollmentCandidate\(row\)/);
+  assert.match(receiptForm, /row\.crm_linked && !\['Rejected', 'Ended'\]\.includes\(row\.status\)/, 'the CRM marker mirrors the server check');
+  // D3: the free enrollment goes through the same enrollment checks as a payment.
+  assert.match(receiptForm, /const confirmsEnrollment = todayPayment > 0 \|\| freeEnrollment;/);
+  assert.match(receiptForm, /if \(confirmsEnrollment && !selectedCharge\?\.enrollment_id && hasCrmEnrollment/);
+  // D3: the optional group of a tuition session, passed to the page beside the payment payload.
+  assert.match(receiptForm, /<Field label="Groupe \(facultatif\)">/);
+  assert.match(receiptForm, /const groupSession = form\.session_type && form\.session_type !== 'Other' \? form\.session_type : '';/);
+  assert.match(receiptForm, /const groupOffered = Boolean\(groupSession && form\.level && form\.school_year\) && !targetEnrollment\?\.group_id;/);
+  assert.match(receiptForm, /\{ groupId: confirmsEnrollment && groupOffered \? groupId : '' \}\);/);
+  assert.match(receiptForm, /disabled=\{group\.free === 0\}/, 'a full group cannot be chosen');
+  assert.equal(groupSeatsLabel(3), '3 places libres');
+  assert.equal(groupSeatsLabel(1), '1 place libre');
+  assert.equal(groupSeatsLabel(0), 'complet');
+  assert.equal(groupSeatsLabel(null), 'places non limitées');
+  {
+    // Seats counted as academic_security.seats_taken: distinct learners, archived ones excluded.
+    const tables = {
+      groups: [
+        { id: 'g1', name: 'A1 matin', niveau: 'A1', session_type: 'Adults', annee: '2026-2027', capacite_max: 3 },
+        { id: 'g2', name: 'A1 soir', niveau: 'A1', session_type: 'Adults', annee: '2026/2027', capacite_max: 2 },
+        { id: 'g3', name: 'A1 ancien', niveau: 'A1', session_type: 'Adults', annee: '2025-2026', capacite_max: 2 },
+        { id: 'g4', name: 'A1 enfants', niveau: 'A1', session_type: 'Yearly', annee: '2026-2027', capacite_max: 2 },
+        { id: 'g5', name: 'A1 sans limite', niveau: 'A1', session_type: 'Adults', annee: '2026-2027', capacite_max: null },
+      ],
+      enrollments: [
+        { student_id: 's1', group_id: 'g1', status: 'Validated' }, { student_id: 's1', group_id: 'g1', status: 'Ended' },
+        { student_id: 's2', group_id: 'g1', status: 'Rejected' }, { student_id: 's3', group_id: 'g1', status: 'Validated' },
+        { student_id: 's4', group_id: 'g2', status: 'Validated' }, { student_id: 's5', group_id: 'g2', status: 'Validated' },
+      ],
+      students: [
+        { id: 's1', groupe_id: 'g1', deleted_at: null }, { id: 's2', groupe_id: null, deleted_at: null },
+        { id: 's3', groupe_id: null, deleted_at: '2026-10-01T00:00:00Z' }, { id: 's4', groupe_id: 'g2', deleted_at: null },
+        { id: 's5', groupe_id: null, deleted_at: null }, { id: 's6', groupe_id: 'g1', deleted_at: null },
+      ],
+    };
+    const reads = [];
+    const fakeClient = { from(table) {
+      const filters = [];
+      const query = {
+        select() { return query; },
+        eq(column, value) { filters.push((row) => row[column] === value); return query; },
+        neq(column, value) { filters.push((row) => row[column] !== value); return query; },
+        in(column, values) { filters.push((row) => values.includes(row[column])); return query; },
+        is(column, value) { filters.push((row) => (row[column] ?? null) === value); return query; },
+        order() { return query; },
+        then(resolve) { reads.push(table); resolve({ data: tables[table].filter((row) => filters.every((test) => test(row))), error: null }); },
+      };
+      return query;
+    } };
+    const choices = await loadGroupChoices(fakeClient, { sessionType: 'Adults', level: 'A1', schoolYear: '2026/2027' });
+    assert.deepEqual(choices.map((group) => [group.id, group.free]), [['g1', 1], ['g2', 0], ['g5', null]],
+      'g1: s1 and s6 (s2 Rejected, s3 archived); g2 full; other years and programmes excluded');
+    assert.deepEqual(await loadGroupChoices(fakeClient, { sessionType: 'Other', level: 'A1', schoolYear: '2026/2027' }), []);
+    assert.deepEqual(await loadGroupChoices(fakeClient, { sessionType: 'Adults', level: '', schoolYear: '2026/2027' }), []);
+  }
   assert.equal(LAST_PAYMENT_NOTICE, 'L’inscription restera confirmée. Elle apparaîtra dans « Inscriptions confirmées sans paiement actif » et la conversion CRM sera signalée pour vérification.');
   assert.equal(correctionErrorMessage({ code: 'PT409', message: 'Inscription ou paiement en cours.' }, 'x'), CORRECTION_BUSY_MESSAGE);
   assert.equal(CORRECTION_BUSY_MESSAGE, 'Paiement en cours pour cet apprenant : actualisez puis réessayez.');
@@ -377,7 +467,39 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   const financePageE2 = await readFile(new URL('../src/app/(admin)/finance/page.jsx', import.meta.url), 'utf8');
   assert.match(financePageE2, /\{role === 'director' && <FinanceReviewQueue \/>\}/);
   const newPage = await readFile(new URL('../src/app/(admin)/receipts/new/page.jsx', import.meta.url), 'utf8');
-  assert.match(newPage, /data\.enrollment_confirmation_pending \? PENDING_CONFIRMATION_MESSAGE/);
+  assert.doesNotMatch(newPage, /enrollment_confirmation_pending|PENDING_CONFIRMATION_MESSAGE|10 %/);
+  assert.match(newPage, /const message = paymentResultMessage\(data, placement\);/);
+  // D3: after the payment, fresh versions of the enrollment and the learner, then the placement
+  // with the enrollment; a refusal is a message, never an undo of the payment.
+  assert.match(newPage, /const placement = groupId && data\.enrollment_id && !data\.replayed\n\s+\? await placeAfterPayment\(client, data\.enrollment_id, groupId\) : \{\};/);
+  assert.match(newPage, /from\('enrollments'\)\s*\.select\('id,updated_at,student_id'\)\.eq\('id', enrollmentId\)/);
+  assert.match(newPage, /from\('students'\)\s*\.select\('id,updated_at'\)\.eq\('id', enrollment\.student_id\)/);
+  assert.match(newPage, /placeLearnerInGroup\(client, \{ student, group: groupId, enrollment \}\)/);
+  assert.match(newPage, /if \(error\) return \{ placementError: membershipErrorMessage\(error\) \};\n\s+await invalidateAfterLearnerSave\(queryClient\);/,
+    'a placement refreshes the group, learner and enrollment caches');
+  assert.doesNotMatch(newPage, /void_financial_receipt|delete_mistaken_receipt/, 'a placement refusal never undoes the payment');
+  const afterPayment = newPage.slice(newPage.indexOf("rpc('create_charge_payment'"));
+  assert.ok(afterPayment.indexOf('placeAfterPayment(client') > afterPayment.indexOf('clearPendingPayment();'), 'placement follows the payment');
+  assert.match(afterPayment, /await Promise\.all\(\[\n\s+invalidateAfterFinance\(queryClient\),/);
+  assert.match(newPage, /initialData=\{\{ student_id: searchParams\.get\('student_id'\) \|\| ''/, '« Inscrire et encaisser » links here with ?student_id=');
+  // D5: the director's « Contrôles » list after EAP.
+  const reviewQueue = await readFile(new URL('../src/components/finance/FinanceReviewQueue.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(reviewQueue, /pending_confirmation|10 %/);
+  assert.match(reviewQueue, /title="Inscriptions confirmées sans aucun paiement"[^\n]*rows=\{data\.unpaid_never\}/);
+  assert.match(reviewQueue, /Origine : \{unpaidOriginLabel\(row\.origin\)\}/);
+  assert.match(reviewQueue, /title="Inscriptions payées hors rattachement"[^\n]*rows=\{data\.paid_unlinked\}/);
+  assert.match(reviewQueue, /\{row\.receipt_count\} reçu/);
+  const paidUnlinked = reviewQueue.slice(reviewQueue.indexOf('rows={data.paid_unlinked}'), reviewQueue.indexOf('</ReadState>'));
+  assert.doesNotMatch(paidUnlinked, /<button|onClick|receipts\/new/, 'section (e) is read-only');
+  for (const key of ['unpaid_confirmed', 'discounts', 'backdated']) assert.match(reviewQueue, new RegExp(`rows=\\{data\\.${key}\\}`), key);
+  const migration127 = await readFile(new URL('../supabase/migrations/127_enrollment_at_payment.sql', import.meta.url), 'utf8');
+  const queue127 = migration127.slice(migration127.indexOf('function public.get_finance_review_queue'));
+  for (const key of ["'unpaid_never'", "'paid_unlinked'", "'origin'", "'receipt_count'", "'created_on'", "'learner_name'"]) assert.ok(queue127.includes(key), key);
+  assert.equal(unpaidOriginLabel({ kind: 'placement_without_enrollment', reason: 'Bourse', author_role: 'director' }),
+    'Affectation sans inscription payée — Bourse (Direction)');
+  assert.equal(unpaidOriginLabel({ kind: 'reopen', reason: null, author_role: 'admin' }), 'Réouverture');
+  assert.equal(unpaidOriginLabel({ kind: 'capacity_override', reason: 'Groupe complet accepté' }), 'Dépassement de capacité — Groupe complet accepté');
+  assert.equal(unpaidOriginLabel(null), 'antérieure à cette version');
 }
 
 const emailFunction = await readFile(new URL('../supabase/functions/sendReceiptEmail/index.ts', import.meta.url), 'utf8');

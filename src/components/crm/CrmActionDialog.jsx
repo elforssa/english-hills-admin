@@ -31,7 +31,7 @@ const nextTypes = {
   whatsapp_followup: 'Suivi WhatsApp',
   confirm_placement_test: 'Préparer un test de niveau',
   center_visit: 'Visite au centre',
-  enrollment_followup: 'Suivi de pré-inscription'
+  enrollment_followup: 'Suivi d’inscription'
 };
 const stepTasks = {
   placement_test: 'confirm_placement_test',
