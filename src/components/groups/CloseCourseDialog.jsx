@@ -13,7 +13,7 @@ import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { membershipErrorMessage } from '@/lib/academic/membershipActions.mjs';
 import {
   UNPLACED_CHOICES, allUnplacedChosen, closeCourse, closeCourseMessage, closeCoursePreview, courseDatesLabel, courseMoney as money,
-  unplacedLists,
+  effectiveUnplacedChoices, unplacedChoicesFor, unplacedLists,
 } from '@/lib/academic/courseClose.mjs';
 
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
@@ -37,14 +37,17 @@ export default function CloseCourseDialog({ groupId, onClose, onClosed }) {
   useEffect(() => { load(); }, [load]);
 
   const unplaced = preview?.unplaced || [];
-  const ready = preview && !preview.closed_at && allUnplacedChosen(unplaced, choices) && reason.trim().length > 0
+  // Before the end date (an empty course), every paid enrollment without a group stays waiting.
+  const offered = unplacedChoicesFor(preview);
+  const chosen = effectiveUnplacedChoices(preview, choices);
+  const ready = preview && !preview.closed_at && allUnplacedChosen(unplaced, chosen) && reason.trim().length > 0
     && reason.trim().length <= 200 && (preview.empty || preview.finished);
 
   const submit = async (event) => {
     event.preventDefault();
     if (!ready) return;
     setSaving(true);
-    const { attach, end } = unplacedLists(unplaced, choices);
+    const { attach, end } = unplacedLists(unplaced, chosen);
     const { data, error } = await closeCourse(getBrowserClient(), {
       groupId, expectedCount: preview.live_count, reason: reason.trim(), attach, endUnplaced: end,
     });
@@ -98,15 +101,16 @@ export default function CloseCourseDialog({ groupId, onClose, onClosed }) {
             {unplaced.length > 0 && (
               <fieldset className="space-y-2 rounded-md border border-border p-3">
                 <legend className="px-1 font-semibold">Inscriptions payées sans groupe pour ce cours</legend>
-                <p className="text-xs text-muted-foreground">Choisissez pour chacune avant de clôturer.</p>
+                <p className="text-xs text-muted-foreground">{preview.finished ? 'Choisissez pour chacune avant de clôturer.'
+                  : 'Le cours n’est pas terminé : ces inscriptions restent en attente de leur groupe.'}</p>
                 {unplaced.map(row => (
                   <div key={row.enrollment_id} className="rounded-md border border-border p-2" data-testid="unplaced-row">
                     <p className="font-medium">{row.full_name}
                       <span className="font-normal text-muted-foreground"> · {row.level || 'sans niveau'} · payé {money(row.paid_total)}
                         {row.has_other_live ? ' · autre inscription en cours' : ''}
                         {row.created_after_end || row.next_session_deposit ? ' · inscrit ou payé après la fin du cours (session suivante ?)' : ''}</span></p>
-                    <div className="mt-1 flex flex-wrap gap-3" role="radiogroup" aria-label={`Choix pour ${row.full_name}`}>
-                      {UNPLACED_CHOICES.map(choice => (
+                    {preview.finished ? <div className="mt-1 flex flex-wrap gap-3" role="radiogroup" aria-label={`Choix pour ${row.full_name}`}>
+                      {offered.map(choice => (
                         <label key={choice.value} className="inline-flex items-center gap-1.5">
                           <input type="radio" name={`unplaced-${row.enrollment_id}`} value={choice.value}
                             checked={choices[row.enrollment_id] === choice.value}
@@ -114,8 +118,8 @@ export default function CloseCourseDialog({ groupId, onClose, onClosed }) {
                           {choice.label}
                         </label>
                       ))}
-                    </div>
-                    {choices[row.enrollment_id] === 'attach' && <p className="mt-1 text-xs text-muted-foreground">{UNPLACED_CHOICES[0].note}</p>}
+                    </div> : <p className="mt-1 text-xs text-muted-foreground">{offered[0].label}</p>}
+                    {chosen[row.enrollment_id] === 'attach' && <p className="mt-1 text-xs text-muted-foreground">{UNPLACED_CHOICES[0].note}</p>}
                   </div>
                 ))}
               </fieldset>

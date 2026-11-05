@@ -22,7 +22,7 @@ import { safeReturnTo } from '@/lib/navigation.mjs';
 import { getTeacherRoster, rosterToAcademicRows } from '@/lib/portal';
 import ReadState from '@/components/operational/ReadState';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
-import { courseDatesLabel, courseFinished, formatCourseDate, reopenCourse, reopenCourseMessage } from '@/lib/academic/courseClose.mjs';
+import { courseDatesLabel, courseFinished, fetchClosedOnlineGroupIds, formatCourseDate, isClosedCourse, reopenCourse, reopenCourseMessage } from '@/lib/academic/courseClose.mjs';
 import { isOnlineSessionType } from '@/lib/academicPrograms';
 import CloseCourseDialog from '@/components/groups/CloseCourseDialog';
 
@@ -72,6 +72,8 @@ export default function GroupDetail() {
   const [closeOpen, setCloseOpen] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [pastLearners, setPastLearners] = useState([]);
+  // Online courses closed on their own page (the closed-online set; staff only).
+  const [closedOnline, setClosedOnline] = useState(() => new Set());
 
   useEffect(() => {
     if (!id) return;
@@ -80,6 +82,8 @@ export default function GroupDetail() {
     (async () => {
       const [g] = await entities.Group.filter({ id });
       setGroup(g || null);
+      setClosedOnline(g && isOnlineSessionType(g.session_type) && role !== 'teacher'
+        ? await fetchClosedOnlineGroupIds(getBrowserClient()) : new Set());
       if (g?.teacher_id) {
         const [t] = await getTeacherDirectory({ id: g.teacher_id });
         setTeacher(t || null);
@@ -153,7 +157,9 @@ export default function GroupDetail() {
     setReload(value => value + 1);
   };
   const closed = Boolean(group?.closed_at);
-  const canPlace = canManage && !closed;
+  // An online course closed on its page takes no learner either (CDC D4, S3).
+  const onlineClosed = !closed && isClosedCourse(group, closedOnline);
+  const canPlace = canManage && !closed && !onlineClosed;
 
   // Q8 = A: the director undoes a close made by mistake; a conflict reloads the page.
   const reopen = async () => {
@@ -297,6 +303,11 @@ export default function GroupDetail() {
       {closed && (
         <p role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm">
           <Lock size={15} className="shrink-0" /> Cours clôturé le {formatCourseDate(group.closed_at)}. Il n’accepte plus d’apprenant.
+        </p>
+      )}
+      {onlineClosed && (
+        <p role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm">
+          <Lock size={15} className="shrink-0" /> Cours en ligne clôturé sur sa page Cours en ligne. Il n’accepte plus d’apprenant.
         </p>
       )}
 

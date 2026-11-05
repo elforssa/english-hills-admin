@@ -1038,7 +1038,7 @@ export default function GuideContent() {
 </li>
 </ol>
 <figure className="fig narrow">
-<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027, les dates du cours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe pour une Mise à niveau avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027, les dates du cours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Nom du groupe</span>&nbsp;: obligatoire.</li>
 <li><span className="ui">Enseignant</span>&nbsp;: obligatoire. Il choisit parmi les enseignants existants.</li>
 <li><span className="ui">Jours</span>&nbsp;: du texte libre, mais l’<b>Emploi du temps</b> s’en sert (écrivez Lun, Mar, Mer, Jeu, Ven, Sam, Dim).</li>
@@ -1487,7 +1487,7 @@ export default function GuideContent() {
 <p>Liste des groupes (programme, niveau, dates du cours, enseignant, horaire, salle, terme). Le filtre de vue montre <span className="ui">En cours</span> par défaut, ou <span className="ui">Clôturés</span>. Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant et d’une année scolaire, et un programme court de ses dates (<a href="#q8">Q8</a>)&nbsp;; sa page affiche l’année et les dates.</p>
 <p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span> (<a href="#q10">Q10</a>). Un cours clôturé affiche «&nbsp;Cours clôturé le …&nbsp;», n’a plus ces boutons et montre la liste <b>Anciens apprenants du cours</b>.</p>
 <figure className="fig" style={{ marginBottom: '10px' }}>
-<Image src="/helpdesk/s17-groups.jpg" width={1700} height={1075} alt="Liste des groupes et niveaux" unoptimized tabIndex={0} role="button" /></figure>
+<Image src="/helpdesk/s17-groups.jpg" width={1700} height={1075} alt="Liste des groupes et niveaux en vue En cours, avec la colonne Dates et un cours marqué terminé" unoptimized tabIndex={0} role="button" /></figure>
 </div>
 <div className="card">
 <h4>Présences</h4>

@@ -3,7 +3,7 @@
 import { currentSchoolYear, groupMemberIds, groupYear, isSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
 import { EGC_REASON_TEXT, groupDeleteErrorMessage, membershipErrorMessage } from '@/lib/academic/membershipActions.mjs';
 import {
-  GROUP_VIEWS, courseDatesError, courseDatesLabel, courseDatesRequired, courseEndedSuffix, fetchClosedOnlineGroupIds,
+  GROUP_VIEWS, capacityAfterProgrammeChange, courseDatesError, courseDatesLabel, courseDatesRequired, courseEndedSuffix, fetchClosedOnlineGroupIds,
   formatCourseDate, isClosedCourse, listCoursesToClose, oneToOneGroupName,
 } from '@/lib/academic/courseClose.mjs';
 import CloseCourseDialog from '@/components/groups/CloseCourseDialog';
@@ -65,8 +65,11 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
       ...f,
       session_type: sessionType,
       niveau: firstLevel,
+      // Q4 = A: One-to-One has capacity 1; leaving it gives a group's capacity back.
+      capacite_max: capacityAfterProgrammeChange({ from: f.session_type, to: sessionType, capacity: f.capacite_max,
+        savedCapacity: group?.capacite_max, savedProgramme: group?.session_type }),
       ...(sessionType === 'Adults' ? { categorie: 'Adultes' } : {}),
-      ...(sessionType === 'One-to-One' ? { capacite_max: 1, categorie: 'Particulier' } : {}),
+      ...(sessionType === 'One-to-One' ? { categorie: 'Particulier' } : {}),
       ...(isOnlineSessionType(sessionType) ? { teacher_id: '', salle: '', date_debut: '', date_fin: '' } : {}),
     }));
   };
@@ -77,9 +80,12 @@ function GroupModal({ group, teachers, onSave, onClose, receptionist, memberCoun
       toast.error('Année scolaire invalide : utilisez le format 2026/2027 (deux années consécutives).');
       return;
     }
-    // CDC (D1): the course dates, as the database checks them.
+    // CDC (D1): the course dates, as the database checks them (never stricter: an edit
+    // that keeps the programme and the dates is not re-checked, as in the database).
     const datesError = courseDatesError({ sessionType: form.session_type, schoolYear: form.school_year.trim(),
-      dateDebut: form.date_debut, dateFin: form.date_fin });
+      dateDebut: form.date_debut, dateFin: form.date_fin,
+      previous: group ? { sessionType: group.session_type, schoolYear: (group.annee || '').replace('-', '/'),
+        dateDebut: group.date_debut || '', dateFin: group.date_fin || '' } : null });
     if (datesError) { toast.error(datesError); return; }
     setSaving(true);
     const payload = { name: form.name, langue: form.langue || 'Anglais', session_type: form.session_type,
@@ -205,6 +211,10 @@ export default function Groups() {
   const [closeTarget, setCloseTarget] = useState(null);
   const director = role === 'director';
   const views = GROUP_VIEWS.filter(v => v.value !== 'a-cloturer' || director);
+  // « À clôturer » is the director's list: a link to it opened by another role says so
+  // and shows the courses in progress.
+  const directorOnlyView = view === 'a-cloturer' && !director;
+  const shownView = directorOnlyView ? 'en-cours' : view;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -267,8 +277,8 @@ export default function Groups() {
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '—';
   const finishedById = new Map(toClose.map(row => [row.group_id, row]));
-  const inView = (g) => view === 'a-cloturer' ? finishedById.has(g.id)
-    : view === 'clotures' ? isClosedCourse(g, closedOnline) : !isClosedCourse(g, closedOnline);
+  const inView = (g) => shownView === 'a-cloturer' ? finishedById.has(g.id)
+    : shownView === 'clotures' ? isClosedCourse(g, closedOnline) : !isClosedCourse(g, closedOnline);
   const filtered = groups.filter(g => (
     inView(g)
     && (!filterTerme || g.terme === filterTerme)
@@ -299,7 +309,7 @@ export default function Groups() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Groupes & niveaux</h1>
-          <p className="text-muted-foreground text-sm mt-1">{filtered.length} groupe{filtered.length > 1 ? 's' : ''}{view === 'a-cloturer' ? ' à clôturer' : view === 'clotures' ? ' clôturés' : ' en cours'}</p>
+          <p className="text-muted-foreground text-sm mt-1">{filtered.length} groupe{filtered.length > 1 ? 's' : ''}{shownView === 'a-cloturer' ? ' à clôturer' : shownView === 'clotures' ? ' clôturés' : ' en cours'}</p>
         </div>
         {role !== 'teacher' && <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouveau groupe
@@ -307,7 +317,7 @@ export default function Groups() {
       </div>
 
       <div className="mb-5 flex flex-wrap gap-3">
-        <select aria-label="Vue des groupes" className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={view} onChange={e => setView(e.target.value)}>
+        <select aria-label="Vue des groupes" className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={shownView} onChange={e => setView(e.target.value)}>
           {views.map(v => <option key={v.value} value={v.value}>{v.label}{v.value === 'a-cloturer' && toClose.length ? ` (${toClose.length})` : ''}</option>)}
         </select>
         <select className="border border-border rounded-md px-3 py-2 text-sm bg-white" value={filterSession} onChange={e => { setFilterSession(e.target.value); setFilterLevel(''); }}>
@@ -324,6 +334,11 @@ export default function Groups() {
         </select>
       </div>
 
+      {directorOnlyView && (
+        <p role="status" className="mb-5 rounded-md border border-border bg-muted p-3 text-sm">
+          La liste « À clôturer » est réservée à la direction, qui clôture les cours terminés. Voici les groupes en cours.
+        </p>
+      )}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
           <>

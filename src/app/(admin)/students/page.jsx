@@ -24,7 +24,7 @@ import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import ProgrammePill from '@/components/operational/ProgrammePill';
 import { currentSchoolYear, fileAwaitsGroup, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
-import { closeSchoolYearPreview } from '@/lib/academic/courseClose.mjs';
+import { closeSchoolYearPreview, programmeBreakdown, yearCloseHasWork } from '@/lib/academic/courseClose.mjs';
 import { PILL_CLASS, PILL_SELECT_CLASS } from '@/lib/ui/pill.mjs';
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
@@ -110,14 +110,14 @@ function YearCloseDialog({ onClose, onDone }) {
           : <div className="space-y-1 text-sm" role="status">
             <p>{count} inscription(s) active(s) seront terminées. Les apprenants sans autre inscription deviennent « Ancien apprenant ». Paiements et soldes ne changent pas.</p>
             {Number(preview.kept_in_later_courses) > 0 && <p>{preview.kept_in_later_courses} inscription(s) d’un cours qui se termine plus tard restent en cours.</p>}
-            {waiting > 0 && <p>{waiting} inscription(s) payée(s) sans groupe restent en attente de leur cours (<Link href="/students?group=unassigned" className="text-primary underline">Groupe à affecter</Link>).</p>}
-            {carried > 0 && <p className="text-amber-700">{carried} inscription(s) payée(s) sans groupe d’une année scolaire précédente attendent toujours un groupe.</p>}
+            {waiting > 0 && <p>{waiting} inscription(s) payée(s) sans groupe restent en attente de leur cours ({programmeBreakdown(preview.kept_waiting_unplaced?.by_programme)}) (<Link href="/students?group=unassigned" className="text-primary underline">Groupe à affecter</Link>).</p>}
+            {carried > 0 && <p className="text-amber-700">{carried} inscription(s) payée(s) sans groupe d’une année scolaire précédente attendent toujours un groupe ({programmeBreakdown(preview.carried_over_waiting?.by_programme)}).</p>}
             <p>{Number(preview.groups_to_mark || 0)} groupe(s) seront marqués clôturés.</p>
           </div>}
         <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif *
           <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" maxLength={200} required value={reason} onChange={e => setReason(e.target.value)} /></label>
         <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button type="submit" disabled={saving || !count || !reason.trim()}>{saving ? '…' : 'Clôturer'}</Button></div>
+          <Button type="submit" disabled={saving || !yearCloseHasWork(preview) || !reason.trim()}>{saving ? '…' : 'Clôturer'}</Button></div>
       </form>
     </DialogContent>
   </Dialog>;

@@ -51,18 +51,34 @@ export function courseWindow(schoolYear) {
   return { from: `${first}-06-01`, to: `${first + 1}-08-31` };
 }
 
-// The form's check, the same rules as the database (D1). Returns '' when valid.
-export function courseDatesError({ sessionType, schoolYear, dateDebut, dateFin }) {
+// The form's check, exactly the database's rules (D1), never stricter. Returns '' when
+// valid. `previous` is the saved group when editing ({ sessionType, schoolYear,
+// dateDebut, dateFin }): like the database, the required dates are checked on a
+// creation, a change of programme or a date change only, and the window on a creation,
+// a year change or a date change. A programme with optional dates may carry one date.
+export function courseDatesError({ sessionType, schoolYear, dateDebut, dateFin, previous = null }) {
   const start = dateDebut || '', end = dateFin || '';
   if (isOnlineSessionType(sessionType)) return start || end ? COURSE_REASON_TEXT.online_dates : '';
-  if (courseDatesRequired(sessionType) && (!start || !end)) return COURSE_REASON_TEXT.dates_required;
-  if ((start && !end) || (!start && end)) return 'Renseignez les deux dates du cours, ou aucune.';
+  const datesChanged = !previous || (previous.dateDebut || '') !== start || (previous.dateFin || '') !== end;
+  const programmeChanged = !previous || previous.sessionType !== sessionType;
+  const yearChanged = !previous || previous.schoolYear !== schoolYear;
+  if (courseDatesRequired(sessionType) && (programmeChanged || datesChanged) && (!start || !end)) {
+    return COURSE_REASON_TEXT.dates_required;
+  }
   if (start && end && end < start) return 'La date de fin doit suivre la date de début.';
   const window = courseWindow(schoolYear);
-  if ((start || end) && window && [start, end].some(d => d && (d < window.from || d > window.to))) {
+  if ((start || end) && (datesChanged || yearChanged) && window && [start, end].some(d => d && (d < window.from || d > window.to))) {
     return `Les dates du cours doivent être comprises dans l’année scolaire du groupe (du 1er juin ${window.from.slice(0, 4)} au 31 août ${window.to.slice(0, 4)}).`;
   }
   return '';
+}
+
+// A programme change in the group form: One-to-One forces capacity 1 (Q4 = A); leaving
+// One-to-One gives back the group's own capacity, or the default 12 for a new group.
+export function capacityAfterProgrammeChange({ from, to, capacity, savedCapacity = null, savedProgramme = null }) {
+  if (to === 'One-to-One') return 1;
+  if (from === 'One-to-One') return savedProgramme && savedProgramme !== 'One-to-One' && savedCapacity ? savedCapacity : 12;
+  return capacity;
 }
 
 export function formatCourseDate(value) {
@@ -146,6 +162,26 @@ export function unplacedLists(unplaced, choices) {
 }
 export function allUnplacedChosen(unplaced, choices) {
   return (unplaced || []).every(row => ['attach', 'end', 'wait'].includes(choices?.[row.enrollment_id]));
+}
+// Before its end date only an empty course closes, and that close touches no paid
+// enrollment without a group (close_course refuses course.not_finished otherwise): the
+// dialog then offers « Laisser en attente » only, already chosen.
+export function unplacedChoicesFor(preview) {
+  return preview?.finished ? UNPLACED_CHOICES : UNPLACED_CHOICES.filter(choice => choice.value === 'wait');
+}
+export function effectiveUnplacedChoices(preview, choices) {
+  if (preview?.finished) return choices || {};
+  return Object.fromEntries((preview?.unplaced || []).map(row => [row.enrollment_id, 'wait']));
+}
+
+// « Clôturer l'année »: the command has work when it ends enrollments or marks groups.
+export function yearCloseHasWork(preview) {
+  return Number(preview?.to_end || 0) > 0 || Number(preview?.groups_to_mark || 0) > 0;
+}
+// A by-programme count ({ "Mise à niveau": 3, "Summer Camp": 1 }) as « Mise à niveau 3, Summer Camp 1 ».
+export function programmeBreakdown(byProgramme) {
+  return Object.entries(byProgramme || {}).filter(([, n]) => Number(n) > 0)
+    .sort(([a], [b]) => a.localeCompare(b, 'fr')).map(([programme, n]) => `${programme} ${Number(n)}`).join(', ');
 }
 
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;

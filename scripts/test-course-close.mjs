@@ -7,10 +7,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   COURSE_DATE_PROGRAMMES, COURSE_PLACEMENT_DATES_TEXT, COURSE_REASON_TEXT, GROUP_VIEWS, UNPLACED_CHOICES,
-  allUnplacedChosen, closeCourse, closeCourseMessage, closeCoursePreview, closeSchoolYearPreview, courseDatesError,
+  allUnplacedChosen, capacityAfterProgrammeChange, closeCourse, closeCourseMessage, closeCoursePreview, closeSchoolYearPreview, courseDatesError,
   courseDatesLabel, courseDatesRequired, courseEndedSuffix, courseErrorMessage, courseFinished, courseReason, courseWindow,
   coursesToCloseCount, fetchClosedOnlineGroupIds, formatCourseDate, isClosedCourse, listCoursesToClose, oneToOneGroupName,
-  openCourses, reopenCourse, reopenCourseMessage, unplacedLists,
+  effectiveUnplacedChoices, openCourses, programmeBreakdown, reopenCourse, reopenCourseMessage, unplacedChoicesFor, unplacedLists,
+  yearCloseHasWork,
 } from '../src/lib/academic/courseClose.mjs';
 import {
   CLOSED_GROUP_HISTORY_MESSAGE, GROUP_HISTORY_MESSAGE, groupDeleteErrorMessage, membershipErrorMessage,
@@ -50,8 +51,34 @@ assert.match(migration, /Les dates du cours doivent être comprises dans l’ann
   'the form says what the server says');
 assert.equal(courseDatesError({ ...ok, dateDebut: '2026-12-21' }), 'La date de fin doit suivre la date de début.');
 assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '', dateFin: '' }), '', 'Yearly may stay undated');
-assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '2026-09-01', dateFin: '' }),
-  'Renseignez les deux dates du cours, ou aucune.');
+// Never stricter than the database: an optional programme may carry one date.
+assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '2026-09-01', dateFin: '' }), '',
+  'Yearly may carry its start date alone');
+assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '', dateFin: '2027-06-30' }), '',
+  'Yearly may carry its end date alone');
+assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '', dateFin: '2027-09-01' }),
+  'Les dates du cours doivent être comprises dans l’année scolaire du groupe (du 1er juin 2026 au 31 août 2027).');
+// Editing: like the database, an undated short-programme group (closed, or created
+// before 128) can change its name or teacher without dates; a date or programme change
+// re-checks them, and only a date or year change re-checks the window.
+const saved = { sessionType: 'Mise à niveau', schoolYear: '2026/2027', dateDebut: '', dateFin: '' };
+assert.equal(courseDatesError({ ...saved, previous: saved }), '', 'an unchanged undated group saves');
+assert.equal(courseDatesError({ ...saved, dateDebut: '2026-10-01', previous: saved }), COURSE_REASON_TEXT.dates_required);
+assert.equal(courseDatesError({ ...saved, sessionType: 'Adults', previous: saved }), COURSE_REASON_TEXT.dates_required);
+assert.equal(courseDatesError({ ...saved, sessionType: 'Yearly', previous: saved }), '');
+assert.equal(courseDatesError({ sessionType: 'Yearly', schoolYear: '2026/2027', dateDebut: '', dateFin: '',
+  previous: { ...saved, sessionType: 'Yearly' } }), '');
+const dated = { ...ok, previous: { ...ok } };
+assert.equal(courseDatesError({ ...dated, schoolYear: '2027/2028' }),
+  'Les dates du cours doivent être comprises dans l’année scolaire du groupe (du 1er juin 2027 au 31 août 2028).', 'a year change re-checks the window');
+assert.equal(courseDatesError({ ...dated, dateFin: '' }), COURSE_REASON_TEXT.dates_required, 'a date is never cleared');
+// Q4 = A: One-to-One forces capacity 1; leaving it gives a capacity back.
+assert.equal(capacityAfterProgrammeChange({ from: 'Mise à niveau', to: 'One-to-One', capacity: 8 }), 1);
+assert.equal(capacityAfterProgrammeChange({ from: 'One-to-One', to: 'Mise à niveau', capacity: 1 }), 12, 'a new group gets the default');
+assert.equal(capacityAfterProgrammeChange({ from: 'One-to-One', to: 'Yearly', capacity: 1, savedCapacity: 8, savedProgramme: 'Adults' }), 8,
+  'an edited group gets its own capacity back');
+assert.equal(capacityAfterProgrammeChange({ from: 'One-to-One', to: 'Yearly', capacity: 1, savedCapacity: 1, savedProgramme: 'One-to-One' }), 12);
+assert.equal(capacityAfterProgrammeChange({ from: 'Yearly', to: 'Adults', capacity: 9 }), 9);
 assert.equal(courseDatesError({ sessionType: 'Online', schoolYear: '2026/2027', dateDebut: '2026-09-01', dateFin: '2026-12-01' }),
   COURSE_REASON_TEXT.online_dates, 'an online course keeps its term on its own page');
 assert.equal(courseDatesError({ sessionType: 'Online', schoolYear: '2026/2027' }), '');
@@ -131,6 +158,17 @@ const unplaced = [{ enrollment_id: 'e1' }, { enrollment_id: 'e2' }, { enrollment
 assert.equal(allUnplacedChosen(unplaced, { e1: 'attach', e2: 'end' }), false, 'Q14 = A: every row needs an explicit choice');
 assert.equal(allUnplacedChosen(unplaced, { e1: 'attach', e2: 'end', e3: 'wait' }), true);
 assert.equal(allUnplacedChosen([], {}), true);
+// Before its end date only an empty course closes: « Laisser en attente » only, already chosen.
+assert.deepEqual(unplacedChoicesFor({ finished: true }).map(c => c.value), ['attach', 'end', 'wait']);
+assert.deepEqual(unplacedChoicesFor({ finished: false }).map(c => c.value), ['wait']);
+assert.deepEqual(unplacedChoicesFor(null).map(c => c.value), ['wait']);
+const early = { finished: false, unplaced };
+assert.deepEqual(effectiveUnplacedChoices(early, { e1: 'attach', e2: 'end' }), { e1: 'wait', e2: 'wait', e3: 'wait' });
+assert.deepEqual(unplacedLists(unplaced, effectiveUnplacedChoices(early, { e1: 'attach' })), { attach: [], end: [] },
+  'an early close sends no paid enrollment (course.not_finished otherwise)');
+assert.deepEqual(effectiveUnplacedChoices({ finished: true, unplaced }, { e1: 'attach' }), { e1: 'attach' });
+assert.match(migration, /if not v_empty and \(g\.date_fin is null or g\.date_fin >= v_today\) then/,
+  'the server refuses lists on a course that is not finished');
 assert.deepEqual(unplacedLists(unplaced, { e1: 'attach', e2: 'end', e3: 'wait', ghost: 'end' }), { attach: ['e1'], end: ['e2'] },
   'only listed rows are sent; « Laisser en attente » sends nothing');
 assert.equal(closeCourseMessage({ total_ended: 4, alumni: 3, charges_linked: 2 }),
@@ -152,6 +190,13 @@ assert.equal(coursesToCloseCount([
   { kind: 'in_person', live_count: 3 }, { kind: 'in_person', live_count: 0 }, { kind: 'online', live_count: 1 },
 ]), 2, 'an empty finished course is listed but not counted on the card');
 assert.equal(coursesToCloseCount(null), 0);
+// « Clôturer l'année »: enabled when it ends enrollments or only marks groups; waiting rows by programme.
+assert.equal(yearCloseHasWork({ to_end: 0, groups_to_mark: 2 }), true, 'a close that only marks groups');
+assert.equal(yearCloseHasWork({ to_end: 3, groups_to_mark: 0 }), true);
+assert.equal(yearCloseHasWork({ to_end: 0, groups_to_mark: 0 }), false);
+assert.equal(yearCloseHasWork(null), false);
+assert.equal(programmeBreakdown({ 'Summer Camp': 1, 'Mise à niveau': 3, Adults: 0 }), 'Mise à niveau 3, Summer Camp 1');
+assert.equal(programmeBreakdown(null), '');
 
 // ── The director commands' wrappers ───────────────────────────────────────────
 const calls = [];
@@ -223,14 +268,23 @@ assert.match(dashboard, /\.is\('group_id', null\)\.not\('session_type', 'in', `\
 const groupsPage = await read('src/app/(admin)/groups/page.jsx');
 assert.match(groupsPage, /CloseCourseDialog/);
 assert.match(groupsPage, /Vue des groupes/);
+assert.match(groupsPage, /La liste « À clôturer » est réservée à la direction/, '?vue=a-cloturer opened by another role says so');
+assert.match(groupsPage, /previous: group \?/, 'the form re-checks dates as the database does');
+assert.match(groupsPage, /capacityAfterProgrammeChange\(/);
+const studentsPage = await read('src/app/(admin)/students/page.jsx');
+assert.match(studentsPage, /disabled=\{saving \|\| !yearCloseHasWork\(preview\)/);
+assert.match(studentsPage, /programmeBreakdown\(preview\.kept_waiting_unplaced\?\.by_programme\)/);
 const groupPage = await read('src/app/(admin)/groups/[id]/page.jsx');
 assert.match(groupPage, /reopenCourseMessage\(data\)/, 'the reopen toast reads the skipped list');
 assert.doesNotMatch(groupPage, /Number\(data\?\.skipped/);
 assert.match(groupPage, /Anciens apprenants du cours/);
+assert.match(groupPage, /const canPlace = canManage && !closed && !onlineClosed;/, 'a closed online course takes no learner (S3)');
+assert.match(groupPage, /isClosedCourse\(group, closedOnline\)/);
 const dialog = await read('src/components/groups/CloseCourseDialog.jsx');
 assert.match(dialog, /closeCourseMessage\(data\)/);
 assert.match(dialog, /isRecordConflict\(error\)\) load\(\)/, 'a conflict reloads the preview, never replays the close');
 assert.match(dialog, /Rouvrir l’inscription/, 'reviewer point: a next-session deposit names « Rouvrir l’inscription »');
+assert.match(dialog, /unplacedChoicesFor\(preview\)/, 'a course before its end date offers « Laisser en attente » only');
 
 // ── The R0 count query: the suite embeds the reviewed file verbatim ───────────
 const r0 = await read('supabase/manual/course_close_r0_counts.sql');
