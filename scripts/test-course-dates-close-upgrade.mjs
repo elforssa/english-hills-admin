@@ -205,10 +205,18 @@ assert.deepEqual(json(`select jsonb_object_agg(action || ':' || entity, n) from 
 const afterS1 = counts();
 assert.equal(afterS1['T2 S1 Mise à niveau · enrollments ended · Mise à niveau'], 0);
 assert.equal(afterS1['A3 card under OA5 (programmes that use groups: every programme but Other)'], 4, 'the card shows the declared A4');
-// A second S1 run with zero counts changes no row.
+// A second S1 run with zero counts changes no row and writes no journal row, not even a run row.
 const postS1 = hashes();
+const journalRows = () => sql('select count(*) from maintenance.course_close_journal');
+const journalBefore = journalRows();
+assert.match(fails(step({ 'cdc.expected_mise_a_niveau': 0, 'cdc.expected_s1': '0/0/4' })),
+  /DRYRUN_OK CDC backlog run=none scenario=S1 ended=0 stay_enrolled=0 alumni=0 charges_linked=0 card=4/);
 sql(step({ 'cdc.dry_run': 'off', 'cdc.expected_mise_a_niveau': 0, 'cdc.expected_s1': '0/0/4' }));
 assert.deepEqual(hashes(), postS1, 'a second run finds no target');
+assert.equal(journalRows(), journalBefore, 'a zero re-run writes no run row');
+// A zero re-run still checks its declared counts.
+assert.match(fails(step({ 'cdc.dry_run': 'off', 'cdc.expected_mise_a_niveau': 0, 'cdc.expected_s1': '0/0/5' })),
+  /CDC backlog refused: scenario S1 found T3 0 T4 0 A4 4, declared 0 \/ 0 \/ 5/);
 // S4: Adults and One-to-One switched on after the owner's confirmation.
 assert.match(fails(step({ 'cdc.adults': 'on', 'cdc.one_to_one': 'on', 'cdc.expected_mise_a_niveau': 0, 'cdc.expected_s4': '0/2/1' })),
   /DRYRUN_OK CDC backlog run=[0-9a-f-]+ scenario=S4 ended=3 stay_enrolled=0 alumni=2 charges_linked=0 card=1/);
@@ -223,8 +231,11 @@ assert.deepEqual([enr(id(206)).status, enr(id(207)).status], ['Confirmed', 'Conf
 // 4. The revert.
 // ---------------------------------------------------------------------------
 const runs = sql("select string_agg(run_id::text, ',' order by id) from maintenance.course_close_journal where source = 'backlog_step' and action = 'run'").split(',');
-assert.equal(runs.length, 3, 'S1, the empty S1 re-run and S4');
-const [s1Run, , s4Run] = runs;
+assert.equal(runs.length, 2, 'S1 and S4 (the empty S1 re-run wrote no run row)');
+const [s1Run, s4Run] = runs;
+// Run rows (nit, entity names): the step's and the revert's run rows are entity 'runs' with
+// row_id the run; a command's run row is its group's ('groups'), checked by the SQL suite.
+assert.equal(sql("select bool_and(entity = 'runs' and row_id = run_id and group_id is null) from maintenance.course_close_journal where source = 'backlog_step' and action = 'run'"), 't');
 // « Rouvrir l'inscription » on one S1 row: the revert must skip it explicitly.
 asUser(id(1), `select public.reopen_enrollment(${q(id(201))}, (select updated_at from public.enrollments where id = ${q(id(201))}))`);
 const revertText = readFileSync(REVERT, 'utf8');
@@ -238,6 +249,8 @@ assert.deepEqual(hashes(), preRevert, 'refusals and the dry run change nothing')
 sql(revert(s1Run, { 'cdc.revert_declared_skips': 1, 'cdc.dry_run': 'off' }));
 assert.deepEqual([enr(id(202)).status, enr(id(203)).status, stu(id(102)), stu(id(103))], ['Confirmed', 'Confirmed', 'Enrolled', 'Enrolled']);
 assert.equal(sql(`select enrollment_id from public.charges where id = ${q(partly.charge_id)}`), id(203), "the step's charge link stays");
+assert.equal(sql("select count(*) filter (where entity = 'runs' and row_id = run_id) || '/' || count(*) from maintenance.course_close_journal where source = 'backlog_revert' and action = 'run'"),
+  '1/1', "the revert's run row is entity 'runs'");
 // What remains of S1 is the reopened row only: it never reverts without a declared skip.
 assert.match(fails(revert(s1Run, { 'cdc.revert_expected_enrollments': 1, 'cdc.dry_run': 'off' })), /CDC revert refused: 1 journalled rows changed/);
 sql(revert(s4Run, { 'cdc.dry_run': 'off' }));

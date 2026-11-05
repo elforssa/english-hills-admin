@@ -16,6 +16,13 @@ retryable code (40001):
   the close refuse its count.
 - Two closes of one course: the second replays the first run.
 - « Rouvrir le cours » against a placement, « Rouvrir l'inscription » and a leaver.
+- Lock order, three sessions (review S2): a blocker holds the listed learner and its
+  enrollment row while « Clôturer le cours » (attach) or « Rouvrir le cours » waits on it.
+  A placement into the same course must not wait behind the command (it takes its
+  learners before the group row), the blocker then places the listed row (or reopens the
+  course) and commits, and the command refuses with PT409 without deadlock. Taking the
+  group row before the learners makes the placement wait and the blocker deadlock, so
+  either check fails.
 - S3: an online course closed on its page while a placement waits on the online
   course row: the placement refuses the closed course.
 - N-3, through place_learner_in_group and a direct management write, both orders, on a
@@ -58,8 +65,9 @@ DIRECTOR, ADMIN, RECEPTION = users['director'], users['admin'], users['reception
 groups, students, enrollments = {}, {}, {}
 
 
-def sql(text, check=True):
-    result = subprocess.run(ARGS, input=text, text=True, capture_output=True, env=ENV, timeout=90)
+def sql(text, check=True, app=None):
+    env = {**ENV, 'PGAPPNAME': app} if app else ENV
+    result = subprocess.run(ARGS, input=text, text=True, capture_output=True, env=env, timeout=90)
     if check and result.returncode:
         raise AssertionError(result.stderr)
     return result
@@ -77,8 +85,8 @@ def wrap(user, statement, end='commit'):
     return f"begin;set local request.jwt.claim.sub={quote(user)};set local role authenticated;{statement};{end};"
 
 
-def attempt(user, statement, end='commit'):
-    result = sql('\\set VERBOSITY verbose\n' + wrap(user, statement, end), False)
+def attempt(user, statement, end='commit', app=None):
+    result = sql('\\set VERBOSITY verbose\n' + wrap(user, statement, end), False, app)
     if result.returncode:
         code = re.search(r'ERROR:\s+([0-9A-Z]{5}):', result.stderr)
         hint = re.search(r'HINT:\s+(\S+)', result.stderr)
@@ -108,6 +116,67 @@ class Holder:
         self.proc.stdin.close()
         self.proc.wait(timeout=60)
         assert self.proc.returncode == 0, self.proc.stderr.read()
+
+
+class Blocker:
+    """A third session, as the database owner, that holds row locks, then finishes as a user."""
+    def __init__(self, statement):
+        self.proc = subprocess.Popen(ARGS, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=ENV)
+        self.proc.stdin.write(f"begin;{statement};select 'LOCK_READY';\n")
+        self.proc.stdin.flush()
+        while True:
+            line = self.proc.stdout.readline()
+            if line.strip() == 'LOCK_READY':
+                break
+            if self.proc.poll() is not None or line == '':
+                raise AssertionError('blocker failed: ' + self.proc.stderr.read())
+
+    def finish_as(self, user, statement):
+        out, err = self.proc.communicate(f"set local request.jwt.claim.sub={quote(user)};set local role authenticated;"
+                                         f"{statement};reset role;commit;\n", timeout=60)
+        assert self.proc.returncode == 0, err
+        return out.strip().splitlines()
+
+    def abort(self):
+        if self.proc.poll() is None:
+            self.proc.communicate('rollback;\n', timeout=60)
+
+
+def waits_on_lock(app, seconds=15):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if value(f"select count(*) from pg_stat_activity where application_name={quote(app)} and wait_event_type='Lock'") == '1':
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def three_sessions(label, locks, command, placement, finish):
+    """S1 holds `locks`; the director's `command` (S2) must wait on them; a `placement` (S3)
+    into the same course must end without waiting behind S2; S1 then runs `finish` as the
+    director and commits. Returns the results of S3, S1 and S2."""
+    app = f'cdc-race-{label}-{run}'
+    blocker = Blocker(locks)
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+    try:
+        waiter = pool.submit(attempt, DIRECTOR, command, 'commit', app)
+        assert waits_on_lock(app), f'{label}: the command must wait on the blocked learner'
+        third = pool.submit(attempt, DIRECTOR, placement)
+        try:
+            third_result = third.result(timeout=15)
+        except concurrent.futures.TimeoutError:
+            raise AssertionError(f'{label}: a placement waited behind a command that waits on a learner: '
+                                 'the command holds the group row before its learners') from None
+        assert not waiter.done(), f'{label}: the command must still wait: {waiter.result()}'
+        blocker_output = blocker.finish_as(DIRECTOR, finish)
+    except BaseException:
+        blocker.abort()
+        raise
+    result = waiter.result(timeout=60)
+    pool.shutdown()
+    for item in (third_result, result):
+        assert item.get('code') not in ('40P01', '40001'), item
+    return third_result, blocker_output, result
 
 
 def race(holder_user, holder_statement, waiter_user, waiter_statement, holder_end='commit', waiter_end='commit'):
@@ -182,10 +251,14 @@ AN = YEAR.replace('/', '-')
 FAR_FIRST = int(YEAR[:4]) + 5
 FAR_YEAR, FAR_AN = f'{FAR_FIRST}/{FAR_FIRST + 1}', f'{FAR_FIRST}-{FAR_FIRST + 1}'
 d = lambda n: (today + datetime.timedelta(days=n)).isoformat()
+# Review S3: the last day of the course year's window (31 August of its second year). The
+# course year is the school year of tomorrow, so this day is always after today, and d(n)
+# for n > 1 is never used: near 31 August it would fall in the next school year.
+WINDOW_END = f'{int(YEAR[:4]) + 1}-08-31'
 
 # Finished in-person courses (Mise à niveau A1, ended yesterday), an open one, an online one
 # and two undated Yearly groups of a far school year (N-3).
-FINISHED = ['n1a', 'n1b', 'r1a', 'r1b', 'd1a', 'd1b', 'at_a', 'at_b', 'two', 'ro_p', 'ro_e', 'ro_l', 'yc_a', 'yc_b']
+FINISHED = ['n1a', 'n1b', 'r1a', 'r1b', 'd1a', 'd1b', 'at_a', 'at_b', 'two', 'ro_p', 'ro_e', 'ro_l', 'yc_a', 'yc_b', 'lo_c', 'lo_r']
 for name in FINISHED + ['open']:
     groups[name] = str(uuid.uuid4())
 for name in ('online', 'far1', 'far2', 'far3', 'far4'):
@@ -193,8 +266,8 @@ for name in ('online', 'far1', 'far2', 'far3', 'far4'):
 MEMBERS = {'n1a': ['m_n1a'], 'n1b': ['m_n1b'], 'r1a': ['m_r1a'], 'r1b': ['m_r1b'], 'd1a': ['m_d1a'], 'd1b': ['m_d1b'],
            'at_a': ['m_at_a'], 'at_b': ['m_at_b'],
            'two': ['m_two'], 'ro_p': ['m_ro_p1', 'm_ro_p2'], 'ro_e': ['m_ro_e1', 'm_ro_e2'], 'ro_l': ['m_ro_l'],
-           'yc_a': ['m_yc_a'], 'yc_b': ['m_yc_b']}
-WAITING = ['x_n1a', 'x_n1b', 'x_r1a', 'x_r1b', 'u_at_a', 'u_at_b', 'x_ro_p']
+           'yc_a': ['m_yc_a'], 'yc_b': ['m_yc_b'], 'lo_r': ['m_lo_r']}
+WAITING = ['x_n1a', 'x_n1b', 'x_r1a', 'x_r1b', 'u_at_a', 'u_at_b', 'x_ro_p', 'u_lo_c', 'x_lo_c', 'x_lo_r']
 # Learners without any row, entered by a direct management write.
 DIRECT = ['x_d1a', 'x_d1b', 'y_far3', 'y_far4']
 OTHERS = ['x_online', 'y_far1', 'y_far2'] + DIRECT
@@ -221,7 +294,7 @@ update public.profiles p set role=u.role from (values ({quote(DIRECTOR)},'direct
 insert into public.teachers(id,full_name,email,contract_type) values({quote(teacher)},'CDC race teacher {run}','cdc-race-t-{run}@example.test','Freelance');
 insert into public.groups(id,name,session_type,niveau,annee,capacite_max,date_debut,date_fin) values
 {group_rows},
-({quote(groups['open'])},'CDC race open {run}','Mise à niveau','A1',{quote(AN)},10,{quote(d(-5))},{quote(d(30))});
+({quote(groups['open'])},'CDC race open {run}','Mise à niveau','A1',{quote(AN)},10,{quote(d(-5))},{quote(WINDOW_END)});
 insert into public.groups(id,name,session_type,niveau,annee) values
 ({quote(groups['online'])},'CDC race online {run}','Online','B1',{quote(AN)}),
 ({quote(groups['far1'])},'CDC race far one {run}','Yearly','Child 1',{quote(FAR_AN)}),
@@ -247,7 +320,7 @@ commit;""")
             result = attempt(DIRECTOR, place(students[member], groups[group]))
             assert 'ok' in result, result
     # Two courses are closed before their reopen races; the third one too.
-    for group in ('ro_p', 'ro_e', 'ro_l'):
+    for group in ('ro_p', 'ro_e', 'ro_l', 'lo_r'):
         assert 'ok' in attempt(DIRECTOR, close(group, len(MEMBERS[group])))
 
     # N-1, director path, the placement first: the close waits, then refuses its count.
@@ -313,6 +386,28 @@ commit;""")
     assert 'ok' in result or result.get('code') == 'PT409', result
     assert closed_at('ro_l') == 'open'
     print('PASS reopen against a placement, « Rouvrir l’inscription » and a leaver: serialized, no deadlock')
+
+    # Lock order, three sessions (review S2). The close (attach) waits on the listed learner
+    # held by S1; a placement into the same course is not held behind it; S1 places the
+    # listed row and commits; the close refuses its count.
+    hold = lambda name: (f"select 1 from public.students where id={quote(students[name])} for update;"
+                         f"select 1 from public.enrollments where id={quote(enrollments[name])} for update")
+    third, blocker, result = three_sessions('close', hold('u_lo_c'), close('lo_c', 0, attach=['u_lo_c']),
+                                            place(students['x_lo_c'], groups['lo_c']), place(students['u_lo_c'], groups['lo_c']))
+    assert 'ok' in third, third
+    refused(result, 'PT409', 'course.count_changed')
+    assert closed_at('lo_c') == 'open', closed_at('lo_c')
+    assert enrollment_of('u_lo_c').startswith('Validated:' + groups['lo_c']) and enrollment_of('x_lo_c').startswith('Validated:' + groups['lo_c'])
+    # The reopen waits on the member held by S1; a placement into the closed course is refused
+    # at once; S1 reopens the course and commits; the waiting reopen refuses its stale mark.
+    third, blocker, result = three_sessions('reopen', hold('m_lo_r'), reopen('lo_r'),
+                                            place(students['x_lo_r'], groups['lo_r']), reopen('lo_r'))
+    refused(third, '23514', 'course.closed')
+    assert json.loads(blocker[-1])['restored'] == 1, blocker
+    refused(result, 'PT409', 'egc.stale')
+    assert closed_at('lo_r') == 'open' and enrollment_of('m_lo_r').startswith('Validated:' + groups['lo_r'])
+    assert enrollment_of('x_lo_r') == 'Confirmed:-:-'
+    print('PASS lock order: a blocked close or reopen holds no group row; it then refuses with PT409, no deadlock')
 
     # S3: the online close holds the online course row; the placement waits in the guard, then refuses.
     sql(wrap(ADMIN, f"""select public.online_save_course({quote(groups['online'])},null,

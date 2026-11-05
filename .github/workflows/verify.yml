@@ -502,6 +502,9 @@ jobs:
       - name: Student placement, second programme, capacity override and leaver browser flow
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-student-placement-browser.mjs
+      - name: Course close browser flow (CDC-r3)
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-course-close-browser.mjs
       - name: Portal readiness cross-role REST, route origin guard and portal browser checks
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: |

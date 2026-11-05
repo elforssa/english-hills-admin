@@ -4,8 +4,9 @@
 -- guard on every path, « Rouvrir le cours », the finished-course list, « Clôturer
 -- l'année » (D5), the group read policies (D6) and the D10 R0 count query on a fixture.
 -- Local Supabase only; synthetic fixtures; everything rolls back. Dates are relative to
--- the centre's business date: the course year is the school year of tomorrow, so a day
--- before and a day after today always lie inside its window (1 June – 31 August).
+-- the centre's business date: the course year is the school year of tomorrow, so d(-91)
+-- to d(1) always lie inside its window (1 June – 31 August). A later date goes through
+-- ahead(n), which stays inside the window on any day of the year, 31 August included.
 \set ON_ERROR_STOP on
 begin;
 
@@ -80,6 +81,10 @@ create function pg_temp.first() returns integer language sql stable as $$ select
 create function pg_temp.yr_next() returns text language sql stable as $$ select (pg_temp.first() + 1) || '/' || (pg_temp.first() + 2) $$;
 create function pg_temp.yr_prev() returns text language sql stable as $$ select (pg_temp.first() - 1) || '/' || pg_temp.first() $$;
 create function pg_temp.d(n integer) returns date language sql stable as $$ select public.business_date() + n $$;
+-- n (2 to 10) days ahead, pinned inside the course year: never after 31 August of its
+-- second year, strictly increasing in n, and ahead(10) is always after today.
+create function pg_temp.ahead(n integer) returns date language sql stable as $$
+  select least(pg_temp.d(n), make_date(pg_temp.first() + 1, 8, 21) + n) $$;
 create function pg_temp.logs(kind text, g uuid) returns bigint language sql security definer as $$
   select count(*) from public.activity_log where changed_columns = array[kind] and after->>'group_id' = g::text $$;
 create function pg_temp.pay(i integer, payload jsonb) returns jsonb language plpgsql as $$
@@ -111,6 +116,17 @@ insert into public.teachers(id, full_name, email) values (pg_temp.id(90), 'CDC t
 select pg_temp.act(1);
 select crm_create_followup_policy(gen_random_uuid(), '{"weekly_hours":{"1":[["00:00","23:59"]],"2":[["00:00","23:59"]],"3":[["00:00","23:59"]],"4":[["00:00","23:59"]],"5":[["00:00","23:59"]],"6":[["00:00","23:59"]],"7":[["00:00","23:59"]]}}');
 select pg_temp.owner();
+
+-- S3 (review): every fixture date lies inside the course year's window, whatever today is;
+-- checked here for today and for the day before 1 September, the edge the review named.
+select pg_temp.ok(pg_temp.d(n) between make_date(pg_temp.first(), 6, 1) and make_date(pg_temp.first() + 1, 8, 31), 'd(' || n || ') inside the window')
+from unnest(array[-91, -60, -40, -30, -20, -10, -5, -2, -1, 0, 1]) n;
+select pg_temp.ok(pg_temp.ahead(n) between make_date(pg_temp.first(), 6, 1) and make_date(pg_temp.first() + 1, 8, 31)
+  and pg_temp.ahead(n) > pg_temp.ahead(n - 1) and pg_temp.ahead(10) > pg_temp.d(0), 'ahead(' || n || ') inside the window')
+from generate_series(3, 10) n;
+select pg_temp.ok(least(make_date(2027, 8, 30) + n, make_date(2027, 8, 21) + n) <= make_date(2027, 8, 31)
+  and least(make_date(2027, 8, 30) + 10, make_date(2027, 8, 21) + 10) > make_date(2027, 8, 30), 'ahead() on 30 August ' || n)
+from generate_series(2, 10) n;
 
 -- ===========================================================================
 -- 0. Manifest: grants, the journal, the policies, the triggers
@@ -381,14 +397,14 @@ select pg_temp.fails(format($$insert into public.groups(name, session_type, nive
   '23514', 'course.dates_outside_year');
 -- A year change re-checks the dates; a date change is logged.
 insert into public.groups(id, name, session_type, niveau, annee, capacite_max, date_debut, date_fin) values
-  (pg_temp.id(305), 'CDC MAN dates log', 'Mise à niveau', 'A2', pg_temp.an(), 10, pg_temp.d(-30), pg_temp.d(5));
+  (pg_temp.id(305), 'CDC MAN dates log', 'Mise à niveau', 'A2', pg_temp.an(), 10, pg_temp.d(-30), pg_temp.ahead(5));
 select pg_temp.fails(format('update public.groups set annee = %L where id = %L', (pg_temp.first() + 2) || '-' || (pg_temp.first() + 3),
   pg_temp.id(305)), '23514', 'course.dates_outside_year');
 select pg_temp.act(1);
-update public.groups set date_fin = pg_temp.d(4) where id = pg_temp.id(305);
+update public.groups set date_fin = pg_temp.ahead(4) where id = pg_temp.id(305);
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.logs('group_dates_changed', pg_temp.id(305)) = 1
-  and (select after->'after'->>'date_fin' = pg_temp.d(4)::text and after->'before'->>'date_fin' = pg_temp.d(5)::text
+  and (select after->'after'->>'date_fin' = pg_temp.ahead(4)::text and after->'before'->>'date_fin' = pg_temp.ahead(5)::text
     and actor_id = pg_temp.id(1) from public.activity_log where changed_columns = array['group_dates_changed']
     and after->>'group_id' = pg_temp.id(305)::text), 'Q6: a date edit is logged with its before and after');
 delete from public.groups where id = pg_temp.id(305);
@@ -397,7 +413,7 @@ select pg_temp.fails(format($$insert into public.groups(name, session_type, nive
   values ('x', 'One-to-One', 'A1', %L, %s, %L, %L)$$, pg_temp.an(), c, pg_temp.d(-1), pg_temp.d(1)), '23514', 'course.one_to_one_capacity')
 from unnest(array['2', 'null']) c;
 insert into public.groups(id, name, session_type, niveau, annee, capacite_max, date_debut, date_fin) values
-  (pg_temp.id(309), 'Cours individuel · A1', 'One-to-One', 'A1', pg_temp.an(), 1, pg_temp.d(-10), pg_temp.d(10));
+  (pg_temp.id(309), 'Cours individuel · A1', 'One-to-One', 'A1', pg_temp.an(), 1, pg_temp.d(-10), pg_temp.ahead(10));
 select pg_temp.fails(format('update public.groups set capacite_max = 2 where id = %L', pg_temp.id(309)), '23514', 'course.one_to_one_capacity');
 select pg_temp.fails(format($$update public.groups set session_type = 'One-to-One', niveau = 'A1' where id = %L$$, pg_temp.id(303)),
   '23514', 'course.dates_required');
@@ -406,19 +422,19 @@ select pg_temp.fails(format($$update public.groups set session_type = 'One-to-On
 -- 3. The reception group command with dates (save_receptionist_group)
 -- ===========================================================================
 select pg_temp.put('rg', jsonb_build_object('name', 'CDC reception MAN', 'session_type', 'Mise à niveau', 'niveau', 'A1',
-  'annee', pg_temp.an(), 'capacite_max', 8, 'date_debut', pg_temp.d(2), 'date_fin', pg_temp.d(3)));
+  'annee', pg_temp.an(), 'capacite_max', 8, 'date_debut', pg_temp.ahead(2), 'date_fin', pg_temp.ahead(3)));
 select pg_temp.act(3);
 select pg_temp.ok((select id from public.save_receptionist_group(pg_temp.id(310), null, pg_temp.get('rg'))) = pg_temp.id(310), 'reception creates with dates');
 select pg_temp.ok((select id from public.save_receptionist_group(pg_temp.id(310), null, pg_temp.get('rg'))) = pg_temp.id(310), 'replay: same identity');
 select pg_temp.fails(format('select public.save_receptionist_group(%L, null, %L)', pg_temp.id(310),
-  pg_temp.get('rg') || jsonb_build_object('date_fin', pg_temp.d(4))), '23505');
+  pg_temp.get('rg') || jsonb_build_object('date_fin', pg_temp.ahead(4))), '23505');
 select pg_temp.fails(format('select public.save_receptionist_group(%L, null, %L)', pg_temp.id(311),
   pg_temp.get('rg') - 'date_debut' - 'date_fin'), '23514', 'course.dates_required');
-select public.save_receptionist_group(pg_temp.id(310), pg_temp.gu(pg_temp.id(310)), jsonb_build_object('date_fin', pg_temp.d(4)));
+select public.save_receptionist_group(pg_temp.id(310), pg_temp.gu(pg_temp.id(310)), jsonb_build_object('date_fin', pg_temp.ahead(4)));
 select pg_temp.fails(format($$select public.save_receptionist_group(%L, %L, '{"date_fin": ""}')$$, pg_temp.id(310), pg_temp.gu(pg_temp.id(310))),
   '23514', 'course.dates_required');
 select pg_temp.owner();
-select pg_temp.ok((select date_debut = pg_temp.d(2) and date_fin = pg_temp.d(4) from public.groups where id = pg_temp.id(310)), 'reception edits the dates');
+select pg_temp.ok((select date_debut = pg_temp.ahead(2) and date_fin = pg_temp.ahead(4) from public.groups where id = pg_temp.id(310)), 'reception edits the dates');
 delete from public.groups where id = pg_temp.id(310);
 
 -- ===========================================================================
@@ -587,7 +603,15 @@ select pg_temp.ok((select jsonb_object_agg(action, n) from (select action, count
     || case when (pg_temp.get('cl')->>'charges_linked')::int > 0 then jsonb_build_object('charge_linked', (pg_temp.get('cl')->>'charges_linked')::int)
        else '{}'::jsonb end, 'journal rows');
 select pg_temp.ok((select bool_and(after is not null) from maintenance.course_close_journal where run_id = (pg_temp.get('cl')->>'run_id')::uuid
-  and entity in ('runs', 'groups', 'enrollments', 'students')), 'journal after-images');
+  and entity in ('groups', 'enrollments', 'students')), 'journal after-images');
+-- Run rows (nit, entity names): a command's run row is its group's (entity 'groups', row_id
+-- the group); only the one-time step and its revert write entity 'runs' (row_id the run),
+-- checked by test-course-dates-close-upgrade.mjs.
+select pg_temp.ok((select count(*) = 1 and bool_and(entity = 'groups' and row_id = pg_temp.id(301) and group_id = pg_temp.id(301)
+  and source = 'close_course') from maintenance.course_close_journal where run_id = (pg_temp.get('cl')->>'run_id')::uuid and action = 'run'),
+  'the close run row is the group''s');
+select pg_temp.ok(not exists (select 1 from maintenance.course_close_journal where entity = 'runs'
+  and source in ('close_course', 'reopen_course', 'close_school_year')), 'no command writes a ''runs'' row');
 select pg_temp.ok(pg_temp.logs('close_course', pg_temp.id(301)) = 1, 'activity log');
 select pg_temp.ok(pg_temp.logs('capacity_override', pg_temp.id(301)) = 0, 'no capacity override on attach');
 select pg_temp.ok((select enrollment_id = pg_temp.id(411) from public.charges where id = pg_temp.cid('c_link'))
@@ -753,6 +777,8 @@ select pg_temp.ok(pg_temp.logs('capacity_override', pg_temp.id(320)) = (pg_temp.
 select pg_temp.ok((select jsonb_object_agg(action, n) from (select action, count(*) n from maintenance.course_close_journal
     where run_id = (pg_temp.get('ro')->>'run_id')::uuid group by action) x)
   = '{"reopened": 1, "restored": 5, "skipped": 1}'::jsonb, 'reopen journal');
+select pg_temp.ok((select bool_and(entity = 'groups' and row_id = pg_temp.id(320)) from maintenance.course_close_journal
+  where run_id = (pg_temp.get('ro')->>'run_id')::uuid and action = 'reopened'), 'the reopen row is the group''s');
 select pg_temp.ok(pg_temp.logs('reopen_course', pg_temp.id(320)) = 1, 'reopen log');
 select pg_temp.act(1);
 select pg_temp.fails(format('select public.reopen_course(%L, %L)', pg_temp.id(320), now()), 'PT409', 'egc.stale');
@@ -790,6 +816,44 @@ select pg_temp.ok((select kind = 'online' and live_count = 1 and date_fin = pg_t
 select pg_temp.ok((select count(*) from listed where kind = 'online' or live_count > 0) = 2, 'the card count');
 
 -- ===========================================================================
+-- 7b. A course of one is its learner's (Q4, reviewer point 3; 128 course_of_one_allows)
+-- ===========================================================================
+-- 340: a finished One-to-One B1 course with its learner (240); 241 has a paid One-to-One
+-- B1 row (441) and no course yet.
+insert into public.groups(id, name, session_type, niveau, annee, capacite_max, date_debut, date_fin) values
+  (pg_temp.id(340), 'Cours individuel · B1', 'One-to-One', 'B1', pg_temp.an(), 1, pg_temp.d(-20), pg_temp.d(-3));
+insert into public.students(id, full_name, status, session_type) values
+  (pg_temp.id(240), 'CDC one-to-one own', 'Enrolled', 'One-to-One'), (pg_temp.id(241), 'CDC one-to-one other', 'Enrolled', 'One-to-One');
+insert into public.enrollments(id, student_id, status, session_type, school_year, level) values
+  (pg_temp.id(440), pg_temp.id(240), 'Confirmed', 'One-to-One', pg_temp.yr(), 'B1'),
+  (pg_temp.id(441), pg_temp.id(241), 'Confirmed', 'One-to-One', pg_temp.yr(), 'B1');
+select pg_temp.place(pg_temp.id(240), pg_temp.id(340), pg_temp.id(440));
+select pg_temp.act(1);
+select pg_temp.put('pv1', public.close_course_preview(pg_temp.id(340)));
+select pg_temp.put('l1', (select to_jsonb(x) from public.list_courses_to_close() x where x.group_id = pg_temp.id(340)));
+select pg_temp.owner();
+select pg_temp.ok(coalesce(jsonb_array_length(pg_temp.get('pv1')->'unplaced'), 0) = 0
+  and (pg_temp.get('pv1')->>'live_count')::int = 1, 'the preview never offers another learner''s row: ' || pg_temp.get('pv1')::text);
+select pg_temp.ok((pg_temp.get('l1')->>'unplaced_count')::int = 0 and (pg_temp.get('l1')->>'live_count')::int = 1,
+  'the finished list does not count it either: ' || pg_temp.get('l1')::text);
+-- Matching programme, year and level: only the course of one keeps it out.
+select pg_temp.ok(exists (select 1 from public.enrollments e join public.groups g on g.id = pg_temp.id(340)
+  where e.id = pg_temp.id(441) and e.session_type = g.session_type and e.level = g.niveau
+    and e.school_year = academic_security.school_year_of(g.annee)), 'fixture: 441 matches 340 but for its learner');
+select pg_temp.act(1);
+select pg_temp.fails(format('select public.close_course(%L, 1, %L, %L)', pg_temp.id(340), 'Cours terminé', array[pg_temp.id(441)]),
+  'PT409', 'course.unplaced_changed');
+select pg_temp.fails(format('select public.close_course(%L, 1, %L, null, %L)', pg_temp.id(340), 'Cours terminé', array[pg_temp.id(441)]),
+  'PT409', 'course.unplaced_changed');
+select pg_temp.put('cl1', public.close_course(pg_temp.id(340), 1, 'Cours terminé'));
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.est(pg_temp.id(440)) = 'Ended' and pg_temp.est(pg_temp.id(441)) = 'Confirmed'
+  and (pg_temp.get('cl1')->>'total_ended')::int = 1, 'the close ends its member and leaves the other learner''s row waiting');
+-- 240 pays a new One-to-One B1 row after the close: its own course matches it (442, below).
+insert into public.enrollments(id, student_id, status, session_type, school_year, level) values
+  (pg_temp.id(442), pg_temp.id(240), 'Confirmed', 'One-to-One', pg_temp.yr(), 'B1');
+
+-- ===========================================================================
 -- 8. The read policies (D6, OA3)
 -- ===========================================================================
 insert into public.family_links(id, student_id, relation, profile_id, invite_email, status, activated_at) values
@@ -825,7 +889,7 @@ select pg_temp.ok(position('for no key update' in pg_get_functiondef('public.clo
   'N-3: the year close locks its candidate groups for no key update');
 insert into public.groups(id, name, session_type, niveau, annee, capacite_max, date_debut, date_fin) values
   (pg_temp.id(330), 'CDC MAN A2 finished', 'Mise à niveau', 'A2', pg_temp.an(), 10, pg_temp.d(-20), pg_temp.d(-5)),
-  (pg_temp.id(334), 'CDC Summer Camp running', 'Summer Camp', 'A2', pg_temp.an(), 10, pg_temp.d(-10), pg_temp.d(10)),
+  (pg_temp.id(334), 'CDC Summer Camp running', 'Summer Camp', 'A2', pg_temp.an(), 10, pg_temp.d(-10), pg_temp.ahead(10)),
   (pg_temp.id(336), 'CDC MAN C1 finished', 'Mise à niveau', 'C1', pg_temp.an(), 10, pg_temp.d(-10), pg_temp.d(-2));
 insert into public.groups(id, name, session_type, niveau, annee) values (pg_temp.id(331), 'CDC Yearly empty', 'Yearly', 'Child 3', pg_temp.an());
 insert into public.students(id, full_name, status, session_type) values
@@ -840,7 +904,7 @@ create function pg_temp.outcome(e uuid) returns text language sql as $$
 select pg_temp.ok(pg_temp.outcome(pg_temp.id(x)) = o, 'year close outcome ' || x || ': ' || coalesce(pg_temp.outcome(pg_temp.id(x)), 'none') || ', expected ' || o)
 from (values (419, 'kept_later'), (433, 'kept_later'), (435, 'kept_waiting'), (417, 'kept_waiting'), (416, 'kept_waiting'),
   (436, 'end'), (437, 'end'), (413, 'end'), (421, 'end'), (423, 'end'), (424, 'end'), (432, 'end'), (415, 'end'),
-  (422, 'end'), (425, 'end'), (426, 'end')) x(x, o);
+  (422, 'end'), (425, 'end'), (426, 'end'), (441, 'kept_waiting'), (442, 'end')) x(x, o);
 -- The preview (director only) and the carried-over rows of an earlier year.
 select pg_temp.act(3);
 select pg_temp.fails(format('select public.close_school_year_preview(%L)', pg_temp.yr()), '42501');
@@ -876,12 +940,14 @@ select pg_temp.ok((pg_temp.get('yc') #>> '{}')::int = (pg_temp.get('yp')->>'to_e
 select pg_temp.ok(pg_temp.est(pg_temp.id(419)) = 'Validated' and pg_temp.est(pg_temp.id(433)) = 'Validated'
   and pg_temp.est(pg_temp.id(435)) = 'Confirmed' and pg_temp.est(pg_temp.id(417)) = 'Confirmed' and pg_temp.est(pg_temp.id(438)) = 'Confirmed',
   'OA4/OA6: courses ending later and waiting rows are kept');
+select pg_temp.ok(pg_temp.est(pg_temp.id(441)) = 'Confirmed' and pg_temp.est(pg_temp.id(442)) = 'Ended',
+  'One-to-One: another learner''s finished course of one never ends a waiting row; the learner''s own does');
 select pg_temp.ok((select bool_and(status = 'Ended') from public.enrollments where id in (pg_temp.id(436), pg_temp.id(437), pg_temp.id(413),
   pg_temp.id(421), pg_temp.id(423), pg_temp.id(424), pg_temp.id(432))), 'the rest of the year ends');
 select pg_temp.ok((select array_agg(id order by id) from public.groups where id::text like 'cdc00000-%' and closed_at is not null
     and id not in (pg_temp.id(301), pg_temp.id(308)))
   = (select array_agg(x order by x) from unnest(array[pg_temp.id(303), pg_temp.id(320), pg_temp.id(321), pg_temp.id(330), pg_temp.id(331),
-    pg_temp.id(336)]) x), 'Q16: the finished and undated groups left empty are marked; 306, 309, 334 and online groups are not');
+    pg_temp.id(336), pg_temp.id(340)]) x), 'Q16: the finished and undated groups left empty are marked; 306, 309, 334 and online groups are not');
 select pg_temp.put('ylog', (select after from public.activity_log where changed_columns = array['close_school_year']
   and after->>'school_year' = pg_temp.yr()));
 select pg_temp.ok((pg_temp.get('ylog')->>'groups_left_open')::int = 0

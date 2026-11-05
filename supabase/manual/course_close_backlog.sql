@@ -140,6 +140,15 @@ begin
       where s.deleted_at is not null or s.status is distinct from 'Enrolled') then
     raise exception 'CDC backlog refused: a target''s learner file is archived or not « Inscrit »' using errcode = '22023';
   end if;
+  -- A re-run that finds no target (every count declared 0) writes nothing, not even a run row.
+  if v_targets = 0 then
+    if current_setting('cdc.dry_run') = 'on' then
+      raise exception 'DRYRUN_OK CDC backlog run=none scenario=% ended=0 stay_enrolled=0 alumni=0 charges_linked=0 card=%',
+        upper(v_scenario), v_card_before;
+    end if;
+    raise notice 'CDC backlog: scenario % found no target; nothing written', upper(v_scenario);
+    return;
+  end if;
 
   -- Locks: the enrollment-intent lock of the payment path, then learners, then enrollments (id order).
   for v_t in select distinct student_id from cdc_target order by 1 loop
