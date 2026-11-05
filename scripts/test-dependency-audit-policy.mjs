@@ -5,8 +5,8 @@ import { validateAudit, validateRuntimeSource, advisoryURL, minimatchAdvisoryURL
 const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url)));
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 const versions = ['1.0.0', '2.3.2', '3.0.3'];
-// minimatch registry on 2026-11-03: the two approved copies, the assessed 10.2.6 (still
-// inside the affected range) and the 11.x line that the production Sentry copy uses.
+// minimatch registry on 2026-11-03: 3.1.5 (outside the range since 2026-11-05), the approved
+// 10.2.5, the assessed 10.2.6 (still inside the range) and the production Sentry 11.x line.
 const minimatchVersions = ['3.1.5', '10.2.5', '10.2.6', '11.0.0', '11.0.1', '11.0.4'];
 // `npm audit fix --dry-run --package-lock-only --json` on 2026-11-03: nothing to change.
 const fixPlan = { added: 0, removed: 0, changed: 0, audited: 868, funding: 192, audit: { auditReportVersion: 2 } };
@@ -111,101 +111,77 @@ for (const [version, expected] of versionCases) {
 assert.throws(() => check(report, lock, manifest, [...versions, '3.0.4', 'not-a-version']), /Invalid registry SemVer entry/);
 console.log('Audit policy: exact advisory accepted; new advisories, path/classification drift, compatible fixes, release drift and invalid metadata rejected.');
 
-// ===== minimatch GHSA-g3hv-75wg-m249: today's report (2026-11-03) is accepted exactly =====
-const eslintFix = { name: 'eslint', version: '4.0.0', isSemVerMajor: true };
+// ===== minimatch GHSA-g3hv-75wg-m249, narrowed 2026-11-05 to >=7.0.0 <11.0.1 =====
+// npm's report on 2026-11-05: only the typescript-eslint chain reaches the one affected
+// copy (10.2.5); minimatch 3.1.5 under ESLint 8 / rimraf is outside the new range.
 const nextFix = { name: 'eslint-config-next', version: '0.2.4', isSemVerMajor: true };
-const mm = (name, via, fixAvailable = eslintFix, nodes = [node(name)]) => ({ name, severity: 'moderate', via, nodes, fixAvailable });
+const mm = (name, via, fixAvailable = true, nodes = [node(name)]) => ({ name, severity: 'moderate', via, nodes, fixAvailable });
 const minimatchEntries = {
-  '@eslint-community/eslint-utils': mm('@eslint-community/eslint-utils', ['eslint']),
-  '@eslint/eslintrc': mm('@eslint/eslintrc', ['minimatch']),
-  '@humanwhocodes/config-array': mm('@humanwhocodes/config-array', ['minimatch']),
-  '@typescript-eslint/eslint-plugin': mm('@typescript-eslint/eslint-plugin', ['@typescript-eslint/parser', '@typescript-eslint/type-utils', '@typescript-eslint/utils', 'eslint'], nextFix),
-  '@typescript-eslint/parser': mm('@typescript-eslint/parser', ['@typescript-eslint/typescript-estree', 'eslint'], nextFix),
-  '@typescript-eslint/type-utils': mm('@typescript-eslint/type-utils', ['@typescript-eslint/typescript-estree', '@typescript-eslint/utils', 'eslint'], nextFix),
-  '@typescript-eslint/typescript-estree': mm('@typescript-eslint/typescript-estree', ['minimatch'], nextFix),
-  '@typescript-eslint/utils': mm('@typescript-eslint/utils', ['@eslint-community/eslint-utils', '@typescript-eslint/typescript-estree', 'eslint'], true),
-  eslint: mm('eslint', ['@eslint-community/eslint-utils', '@eslint/eslintrc', '@humanwhocodes/config-array', 'file-entry-cache', 'minimatch']),
-  'eslint-config-next': mm('eslint-config-next', ['@typescript-eslint/eslint-plugin', 'eslint', 'eslint-plugin-import', 'eslint-plugin-jsx-a11y', 'eslint-plugin-react'], nextFix),
-  'eslint-plugin-import': mm('eslint-plugin-import', ['minimatch'], nextFix),
-  'eslint-plugin-jsx-a11y': mm('eslint-plugin-jsx-a11y', ['minimatch'], nextFix),
-  'eslint-plugin-react': mm('eslint-plugin-react', ['minimatch'], true),
-  'file-entry-cache': mm('file-entry-cache', ['flat-cache']),
-  'flat-cache': mm('flat-cache', ['rimraf']),
-  glob: mm('glob', ['minimatch'], eslintFix, [node('rimraf/node_modules/glob')]),
-  minimatch: mm('minimatch', [{ name: 'minimatch', dependency: 'minimatch', url: minimatchAdvisoryURL, severity: 'moderate', range: minimatchAffectedRange }], eslintFix,
-    [node('@typescript-eslint/typescript-estree/node_modules/minimatch'), node('minimatch')]),
-  rimraf: mm('rimraf', ['glob']),
+  '@typescript-eslint/eslint-plugin': mm('@typescript-eslint/eslint-plugin', ['@typescript-eslint/parser', '@typescript-eslint/type-utils', '@typescript-eslint/utils']),
+  '@typescript-eslint/parser': mm('@typescript-eslint/parser', ['@typescript-eslint/typescript-estree']),
+  '@typescript-eslint/type-utils': mm('@typescript-eslint/type-utils', ['@typescript-eslint/typescript-estree', '@typescript-eslint/utils']),
+  '@typescript-eslint/typescript-estree': mm('@typescript-eslint/typescript-estree', ['minimatch']),
+  '@typescript-eslint/utils': mm('@typescript-eslint/utils', ['@typescript-eslint/typescript-estree']),
+  minimatch: mm('minimatch', [{ name: 'minimatch', dependency: 'minimatch', url: minimatchAdvisoryURL, severity: 'moderate', range: minimatchAffectedRange }], nextFix,
+    [node('@typescript-eslint/typescript-estree/node_modules/minimatch')]),
 };
 const minimatchReport = {
   auditReportVersion: 2,
   vulnerabilities: minimatchEntries,
-  metadata: { vulnerabilities: { info: 0, low: 0, moderate: 18, high: 0, critical: 0, total: 18 } },
+  metadata: { vulnerabilities: { info: 0, low: 0, moderate: 6, high: 0, critical: 0, total: 6 } },
 };
-assert.equal(check(minimatchReport).permitted, 18);
+assert.equal(minimatchAffectedRange, '>=7.0.0 <11.0.1');
+assert.equal(check(minimatchReport).permitted, 6);
 assert.equal(check(minimatchReport).advisory, 'GHSA-g3hv-75wg-m249');
-// npm moves its bare `true` between propagated entries from run to run; any of them is
+// npm's propagated entries carry a bare `true` or a downgrade of the dev root; either is
 // accepted while the dry-run fix plan is empty.
-const movedBoolean = structuredClone(minimatchReport);
-movedBoolean.vulnerabilities['eslint-plugin-react'].fixAvailable = nextFix;
-movedBoolean.vulnerabilities['eslint-plugin-import'].fixAvailable = true;
-movedBoolean.vulnerabilities.eslint.fixAvailable = true;
-assert.equal(check(movedBoolean).permitted, 18);
+const mixedFix = structuredClone(minimatchReport);
+mixedFix.vulnerabilities['@typescript-eslint/parser'].fixAvailable = nextFix;
+mixedFix.vulnerabilities['@typescript-eslint/utils'].fixAvailable = { name: 'eslint-config-next', version: '12.0.4', isSemVerMajor: true };
+assert.equal(check(mixedFix).permitted, 6);
 const rejectMinimatch = (description, mutate) => reject(description, mutate, minimatchReport);
+// The narrowing itself: the former 3.1.5 node, a former consumer or the old range fail.
+rejectMinimatch('former 3.1.5 node in the report', ({ report: r }) => { r.vulnerabilities.minimatch.nodes.push(node('minimatch')); });
+rejectMinimatch('former consumer in the report', ({ report: r }) => { r.vulnerabilities.eslint = mm('eslint', ['minimatch']); r.metadata.vulnerabilities.moderate = 7; r.metadata.vulnerabilities.total = 7; });
+rejectMinimatch('former range', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].range = '<11.0.1'; });
+rejectMinimatch('3.1.5 copy moved back inside the range', ({ lock: l }) => { l.packages[node('minimatch')].version = '7.4.9'; });
 rejectMinimatch('production minimatch node in the report', ({ report: r }) => { r.vulnerabilities.minimatch.nodes.push(node('@sentry/bundler-plugins/node_modules/minimatch')); });
 rejectMinimatch('production copy inside the affected range', ({ lock: l }) => { l.packages[node('@sentry/bundler-plugins/node_modules/minimatch')].version = '10.2.6'; });
-rejectMinimatch('approved copy reclassified as runtime', ({ lock: l }) => { delete l.packages[node('minimatch')].dev; });
-rejectMinimatch('consumer reclassified as runtime', ({ lock: l }) => { delete l.packages[node('eslint')].dev; });
-rejectMinimatch('extra audit node', ({ report: r }) => { r.vulnerabilities.eslint.nodes.push(node('other/node_modules/eslint')); });
+rejectMinimatch('approved copy reclassified as runtime', ({ lock: l }) => { delete l.packages[node('@typescript-eslint/typescript-estree/node_modules/minimatch')].dev; });
+rejectMinimatch('consumer reclassified as runtime', ({ lock: l }) => { delete l.packages[node('@typescript-eslint/parser')].dev; });
+rejectMinimatch('extra audit node', ({ report: r }) => { r.vulnerabilities['@typescript-eslint/parser'].nodes.push(node('other/node_modules/@typescript-eslint/parser')); });
 rejectMinimatch('extra affected installation', ({ lock: l }) => { l.packages[node('other/node_modules/minimatch')] = { version: '9.0.5', dev: true }; });
-rejectMinimatch('new runtime consumer', ({ lock: l }) => { l.packages[node('next')].dependencies.minimatch = '^3.1.5'; });
-rejectMinimatch('new dev consumer', ({ lock: l }) => { l.packages[node('tailwindcss')].dependencies.minimatch = '^3.1.5'; });
-rejectMinimatch('unapproved consumer in the report', ({ report: r }) => { r.vulnerabilities.tailwindcss = mm('tailwindcss', ['minimatch']); r.metadata.vulnerabilities.moderate = 19; r.metadata.vulnerabilities.total = 19; });
+rejectMinimatch('new runtime consumer', ({ lock: l }) => { l.packages[node('next')].dependencies['@typescript-eslint/typescript-estree'] = '^8.59.3'; });
+rejectMinimatch('new dev consumer', ({ lock: l }) => { l.packages[node('tailwindcss')].dependencies['@typescript-eslint/parser'] = '^8.59.3'; });
+rejectMinimatch('unapproved consumer in the report', ({ report: r }) => { r.vulnerabilities.tailwindcss = mm('tailwindcss', ['minimatch']); r.metadata.vulnerabilities.moderate = 7; r.metadata.vulnerabilities.total = 7; });
 rejectMinimatch('advisory severity change', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].severity = 'high'; });
-rejectMinimatch('aggregate severity change', ({ report: r }) => { r.vulnerabilities.minimatch.severity = 'high'; r.metadata.vulnerabilities.moderate = 17; r.metadata.vulnerabilities.high = 1; });
-rejectMinimatch('affected range change', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].range = '<11.0.2'; });
+rejectMinimatch('aggregate severity change', ({ report: r }) => { r.vulnerabilities.minimatch.severity = 'high'; r.metadata.vulnerabilities.moderate = 5; r.metadata.vulnerabilities.high = 1; });
+rejectMinimatch('affected range change', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].range = '>=7.0.0 <11.0.2'; });
 rejectMinimatch('other advisory on the same package', ({ report: r }) => { r.vulnerabilities.minimatch.via.push({ name: 'minimatch', dependency: 'minimatch', url: 'https://github.com/advisories/GHSA-other', severity: 'moderate', range: '<12' }); });
 rejectMinimatch('other advisory package', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].dependency = 'other'; });
-rejectMinimatch('compatible fix', ({ report: r }) => { r.vulnerabilities.eslint.fixAvailable = { name: 'eslint', version: '8.57.2', isSemVerMajor: false }; });
+rejectMinimatch('compatible fix', ({ report: r }) => { r.vulnerabilities['@typescript-eslint/parser'].fixAvailable = { name: 'eslint-config-next', version: '15.5.25', isSemVerMajor: false }; });
 rejectMinimatch('boolean fix on the advisory root', ({ report: r }) => { r.vulnerabilities.minimatch.fixAvailable = true; });
 rejectMinimatch('boolean fix with a non-empty fix plan', ({ fixPlan: f }) => { f.changed = 1; });
 rejectMinimatch('boolean fix with an invalid fix plan', (inputs) => { inputs.fixPlan = { added: 0, removed: 0, changed: 0 }; });
-rejectMinimatch('unassessed major fix metadata', ({ report: r }) => { r.vulnerabilities.eslint.fixAvailable = { name: 'eslint', version: '9.0.0', isSemVerMajor: true }; });
-// CI (Node 22.23.4, npm 10.9.9) reported eslint-config-next 12.0.4 where a local run of the
-// same npm had reported 0.2.4: any major downgrade suggestion of the two roots is the
-// same non-fix; an upgrade, the installed major, another package or a malformed version
-// is not.
-const ciShape = structuredClone(minimatchReport);
-for (const name of Object.keys(ciShape.vulnerabilities)) {
-  if (ciShape.vulnerabilities[name].fixAvailable?.name === 'eslint-config-next') ciShape.vulnerabilities[name].fixAvailable = { name: 'eslint-config-next', version: '12.0.4', isSemVerMajor: true };
-}
-ciShape.vulnerabilities['eslint-plugin-react'].fixAvailable = true;
-assert.equal(check(ciShape).permitted, 18, 'the CI metadata shape is accepted');
-for (const fix of [{ name: 'eslint-config-next', version: '14.2.35', isSemVerMajor: true }, { name: 'eslint', version: '7.32.0', isSemVerMajor: true }]) {
-  const downgrade = structuredClone(minimatchReport);
-  downgrade.vulnerabilities.eslint.fixAvailable = fix;
-  assert.equal(check(downgrade).permitted, 18, `${fix.name} ${fix.version} downgrade suggestion accepted`);
-}
 for (const fix of [{ name: 'eslint-config-next', version: '15.6.0', isSemVerMajor: true }, { name: 'eslint-config-next', version: '16.0.0', isSemVerMajor: true },
-  { name: 'eslint', version: '8.57.2', isSemVerMajor: true }, { name: 'minimatch', version: '11.0.4', isSemVerMajor: true }, { name: 'eslint-config-next', version: 'not-a-version', isSemVerMajor: true },
+  { name: 'eslint', version: '4.0.0', isSemVerMajor: true }, { name: 'minimatch', version: '11.0.4', isSemVerMajor: true }, { name: 'eslint-config-next', version: 'not-a-version', isSemVerMajor: true },
   { name: 'eslint-config-next', version: '12.0.4', isSemVerMajor: false }, { name: 'eslint-config-next', isSemVerMajor: true }]) {
-  rejectMinimatch(`fix metadata ${fix.name} ${fix.version} ${fix.isSemVerMajor}`, ({ report: r }) => { r.vulnerabilities.eslint.fixAvailable = fix; });
+  rejectMinimatch(`fix metadata ${fix.name} ${fix.version} ${fix.isSemVerMajor}`, ({ report: r }) => { r.vulnerabilities['@typescript-eslint/parser'].fixAvailable = fix; });
 }
-rejectMinimatch('approved tooling version changed', ({ lock: l }) => { l.packages[node('eslint')].version = '8.57.2'; });
-rejectMinimatch('approved copy version changed', ({ lock: l }) => { l.packages[node('minimatch')].version = '3.1.4'; });
+rejectMinimatch('approved tooling version changed', ({ lock: l }) => { l.packages[node('@typescript-eslint/parser')].version = '8.59.4'; });
+rejectMinimatch('approved copy version changed', ({ lock: l }) => { l.packages[node('@typescript-eslint/typescript-estree/node_modules/minimatch')].version = '10.2.4'; });
 rejectMinimatch('registry failure', (inputs) => { inputs.minimatchVersions = {}; });
-rejectMinimatch('registry without the approved copies', (inputs) => { inputs.minimatchVersions = ['11.0.4']; });
-rejectMinimatch('entry reaching both advisories', ({ report: r }) => { r.vulnerabilities.braces = structuredClone(report.vulnerabilities.braces); r.vulnerabilities.eslint.via.push('braces'); r.metadata.vulnerabilities.high = 1; r.metadata.vulnerabilities.total = 19; });
-for (const source of ["import { ESLint } from 'eslint';", 'require("minimatch")', "import rimraf from 'rimraf';"]) {
+rejectMinimatch('registry without the approved copy', (inputs) => { inputs.minimatchVersions = ['3.1.5', '11.0.4']; });
+rejectMinimatch('entry reaching both advisories', ({ report: r }) => { r.vulnerabilities.braces = structuredClone(report.vulnerabilities.braces); r.vulnerabilities['@typescript-eslint/parser'].via.push('braces'); r.metadata.vulnerabilities.high = 1; r.metadata.vulnerabilities.total = 7; });
+for (const source of ["import { parse } from '@typescript-eslint/parser';", 'require("minimatch")', "import next from 'eslint-config-next';"]) {
   assert.throws(() => validateRuntimeSource(source));
 }
 const minimatchVersionCases = [
   ['10.2.6', 'accepted'],
   ['11.0.5', 'accepted'],
   ['12.0.0', 'accepted'],
-  ['3.1.6-rc.1', 'accepted'],
+  ['3.1.6', 'accepted'],
   ['10.2.7-beta.1', 'accepted'],
-  ['3.1.6', 'blocked'],
-  ['3.2.0', 'blocked'],
   ['10.2.7', 'blocked'],
   ['10.3.0', 'blocked'],
   ['not-a-version', 'invalid'],
@@ -213,11 +189,11 @@ const minimatchVersionCases = [
 for (const [version, expected] of minimatchVersionCases) {
   const registry = [...minimatchVersions, version];
   if (expected === 'accepted') {
-    assert.equal(check(minimatchReport, lock, manifest, versions, registry).permitted, 18, version);
+    assert.equal(check(minimatchReport, lock, manifest, versions, registry).permitted, 6, version);
   } else {
     assert.throws(() => check(minimatchReport, lock, manifest, versions, registry),
       expected === 'invalid' ? /Invalid minimatch registry SemVer entry/ : /New stable minimatch release available/, version);
   }
   console.log(`PASS minimatch registry version ${version}: ${expected}`);
 }
-console.log('Minimatch exception: today\'s dev-only report accepted; production nodes, new consumers, severity/range/fix drift, other advisories and new stable releases rejected.');
+console.log('Minimatch exception: today\'s dev-only report accepted; the former 3.1.5 node and consumers, production nodes, new consumers, severity/range/fix drift, other advisories and new stable 10.x releases rejected.');

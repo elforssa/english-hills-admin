@@ -34,98 +34,56 @@ const approvedEdges = [
   [node('@next/eslint-plugin-next'), 'dependencies', 'fast-glob', node('@next/eslint-plugin-next/node_modules/fast-glob')],
 ];
 // Second temporary exact advisory exception, owner-approved 2026-11-03 ("approve audit
-// exception"): minimatch <11.0.1 (moderate) reaches only the dev-only ESLint 8 /
-// typescript-eslint / rimraf tooling. The production copy under @sentry/bundler-plugins
-// is 11.0.4 and outside the range. Not a general waiver: a production node, a new
-// consumer, a severity or range change, any other advisory, a compatible (non-major)
-// fix or an unassessed newer stable release in an affected line (3.x, 10.x) fails.
+// exception") and narrowed 2026-11-05 (owner approval: "narrow the existing minimatch
+// exception to the advisory's new range and remaining node only"). npm's data for
+// GHSA-g3hv-75wg-m249 changed overnight from <11.0.1 to >=7.0.0 <11.0.1, so minimatch
+// 3.1.5 (node_modules/minimatch, under ESLint 8 / rimraf) is no longer affected and is
+// no longer an exception. The one remaining affected copy is 10.2.5 under the dev-only
+// typescript-eslint tooling of eslint-config-next. The production copy under
+// @sentry/bundler-plugins is 11.0.4, outside the range. Not a general waiver: a
+// production node, a new consumer, a severity or range change, any other advisory, a
+// compatible (non-major) fix or an unassessed newer stable 10.x release fails.
 export const minimatchAdvisoryURL = 'https://github.com/advisories/GHSA-g3hv-75wg-m249';
-export const minimatchAffectedRange = '<11.0.1';
+export const minimatchAffectedRange = '>=7.0.0 <11.0.1';
 const minimatchNodes = {
-  'node_modules/minimatch': '3.1.5',
   'node_modules/@typescript-eslint/typescript-estree/node_modules/minimatch': '10.2.5',
 };
 const minimatchConsumers = {
   ...minimatchNodes,
-  'node_modules/@eslint-community/eslint-utils': '4.9.1',
-  'node_modules/@eslint/eslintrc': '2.1.4',
-  'node_modules/@humanwhocodes/config-array': '0.13.0',
   'node_modules/@typescript-eslint/eslint-plugin': '8.59.3',
   'node_modules/@typescript-eslint/parser': '8.59.3',
   'node_modules/@typescript-eslint/type-utils': '8.59.3',
   'node_modules/@typescript-eslint/typescript-estree': '8.59.3',
   'node_modules/@typescript-eslint/utils': '8.59.3',
-  'node_modules/eslint': '8.57.1',
   'node_modules/eslint-config-next': '15.5.24',
-  'node_modules/eslint-import-resolver-typescript': '3.10.1',
-  'node_modules/eslint-plugin-import': '2.32.0',
-  'node_modules/eslint-plugin-jsx-a11y': '6.10.2',
-  'node_modules/eslint-plugin-react': '7.37.5',
-  'node_modules/eslint-plugin-react-hooks': '5.2.0',
-  'node_modules/file-entry-cache': '6.0.1',
-  'node_modules/flat-cache': '3.2.0',
-  'node_modules/rimraf': '3.0.2',
-  'node_modules/rimraf/node_modules/glob': '7.2.3',
 };
 const minimatchEdges = [
-  ['', 'devDependencies', 'eslint', node('eslint')],
   ['', 'devDependencies', 'eslint-config-next', node('eslint-config-next')],
-  [node('@eslint-community/eslint-utils'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('@eslint/eslintrc'), 'dependencies', 'minimatch', node('minimatch')],
-  [node('@humanwhocodes/config-array'), 'dependencies', 'minimatch', node('minimatch')],
   [node('@typescript-eslint/eslint-plugin'), 'dependencies', '@typescript-eslint/type-utils', node('@typescript-eslint/type-utils')],
   [node('@typescript-eslint/eslint-plugin'), 'dependencies', '@typescript-eslint/utils', node('@typescript-eslint/utils')],
   [node('@typescript-eslint/eslint-plugin'), 'peerDependencies', '@typescript-eslint/parser', node('@typescript-eslint/parser')],
-  [node('@typescript-eslint/eslint-plugin'), 'peerDependencies', 'eslint', node('eslint')],
   [node('@typescript-eslint/parser'), 'dependencies', '@typescript-eslint/typescript-estree', node('@typescript-eslint/typescript-estree')],
-  [node('@typescript-eslint/parser'), 'peerDependencies', 'eslint', node('eslint')],
   [node('@typescript-eslint/type-utils'), 'dependencies', '@typescript-eslint/typescript-estree', node('@typescript-eslint/typescript-estree')],
   [node('@typescript-eslint/type-utils'), 'dependencies', '@typescript-eslint/utils', node('@typescript-eslint/utils')],
-  [node('@typescript-eslint/type-utils'), 'peerDependencies', 'eslint', node('eslint')],
   [node('@typescript-eslint/typescript-estree'), 'dependencies', 'minimatch', node('@typescript-eslint/typescript-estree/node_modules/minimatch')],
-  [node('@typescript-eslint/utils'), 'dependencies', '@eslint-community/eslint-utils', node('@eslint-community/eslint-utils')],
   [node('@typescript-eslint/utils'), 'dependencies', '@typescript-eslint/typescript-estree', node('@typescript-eslint/typescript-estree')],
-  [node('@typescript-eslint/utils'), 'peerDependencies', 'eslint', node('eslint')],
   [node('eslint-config-next'), 'dependencies', '@typescript-eslint/eslint-plugin', node('@typescript-eslint/eslint-plugin')],
   [node('eslint-config-next'), 'dependencies', '@typescript-eslint/parser', node('@typescript-eslint/parser')],
-  [node('eslint-config-next'), 'dependencies', 'eslint-import-resolver-typescript', node('eslint-import-resolver-typescript')],
-  [node('eslint-config-next'), 'dependencies', 'eslint-plugin-import', node('eslint-plugin-import')],
-  [node('eslint-config-next'), 'dependencies', 'eslint-plugin-jsx-a11y', node('eslint-plugin-jsx-a11y')],
-  [node('eslint-config-next'), 'dependencies', 'eslint-plugin-react', node('eslint-plugin-react')],
-  [node('eslint-config-next'), 'dependencies', 'eslint-plugin-react-hooks', node('eslint-plugin-react-hooks')],
-  [node('eslint-config-next'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint-import-resolver-typescript'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint-import-resolver-typescript'), 'peerDependencies', 'eslint-plugin-import', node('eslint-plugin-import')],
-  [node('eslint-plugin-import'), 'dependencies', 'minimatch', node('minimatch')],
-  [node('eslint-plugin-import'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint-plugin-jsx-a11y'), 'dependencies', 'minimatch', node('minimatch')],
-  [node('eslint-plugin-jsx-a11y'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint-plugin-react'), 'dependencies', 'minimatch', node('minimatch')],
-  [node('eslint-plugin-react'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint-plugin-react-hooks'), 'peerDependencies', 'eslint', node('eslint')],
-  [node('eslint'), 'dependencies', '@eslint-community/eslint-utils', node('@eslint-community/eslint-utils')],
-  [node('eslint'), 'dependencies', '@eslint/eslintrc', node('@eslint/eslintrc')],
-  [node('eslint'), 'dependencies', '@humanwhocodes/config-array', node('@humanwhocodes/config-array')],
-  [node('eslint'), 'dependencies', 'file-entry-cache', node('file-entry-cache')],
-  [node('eslint'), 'dependencies', 'minimatch', node('minimatch')],
-  [node('file-entry-cache'), 'dependencies', 'flat-cache', node('flat-cache')],
-  [node('flat-cache'), 'dependencies', 'rimraf', node('rimraf')],
-  [node('rimraf'), 'dependencies', 'glob', node('rimraf/node_modules/glob')],
-  [node('rimraf/node_modules/glob'), 'dependencies', 'minimatch', node('minimatch')],
 ];
-// npm's fix metadata on 2026-11-03: the "fixes" it reports are major DOWNGRADE
-// suggestions of the two dev roots (eslint 4.0.0; eslint-config-next 0.2.4 or 12.0.4,
-// the version varies between runs of the same npm) and do not count. Such metadata is
-// accepted only for these two roots and only when the suggested major is below the
-// installed one; an upgrade suggestion or any other package requires reassessment.
-// npm also marks one or two propagated entries `fixAvailable: true` (the entry varies
-// between runs) although `npm audit fix --dry-run` changes nothing, so a bare `true`
-// is accepted only on a propagated entry and only while that dry-run plan is empty; a
-// real compatible fix shows up in the plan and retires the exception.
-const minimatchFixRoots = ['eslint', 'eslint-config-next'];
-// Stable releases newer than the approved copies in their lines that were assessed and
-// found still inside the advisory range (10.2.6, assessed 2026-11-03). Any other newer
-// stable release in a 3.x or 10.x line requires reassessment and fails closed.
+// npm's fix metadata on 2026-11-03: the "fixes" it reported were major DOWNGRADE
+// suggestions of the dev root (eslint-config-next 0.2.4 or 12.0.4, the version varies
+// between runs of the same npm) and do not count. Such metadata is accepted only for
+// that root and only when the suggested major is below the installed one; an upgrade
+// suggestion or any other package requires reassessment. ESLint itself no longer
+// reaches the affected copy and is no longer accepted as a fix root (2026-11-05).
+// npm also marks propagated entries `fixAvailable: true` although `npm audit fix
+// --dry-run` changes nothing, so a bare `true` is accepted only on a propagated entry
+// and only while that dry-run plan is empty; a real compatible fix shows up in the plan
+// and retires the exception.
+const minimatchFixRoots = ['eslint-config-next'];
+// Stable releases newer than the approved copy in its line that were assessed and found
+// still inside the advisory range (10.2.6, assessed 2026-11-03). Any other newer stable
+// 10.x release requires reassessment and fails closed.
 const minimatchAssessedReleases = ['10.2.6'];
 const sorted = (values) => values.map((value) => JSON.stringify(value)).sort();
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -187,9 +145,9 @@ function ancestorsOf(edges, roots) {
 }
 
 export function validateMinimatchPaths(lock) {
-  // Every installed minimatch inside the affected range must be one of the two approved
-  // dev-only copies at its recorded version; copies outside the range (the production
-  // one under @sentry/bundler-plugins) are not exceptions and need no approval here.
+  // Every installed minimatch inside the affected range must be the approved dev-only
+  // copy at its recorded version; copies outside the range (3.1.5 since 2026-11-05, and
+  // the production one under @sentry/bundler-plugins) are not exceptions here.
   for (const path of Object.keys(lock.packages).filter((candidate) => candidate.split('node_modules/').at(-1) === 'minimatch')) {
     const version = lock.packages[path]?.version;
     assert.ok(semver.valid(version), 'Invalid installed minimatch version');
@@ -213,8 +171,8 @@ export function validateMinimatchPaths(lock) {
 export function validateAudit(report, lock, manifest, publishedBracesVersions, publishedMinimatchVersions, fixPlan) {
   validateToolingPaths(lock, manifest);
   validateMinimatchPaths(lock);
-  // Like the braces rule: a stable minimatch release newer than an approved copy in its
-  // own line (3.x or 10.x) requires reassessment even before advisory metadata catches
+  // Like the braces rule: a stable minimatch release newer than the approved copy in its
+  // own line (10.x) requires reassessment even before advisory metadata catches
   // up, unless it was already assessed as still affected. Prereleases alone do not
   // retire the exception; releases in other lines (11.x) are not compatible fixes.
   assert.ok(Array.isArray(publishedMinimatchVersions) && Object.values(minimatchNodes).every((version) => publishedMinimatchVersions.includes(version)), 'Invalid minimatch registry version metadata');
