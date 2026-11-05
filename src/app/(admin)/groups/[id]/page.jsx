@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { ArrowLeft, Users, UserSearch, UserPlus, X, Check } from 'lucide-react';
+import { ArrowLeft, Users, UserSearch, UserPlus, X, Check, Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { STUDENT_STATUS_COLORS } from '@/lib/statusColors';
@@ -22,6 +22,9 @@ import { safeReturnTo } from '@/lib/navigation.mjs';
 import { getTeacherRoster, rosterToAcademicRows } from '@/lib/portal';
 import ReadState from '@/components/operational/ReadState';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { courseDatesLabel, courseFinished, formatCourseDate, reopenCourse, reopenCourseMessage } from '@/lib/academic/courseClose.mjs';
+import { isOnlineSessionType } from '@/lib/academicPrograms';
+import CloseCourseDialog from '@/components/groups/CloseCourseDialog';
 
 const chunks = (values, size = 100) => Array.from({ length: Math.ceil(values.length / size) }, (_, i) => values.slice(i * size, (i + 1) * size));
 
@@ -64,6 +67,11 @@ export default function GroupDetail() {
   // { student, capacity, withoutEnrollment, overrideReason, withoutEnrollmentReason }.
   const [reasons, setReasons] = useState(null);
   const canOverride = role === 'admin' || role === 'director';
+  const director = role === 'director';
+  // CDC (D8): the close dialog, the reopen in progress and the course's past learners.
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [pastLearners, setPastLearners] = useState([]);
 
   useEffect(() => {
     if (!id) return;
@@ -87,6 +95,18 @@ export default function GroupDetail() {
       const members = groupMemberIds(everyone, registrations, id);
       setStudents(everyone.filter(s => members.has(s.id)));
       setVisibleStudents(everyone);
+      // « Anciens apprenants du cours »: enrollments that ended in this group (staff only).
+      if (g?.closed_at && role !== 'teacher') {
+        const ended = await entities.Enrollment.filterAll({ ended_group_id: id }, '-ended_at');
+        const known = new Map(everyone.map(s => [s.id, s]));
+        const missing = [...new Set(ended.map(e => e.student_id).filter(sid => sid && !known.has(sid)))];
+        const extra = (await Promise.all(chunks(missing).map(ids => entities.Student.filterAll({ id: ids }, 'full_name')))).flat();
+        for (const s of extra) known.set(s.id, s);
+        setPastLearners(ended.map(e => ({ enrollment: e, student: known.get(e.student_id) || null }))
+          .sort((a, b) => (a.student?.full_name || '').localeCompare(b.student?.full_name || '', 'fr')));
+      } else {
+        setPastLearners([]);
+      }
       setLoading(false);
     })().catch(() => { setLoadError(true); setLoading(false); });
   }, [id, reload, role]);
@@ -131,6 +151,19 @@ export default function GroupDetail() {
   const refreshMemberships = () => {
     invalidateAfterLearnerSave(queryClient);
     setReload(value => value + 1);
+  };
+  const closed = Boolean(group?.closed_at);
+  const canPlace = canManage && !closed;
+
+  // Q8 = A: the director undoes a close made by mistake; a conflict reloads the page.
+  const reopen = async () => {
+    if (!confirm(`Rouvrir le cours « ${group.name} » ? Les inscriptions terminées par la clôture sont rétablies si elles n’ont pas changé depuis.`)) return;
+    setReopening(true);
+    const { data, error } = await reopenCourse(getBrowserClient(), { groupId: id, closedAt: group.closed_at });
+    setReopening(false);
+    if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) refreshMemberships(); return; }
+    toast.success(reopenCourseMessage(data));
+    refreshMemberships();
   };
 
   // Every placement uses an enrollment (DAT-2). EAP (Q3 = B): a placement follows a
@@ -215,7 +248,11 @@ export default function GroupDetail() {
     ['Salle', group.salle || '—'],
     ['Terme', group.terme || '—'],
     ['Année scolaire', schoolYearOfGroup(group) || '—'],
+    ['Dates du cours', courseDatesLabel(group) || '—'],
   ];
+  // OA2: « Clôturer le cours » once finished, or at any time when the course is empty.
+  const showClose = director && !closed && !isOnlineSessionType(group.session_type)
+    && (courseFinished(group) || students.length === 0);
   return (
     <div className="p-4 lg:p-8">
       <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/groups'))} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -231,7 +268,20 @@ export default function GroupDetail() {
             {full && <span className="text-amber-600 font-medium">· complet</span>}
           </p>
         </div>
-        {canManage && (
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        {showClose && (
+          <button type="button" onClick={() => setCloseOpen(true)}
+            className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted">
+            <Lock size={15} /> Clôturer le cours
+          </button>
+        )}
+        {director && closed && (
+          <button type="button" onClick={reopen} disabled={reopening}
+            className="flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted disabled:opacity-50">
+            Rouvrir le cours
+          </button>
+        )}
+        {canPlace && (
           <button
             onClick={() => setPickerOpen(true)}
             disabled={full && !canOverride}
@@ -241,7 +291,14 @@ export default function GroupDetail() {
             <UserPlus size={15} /> Ajouter des apprenants
           </button>
         )}
+        </div>
       </div>
+
+      {closed && (
+        <p role="status" className="mb-6 flex items-center gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-sm">
+          <Lock size={15} className="shrink-0" /> Cours clôturé le {formatCourseDate(group.closed_at)}. Il n’accepte plus d’apprenant.
+        </p>
+      )}
 
       <div className="bg-card border border-border rounded-lg p-5 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
@@ -262,7 +319,7 @@ export default function GroupDetail() {
           <div className="p-10 text-center">
             <UserSearch size={32} className="mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-sm font-medium text-foreground">Aucun apprenant dans ce groupe</p>
-            {canManage && (
+            {canPlace && (
               <button onClick={() => setPickerOpen(true)} className="inline-flex items-center gap-1 text-sm font-semibold mt-3 hover:underline" style={{ color: 'var(--brand)' }}>
                 <UserPlus size={14} /> Ajouter des apprenants
               </button>
@@ -298,7 +355,7 @@ export default function GroupDetail() {
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${STUDENT_STATUS_COLORS[s.status] || 'bg-gray-100 text-gray-500'}`}>{s.status || '—'}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {canManage && (
+                      {canPlace && (
                         <button
                           onClick={() => removeFromGroup(s)}
                           disabled={busyId === s.id}
@@ -316,7 +373,41 @@ export default function GroupDetail() {
         )}
       </div>
 
-      {pickerOpen && (
+      {closed && role !== 'teacher' && (
+        <div className="mt-6 bg-card border border-border rounded-lg overflow-hidden">
+          <div className="px-4 lg:px-6 py-4 border-b border-border">
+            <h2 className="font-semibold">Anciens apprenants du cours</h2>
+          </div>
+          {pastLearners.length === 0
+            ? <p className="p-6 text-center text-sm text-muted-foreground">Aucun ancien apprenant.</p>
+            : <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    {['Nom', 'Niveau', 'Fin', 'Motif'].map(hd => <th key={hd} className="text-left px-4 py-3 font-semibold text-muted-foreground">{hd}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {pastLearners.map(({ enrollment, student }) => (
+                    <tr key={enrollment.id}>
+                      <td className="px-4 py-3 font-medium">
+                        {student ? <ContextLink href={`/students/${student.id}`} className="text-primary hover:underline">{student.full_name}</ContextLink> : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{enrollment.level || group.niveau || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatCourseDate(enrollment.ended_at) || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{enrollment.end_reason || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>}
+        </div>
+      )}
+
+      {closeOpen && <CloseCourseDialog groupId={id} onClose={() => setCloseOpen(false)}
+        onClosed={() => { setCloseOpen(false); refreshMemberships(); }} />}
+
+      {pickerOpen && canPlace && (
         <Dialog open onOpenChange={(o) => !o && setPickerOpen(false)}>
           <DialogContent className="max-w-md p-0">
             <DialogHeader className="px-4 pt-4">

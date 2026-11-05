@@ -224,8 +224,11 @@ do $$ declare v_group uuid; v_enrollment uuid; before_group jsonb; before_enroll
  perform public.save_receptionist_group('96000000-0000-0000-0000-000000000034',null,
    '{"name":"Empty programme group","session_type":"Yearly","niveau":"Child 1"}');
  select updated_at into v_version from public.groups where id='96000000-0000-0000-0000-000000000034';
+ -- CDC (128, Q1 = A): a change into a short programme carries the course dates.
  perform public.save_receptionist_group('96000000-0000-0000-0000-000000000034',v_version,
-   '{"session_type":"Adults","niveau":"Beginning 1"}');
+   jsonb_build_object('session_type','Adults','niveau','Beginning 1',
+     'date_debut',make_date(left(public.centre_school_year(),4)::int,9,1),
+     'date_fin',make_date(left(public.centre_school_year(),4)::int+1,6,30)));
  if not exists(select 1 from public.groups where id='96000000-0000-0000-0000-000000000034'
    and session_type='Adults' and niveau='Beginning 1') then
    raise exception 'Empty group programme change failed'; end if;

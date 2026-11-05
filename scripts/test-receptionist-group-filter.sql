@@ -11,9 +11,10 @@ insert into auth.users(id,email,aud,role,created_at,updated_at) values
 update public.profiles set role='receptionist' where id='97000000-0000-0000-0000-000000000001';
 update public.profiles set role='director' where id='97000000-0000-0000-0000-000000000002';
 
-insert into public.groups(id,name,session_type,niveau) values
- ('97000000-0000-0000-0000-000000000100','Filter Child 1','Yearly','Child 1'),
- ('97000000-0000-0000-0000-000000000101','Filter MAN A1','Mise à niveau','A1');
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id,name,session_type,niveau,date_debut,date_fin) values
+ ('97000000-0000-0000-0000-000000000100','Filter Child 1','Yearly','Child 1',null,null),
+ ('97000000-0000-0000-0000-000000000101','Filter MAN A1','Mise à niveau','A1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30));
 insert into public.students(id,full_name,status,session_type,niveau_cefr) values
  ('97000000-0000-0000-0000-000000000204','Filter 097 confirmed','Prospect','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000205','Filter 097 ended','Prospect','Yearly','Child 1'),

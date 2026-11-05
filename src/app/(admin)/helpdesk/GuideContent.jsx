@@ -12,8 +12,8 @@ export default function GuideContent() {
 <h1>Guide Accueil</h1>
 <p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 2.2</li>
-<li>4 novembre 2026</li>
+<li>Version 2.3</li>
+<li>5 novembre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
 </ul>
@@ -1022,7 +1022,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez <span className="menu">Académique</span> › <span className="menu">Groupes &amp; niveaux</span>, puis cliquez sur <span className="ui">Nouveau groupe</span>.</p>
 </li>
-<li><p>Saisissez le <span className="ui">Nom du groupe</span> (obligatoire). Il n’y a pas de règle imposée&nbsp;; suivez l’usage de l’équipe, par exemple «&nbsp;Child 2 · Samedi après-midi&nbsp;».</p>
+<li><p>Saisissez le <span className="ui">Nom du groupe</span> (obligatoire). Suivez l’usage de l’équipe, par exemple «&nbsp;Child 2 · Samedi après-midi&nbsp;». <b>Un nom de groupe ne contient jamais le nom d’un apprenant</b>&nbsp;: pour un cours individuel (One-to-One), la plateforme propose «&nbsp;Cours individuel · niveau · date de début&nbsp;».</p>
 </li>
 <li><p>Choisissez la <span className="ui">Session</span> puis le <span className="ui">Niveau</span> (la liste des niveaux dépend de la session) et la <span className="ui">Catégorie</span>.</p>
 </li>
@@ -1032,18 +1032,29 @@ export default function GuideContent() {
 </li>
 <li><p>Vérifiez l’<span className="ui">Année scolaire</span>&nbsp;: elle est obligatoire et proposée automatiquement (l’année en cours, du 1<sup>er</sup> septembre au 31 août). Pour un groupe de la rentrée suivante, changez-la. Format&nbsp;: deux années qui se suivent, avec une barre, par exemple <b>2026/2027</b>.</p>
 </li>
+<li><p>Renseignez la <span className="ui">Date de début</span> et la <span className="ui">Date de fin</span> du cours. Elles sont <b>obligatoires pour Mise à niveau, Adults, Summer Camp et One-to-One</b>, facultatives pour Yearly et Communication. Un cours en ligne n’en a pas ici&nbsp;: ses dates se modifient sur sa page Cours en ligne. Les dates restent dans l’année scolaire du groupe, du 1<sup>er</sup> juin au 31 août suivant (pour 2026/2027&nbsp;: du 1<sup>er</sup> juin 2026 au 31 août 2027). Un cours individuel (One-to-One) a une capacité de 1.</p>
+</li>
 <li><p>Cliquez sur <span className="ui">Enregistrer</span>&nbsp;: le message «&nbsp;Groupe créé&nbsp;» s’affiche.</p>
 </li>
 </ol>
 <figure className="fig narrow">
-<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027 et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<Image src="/helpdesk/q08-groupe-formulaire.jpg" width={1700} height={1075} alt="Fenêtre Nouveau groupe avec le nom, l’enseignant, les jours, l’année scolaire 2026/2027, les dates du cours et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Nom du groupe</span>&nbsp;: obligatoire.</li>
 <li><span className="ui">Enseignant</span>&nbsp;: obligatoire. Il choisit parmi les enseignants existants.</li>
 <li><span className="ui">Jours</span>&nbsp;: du texte libre, mais l’<b>Emploi du temps</b> s’en sert (écrivez Lun, Mar, Mer, Jeu, Ven, Sam, Dim).</li>
 <li><span className="ui">Année scolaire</span>&nbsp;: obligatoire, proposée automatiquement, au format 2026/2027.</li>
+<li><span className="ui">Date de début</span> et <span className="ui">Date de fin</span>&nbsp;: obligatoires pour les programmes courts.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
+<div className="callout warn">
+<strong>Les messages sur les dates</strong><ul className="tight">
+<li>«&nbsp;Renseignez les dates du cours&nbsp;: date de début et date de fin.&nbsp;»&nbsp;: un programme court (Mise à niveau, Adults, Summer Camp, One-to-One) a besoin des deux dates.</li>
+<li>«&nbsp;Les dates du cours doivent être comprises dans l’année scolaire du groupe (du 1er juin 2026 au 31 août 2027).&nbsp;»&nbsp;: corrigez la date ou l’année scolaire.</li>
+<li>«&nbsp;La date de fin doit suivre la date de début.&nbsp;»</li>
+<li>«&nbsp;Un cours individuel (One-to-One) a une capacité de 1.&nbsp;»</li>
+</ul>
+</div>
 <h4>Modifier un groupe, changer d’enseignant</h4>
 <p>Dans la liste, cliquez sur l’icône de modification à droite de la ligne du groupe. La fenêtre «&nbsp;Modifier le groupe&nbsp;» s’ouvre&nbsp;: changez l’<span className="ui">Enseignant</span>, l’horaire, la salle ou la capacité, puis <span className="ui">Enregistrer</span> («&nbsp;Groupe mis à jour&nbsp;»). La page du groupe (clic sur son nom) montre ses apprenants et son année scolaire (<a href="#q10">Q10</a>).</p>
 <div className="callout warn">
@@ -1054,6 +1065,7 @@ export default function GuideContent() {
 <li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant se demande à la direction (<a href="#q12">Q12</a>).</li>
 <li>La capacité est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant. Seule la direction peut en ajouter un quand même, avec un motif.</li>
 <li>Vous ne pouvez pas supprimer un groupe&nbsp;: demandez à la direction.</li>
+<li>Un cours terminé est <b>clôturé par la direction</b>. Un cours clôturé n’accepte plus d’apprenant et quitte les listes de choix, les présences et l’emploi du temps. Ses dates, son année, son programme, son niveau et sa capacité ne changent plus («&nbsp;Ce cours est clôturé. Rouvrez le cours pour le modifier.&nbsp;»)&nbsp;; son nom, son enseignant, sa salle et son horaire restent modifiables. Seule la direction peut le rouvrir.</li>
 <li>Après avoir créé ou changé les jours, vérifiez le résultat dans l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>).</li>
 </ul>
 </div>
@@ -1102,6 +1114,9 @@ export default function GuideContent() {
 <li>Un dossier actif sans inscription payée affiche <span className="ui">Inscrire et encaisser</span>&nbsp;: l’affectation suit toujours une inscription payée. Sur la page du groupe, ce dossier apparaît grisé avec «&nbsp;sans inscription payée&nbsp;» et ne peut pas être choisi («&nbsp;Un apprenant grisé n’a pas d’inscription payée&nbsp;: inscrire et encaisser d’abord.&nbsp;»). Si l’affectation est tentée autrement, la plateforme répond «&nbsp;Inscrivez et encaissez d’abord&nbsp;: l’affectation suit une inscription payée.&nbsp;»</li>
 <li>L’autre voie&nbsp;: <span className="menu">Groupes &amp; niveaux</span> › le groupe › <span className="ui">Ajouter des apprenants</span>. Elle refuse certains cas (plusieurs inscriptions en attente). Le lien de la liste est plus fiable.</li>
 <li>Pour changer quelqu’un de groupe, ou le sortir d’un groupe&nbsp;: <a href="#q10">Q10</a>.</li>
+<li>Un cours clôturé n’est jamais proposé. Si l’affectation est tentée autrement, la plateforme répond «&nbsp;Ce cours est clôturé.&nbsp;»&nbsp;: choisissez un autre cours, ou demandez à la direction s’il a été clôturé par erreur.</li>
+<li>Un cours terminé mais pas encore clôturé reste proposé avec «&nbsp;· terminé le …&nbsp;»&nbsp;: c’est pour placer un apprenant oublié avant la clôture. Pour un nouveau départ, choisissez le cours suivant.</li>
+<li>«&nbsp;Renseignez les dates du cours avant d’y affecter un apprenant.&nbsp;»&nbsp;: complétez d’abord les dates du groupe (<a href="#q8">Q8</a>).</li>
 <li>La capacité d’un groupe est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant (seule la direction peut dépasser, avec un motif). Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
 </ul>
 </div>
@@ -1259,7 +1274,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p><b>Enseignants</b>&nbsp;: chacun est dans la liste, avec ses niveaux et ses certifications à jour (<a href="#q12">Q12</a>). Un nouvel enseignant se demande à la direction.</p>
 </li>
-<li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité, terme et la nouvelle <b>année scolaire</b> (<a href="#q8">Q8</a>). Un groupe de l’an dernier ne reçoit pas les inscriptions de la nouvelle année.</p>
+<li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité, terme, la nouvelle <b>année scolaire</b> et les <b>dates du cours</b> (obligatoires pour les programmes courts) (<a href="#q8">Q8</a>). Un groupe de l’an dernier ne reçoit pas les inscriptions de la nouvelle année.</p>
 </li>
 <li><p><b>Emploi du temps</b>&nbsp;: relisez la grille, aucun groupe ne manque (<a href="#q13">Q13</a>).</p>
 </li>
@@ -1469,8 +1484,8 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Groupes &amp; niveaux</h4>
-<p>Liste des groupes (programme, niveau, enseignant, horaire, salle, terme). Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant et d’une année scolaire (<a href="#q8">Q8</a>)&nbsp;; sa page affiche l’année.</p>
-<p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span> (<a href="#q10">Q10</a>).</p>
+<p>Liste des groupes (programme, niveau, dates du cours, enseignant, horaire, salle, terme). Le filtre de vue montre <span className="ui">En cours</span> par défaut, ou <span className="ui">Clôturés</span>. Vous pouvez créer et modifier un groupe, pas le supprimer. Un groupe a besoin d’un enseignant et d’une année scolaire, et un programme court de ses dates (<a href="#q8">Q8</a>)&nbsp;; sa page affiche l’année et les dates.</p>
+<p>Page d’un groupe&nbsp;: <span className="ui">Ajouter des apprenants</span> et <span className="ui">Retirer</span> (<a href="#q10">Q10</a>). Un cours clôturé affiche «&nbsp;Cours clôturé le …&nbsp;», n’a plus ces boutons et montre la liste <b>Anciens apprenants du cours</b>.</p>
 <figure className="fig" style={{ marginBottom: '10px' }}>
 <Image src="/helpdesk/s17-groups.jpg" width={1700} height={1075} alt="Liste des groupes et niveaux" unoptimized tabIndex={0} role="button" /></figure>
 </div>
@@ -1591,7 +1606,7 @@ export default function GuideContent() {
 </ol>
 <p>Une inscription n’existe qu’une fois payée&nbsp;: tout paiement supérieur à zéro la confirme, une remise de 100&nbsp;% avec un motif aussi (inscription gratuite). Le reste à payer est suivi comme avant («&nbsp;Acompte versé&nbsp;», «&nbsp;En retard&nbsp;»).</p>
 <p>Anciens statuts retirés, encore visibles sur d’anciennes fiches&nbsp;: «&nbsp;Soumise&nbsp;», «&nbsp;En cours d’examen&nbsp;», «&nbsp;Essai&nbsp;» et «&nbsp;Refusée&nbsp;». Ils restent dans l’historique&nbsp;; plus personne ne peut en créer.</p>
-<p><b>Terminée</b>&nbsp;: une inscription finie (fin de parcours, départ, clôture de l’année ou d’un cours en ligne). Elle garde son motif, sa date de fin et le groupe qu’elle a quitté, et reste dans l’historique de la fiche. L’apprenant sort du groupe&nbsp;; ses présences d’avant la date de fin restent. Vous ne pouvez ni la modifier ni la rouvrir&nbsp;: la direction peut la rouvrir. Si la personne revient&nbsp;: sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</p>
+<p><b>Terminée</b>&nbsp;: une inscription finie (fin de parcours, départ, clôture de l’année, d’un cours terminé ou d’un cours en ligne). Elle garde son motif, sa date de fin et le groupe qu’elle a quitté, et reste dans l’historique de la fiche. L’apprenant sort du groupe&nbsp;; ses présences d’avant la date de fin restent. Vous ne pouvez ni la modifier ni la rouvrir&nbsp;: la direction peut la rouvrir. Si la personne revient&nbsp;: sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</p>
 <h3>Le statut du dossier d’un apprenant</h3>
 <p>Il est calculé par la plateforme à partir des inscriptions&nbsp;: vous ne le choisissez pas.</p>
 <div className="scroll">
@@ -1622,7 +1637,7 @@ export default function GuideContent() {
 </tbody>
 </table>
 </div>
-<p>La clôture de l’année scolaire ou d’un cours en ligne, faite par la direction, termine aussi des inscriptions et peut donner ces deux derniers statuts.</p>
+<p>La clôture de l’année scolaire, d’un cours terminé ou d’un cours en ligne, faite par la direction, termine aussi des inscriptions et peut donner ces deux derniers statuts.</p>
 <p>Un Ancien apprenant ou un Inactif n’apparaît pas dans la liste par défaut (choisissez <span className="ui">Tous les statuts</span>) et sa colonne Groupe affiche «&nbsp;—&nbsp;». Pour une réinscription&nbsp;: sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</p>
 <h3>Glossaire des mots anglais</h3>
 <p>Quelques mots restent en anglais dans la plateforme. Voici leur sens.</p>
@@ -1878,7 +1893,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Académique</td>
-<td>Supprimer un groupe, saisir des notes, imprimer des bulletins.</td>
+<td>Supprimer un groupe, clôturer un cours terminé ou le rouvrir, clôturer l’année scolaire, saisir des notes, imprimer des bulletins.</td>
 </tr>
 <tr>
 <td>Enseignants</td>
@@ -1985,7 +2000,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 2.1, 30 octobre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.3, 5 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );

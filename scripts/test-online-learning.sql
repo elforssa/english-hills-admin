@@ -278,8 +278,12 @@ select pg_temp.ok(pg_temp.join_reason(8, 513) = 'online.course_inactive', 'draft
 -- D8 = A (EGC): closing the course ended the learner's seat; seated again after
 -- the close, the closed state still refuses the join.
 select pg_temp.ok(pg_temp.join_reason(8, 514) = 'online.not_eligible', 'closing the course ended its enrollments');
+-- CDC (128, D4): no placement enters a closed course; the stale seat is seeded the way
+-- only the Batch D two-flag restore can write it.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
   (pg_temp.id(201), pg_temp.id(309), 'Validated', 'Online', '2028/2029', 'B1');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.ok(pg_temp.join_reason(8, 514) = 'online.course_inactive', 'closed course');
 select pg_temp.ok(pg_temp.join_reason(8, 511) = 'online.not_eligible', 'not seated in that course');
 select pg_temp.ok(pg_temp.join_reason(8, 501, 202) = 'online.not_eligible', 'another learner is not visible to this student');
@@ -568,8 +572,14 @@ select pg_temp.ok(not exists (select 1 from public.enrollments where group_id = 
   and (select count(*) from public.enrollments where ended_group_id = pg_temp.id(301) and status = 'Ended'
     and end_reason = 'Cours en ligne clôturé') = 3, 'course close ends its enrollments');
 select pg_temp.ok(pg_temp.join_reason(8, 507) = 'online.not_eligible', 'no seat after close');
+-- CDC (128, D4, Q9): a placement into a closed online course is refused; the stale seat
+-- is seeded the way only the Batch D two-flag restore can write it.
+select pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
+  values (%L, %L, 'Validated', 'Online', '2026/2027', 'B1')$$, pg_temp.id(201), pg_temp.id(301)), '23514', 'course.closed');
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(student_id, group_id, status, session_type, school_year, level) values
   (pg_temp.id(201), pg_temp.id(301), 'Validated', 'Online', '2026/2027', 'B1');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.ok(pg_temp.join_reason(8, 507) = 'online.course_inactive', 'no re-issue after close');
 
 -- ---------------------------------------------------------------------------

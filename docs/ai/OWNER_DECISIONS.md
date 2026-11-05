@@ -448,6 +448,7 @@ Plan: [course dates and close](../architecture/plans/course-dates-close.md), rev
 
   Approved: CDC-r3 at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19`, Q1 and Q3–Q18 all A, OA1–OA6 as recorded above. The six reviewer points of instruction 2 are carried into the implementation record ([plan approval record](../architecture/plans/course-dates-close.md#owner-decisions-required)).
 - **Not approved by this record:** the read-only R0 count on Production, implementation, migration 128, the one-time data step (Adults and One-to-One only after the owner's confirmation per programme), the merge and the deployment; each needs its own approval. The owner merges PR #185 separately.
+- **Implementation status (2026-11-05):** implemented on branch `feat/course-dates-close` with migration `128_course_dates_close.sql`, applying Q1 and Q3–Q18 A and OA1–OA6, with the six reviewer points ([implementation record](../architecture/plans/course-dates-close.md#implementation-record-cdc-r3-2026-11-05)); implementation PR open, not merged, not deployed, 128 not applied on Production. The read-only R0 count ran once on Production on 2026-11-05 at 13:05 UTC under the owner's approval in the implementation instruction (counts in the implementation record; every figure the plan states matched). The one-time step (Mise à niveau only; Adults and One-to-One off until the owner confirms each), its revert and the restore are prepared, not run. No new owner decision.
 
 ## Deferred backlog after RCC-r1
 

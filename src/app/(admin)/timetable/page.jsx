@@ -5,6 +5,8 @@ import PersonLink from '@/components/PersonLink';
 import { useEffect, useState } from 'react';
 import { getTeacherDirectory, getMyTeacher } from '@/lib/teacher-directory';
 import { entities } from '@/lib/entities';
+import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -20,6 +22,7 @@ const COLORS = [
 export default function Timetable() {
   const { user: sessionUser } = useAuth();
   const [groups, setGroups] = useState([]);
+  const closedOnline = useClosedOnlineGroupIds();
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterTerme, setFilterTerme] = useState('');
@@ -59,9 +62,11 @@ export default function Timetable() {
 
   const teacherName = (tid) => teachers.find(t => t.id === tid)?.full_name || '';
   // Scope the schedule to the teacher's own groups; admins/directors see all.
+  // CDC (D4): a closed course leaves the timetable.
+  const openGroups = groups.filter(g => !isClosedCourse(g, closedOnline));
   const visibleGroups = role === 'teacher'
-    ? groups.filter(g => g.teacher_id === myTeacherId)
-    : groups;
+    ? openGroups.filter(g => g.teacher_id === myTeacherId)
+    : openGroups;
   const filtered = visibleGroups.filter(g => !filterTerme || g.terme === filterTerme);
 
   const groupsByDay = DAYS.reduce((acc, day) => {

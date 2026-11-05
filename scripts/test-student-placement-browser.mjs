@@ -35,9 +35,9 @@ try {
   sql(`update public.profiles set role='admin' where id='${userId}'`);
   const groupId=randomUUID(), manId=randomUUID(), fullId=randomUUID(), child2Id=randomUUID(), levelledId=randomUUID(), paidId=randomUUID(), seatedId=randomUUID();
   const recPaidId=randomUUID(), recPaid2Id=randomUUID(), recUnpaidId=randomUUID();
-  sql(`insert into public.groups(id,name,session_type,niveau,annee,capacite_max) values ('${groupId}','${run} group','Yearly','Child 1','2026-2027',15),
-      ('${manId}','${run} man','Mise à niveau','A1','2026-2027',15),('${fullId}','${run} full','Yearly','Child 2','2026-2027',1),
-      ('${child2Id}','${run} child2','Yearly','Child 2','2026-2027',15);
+  sql(`insert into public.groups(id,name,session_type,niveau,annee,capacite_max,date_debut,date_fin) values ('${groupId}','${run} group','Yearly','Child 1','2026-2027',15,null,null),
+      ('${manId}','${run} man','Mise à niveau','A1','2026-2027',15,'2026-09-01','2027-06-30'),('${fullId}','${run} full','Yearly','Child 2','2026-2027',1,null,null),
+      ('${child2Id}','${run} child2','Yearly','Child 2','2026-2027',15,null,null);
     insert into public.students(id,full_name,status,session_type) values ('${paidId}','${run} paid','Prospect','Yearly'),
       ('${seatedId}','${run} seated','Prospect','Yearly'),('${levelledId}','${run} levelled','Prospect','Yearly');
     insert into public.students(id,full_name,status,session_type,niveau_cefr) values ('${recPaidId}','${run} reception paid','Prospect','Yearly','Child 1'),

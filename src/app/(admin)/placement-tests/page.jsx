@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import PlacementTestModal from '@/components/placement/PlacementTestModal';
 import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
+import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 const STATUS_COLORS = {
   'Planifié': 'bg-blue-100 text-blue-700',
@@ -27,6 +29,7 @@ function PlacementTestsList() {
   const [loadedScope, setLoadedScope] = useState(null);
   const [tests, setTests] = useState([]);
   const [groups, setGroups] = useState([]);
+  const closedOnline = useClosedOnlineGroupIds();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -126,7 +129,7 @@ function PlacementTestsList() {
         )}
         </ReadState>
       </div>
-      {modal !== null && <PlacementTestModal test={modal.id ? modal : null} groups={groups} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <PlacementTestModal test={modal.id ? modal : null} groups={groups.filter(g => !isClosedCourse(g, closedOnline) || g.id === modal.groupe_affecte_id)} students={students} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }

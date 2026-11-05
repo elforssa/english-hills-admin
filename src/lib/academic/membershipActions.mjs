@@ -4,10 +4,13 @@
 // injected so the node tests run this code.
 import { isRecordConflict, recordConflictMessage } from '../conflictErrors.mjs';
 import { onlineReason, ONLINE_REASON_TEXT } from '../online/reasons.mjs';
+import { courseErrorMessage } from './courseClose.mjs';
 
 export const ENROLLMENT_CHANGED_MESSAGE = 'Cette inscription a changé, rechargez.';
 export const DUPLICATE_ENROLLMENT_MESSAGE = 'Une inscription active existe déjà pour ce programme et cette année.';
 export const GROUP_HISTORY_MESSAGE = 'Ce groupe a un historique d’inscriptions : il ne peut pas être supprimé.';
+// CDC (128): a closed course keeps its past learners (ended_group_id), so it stays in history.
+export const CLOSED_GROUP_HISTORY_MESSAGE = 'Ce cours clôturé garde l’historique de ses anciens apprenants : il ne peut pas être supprimé.';
 
 export const EGC_REASON_TEXT = {
   capacity: 'Ce groupe est complet.',
@@ -70,6 +73,9 @@ export function egcReason(hint) {
 // direct writes. Raw server text is shown only when nothing better is known.
 export function membershipErrorMessage(error) {
   if (!error) return '';
+  // CDC (128): the course refusals and the close conflicts carry their own words.
+  const course = courseErrorMessage(error);
+  if (course) return course;
   const reason = egcReason(error.hint);
   // ADR-009: a record conflict first; its egc hint picks the precise text.
   if (isRecordConflict(error)) {
@@ -92,9 +98,11 @@ export function membershipErrorMessage(error) {
   return error.message || GENERIC;
 }
 
-// Deleting a group is refused while any enrollment (current or ended) refers to it.
-export function groupDeleteErrorMessage(error) {
-  return error?.code === '23503' ? GROUP_HISTORY_MESSAGE : membershipErrorMessage(error);
+// Deleting a group is refused while any enrollment (current or ended) refers to it;
+// a closed course says why (its past learners reference it).
+export function groupDeleteErrorMessage(error, group = null) {
+  if (error?.code === '23503') return group?.closed_at ? CLOSED_GROUP_HISTORY_MESSAGE : GROUP_HISTORY_MESSAGE;
+  return membershipErrorMessage(error);
 }
 
 // EAP (Q3 = B): reception places a paid (Confirmed/Validated) enrollment only;

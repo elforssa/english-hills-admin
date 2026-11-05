@@ -7,10 +7,11 @@ insert into auth.users(id,email,aud,role,created_at,updated_at) values
  ('74000000-0000-0000-0000-000000000002','workflow-parent@example.test','authenticated','authenticated',now(),now());
 update public.profiles set role='admin' where id='74000000-0000-0000-0000-000000000001';
 update public.profiles set role='parent' where id='74000000-0000-0000-0000-000000000002';
-insert into public.groups(id,name,session_type,niveau) values
- ('74000000-0000-0000-0000-000000000011','Workflow A','Yearly','Child 1'),
- ('74000000-0000-0000-0000-000000000012','Workflow B','Yearly','Child 2'),
- ('74000000-0000-0000-0000-000000000013','Workflow Adult','Adults','Beginning 1');
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id,name,session_type,niveau,date_debut,date_fin) values
+ ('74000000-0000-0000-0000-000000000011','Workflow A','Yearly','Child 1',null,null),
+ ('74000000-0000-0000-0000-000000000012','Workflow B','Yearly','Child 2',null,null),
+ ('74000000-0000-0000-0000-000000000013','Workflow Adult','Adults','Beginning 1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30));
 insert into public.students(id,full_name,status,session_type) values
  ('74000000-0000-0000-0000-000000000021','Workflow student','Prospect','Yearly'),
  ('74000000-0000-0000-0000-000000000022','Workflow legacy payer','Prospect','Yearly');

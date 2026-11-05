@@ -47,8 +47,9 @@ do $$ begin
   end if;
 end $$;
 
-insert into public.groups(id,name,session_type,niveau)
-values ('72000000-0000-0000-0000-000000000042','Synthetic adult group','Adults','Beginning 1');
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id,name,session_type,niveau,date_debut,date_fin)
+values ('72000000-0000-0000-0000-000000000042','Synthetic adult group','Adults','Beginning 1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30));
 update public.enrollments set group_id='72000000-0000-0000-0000-000000000042'
 where id=(select (result->>'enrollment_id')::uuid from paid_case where case_name='new-adults');
 do $$ begin

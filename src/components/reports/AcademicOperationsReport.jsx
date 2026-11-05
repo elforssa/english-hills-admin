@@ -6,6 +6,7 @@ import {
   ArrowUpRight, CalendarCheck2, GraduationCap, UsersRound,
 } from 'lucide-react';
 import { academicOperationsData } from '@/lib/reportData.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
 
 function Metric({ icon: Icon, label, value, note, tone = 'slate' }) {
@@ -62,11 +63,12 @@ export default function AcademicOperationsReport({
   students, teachers, groups, enrollments, loading,
 }) {
   const [sessionFilter, setSessionFilter] = useState('');
+  const closedOnlineIds = useClosedOnlineGroupIds();
 
   // Active learners: Inscrit and Essai (EGC); members through the shared roster helper.
   const data = useMemo(
-    () => academicOperationsData({ students, teachers, groups, enrollments, sessionFilter, sessionTypes: SESSION_TYPES }),
-    [students, teachers, groups, enrollments, sessionFilter],
+    () => academicOperationsData({ students, teachers, groups, enrollments, sessionFilter, sessionTypes: SESSION_TYPES, closedOnlineIds }),
+    [students, teachers, groups, enrollments, sessionFilter, closedOnlineIds],
   );
 
   return (

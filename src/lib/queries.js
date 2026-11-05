@@ -35,6 +35,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { entities } from './entities';
+import { getBrowserClient } from './supabase';
+import { fetchClosedOnlineGroupIds } from './academic/courseClose.mjs';
 
 // Stable query keys live here so they can be referenced from anywhere
 // (mutation helpers, manual invalidations from pages, devtools).
@@ -133,4 +135,21 @@ export function useEntityDelete(name) {
     mutationFn: (id) => getEntity(name).delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: entityKeys.all(name) }),
   });
+}
+
+const NO_CLOSED_ONLINE = new Set();
+/**
+ * useClosedOnlineGroupIds() — the groups of the online courses closed on their own
+ * page (CDC D4). Pickers that start something new leave them out with
+ * openCourses(groups, closedOnline); staff only read online_courses, so any other
+ * role gets an empty set and relies on the database guard.
+ */
+export function useClosedOnlineGroupIds(options = {}) {
+  const { data } = useQuery({
+    queryKey: ['Group', 'closed-online'],
+    queryFn: () => fetchClosedOnlineGroupIds(getBrowserClient()),
+    staleTime: 60_000,
+    ...options,
+  });
+  return data || NO_CLOSED_ONLINE;
 }

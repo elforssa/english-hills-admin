@@ -103,10 +103,11 @@ insert into public.teachers(id, full_name, email, contract_type, telephone, note
   (pg_temp.id(103), 'Teacher Three', 'pr-t3@example.test', 'Freelance', '0600000103', null, now());
 update public.profiles set linked_teacher_id = pg_temp.id(97 + ('x' || right(id::text, 1))::bit(4)::integer)
   where id in (pg_temp.id(4), pg_temp.id(5), pg_temp.id(6));
-insert into public.groups(id, name, session_type, niveau, teacher_id, annee, jours, horaire, salle) values
-  (pg_temp.id(301), 'PR G1', 'Yearly', 'Child 1', pg_temp.id(101), '2026-2027', 'Lun', '17:00', 'S1'),
-  (pg_temp.id(302), 'PR G2', 'Yearly', 'Child 1', null, '2026-2027', 'Mar', '17:00', 'S2'),
-  (pg_temp.id(303), 'PR G3 archived teacher', 'Adults', 'Beginning 1', pg_temp.id(103), '2026-2027', 'Mer', '18:00', 'S3');
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id, name, session_type, niveau, teacher_id, annee, jours, horaire, salle, date_debut, date_fin) values
+  (pg_temp.id(301), 'PR G1', 'Yearly', 'Child 1', pg_temp.id(101), '2026-2027', 'Lun', '17:00', 'S1', null, null),
+  (pg_temp.id(302), 'PR G2', 'Yearly', 'Child 1', null, '2026-2027', 'Mar', '17:00', 'S2', null, null),
+  (pg_temp.id(303), 'PR G3 archived teacher', 'Adults', 'Beginning 1', pg_temp.id(103), '2026-2027', 'Mer', '18:00', 'S3', '2026-09-01', '2027-06-30');
 
 -- Learners. 201/202 family A (D9: the second address arrives in mixed case and
 -- spaces); 203 family B with the same surname; 204 adult whose own address is a

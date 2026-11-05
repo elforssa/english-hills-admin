@@ -115,9 +115,10 @@ do $$ begin
  if not exists(select 1 from public.students where id='77000000-0000-0000-0000-000000000020' and status='Enrolled' and groupe_id='77000000-0000-0000-0000-000000000010') then raise exception 'Enrollment synchronization failed'; end if;
 end $$;
 -- Direct RPC regressions: nullable legacy fields must not disable compatibility.
-insert into public.groups(id,name,session_type,niveau) values
- ('77000000-0000-0000-0000-000000000011','RPC Adults','Adults','Beginning 1'),
- ('77000000-0000-0000-0000-000000000012','RPC Child 2','Yearly','Child 2');
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id,name,session_type,niveau,date_debut,date_fin) values
+ ('77000000-0000-0000-0000-000000000011','RPC Adults','Adults','Beginning 1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30)),
+ ('77000000-0000-0000-0000-000000000012','RPC Child 2','Yearly','Child 2',null,null);
 -- Batch H (H5): one Child 1 group per later school year (a placement takes its group's year).
 insert into public.groups(id,name,session_type,niveau,annee) values
  ('77000000-0000-0000-0000-000000000013','RPC Child 1 2027','Yearly','Child 1','2027-2028'),

@@ -82,6 +82,18 @@ for (let school = 0; school < 200; school += 1) {
 assert.deepEqual(ACADEMIC_ENROLLMENT_STATUSES, ['Confirmed', 'Validated', 'Trial']);
 const reportShape = academicOperationsData({ students: [], teachers: [], groups: [], enrollments: [], sessionTypes: ['Yearly'] });
 assert.equal('enrollmentsToReview' in reportShape, false, 'no « Inscriptions à examiner » list');
+// CDC (D4): a closed course (in person or online) is neither a group without a teacher nor occupancy.
+{
+  const closedGroups = [
+    { id: 'open', name: 'Ouvert', niveau: 'A1', session_type: 'Adults', capacite_max: 10 },
+    { id: 'closed', name: 'Clôturé', niveau: 'A1', session_type: 'Adults', capacite_max: 10, closed_at: '2026-10-01T00:00:00Z' },
+    { id: 'online', name: 'En ligne', niveau: 'A1', session_type: 'Online' },
+  ];
+  const shaped = academicOperationsData({ students: [], teachers: [], groups: closedGroups, enrollments: [], sessionTypes: ['Adults', 'Online'],
+    closedOnlineIds: new Set(['online']) });
+  assert.deepEqual(shaped.unassignedGroups.map(g => g.id), ['open']);
+  assert.deepEqual(shaped.sessionRows.map(r => [r.sessionType, r.groups, r.capacity]), [['Adults', 1, 10]]);
+}
 const reportPage = readFileSync('src/components/reports/AcademicOperationsReport.jsx', 'utf8');
 assert.doesNotMatch(reportPage, /Inscriptions à examiner|\/enrollments/);
 console.log('PASS report days verbatim under five time zones; academic report identical from the page loader’s reduced reads (200 random schools x 4 sessions); no « Inscriptions à examiner »');

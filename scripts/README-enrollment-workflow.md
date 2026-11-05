@@ -115,6 +115,38 @@ Plan [EAP-r4](../docs/architecture/plans/enrollment-at-payment.md) and
   `scripts/test-enrollment-at-payment-upgrade.mjs` (126 → 127 rehearsal with the archive, revert and no-op) and
   `scripts/test-enrollment-at-payment-absence.mjs` (no retired-status writer or wording left in `src/`).
 
+## Courses with dates (migration 128, on a branch)
+
+Plan [CDC-r3](../docs/architecture/plans/course-dates-close.md), [ADR-016](../docs/architecture/decisions/ADR-016-course-dates-and-close.md):
+implemented on branch `feat/course-dates-close` with `supabase/migrations/128_course_dates_close.sql`, **not merged, not
+deployed, 128 not applied on Production**. With 128:
+
+- **Dates.** `groups.date_debut` / `date_fin` (check `groups_course_dates_order`), required for Mise à niveau, Adults,
+  Summer Camp and One-to-One, refused on online groups, inside 1 June Y – 31 August Y+1 of the group's year
+  (`academic_security.guard_group_year`, re-created; trigger `groups_year_guard` also fires on the dates) and checked
+  by `academic_security.guard_course_group` (trigger `groups_course_guard`: required dates, One-to-One capacity 1,
+  logged date edits, the protected closed mark, the frozen fields of a closed group). `save_receptionist_group`
+  accepts the two date keys.
+- **Closed course.** `groups.closed_at` / `closed_by`, written only by the commands under `eh.course_command`. Trigger
+  `enrollment_course_guard` share-locks the group row (and the online course row), then refuses an entry into a
+  closed course (`course.closed`) or an undated short-programme group (`course.dates_required`).
+  `enforce_group_capacity` reads its group `for share`, so every path takes learners, the group row, then the seat lock.
+- **Commands (director).** `list_courses_to_close()`; `close_course_preview(group)`;
+  `close_course(group, expected_count, reason, attach[], end_unplaced[])` locks the learners in id order, marks the
+  group, attaches the « A suivi ce cours » rows through `academic_security.place`, ends everything through
+  `academic_security.leave`, links the qualifying charges, journals every row in `maintenance.course_close_journal`
+  and replays a repeated call; `reopen_course(group, expected_closed_at)` restores the journalled rows and returns the
+  skipped ones; `close_school_year_preview(year)`; `close_school_year` re-created (spares later courses, OA6, marks
+  groups `for no key update` after the learners, never a group with a live learner).
+- **Reads.** `crm_enrollment_groups` leaves closed courses out; parents and students read groups only through
+  `public.family_group_ids()` (policy « groups read family »).
+- **Existing rows.** `supabase/manual/course_close_backlog.sql` (prepared, not run; dry run by default; declared counts
+  of the R0 count of 2026-11-05; Mise à niveau only unless `cdc.adults` / `cdc.one_to_one` are turned on after the
+  owner's confirmation) and `supabase/manual/course_close_backlog_revert.sql`; the restore is
+  `scripts/rollback/128_course_dates_close_restore.sql`.
+- **Tests.** `scripts/test-course-dates-close.sql`, `scripts/test-course-dates-close-upgrade.mjs` (127 → 128 with the
+  step, revert and restore), `python3 scripts/test-course-close-concurrency.py` and `node scripts/test-course-close.mjs`.
+
 ## Local verification
 
 Use local Supabase only and a feature branch. Run `npm test`, `npm run lint`,

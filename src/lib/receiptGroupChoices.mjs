@@ -3,18 +3,26 @@
 // core does (academic_security.seats_taken, migration 120): learners not archived
 // with a non-Rejected enrollment in the group, or with it as their file's main group.
 // Online groups have no seat limit. The count is indicative: place_learner_in_group
-// decides. The client is injected so the node tests run this code.
+// decides. The client is injected so the node tests run this code. A closed course
+// (CDC D4) is never offered: in person, its closed mark; online, the online close.
 import { groupMatchesSelection, isOnlineSessionType } from './academicPrograms.js';
 import { groupYear, schoolYearOfGroup } from './enrollmentWorkflow.mjs';
 
 export async function loadGroupChoices(client, { sessionType, level, schoolYear }) {
   if (!sessionType || sessionType === 'Other' || !level || !schoolYear) return [];
   const { data: groups, error } = await client.from('groups')
-    .select('id,name,niveau,session_type,annee,capacite_max,horaire,jours')
-    .eq('niveau', level).in('annee', [...new Set([groupYear(schoolYear), schoolYear])]).order('name');
+    .select('id,name,niveau,session_type,annee,capacite_max,horaire,jours,date_fin,closed_at')
+    .eq('niveau', level).in('annee', [...new Set([groupYear(schoolYear), schoolYear])]).is('closed_at', null).order('name');
   if (error) throw error;
-  const rows = (groups || []).filter((group) => groupMatchesSelection(group, sessionType, level)
+  let rows = (groups || []).filter((group) => groupMatchesSelection(group, sessionType, level)
     && schoolYearOfGroup(group) === schoolYear);
+  if (rows.length && isOnlineSessionType(sessionType)) {
+    const { data: closed, error: closedError } = await client.from('online_courses').select('group_id')
+      .in('group_id', rows.map((group) => group.id)).eq('status', 'closed');
+    if (closedError) throw closedError;
+    const closedIds = new Set((closed || []).map((row) => row.group_id));
+    rows = rows.filter((group) => !closedIds.has(group.id));
+  }
   if (!rows.length) return [];
   const ids = rows.map((group) => group.id);
   const [{ data: enrolled, error: enrolledError }, { data: mainGroup, error: mainGroupError }] = await Promise.all([
