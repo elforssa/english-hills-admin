@@ -378,6 +378,20 @@ Plan: [enrollment at payment](../architecture/plans/enrollment-at-payment.md), r
 - **Release approvals (Maroine, 2026-11-05):** R0, R1 and R2 together (the read-only R0 again, the private export, migration 127 in the 05:00–07:30 UTC window, then the archive step with the day's declared counts, accepting their G2 conversions and G7 review flags, both 0 that day); the merge of PR #182 kept separate; after the merge, R3 and R4 as written in the plan: zero-payment rolled-back probes as reception only, no receipt-producing probe, no data change, no revert or restore.
 - **Release status (2026-11-05):** R0–R4 done ([closeout](CURRENT_STATE.md#enrollment-at-payment-migration-127-production-closeout-r0r4--2026-11-05), [release record](../architecture/plans/enrollment-at-payment.md#release-record-r0r4--2026-11-05)). The archive step ended the 14 waiting enrollments, set their 14 learner files to Inactive and detached the one LOST lead; it converted no lead and raised no review flag. The archive revert and the function restore were not run and each still needs its own approval. **Pending:** R5 (the owner's first reception morning: one walk-in and one prospect through « Inscrire et encaisser », the group assignment, Contrôles) and R6 (the eh-website PR, with its own approval). Dropping the retired status values stays a later optional release. No new owner decision.
 
+## Courses with dates — close a finished course — PLAN PROPOSED (2026-11-05)
+
+Plan: [course dates and close](../architecture/plans/course-dates-close.md), revision **CDC-r1** (Tier 3, plan only; [ADR-016](../architecture/decisions/ADR-016-course-dates-and-close.md) proposed). **Not reviewed and not approved.**
+
+- **Problem (owner, 2026-11-05):** groups have no start or end date, so finished short courses (Mise à niveau, Adults sessions) leave paid enrollments « Confirmed/Validated » for ever. The dashboard card « Inscrits — groupe à affecter » shows 38 (18 Mise à niveau, 10 Adults, 7 Yearly, 2 One-to-One, 1 Online One-to-One, all 2026/2027, no group). Only « Clôturer l'année » exists.
+- **Direction proposed by the coordinator, recorded as proposed (to be confirmed through the plan's Q1–Q13):**
+  1. Groups get `date_debut` and `date_fin`: required for short programmes (Mise à niveau, Adults, Summer Camp, One-to-One); for Yearly, proposed as the end of the school year; validated against the group's school year.
+  2. A director dashboard card « Cours terminés à clôturer » (end date passed, still active enrollments).
+  3. A director command « Clôturer le cours »: ends every live enrollment of that group with the reason « Cours terminé », resyncs the files (Ancien apprenant unless another live enrollment keeps Inscrit), balances stay owed, attendance and receipts kept, journalled and idempotent, reusing the Batch D leaver/year-close machinery and ADR-009 conflicts. Not automatic.
+  4. One-to-One as a course of capacity 1 with its own dates (recommendation; the owner is asked).
+  5. One-time data step, counted first and approved separately: end the 18 Mise à niveau Confirmed enrollments without group with the reason « Mise à niveau terminée » (learners with another live enrollment keep Inscrit); Adults (10) and One-to-One (3) only after the owner's confirmation per programme.
+- **Open (plan Q1–Q13, each with a recommendation):** which programmes require dates and what happens to existing groups without them; Yearly dates; the date window against the school year; One-to-One; who closes and sees the card; closing before the end date; the closed state; reopening a course; online courses; teachers and past rosters; timing of the one-time step; which backlog programmes it ends; reopening an enrollment it ended.
+- **Not approved by this record:** the plan, implementation, the read-only R0 count on Production, the migration, the one-time data step, the merge and the deployment; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
