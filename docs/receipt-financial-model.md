@@ -190,7 +190,7 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
   the receipt but confirms nothing (`enrollment_confirmation_pending`): a linked Submitted, Under Review or Trial
   enrollment keeps its status and a new one is created as Under Review. The 10 % discount cap was withdrawn by Batch H
   (migration 125, 2026-10-30); the 10 % confirmation rule is withdrawn by owner decision 2 of 2026-11-04 and removed
-  by migration 127 ([below](#enrollment-at-payment-migration-127-on-a-branch); not yet deployed).
+  by migration 127 ([below](#enrollment-at-payment-migration-127-released-2026-11-05); released 2026-11-05).
 - **Dates and reports.** `public.business_date()` (zone `Africa/Casablanca`) replaces `current_date` in `charge_balances`,
   the payment functions and the monthly/yearly finance summaries. `get_finance_summary()` and `get_unpaid_receipts(int)`
   are dropped. `get_finance_review_queue` feeds the director's "Contrôles" list on `/finance`.
@@ -198,11 +198,11 @@ Migration `113_premium_retirement_finance_contract.sql` redefined only
   (EH-HIST-2026 series, then `receipts_number_required`), `batch_e_d2_unpaid_confirmed_enrollments.sql`,
   `batch_e_d3_legacy_rounding.sql`, each with a reverse script.
 
-### Enrollment at payment (migration 127, on a branch)
+### Enrollment at payment (migration 127, released 2026-11-05)
 
 [Plan EAP-r4](architecture/plans/enrollment-at-payment.md#d2--any-payment-confirms-free-enrollment-owner-decision-2-q1),
-[ADR-015](architecture/decisions/ADR-015-enrollment-at-payment.md). Implemented on branch `feat/enrollment-at-payment`
-with `127_enrollment_at_payment.sql`; **not merged, not deployed, 127 not applied on Production**:
+[ADR-015](architecture/decisions/ADR-015-enrollment-at-payment.md). Released on 2026-11-05
+with `127_enrollment_at_payment.sql` (PR #182, merge `3788132…`):
 
 - **Any payment above zero confirms.** `create_charge_payment` (122 body) loses the reception 10 % branch and the
   `enrollment_confirmation_pending` result key: a live tuition receipt confirms the selected, matching or new enrollment
