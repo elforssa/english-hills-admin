@@ -1368,6 +1368,54 @@ Private local Supabase stack (CI image `supabase/postgres 17.6.1.165`, its own p
   - `npm test`: **pass**.
   - `npm run lint`: **clean**. Its one warning (`<img>` in `Sidebar.jsx`) is in a file this branch does not touch.
   - `npm run build`: **pass**, with the app lane's environment (placeholder Supabase keys, no Sentry DSN).
-- **Not run locally; open before merge:**
-  - **The browser checks of acceptance 2 (D8).** CI's browser shards run the updated browser suites but have no dedicated course-close browser suite.
-  - **The guide's group-form screenshot.** `public/helpdesk/q08-groupe-formulaire.jpg` is still the guide 2.1 image, without the two date fields, while the legend under it now has six items, including « Date de début » and « Date de fin ».
+- **Open at `b293391`, closed by the review fixes below:** the browser checks of acceptance 2 (D8) had no dedicated suite, and `public/helpdesk/q08-groupe-formulaire.jpg` was still the guide 2.1 image without the date fields.
+
+## Review fixes (independent reviews of PR #186 at `b293391`, 2026-11-06)
+
+The database and application reviews both returned CHANGES REQUIRED; neither asked for a change to migration 128, and none was made. No rule is weakened: every change below either narrows the screens to what the database already allows or adds a test. Commits `f93a6d5` (application) and `52c0b41` (tests) on `feat/course-dates-close`.
+
+### Application
+
+- **B1, a course-close browser suite.** New `scripts/test-course-close-browser.mjs`, wired into the `browser-security` shard after the student-placement flow (step « Course close browser flow (CDC-r3) »). Synthetic data only; every fixture is tagged with the run and removed at the end, pass or fail. It checks:
+  1. the director: the card « Cours terminés à clôturer » equals the rule's count, the « À clôturer » view, the close dialog with one row « A suivi ce cours » and one « Terminer sans groupe » (« Confirmer » disabled until both are chosen), the database after the close (the members and the attached row Ended with the course as their last group, the « Terminer sans groupe » row Ended without one, each file « Inscrit » or « Ancien apprenant » as its other enrollments require, and the mark), « Groupes actifs » one lower, then « Rouvrir le cours » and the database after it;
+  2. the director closing an empty group;
+  3. admin and reception: no card, no « Clôturer » or « Rouvrir » button anywhere, `?vue=a-cloturer` explains that the list is the director's, and the admin dashboard sends no `list_courses_to_close` request (reception lands on `/crm/leads`);
+  4. closed courses absent from the enrollment dialog's group picker (admin), the receipt form's group picker (reception), the closed group's page (no « Ajouter des apprenants ») and the « Groupes actifs » count; a finished course not yet closed stays in the pickers, marked « terminé le … »;
+  5. the year-close dialog with a Summer Camp course still running (its member kept in it) and a Summer Camp row left waiting, both split by programme; in a later year with only groups to mark, the button is enabled once a reason is given (never clicked);
+  6. the group form on the management and the reception path: dates outside the year refused, One-to-One forced to capacity 1 with the neutral name, back to 12 on leaving One-to-One, and a Yearly group saved with one date; a closed undated Adults group from before 128 is still renamed from its « Clôturés » row.
+
+  It also checks S2 and S3 below in the browser.
+- **S1, the guide screenshots.** `q08-groupe-formulaire.jpg` and `s17-groups.jpg` are re-captured on synthetic data at the guide's size (1700 × 1075). q08: « Nouveau groupe » for a Mise à niveau, with the six markers of the legend (name, teacher, days, school year, the two dates, « Enregistrer ») and French dates. s17: reception's list in the « En cours » view, with the view filter and the « Dates » column, one course marked « terminé le … ». Both alt texts follow.
+- **S2.** Before its end date only an empty course closes, and that close sends no attach or end list (`close_course` refuses `course.not_finished` otherwise). The dialog of a course that is not finished now offers « Laisser en attente » only, already chosen, and sends empty lists.
+- **S3.** The page of an online course closed on its « Cours en ligne » page hides « Ajouter des apprenants » (the closed-online set, as the pickers use) and says the course is closed.
+- **Nits:**
+  - The form is never stricter than the database (D1): a programme with optional dates may carry one date; on an edit, the required dates are checked only on a programme or date change, and the window only on a date or year change, as the trigger does, so a closed undated short-programme group stays editable (its name, for instance).
+  - SECURITY_RULES: the protected mark raises `42501` (hint `course.mark_protected`), not `23514`.
+  - « Clôturer l'année » is enabled when it would only mark groups (no enrollment to end).
+  - The year-close dialog splits the rows left waiting, and the carried-over waiting rows, by programme.
+  - `?vue=a-cloturer` for admin and reception says that the « À clôturer » list is the director's and shows the courses in progress instead of an empty list.
+  - Leaving One-to-One in the form gives the group back its saved capacity, or 12 for a new group.
+
+### Database (tests only)
+
+- **S1, One-to-One (128 `course_of_one_allows`).** New SQL section « 7b »: a finished One-to-One B1 course of capacity 1 with its learner, and another learner's paid One-to-One B1 row without a group. The preview never lists that row and `list_courses_to_close` counts it nowhere; `close_course` with it as « A suivi ce cours » or as « Terminer sans groupe » is refused `PT409 course.unplaced_changed`; the close ends only the member. After the close, the member pays a new One-to-One B1 row: in the June year close, the other learner's row is `kept_waiting` and stays Confirmed, while the member's new row matches its own finished course and ends.
+- **S2, lock order.** New harness case with three sessions: a blocker holds the listed learner's file (`students` row) while a close (and, separately, a reopen) waits on it; a third session's placement into the same group must then finish at once, because the waiting command holds no group row yet. The blocker then places the listed learner (or reopens first), and the command refuses with `PT409` (`course.count_changed`; `egc.stale` for the reopen); no `40P01`. **Mutation check:** with the group row taken before the learners, in `close_course` and then in `reopen_course` (a local copy of each function, applied on the private stack and restored after), this case fails (« a placement waited behind a command that waits on a learner: the command holds the group row before its learners ») while every case before it still passes: the earlier cases did not catch the flip.
+- **S3, fixture dates.** No fixture date depends on today near 31 August. The SQL suite's later dates go through `pg_temp.ahead(n)` (n from 2 to 10), which never passes 31 August of the fixture school year's second year and stays after today, and a first check asserts that every offset the suite uses falls inside that year's window; the harness's end date is the window's last day (`WINDOW_END`), as in the browser suite.
+- **Nits:**
+  - **The overshoot check is unreachable, kept.** The last `PT409 course.count_changed` in `close_course` (after the ends: ended rows ≠ expected + attached + ended-unplaced) cannot fire: the learners are locked, the group is marked before the counts and nothing can enter it, and the lists are re-checked against `course_unplaced` after the mark. It stays as a guard against a later change of the cores it calls.
+  - **Run-row entities.** The migration is unchanged and the convention is now asserted: a command's run row (`close_course`, `close_school_year`; and `reopen_course`'s `reopened` row) has entity `groups` with `row_id` = the group; the one-time step's and the revert's run rows have entity `runs` with `row_id` = the run and no group.
+  - **Placement on every path is the trigger's.** Section 5 drives four paths into a closed course (the director's placement, reception's assignment, a management insert and update through RLS, and an insert as the table owner). Every other path that writes `enrollments.group_id` or `status` passes through the same row trigger `enrollment_course_guard` (`before insert or update of group_id, status`), which the owner's refused insert shows applies below RLS; the manifest asserts the trigger exists. The suite therefore does not drive every application path one by one.
+  - **A zero-target re-run writes nothing.** `course_close_backlog.sql` now stops before the run row when it has no target: the dry run says `run=none`, a real run raises a notice and returns. The upgrade rehearsal checks that the journal count is unchanged after a zero-target re-run and that a re-run declaring the original counts is refused.
+
+### Local verification of the fixes (2026-11-06, private stack, synthetic data only)
+
+On the code of `52c0b41` (only what is new or changed, as the owner instructed):
+
+- `test-course-dates-close.sql` on a fresh reset to 128: **pass**, including section 7b and the window check.
+- `test-course-close-concurrency.py`: **pass**, eleven cases, including the lock-order case; no `40P01`.
+- `test-course-dates-close-upgrade.mjs` after a reset to 127: **pass**, including the zero-target re-run and the run-row entities; the stack was then reset to 128.
+- `test-course-close-browser.mjs` against a production build of the branch: **pass**, 16 checks; fixtures removed.
+- `npm test`: **pass** (including `test-course-close.mjs` and the helpdesk content test).
+- `npm run lint`: **clean** apart from the existing `<img>` warning in `Sidebar.jsx`. `npm run build`: **pass**, with the app lane's environment.
+
+GitHub's Verify run on the pull request remains the reference for the six shards.
