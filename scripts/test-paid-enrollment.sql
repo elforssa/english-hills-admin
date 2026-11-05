@@ -87,8 +87,12 @@ insert into public.students(id,full_name,status) values
   ('72000000-0000-0000-0000-000000000021','Existing Prospect','Prospect'),
   ('72000000-0000-0000-0000-000000000022','Zero Payment','Prospect'),
   ('72000000-0000-0000-0000-000000000023','Other Service','Prospect');
+-- EAP (127): a legacy undated Submitted row (pre-127 history), written under the two-flag
+-- exemption; a payment on it still confirms it.
+select set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
 insert into public.enrollments(id,student_id,status,date_inscription)
 values ('72000000-0000-0000-0000-000000000031','72000000-0000-0000-0000-000000000021','Submitted',current_date);
+select set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
 
 insert into paid_case values ('prospect', public.create_charge_payment(jsonb_build_object(
   'student_id','72000000-0000-0000-0000-000000000021',
@@ -186,13 +190,21 @@ do $$ begin
   end if;
 end $$;
 
--- Explicit staff rejection of a group-pending enrollment does downgrade it;
--- voiding a payment alone never does.
-update public.enrollments set status='Rejected'
-where id='72000000-0000-0000-0000-000000000031';
-do $$ begin
-  if (select status from public.students where id='72000000-0000-0000-0000-000000000021') <> 'Inactive' then
-    raise exception 'Explicit rejection left student enrolled';
+-- EAP (127): Rejected is retired; an explicit rejection of a group-pending enrollment is
+-- refused (23514, eap.status_retired) and leaves the learner enrolled; voiding a payment
+-- alone never downgrades it either.
+do $$ declare h text; begin
+  begin
+    update public.enrollments set status='Rejected'
+    where id='72000000-0000-0000-0000-000000000031';
+    raise exception 'Retired rejection unexpectedly accepted';
+  exception when check_violation then
+    get stacked diagnostics h = pg_exception_hint;
+    if h is distinct from 'eap.status_retired' then raise exception 'Unexpected rejection refusal hint %', h; end if;
+  end;
+  if (select status from public.enrollments where id='72000000-0000-0000-0000-000000000031') <> 'Confirmed'
+    or (select status from public.students where id='72000000-0000-0000-0000-000000000021') <> 'Enrolled' then
+    raise exception 'Refused rejection changed the enrollment or the student';
   end if;
 end $$;
 

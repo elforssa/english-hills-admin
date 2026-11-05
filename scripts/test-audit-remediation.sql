@@ -25,8 +25,12 @@ insert into public.enrollments(student_id,group_id,status,session_type,school_ye
 insert into public.students(id,full_name,email,status) values
   ('00000000-0000-4000-8000-00000000d003','Trial Child','trial@example.invalid','Prospect'),
   ('00000000-0000-4000-8000-00000000d004','Status Child','status@example.invalid','Prospect');
+-- EAP (127): a historical Trial row, inserted under the two-flag exemption (the
+-- retired-status guard refuses it otherwise).
+select set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
 insert into public.enrollments(student_id,group_id,status,session_type,school_year) values
   ('00000000-0000-4000-8000-00000000d003','00000000-0000-4000-8000-00000000c001','Trial','Yearly','2026/2027');
+select set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
 -- Model a pre-existing enrollment-only record for the legacy RLS test: the file
 -- copy of the group is cleared with triggers bypassed (synthetic historical state).
 set local session_replication_role = replica;
@@ -131,8 +135,29 @@ end $$;
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-00000000a001',true);
 -- Status follows enrollments on a learner without another enrollment (EGC I7); a
 -- trial or confirmed row needs its programme and school year (I9).
-insert into public.enrollments(id,student_id,status,date_inscription,session_type,school_year)
-values('00000000-0000-4000-8000-00000000f100','00000000-0000-4000-8000-00000000d004','Submitted',current_date,'Yearly','2026/2027');
+-- EAP (127): Submitted, Trial and Rejected are retired: a new row or a transition into
+-- one is refused (23514, eap.status_retired) and leaves the learner unchanged. The
+-- derivation for such rows (still readable, restored by the journalled revert) is kept
+-- on a legacy row written under the two-flag exemption.
+create function pg_temp.retired(statement text) returns void language plpgsql as $$
+declare st text; h text; begin
+  begin execute statement;
+  exception when others then
+    get stacked diagnostics st = returned_sqlstate, h = pg_exception_hint;
+    if st = '23514' and h = 'eap.status_retired' then return; end if;
+    raise exception 'Expected 23514/eap.status_retired from %, got %/%', statement, st, h;
+  end;
+  raise exception 'Retired status accepted: %', statement;
+end $$;
+create function pg_temp.legacy(statement text) returns void language plpgsql as $$ begin
+  perform set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
+  execute statement;
+  perform set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
+end $$;
+select pg_temp.retired($q$insert into public.enrollments(id,student_id,status,date_inscription,session_type,school_year)
+values('00000000-0000-4000-8000-00000000f100','00000000-0000-4000-8000-00000000d004','Submitted',current_date,'Yearly','2026/2027')$q$);
+select pg_temp.legacy($q$insert into public.enrollments(id,student_id,status,date_inscription,session_type,school_year)
+values('00000000-0000-4000-8000-00000000f100','00000000-0000-4000-8000-00000000d004','Submitted',current_date,'Yearly','2026/2027')$q$);
 do $$ begin
   if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Prospect' then
     raise exception 'Submitted enrollment status drift'; end if;
@@ -149,8 +174,14 @@ do $$ begin
     raise exception 'Enrollment student changed';
   exception when check_violation then null; end;
 end $$;
-update public.enrollments set status='Trial',group_id='00000000-0000-4000-8000-00000000c001'
-where id='00000000-0000-4000-8000-00000000f100';
+select pg_temp.retired($q$update public.enrollments set status='Trial',group_id='00000000-0000-4000-8000-00000000c001'
+where id='00000000-0000-4000-8000-00000000f100'$q$);
+do $$ begin
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Prospect' then
+    raise exception 'Refused Trial transition changed student'; end if;
+end $$;
+select pg_temp.legacy($q$update public.enrollments set status='Trial',group_id='00000000-0000-4000-8000-00000000c001'
+where id='00000000-0000-4000-8000-00000000f100'$q$);
 do $$ begin
   if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Trial' then
     raise exception 'Trial enrollment status drift'; end if;
@@ -160,7 +191,12 @@ do $$ begin
   if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Enrolled' then
     raise exception 'Validated enrollment status drift'; end if;
 end $$;
-update public.enrollments set status='Rejected' where id='00000000-0000-4000-8000-00000000f100';
+select pg_temp.retired($q$update public.enrollments set status='Rejected' where id='00000000-0000-4000-8000-00000000f100'$q$);
+do $$ begin
+  if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Enrolled' then
+    raise exception 'Refused Rejected transition changed student'; end if;
+end $$;
+select pg_temp.legacy($q$update public.enrollments set status='Rejected' where id='00000000-0000-4000-8000-00000000f100'$q$);
 do $$ begin
   if (select status from public.students where id='00000000-0000-4000-8000-00000000d004') <> 'Inactive' then
     raise exception 'Rejected enrollment status drift'; end if;
@@ -194,26 +230,23 @@ begin
   if public.check_anon_rate_limit('audit-synthetic-only','inscription:hour',999999,0) then
     raise exception 'Caller-controlled threshold bypassed public limiter'; end if;
 end $$;
+-- EAP (127, D4): the public self sign-up is closed; the service-role RPC refuses before
+-- any write (42501, eap.public_registration_retired), so no learner or Submitted row exists.
 do $$
-declare first_id uuid; second_id uuid;
+declare st text; h text;
 begin
-  first_id := public.create_public_registration(
-    '{"full_name":"Synthetic Registrant","telephone":"0000000000","email":"registration@example.invalid","consent":true}'::jsonb,
-    '00000000-0000-4000-8000-00000000f001', repeat('a',64));
-  second_id := public.create_public_registration(
-    '{"full_name":"Synthetic Registrant","telephone":"0000000000","email":"registration@example.invalid","consent":true}'::jsonb,
-    '00000000-0000-4000-8000-00000000f001', repeat('a',64));
-  if first_id <> second_id then raise exception 'Registration retry duplicated student'; end if;
-  if (select count(*) from public.enrollments where registration_request_id='00000000-0000-4000-8000-00000000f001') <> 1 then
-    raise exception 'Registration retry duplicated enrollment'; end if;
-  if (select consent_at is null or consent_policy_version is null from public.enrollments where registration_request_id='00000000-0000-4000-8000-00000000f001') then
-    raise exception 'Registration consent evidence missing'; end if;
   begin
     perform public.create_public_registration(
-      '{"full_name":"Changed","telephone":"0000000000","email":"registration@example.invalid","consent":true}'::jsonb,
-      '00000000-0000-4000-8000-00000000f001', repeat('b',64));
-    raise exception 'Changed registration request key accepted';
-  exception when unique_violation then null; end;
+      '{"full_name":"Synthetic Registrant","telephone":"0000000000","email":"registration@example.invalid","consent":true}'::jsonb,
+      '00000000-0000-4000-8000-00000000f001', repeat('a',64));
+    raise exception 'Retired public registration accepted';
+  exception when insufficient_privilege then
+    get stacked diagnostics st = returned_sqlstate, h = pg_exception_hint;
+    if h is distinct from 'eap.public_registration_retired' then
+      raise exception 'Unexpected public registration refusal hint %', h; end if;
+  end;
+  if exists(select 1 from public.enrollments where registration_request_id='00000000-0000-4000-8000-00000000f001') then
+    raise exception 'Retired public registration created an enrollment'; end if;
 end $$;
 insert into public.students(full_name,email,status)
 select 'Audit Large Set ' || lpad(i::text,4,'0'),

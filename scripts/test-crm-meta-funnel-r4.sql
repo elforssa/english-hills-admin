@@ -79,10 +79,12 @@ create function pg_temp.act(cmd text,l uuid,data jsonb) returns jsonb language p
  execute format('select public.crm_%I($1,$2)',cmd) into result using gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l))||data;return result;end $$;
 create function pg_temp.qualify(l uuid) returns void language plpgsql as $$ begin perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','PRIVATE NOTE',
  'qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));end $$;
+-- EAP (127): crm_start_enrollment creates only Confirmed enrollments (postgres-session
+-- call); the linked lead converts when the enrollment is created.
 create function pg_temp.enroll(l uuid) returns uuid language plpgsql as $$ declare result jsonb;begin
  result:=public.crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),'student_choice','new',
  'learner_name','Private learner','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2',
- 'candidate_review',crm_security.candidate_token(l,'Private learner','2014-05-10'),'confirm_new',true));return (result->'enrollment'->>'id')::uuid;end $$;
+ 'candidate_review',crm_security.candidate_token(l,'Private learner','2014-05-10'),'confirm_new',true,'initial_status','Confirmed'));return (result->'enrollment'->>'id')::uuid;end $$;
 create function pg_temp.payload(d public.crm_external_deliveries) returns jsonb language sql as $$ select jsonb_build_object('data',jsonb_build_array(jsonb_build_object(
  'event_name',d.mapping_snapshot->'events'->>d.event_kind,'event_id',d.provider_event_id,'event_time',floor(extract(epoch from d.event_time))::bigint,
  'action_source','system_generated','user_data',jsonb_build_object('lead_id',(select source_external_id from public.crm_lifecycle_eligibility_evidence where id=d.eligibility_evidence_id)),
@@ -135,8 +137,9 @@ select pg_temp.ok((select count(*)=2 from public.crm_activities where lead_id=(s
  'repeat closure history originates from crm_close_not_qualified and the committed conversation-decision path');
 select pg_temp.actor(0);insert into fx values('direct',pg_temp.intake('882011'));
 update public.crm_leads set status='QUALIFIED',version=version+1 where id=(select id from fx where k='direct');
+-- EAP (127): the enrollment is created Confirmed (no separate confirmation update).
 select pg_temp.actor(1);insert into fx values('direct_enrollment',pg_temp.enroll((select id from fx where k='direct')));
-update public.enrollments set status='Confirmed',updated_at=clock_timestamp()+interval '1 millisecond' where id=(select id from fx where k='direct_enrollment');set constraints all immediate;set constraints all deferred;
+set constraints all immediate;set constraints all deferred;
 select pg_temp.actor(0);select public.crm_reconcile_external_deliveries(100);select public.crm_reconcile_external_deliveries(100);
 select pg_temp.ok((select count(*)=1 from public.crm_external_deliveries where lead_id=(select id from fx where k='history') and event_kind='intake'),'Intake is singleton');
 select pg_temp.ok((select count(*)=2 from public.crm_external_deliveries where lead_id=(select id from fx where k='history') and event_kind='qualified'),'real reopen creates two qualification occurrences');
@@ -188,8 +191,8 @@ select pg_temp.ok(not exists(select 1 from public.crm_external_deliveries where 
 insert into fx values('qualified_converted',pg_temp.intake('882028',true,
  (select valid_from+interval '2 seconds' from public.crm_lifecycle_producer_boundaries where id='8c000000-0000-0000-0000-000000000012')));
 select pg_temp.actor(1);select pg_temp.qualify((select id from fx where k='qualified_converted'));
+-- EAP (127): the enrollment is created Confirmed (no separate confirmation update).
 insert into fx values('qualified_converted_enrollment',pg_temp.enroll((select id from fx where k='qualified_converted')));
-update public.enrollments set status='Confirmed',updated_at=clock_timestamp()+interval '1 millisecond' where id=(select id from fx where k='qualified_converted_enrollment');
 set constraints all immediate;set constraints all deferred;
 set local session_replication_role=replica;
 with ordered as (select occurred_at,created_at from public.crm_activities where lead_id=(select id from fx where k='qualified_converted') and event_type='lead_created')

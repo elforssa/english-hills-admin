@@ -59,6 +59,27 @@ create function pg_temp.start_data(l uuid) returns jsonb language sql as $$
  'candidate_review',crm_security.candidate_token(l,'Phase6 learner','2014-05-10'),'confirm_new',true)
 $$;
 create function pg_temp.finances() returns jsonb language sql as $$ select jsonb_build_array((select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events)) $$;
+-- EAP (127): from 127 on, crm_start_enrollment creates only Confirmed enrollments and a
+-- waiting (Submitted) enrollment exists only as a legacy row, written under the two-flag
+-- exemption and linked explicitly. The upgrade rehearsals also run this file at older
+-- ceilings, where these helpers keep the pre-127 calls unchanged.
+create function pg_temp.eap() returns boolean language sql as $$ select to_regprocedure('academic_security.guard_retired_enrollment_status()') is not null $$;
+create function pg_temp.waiting(s uuid,session text,year text) returns uuid language plpgsql as $$ declare e uuid; begin
+ if pg_temp.eap() then perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true); end if;
+ insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted',session,year) returning id into e;
+ if pg_temp.eap() then perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true); end if;
+ return e;
+end $$;
+create function pg_temp.start(l uuid,extra jsonb default '{}') returns jsonb language sql as $$
+ select public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||extra||case when pg_temp.eap() then '{"initial_status":"Confirmed"}'::jsonb else '{}'::jsonb end)
+$$;
+-- A lead linked to a waiting enrollment of a new learner (pre-127: crm_start_enrollment's own Submitted row).
+create function pg_temp.waiting_start(l uuid) returns jsonb language plpgsql as $$ declare s uuid; e uuid; begin
+ if not pg_temp.eap() then return public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)); end if;
+ insert into students(full_name,date_naissance,status,session_type) values('Phase7 waiting learner','2014-05-10','Prospect','Yearly') returning id into s;
+ e:=pg_temp.waiting(s,'Yearly','2026/2027');
+ return pg_temp.start(l,jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e)));
+end $$;
 
 alter table public.receipts disable trigger on_receipt_created;
 create function pg_temp.flush_revenue() returns void language plpgsql as $$ begin
@@ -73,7 +94,7 @@ create function pg_temp.revenue(l uuid) returns numeric language sql as $$ selec
 
 -- Future payments, installments, first touch, multiple charges, actual void/delete.
 do $$ declare l uuid:=pg_temp.qualified(); r jsonb; s uuid;e uuid;c uuid; receipt uuid; second uuid; first_touch uuid; submission uuid:=gen_random_uuid(); entries bigint; converted timestamptz; begin
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
+ r:=pg_temp.waiting_start(l);s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
  select first_submission_id into first_touch from crm_leads where id=l;
  insert into crm_submissions(id,channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,payload_hash)
  values(submission,'manual',now()+interval '1 second',now()+interval '1 second','server','{}','[]','Later submission','needs_review',repeat('e',64));
@@ -111,31 +132,31 @@ end $$;
 -- Unattributed money remains discoverable; a delayed explicit link catches it.
 do $$ declare s uuid;e uuid;b uuid;l uuid;other uuid;r jsonb;receipt uuid; begin
  insert into students(full_name,status,session_type) values('Phase7 delayed learner','Prospect','Yearly') returning id into s;
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2026/2027') returning id into e;
+ e:=pg_temp.waiting(s,'Yearly','2026/2027');
  r:=pg_temp.pay(s,e,1000);receipt:=(r->>'receipt_id')::uuid;perform pg_temp.flush_revenue();
  perform pg_temp.ok(not exists(select 1 from crm_revenue_entries where receipt_id=receipt),'no enrollment CRM link means no attribution');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(public.crm_get_revenue_reconciliation_queue(100)) x where x->>'receipt_id'=receipt::text and x->>'status'='unattributed'),'old unlinked financial event discoverable');
- l:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e)));
+ l:=pg_temp.qualified();r:=pg_temp.start(l,jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e)));
  perform pg_temp.flush_revenue();perform pg_temp.ok(pg_temp.revenue(l)=1000,'delayed enrollment link automatically reconciles older money');
  -- The second enrollment of the same learner is in another school year (EGC I3).
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Yearly','2027/2028') returning id into b;
+ b:=pg_temp.waiting(s,'Yearly','2027/2028');
  r:=pg_temp.pay(s,b,500,null,'2027/2028');receipt:=(r->>'receipt_id')::uuid;perform pg_temp.flush_revenue();
  perform pg_temp.ok(pg_temp.revenue(l)=1000 and not exists(select 1 from crm_revenue_entries where receipt_id=receipt),'same student different enrollment never guesses');
- other:=pg_temp.qualified();r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(other)||jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'school_year','2027/2028','expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
+ other:=pg_temp.qualified();r:=pg_temp.start(other,jsonb_build_object('student_choice','existing','student_id',s,'enrollment_id',b,'school_year','2027/2028','expected_enrollment_updated_at',(select updated_at from enrollments where id=b)));
  perform pg_temp.flush_revenue();perform pg_temp.ok(pg_temp.revenue(l)=1000 and pg_temp.revenue(other)=500,'two same-student opportunities have independent explicit revenue');
 end $$;
 
 -- Trusted inner finance can record money before enrollment confirmation. The
 -- fixture completes explicit financial links without promoting the enrollment.
 do $$ declare l uuid:=pg_temp.qualified();r jsonb;s uuid;e uuid;b uuid;receipt uuid;c uuid;event uuid;state jsonb; begin
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
+ r:=pg_temp.waiting_start(l);s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
  perform pg_temp.actor(1);
  r:=public.create_charge_payment_financial(jsonb_build_object('student_id',s,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',1000,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
  receipt:=(r->>'receipt_id')::uuid;c:=(r->>'charge_id')::uuid;
  perform pg_temp.flush_revenue();perform pg_temp.ok(pg_temp.revenue(l)=0,'missing legacy links do not infer from student');
  update receipts set enrollment_id=e where id=receipt;
  perform pg_temp.ok(public.crm_reconcile_receipt_revenue(receipt)->>'status'='missing_links','missing charge enrollment stays unattributed');
- insert into enrollments(student_id,status,session_type,school_year) values(s,'Submitted','Adults','2027/2028') returning id into b;
+ b:=pg_temp.waiting(s,'Adults','2027/2028');
  update charges set enrollment_id=b where id=c;
  perform pg_temp.ok(public.crm_reconcile_receipt_revenue(receipt)->>'status'='review_financial_identity','conflicting financial links require review');
  update charges set enrollment_id=e where id=c;
@@ -163,7 +184,7 @@ end $$;
 
 -- Confirmation is independent of money.
 do $$ declare l uuid:=pg_temp.qualified();r jsonb;begin
- r:=public.crm_start_enrollment(gen_random_uuid(),pg_temp.start_data(l));
+ r:=pg_temp.waiting_start(l);
  update enrollments set status='Confirmed' where id=(r->'enrollment'->>'id')::uuid;
  perform pg_temp.flush_revenue();
  perform pg_temp.ok((select status='CONVERTED' from crm_leads where id=l) and pg_temp.revenue(l)=0,'converted with zero revenue is legitimate');

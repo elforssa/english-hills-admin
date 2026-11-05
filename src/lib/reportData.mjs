@@ -2,7 +2,7 @@
 // totals; these helpers shape them without any date arithmetic in the browser, so
 // a stale browser time-zone table cannot move a Casablanca day.
 import {
-  ACTIVE_STUDENT_STATUSES, LIVE_ENROLLMENT_STATUSES, groupMemberIds, isPendingPreEnrollment, studentNeedsGroup,
+  ACTIVE_STUDENT_STATUSES, LIVE_ENROLLMENT_STATUSES, MEMBERSHIP_STATUSES, groupMemberIds, studentNeedsGroup,
 } from './enrollmentWorkflow.mjs';
 
 export const ATTENDANCE_STATUSES = ['Présent', 'Absent', 'Retard', 'Justifié'];
@@ -37,7 +37,9 @@ export function reportYears(rows = []) {
 // live enrollments, active learners, the learners those enrollments name and the
 // learners whose file group is one of the groups. academicOperationsData returns
 // the same result from this subset as from every learner and enrollment.
-export const ACADEMIC_ENROLLMENT_STATUSES = LIVE_ENROLLMENT_STATUSES;
+// The live enrollments plus the memberships the database still counts (a Trial row
+// placed before the EAP archive step).
+export const ACADEMIC_ENROLLMENT_STATUSES = [...new Set([...LIVE_ENROLLMENT_STATUSES, ...MEMBERSHIP_STATUSES])];
 export function isAcademicSourceStudent(student, liveStudentIds, groupIds) {
   return ACTIVE_STUDENT_STATUSES.includes(student.status) || liveStudentIds.has(student.id)
     || (student.groupe_id != null && groupIds.has(student.groupe_id));
@@ -72,7 +74,6 @@ export async function loadAcademicSources(entities, groups, chunkSize = 100) {
 
 export function academicOperationsData({ students, teachers, groups, enrollments, sessionFilter = '', sessionTypes }) {
   const active = new Set(ACTIVE_STUDENT_STATUSES);
-  const studentsById = new Map(students.map((student) => [student.id, student]));
   const membersByGroup = new Map(groups.map((group) => [group.id, groupMemberIds(students, enrollments, group.id)]));
 
   const sessionGroups = groups.filter((group) => !sessionFilter || (group.session_type || 'Yearly') === sessionFilter);
@@ -89,10 +90,6 @@ export function academicOperationsData({ students, teachers, groups, enrollments
       const sessions = pending.map(e => [e.session_type || student.session_type || 'Yearly', e.school_year].filter(Boolean).join(' · '));
       return { id: student.id, label: `${student.full_name} · ${sessions.length ? sessions.join(' / ') : student.session_type || 'Yearly'}` };
     });
-  const enrollmentsToReview = enrollments
-    .filter(isPendingPreEnrollment)
-    .filter((enrollment) => !sessionFilter || (enrollment.session_type || studentsById.get(enrollment.student_id)?.session_type || 'Yearly') === sessionFilter)
-    .map((enrollment) => ({ id: enrollment.id, label: `${studentsById.get(enrollment.student_id)?.full_name || 'Apprenant'} · ${enrollment.status}` }));
 
   const sessionRows = sessionTypes.map((sessionType) => {
     const rowGroups = groups.filter((group) => (group.session_type || 'Yearly') === sessionType);
@@ -110,7 +107,6 @@ export function academicOperationsData({ students, teachers, groups, enrollments
   }).filter((row) => row.groups).sort((a, b) => b.students - a.students);
 
   return {
-    sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, enrollmentsToReview,
-    sessionRows, teacherRows,
+    sessionGroups, sessionStudents, unassignedGroups, studentsWithoutGroup, sessionRows, teacherRows,
   };
 }

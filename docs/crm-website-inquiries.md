@@ -2,7 +2,7 @@
 
 > Implementation/activation reference with historical phase notes. Deployment and enablement statements below describe that phase, not necessarily the present environment; consult [CURRENT_STATE](ai/CURRENT_STATE.md). Later reconciliation/scheduling behavior is documented in [ADR-002](architecture/decisions/ADR-002-meta-intake-and-reconciliation.md).
 
-This repository has an admin application and official public pre-registration, not a marketing landing page. No marketing page was invented. `/api/public/inscription` and its student/enrollment behavior are unchanged. The external landing site must integrate the helper/contract below.
+This repository has an admin application and official public pre-registration, not a marketing landing page. No marketing page was invented. `/api/public/inscription` and its student/enrollment behavior are unchanged. The external landing site must integrate the helper/contract below. **Enrollment at payment** ([plan EAP-r4](architecture/plans/enrollment-at-payment.md), migration 127; implemented on branch `feat/enrollment-at-payment`, not merged or deployed) retires that public pre-registration: `/api/public/inscription` answers 410 and `/inscription` becomes a static contact page (phone, WhatsApp, address, hours). This inquiry endpoint, its limiter and its attribution are untouched; the website's « S'inscrire » links become « Nous contacter » in a separate eh-website PR after the admin release (a follow-up, not opened yet).
 
 ## Endpoint and public contract
 

@@ -98,10 +98,12 @@ do $$ declare l public.crm_leads;r jsonb;first_touch uuid;student uuid;enrollmen
  perform pg_temp.actor(3);
  perform crm_qualify_lead(gen_random_uuid(),jsonb_build_object('lead_id',l.id,'expected_version',l.version,'conversation_channel','phone','note','Synthetic inquiry','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
  select * into l from crm_leads where id=l.id;
- r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l.id,'expected_version',l.version,'student_choice','new','learner_name','Phase9 learner','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l.id,'Phase9 learner','2014-05-10'),'confirm_new',true));
+ -- EAP (127): reception enrolls and collects in one step (crm_enroll_and_collect
+ -- replaces crm_start_enrollment followed by create_charge_payment).
+ r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l.id,'expected_version',l.version,'student_choice','new','learner_name','Phase9 learner','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l.id,'Phase9 learner','2014-05-10'),'confirm_new',true),
+  'payment',jsonb_build_object('gross_amount',1000,'payment_amount',500,'payment_method','Espèces')));
  student:=(r->'enrollment'->>'student_id')::uuid;enrollment:=(r->'enrollment'->>'id')::uuid;
  perform pg_temp.actor(1);
- perform create_charge_payment(jsonb_build_object('student_id',student,'enrollment_id',enrollment,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1000,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
  set constraints all immediate;set constraints all deferred;
  perform pg_temp.ok((select channel='website' from crm_submissions where id=first_touch),'first-touch fixture is website');
  perform pg_temp.ok((select sum(amount_delta)=500 and bool_and(attribution_submission_id=first_touch) from crm_revenue_entries where lead_id=l.id),'unchanged revenue pipeline freezes website first touch despite later Meta touch');

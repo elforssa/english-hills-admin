@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  AlertTriangle, ArrowUpRight, CalendarCheck2, GraduationCap, UsersRound,
+  ArrowUpRight, CalendarCheck2, GraduationCap, UsersRound,
 } from 'lucide-react';
 import { academicOperationsData } from '@/lib/reportData.mjs';
 import { SESSION_TYPES } from '@/lib/academicPrograms';
@@ -90,16 +90,14 @@ export default function AcademicOperationsReport({
       </div>
 
       <div className="space-y-5 bg-background p-4 text-foreground lg:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Metric icon={UsersRound} label="Groupes sans enseignant" value={loading ? '—' : data.unassignedGroups.length} note={`${data.sessionGroups.length} groupe(s) dans la vue`} tone={data.unassignedGroups.length ? 'rose' : 'emerald'} />
           <Metric icon={GraduationCap} label="Apprenants sans groupe" value={loading ? '—' : data.studentsWithoutGroup.length} note={`${data.sessionStudents.length} apprenant(s) actif(s)`} tone={data.studentsWithoutGroup.length ? 'amber' : 'emerald'} />
-          <Metric icon={AlertTriangle} label="Inscriptions à examiner" value={loading ? '—' : data.enrollmentsToReview.length} note="Demandes soumises ou en revue" tone={data.enrollmentsToReview.length ? 'amber' : 'emerald'} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <ActionList title="Groupes sans enseignant" description="À affecter avant l’ouverture des cours." items={data.unassignedGroups} href="/groups" empty="Tous les groupes visibles ont un enseignant." accent="rose" />
           <ActionList title="Apprenants sans groupe" description="Apprenants actifs avec un groupe à affecter, y compris pour une session supplémentaire." items={data.studentsWithoutGroup} href="/students" empty="Tous les apprenants actifs sont affectés." />
-          <ActionList title="Inscriptions à examiner" description="Demandes académiques en attente d’une décision." items={data.enrollmentsToReview} href="/enrollments" empty="Aucune inscription ne demande de revue." />
         </div>
 
         <section className="rounded-xl border border-border bg-white overflow-hidden">

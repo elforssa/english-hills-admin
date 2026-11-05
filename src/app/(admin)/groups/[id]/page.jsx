@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { currentSchoolYear, groupMemberIds, isMembership, schoolYearOfGroup } from '@/lib/enrollmentWorkflow.mjs';
-import { egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
+import { eapReason, egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup } from '@/lib/academic/membershipActions.mjs';
 import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
@@ -60,7 +60,9 @@ export default function GroupDetail() {
   const [loadError, setLoadError] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busyId, setBusyId] = useState(null);
-  const [override, setOverride] = useState(null); // { student, reason }
+  // Management reasons for one placement (EAP Q3 = B and D4-A), each asked separately:
+  // { student, capacity, withoutEnrollment, overrideReason, withoutEnrollmentReason }.
+  const [reasons, setReasons] = useState(null);
   const canOverride = role === 'admin' || role === 'director';
 
   useEffect(() => {
@@ -131,15 +133,19 @@ export default function GroupDetail() {
     setReload(value => value + 1);
   };
 
-  // Every placement creates or uses an enrollment (DAT-2): the reception keeps its
-  // command; director and admin use place_learner_in_group, with a capacity
-  // override reason when the group is full (D4-A).
-  const addToGroup = async (s, overrideReason = null) => {
+  // Every placement uses an enrollment (DAT-2). EAP (Q3 = B): a placement follows a
+  // paid (Confirmed) enrollment; reception keeps its command and is refused without
+  // one (eap.paid_enrollment_required). Director and admin use place_learner_in_group
+  // and give a reason to place a learner without a paid enrollment, and a separate
+  // capacity override reason when the group is full (D4-A).
+  const askReasons = (s, given, need) => setReasons({ student: s, capacity: false, withoutEnrollment: false,
+    overrideReason: given.overrideReason || '', withoutEnrollmentReason: given.withoutEnrollmentReason || '', ...need });
+  const addToGroup = async (s, given = {}) => {
     const pending = matchingPending(s);
     if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
-    if (full && !overrideReason) {
-      if (canOverride) setOverride({ student: s, reason: '' });
-      else toast.error('Ce groupe est complet.');
+    if (full && !given.overrideReason && !canOverride) { toast.error('Ce groupe est complet.'); return; }
+    if (canOverride && ((full && !given.overrideReason) || (!pending.length && !given.withoutEnrollmentReason))) {
+      askReasons(s, given, { capacity: full, withoutEnrollment: !pending.length });
       return;
     }
     setBusyId(s.id);
@@ -151,16 +157,19 @@ export default function GroupDetail() {
           p_student_updated_at: s.updated_at, p_enrollment_updated_at: selected?.updated_at || null,
         })
         : await placeLearnerInGroup(getBrowserClient(), { student: s, group: id, enrollment: selected,
-          schoolYear: selected ? null : groupSchoolYear, overrideReason });
+          schoolYear: selected ? null : groupSchoolYear, overrideReason: given.overrideReason || null,
+          withoutEnrollmentReason: given.withoutEnrollmentReason || null });
       if (error) throw error;
-      setOverride(null);
+      setReasons(null);
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch (error) {
-      // The server counts every seat (pending enrollments with this group too):
-      // its capacity answer opens the override dialog for direction (S2).
-      if (egcReason(error?.hint) === 'capacity' && canOverride && !overrideReason) {
-        setOverride({ student: s, reason: '' });
+      // The server counts every seat (pending enrollments with this group too) and
+      // knows a legacy unpaid row: its answer opens the reasons dialog for direction (S2).
+      const needCapacity = egcReason(error?.hint) === 'capacity' && !given.overrideReason;
+      const needWithoutEnrollment = eapReason(error?.hint) === 'placement_reason_required' && !given.withoutEnrollmentReason;
+      if (canOverride && (needCapacity || needWithoutEnrollment)) {
+        askReasons(s, given, { capacity: needCapacity || Boolean(given.overrideReason), withoutEnrollment: needWithoutEnrollment || Boolean(given.withoutEnrollmentReason) });
         return;
       }
       toast.error(membershipErrorMessage(error));
@@ -313,6 +322,9 @@ export default function GroupDetail() {
             <DialogHeader className="px-4 pt-4">
               <DialogTitle>Ajouter des apprenants à « {group.name} »</DialogTitle>
             </DialogHeader>
+            {role === 'receptionist' && (
+              <p className="px-4 text-xs text-muted-foreground">Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.</p>
+            )}
             <Command>
               <CommandInput placeholder="Rechercher un apprenant…" />
               <CommandList className="max-h-80">
@@ -323,12 +335,13 @@ export default function GroupDetail() {
                       key={s.id}
                       value={`${s.full_name} ${s.telephone || ''}`}
                       onSelect={() => addToGroup(s)}
-                      disabled={busyId === s.id || (full && !canOverride)}
+                      disabled={busyId === s.id || (full && !canOverride) || (role === 'receptionist' && !matchingPending(s).length)}
                     >
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
-                      <span className="flex-1 truncate">{s.full_name}</span>
-                      <span className="text-xs text-muted-foreground ml-2">
+                      <span className="min-w-0 flex-1 truncate">{s.full_name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground ml-2">
                         {memberOfOtherProgramme(s) ? 'déjà dans un autre programme' : `${s.session_type || 'Yearly'} · ${s.niveau_cefr || 'NIV à définir'}`}
+                        {!matchingPending(s).length && ' · sans inscription payée'}
                       </span>
                     </CommandItem>
                   ))}
@@ -345,23 +358,39 @@ export default function GroupDetail() {
         </Dialog>
       )}
 
-      {override && (
-        <Dialog open onOpenChange={(o) => !o && setOverride(null)}>
+      {reasons && (
+        <Dialog open onOpenChange={(o) => !o && setReasons(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Groupe complet</DialogTitle>
+              <DialogTitle>{reasons.withoutEnrollment ? 'Affectation sans inscription payée' : 'Groupe complet'}</DialogTitle>
             </DialogHeader>
-            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); addToGroup(override.student, override.reason.trim()); }}>
-              <p className="text-sm text-muted-foreground">
-                « {group.name} » a atteint sa capacité ({group.capacite_max}). Ajouter {override.student.full_name} quand même ? Le motif est enregistré dans le journal.
-              </p>
-              <label htmlFor="capacity-override-reason" className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif du dépassement *</label>
-              <textarea id="capacity-override-reason" required maxLength={200} value={override.reason}
-                onChange={(event) => setOverride(current => ({ ...current, reason: event.target.value }))}
-                className="h-20 w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+            <form className="space-y-3" onSubmit={(event) => {
+              event.preventDefault();
+              addToGroup(reasons.student, { overrideReason: reasons.capacity ? reasons.overrideReason.trim() : '',
+                withoutEnrollmentReason: reasons.withoutEnrollment ? reasons.withoutEnrollmentReason.trim() : '' });
+            }}>
+              {reasons.withoutEnrollment && <>
+                <p className="text-sm text-muted-foreground">
+                  {reasons.student.full_name} n’a pas d’inscription payée pour ce programme et cette année. L’affectation crée ou place une inscription non payée : le motif est enregistré dans le journal et l’inscription apparaît dans « Contrôles ». Sinon, utilisez « Inscrire et encaisser » depuis la fiche apprenant.
+                </p>
+                <label htmlFor="without-enrollment-reason" className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif de l’affectation sans inscription payée *</label>
+                <textarea id="without-enrollment-reason" required maxLength={200} value={reasons.withoutEnrollmentReason}
+                  onChange={(event) => setReasons(current => ({ ...current, withoutEnrollmentReason: event.target.value }))}
+                  className="h-20 w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              </>}
+              {reasons.capacity && <>
+                <p className="text-sm text-muted-foreground">
+                  « {group.name} » a atteint sa capacité ({group.capacite_max}). Ajouter {reasons.student.full_name} quand même ? Le motif est enregistré dans le journal.
+                </p>
+                <label htmlFor="capacity-override-reason" className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif du dépassement *</label>
+                <textarea id="capacity-override-reason" required maxLength={200} value={reasons.overrideReason}
+                  onChange={(event) => setReasons(current => ({ ...current, overrideReason: event.target.value }))}
+                  className="h-20 w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+              </>}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setOverride(null)} className="rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">Annuler</button>
-                <button type="submit" disabled={!override.reason.trim() || busyId === override.student.id} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Ajouter quand même</button>
+                <button type="button" onClick={() => setReasons(null)} className="rounded-md px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground">Annuler</button>
+                <button type="submit" disabled={(reasons.capacity && !reasons.overrideReason.trim()) || (reasons.withoutEnrollment && !reasons.withoutEnrollmentReason.trim())
+                  || busyId === reasons.student.id} className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">{reasons.capacity ? 'Ajouter quand même' : 'Affecter'}</button>
               </div>
             </form>
           </DialogContent>

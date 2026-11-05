@@ -25,6 +25,16 @@ create function pg_temp.denied(statement text) returns void language plpgsql as 
   begin execute statement; exception when insufficient_privilege then return; end;
   raise exception 'Expected permission denial: %',statement;
 end $$;
+-- EAP (127): a retired pre-enrollment command refuses with 42501 and its own hint.
+create function pg_temp.retired(statement text) returns void language plpgsql as $$
+declare v_hint text; begin
+  begin execute statement; exception when insufficient_privilege then
+    get stacked diagnostics v_hint=pg_exception_hint;
+    if v_hint='eap.status_retired' then return; end if;
+    raise exception 'Expected eap.status_retired, got %: %',v_hint,statement;
+  end;
+  raise exception 'Expected retired-status refusal: %',statement;
+end $$;
 
 select set_config('request.jwt.claim.sub','77000000-0000-0000-0000-000000000001',true);
 set local role authenticated;
@@ -67,7 +77,8 @@ select pg_temp.denied($q$select public.soft_delete_student('77000000-0000-0000-0
 -- CASCADE must not let a receptionist bypass the table/trigger protections.
 select pg_temp.denied($q$truncate public.placement_tests cascade$q$);
 select pg_temp.denied($q$truncate public.app_config$q$);
-select pg_temp.denied($q$insert into public.enrollments(student_id,status) values('77000000-0000-0000-0000-000000000020','Submitted')$q$);
+-- EAP (127): Confirmed, as a Submitted row is now refused by the retired-status guard first.
+select pg_temp.denied($q$insert into public.enrollments(student_id,status,session_type,school_year) values('77000000-0000-0000-0000-000000000020','Confirmed','Yearly','2027/2028')$q$);
 update public.profiles set full_name='Receptionist self edit',phone='0000000000' where id=auth.uid();
 do $$ begin
  if not exists(select 1 from public.students where id='77000000-0000-0000-0000-000000000020') then raise exception 'Student read missing'; end if;
@@ -85,17 +96,16 @@ do $$ begin
  delete from public.placement_tests where id='77000000-0000-0000-0000-000000000040';
  if found then raise exception 'Placement deletion allowed'; end if;
 end $$;
-select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020');
--- A trial needs a school year (EGC I9) and one live enrollment per programme and year (I3).
+-- EAP (127): reception no longer creates a pre-enrollment or a trial; it assigns a
+-- group to a Confirmed enrollment.
+select pg_temp.retired($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020')$q$);
 select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020','77000000-0000-0000-0000-000000000030','77000000-0000-0000-0000-000000000010','Validated','Child 1');
-select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,'77000000-0000-0000-0000-000000000019','Trial','Child 1',current_date,null,null,'2025/2026');
+select pg_temp.retired($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,'77000000-0000-0000-0000-000000000019','Trial','Child 1',current_date,null,null,'2025/2026')$q$);
 select pg_temp.denied($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,null,'Confirmed')$q$);
 select pg_temp.denied($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020','77000000-0000-0000-0000-000000000030',null,'Submitted')$q$);
 do $$ begin
- begin
-  perform public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,null,'Trial');
-  raise exception 'Trial without group accepted';
- exception when check_violation then null; end;
+ -- EAP (127): a trial is refused as retired (it used to need a group).
+ perform pg_temp.retired($q$select public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000020',null,null,'Trial')$q$);
  if not exists(select 1 from public.enrollments where id='77000000-0000-0000-0000-000000000030' and status='Validated') then
   raise exception 'Confirmed assignment failed'; end if;
 end $$;
@@ -127,18 +137,26 @@ create temp table egc_i9_def as select pg_get_constraintdef(oid) def, convalidat
 alter table public.enrollments drop constraint enrollments_confirmed_has_programme;
 -- ... and before Batch H's group year check (H5), which would give row 34 its group's year.
 alter table public.enrollments disable trigger enrollment_group_year_guard;
+-- EAP (127): the Submitted and Under Review legacy rows also predate the retired-status
+-- guard; seeded under the two-flag exemption.
+select set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
 insert into public.enrollments(id,student_id,status,session_type,level,group_id) values
  ('77000000-0000-0000-0000-000000000031','77000000-0000-0000-0000-000000000021','Submitted','Yearly','Child 1',null),
  ('77000000-0000-0000-0000-000000000032','77000000-0000-0000-0000-000000000021','Under Review',null,null,null),
  ('77000000-0000-0000-0000-000000000033','77000000-0000-0000-0000-000000000021','Confirmed',null,null,null),
  ('77000000-0000-0000-0000-000000000034','77000000-0000-0000-0000-000000000021','Validated','Yearly','Child 1','77000000-0000-0000-0000-000000000010'),
  ('77000000-0000-0000-0000-000000000035','77000000-0000-0000-0000-000000000025','Confirmed','Adults','Beginning 1',null);
+select set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
 update public.enrollments set school_year='2026/2027' where id='77000000-0000-0000-0000-000000000035';
 alter table public.enrollments enable trigger enrollment_group_year_guard;
 -- A Confirmed legacy row that can still exist after the check: programme and year
 -- set, level unknown.
 insert into public.enrollments(id,student_id,status,session_type,school_year,level,group_id) values
  ('77000000-0000-0000-0000-000000000036','77000000-0000-0000-0000-000000000021','Confirmed','Yearly','2029/2030',null,null);
+-- EAP (127): the unknown-level learner's Confirmed enrollment (a paid one in
+-- practice; seeded directly, like row 30, so no financial event is written).
+insert into public.enrollments(id,student_id,status,session_type,school_year,level,group_id) values
+ ('77000000-0000-0000-0000-000000000037','77000000-0000-0000-0000-000000000022','Confirmed','Yearly','2026/2027',null,null);
 alter table public.enrollments add constraint enrollments_confirmed_has_programme
   check (coalesce(status, '') not in ('Confirmed','Validated','Trial') or (session_type is not null and school_year is not null)) not valid;
 -- The re-added check has exactly the migration's expression (this fixture re-adds
@@ -208,6 +226,13 @@ begin
     -- Each live row needs its own school year (EGC I3, I9); legacy rows receive it,
     -- in a group of that year (H5).
     in_year := case year when 2026 then compatible else ('77000000-0000-0000-0000-0000000000' || (year - 2014))::uuid end;
+    -- EAP (127): a new or pre-confirmation row is no longer turned into a trial.
+    if desired='Trial' then
+      perform pg_temp.retired(format('select public.save_receptionist_enrollment(%L,%L,%L,%L,null,current_date,null,null,%L)',
+        learner,enrollment_id,in_year,desired,year||'/'||(year+1)));
+      year := year + 1;
+      continue;
+    end if;
     result := public.save_receptionist_enrollment(learner,enrollment_id,in_year,desired,null,current_date,null,null,
       year||'/'||(year+1));
     year := year + 1;
@@ -215,10 +240,13 @@ begin
       and session_type='Yearly' and level='Child 1' and group_id=in_year and status=desired) then
       raise exception 'Compatible normal/legacy assignment lost resolved fields'; end if;
   end loop;
-  result := public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000022',null,compatible,'Trial',null,current_date,null,null,'2026/2027');
+  -- EAP (127): the unknown level resolves from the group when its Confirmed
+  -- enrollment is placed (a trial is no longer created).
+  result := public.save_receptionist_enrollment('77000000-0000-0000-0000-000000000022','77000000-0000-0000-0000-000000000037',
+    compatible,'Validated',null,current_date,null,null,'2026/2027');
   if not exists(select 1 from public.enrollments where id=result and level='Child 1' and session_type='Yearly')
     or not exists(select 1 from public.students where id='77000000-0000-0000-0000-000000000022'
-      and niveau_cefr='Child 1' and groupe_id=compatible and status='Trial') then
+      and niveau_cefr='Child 1' and groupe_id=compatible and status='Enrolled') then
     raise exception 'Unknown level did not resolve from compatible group and synchronize'; end if;
   perform pg_temp.incompatible(format('select public.save_receptionist_enrollment(%L,null,%L,%L,null)',
     learner,'77000000-0000-0000-0000-000000000099','Trial'));

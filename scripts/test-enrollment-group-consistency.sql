@@ -257,28 +257,57 @@ insert into public.family_links(student_id, relation, profile_id, invite_email, 
 -- DAT-1: a second programme never moves the first (every placement path).
 -- ===========================================================================
 select pg_temp.act(2);
+-- EAP (127, Q3 = B): placing a learner without an enrollment needs the admin's
+-- dedicated reason; without it the placement is refused.
+select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', pg_temp.id(201), pg_temp.id(301), pg_temp.su(pg_temp.id(201))),
+  '23514', 'eap.placement_reason_required');
 -- Yearly memberships through the placement command (creates a Validated enrollment).
 do $$ declare i integer; begin
   foreach i in array array[201, 202, 203, 204, 205] loop
-    perform public.place_learner_in_group(pg_temp.id(i), pg_temp.id(301), pg_temp.su(pg_temp.id(i)));
+    perform public.place_learner_in_group(pg_temp.id(i), pg_temp.id(301), pg_temp.su(pg_temp.id(i)),
+      p_without_enrollment_reason => 'EGC fixture');
   end loop;
 end $$;
 select pg_temp.ok(pg_temp.file(pg_temp.id(201)) = jsonb_build_object('status', 'Enrolled', 'groupe_id', pg_temp.id(301), 'session_type', 'Yearly',
   'niveau_cefr', 'Child 1', 'deleted', false) and (pg_temp.enr(pg_temp.id(201), 'Yearly')).status = 'Validated'
   and (pg_temp.enr(pg_temp.id(201), 'Yearly')).school_year = '2026/2027', 'placement without enrollment creates a Validated one (DAT-2)');
 -- (a) group page command, (b) reception command, (c) enrollment editor, (d) CRM below, (e) payment then placement.
-select public.place_learner_in_group(pg_temp.id(201), pg_temp.id(302), pg_temp.su(pg_temp.id(201)));
+select public.place_learner_in_group(pg_temp.id(201), pg_temp.id(302), pg_temp.su(pg_temp.id(201)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.act(3);
+-- EAP (127): reception places only a paid enrollment; it collects first, then places.
+select pg_temp.fails(format('select public.assign_receptionist_student_group(%L, null, %L, %L, null)', pg_temp.id(202), pg_temp.id(302),
+  pg_temp.su(pg_temp.id(202))), '23514', 'eap.paid_enrollment_required');
+select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(202), 'session_type', 'Mise à niveau',
+  'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(1202)));
 select public.assign_receptionist_student_group(pg_temp.id(202), null, pg_temp.id(302), pg_temp.su(pg_temp.id(202)), null);
 select pg_temp.act(2);
-create temp table egc_ids as select public.create_enrollment(pg_temp.id(203),
-  '{"session_type":"Mise à niveau","school_year":"2026/2027"}') e203;
+-- EAP (127): the enrollment editor no longer creates an enrollment, and no longer
+-- changes a status; an old pre-enrollment (seeded below as history under the
+-- two-flag exemption) still only reserves the group, and its payment validates it.
+select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(203), '{"session_type":"Mise à niveau","school_year":"2026/2027"}'),
+  '42501', 'eap.status_retired');
+select pg_temp.owner();
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
+create temp table egc_ids as select pg_temp.id(831) e203;
+insert into public.enrollments(id, student_id, status, session_type, school_year) values
+  (pg_temp.id(831), pg_temp.id(203), 'Submitted', 'Mise à niveau', '2026/2027');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.open_to_api('egc_ids');
+select pg_temp.act(2);
+-- EAP (127, Q3 = B): placing a legacy unpaid row is a placement without a paid
+-- enrollment; director/admin give the dedicated reason, which is logged.
+select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, %L, null, %L)', pg_temp.id(203), pg_temp.id(302),
+  pg_temp.su(pg_temp.id(203)), (select e203 from egc_ids), pg_temp.eu((select e203 from egc_ids))), '23514', 'eap.placement_reason_required');
 select public.place_learner_in_group(pg_temp.id(203), pg_temp.id(302), pg_temp.su(pg_temp.id(203)), (select e203 from egc_ids), null,
-  pg_temp.eu((select e203 from egc_ids)));
+  pg_temp.eu((select e203 from egc_ids)), null, 'Place réservée avant paiement');
 select pg_temp.ok((select status from public.enrollments where id = (select e203 from egc_ids)) = 'Submitted'
   and not pg_temp.member(pg_temp.id(203), pg_temp.id(302)), 'a placed pre-enrollment reserves the group but is not a member');
-select public.save_enrollment_changes((select e203 from egc_ids), pg_temp.eu((select e203 from egc_ids)), '{"status":"Validated"}');
+select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select e203 from egc_ids), pg_temp.eu((select e203 from egc_ids)),
+  '{"status":"Validated"}'), '23514', 'egc.status_not_permitted');
+select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(203), 'enrollment_id', (select e203 from egc_ids),
+  'session_type', 'Mise à niveau', 'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces',
+  'idempotency_key', pg_temp.id(1203)));
+select pg_temp.ok((select status from public.enrollments where id = (select e203 from egc_ids)) = 'Validated', 'the payment validates the placed pre-enrollment');
 select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(205), 'session_type', 'Mise à niveau',
   'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 200, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(1205)));
 select pg_temp.ok((pg_temp.enr(pg_temp.id(205), 'Mise à niveau')).status = 'Confirmed'
@@ -339,7 +368,7 @@ select pg_temp.act(3);
 select pg_temp.fails(format($$select public.save_receptionist_group(%L, %L, '{"niveau":"Child 2"}')$$, pg_temp.id(301),
   (select updated_at from public.groups where id = pg_temp.id(301))), '23514');
 select pg_temp.act(2);
-select public.place_learner_in_group(pg_temp.id(206), pg_temp.id(305), pg_temp.su(pg_temp.id(206)));
+select public.place_learner_in_group(pg_temp.id(206), pg_temp.id(305), pg_temp.su(pg_temp.id(206)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.fails(format('update public.groups set niveau = %L where id = %L', 'Child 2', pg_temp.id(305)), '23514', 'egc.group_level_locked');
 select public.remove_learner_from_group(pg_temp.id(206), pg_temp.id(305), pg_temp.su(pg_temp.id(206)));
 update public.groups set niveau = 'Child 2' where id = pg_temp.id(305);
@@ -348,7 +377,7 @@ select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, %L
   pg_temp.su(pg_temp.id(206)), (pg_temp.enr(pg_temp.id(206), 'Yearly')).id, (pg_temp.enr(pg_temp.id(206), 'Yearly')).updated_at),
   '23514', 'egc.group_mismatch');
 -- I4 narrowing: a payment on a Validated enrollment whose group drifted (seeded with triggers disabled).
-select public.place_learner_in_group(pg_temp.id(207), pg_temp.id(306), pg_temp.su(pg_temp.id(207)));
+select public.place_learner_in_group(pg_temp.id(207), pg_temp.id(306), pg_temp.su(pg_temp.id(207)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.owner();
 insert into public.charges(id, student_id, enrollment_id, session_type, school_year, service_description, plan_type, gross_amount, created_by)
 values (pg_temp.id(1207), pg_temp.id(207), (pg_temp.enr(pg_temp.id(207), 'Yearly')).id, 'Yearly', '2026/2027', 'Yearly · 2026/2027', 'Standard', 4000, pg_temp.id(2));
@@ -400,9 +429,13 @@ select pg_temp.ok((select (r->>'enrollment_id')::uuid from egc_pay) = (pg_temp.e
   and (select (r->>'student_enrolled')::boolean and (r->>'enrollment_confirmed')::boolean and not (r->>'group_pending')::boolean from egc_pay),
   'an unlinked charge reuses the learner''s single Yearly enrollment');
 select pg_temp.owner();
+-- EAP (127): two old pre-enrollments (history, seeded under the two-flag exemption);
+-- only such legacy rows can still match an undated charge twice.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(student_id, status, session_type) values (pg_temp.id(208), 'Submitted', 'Yearly');
 insert into public.enrollments(student_id, status, session_type, school_year) values (pg_temp.id(208), 'Under Review', 'Yearly',
   academic_security.school_year_on(academic_security.today()));
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 insert into public.charges(id, student_id, session_type, service_description, plan_type, gross_amount, created_by)
 values (pg_temp.id(1209), pg_temp.id(208), 'Yearly', 'Yearly · Standard', 'Standard', 3000, pg_temp.id(2));
 select pg_temp.act(2);
@@ -430,14 +463,22 @@ alter table public.enrollments add constraint enrollments_active_requires_group
   check (coalesce(status, '') not in ('Validated','Trial') or group_id is not null) not valid;
 alter table public.enrollments add constraint enrollments_confirmed_has_programme
   check (coalesce(status, '') not in ('Confirmed','Validated','Trial') or (session_type is not null and school_year is not null)) not valid;
-select pg_temp.act(2);
+-- EAP (127): a pre-enrollment is no longer inserted nor rejected; the insert goes
+-- through a payment and the delete is that of an old pre-enrollment (history,
+-- seeded under the two-flag exemption).
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(id, student_id, status, session_type) values (pg_temp.id(812), pg_temp.id(204), 'Submitted', 'Adults');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
+select pg_temp.act(2);
+select pg_temp.fails(format($$update public.enrollments set status = 'Rejected' where id = %L$$, pg_temp.id(812)), '23514', 'eap.status_retired');
 delete from public.enrollments where id = pg_temp.id(812);
-insert into public.enrollments(id, student_id, status, session_type) values (pg_temp.id(813), pg_temp.id(204), 'Submitted', 'Adults');
-update public.enrollments set status = 'Rejected' where id = pg_temp.id(813);
+select pg_temp.fails(format($$insert into public.enrollments(id, student_id, status, session_type) values (%L, %L, 'Submitted', 'Adults')$$,
+  pg_temp.id(813), pg_temp.id(204)), '23514', 'eap.status_retired');
+select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(204), 'session_type', 'Adults', 'school_year', '2026/2027',
+  'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(1204)));
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.file(pg_temp.id(204))->>'groupe_id' = pg_temp.id(301)::text and pg_temp.file(pg_temp.id(204))->>'status' = 'Enrolled',
-  'a legacy Validated row without group never clears the main group (inserts, deletes, rejections)');
+  'a legacy Validated row without group never clears the main group (inserts, deletes)');
 -- Fixture removal of the legacy row (a command-only delete, I10), then the
 -- enforced checks are valid again.
 select set_config('eh.enrollment_command', 'on', true);
@@ -462,10 +503,15 @@ create function pg_temp.qualified_lead() returns uuid language plpgsql as $$ dec
     'next_task', jsonb_build_object('task_type', 'confirm_placement_test', 'due_at', now() + interval '2 days')));
   return l;
 end $$;
-create function pg_temp.crm_existing(l uuid, s uuid, session text, grp uuid, initial text default 'Submitted', year text default '2026/2027') returns jsonb
+-- EAP (127): the enrollment part of « Inscrire et encaisser » (no group, no initial status).
+create function pg_temp.crm_existing(l uuid, s uuid, session text, year text default '2026/2027') returns jsonb
 language sql security definer as $$
   select jsonb_build_object('lead_id', l, 'expected_version', x.version, 'student_choice', 'existing', 'student_id', s,
-    'session_type', session, 'school_year', year, 'group_id', grp, 'initial_status', initial) from public.crm_leads x where x.id = l
+    'session_type', session, 'school_year', year) from public.crm_leads x where x.id = l
+$$;
+create function pg_temp.collect(enrollment jsonb) returns jsonb language sql as $$
+  select jsonb_build_object('enrollment', enrollment, 'payment', jsonb_build_object('gross_amount', 1000, 'payment_amount', 100,
+    'payment_method', 'Espèces'))
 $$;
 create function pg_temp.lead_e(l uuid) returns uuid language sql security definer as $$
   select enrollment_id from public.crm_leads where id = l $$;
@@ -475,18 +521,19 @@ create temp table egc_crm as select pg_temp.qualified_lead() trial, pg_temp.qual
   pg_temp.qualified_lead() full_group;
 select pg_temp.open_to_api('egc_crm');
 select pg_temp.act(3);
-select public.crm_start_enrollment(gen_random_uuid(), pg_temp.crm_existing((select trial from egc_crm), pg_temp.id(204), 'Mise à niveau', pg_temp.id(302), 'Trial'));
+-- EAP (127): the CRM command has no API grant and never places; reception enrolls
+-- and collects in one step, then places the paid enrollment.
+select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', pg_temp.crm_existing((select trial from egc_crm),
+  pg_temp.id(204), 'Mise à niveau') || '{"initial_status":"Confirmed"}'), '42501');
+select public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.collect(pg_temp.crm_existing((select trial from egc_crm), pg_temp.id(204), 'Mise à niveau')));
+select public.assign_receptionist_student_group(pg_temp.id(204), null, pg_temp.id(302), pg_temp.su(pg_temp.id(204)), null);
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.member(pg_temp.id(204), pg_temp.id(302))
-  and pg_temp.file(pg_temp.id(204))->>'groupe_id' = pg_temp.id(301)::text, 'CRM start with a group: second membership, main group stays Yearly');
+  and pg_temp.file(pg_temp.id(204))->>'groupe_id' = pg_temp.id(301)::text, 'CRM enroll and collect, then placement: second membership, main group stays Yearly');
 -- D5-A: an ended converted enrollment keeps its conversion; a later lead creates a new enrollment.
+-- EAP (127): the enrollment and its payment are one command (« Inscrire et encaisser »).
 select pg_temp.act(3);
-select public.crm_start_enrollment(gen_random_uuid(), pg_temp.crm_existing((select conv from egc_crm), pg_temp.id(211), 'Adults', null));
-select pg_temp.owner();
-select pg_temp.act(2);
-select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(211), 'enrollment_id',
-  pg_temp.lead_e((select conv from egc_crm)), 'session_type', 'Adults', 'school_year', '2026/2027',
-  'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(1213)));
+select public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.collect(pg_temp.crm_existing((select conv from egc_crm), pg_temp.id(211), 'Adults')));
 select pg_temp.owner();
 select pg_temp.ok((select status from public.crm_leads where id = (select conv from egc_crm)) = 'CONVERTED', 'payment converts the lead');
 select pg_temp.act(1);
@@ -496,22 +543,27 @@ select pg_temp.ok((select status = 'CONVERTED' and not conversion_review_require
   and not exists (select 1 from public.crm_activities a where a.lead_id = (select conv from egc_crm) and a.event_type = 'conversion_review_required'),
   'D5-A: leaving after conversion raises no review flag');
 select pg_temp.act(3);
-select pg_temp.ok((public.crm_start_enrollment(gen_random_uuid(), pg_temp.crm_existing((select back from egc_crm), pg_temp.id(211), 'Adults', null)))
+select pg_temp.ok((public.crm_enroll_and_collect(gen_random_uuid(), pg_temp.collect(pg_temp.crm_existing((select back from egc_crm), pg_temp.id(211), 'Adults'))))
   ->'enrollment'->>'id' is distinct from pg_temp.lead_e((select conv from egc_crm))::text,
   'D5-A: a returning learner''s lead creates a new enrollment (the ended one is not reused)');
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)', jsonb_build_object('lead_id', (select full_group from egc_crm),
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', jsonb_build_object('enrollment', jsonb_build_object('lead_id', (select full_group from egc_crm),
   'expected_version', pg_temp.lead_v((select full_group from egc_crm)), 'student_choice', 'existing',
   'student_id', pg_temp.id(211), 'session_type', 'Adults', 'school_year', '2026/2027', 'enrollment_id',
   pg_temp.lead_e((select conv from egc_crm)), 'expected_enrollment_updated_at',
-  pg_temp.eu(pg_temp.lead_e((select conv from egc_crm))))), '22023', 'crm_enrollment.enrollment_incompatible');
+  pg_temp.eu(pg_temp.lead_e((select conv from egc_crm)))))), '22023', 'crm_enrollment.enrollment_incompatible');
 select pg_temp.owner();
 
 -- ===========================================================================
 -- ACA-6 / I6 / D4-A: capacity at assignment on every path; status-only changes never raise.
 -- ===========================================================================
 select pg_temp.act(2);
-select public.place_learner_in_group(pg_temp.id(212), pg_temp.id(304), pg_temp.su(pg_temp.id(212)));
-select public.place_learner_in_group(pg_temp.id(213), pg_temp.id(304), pg_temp.su(pg_temp.id(213)));
+select public.place_learner_in_group(pg_temp.id(212), pg_temp.id(304), pg_temp.su(pg_temp.id(212)), p_without_enrollment_reason => 'EGC fixture');
+select public.place_learner_in_group(pg_temp.id(213), pg_temp.id(304), pg_temp.su(pg_temp.id(213)), p_without_enrollment_reason => 'EGC fixture');
+-- EAP (127): learner 214 is enrolled and paid first, so every path reaches the capacity rule.
+create temp table egc_e214 as select (public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(214), 'session_type', 'Adults',
+  'school_year', '2026/2027', 'level', 'Beginning 1', 'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces',
+  'idempotency_key', pg_temp.id(1220)))->>'enrollment_id')::uuid id;
+select pg_temp.open_to_api('egc_e214');
 select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', pg_temp.id(214), pg_temp.id(304), pg_temp.su(pg_temp.id(214))),
   '23514', 'egc.capacity');
 select pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
@@ -521,12 +573,13 @@ select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', 
   '23514', 'egc.capacity');
 select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, p_capacity_override_reason => %L)', pg_temp.id(214), pg_temp.id(304),
   pg_temp.su(pg_temp.id(214)), 'Accord direction'), '42501', 'egc.capacity_override_forbidden');
-select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Submitted', 'Beginning 1', current_date, null, 'Adults', '2026/2027')$$,
-  pg_temp.id(214), pg_temp.id(304)), '23514', 'egc.capacity');
+select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, %L, %L, 'Confirmed', 'Beginning 1', current_date, null, 'Adults', '2026/2027')$$,
+  pg_temp.id(214), (select id from egc_e214), pg_temp.id(304)), '23514', 'egc.capacity');
 select pg_temp.fails(format('select public.assign_receptionist_student_group(%L, null, %L, %L, null)', pg_temp.id(214), pg_temp.id(304),
   pg_temp.su(pg_temp.id(214))), '23514', 'egc.capacity');
-select pg_temp.fails(format('select public.crm_start_enrollment(gen_random_uuid(), %L)',
-  pg_temp.crm_existing((select full_group from egc_crm), pg_temp.id(214), 'Adults', pg_temp.id(304), 'Trial')), '22023', 'crm_enrollment.record_rejected');
+-- EAP (127): the CRM path no longer places (a group is refused before any write).
+select pg_temp.fails(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.collect(pg_temp.crm_existing((select full_group from egc_crm),
+  pg_temp.id(214), 'Adults') || jsonb_build_object('group_id', pg_temp.id(304)))), '22023', 'crm_enrollment.request_invalid');
 select pg_temp.act(1);
 select public.place_learner_in_group(pg_temp.id(214), pg_temp.id(304), pg_temp.su(pg_temp.id(214)), p_capacity_override_reason => 'Accord direction');
 select pg_temp.owner();
@@ -558,9 +611,9 @@ do $$ declare g uuid; begin
   end loop;
 end $$;
 select pg_temp.act(2);
-select public.place_learner_in_group(pg_temp.id(215), pg_temp.id(307), pg_temp.su(pg_temp.id(215)));
-select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', pg_temp.id(216), pg_temp.id(307), pg_temp.su(pg_temp.id(216))),
-  '23514', 'online.capacity');
+select public.place_learner_in_group(pg_temp.id(215), pg_temp.id(307), pg_temp.su(pg_temp.id(215)), p_without_enrollment_reason => 'EGC fixture');
+select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, p_without_enrollment_reason => %L)', pg_temp.id(216), pg_temp.id(307),
+  pg_temp.su(pg_temp.id(216)), 'EGC fixture'), '23514', 'online.capacity');
 select pg_temp.owner();
 
 -- ===========================================================================
@@ -569,9 +622,11 @@ select pg_temp.owner();
 select pg_temp.act(2);
 select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', pg_temp.id(215), pg_temp.id(308), pg_temp.su(pg_temp.id(215))),
   '23514', 'egc.already_placed');
+-- EAP (127): the enrollment editor creates nothing any more; a direct second live
+-- row (Confirmed: the retired statuses are refused first) still meets the index.
 select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(215), '{"session_type":"Online","school_year":"2026/2027"}'),
-  'PT409', 'egc.duplicate_enrollment');
-select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year) values (%L, 'Submitted', 'Online', '2026/2027')$$,
+  '42501', 'eap.status_retired');
+select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year) values (%L, 'Confirmed', 'Online', '2026/2027')$$,
   pg_temp.id(215)), '23505');
 select pg_temp.act(3);
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, null, 'Submitted', 'B1', current_date, null, 'Online', '2026/2027')$$,
@@ -584,7 +639,7 @@ select pg_temp.ok((pg_temp.enr(pg_temp.id(215), 'Online')).status = 'Ended' and 
   and (pg_temp.enr(pg_temp.id(215), 'Online')).ended_group_id = pg_temp.id(307) and pg_temp.file(pg_temp.id(215))->>'status' = 'Alumni'
   and pg_temp.file(pg_temp.id(215))->>'groupe_id' is null, 'ended with the course reason; Alumni with nothing else active');
 select pg_temp.act(2);
-select public.place_learner_in_group(pg_temp.id(215), pg_temp.id(308), pg_temp.su(pg_temp.id(215)));
+select public.place_learner_in_group(pg_temp.id(215), pg_temp.id(308), pg_temp.su(pg_temp.id(215)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.member(pg_temp.id(215), pg_temp.id(308)) and pg_temp.file(pg_temp.id(215))->>'status' = 'Enrolled',
   'the second online course of the year succeeds after the close');
@@ -593,21 +648,30 @@ select pg_temp.ok(pg_temp.member(pg_temp.id(215), pg_temp.id(308)) and pg_temp.f
 -- ACA-5: admin enrollment commands (allow-list, stale, no regression, create needs programme/year).
 -- ===========================================================================
 select pg_temp.act(2);
-select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults"}'), '22023', 'egc.programme_required');
-select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults","school_year":"2026/2027","group_id":"x"}'), '22023');
-select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults","school_year":"2026/2027","status":"Confirmed"}'),
-  '22023', 'egc.status_not_permitted');
-create temp table egc_e217 as select public.create_enrollment(pg_temp.id(217), '{"session_type":"Adults","school_year":"2026/2027","notes":"EGC"}') id;
+-- EAP (127): create_enrollment refuses every request (an enrollment is born at the
+-- payment); the editor's checks below run on a paid (Confirmed) enrollment.
+select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults"}'), '42501', 'eap.status_retired');
+select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults","school_year":"2026/2027","group_id":"x"}'),
+  '42501', 'eap.status_retired');
+select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Adults","school_year":"2026/2027","notes":"EGC"}'),
+  '42501', 'eap.status_retired');
+create temp table egc_e217 as select (public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(217), 'session_type', 'Adults',
+  'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces',
+  'idempotency_key', pg_temp.id(1221)))->>'enrollment_id')::uuid id;
 select pg_temp.open_to_api('egc_e217');
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), '2000-01-01T00:00:00Z', '{"notes":"x"}'),
   'PT409', 'egc.stale');
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"group_id":null}'), '22023');
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"school_year":"2027/2028"}'),
   '23514', 'egc.programme_fixed');
+-- EAP (127, Q5): no status change in the editor (Validated used to need a group,
+-- Under Review used to pass); an unchanged status key passes.
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"status":"Validated"}'),
-  '23514', 'egc.group_required');
-select public.save_enrollment_changes((select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"status":"Under Review","level":"Beginning 1"}');
-select pg_temp.ok((select status = 'Under Review' and level = 'Beginning 1' from public.enrollments where id = (select id from egc_e217)), 'changed fields only');
+  '23514', 'egc.status_not_permitted');
+select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"status":"Under Review"}'),
+  '23514', 'egc.status_not_permitted');
+select public.save_enrollment_changes((select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"status":"Confirmed","level":"Beginning 1"}');
+select pg_temp.ok((select status = 'Confirmed' and level = 'Beginning 1' from public.enrollments where id = (select id from egc_e217)), 'changed fields only');
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (pg_temp.enr(pg_temp.id(209), 'Adults')).id,
   (pg_temp.enr(pg_temp.id(209), 'Adults')).updated_at, '{"status":"Submitted"}'), '23514', 'egc.status_not_permitted');
 select pg_temp.act(3);
@@ -711,7 +775,11 @@ select pg_temp.ok((select status = 'Confirmed' and group_id is null and ended_at
 select pg_temp.act(1);
 select public.end_learner(pg_temp.id(219), pg_temp.su(pg_temp.id(219)), 'Alumni', 'Fin');
 select pg_temp.owner();
+-- EAP (127): an old pre-enrollment (history, seeded under the two-flag exemption),
+-- also the row I10 lets a staff member delete below.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(student_id, status, session_type, school_year) values (pg_temp.id(219), 'Submitted', 'Summer Camp', '2025/2026');
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.act(2);
 select pg_temp.fails(format('select public.reopen_enrollment(%L, %L)', (select id from egc_ended), pg_temp.eu((select id from egc_ended))), 'PT409', 'egc.duplicate_enrollment');
 -- I10: Ended rows are history; Trial/Confirmed/Validated rows are deleted only by the commands.
@@ -731,11 +799,12 @@ select pg_temp.owner();
 select pg_temp.fails(format($$insert into public.enrollments(student_id, status, session_type, school_year) values (%L, 'Ended', 'Adults', '2026/2027')$$,
   pg_temp.id(221)), '23514');
 -- Batch H (H5): a placement without a year takes its group's year (asserted, then undone);
--- without a group the I9 check still refuses a missing year.
+-- without a group the I9 check still refuses a missing year. EAP (127): Validated, as
+-- Trial is retired.
 do $$ begin
   begin
     insert into public.enrollments(student_id, status, session_type, school_year, group_id, level)
-      values (pg_temp.id(221), 'Trial', 'Yearly', null, pg_temp.id(301), 'Child 1');
+      values (pg_temp.id(221), 'Validated', 'Yearly', null, pg_temp.id(301), 'Child 1');
     if not exists (select 1 from public.enrollments where student_id = pg_temp.id(221) and group_id = pg_temp.id(301)
         and school_year = academic_security.school_year_of((select annee from public.groups where id = pg_temp.id(301)))) then
       raise exception 'FAIL: H5 a placement without a year takes its group''s year';
@@ -832,8 +901,8 @@ select pg_temp.ok(pg_temp.file(pg_temp.id(201))->>'status' = 'Enrolled' and pg_t
 -- Storage: the teacher of a second-programme group reserves and resolves a portfolio asset.
 -- ===========================================================================
 select pg_temp.act(2);
-select public.place_learner_in_group(pg_temp.id(223), pg_temp.id(301), pg_temp.su(pg_temp.id(223)));
-select public.place_learner_in_group(pg_temp.id(223), pg_temp.id(302), pg_temp.su(pg_temp.id(223)));
+select public.place_learner_in_group(pg_temp.id(223), pg_temp.id(301), pg_temp.su(pg_temp.id(223)), p_without_enrollment_reason => 'EGC fixture');
+select public.place_learner_in_group(pg_temp.id(223), pg_temp.id(302), pg_temp.su(pg_temp.id(223)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.act(5);
 create temp table egc_asset as select public.reserve_storage_asset('portfolio', pg_temp.id(223)) a;
 select pg_temp.open_to_api('egc_asset');

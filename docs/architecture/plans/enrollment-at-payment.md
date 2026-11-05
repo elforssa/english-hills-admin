@@ -1,6 +1,8 @@
 # Enrollment at payment — retire pré-inscription and essai, revision EAP-r2
 
-**Status: APPROVED FOR IMPLEMENTATION (Maroine, 2026-11-04) at exact head `6d515611d6ca565725373d99fff6bdfc37977af7`, revision EAP-r4, after the independent plan review returned READY FOR OWNER APPROVAL on that head; answers Q1–Q13 recorded verbatim in the [approval record](#owner-decisions-required) and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--approved-for-implementation-2026-11-04). This approves the plan only: the R0 count, implementation, the migration, the archive step (the owner accepts the day's G2 permanent conversions and G7 review flags at that approval), merge, deploy and the eh-website PR each need their own approval. Nothing is implemented, merged, applied or deployed.** Revision history: Revision EAP-r1 (PR #181 head `f257f03…`) received **CHANGES REQUIRED** from the independent review on 2026-11-04 (blockers B1 and B2, should-fixes S4–S8, nits); EAP-r2 (head `c9a396f…`) applied them and its re-review returned **CHANGES REQUIRED without blockers** (R1–R7, nits), applied by EAP-r3 (head `f48254b…`), whose delta re-review returned **CHANGES REQUIRED without blockers** (S1 function identities and grants, S2 the paid-elsewhere rule, nits); EAP-r4 applied those (docs only, same branch); the answers it recorded as proposed are now approved as stated below. Owner decisions 1–7 of 2026-11-04 (Maroine) are recorded below and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--approved-for-implementation-2026-11-04); the decisions Q1–Q13 and their approved answers are under [Owner decisions required](#owner-decisions-required). Nothing is implemented, merged, applied or deployed; no Production read, count or mutation has occurred. Risk tier: **3** (enrollment/conversion integrity, finance function, existing Production data, a database guard, a public endpoint). Owner: Maroine. Baseline: `origin/main` `89fb68383e6066a163ae4836711ce2e10df66bee` (PR #180 merge, docs only); Production ledger 001–126 per [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries); next free migration number **127** (provisional, re-read at implementation). Pattern: [Premium retirement](premium-retirement.md) (retire, keep history readable, counted data step, drop later if ever). Planned, implemented, merged, deployed and Production-verified are distinct states.
+**Implementation: IMPLEMENTED ON BRANCH `feat/enrollment-at-payment` (2026-11-04), implementation PR open, not merged, not deployed; migration 127 not applied on Production; the archive step, its revert and the restore are prepared and not run. R0 ran once on Production, read-only, 2026-11-04 04:39Z. See the [implementation record](#implementation-record-eap-r4-2026-11-04).**
+
+**Status: APPROVED FOR IMPLEMENTATION (Maroine, 2026-11-04) at exact head `6d515611d6ca565725373d99fff6bdfc37977af7`, revision EAP-r4, after the independent plan review returned READY FOR OWNER APPROVAL on that head; answers Q1–Q13 recorded verbatim in the [approval record](#owner-decisions-required) and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--approved-for-implementation-2026-11-04). This approves the plan only: the R0 count, implementation, the migration, the archive step (the owner accepts the day's G2 permanent conversions and G7 review flags at that approval), merge, deploy and the eh-website PR each need their own approval. Nothing was implemented, merged, applied or deployed at approval.** Revision history: Revision EAP-r1 (PR #181 head `f257f03…`) received **CHANGES REQUIRED** from the independent review on 2026-11-04 (blockers B1 and B2, should-fixes S4–S8, nits); EAP-r2 (head `c9a396f…`) applied them and its re-review returned **CHANGES REQUIRED without blockers** (R1–R7, nits), applied by EAP-r3 (head `f48254b…`), whose delta re-review returned **CHANGES REQUIRED without blockers** (S1 function identities and grants, S2 the paid-elsewhere rule, nits); EAP-r4 applied those (docs only, same branch); the answers it recorded as proposed are now approved as stated below. Owner decisions 1–7 of 2026-11-04 (Maroine) are recorded below and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-at-payment--retire-pr%C3%A9-inscription-and-essai--approved-for-implementation-2026-11-04); the decisions Q1–Q13 and their approved answers are under [Owner decisions required](#owner-decisions-required). At approval nothing was implemented, merged, applied or deployed and no Production read, count or mutation had occurred (state since then: the implementation line above). Risk tier: **3** (enrollment/conversion integrity, finance function, existing Production data, a database guard, a public endpoint). Owner: Maroine. Baseline: `origin/main` `89fb68383e6066a163ae4836711ce2e10df66bee` (PR #180 merge, docs only); Production ledger 001–126 per [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries); next free migration number **127** (provisional, re-read at implementation). Pattern: [Premium retirement](premium-retirement.md) (retire, keep history readable, counted data step, drop later if ever). Planned, implemented, merged, deployed and Production-verified are distinct states.
 
 # Owner summary
 
@@ -524,3 +526,164 @@ Stop and report if: a re-created function's latest definition differs from the c
 ### Docs / status reporting
 
 Report per [AGENTS](../../../AGENTS.md#implementation-handoff) with branch, head SHA, PR, tier rationale, checks tied to the SHA, self-check, plan revision, migration filename and unresolved decisions. Do not mark Production state until a dated release record exists; keep merge, deployment and Production verification distinct. Independent review is mandatory (Tier 3).
+
+# Implementation record (EAP-r4, 2026-11-04)
+
+**State: IMPLEMENTED ON BRANCH `feat/enrollment-at-payment`, in the implementation pull request; not merged, not deployed; migration 127 not applied on Production; the archive step, its revert and the restore are prepared and not run.** Implemented under owner authorization of 2026-11-04 (Maroine), Tier 3, from a fresh `origin/main` at `8d5f99f` (the plan merge). Planned, implemented, merged, deployed and Production-verified remain distinct states; CURRENT_STATE changes only at closeout with dated evidence.
+
+## Prerequisites as found
+
+- Next free migration number: **127**, confirmed from `supabase/migrations` on `origin/main` `8d5f99f` and from CURRENT_STATE (Production ledger 001–126).
+- `pg_get_functiondef` of every re-created function on a clean local build at 126 (CI image `supabase/postgres 17.6.1.165`) equals the body this plan cites: `create_charge_payment` and `get_finance_review_queue` (122), `crm_start_enrollment`, `save_receptionist_enrollment`, `create_public_registration` and `portal_request_reenrollment` (125), `create_enrollment`, `save_enrollment_changes`, `reopen_enrollment`, `academic_security.place` and `public.place_learner_in_group` (120), `crm_security.protect_enrollment_link` (084). No stop condition.
+
+## R0 count (Production, read-only, run once)
+
+Run **once** on 2026-11-04 at 04:39Z under the owner's approval of that day: `set transaction read only;` and the plan's single SELECT, counts only, no personal data. Nothing else touched Production.
+
+| A1 | A2 | A3 | A4 | A5 | B | C | D | E | F | G1 | G2 | G3 | G4 | G5 | G6 | G7 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 12 | 2 | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 | 0 | 0 | 1 | 0 |
+
+| H1 | H2 | H3 | I | J1 | J2 | J3 | J4 | K1 | K2 | K3 | L1 | L2 | F2 | M |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 14 | 0 | 1 | 39 | 85 | 9 | 14 | 2 | 1 | 41 | 0 | 0 | 13 | 0 |
+
+As expected: **C = 0** (no Submitted/Under Review row paid at 10 % or more), **M = 0**, **B = D = E = F = 0**, **L1 = L2 = 0** (no unpaid row whose learner paid elsewhere, so no receipt to re-link first), **G2 = 0** and **G7 = 0** (no permanent conversion and no new review flag on the day of the count). Every retired row is an unpaid Submitted (A1 = 12) or Under Review (A2 = 2) row: J4 = 14 = A1 + A2, none with a group (A3 = 0), four from the public form (A4 = 4), none with an open charge for the same programme and year (A5 = 0). Counts the owner asked to have explained, none of which changes the design:
+
+- **F2 = 13** — 13 of the 14 unpaid rows have no programme or no year (the counts alone do not say why; the pre-127 pre-enrollment paths did not require both). They are **ended as they are** (step 3 ends unpaid rows; `enrollments_confirmed_has_programme` binds only Confirmed/Validated rows), so they need nothing more; only paid rows (F = 0) would have needed the charge's year.
+- **H2 = 14** — 14 Prospect learner files whose only enrollments are these unpaid rows; under Q4 = A the archive's resync makes them **Inactif**. They leave the default « Dossiers actifs » list and stay searchable under « Tous les statuts ». H1 = H3 = 0: no learner file is in status Trial.
+- **G1 = 1, G3 = 1, G6 = 1** — one unpaid row is linked to a QUALIFIED CRM lead with one open « Finaliser l'inscription » task: the archive detaches that lead (activity `enrollment_detached`) and leaves the task open for reception (the lead stays QUALIFIED; no conversion, no review flag).
+- **I = 1** — one Rejected row: history, untouched.
+- **K1 = 2 (of which K2 = 1)** — two Confirmed/Validated rows with no receipt, no fully discounted charge and no payment elsewhere; one was created by the Batch D clean-up (« Rattrapage EGC »). The archive does not touch them; they are the day-one content of Contrôles (d) `unpaid_never` (Q13) for the director to handle.
+- **K3 = 41** — 41 Confirmed/Validated rows with no linked receipt whose learner paid elsewhere (receipts not linked to the enrollment, Batch D C1/C5 rows among them): informational, the day-one content of Contrôles (e) `paid_unlinked`.
+- **J1 = 39, J2 = 85, J3 = 9** — totals for context.
+
+The declared counts of `supabase/manual/enrollment_at_payment_archive.sql` follow these numbers (`a1 = 12`, `a2 = 2`, `b = c = d = e = 0`, `g1 = 1`, `g2 = 0`, plus `g7 = 0` as a post-condition); the release task re-runs R0 before the archive step and re-declares if anything moved.
+
+## Owner nits recorded in the approval
+
+- The re-created `public.place_learner_in_group` revokes execute from `public`, `anon` and `service_role` and grants it to `authenticated` only, as the 120 one did (snapshot-compared).
+- Both placement bodies are the 120 bodies, keeping SECURITY DEFINER, the fixed `search_path` and the `assign_group` capability check; the only change is the paid-enrollment branch.
+- The new reason is passed to `academic_security.place` as its **ninth** argument, `p_without_enrollment_reason`.
+- Both placement functions are in the `pg_get_functiondef` prerequisite list above.
+
+## Deviations and clarifications (none changes a decision)
+
+1. **Programme « Autre » refused by the wrapper** (`22023`, `eap.program_not_enrollable`): « Autre » is a charge without an enrollment; the wrapper creates an enrollment, so it refuses it rather than create one the receipt form would not.
+2. **The free-enrollment branch does not clear a review flag**: a fully discounted new tuition charge confirms the enrollment with no receipt; nothing in the 10 % review exists any more to clear.
+3. **The placement refusal covers retired rows and legacy unpaid rows**: reception is refused on any enrollment that is not Confirmed/Validated (a Submitted row included), and director/admin need a reason for a legacy unpaid row as for no enrollment at all (new hint `eap.placement_reason_required`). The `placement_without_enrollment` log is written whenever that branch applies.
+4. **A caller without a profile role is treated as management** in the placement branch, matching the 120 body (only the migration role and service paths reach it without one).
+5. **The archive detaches only this run's rows** (journal-scoped), never a lead linked to an older ended enrollment.
+6. **BEFORE trigger order on `enrollments`** is alphabetical: `enrollment_group_capacity`, `enrollment_group_year_guard`, `enrollment_student_sync_before`, `enrollments_history_guard`, `enrollments_retired_status_guard`, `online_enrollment_capacity`, `receptionist_no_truncate`, `set_enrollments_updated_at`. The plan listed fewer. The order is immaterial: a Trial row without a group is refused by the student-sync check (« Active enrollment requires a group ») and a full in-person group by `egc.capacity` before the guard runs, and every path refuses either way; no earlier trigger lets an ended row be modified.
+7. **The revert also restores learner statuses** from the journal's before-images, not only enrollment rows and lead links, so a revert leaves the files as the archive found them; conversions, activities and cancelled tasks stay (B2).
+8. **The wrapper refreshes the CRM part of its result after the payment** (lead, open tasks, `enrollment_followup` nulled when that task is no longer open) and reads `balance` from `charge_balances`, so a replay returns the balance too.
+9. **`followup_at` is accepted in the enrollment payload and unused**: the lead converts in the same transaction, so no « Finaliser l'inscription » follow-up is ever created by the wrapper; the key stays accepted for payload compatibility.
+10. **One more ledger ceiling**: `test-premium-retirement-upgrade-113-current.sql` also checked the current ceiling and moves to 127 with the three the plan named.
+11. **`crm_start_enrollment` keeps its refusal text** « Only pre-confirmation enrollment initiation is permitted » (the plan keeps that body); with `initial_status` now limited to Confirmed and the `authenticated` grant revoked, the text no longer describes the behaviour. Only the wrapper reaches it; rewording it is left to a later change.
+12. **ADR-015's status line** keeps its plan-time wording (« Accepted for implementation planning ») while the decisions index calls it Proposed; both stay until merge, when the ADR is accepted with the release record.
+13. **The local shard replay found suites the first pass had not updated**, updated under the plan's own rule (refusal cases; legacy rows only under the two-flag exemption inside fixtures): `test-crm-phase5.sql`, `test-crm-phase6.sql` and `test-crm-phase7.sql` (listed in the inventory); `test-batch3b-security.mjs`, `test-batch4a-security.mjs`, `test-batch4c-storage-enforcement.mjs`, `test-receptionist-storage.mjs` and `test-ui-foundation-browser.mjs` (not listed; the last now expects reception's Students list cell to offer « Inscrire et encaisser » to the receipt form, not « Groupe à affecter », for an active file without a paid enrollment, Q3 = B, while the director keeps « Groupe à affecter »). It also corrected five test-side defects in new browser cases: the payment-date case now enters a positive payment (the date guard applies to a payment, as on the receipt form) and expects the browser's own range check; the stubbed server discount-reason refusal now carries a discount, so its field exists to be focused; the placement-refusal case uses an empty group of its own; the reception refusal waits for that learner's own response; and the portal composer check waits for the recipient list, now that the parent case opens the Messages tab earlier. A legacy « essai » fixture carries a group of its own, because the cumulative enrollment trigger has always required one for Trial, and the B1 frozen-request case keeps its fixed clock so the refetch it waits for is a real one. The CRM browser suites' clean-up also removes the leads' revenue entries and the charges' discount reasons. The enrollments column default stays `Submitted` (the plan does not change it); an insert without a status is refused by the guard.
+
+## Tests
+
+New: `scripts/test-enrollment-at-payment.sql` (CI SQL step: guard on every path and its exemption; any-amount and free confirmation; zero payment; B1; the wrapper end to end with the derived key, replay and fingerprint conflict; Q12; role matrix and grants; Q3 = B placement for reception and management, with and without reasons, logs; reopen of archived and reverted rows; Contrôles (d)/(e); K1/K3 statements equal to the function; ACLs), `scripts/test-enrollment-at-payment-upgrade.mjs` (new `verify.yml` step on the upgrades shard: seeded 126 patterns, R0 counts, 127 manifest and posture, archive refused on a wrong count, dry run, run, outcomes and journal, no-op second run, revert with B2 kept and a refused second revert, restore to the 126 catalog), `scripts/test-enrollment-at-payment-absence.mjs` (in `npm test`; 30 allowlisted read-only uses, each with its reason).
+
+Updated for the retired statuses, the 10 % rule, the revoked `crm_start_enrollment` grant or Q3 = B placement (no unrelated assertion weakened):
+
+- SQL: `test-audit-follow-ups.sql`, `test-audit-remediation.sql`, `test-crm-dgi-b2.sql`, `test-crm-meta-funnel-r4.sql`, `test-crm-phase5.sql` and `test-crm-phase6.sql` (legacy waiting rows under the two-flag exemption, linked explicitly; Submitted/Under Review/Trial initiation and a group at initiation become refusals; the `crm_start_enrollment` grant assertion becomes « no API grant »), `test-crm-phase7.sql` (version-aware helpers: unchanged below 127, where four upgrade rehearsals replay it), `test-crm-phase9.sql`, `test-crm-phase10.sql`, `test-crm-phase11.sql`, `test-crm-phase12-e2e.sql`, `test-crm-r4-advisory-setup.sql` (the enroll helper adds `initial_status: Confirmed` only once the wrapper exists, so older-ceiling users keep the old payload), `test-crm-rcc-a2.sql`, `test-enrollment-group-consistency.sql`, `test-finance-batch-e.sql` (the Q5 = B cases become any-amount confirmation), `test-online-learning.sql`, `test-paid-enrollment.sql`, `test-portal-readiness.sql`, `test-receptionist-batch1.sql`, `test-receptionist-group-filter.sql`, `test-receptionist-security.sql`.
+- Ceilings 126 → 127: `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-conflicts-without-retry-upgrade.mjs`, `test-premium-retirement-upgrade-113-current.sql`.
+- Concurrency (Python): `test-crm-phase6-concurrency.py`, `test-crm-rcc-a2-concurrency.py` (adds two wrappers on one lead, and the wrapper against the receipt form on one learner in both orders), `test-enrollment-group-concurrency.py`, `test-finance-batch-e-concurrency.py`.
+- Node and real-HTTP: `test-no-retry-conflicts-local.mjs` (stale-lead conflict through the wrapper; Confirmed fixture), `test-cache-invalidation.mjs`, `test-receipt-client-regressions.mjs`, `test-enrollment-workflow.mjs`, `test-membership-actions.mjs`, `test-report-data.mjs`, `test-audit-follow-ups-ui.mjs`, `test-navigation.mjs`, `test-middleware-security.mjs`, `test-public-programs.mjs` (rewritten: no programme offered, the route refuses), `test-public-input-bounds.mjs` (410 before parsing), `test-portal-readiness.mjs`, `test-crm-rcc-a2.mjs`.
+- Browser: `test-receptionist-browser.mjs`, `test-student-placement-browser.mjs`, `test-crm-rcc-a2-browser.mjs`, `test-crm-phase6-browser.mjs`, `test-crm-rcc-b1-browser.mjs`, `test-portal-readiness-browser.mjs`, `test-ui-foundation-browser.mjs` (the three CRM suites' clean-up also removes the synthetic leads' revenue entries, which every CRM enrollment now has).
+- REST security (browser-security shard; not in the plan's inventory, see deviation 13): `test-batch3b-security.mjs` (the portal insert attempts use a Confirmed row so RLS still answers; retired statuses and the Submitted column default meet the guard; the re-enrollment request is refused; staff validate, a staff rejection is refused and the closed-row deletion runs on a legacy Rejected fixture), `test-batch4a-security.mjs` (the enrollment document belongs to a Confirmed enrollment; the public registration answers 410 and creates nothing), `test-batch4c-storage-enforcement.mjs` and `test-receptionist-storage.mjs` (the enrollment document belongs to a Confirmed enrollment).
+- Not CI-wired and left unchanged: `test-crm-phase2.sql` (a pre-trigger structural fixture of the CRM phase 2).
+- Unchanged and re-run: `test-audit-follow-ups-upgrade.mjs`, `test-crm-lead-ad-source-upgrade.mjs`, `test-egc-upgrade.mjs`, `test-crm-rcc-a2-upgrade.mjs`, `test-helpdesk-content.mjs` (thresholds kept).
+
+Local evidence (private stack, CI image `supabase/postgres 17.6.1.165`, synthetic data only): every step of the six `local-database` shards of `verify.yml` was replayed on a private full-service stack (Auth, REST, Storage and mail) with the CI environment (`GITHUB_EVENT_NAME=pull_request`). On the final tree, `sql-and-concurrency`, `upgrades-from-097-to-105`, `upgrades-from-106-to-111`, `upgrades-from-112-to-116` (with the new 126 → 127 step) and `browser-security` pass in full. In `browser-crm`, every step and every suite passes, with one exception: the final « no browser errors » check of `test-crm-rcc-b1-browser.mjs` in WebKit. It collects three « access control checks » rejections from Opportunities reads (`crm_list_staff`, `crm_get_opportunity_filter_options`, `crm_get_opportunities`) that are aborted by the overlay-chunk navigation. The same check fails the same way on this machine at main `8d5f99f` (migration 126, suite unchanged), so it comes from the local WebKit, not this change; the remote CI lane is the reference. The steps after the opportunities step were replayed separately once the `test-ui-foundation-browser.mjs` update was in place. `npm test` (with the absence guard), `npm run lint`, `npm run build` (empty Sentry DSN), `scripts/ci/test_verify.py`, the SQLSTATE source scan and the docs check also pass.
+
+## Independent review fixes (reviews of #182 at `92b8842`, 2026-11-04)
+
+Both independent reviews (database and application) returned CHANGES REQUIRED with no blocker. The fixes are on the same branch. No rule was weakened.
+
+**Application**
+1. **No second tuition charge from the CRM dialog.**
+   - In step 2, the dialog reads the learner's live charges from `charge_balances`, as the receipt form does.
+   - « Encaisser sur cette inscription » is offered only for an enrollment with no live charge.
+   - An enrollment that already has a charge shows « Un montant est déjà enregistré sur cette inscription · reste … MAD ». « Encaisser sur ce montant » opens the receipt form on that charge (`/receipts/new?student_id=…&charge_id=…`). A paid row keeps « Rattacher cette inscription payée » (Q12).
+   - The server refuses the same case: `crm_enroll_and_collect` raises `22023` / `eap.enrollment_already_charged` on a first run that sends a payment for an existing enrollment with a live charge or receipt. That refusal is mapped in French and re-reads step 2.
+   - Covered by `test-enrollment-at-payment.sql` (refusal, nothing written) and `test-crm-rcc-a2-browser.mjs` (the charged row offers its own charge and the link, never the payment; a row without any charge still offers it).
+2. **C6 quotes the dialog's own messages:** « Inscription confirmée · reçu … », « Groupe : … » or « Groupe à affecter », « Groupe non affecté : … Apprenant inscrit — groupe à affecter. », « Inscription payée rattachée », and the 100 % title.
+3. **`test-crm-rcc-a2-browser.mjs`.** An enrollment ended after confirmation is not flagged by the server (`evaluate_conversion`, 120). Its note now says so: « Inscription terminée après sa confirmation. Le prospect reste converti. » The test asserts `conversion_review_required = false`. A case that the server does flag is checked separately: a confirmed row moved back by the journalled revert, asserted `true`, with the review sentence.
+4. **Nits:**
+   - A replayed receipt payment keeps the chosen group: it is placed if the lost first response never got to it, and the message says so. (As first written, this code never ran; see N1′ below.)
+   - Reception's group picker greys out learners without a paid enrollment (« sans inscription payée ») and says once, above the list, « Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord. ». The receptionist and placement browser suites now assert the disabled row. The database refusal stays covered by the SQL suites and by the receptionist suite's direct request.
+   - The Students list default filter reads « Dossiers actifs », in the guide and in `docs/ai/WORKFLOWS.md` too. It still lists legacy Trial files until they are archived.
+   - The guide says that a full group is shown greyed out (« complet »), and drops « Only operational pre-enrollment is permitted » from its message table.
+   - The receipt form never offers an Ended enrollment as a candidate, even a CRM-linked one.
+   - Contrôles shows French enrollment statuses.
+   - The `/inscription` WhatsApp link is a neutral `https://wa.me/212664239091`, not the camp redirect.
+
+**Database**
+- **S1:** negative tests for the `protect_enrollment_link` detach exemption. Each of these is refused:
+  - the flag off;
+  - a live enrollment;
+  - a converted lead;
+  - a retarget to another enrollment;
+  - a learner change or clear.
+
+  The one admitted shape is checked too.
+- **S2:** in Contrôles (d), the origin ordering gives `placement_without_enrollment` priority over `capacity_override`. It is tested with a director placement into a full group, which logs both kinds.
+- **N1:** a replay must carry a payment exactly when the first run did. A Q12 link replayed with a payment, or a paid request replayed without one, raises `crm_enrollment.request_conflict` and issues nothing. The exact replay still answers.
+- **N2:** `test-crm-phase6.sql` asserts the new learner is `Enrolled`.
+- **N3, known gap (recorded, not changed):** director and admin direct RLS inserts can still create an unpaid Confirmed enrollment without a reason. Such a row is not hidden: it appears in Contrôles (d) with no origin.
+- **N4:** the archive step's header and the release steps below state that a second run needs every declared count set to 0.
+- **N5:** the suite cross-checks the R0 L2 statement against `finance_security.unlinked_payment_count` on a legacy Submitted row whose learner paid on an unlinked receipt.
+
+`crm_enroll_and_collect` and `get_finance_review_queue` stay the only bodies changed, both already in the 127 manifest. The restore script is unchanged: it drops the wrapper and restores the 122 queue body.
+
+Local evidence for these fixes comes from the same private stack and CI image, with synthetic data only. Replayed again on the fixed tree:
+- `sql-and-concurrency` (with `test-enrollment-at-payment.sql` and `test-crm-phase6.sql`): pass.
+- `upgrades-from-112-to-116` (126 → 127, archive, revert and restore): pass.
+- `browser-security`: pass.
+- `browser-crm`: every step and suite passes, including the new rcc-a2 cases, except the same local-WebKit « no browser errors » check of `test-crm-rcc-b1-browser.mjs` described above. This time it collected chunk-load aborts, which come from the same navigation.
+
+`npm test` and `npm run lint` pass.
+
+The replay itself found four test-side defects, all fixed:
+- an S1 fixture id that collided with an earlier section;
+- an rcc-a2 count taken before the charges were read;
+- the placement suite expecting the old filter label;
+- the reception picker's first, longer note, which hid the learner's name on the row.
+
+Three intermediate failures were load timeouts, with a load average up to 99 from other stacks on this machine: a speed budget, a storage health check, and a page load. Each passed on rerun with no change.
+
+## Final-review nit N1′ (re-reviews of #182 at `ebbacde`, 2026-11-05)
+
+Both re-reviews at `ebbacde` returned READY FOR FINAL REVIEW, with one nit. The App 4 replay fix above did not run: a replayed `create_charge_payment` returns only `charge_id`, `receipt_id` and `replayed` (125, the inner replay branch), never `enrollment_id`. So the condition `groupId && data.enrollment_id` was always false on a replay, and the chosen group was dropped.
+
+Fixed in `src/app/(admin)/receipts/new/page.jsx`:
+- A first run still uses the `enrollment_id` it returns.
+- A replay with a receipt reads the enrollment that its charge carries, from `charge_balances` (the security-invoker view the receipt form already reads). It then places the learner as before, on fresh versions.
+  - If the lost first response had already placed the learner in that group, nothing is placed twice.
+  - If the learner is already in another group, nothing changes.
+  - If reading the charge fails, the message says « Groupe non affecté : … » and the payment stays recorded.
+- A replay without a receipt (a 100 % discount agreement) places nothing. Its group is then assigned by hand from the learner's file.
+
+No server body changed.
+
+Covered by:
+- `test-receipt-client-regressions.mjs`.
+- A new case in `test-receptionist-browser.mjs`. A walk-in payment with a group commits, but its response is aborted, and nothing is placed. The same key is then sent again. The server replays it: same receipt, no `enrollment_id`. The page places the learner from the charge's enrollment and shows « Paiement déjà enregistré — reçu existant affiché. Groupe affecté. ». The case then checks one learner, one receipt, and the enrollment Validated in that group.
+
+Local evidence (same private stack and CI image, synthetic data only): the `browser-security` shard passes in full with the new case. `npm test`, ESLint on the changed files, and the docs check pass. Before this fix the case would have failed: on a replay the page sent no `place_learner_in_group` request at all.
+
+## Production steps deferred to the release task
+
+These steps run in this order:
+1. R0 again, just before the archive step.
+2. The migration.
+3. The application deployment, within minutes.
+4. The archive step: a dry run, then the run with the declared counts. A re-run after a successful run needs every declared count set to 0.
+5. The post-checks.
+6. The eh-website PR (D8), after the admin release.
+
+Each step needs its own approval.

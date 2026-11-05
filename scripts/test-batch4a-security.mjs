@@ -193,7 +193,8 @@ try {
   ok(await request(admin,'teachers','PATCH',{photo_url:'asset:'+tp.id},'?id=eq.'+t.id));
   ok(await app(director,'sign',{assetId:tp.id})); checks++;
   await denied(()=>app(teacher,'sign',{assetId:tp.id}));
-  const enrollment=await create('enrollments',{student_id:child.id,status:'Submitted'});
+  // EAP (127): Submitted is retired; the document belongs to a Confirmed enrollment of its own year.
+  const enrollment=await create('enrollments',{student_id:child.id,status:'Confirmed',session_type:'Yearly',school_year:'2029/2030'});
   const document=await reserve(admin,'enrollment_document',child.id,null,enrollment.id); await ready(admin,document);
   ok(await request(admin,'enrollments','PATCH',{documents_urls:['asset:'+document.id]},'?id=eq.'+enrollment.id));
   ok(await app(director,'sign',{assetId:document.id})); checks++;
@@ -215,9 +216,12 @@ try {
   const registration={full_name:run+' Registration',telephone:'0600000000',email:run+'-registration@example.invalid',consent:true,idempotency_key:randomUUID()};
   async function register(body) { return fetch('http://127.0.0.1:3101/api/public/inscription',{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://127.0.0.1:3101','x-real-ip':run},body:JSON.stringify(body)}); }
   const studentCount=count('students');
-  assert.equal((await register({...registration,documents_urls:['https://example.invalid/forged']})).status,400);
+  // EAP (127, D4): online pre-registration is closed; the route answers 410 Gone before
+  // reading the request, so a forged document and a valid body alike create nothing.
+  assert.equal((await register({...registration,documents_urls:['https://example.invalid/forged']})).status,410);
   assert.equal(count('students'),studentCount); checks++;
-  assert.equal((await register(registration)).status,200); checks++;
+  assert.equal((await register(registration)).status,410);
+  assert.equal(count('students'),studentCount); checks++;
   assert.equal(sql("select json_agg(p) from (select * from pg_policies where schemaname='storage' order by policyname) p;"),policies); checks++;
   console.log('PASS Batch 4A: '+checks+' checks; broad Storage policies unchanged (NOT final isolation).');
   if(process.argv.includes('--ui')) {

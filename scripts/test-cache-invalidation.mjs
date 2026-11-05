@@ -4,7 +4,7 @@
 // src/lib/cacheInvalidation.mjs (or, for the receipt deletion, refresh everything).
 // A new write call must be added here.
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { FINANCE_KEYS, LEARNER_KEYS, invalidateAfterFinance, invalidateAfterLearnerSave } from '../src/lib/cacheInvalidation.mjs';
 
 const FINANCE = ["'create_charge_payment'", "'void_financial_receipt'", "'void_financial_charge'", "'delete_mistaken_receipt'",
@@ -13,7 +13,7 @@ const LEARNER = ["'save_receptionist_student'", "'save_receptionist_enrollment'"
   "'save_receptionist_group'", "'soft_delete_student'", "'append_receptionist_enrollment_document'",
   "'save_receptionist_teacher_operations'", "'soft_delete_teacher'", "'save_attendance'", 'placeLearnerInGroup(',
   'removeLearnerFromGroup(', 'reopenEnrollment(', 'restoreStudent(', 'endLearner(', 'closeSchoolYear(',
-  'createEnrollment(', 'saveEnrollmentChanges(', 'createStudentOnce(', 'Teacher.update(', 'Teacher.create(',
+  'saveEnrollmentChanges(', 'createStudentOnce(', 'Teacher.update(', 'Teacher.create(',
   "from('students').update", "from('enrollments').delete", "from('groups').update", "from('groups').insert",
   "from('groups').delete"];
 // Libraries that only wrap a call; their callers are checked instead.
@@ -67,10 +67,12 @@ for (const file of files('src')) {
 }
 // onSave / onDone / onRestored callers refresh: every such prop handler next to a
 // write-making component calls a helper.
-for (const [file, component] of [['src/app/(admin)/students/page.jsx', 'DossierGroupPlacement'], ['src/app/(admin)/students/page.jsx', 'EnrollmentModal'],
+// EAP (127): the « Pré-inscriptions » page is deleted; « Clôturer l'année » moved to the
+// Students list, and the dossier placement dialog went with the pre-enrollment path.
+for (const [file, component] of [['src/app/(admin)/students/page.jsx', 'EnrollmentModal'],
   ['src/app/(admin)/students/page.jsx', 'ArchivedStudentsDialog'], ['src/app/(admin)/students/[id]/page.jsx', 'LeaverDialog'],
-  ['src/app/(admin)/students/[id]/page.jsx', 'EnrollmentModal'], ['src/app/(admin)/enrollments/page.jsx', 'EnrollmentModal'],
-  ['src/app/(admin)/enrollments/page.jsx', 'YearCloseDialog'], ['src/app/(admin)/groups/page.jsx', 'GroupModal'], ['src/app/(admin)/payroll/page.jsx', 'PayrollModal']]) {
+  ['src/app/(admin)/students/[id]/page.jsx', 'EnrollmentModal'], ['src/app/(admin)/students/page.jsx', 'YearCloseDialog'],
+  ['src/app/(admin)/groups/page.jsx', 'GroupModal'], ['src/app/(admin)/payroll/page.jsx', 'PayrollModal']]) {
   const text = readFileSync(file, 'utf8');
   const uses = [...text.matchAll(new RegExp(`<${component}\\b[\\s\\S]*?/>`, 'g'))].map(m => m[0]);
   if (!uses.length && component === 'PayrollModal') continue;
@@ -84,7 +86,7 @@ for (const [file, component] of [['src/app/(admin)/students/page.jsx', 'DossierG
 // The list reaches the known screens (a renamed call would otherwise pass silently).
 for (const file of ['src/app/(admin)/receipts/new/page.jsx', 'src/app/(admin)/receipts/[id]/edit/page.jsx',
   'src/app/(admin)/finance/charges/[id]/edit/page.jsx', 'src/app/(admin)/payroll/page.jsx']) assert.ok(found.finance.has(file), file);
-for (const file of ['src/app/(admin)/students/page.jsx', 'src/app/(admin)/students/[id]/page.jsx', 'src/app/(admin)/enrollments/page.jsx',
+for (const file of ['src/app/(admin)/students/page.jsx', 'src/app/(admin)/students/[id]/page.jsx',
   'src/app/(admin)/groups/page.jsx', 'src/app/(admin)/groups/[id]/page.jsx', 'src/app/(admin)/attendance/page.jsx',
   'src/app/(admin)/teacher-portal/page.jsx', 'src/components/students/ReceptionistStudentForm.jsx',
   'src/components/students/EnrollmentModal.jsx', 'src/components/students/StudentForm.jsx',
@@ -93,6 +95,17 @@ for (const file of ['src/app/(admin)/students/page.jsx', 'src/app/(admin)/studen
 // too; the enrollment start (a learner, an enrollment, a charge) uses it.
 assert.match(readFileSync('src/lib/crm/queries.js', 'utf8'), /invalidateAfterLearnerSave\(client\), invalidateAfterFinance\(client\)/);
 assert.match(readFileSync('src/components/crm/CrmEnrollmentDialog.jsx', 'utf8'), /useCrmRefresh\(\)/);
+// EAP (127): « Inscrire et encaisser » (crm_enroll_and_collect) writes a learner, an enrollment,
+// a charge and a receipt through crmRpc, whose caller refreshes both families; the placement
+// after a payment (receipt form, CRM dialog) refreshes the learner caches (checked above as a
+// placeLearnerInGroup( call site), and the receipt page refreshes finance after the payment.
+const crmDialog = readFileSync('src/components/crm/CrmEnrollmentDialog.jsx', 'utf8');
+assert.match(crmDialog, /crmRpc\('crm_enroll_and_collect'/);
+assert.doesNotMatch(crmDialog, /'crm_start_enrollment'/);
+for (const file of ['src/app/(admin)/receipts/new/page.jsx', 'src/components/crm/CrmEnrollmentDialog.jsx']) {
+  assert.ok(found.learner.has(file), `${file}: the post-payment placement refreshes the learner caches`);
+}
+assert.ok(!existsSync('src/app/(admin)/enrollments'), 'the « Pré-inscriptions » page is deleted');
 
 // The helpers refresh every dependent prefix.
 const calls = [];

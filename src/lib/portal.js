@@ -62,10 +62,6 @@ export async function getLearnerRecord(studentId) {
   return rpc('portal_learner_record', { p_student_id: studentId });
 }
 
-export async function requestReenrollment(studentId) {
-  return rpc('portal_request_reenrollment', { p_student_id: studentId });
-}
-
 // ── Portal messaging ───────────────────────────────────────────────────────
 export async function getMessageRecipients() {
   return (await rpc('portal_message_recipients')) || [];

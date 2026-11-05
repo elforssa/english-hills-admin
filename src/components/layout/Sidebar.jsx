@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
   ClipboardList, CreditCard, FileText, UserCheck, BarChart3,
   LogOut, ChevronDown, ChevronRight, Shield, Menu, X,
-  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, UserPlus, ExternalLink, History, RadioTower, LifeBuoy, Video,
+  Bell, MessageSquare, Award, Brain, Briefcase, FolderOpen, ExternalLink, History, RadioTower, LifeBuoy, Video,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { receptionistCanAccess } from '@/lib/roleAccess.mjs';
@@ -25,7 +25,6 @@ const NAV = [
   { label: 'Admissions', icon: ClipboardList, roles: OPERATIONS, children: [
     { href: '/placement-tests', label: 'Tests de niveau', roles: OPERATIONS },
     { href: '/placement-tests?view=calendar', label: 'Calendrier', roles: OPERATIONS },
-    { href: '/enrollments', label: 'Inscriptions', roles: OPERATIONS },
   ] },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
@@ -100,7 +99,6 @@ const NAV = [
   { href: '/helpdesk', label: 'Aide', icon: LifeBuoy, roles: OPERATIONS },
   { href: '/settings', label: 'Mon compte', icon: Shield, roles: ['receptionist'] },
   { href: '/settings', label: 'Paramètres', icon: Shield, roles: ADMIN },
-  { href: '/inscription', label: 'Formulaire public', icon: UserPlus, roles: ADMIN },
 ];
 
 function NavItem({ item, onNavigate }) {

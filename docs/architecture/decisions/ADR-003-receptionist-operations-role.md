@@ -51,6 +51,8 @@ The contract also specifies fixed system Views, semantic action dialogs for drag
 
 Use the same underlying enrollment/payment engine as CRM enrollment. Do not force a walk-in through a fake Meta lead. Create a manual prospect only if they are not enrolling yet. Preserve learner matching, explicit enrollment identity, financial idempotency and existing confirmation rules.
 
+**Note (2026-11-04).** This walk-in direction is delivered by « Inscrire et encaisser » ([ADR-015](ADR-015-enrollment-at-payment.md), [plan EAP-r4](../plans/enrollment-at-payment.md)), implemented on branch `feat/enrollment-at-payment` with migration 127; not merged, not deployed. A walk-in is enrolled from the learner file through the receipt form and the existing `create_charge_payment`, with no lead; a CRM prospect goes through `crm_enroll_and_collect`, which composes the existing CRM enrollment command and the same payment command. Both create a confirmed enrollment together with its receipt (any payment above zero confirms; the owner withdrew the 10 % rule on 2026-11-04). Learner matching, explicit enrollment identity and financial idempotency are kept. Until the release, the [implementation status](#implementation-status) below still describes Production.
+
 ## Alternatives considered
 
 - Making receptionist admin would expose integrations, management functions and HR/payroll.

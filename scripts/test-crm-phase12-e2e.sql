@@ -69,17 +69,23 @@ do $$ declare l uuid:=(select (v->>'lead_id')::uuid from fx where k='website');s
  perform crm_security.resolve_submission(l,s,(select version from crm_leads where id=l),gen_random_uuid());
  perform pg_temp.ok((select first_submission_id=first_id and latest_submission_id=s from crm_leads where id=l),'website first touch frozen');
 end $$;
-do $$ declare item record;l uuid;r jsonb;s uuid;e uuid;receipt uuid;name text;before_count int;begin
+do $$ declare item record;l uuid;r jsonb;s uuid;e uuid;receipt uuid;name text;before_count int;h text;begin
  for item in select * from fx where k in ('manual','meta-lead','website') order by k loop
   l:=coalesce((item.v->>'lead_id')::uuid,(item.v->'lead'->>'id')::uuid);select learner_name into name from crm_leads where id=l;
   if item.k<>'manual' then perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','Enrollment','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));end if;
-  r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name',name,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,name,'2014-05-10'),'confirm_new',true));
-  s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
-  perform pg_temp.ok((select status='Submitted' from enrollments where id=e) and (select status='QUALIFIED' from crm_leads where id=l),'Submitted not Converted');
-  update enrollments set status='Confirmed' where id=e;
-  perform pg_temp.ok((select status='CONVERTED' from crm_leads where id=l),'explicit linked confirmation converts');
-  perform pg_temp.ok(not exists(select 1 from crm_revenue_entries where lead_id=l),'converted with zero revenue legitimate');
-  r:=create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',1500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));receipt:=(r->>'receipt_id')::uuid;
+  -- EAP (127): the pre-confirmation (Submitted) start is retired: refused, and the
+  -- enrollment is created Confirmed with its payment in one step, which converts.
+  begin
+   perform crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name',name,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,name,'2014-05-10'),'confirm_new',true));
+   raise exception 'FAIL: Submitted start accepted';
+  exception when insufficient_privilege then
+   get stacked diagnostics h=pg_exception_hint;
+   perform pg_temp.ok(h='crm_enrollment.initial_status_not_permitted','Submitted start refused');
+  end;
+  r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name',name,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,name,'2014-05-10'),'confirm_new',true),
+   'payment',jsonb_build_object('gross_amount',1500,'payment_amount',1500,'payment_method','Espèces')));
+  s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;receipt:=(r->>'receipt_id')::uuid;
+  perform pg_temp.ok((select status='Confirmed' and student_id=s from enrollments where id=e) and (select status='CONVERTED' from crm_leads where id=l) and receipt is not null,'paid linked enrollment converts');
   set constraints all immediate;set constraints all deferred;
   perform pg_temp.ok((select sum(amount_delta)=1500 and bool_and(attribution_submission_id=(select first_submission_id from crm_leads where id=l)) from crm_revenue_entries where lead_id=l),'collected revenue frozen first-touch');
   perform pg_temp.ok((select count(*)=1 from crm_activities where lead_id=l and event_type='lead_converted'),'exactly one trusted conversion');

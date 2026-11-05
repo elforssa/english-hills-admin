@@ -1,7 +1,7 @@
 const ORIGIN = 'https://english-hills.local';
 const RETURN_SCREENS = new Set([
   '/crm/leads', '/crm/today', '/students', '/students-directory', '/teachers', '/receipts', '/dashboard', '/finance',
-  '/attendance', '/assessments', '/payroll', '/dismissal', '/enrollments',
+  '/attendance', '/assessments', '/payroll', '/dismissal',
   '/timetable', '/groups', '/learning-assessments',
   '/leave-requests', '/placement-tests', '/certificates', '/portfolios', '/activity-log', '/online',
 ]);

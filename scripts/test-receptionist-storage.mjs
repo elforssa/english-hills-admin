@@ -53,7 +53,8 @@ try {
   actor = ok(await request('/auth/v1/admin/users', 'POST', { email, password, email_confirm: true })).id;
   sql(`update public.profiles set role='receptionist' where id=${q(actor)};
     insert into public.students(id,full_name,status,session_type) values(${q(student)},'Synthetic storage learner','Enrolled','Yearly');
-    insert into public.enrollments(id,student_id,status,session_type,school_year) values(${q(enrollment)},${q(student)},'Submitted','Yearly','2026/2027');`);
+    insert into public.enrollments(id,student_id,status,session_type,school_year) values(${q(enrollment)},${q(student)},'Confirmed','Yearly','2026/2027');`);
+  // EAP (127): the document is attached to a paid (Confirmed) enrollment; Submitted is retired.
   const session = ok(await request('/auth/v1/token?grant_type=password', 'POST', { email, password }, status.ANON_KEY));
   const token = session.access_token;
   for (const [purpose, enrollmentId] of [['student_photo', null], ['enrollment_document', enrollment]]) {

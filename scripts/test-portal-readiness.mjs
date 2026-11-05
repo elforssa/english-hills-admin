@@ -15,6 +15,20 @@ import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs'
 import { CROSS_ORIGIN_ERROR, CONTENT_TYPE_ERROR } from '../src/lib/http/requestOrigin.mjs';
 
 const root = new URL('../', import.meta.url);
+
+// Static (Enrollment at payment D4, Q8): the parent portal no longer requests a re-enrollment
+// (portal_request_reenrollment refuses with eap.status_retired); it points the family to the
+// office through the existing portal message composer.
+{
+  const parentPortal = readFileSync(new URL('src/app/(admin)/parent-portal/page.jsx', root), 'utf8');
+  const portalLib = readFileSync(new URL('src/lib/portal.js', root), 'utf8');
+  assert.doesNotMatch(portalLib, /portal_request_reenrollment|requestReenrollment/, 'no re-enrollment request wrapper');
+  assert.doesNotMatch(parentPortal, /requestReenrollment|portal_request_reenrollment|Demander une réinscription/, 'no re-enrollment request call');
+  assert.match(parentPortal, /Pour une réinscription, contactez l’accueil/, 'the contact line');
+  const line = parentPortal.indexOf('Pour une réinscription, contactez l’accueil');
+  assert.match(parentPortal.slice(line, line + 600), /onClick=\{\(\) => setTab\('messages'\)\}/, 'opens the portal message composer');
+  assert.match(parentPortal, /<MessagesTab /, 'the existing composer');
+}
 assertLocalFeatureBranch(root);
 const env = {};
 for (const line of readFileSync(new URL('.env.local', root), 'utf8').split('\n')) {
@@ -225,6 +239,10 @@ try {
     const res = await fetch(app + path, { method, redirect: 'manual', ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: '{}' } : {}) });
     const data = await res.json().catch(() => null);
     assert.ok(![CROSS_ORIGIN_ERROR, CONTENT_TYPE_ERROR].includes(data?.error), path + ' must keep its own authentication');
+    // Enrollment at payment D4: the retired public registration answers 410 before any parsing.
+    if (path === '/api/public/inscription') {
+      assert.equal(res.status, 410); assert.deepEqual(data, { error: 'Les inscriptions en ligne sont fermées. Contactez le centre.' });
+    }
     checks++;
   }
   console.log(`PASS origin guard: ${guarded.length} routes refuse cross-origin and non-JSON requests; exempt routes unchanged`);

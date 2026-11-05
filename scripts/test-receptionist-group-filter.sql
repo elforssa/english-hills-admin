@@ -34,6 +34,9 @@ insert into public.students(id,full_name,status,session_type,niveau_cefr) values
  ('97000000-0000-0000-0000-000000000208','Filter 097 rejected dossier only','Enrolled','Yearly','Child 1'),
  ('97000000-0000-0000-0000-000000000211','Filter 097 former learner','Alumni','Yearly','Child 1');
 set local session_replication_role = origin;
+-- EAP (127): the Submitted, Under Review, Rejected and Trial rows are history (old
+-- rows the unchanged reader still lists), seeded under the two-flag exemption.
+select set_config('eh.membership_sync','on',true), set_config('eh.enrollment_command','on',true);
 insert into public.enrollments(id,student_id,group_id,status,session_type,level,school_year) values
  ('97000000-0000-0000-0000-000000000302','97000000-0000-0000-0000-000000000202',null,'Submitted','Yearly','Child 1','2026/2027'),
  ('97000000-0000-0000-0000-000000000303','97000000-0000-0000-0000-000000000203',null,'Under Review','Yearly','Child 1','2026/2027'),
@@ -46,6 +49,7 @@ insert into public.enrollments(id,student_id,group_id,status,session_type,level,
  ('97000000-0000-0000-0000-000000000309','97000000-0000-0000-0000-000000000209','97000000-0000-0000-0000-000000000100','Validated','Yearly','Child 1','2026/2027'),
  ('97000000-0000-0000-0000-000000000319','97000000-0000-0000-0000-000000000209',null,'Confirmed','Mise à niveau',null,'2026/2027'),
  ('97000000-0000-0000-0000-000000000310','97000000-0000-0000-0000-000000000210','97000000-0000-0000-0000-000000000100','Trial','Yearly','Child 1','2026/2027');
+select set_config('eh.membership_sync','',true), set_config('eh.enrollment_command','',true);
 -- 205 leaves through the leaver core (Ancien apprenant).
 select academic_security.leave('97000000-0000-0000-0000-000000000205','Alumni','Synthetic leaver',null);
 do $$ begin

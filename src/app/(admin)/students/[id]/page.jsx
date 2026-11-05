@@ -16,19 +16,19 @@ import PageHeader from '@/components/operational/PageHeader';
 import ReadState from '@/components/operational/ReadState';
 import { Button } from '@/components/ui/button';
 import { DOSSIER_LABELS, ENROLLMENT_LABELS, displayLabel, programmeLabel } from '@/lib/ui/presentation.mjs';
-import { ArrowLeft, Edit, FileText, Trash2 } from 'lucide-react';
+import { ArrowLeft, CircleDollarSign, Edit, FileText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import ProgrammePill from '@/components/operational/ProgrammePill';
 import { PILL_CLASS } from '@/lib/ui/pill.mjs';
-import { localBusinessDate, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
+import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { studentPaymentSummary } from '@/lib/studentPayment';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
 import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
-import { LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { isOpenEnrollment, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
 import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
@@ -47,7 +47,8 @@ const Section = ({ title, children }) => (
 // with a reason; with none left the file becomes Ancien apprenant or Inactif and
 // leaves every roster. Charges, receipts and attendance never change.
 function LeaverDialog({ student, enrollments, groups, openBalance, onClose, onDone }) {
-  const active = enrollments.filter(e => LIVE_ENROLLMENT_STATUSES.includes(e.status));
+  // Every row not yet ended: a retired one awaiting the archive step is ended too.
+  const active = enrollments.filter(isOpenEnrollment);
   const [selected, setSelected] = useState(() => active.map(e => e.id));
   const [finalStatus, setFinalStatus] = useState('Alumni');
   const [reason, setReason] = useState('');
@@ -287,8 +288,9 @@ function StudentDetail() {
       </Section>
 
       <Section title="Inscriptions et groupes">
-        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception prépare les pré-inscriptions. La confirmation suit le parcours autorisé ; contactez la direction pour les opérations restreintes.</p>}
-        {(role === 'receptionist' || isManagement) && <button type="button" className="mb-3 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground" onClick={() => setEnrollmentModal({ student_id: id, status: 'Submitted', date_inscription: localBusinessDate() })}>{role === 'receptionist' ? 'Nouvelle pré-inscription' : 'Nouvelle inscription'}</button>}
+        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.</p>}
+        {/* EAP: an enrollment is born at the payment; the receipt form confirms it and places the learner. */}
+        {(role === 'receptionist' || isManagement) && <Link data-touch-target href={`/receipts/new?student_id=${student.id}`} className="mb-3 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"><CircleDollarSign size={14} />Inscrire et encaisser</Link>}
         {/* The main group is the database's copy of one membership; each enrollment shows its own group. */}
         {student.groupe_id && <p className="mb-3 text-sm">Groupe principal : {groups.find(g => g.id === student.groupe_id)?.name || 'Groupe affecté'}</p>}
         {enrollments.length === 0 ? <p className="text-sm text-muted-foreground">Aucune inscription enregistrée. Le statut du dossier ne confirme pas une inscription actuelle. Une affectation de groupe passe par une inscription.</p> : (
@@ -302,7 +304,7 @@ function StudentDetail() {
               </div>
               <div className="flex items-center gap-3">
                 {isManagement && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}
-                <button disabled={!canManage || (role === 'receptionist' && enrollment.status === 'Ended')} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+                <button disabled={!canManage || (role === 'receptionist' && !LIVE_ENROLLMENT_STATUSES.includes(enrollment.status))} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
               </div>
               {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
                 {(enrollment.documents_urls || []).map((ref, index) => <button key={ref} type="button"

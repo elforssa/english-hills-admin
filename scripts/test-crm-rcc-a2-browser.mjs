@@ -1,4 +1,5 @@
-// RCC-A2 local Auth + real UI acceptance. Synthetic fixtures are removed in finally.
+// RCC-A2 local Auth + real UI acceptance of « Inscrire et encaisser » (EAP, migration 127).
+// Synthetic fixtures (receipts and charges included) are removed in finally.
 // No Git mutations, production connections, external requests or real data copies.
 import assert from 'node:assert/strict';
 import { CENTRE_UTC_OFFSET_MINUTES } from '../src/lib/centreClock.mjs';
@@ -26,24 +27,32 @@ const rawLead=(contact,learner)=>rpc('create_manual_lead',{display_name:contact,
 const makeLead=(contact,learner,step='placement_test',task='confirm_placement_test')=>{const id=rawLead(contact,learner);act('qualify_lead',id,{conversation_channel:'phone',note:'Projet confirmé',qualification_step:step,next_task:next(task)});return id;};
 const student=(name,birth='2015-03-01')=>{const id=randomUUID();fixtureStudents.push(id);sql(`insert into public.students(id,full_name,date_naissance,telephone,status,session_type) values('${id}',${quote(name)},'${birth}',${quote(phone())},'Prospect','Yearly')`);return id;};
 const newPayload=(lead,name)=>({lead_id:lead,expected_version:detail(lead).version,student_choice:'new',learner_name:name,candidate_review:sql(`select crm_security.candidate_token('${lead}',${quote(name)},null)`),session_type:'Yearly',school_year:enrollmentSchoolYear()});
+// EAP (migration 127): the CRM enrollment is created only with its payment.
+const PAYMENT={gross_amount:3000,discount_amount:0,payment_amount:1000,payment_method:'Espèces'};
+const enroll=(enrollment,who=actor)=>rpc('enroll_and_collect',{enrollment,payment:PAYMENT},who);
+// A desk payment (receipt form command) that confirms an enrollment of the learner.
+const collect=(studentId,who=actor)=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(who)};set local role authenticated;select public.create_charge_payment(${quote(JSON.stringify({student_id:studentId,session_type:'Yearly',school_year:enrollmentSchoolYear(),...PAYMENT,idempotency_key:randomUUID()}))}::jsonb);commit;`));
+// A retired-status row exists only as history; the journalled-revert flags let the fixture write one.
+const legacy=(lead,studentId,status,group=null)=>{const id=randomUUID();sql(`begin;set local eh.membership_sync=on;set local eh.enrollment_command=on;insert into public.enrollments(id,student_id,session_type,school_year,status,group_id) values('${id}','${studentId}','Yearly','${enrollmentSchoolYear()}','${status}',${group?`'${group}'`:'null'});update public.crm_leads set student_id='${studentId}',enrollment_id='${id}',version=version+1 where id='${lead}';commit;`);return id;};
+const receipts=studentId=>sql(`select count(*) from public.receipts where student_id='${studentId}' and voided_at is null`);
 const year=enrollmentSchoolYear();
 const UNCERTAIN='Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon.';
-const DEFAULT_LINE='Suivi « Finaliser l’inscription » : demain, au prochain créneau d’appel autorisé.';
+const PAYMENT_REQUIRED='L’inscription se confirme à l’encaissement : saisissez un paiement.';
 const dialog=()=>page.getByRole('dialog').last();
 const button=name=>dialog().getByRole('button',{name,exact:true});
 async function done(){await button('Terminé').click();}
 async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
-async function start(id){await open(id);await page.getByRole('button',{name:"Commencer l'inscription",exact:true}).click();await dialog().getByText('1 / 3 · Apprenant').waitFor();}
+async function start(id){await open(id);await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await dialog().getByText('1 / 3 · Apprenant').waitFor();}
 async function newLearner(){await button('Créer un nouvel apprenant').click();await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();}
-async function toReview(){await button('Continuer').click();await dialog().getByText('3 / 3 · Vérification').waitFor();}
-async function noRaw(){const text=await page.locator('body').innerText();assert(!/crm_enrollment|SQLSTATE|\b22023\b|\bPT409\b|\b40001\b|\b42501\b|Invalid new learner|Qualified unlinked|Student unavailable|Enrollment (unavailable|group)|Valid future task|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text),'no raw server text, hint, SQLSTATE or identifier rendered');}
+async function toPayment(){await button('Continuer').click();await dialog().getByText('3 / 3 · Paiement').waitFor();}
+async function pay(paid='1000',gross='3000'){await dialog().getByLabel('Prix brut convenu',{exact:true}).fill(gross);await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill(paid);}
+async function noRaw(){const text=await page.locator('body').innerText();assert(!/crm_enrollment|eap\.|SQLSTATE|\b22023\b|\bPT409\b|\b40001\b|\b42501\b|Invalid new learner|Qualified unlinked|Student unavailable|Enrollment (unavailable|group)|Valid future task|Payment exceeds|Idempotency key|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(text),'no raw server text, hint, SQLSTATE or identifier rendered');}
 // The centre's wall clock (plan AFU-r1, H7) from the browser's own clock, as the dialog
 // computes it: the fixed centre offset, never the browser's time-zone data.
 const wall=(delta=0)=>page.evaluate(([ms,offset])=>new Date(Date.now()+ms+offset*60000).toISOString().slice(0,16),[delta,CENTRE_UTC_OFFSET_MINUTES]);
 const focused=()=>page.evaluate(()=>({field:document.activeElement?.getAttribute('data-field'),id:document.activeElement?.id,invalid:document.activeElement?.getAttribute('aria-invalid')}));
-const civil=task=>{const [d,t]=sql(`select to_char(due_at at time zone public.centre_utc_offset(),'DD/MM/YYYY'),to_char(due_at at time zone public.centre_utc_offset(),'HH24:MI') from public.crm_tasks where id='${task}'`).split('|');return `${d} à ${t}`;};
 const startCalls=[];
-function watch(target){target.on('request',request=>{if(request.url().endsWith('/rpc/crm_start_enrollment'))startCalls.push(request.postDataJSON());});}
+function watch(target){target.on('request',request=>{if(request.url().endsWith('/rpc/crm_enroll_and_collect'))startCalls.push(request.postDataJSON());});}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));}
 async function newPage(context){await context.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());page=await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));page.setDefaultTimeout(60000);watch(page);await login(users[1]);}
 try {
@@ -57,7 +66,7 @@ try {
  browser=await chromium.launch({headless:true});let context=await browser.newContext({viewport:{width:1440,height:1000}});await newPage(context);
  const hours=Object.fromEntries([2,3,4,5,6].map(i=>[i,[['10:00','12:30'],['15:20','20:00']]]));hours[1]=[['15:00','20:00']];hours[7]=[];rpc('create_followup_policy',{weekly_hours:hours,attempt_offsets:[0,0,1,3,5]},users[0].id);
 
- // Browser birth bound, default-first follow-up and the created result.
+ // Browser birth bound, no « Démarrage », the desk-guard preview and the paid result.
  const lead1=makeLead('A2 parent principal','A2 Adam principal');await start(lead1);
  const birth=dialog().getByLabel('Date de naissance (si connue)',{exact:true});
  const today=(await wall()).slice(0,10),tomorrow=(await wall(86400000+60000)).slice(0,10);
@@ -67,37 +76,49 @@ try {
  assert.ok(await button('Continuer').isDisabled(),'future birth blocks step 1');
  await birth.fill(today);assert.equal(await birth.getAttribute('aria-invalid'),null,'today is valid');await birth.fill('');
  await newLearner();
- await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();assert.equal(await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).count(),0,'no input by default');
- await button('Choisir une autre date').click();const due=dialog().getByLabel('Prochain suivi · Casablanca',{exact:true});
- assert.ok((await due.getAttribute('min'))<=await wall(60000),'follow-up min is Casablanca now');
- await due.fill(await wall(-86400000));await dialog().getByText('Cette date de suivi est passée. Choisissez une date future ou gardez le suivi par défaut.').first().waitFor();
- assert.equal(await due.getAttribute('aria-invalid'),'true');assert.ok(await button('Continuer').isDisabled(),'past follow-up blocked on change');
- await button('Garder la date par défaut').click();await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();
- await toReview();await dialog().getByText(DEFAULT_LINE,{exact:true}).waitFor();
- startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();
- const sent1=startCalls[0].p_data;assert(!('followup_at' in sent1),'default sends no follow-up');assert.equal(sent1.birth_date,null);assert.equal(sent1.learner_name,'A2 Adam principal');
- const saved1=detail(lead1);const task1=saved1.open_tasks.find(t=>t.task_type==='enrollment_followup');
- await dialog().getByText(`Suivi « Finaliser l’inscription » prévu le ${civil(task1.id)}.`,{exact:true}).waitFor();
- await dialog().getByText('Le prospect reste qualifié : l’inscription n’est pas encore confirmée. Elle reste à confirmer par le parcours habituel.',{exact:true}).waitFor();
- assert.equal(await dialog().getByRole('status').filter({hasText:'Pré-inscription créée'}).count(),1,'one in-dialog confirmation');assert.equal(await page.locator('[data-sonner-toast]').count(),0,'no additional toast');await noRaw();await done();
+ for(const retired of ['Démarrage','Prochain suivi · Casablanca','Note (facultatif)'])assert.equal(await dialog().getByLabel(retired,{exact:true}).count(),0,`no ${retired}`);
+ assert.equal(await dialog().getByLabel('Programme',{exact:true}).locator('option',{hasText:'Autre programme'}).count(),0,'« Autre » is not an enrollment programme');
+ await dialog().getByLabel('Groupe (facultatif)',{exact:true}).waitFor();
+ await toPayment();
+ await pay('0');await dialog().getByLabel('Remise (MAD)',{exact:true}).fill('500');
+ await dialog().getByRole('note').filter({hasText:'Indiquez le motif de la remise.'}).waitFor();
+ await dialog().getByLabel('Motif de la remise',{exact:true}).selectOption('sibling');
+ await dialog().getByRole('note').filter({hasText:PAYMENT_REQUIRED}).waitFor();
+ const paymentDate=dialog().getByLabel('Date du paiement',{exact:true});assert.equal(await paymentDate.getAttribute('max'),today,'payment date max is the business date');
+ // The payment-date guard applies to a positive payment (Batch E Q4, shared with the receipt form).
+ await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('100');
+ await paymentDate.fill((await wall(-8*86400000)).slice(0,10));await dialog().getByRole('note').filter({hasText:'La date du paiement ne peut pas être antérieure de plus de 7 jours.'}).waitFor();
+ // The date input carries min/max like the receipt form: the browser blocks the submit and
+ // focuses the field before the dialog's own guard (which repeats the same rule) runs.
+ startCalls.length=0;await button('Inscrire et encaisser').click();
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('data-field')==='paymentDate');
+ assert.equal(await paymentDate.evaluate(el=>el.validity.rangeUnderflow),true,'an 8-day backdate is out of range');
+ assert.equal((await focused()).field,'paymentDate','the desk-guard field is focused');assert.equal(startCalls.length,0,'nothing sent');
+ await paymentDate.fill(today);await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('0');await button('Inscrire et encaisser').click();
+ await dialog().getByRole('alert').filter({hasText:PAYMENT_REQUIRED}).waitFor();assert.equal((await focused()).field,'amount');assert.equal(startCalls.length,0,'a zero payment is never sent');
+ await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu \S+$/).waitFor();
+ const sent1=startCalls[0];assert.equal(startCalls.length,1);assert.deepEqual(Object.keys(sent1.p_data).sort(),['enrollment','payment']);
+ for(const key of ['initial_status','group_id','followup_at','notes'])assert(!(key in sent1.p_data.enrollment),`enrollment omits ${key}`);
+ assert(!('idempotency_key' in sent1.p_data.payment),'the payment key is derived by the server');
+ assert.equal(sent1.p_data.enrollment.birth_date,null);assert.equal(sent1.p_data.enrollment.learner_name,'A2 Adam principal');
+ assert.deepEqual([sent1.p_data.payment.gross_amount,sent1.p_data.payment.discount_amount,sent1.p_data.payment.discount_reason_code,sent1.p_data.payment.payment_amount,sent1.p_data.payment.payment_method],[3000,500,'sibling',1000,'Espèces']);
+ const saved1=detail(lead1);assert.equal(saved1.status,'CONVERTED','paid at once: converted');assert.equal(saved1.enrollment.status,'Confirmed');
+ assert.equal(receipts(saved1.enrollment.student_id),'1');assert.equal(saved1.open_tasks?.length||0,0,'open tasks cancelled by the conversion');
+ await dialog().getByText('Groupe à affecter',{exact:true}).waitFor();await dialog().getByText('Prospect converti : le suivi commercial est terminé.',{exact:true}).waitFor();
+ await dialog().getByRole('link',{name:'Ouvrir le reçu',exact:true}).waitFor();
+ assert.equal(await dialog().getByRole('status').filter({hasText:'Inscription confirmée · reçu'}).count(),1,'one in-dialog confirmation');assert.equal(await page.locator('[data-sonner-toast]').count(),0,'no additional toast');await noRaw();await done();
  const section=page.getByRole('dialog').locator('#crm-enrollment');
- await section.getByRole('link',{name:"Continuer l'inscription",exact:true}).waitFor();await section.getByText('Pré-inscription en attente de confirmation.',{exact:true}).waitFor();
- assert.equal(await section.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).count(),0,'exactly one action');assert.equal(await section.getByText(/Finaliser/).count(),0);
- assert.equal(saved1.status,'QUALIFIED');
- console.log('PASS birth bound, default follow-up presentation, created result with server civil time, Continuer in the drawer');
+ await section.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).waitFor();assert.equal(await section.getByRole('button',{name:'Inscrire et encaisser'}).count(),0,'exactly one action');assert.equal(await section.getByText(/Finaliser|Continuer l/).count(),0);
+ console.log('PASS birth bound, no Démarrage/follow-up/Autre, desk-guard preview and focus, zero payment refused before sending, paid result converts the prospect');
 
- // Continuer lands on the learner file with the CRM-linked enrollment focused; Retour returns.
- await section.getByRole('link',{name:"Continuer l'inscription",exact:true}).click();
- await page.waitForURL(url=>url.pathname===`/students/${saved1.enrollment.student_id}`&&url.searchParams.get('enrollment')===saved1.enrollment.id);
- await page.getByText('Inscription liée au prospect CRM',{exact:true}).waitFor();
- await page.waitForFunction(id=>document.activeElement?.id===`enrollment-${id}`,saved1.enrollment.id);
- await page.getByRole('button',{name:'Nouvelle pré-inscription',exact:true}).waitFor();
- assert.equal(await page.getByText('Inscription liée au prospect CRM').count(),1);
- await page.screenshot({path:join(tmpdir(),'hills-rcc-a2-continue.png'),fullPage:false});
+ // Ouvrir l'apprenant lands on the learner file; Retour returns to the prospect.
+ await section.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).click();
+ await page.waitForURL(url=>url.pathname===`/students/${saved1.enrollment.student_id}`);await page.getByRole('heading',{name:'A2 Adam principal',exact:true}).waitFor();
+ await page.screenshot({path:join(tmpdir(),'hills-rcc-a2-open.png'),fullPage:false});
  await page.getByRole('button',{name:'Retour',exact:true}).click();await page.waitForURL(url=>url.pathname==='/crm/leads'&&url.searchParams.get('lead')===lead1);
  await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
- for(const param of [randomUUID(),'not-a-uuid']){await page.goto(`${app}/students/${saved1.enrollment.student_id}?enrollment=${param}`);await page.getByRole('heading',{name:'A2 Adam principal',exact:true}).waitFor();await page.getByRole('button',{name:'Nouvelle pré-inscription',exact:true}).waitFor();assert.equal(await page.getByText('Inscription liée au prospect CRM').count(),0);}
- console.log('PASS Continuer highlight/focus after async load, Retour to CRM, unknown parameter behaves as today, Nouvelle pré-inscription unchanged');
+ console.log('PASS Ouvrir l’apprenant and Retour to CRM');
 
  // Linked learner without lead identity data: preselected, no candidates, no new learner.
  const linkedStudent=student('A2 Lina rattachée','2016-02-03');const lead2=makeLead('A2 parent rattaché','A2 temporaire');
@@ -107,9 +128,9 @@ try {
  await start(lead2);await dialog().getByText('Apprenant rattaché à ce prospect : A2 Lina rattachée · 2016-02-03',{exact:true}).waitFor();
  await dialog().getByText('Ce prospect est déjà rattaché à cet apprenant ; l’inscription sera créée pour lui. Pour changer d’apprenant, contactez la direction.',{exact:true}).waitFor();
  assert.equal(await button('Créer un nouvel apprenant').count(),0);assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).count(),0);
- await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await dialog().getByText('A2 Lina rattachée',{exact:true}).first().waitFor();await toReview();
- startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();
- const sent2=startCalls[0].p_data;assert.equal(sent2.student_choice,'existing');assert.equal(sent2.student_id,linkedStudent);
+ await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await dialog().getByText('A2 Lina rattachée',{exact:true}).first().waitFor();await toPayment();await pay();
+ startCalls.length=0;await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
+ const sent2=startCalls[0].p_data.enrollment;assert.equal(sent2.student_choice,'existing');assert.equal(sent2.student_id,linkedStudent);
  for(const key of ['learner_name','birth_date','candidate_review','confirm_new'])assert(!(key in sent2),`linked payload omits ${key}`);
  assert.equal(candidateCalls.length,0,'no candidate query on the linked path');assert.equal(sql('select count(*) from public.students'),studentsBefore,'no learner created');
  await dialog().getByText(/^A2 Lina rattachée · Programme annuel/).waitFor();await done();assert.equal(detail(lead2).enrollment.student_id,linkedStudent);
@@ -119,7 +140,7 @@ try {
  sql(`update public.crm_leads set student_id='${shortLinked}',learner_name='A' where id='${leadShort}'`);candidateCalls.length=0;
  await start(leadShort);await dialog().getByText('Apprenant rattaché à ce prospect : A2 Malik court · 2015-03-01',{exact:true}).waitFor();
  assert.equal(await button('Créer un nouvel apprenant').count(),0);assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).count(),0);assert.equal(await button('Continuer').isDisabled(),false,'one-character lead name does not block');
- await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toReview();await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();await done();
+ await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toPayment();await pay();await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();await done();
  assert.equal(detail(leadShort).enrollment.student_id,shortLinked);assert.equal(candidateCalls.length,0);
  // A deleted linked learner shows the safe unavailable state; no candidate or new-learner path.
  const goneLinked=student('A2 Nadia archivée');sql(`update public.students set deleted_at=now() where id='${goneLinked}'`);const leadGone=makeLead('A2 parent archivé','A2 Nadia archivée');
@@ -130,139 +151,175 @@ try {
  assert.equal(detail(leadGone).enrollment,null);
  console.log('PASS linked learner with a one-character lead name enrolls; a deleted linked learner shows the unavailable state without candidate or new-learner paths');
 
- // Existing enrollment follow-up: shown, kept, never sent.
+ // An open « Finaliser l’inscription » task is closed by the conversion; nothing about it is sent.
  const lead3=makeLead('A2 parent suivi','A2 Nora suivi','enrollment','enrollment_followup');const kept=detail(lead3).open_tasks.find(t=>t.task_type==='enrollment_followup');
- await start(lead3);await newLearner();
- await dialog().getByText(`Un suivi d’inscription est déjà prévu le ${civil(kept.id)}. Il est conservé.`,{exact:true}).waitFor();
- assert.equal(await button('Choisir une autre date').count(),0);assert.equal(await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).count(),0);
- await toReview();startCalls.length=0;await button('Créer la pré-inscription').click();
- await dialog().getByText(`Le suivi d’inscription déjà prévu est conservé : ${civil(kept.id)}.`,{exact:true}).waitFor();assert(!('followup_at' in startCalls[0].p_data));await done();
- console.log('PASS existing enrollment follow-up shown, kept and reported; no follow-up value sent');
+ await start(lead3);await newLearner();assert.equal(await dialog().getByText(/suivi d’inscription est déjà prévu|Choisir une autre date/).count(),0,'no follow-up choice');
+ await toPayment();await pay();startCalls.length=0;await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
+ assert(!('followup_at' in startCalls[0].p_data.enrollment));assert.equal(sql(`select status from public.crm_tasks where id='${kept.id}'`),'cancelled','the conversion cancels the follow-up');await done();
+ console.log('PASS an existing enrollment follow-up is cancelled by the paid conversion; no follow-up value sent');
 
- // Server field reason: the group changed meanwhile; step 2, Groupe focused and invalid.
- const group=randomUUID();fixtureGroups.push(group);sql(`insert into public.groups(id,name,session_type,niveau) values('${group}','A2 groupe enfants','Yearly','Child 2')`);
+ // Group: placed after the payment on re-read rows; a placement refusal never undoes the payment.
+ const group=randomUUID();fixtureGroups.push(group);sql(`insert into public.groups(id,name,session_type,niveau,annee) values('${group}','A2 groupe enfants','Yearly','Child 2','${year}')`);
  const lead4=makeLead('A2 parent groupe','A2 Yanis groupe');await start(lead4);await newLearner();
- await dialog().getByLabel('Niveau proposé',{exact:true}).selectOption('Child 2');await dialog().getByLabel('Groupe',{exact:true}).selectOption(group);await toReview();
- sql(`update public.groups set niveau='Child 3' where id='${group}'`);const before4=sql('select count(*) from public.students');
- await button('Créer la pré-inscription').click();await dialog().getByText('2 / 3 · Inscription').waitFor();
- await dialog().getByRole('alert').filter({hasText:'Le groupe choisi ne correspond plus au programme ou au niveau. Choisissez un autre groupe.'}).waitFor();
- assert.deepEqual(await focused(),{field:'group',id:await dialog().getByLabel('Groupe',{exact:true}).getAttribute('id'),invalid:'true'},'Groupe focused and invalid');
- assert.equal(sql('select count(*) from public.students'),before4);await noRaw();await button('Annuler').click();
- console.log('PASS server reason navigates to its step and field with aria-invalid and focus; nothing saved');
+ await dialog().getByLabel('Niveau proposé',{exact:true}).selectOption('Child 2');await dialog().getByLabel('Groupe (facultatif)',{exact:true}).selectOption(group);await toPayment();
+ await dialog().getByText('Groupe après encaissement : A2 groupe enfants',{exact:true}).waitFor();await pay();startCalls.length=0;
+ const placed=page.waitForResponse(response=>response.url().endsWith('/rpc/place_learner_in_group'));
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();assert.equal((await placed).status(),200);
+ assert(!('group_id' in startCalls[0].p_data.enrollment),'the group is never sent with the enrollment');
+ await dialog().getByText('Groupe : A2 groupe enfants',{exact:true}).waitFor();await done();
+ const placedEnrollment=detail(lead4).enrollment;assert.equal(sql(`select status||'|'||group_id from public.enrollments where id='${placedEnrollment.id}'`),`Validated|${group}`);
+ // The refusal case uses an empty group of its own: a group with members cannot change level (EGC).
+ const refusedGroup=randomUUID();fixtureGroups.push(refusedGroup);sql(`insert into public.groups(id,name,session_type,niveau,annee) values('${refusedGroup}','A2 groupe refusé','Yearly','Child 2','${year}')`);
+ const lead4b=makeLead('A2 parent groupe refusé','A2 Yasmine groupe');await start(lead4b);await newLearner();
+ await dialog().getByLabel('Niveau proposé',{exact:true}).selectOption('Child 2');await dialog().getByLabel('Groupe (facultatif)',{exact:true}).selectOption(refusedGroup);await toPayment();await pay();
+ sql(`update public.groups set niveau='Child 3' where id='${refusedGroup}'`);
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
+ await dialog().getByText('Groupe non affecté : Le groupe doit correspondre au programme et au niveau de l’inscription. Apprenant inscrit — groupe à affecter.',{exact:true}).waitFor();
+ const refusedEnrollment=detail(lead4b).enrollment;assert.equal(sql(`select status||'|'||coalesce(group_id::text,'') from public.enrollments where id='${refusedEnrollment.id}'`),'Confirmed|','paid, not placed');
+ assert.equal(receipts(refusedEnrollment.student_id),'1','the payment stands');assert.equal(detail(lead4b).status,'CONVERTED');await noRaw();await done();
+ console.log('PASS group placed after the payment (Validated); a placement refusal keeps the receipt and the Confirmed enrollment');
 
- // Race: another actor completes the enrollment first; the panel never claims creation.
- const lead5=makeLead('A2 parent course','A2 Ines course');await start(lead5);await newLearner();await toReview();
- rpc('start_enrollment',newPayload(lead5,'A2 Ines course'),users[2].id);
- await button('Créer la pré-inscription').click();await dialog().getByText('Inscription déjà rattachée',{exact:true}).waitFor();
+ // Free enrollment (Q1): 100 % discount with its reason confirms without a receipt.
+ const leadFree=makeLead('A2 parent gratuit','A2 Sofia gratuite');await start(leadFree);await newLearner();await toPayment();
+ await pay('0');await dialog().getByLabel('Remise (MAD)',{exact:true}).fill('3000');await dialog().getByLabel('Motif de la remise',{exact:true}).selectOption('director_approval');
+ await dialog().getByRole('note').filter({hasText:'Remise de 100 % : inscription confirmée sans paiement (visible dans Contrôles).'}).waitFor();
+ assert.equal(await dialog().getByText('Envoyer aussi le reçu par e-mail').count(),0,'no e-mail without a receipt');
+ await button('Inscrire et encaisser').click();await dialog().getByText('Inscription confirmée sans paiement (remise 100 %)',{exact:true}).waitFor();
+ const free=detail(leadFree);assert.equal(free.status,'CONVERTED');assert.equal(receipts(free.enrollment.student_id),'0');
+ assert.equal(sql(`select count(*) from public.charges where enrollment_id='${free.enrollment.id}' and discount_amount=gross_amount`),'1');assert.equal(await dialog().getByRole('link',{name:'Ouvrir le reçu'}).count(),0);await done();
+ console.log('PASS free enrollment (100 % discount with reason) confirms without a receipt and converts');
+
+ // Race: another actor enrolls the prospect first; the panel never claims this request's work.
+ const lead5=makeLead('A2 parent course','A2 Ines course');await start(lead5);await newLearner();await toPayment();await pay();
+ enroll(newPayload(lead5,'A2 Ines course'),users[2].id);
+ await button('Inscrire et encaisser').click();await dialog().getByText('Inscription déjà rattachée',{exact:true}).waitFor();
  await dialog().getByText('Une inscription a été rattachée à ce prospect entre-temps. Vérifiez-la avant de poursuivre.',{exact:true}).waitFor();
- assert.equal(await dialog().getByText(/Pré-inscription créée$|Essai démarré/).count(),0,'no creation wording');
- assert.equal(sql(`select count(*) from public.students where full_name='A2 Ines course'`),'1','exactly one learner');await noRaw();await done();
- console.log('PASS discovered race result is never presented as this request’s creation');
+ assert.equal(await dialog().getByText(/reçu|remise 100/).count(),0,'no payment wording');
+ assert.equal(sql(`select count(*) from public.students where full_name='A2 Ines course'`),'1','exactly one learner');assert.equal(receipts(detail(lead5).enrollment.student_id),'1','exactly one receipt');await noRaw();await done();
+ console.log('PASS discovered race result is never presented as this request’s enrollment or payment');
 
  // Race: the opportunity is linked to a learner while the dialog submits a new learner.
- const lead6=makeLead('A2 parent lien','A2 Omar lien');await start(lead6);await newLearner();await toReview();
+ const lead6=makeLead('A2 parent lien','A2 Omar lien');await start(lead6);await newLearner();await toPayment();await pay();
  const raced=student('A2 Omar déjà rattaché');sql(`update public.crm_leads set student_id='${raced}' where id='${lead6}'`);
- await button('Créer la pré-inscription').click();await dialog().getByText('Apprenant rattaché à ce prospect : A2 Omar déjà rattaché · 2015-03-01',{exact:true}).waitFor();
+ await button('Inscrire et encaisser').click();await dialog().getByText('Apprenant rattaché à ce prospect : A2 Omar déjà rattaché · 2015-03-01',{exact:true}).waitFor();
  await dialog().getByRole('alert').filter({hasText:'Ce prospect est déjà rattaché à un apprenant. L’inscription doit être créée pour cet apprenant.'}).waitFor();
- assert.equal(sql(`select count(*) from public.students where full_name='A2 Omar lien'`),'0','no duplicate learner');
- await button('Continuer').click();await toReview();await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();await done();
- assert.equal(detail(lead6).enrollment.student_id,raced);
- console.log('PASS linkage race moves the dialog to the linked learner; exactly that learner enrolled');
+ assert.equal(sql(`select count(*) from public.students where full_name='A2 Omar lien'`),'0','no duplicate learner');assert.equal(receipts(raced),'0','the refused request collected nothing');
+ await button('Continuer').click();await toPayment();await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();await done();
+ assert.equal(detail(lead6).enrollment.student_id,raced);assert.equal(receipts(raced),'1');
+ console.log('PASS linkage race moves the dialog to the linked learner, payment kept; exactly that learner enrolled and paid once');
 
  // Linked elsewhere: explained before submit, no dead end.
- const twice=student('A2 Sami double');const twiceEnrollment=randomUUID();sql(`insert into public.enrollments(id,student_id,session_type,school_year,status) values('${twiceEnrollment}','${twice}','Yearly','${year}','Submitted')`);
- const owner=makeLead('A2 parent premier','A2 Sami premier');rpc('start_enrollment',{lead_id:owner,expected_version:detail(owner).version,student_choice:'existing',student_id:twice,session_type:'Yearly',school_year:year,enrollment_id:twiceEnrollment,expected_enrollment_updated_at:sql(`select to_json(updated_at) from public.enrollments where id='${twiceEnrollment}'`).replaceAll('"','')});
+ const twice=student('A2 Sami double');const twiceEnrollment=randomUUID();sql(`insert into public.enrollments(id,student_id,session_type,school_year,status) values('${twiceEnrollment}','${twice}','Yearly','${year}','Confirmed')`);
+ const owner=makeLead('A2 parent premier','A2 Sami premier');enroll({lead_id:owner,expected_version:detail(owner).version,student_choice:'existing',student_id:twice,session_type:'Yearly',school_year:year,enrollment_id:twiceEnrollment,expected_enrollment_updated_at:sql(`select to_json(updated_at) from public.enrollments where id='${twiceEnrollment}'`).replaceAll('"','')});
  const lead7=makeLead('A2 parent second','A2 Sami double');await start(lead7);
  await dialog().getByText('A2 Sami double',{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
  await dialog().getByText('Cet apprenant a déjà une inscription pour ce programme et cette année, rattachée à un autre prospect. Choisissez un autre programme ou une autre année, ou clôturez ce prospect comme doublon.',{exact:true}).waitFor();
  assert.equal(await dialog().getByText('Choisissez l’inscription existante pour éviter un doublon.').count(),0);assert.ok(await button('Continuer').isDisabled());await button('Annuler').click();
  console.log('PASS linked-elsewhere explanation replaces the dead-end selection prompt');
- // Owner wording amendment: an existing enrollment linked by this request is never "created".
- const trialGroup=randomUUID();fixtureGroups.push(trialGroup);sql(`insert into public.groups(id,name,session_type,niveau) values('${trialGroup}','A2 groupe essai','Yearly','Child 2')`);
- for(const status of ['Submitted','Trial']){
-  const name=`A2 Existant ${status}`,existing=student(name),existingEnrollment=randomUUID();
-  sql(`insert into public.enrollments(id,student_id,session_type,school_year,status,level,group_id) values('${existingEnrollment}','${existing}','Yearly','${year}','${status}','Child 2',${status==='Trial'?`'${trialGroup}'`:'null'})`);
-  const leadExisting=makeLead('A2 parent '+status,name);await start(leadExisting);
-  await dialog().getByText(name,{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
-  await button('Rattacher cette inscription').click();await toReview();startCalls.length=0;await button('Rattacher cette inscription').click();
-  await dialog().getByText('Inscription rattachée',{exact:true}).waitFor();assert.equal(startCalls[0].p_data.enrollment_id,existingEnrollment);
-  assert.equal(await dialog().getByText(/^(Pré-inscription créée|Essai démarré|Inscription déjà rattachée)$/).count(),0,`existing ${status} linked is not presented as created or discovered`);
-  await done();assert.equal(detail(leadExisting).enrollment.id,existingEnrollment);
- }
- console.log('PASS existing Submitted and Trial enrollments linked by this request show "Inscription rattachée"');
 
- // Uncertain transport failure, hinted and hint-less definite rejections (stubbed).
- const lead8=makeLead('A2 parent erreurs','A2 Rania erreurs');await start(lead8);await newLearner();await toReview();
+ // Q12: an enrollment already paid at the desk is linked without a payment; an unpaid
+ // Confirmed row is refused by the server and the dialog moves to the payment step.
+ const deskPaid=student('A2 Rim payée');collect(deskPaid);const deskEnrollment=sql(`select id from public.enrollments where student_id='${deskPaid}'`);
+ const leadPaid=makeLead('A2 parent payé','A2 Rim payée');await start(leadPaid);
+ await dialog().getByText('A2 Rim payée',{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
+ // A charged enrollment is never charged a second time: its balance goes to the receipt form, the paid row to the link.
+ const deskCharge=sql(`select id from public.charges where enrollment_id='${deskEnrollment}'`);
+ await dialog().getByText(/^Un montant est déjà enregistré sur cette inscription · reste .+ MAD$/).waitFor();
+ assert.equal(await button('Encaisser sur cette inscription').count(),0,'no second charge offered on a charged enrollment');
+ assert.equal(await dialog().getByRole('link',{name:'Encaisser sur ce montant',exact:true}).getAttribute('href'),`/receipts/new?student_id=${deskPaid}&charge_id=${deskCharge}`,'the balance is collected on its own charge');
+ await button('Rattacher cette inscription payée').click();await button('Continuer').click();await dialog().getByText('3 / 3 · Vérification').waitFor();
+ assert.equal(await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).count(),0,'no payment step for a paid link');
+ startCalls.length=0;await button('Rattacher cette inscription payée').click();await dialog().getByText('Inscription payée rattachée',{exact:true}).waitFor();
+ assert.deepEqual(Object.keys(startCalls[0].p_data),['enrollment'],'no payment object');assert.equal(startCalls[0].p_data.enrollment.enrollment_id,deskEnrollment);
+ assert.equal(detail(leadPaid).status,'CONVERTED');assert.equal(receipts(deskPaid),'1','no second receipt');await done();
+ const unpaid=student('A2 Hind impayée'),unpaidEnrollment=randomUUID();sql(`insert into public.enrollments(id,student_id,session_type,school_year,status) values('${unpaidEnrollment}','${unpaid}','Yearly','${year}','Confirmed')`);
+ const leadUnpaid=makeLead('A2 parent impayé','A2 Hind impayée');await start(leadUnpaid);
+ await dialog().getByText('A2 Hind impayée',{exact:true}).locator('..').getByRole('button',{name:'Utiliser cet apprenant',exact:true}).click();await button('Continuer').click();
+ // The row's charges are read first (« Vérification des montants… »); then the payment is offered once.
+ await button('Encaisser sur cette inscription').waitFor();assert.equal(await button('Encaisser sur cette inscription').count(),1,'an enrollment without any charge is offered the payment');
+ await button('Rattacher cette inscription payée').click();await button('Continuer').click();startCalls.length=0;await button('Rattacher cette inscription payée').click();
+ await dialog().getByRole('alert').filter({hasText:'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.'}).waitFor();
+ await dialog().getByText('3 / 3 · Paiement').waitFor();assert.equal(detail(leadUnpaid).status,'QUALIFIED','the refused link rolled back the conversion');
+ await pay();await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
+ assert.equal(startCalls[1].p_data.enrollment.enrollment_id,unpaidEnrollment);assert(startCalls[1].p_data.payment,'the payment is sent on the same enrollment');
+ assert.equal(startCalls[1].p_request_key,startCalls[0].p_request_key,'one request key per dialog opening');
+ assert.equal(detail(leadUnpaid).status,'CONVERTED');assert.equal(receipts(unpaid),'1');await noRaw();await done();
+ console.log('PASS Q12 paid enrollment linked without a payment (its charge offered on the receipt form, never a second charge); an unpaid one is refused and collected on the payment step');
+
+ // Uncertain transport failure, hinted, desk-guard and hint-less definite rejections (stubbed).
+ const lead8=makeLead('A2 parent erreurs','A2 Rania erreurs');await start(lead8);await newLearner();await toPayment();await pay();
  const responses=[{status:502,contentType:'text/plain',body:'Bad Gateway'},{status:400,contentType:'application/json',body:JSON.stringify({code:'22023',message:'Invalid new learner',details:null,hint:'crm_enrollment.birth_date_future'})},
+  {status:400,contentType:'application/json',body:JSON.stringify({code:'22023',message:'Indiquez le motif de la remise.',details:null,hint:null})},
   {status:400,contentType:'application/json',body:JSON.stringify({code:'22023',message:'Invalid new learner',details:null,hint:null})}];
- await page.route('**/rest/v1/rpc/crm_start_enrollment',route=>route.fulfill(responses.shift()));startCalls.length=0;
- await button('Créer la pré-inscription').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+ await page.route('**/rest/v1/rpc/crm_enroll_and_collect',route=>route.fulfill(responses.shift()));startCalls.length=0;
+ await button('Inscrire et encaisser').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
  assert.equal(await dialog().getByText(/rien n’a été enregistré/).count(),0,'uncertain never says nothing was saved');await noRaw();
- await button('Créer la pré-inscription').click();await dialog().getByText('1 / 3 · Apprenant').waitFor();
+ await button('Inscrire et encaisser').click();await dialog().getByText('1 / 3 · Apprenant').waitFor();
  assert.deepEqual(startCalls[1],startCalls[0],'uncertain retry resends the identical request with the same key');
  await dialog().getByRole('alert').filter({hasText:'La date de naissance ne peut pas être dans le futur.'}).waitFor();
  const birth8=dialog().getByLabel('Date de naissance (si connue)',{exact:true});assert.equal((await focused()).field,'birth');assert.equal(await birth8.getAttribute('aria-invalid'),'true');
- await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toReview();await button('Créer la pré-inscription').click();
+ // The server's discount-reason refusal arrives for a discounted payment whose reason passed
+ // the local check; the reason select exists only while a discount is entered.
+ await button('Continuer').click();await dialog().getByText('2 / 3 · Inscription').waitFor();await toPayment();
+ await dialog().getByLabel('Remise (MAD)',{exact:true}).fill('500');await dialog().getByLabel('Motif de la remise',{exact:true}).selectOption('sibling');
+ await button('Inscrire et encaisser').click();
+ await dialog().getByRole('alert').filter({hasText:'Indiquez le motif de la remise.'}).waitFor();await dialog().getByText('3 / 3 · Paiement').waitFor();assert.equal((await focused()).field,'reasonCode','the server desk-guard text focuses its field');
+ await button('Inscrire et encaisser').click();
  await dialog().getByRole('alert').filter({hasText:'L’inscription n’a pas pu être créée et rien n’a été enregistré. Réessayez ; si le problème persiste, contactez la direction.'}).waitFor();
- assert.notEqual(startCalls[2].p_request_key,startCalls[1].p_request_key,'a definite 22023 discards the key');await noRaw();
- await page.unroute('**/rest/v1/rpc/crm_start_enrollment');
- await dialog().getByText('2 / 3 · Inscription').waitFor();await toReview();// hint-less 22023 keeps today's step 2
- await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();await done();
+ assert.equal(new Set(startCalls.map(call=>call.p_request_key)).size,1,'one request key per dialog opening, reused after definite rejections');await noRaw();
+ await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');
+ await dialog().getByText('2 / 3 · Inscription').waitFor();await toPayment();// hint-less 22023 keeps today's step 2
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();await done();
  assert.equal(sql(`select count(*) from public.students where full_name='A2 Rania erreurs'`),'1');
- console.log('PASS uncertain 5xx keeps key/payload and never says nothing saved; hinted reason focuses its field; hint-less definite uses the safe fallback');
+ console.log('PASS uncertain 5xx keeps key/payload and never says nothing saved; hinted and desk-guard reasons focus their field; hint-less definite uses the safe fallback');
 
- // Contextual actions, spot checks across reopened, closed, refused and post-confirmation changes.
+ // Contextual actions, spot checks: NEW, historical pré-inscription/essai, refused and post-confirmation changes.
  const sectionText=async id=>{await open(id);return page.getByRole('dialog').locator('#crm-enrollment').innerText();};
  const fresh=rawLead('A2 parent nouveau','A2 Lea nouveau');let text=await sectionText(fresh);
- assert.match(text,/Qualifiez le projet avant de commencer une inscription\./);assert.equal(await page.getByRole('button',{name:"Commencer l'inscription"}).count(),0);
- const started=name=>{const id=makeLead('A2 parent '+name,'A2 '+name);rpc('start_enrollment',newPayload(id,'A2 '+name));return id;};
- const closed=started('Lou clos');act('close_lost',closed,{reason:'not_interested'});text=await sectionText(closed);
- assert.match(text,/Prospect clôturé : l’inscription reste visible/);assert.doesNotMatch(text,/Continuer l'inscription/);
- act('reopen_lead',closed,{reason:'Le parent rappelle',next_task:next()});const reopened=detail(closed).status;assert(['NEW','CONTACTING','ENGAGED'].includes(reopened),reopened);
- text=await sectionText(closed);assert.match(text,/Ce prospect a été rouvert\. Qualifiez-le à nouveau pour poursuivre l’inscription\./);assert.match(text,/Ouvrir l'apprenant/);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
- const refused=started('Zoe refusée');sql(`begin;set local request.jwt.claim.sub='${users[2].id}';update public.enrollments set status='Rejected' where id='${detail(refused).enrollment.id}';commit;`);
+ assert.match(text,/Qualifiez le projet avant de commencer une inscription\./);assert.equal(await page.getByRole('button',{name:'Inscrire et encaisser'}).count(),0);
+ const historical=makeLead('A2 parent historique','A2 Lou historique');legacy(historical,student('A2 Lou historique'),'Submitted');text=await sectionText(historical);
+ assert.match(text,/Pré-inscription créée · En attente|Soumise/);assert.match(text,/Ancienne pré-inscription archivée ; relancez « Inscrire et encaisser » si le prospect s’inscrit\./);
+ assert.match(text,/Ouvrir l'apprenant/);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);assert.equal(await page.getByRole('button',{name:'Inscrire et encaisser'}).count(),0);
+ // A trial row always had a group (check_enrollment_student_sync); this one gets an empty group of its own.
+ const trialGroup=randomUUID();fixtureGroups.push(trialGroup);sql(`insert into public.groups(id,name,session_type,niveau,annee) values('${trialGroup}','A2 groupe essai','Yearly','Child 2','${year}')`);
+ const trial=makeLead('A2 parent essai','A2 Zoé essai');legacy(trial,student('A2 Zoé essai'),'Trial',trialGroup);act('close_lost',trial,{reason:'not_interested'});text=await sectionText(trial);
+ assert.match(text,/Ancienne pré-inscription archivée/);assert.doesNotMatch(text,/Continuer l'inscription/);
+ const refused=makeLead('A2 parent refusée','A2 Zoe refusée');legacy(refused,student('A2 Zoe refusée'),'Rejected');
  text=await sectionText(refused);assert.match(text,/Inscription refusée\. Ce prospect reste rattaché à cette inscription/);assert.doesNotMatch(text,/Finaliser|Continuer l'inscription/);
- const changed=started('Adel changé');const changedEnrollment=detail(changed).enrollment.id;
- sql(`begin;set local request.jwt.claim.sub='${users[2].id}';update public.enrollments set status='Confirmed' where id='${changedEnrollment}';commit;`);
+ const changed=makeLead('A2 parent changé','A2 Adel changé');enroll(newPayload(changed,'A2 Adel changé'));const changedEnrollment=detail(changed).enrollment.id;
  text=await sectionText(changed);assert.match(text,/Ouvrir l'apprenant/);assert.doesNotMatch(text,/Cette inscription a changé/);
- sql(`begin;set local request.jwt.claim.sub='${users[2].id}';update public.enrollments set status='Submitted' where id='${changedEnrollment}';commit;`);
- assert.equal(detail(changed).status,'CONVERTED');assert.equal(sql(`select conversion_review_required from public.crm_leads where id='${changed}'`),'t','server flags director review');
- text=await sectionText(changed);assert.match(text,/Cette inscription a changé après sa confirmation\. Elle est signalée pour vérification par la direction\./);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
- console.log('PASS contextual actions: NEW, closed, reopened, refused and changed-after-confirmation states');
+ sql(`begin;set local request.jwt.claim.sub='${users[2].id}';set local eh.enrollment_command=on;update public.enrollments set status='Ended',ended_at=now(),group_id=null where id='${changedEnrollment}';commit;`);
+ assert.equal(detail(changed).status,'CONVERTED');
+ // An enrollment ended after its confirmation raises no review (evaluate_conversion, 120): the note says so, and claims no flag.
+ assert.equal(sql(`select conversion_review_required from public.crm_leads where id='${changed}'`),'f','the server raises no review for an ended enrollment');
+ text=await sectionText(changed);assert.match(text,/Inscription terminée après sa confirmation\. Le prospect reste converti\./);assert.doesNotMatch(text,/signalée pour vérification|Direction : cette conversion nécessite une vérification/);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
+ // A confirmed enrollment moved back to a retired status (only the journalled revert can) is flagged by the server.
+ const reverted=makeLead('A2 parent revert','A2 Ines revert');enroll(newPayload(reverted,'A2 Ines revert'));const revertedEnrollment=detail(reverted).enrollment.id;
+ sql(`begin;set local request.jwt.claim.sub='${users[2].id}';set local eh.membership_sync=on;set local eh.enrollment_command=on;update public.enrollments set status='Submitted' where id='${revertedEnrollment}';commit;`);
+ assert.equal(detail(reverted).status,'CONVERTED');assert.equal(sql(`select conversion_review_required from public.crm_leads where id='${reverted}'`),'t','server flags director review');
+ text=await sectionText(reverted);assert.match(text,/Cette inscription a changé après sa confirmation\. Elle est signalée pour vérification par la direction\./);assert.doesNotMatch(text,/Continuer l'inscription|Finaliser/);
+ console.log('PASS contextual actions: NEW, historical pré-inscription and essai (one row), refused, ended and changed-after-confirmation states');
  assert.deepEqual(pageErrors,[]);await context.close();
 
- // Fixed browser clocks: a stale follow-up is blocked at submit; a lost response is
- // replayed with the same key after the chosen follow-up time has passed.
+ // A lost response is replayed with the same key: one learner, enrollment, receipt and activity.
  context=await browser.newContext({viewport:{width:1440,height:1000}});await newPage(context);
- const lead10=makeLead('A2 parent horloge','A2 Hugo horloge');await start(lead10);await newLearner();
- await button('Choisir une autre date').click();const stale=await wall(3*60000);await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(stale);await toReview();
- await page.clock.setFixedTime(new Date(Date.now()+10*60000));startCalls.length=0;
- await button('Créer la pré-inscription').click();await dialog().getByText('2 / 3 · Inscription').waitFor();
- await dialog().getByRole('alert').filter({hasText:'Cette date de suivi est passée. Choisissez une date future ou gardez le suivi par défaut.'}).waitFor();
- assert.equal(startCalls.length,0,'nothing sent');assert.equal((await focused()).field,'due');assert.equal(await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).inputValue(),stale,'not moved automatically');
- await button('Garder la date par défaut').click();await toReview();await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();await done();
- console.log('PASS a follow-up that became past while the dialog was open returns to step 2 unchanged');
- await page.clock.setFixedTime(new Date());
- const lead11=makeLead('A2 parent perte','A2 Maya perte');await start(lead11);await newLearner();
- await button('Choisir une autre date').click();await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(await wall(5*60000));await toReview();
- let drop=true;await page.route('**/rest/v1/rpc/crm_start_enrollment',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
- startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
- await page.clock.setFixedTime(new Date(Date.now()+10*60000));
- await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();
- assert.equal(startCalls.length,2);assert.deepEqual(startCalls[1],startCalls[0],'byte-identical same-key resend after the follow-up time passed');assert(startCalls[0].p_data.followup_at);
- await dialog().getByText(/^Suivi « Finaliser l’inscription » prévu le [0-9]{2}\/[0-9]{2}\/[0-9]{4} à [0-9]{2}:[0-9]{2}\.$/).waitFor();await page.unroute('**/rest/v1/rpc/crm_start_enrollment');
+ const lead11=makeLead('A2 parent perte','A2 Maya perte');await start(lead11);await newLearner();await toPayment();await pay();
+ let drop=true;await page.route('**/rest/v1/rpc/crm_enroll_and_collect',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
+ startCalls.length=0;await button('Inscrire et encaisser').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
+ assert.equal(startCalls.length,2);assert.deepEqual(startCalls[1],startCalls[0],'byte-identical same-key resend');
+ await dialog().getByText('Cette inscription était déjà enregistrée : rien n’a été saisi deux fois.',{exact:true}).waitFor();await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');
  const lost=detail(lead11);assert.equal(sql(`select count(*) from public.students where full_name='A2 Maya perte'`),'1');assert.equal(sql(`select count(*) from public.enrollments where student_id='${lost.enrollment.student_id}'`),'1');
- assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${lead11}' and task_type='enrollment_followup' and status='open'`),'1');
+ assert.equal(receipts(lost.enrollment.student_id),'1','one receipt');
  assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${lead11}' and event_type='enrollment_started'`),'1');
  await done();
- console.log('PASS lost response replayed with the same key after the follow-up time passed; exactly one student, enrollment, follow-up and activity');
+ console.log('PASS lost response replayed with the same key; exactly one student, enrollment, receipt and activity');
  // B1 regression: a real refetch that already reflects the committed request must not
  // change the frozen request, its presentation or its uncertain-retry message.
  await page.clock.setFixedTime(new Date());
- const leadFrozen=makeLead('A2 parent gel','A2 Lucas gel');await start(leadFrozen);await newLearner();
- await button('Choisir une autre date').click();await dialog().getByLabel('Prochain suivi · Casablanca',{exact:true}).fill(await wall(5*60000));await toReview();
- drop=true;await page.route('**/rest/v1/rpc/crm_start_enrollment',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
- startCalls.length=0;await button('Créer la pré-inscription').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+ const leadFrozen=makeLead('A2 parent gel','A2 Lucas gel');await start(leadFrozen);await newLearner();await toPayment();await pay();
+ drop=true;await page.route('**/rest/v1/rpc/crm_enroll_and_collect',async route=>{if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
+ startCalls.length=0;await button('Inscrire et encaisser').click();await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
  assert.equal(sql(`select count(*) from public.students where full_name='A2 Lucas gel'`),'1','the first request committed');
  await page.clock.setFixedTime(new Date(Date.now()+10*60000));
  const refetched=page.waitForResponse(response=>response.url().endsWith('/rpc/crm_get_enrollment_context'));
@@ -272,31 +329,31 @@ try {
  assert.equal(refreshedContext.linked_student?.available,true,'the refetched context already reflects the committed enrollment');
  await page.waitForTimeout(1000);
  await dialog().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
- assert.equal(await dialog().getByText(/Cette date de suivi est passée/).count(),0,'the past-date warning does not replace the uncertain-retry text');
- assert.equal(await dialog().getByText(/Apprenant rattaché à ce prospect|Un suivi d’inscription est déjà prévu/).count(),0,'refetched state does not change the frozen request');
- await dialog().getByText('Création d’un nouvel apprenant',{exact:true}).waitFor();await dialog().getByText(/^Suivi « Finaliser l’inscription » demandé le /).waitFor();
- await button('Créer la pré-inscription').click();await dialog().getByText('Pré-inscription créée',{exact:true}).waitFor();
+ assert.equal(await dialog().getByText(/Apprenant rattaché à ce prospect/).count(),0,'refetched state does not change the frozen request');
+ await dialog().getByText('Création d’un nouvel apprenant',{exact:true}).waitFor();
+ await button('Inscrire et encaisser').click();await dialog().getByText(/^Inscription confirmée · reçu /).waitFor();
  assert.equal(startCalls.length,2);assert.equal(startCalls[1].p_request_key,startCalls[0].p_request_key,'same request key');
- assert.deepEqual(startCalls[1].p_data,startCalls[0].p_data,'identical frozen business payload');assert(startCalls[0].p_data.followup_at&&startCalls[0].p_data.learner_name==='A2 Lucas gel');
- assert.equal(await dialog().getByText('Inscription déjà rattachée').count(),0,'own replay, not a discovered result');
- await dialog().getByText(/^Suivi « Finaliser l’inscription » prévu le [0-9]{2}\/[0-9]{2}\/[0-9]{4} à [0-9]{2}:[0-9]{2}\.$/).waitFor();await page.unroute('**/rest/v1/rpc/crm_start_enrollment');
+ assert.deepEqual(startCalls[1].p_data,startCalls[0].p_data,'identical frozen business payload');assert(startCalls[0].p_data.enrollment.learner_name==='A2 Lucas gel');
+ assert.equal(await dialog().getByText('Inscription déjà rattachée').count(),0,'own replay, not a discovered result');await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');
  const frozenLead=detail(leadFrozen);assert.equal(sql(`select count(*) from public.students where full_name='A2 Lucas gel'`),'1');
- assert.equal(sql(`select count(*) from public.enrollments where student_id='${frozenLead.enrollment.student_id}'`),'1');
- assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${leadFrozen}' and task_type='enrollment_followup'`),'1');
+ assert.equal(sql(`select count(*) from public.enrollments where student_id='${frozenLead.enrollment.student_id}'`),'1');assert.equal(receipts(frozenLead.enrollment.student_id),'1');
  assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${leadFrozen}' and event_type='enrollment_started'`),'1');
  await done();assert.deepEqual(pageErrors,[]);
- console.log('PASS B1 frozen uncertain request: refetch reflecting the commit changes nothing; same key and payload replay to this dialog’s own success; one learner/enrollment/follow-up; no browser errors');
+ console.log('PASS B1 frozen uncertain request: refetch reflecting the commit changes nothing; same key and payload replay to this dialog’s own success; one learner/enrollment/receipt; no browser errors');
 } catch(error) {
  console.error(error.message);
  if(page&&!page.isClosed()){console.error((await page.locator('body').innerText()).slice(-4500));await page.screenshot({path:join(tmpdir(),'hills-rcc-a2-failure.png'),fullPage:true});}throw error;
 } finally {
  if(browser)await browser.close();
  if(users.length){const ids=users.map(u=>quote(u.id)).join(',');const linkedStudents=JSON.parse(sql(`select coalesce(json_agg(student_id) filter(where student_id is not null),'[]') from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))`));const studentIds=[...new Set([...fixtureStudents,...linkedStudents])].map(quote).join(',')||'null';const groupIds=fixtureGroups.map(quote).join(',')||'null';sql(`begin;
- lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks in access exclusive mode;
+ lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks,public.crm_revenue_entries in access exclusive mode;
  alter table public.placement_tests disable trigger crm_placement_integrity;alter table public.crm_activities disable trigger crm_activities_immutable;alter table public.crm_submissions disable trigger crm_submission_immutable;alter table public.crm_command_requests disable trigger crm_requests_immutable;alter table public.crm_followup_policies disable trigger crm_policy_immutable;
+ -- EAP (127): every CRM enrollment now collects a payment, so its lead has revenue entries.
+ alter table public.crm_revenue_entries disable trigger crm_revenue_immutable;delete from public.crm_revenue_entries where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));alter table public.crm_revenue_entries enable trigger crm_revenue_immutable;
  with removed_placements as(delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
  alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
- set local eh.enrollment_command = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});delete from public.groups where id in(${groupIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
+ set local english_hills.receipt_test_cleanup = 'on';delete from public.financial_events where actor_id in(${ids});delete from public.financial_requests where actor_id in(${ids});delete from public.receipts where student_id in(${studentIds});delete from public.charge_discount_reasons where charge_id in(select id from public.charges where student_id in(${studentIds}));delete from public.charges where student_id in(${studentIds});
+ set local eh.enrollment_command = on; set local eh.membership_sync = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});delete from public.groups where id in(${groupIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
  console.log('PASS synthetic browser fixtures removed; history guards restored');
 }

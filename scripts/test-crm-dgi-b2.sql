@@ -83,9 +83,10 @@ do $$ declare k text;r jsonb;l uuid;s uuid;e uuid;receipt uuid;begin
  foreach k in array array['L2','L4'] loop
   l:=pg_temp.lead(k);
   perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','Qualified','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
-  r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child '||k,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'B2 child '||k,'2014-05-10'),'confirm_new',true));
-  s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
-  r:=create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));receipt:=(r->>'receipt_id')::uuid;
+  -- EAP (127): enroll and collect in one step (replaces crm_start_enrollment + create_charge_payment).
+  r:=crm_enroll_and_collect(gen_random_uuid(),jsonb_build_object('enrollment',jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child '||k,'birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'B2 child '||k,'2014-05-10'),'confirm_new',true),
+   'payment',jsonb_build_object('gross_amount',1500,'payment_amount',500,'payment_method','Espèces')));
+  s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;receipt:=(r->>'receipt_id')::uuid;
   set constraints all immediate;set constraints all deferred;
   if k='L4' then perform void_financial_receipt(receipt,'B2 synthetic reversal',gen_random_uuid());set constraints all immediate;set constraints all deferred;end if;
  end loop;
@@ -159,11 +160,17 @@ select pg_temp.denied($q$select pg_temp.report('programme')$q$,'22023');
 -- L10, acquired 2026-03-05 (outside the main window): money is recorded through the
 -- trusted finance path before the enrollment is confirmed, so the lead has attributed
 -- revenue but no conversion. CAC and converted_paid both require the conversion.
+-- EAP (127): a linked enrollment that is not confirmed only exists as a legacy
+-- (pre-127) state: the Submitted row is a fixture under the two-flag exemption, then
+-- linked through the existing-enrollment path of crm_start_enrollment.
 select pg_temp.intake('L10','meta_instant_form','116101','Yearly','2026-03-05 12:00Z');
 do $$ declare l uuid:=pg_temp.lead('L10');r jsonb;s uuid;e uuid;receipt uuid;c uuid;begin
  perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','Qualified','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
- r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','B2 child L10','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'B2 child L10','2014-05-10'),'confirm_new',true));
- s:=(r->'enrollment'->>'student_id')::uuid;e:=(r->'enrollment'->>'id')::uuid;
+ insert into students(full_name,date_naissance,status,session_type,niveau_cefr) values('B2 child L10','2014-05-10','Prospect','Yearly','Child 2') returning id into s;
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
+ insert into enrollments(student_id,session_type,school_year,level,status,date_inscription) values(s,'Yearly','2026/2027','Child 2','Submitted',public.business_date()) returning id into e;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
+ perform crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e),'session_type','Yearly','school_year','2026/2027','initial_status','Confirmed'));
  r:=create_charge_payment_financial(jsonb_build_object('student_id',s,'session_type','Yearly','school_year','2026/2027','plan_type','Standard','gross_amount',1500,'payment_amount',700,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
  receipt:=(r->>'receipt_id')::uuid;c:=(r->>'charge_id')::uuid;
  update receipts set enrollment_id=e where id=receipt;update charges set enrollment_id=e where id=c;

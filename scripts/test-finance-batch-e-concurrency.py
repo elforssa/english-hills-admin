@@ -174,12 +174,12 @@ from jsonb_each_text({quote(json.dumps(students))}::jsonb) x(k,v);""")
                                        'note': 'Enrollment agreed', 'qualification_step': 'enrollment',
                                        'next_task': {'task_type': 'enrollment_followup',
                                                      'due_at': value("select (now()+interval '1 day')::text")}})['lead']['version']
-    command('start_enrollment', {'lead_id': lead, 'expected_version': version, 'student_choice': 'existing',
-                                 'student_id': students['race'], 'session_type': 'Adults', 'school_year': '2026/2027',
-                                 'initial_status': 'Submitted'})
+    # EAP (127): enrolled and paid in one step (« Inscrire et encaisser »); p1 is that first payment.
+    p1 = command('enroll_and_collect', {'enrollment': {'lead_id': lead, 'expected_version': version, 'student_choice': 'existing',
+                                                       'student_id': students['race'], 'session_type': 'Adults', 'school_year': '2026/2027'},
+                                        'payment': {'gross_amount': 1000, 'payment_amount': 100, 'payment_method': 'Espèces'}})
     enrollment = value(f"select enrollment_id from public.crm_leads where id={quote(lead)}")
-    p1 = pay({'student_id': students['race'], 'enrollment_id': enrollment, 'session_type': 'Adults', 'school_year': '2026/2027',
-              'gross_amount': 1000, 'payment_amount': 100})
+    assert p1['receipt_id'] and p1['charge_id'] and p1['enrollment']['id'] == enrollment, p1
     assert lead_state(lead) == 'false:CONVERTED'
 
     # Order 1: the payment holds its transaction while the void starts; the void then sees it.

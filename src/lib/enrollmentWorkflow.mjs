@@ -1,26 +1,28 @@
-// Shared definitions for the pre-registration queue and placement reports.
+// Shared definitions for enrollments, placement and reports.
 // Group membership derives from enrollments (plan EGC-r2, ADR-010): a learner is a
 // member of a group through a Validated or Trial enrollment in it. The learner-file
 // group (students.groupe_id) is the database's "main group" copy.
+// Enrollment at payment (EAP, migration 127): an enrollment is born Confirmed at the
+// payment and becomes Validated in a group. Submitted, Under Review, Trial and
+// Rejected are retired: never created, only read on old rows (a Trial row placed
+// before the archive step is still a member, as the database counts it).
 import { centreSchoolYear } from './centreClock.mjs';
 
-export const PENDING_PRE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review'];
 export const MEMBERSHIP_STATUSES = ['Validated', 'Trial'];
-export const LIVE_ENROLLMENT_STATUSES = ['Submitted', 'Under Review', 'Confirmed', 'Validated', 'Trial'];
+export const LIVE_ENROLLMENT_STATUSES = ['Confirmed', 'Validated'];
 // "Apprenants actifs": Inscrit and Essai only (D3-A); Ancien apprenant and Inactif are not active.
 export const ACTIVE_STUDENT_STATUSES = ['Enrolled', 'Trial'];
-export function isPendingPreEnrollment(enrollment) {
-  return PENDING_PRE_ENROLLMENT_STATUSES.includes(enrollment.status);
-}
-export function isPreEnrollment(enrollment) {
-  return ['Submitted', 'Under Review', 'Rejected', 'Trial'].includes(enrollment.status);
+// A row not yet ended or refused: a live one or, until the archive step ends it, a
+// retired one. « Ancien apprenant » and « Clôturer l’année » end these too.
+export function isOpenEnrollment(enrollment) {
+  return !['Ended', 'Rejected'].includes(enrollment.status);
 }
 export function isMembership(enrollment) {
   return MEMBERSHIP_STATUSES.includes(enrollment.status) && Boolean(enrollment.group_id);
 }
-// "Groupe à affecter": a Confirmed enrollment without a group, or an active learner
-// with no membership and no pending enrollment. A learner-file group still counts
-// as placed until the clean-up backs every one with an enrollment.
+// "Groupe à affecter": a Confirmed (paid) enrollment without a group, or an active
+// learner with no membership and no paid enrollment. A learner-file group still
+// counts as placed until the clean-up backs every one with an enrollment.
 export function studentNeedsGroup(student, enrollments, session = '') {
   const own = enrollments.filter(e => e.student_id === student.id);
   const inSession = e => !session || (e.session_type || student.session_type || 'Yearly') === session;
@@ -28,7 +30,7 @@ export function studentNeedsGroup(student, enrollments, session = '') {
   if (!ACTIVE_STUDENT_STATUSES.includes(student.status)) return false;
   if (session && (student.session_type || 'Yearly') !== session) return false;
   return !student.groupe_id && !own.some(isMembership)
-    && !own.some(e => ['Submitted', 'Under Review', 'Confirmed'].includes(e.status));
+    && !own.some(e => e.status === 'Confirmed');
 }
 // The Groupe column's fallback for a file with no group and no enrollment to place
 // (plan AFU-r1, H4): « Groupe à affecter » only for an active file (Inscrit or Essai),

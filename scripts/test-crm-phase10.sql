@@ -39,8 +39,22 @@ end $$;
 create function pg_temp.qualify(l uuid) returns void language plpgsql as $$ begin
  perform pg_temp.act('qualify_lead',l,jsonb_build_object('conversation_channel','phone','note','PRIVATE-NOTE','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day')));
 end $$;
+-- EAP (127): crm_start_enrollment creates only Confirmed enrollments (postgres-session
+-- call), so the linked lead converts when the enrollment is created.
 create function pg_temp.enroll(l uuid) returns uuid language plpgsql as $$ declare r jsonb;begin
- r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase10 child','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase10 child','2014-05-10'),'confirm_new',true));return (r->'enrollment'->>'id')::uuid;
+ r:=crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','new','learner_name','Phase10 child','birth_date','2014-05-10','session_type','Yearly','school_year','2026/2027','level','Child 2','candidate_review',crm_security.candidate_token(l,'Phase10 child','2014-05-10'),'confirm_new',true,'initial_status','Confirmed'));return (r->'enrollment'->>'id')::uuid;
+end $$;
+-- EAP (127): legacy state only (a pre-127 Submitted enrollment linked to a qualified
+-- lead, later confirmed): the Submitted row is a fixture under the two-flag exemption,
+-- then linked through the existing-enrollment path of crm_start_enrollment.
+create function pg_temp.legacy_enroll(l uuid) returns uuid language plpgsql as $$ declare s uuid;e uuid;begin
+ insert into students(full_name,date_naissance,status,session_type,niveau_cefr) values('Phase10 legacy child','2014-05-10','Prospect','Yearly','Child 2') returning id into s;
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
+ insert into enrollments(student_id,session_type,school_year,level,status,date_inscription) values(s,'Yearly','2026/2027','Child 2','Submitted',public.business_date()) returning id into e;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
+ perform crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from crm_leads where id=l),'student_choice','existing','student_id',s,'enrollment_id',e,'expected_enrollment_updated_at',(select updated_at from enrollments where id=e),'session_type','Yearly','school_year','2026/2027','initial_status','Confirmed'));
+ perform pg_temp.ok((select status='QUALIFIED' and enrollment_id=e from crm_leads where id=l),'legacy fixture: Submitted enrollment linked, lead not converted');
+ return e;
 end $$;
 select pg_temp.actor(3);
 insert into fx values('lead',to_jsonb(pg_temp.intake()));
@@ -80,8 +94,9 @@ select crm_finish_external_attempt(id,lease_token,'{"outcome":"sent","http_statu
 select pg_temp.actor(1);select pg_temp.denied($q$select crm_retry_external_delivery(id) from crm_external_deliveries$q$,'22023');
 select pg_temp.ok((select count(*)=2 from crm_external_delivery_attempts),'numbered immutable attempts');
 -- Genuine linked enrollment conversion and Confirmed -> Validated never duplicate.
+-- EAP (127): the enrollment is created Confirmed (no separate confirmation step).
 select pg_temp.actor(3);insert into fx values('enrollment',to_jsonb(pg_temp.enroll((select (v#>>'{}')::uuid from fx where k='lead'))));
-select pg_temp.actor(1);update enrollments set status='Confirmed' where id=(select (v#>>'{}')::uuid from fx where k='enrollment');
+select pg_temp.actor(1);
 set constraints all immediate;set constraints all deferred;
 select crm_reconcile_external_deliveries();
 insert into groups(id,name,session_type,niveau) values('8a000000-0000-0000-0000-000000000100','Phase10 fixture','Yearly','Child 2');
@@ -94,9 +109,11 @@ select pg_temp.actor(3);
 insert into fx values('manual',to_jsonb(pg_temp.intake('manual'))),('website',to_jsonb(pg_temp.intake('website'))),('noidentity',to_jsonb(pg_temp.intake('website',true,false))),('noconsent',to_jsonb(pg_temp.intake('meta_instant_form',false))),('review',to_jsonb(pg_temp.intake()));
 select pg_temp.qualify((v#>>'{}')::uuid) from fx where k in ('manual','website','noidentity','noconsent','review');
 insert into fx values('manual_enrollment',to_jsonb(pg_temp.enroll((select (v#>>'{}')::uuid from fx where k='manual'))));
-insert into fx values('review_enrollment',to_jsonb(pg_temp.enroll((select (v#>>'{}')::uuid from fx where k='review'))));
+-- EAP (127): a lead closed lost while linked to an unconfirmed enrollment only exists
+-- as a legacy (pre-127) state; the manual enrollment is already Confirmed.
+insert into fx values('review_enrollment',to_jsonb(pg_temp.legacy_enroll((select (v#>>'{}')::uuid from fx where k='review'))));
 select pg_temp.act('close_lost',(select (v#>>'{}')::uuid from fx where k='review'),'{"reason":"postponed","note":"Wait"}');
-select pg_temp.actor(1);update enrollments set status='Confirmed' where id in(select (v#>>'{}')::uuid from fx where k in ('review_enrollment','manual_enrollment'));
+select pg_temp.actor(1);update enrollments set status='Confirmed' where id=(select (v#>>'{}')::uuid from fx where k='review_enrollment');
 set constraints all immediate;set constraints all deferred;
 select crm_reconcile_external_deliveries();
 select pg_temp.ok((select count(*)=2 and bool_and(status='suppressed' and last_error_code='no_destination') from crm_external_deliveries where lead_id=(select (v#>>'{}')::uuid from fx where k='manual')),'manual qualification and conversion have no fabricated destination');

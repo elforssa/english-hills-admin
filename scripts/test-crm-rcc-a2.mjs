@@ -1,35 +1,45 @@
-// RCC-A2 pure contract: reason table, definite/uncertain classifier, safe
-// fallbacks, Casablanca bounds, contextual actions and result origin.
+// RCC-A2 pure contract, after EAP (migration 127, « Inscrire et encaisser »): reason
+// table, definite/uncertain classifier, safe fallbacks, payment and eap.* refusals,
+// Casablanca bounds, contextual actions and result origin.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { commandError, casablancaInstant } from '../src/lib/crm/presentation.mjs';
-import { ENROLLMENT_REASONS, YEAR_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, discardsRequestKey } from '../src/lib/crm/enrollmentErrors.mjs';
-import { casablancaToday, casablancaNowInput, birthDateReason, followupReason, submitReason, enrollmentAction, continueHref, studentHref, enrollmentParam, enrollmentSuccess, followupNotice } from '../src/lib/crm/enrollmentActions.mjs';
+import { ENROLLMENT_REASONS, YEAR_REASONS, EAP_REASONS, FALLBACK_REASONS, UNCERTAIN_MESSAGE, DEFINITE_GENERIC_MESSAGE, PAID_LINK_REFUSED_MESSAGE, PAYMENT_CONFLICT_MESSAGE, isDefiniteRejection, enrollmentReason, enrollmentFailure, paymentFailure } from '../src/lib/crm/enrollmentErrors.mjs';
+import { ARCHIVED_PRE_ENROLLMENT_NOTE, casablancaToday, casablancaNowInput, birthDateReason, enrollmentAction, studentHref, enrollmentParam, enrollmentSuccess, placementLine } from '../src/lib/crm/enrollmentActions.mjs';
+import { EAP_REASON_TEXT } from '../src/lib/academic/membershipActions.mjs';
 
 // The closed plan §1 vocabulary, the migration's hints and the browser table agree.
 const PLAN = ['lead_unavailable','lead_already_enrolled','lead_not_qualified','program_invalid','school_year_invalid','notes_too_long','initial_status_not_permitted',
   'learner_already_linked','learner_link_mismatch','linked_learner_unavailable','learner_unavailable','learner_choice_required','learner_name_invalid','birth_date_future',
   'birth_date_invalid','candidates_changed','new_learner_confirmation_required','enrollment_incompatible','enrollment_already_linked','enrollment_group_incompatible',
   'enrollment_changed','existing_enrollment_needs_review','existing_enrollment_requires_selection','existing_enrollment_linked_elsewhere','group_incompatible','level_invalid',
-  'trial_requires_group','followup_invalid','followup_in_past','owner_not_operational','followup_policy_unavailable','enrollment_in_progress','concurrent_change','record_rejected'];
+  'followup_invalid','followup_in_past','owner_not_operational','followup_policy_unavailable','enrollment_in_progress','concurrent_change','record_rejected'];
 assert.deepEqual(Object.keys(ENROLLMENT_REASONS).sort(), [...PLAN].sort(), 'browser table equals the plan vocabulary');
 assert.deepEqual(FALLBACK_REASONS, ['request_invalid','request_conflict','lead_changed']);
-const migration = readFileSync(new URL('../supabase/migrations/112_crm_rcc_a2_enrollment_ux.sql', import.meta.url), 'utf8');
-const hinted = new Set([...migration.matchAll(/'crm_enrollment\.([a-z_]+)'/g)].map(m => m[1]));
+// The latest command bodies (127): crm_start_enrollment and its crm_enroll_and_collect wrapper.
+const eap = readFileSync(new URL('../supabase/migrations/127_enrollment_at_payment.sql', import.meta.url), 'utf8');
+const commands = eap.slice(eap.indexOf('CREATE OR REPLACE FUNCTION public.crm_start_enrollment'), eap.indexOf('-- ── D4'));
+const hinted = new Set([...commands.matchAll(/'crm_enrollment\.([a-z_]+)'/g)].map(m => m[1]));
 assert.deepEqual([...hinted].sort(), [...PLAN, ...FALLBACK_REASONS].sort(), 'every server hint is mapped and every mapped reason is emitted');
-const FIELDS = [null,'name','birth','confirmNew','session','year','notes','status','level','group','due'];
-for (const [reason, entry] of Object.entries(ENROLLMENT_REASONS)) {
+assert(!/trial_requires_group/.test(commands), 'the essai reason is gone from the server command');
+const eapHints = new Set([...commands.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]));
+assert.deepEqual([...eapHints].sort(), Object.keys(EAP_REASONS).sort(), 'the wrapper\'s eap.* refusals are mapped');
+for (const [reason, entry] of Object.entries(EAP_REASONS)) assert.equal(entry.message, EAP_REASON_TEXT[reason], `${reason}: the shared French wording`);
+const FIELDS = [null,'name','birth','confirmNew','session','year','level','group','amount'];
+for (const [reason, entry] of Object.entries({ ...ENROLLMENT_REASONS, ...EAP_REASONS })) {
   assert(entry.message && /[éèàâêîôûçÉ’«]|^[A-Z]/.test(entry.message) && !/[A-Za-z]+_[a-z]+|crm_|SQL|uuid/i.test(entry.message), `${reason}: French message without tokens`);
-  assert([null,1,2].includes(entry.step), `${reason}: step`);assert(FIELDS.includes(entry.field), `${reason}: field`);
+  assert([null,1,2,3].includes(entry.step), `${reason}: step`);assert(FIELDS.includes(entry.field), `${reason}: field`);
   assert([true,false,'until-change'].includes(entry.submit), `${reason}: submit`);
   assert(['close','discovered','correct','linked','escalate','reselect','refresh','enrollments','retry'].includes(entry.recovery), `${reason}: recovery`);
   if (entry.field) assert(entry.step, `${reason}: a field always has a step`);
 }
 for (const reason of ['birth_date_future','birth_date_invalid','learner_name_invalid']) assert.equal(ENROLLMENT_REASONS[reason].step, 1, `${reason} goes to step 1, not step 2`);
-for (const reason of ['lead_unavailable','lead_already_enrolled','lead_not_qualified','linked_learner_unavailable','followup_policy_unavailable']) assert.equal(ENROLLMENT_REASONS[reason].submit, false);
+for (const reason of ['lead_unavailable','lead_already_enrolled','lead_not_qualified','linked_learner_unavailable','followup_policy_unavailable','initial_status_not_permitted']) assert.equal(ENROLLMENT_REASONS[reason].submit, false);
+for (const reason of Object.keys(ENROLLMENT_REASONS)) assert.notEqual(ENROLLMENT_REASONS[reason].field, 'due', `${reason}: no follow-up date field any more`);
+assert.doesNotMatch(JSON.stringify(ENROLLMENT_REASONS), /pré-inscription|essai/i, 'no retired wording');
 assert.equal(ENROLLMENT_REASONS.lead_already_enrolled.recovery, 'discovered');
 assert.equal(ENROLLMENT_REASONS.learner_already_linked.message, ENROLLMENT_REASONS.learner_link_mismatch.message);
-assert(!Object.values(ENROLLMENT_REASONS).some(r => /paiement/.test(r.message) && r !== ENROLLMENT_REASONS.enrollment_in_progress), 'only the intent-lock text mentions payment');
+assert(!Object.values(ENROLLMENT_REASONS).some(r => /paiement/.test(r.message) && r !== ENROLLMENT_REASONS.enrollment_in_progress), 'only the intent-lock text mentions payment among crm_enrollment reasons');
 
 // Definite rejection only when a SQLSTATE proves the rollback.
 for (const code of ['22023','PT409','40001','42501','P0001','23514','22P02']) assert.equal(isDefiniteRejection({ code }), true, code);
@@ -55,7 +65,7 @@ const SCENARIOS = {
   enrollment_group_incompatible: ['22023','Enrollment group must match session and level'], enrollment_changed: ['PT409','Stale enrollment; refresh and retry'],
   existing_enrollment_needs_review: ['22023','Existing enrollment status requires review'], existing_enrollment_requires_selection: ['22023','Existing enrollment requires explicit selection'],
   existing_enrollment_linked_elsewhere: ['22023','Existing enrollment requires explicit selection'], group_incompatible: ['22023','Enrollment group must match session and level'],
-  level_invalid: ['22023','Invalid level for selected program'], trial_requires_group: ['22023','Invalid enrollment fields or incompatible group'],
+  level_invalid: ['22023','Invalid level for selected program'],
   followup_invalid: ['22023','Invalid enrollment fields or incompatible group'], followup_in_past: ['22023','Valid future task required'],
   owner_not_operational: ['22023','Assignee must be operational staff'], followup_policy_unavailable: ['22023','Policy has no available calling window'],
   enrollment_in_progress: ['PT409','Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.'], concurrent_change: ['PT409','Concurrent enrollment change; refresh and retry'],
@@ -92,11 +102,32 @@ assert.equal(noHint('P0001', 'internal detail a2000000-0000-0000-0000-0000000000
 for (const error of [{ code: '', message: 'TypeError: Failed to fetch' }, { code: 'PGRST301', message: 'JWT' }, { message: 'Bad Gateway', status: 502 }, null]) {
   const failure = enrollmentFailure(error);
   assert.equal(failure.definite, false);assert.equal(failure.message, UNCERTAIN_MESSAGE);assert(!/rien n’a été enregistré/.test(failure.message));
-  assert.equal(discardsRequestKey(error), false, 'uncertain retains the request key');
 }
 assert(DEFINITE_GENERIC_MESSAGE.includes('rien n’a été enregistré'));
-for (const code of ['22023','42501','PT409','40001']) assert.equal(discardsRequestKey({ code }), true, code);
-assert.equal(discardsRequestKey({ code: '23514' }), false, 'other SQLSTATEs keep today\'s retained key');
+
+// EAP: the wrapper's refusals and the payment command's hint-less refusals.
+const required = { code: '22023', message: 'L’inscription se confirme à l’encaissement : saisissez un paiement.', hint: 'eap.payment_required' };
+assert.deepEqual(enrollmentFailure(required), { definite: true, reason: 'payment_required', ...EAP_REASONS.payment_required });
+assert.equal(enrollmentFailure(required).step, 3);assert.equal(enrollmentFailure(required).field, 'amount');
+const refusedLink = enrollmentFailure(required, { linkingPaid: true });
+assert.equal(refusedLink.message, PAID_LINK_REFUSED_MESSAGE);assert.equal(refusedLink.recovery, 'pay', 'a refused paid link moves to the payment step');assert.equal(refusedLink.step, 3);
+const other = enrollmentFailure({ code: '22023', message: 'Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.', hint: 'eap.program_not_enrollable' });
+assert.equal(other.message, EAP_REASON_TEXT.program_not_enrollable);assert.equal(other.field, 'session');assert.equal(other.step, 2);
+assert.equal(enrollmentFailure({ code: '23514', message: 'x', hint: 'eap.status_retired' }).message, EAP_REASON_TEXT.status_retired);
+const today = 'La date du paiement ne peut pas être dans le futur (aujourd’hui à Casablanca : 04/11/2026).';
+for (const [message, field] of [['Indiquez le motif de la remise.', 'reasonCode'], ['Motif de remise inconnu.', 'reasonCode'], ['Précisez le motif de la remise « Autre ».', 'reasonText'],
+  ['Le motif de la remise ne doit pas dépasser 200 caractères.', 'reasonText'], [today, 'paymentDate'], ['La date du paiement ne peut pas être antérieure de plus de 7 jours.', 'paymentDate']]) {
+  const refused = enrollmentFailure({ code: '22023', message });
+  assert.deepEqual([refused.message, refused.step, refused.field, refused.recovery], [message, 3, field, 'correct'], message);
+}
+assert.equal(paymentFailure({ code: '22023', message: 'Indiquez le motif de la remise. drop table' }), null, 'only the exact desk-guard texts are shown as is');
+assert.equal(paymentFailure({ code: '22023', message: 'Indiquez le motif de la remise.', hint: 'crm_enrollment.request_invalid' }), null, 'a hinted error is never a payment refusal');
+assert.equal(paymentFailure({ message: 'Indiquez le motif de la remise.' }), null, 'an uncertain outcome is never a payment refusal');
+assert.equal(enrollmentFailure({ code: 'P0001', message: 'Payment exceeds the remaining balance of 100.00 MAD.' }).field, 'amount');
+assert.doesNotMatch(enrollmentFailure({ code: 'P0001', message: 'Payment exceeds the remaining balance of 100.00 MAD.' }).message, /Payment|MAD\./);
+assert.deepEqual([enrollmentFailure({ code: 'P0001', message: 'Idempotency key conflict: request contents changed.' }).message, enrollmentFailure({ code: 'P0001', message: 'Idempotency key conflict: request contents changed.' }).submit], [PAYMENT_CONFLICT_MESSAGE, false]);
+assert.equal(enrollmentFailure({ code: 'P0001', message: 'Invalid price or discount.' }).field, 'gross');
+assert.equal(enrollmentFailure({ code: 'P0001', message: 'A valid email recipient is required when email delivery is requested.' }).field, 'emailRecipient');
 
 // Casablanca civil bounds with fixed clocks around Casablanca midnight. The instants
 // come from the runtime's own Casablanca conversion: no UTC offset is assumed, since
@@ -112,27 +143,16 @@ assert.equal(birthDateReason('2026-10-07', beforeMidnight), 'birth_date_future',
 assert.equal(birthDateReason('', beforeMidnight), null, 'blank stays valid');
 assert.equal(birthDateReason('2015-01-01'), null);assert.equal(birthDateReason('07/10/2026'), 'birth_date_invalid');
 assert.equal(casablancaNowInput(halfPast), '2026-10-07T00:30');
-assert.equal(followupReason('2026-10-07T00:29', halfPast), 'followup_in_past');
-assert.equal(followupReason('2026-10-07T00:31', halfPast), null);
-assert.equal(followupReason('', halfPast), null);
-assert.equal(followupReason('not-a-date'), 'followup_invalid');
-// I2: an uncertain replay skips only the follow-up futurity check that time alone can
-// invalidate; the birth-date bound stays active (its frozen value only gets more valid).
-assert.equal(submitReason({ birth: '', due: '2026-10-07T00:29', replay: true }, halfPast), null, 'replay never asks for a new follow-up date');
-assert.equal(submitReason({ birth: '', due: '2026-10-07T00:29', replay: false }, halfPast), 'followup_in_past');
-assert.equal(submitReason({ birth: '2026-10-08', due: '', replay: true }, halfPast), 'birth_date_future', 'birth bound still applies on replay');
-assert.equal(submitReason({ birth: '2026-10-08', due: '2026-10-07T00:29', replay: true }, halfPast), 'birth_date_future');
-assert.equal(submitReason({ birth: '2026-10-08', due: '', checkBirth: false, replay: true }, halfPast), null, 'linked path sends no birth date');
-assert.equal(submitReason({ birth: '2026-10-07', due: '2026-10-07T00:31', replay: false }, halfPast), null);
 
-// Contextual actions, plan §5 rows 1–10: exactly one action or none.
+// Contextual actions, plan §5 rows: exactly one action or none. EAP (D6): former rows
+// 3–5 (pre-inscription or essai, by lead state) are one historical row 3.
 const e = status => ({ id: 'e', student_id: 's', status });
 const rows = [
   [{ status: 'CONVERTED', enrollment: e('Confirmed') }, 1, 'open'], [{ status: 'QUALIFIED', enrollment: e('Validated') }, 1, 'open'],
   [{ status: 'CONVERTED', enrollment: e('Submitted') }, 2, 'open'], [{ status: 'CONVERTED', enrollment: e('Rejected') }, 2, 'open'], [{ status: 'CONVERTED', enrollment: e(null) }, 2, 'open'],
-  [{ status: 'QUALIFIED', enrollment: e('Submitted') }, 3, 'continue'], [{ status: 'QUALIFIED', enrollment: e('Under Review') }, 3, 'continue'], [{ status: 'QUALIFIED', enrollment: e('Trial') }, 3, 'continue'],
-  [{ status: 'NEW', enrollment: e('Submitted') }, 4, 'open'], [{ status: 'CONTACTING', enrollment: e('Trial') }, 4, 'open'], [{ status: 'ENGAGED', enrollment: e('Under Review') }, 4, 'open'],
-  [{ status: 'LOST', enrollment: e('Submitted') }, 5, 'open'], [{ status: 'NOT_QUALIFIED', enrollment: e('Trial') }, 5, 'open'],
+  [{ status: 'QUALIFIED', enrollment: e('Submitted') }, 3, 'open'], [{ status: 'QUALIFIED', enrollment: e('Under Review') }, 3, 'open'], [{ status: 'QUALIFIED', enrollment: e('Trial') }, 3, 'open'],
+  [{ status: 'NEW', enrollment: e('Submitted') }, 3, 'open'], [{ status: 'CONTACTING', enrollment: e('Trial') }, 3, 'open'], [{ status: 'ENGAGED', enrollment: e('Under Review') }, 3, 'open'],
+  [{ status: 'LOST', enrollment: e('Submitted') }, 3, 'open'], [{ status: 'NOT_QUALIFIED', enrollment: e('Trial') }, 3, 'open'],
   [{ status: 'QUALIFIED', enrollment: e('Rejected') }, 6, 'open'], [{ status: 'LOST', enrollment: e('Rejected') }, 6, 'open'],
   [{ status: 'QUALIFIED', enrollment: e(null) }, 7, 'open'], [{ status: 'QUALIFIED', enrollment: e('Mystery') }, 7, 'open'], [{ status: 'CONVERTED', enrollment: null }, 7, null],
   [{ status: 'QUALIFIED', enrollment: null }, 8, 'start'],
@@ -142,46 +162,39 @@ const rows = [
 for (const [lead, row, action] of rows) {
   const result = enrollmentAction(lead);
   assert.equal(result.row, row, JSON.stringify(lead));assert.equal(result.action, action, JSON.stringify(lead));
-  assert(!/Finaliser/.test(result.note || ''), 'no Finaliser note in any state');assert(!/paiement|payer|Encaisser/i.test(result.note || ''), 'no payment wording');
+  assert(!/Finaliser/.test(result.note || ''), 'no Finaliser note in any state');
+  if (row === 3) assert.equal(result.note, ARCHIVED_PRE_ENROLLMENT_NOTE);else assert(!/paiement|payer|Encaisser/i.test(result.note || ''), 'no payment wording outside the historical row');
+  assert.notEqual(result.action, 'continue', 'no « Continuer l’inscription » any more');
 }
+assert.equal(ARCHIVED_PRE_ENROLLMENT_NOTE, 'Ancienne pré-inscription archivée ; relancez « Inscrire et encaisser » si le prospect s’inscrit.');
 assert.match(enrollmentAction({ status: 'CONVERTED', enrollment: e('Submitted') }).note, /vérification par la direction/);
-assert.match(enrollmentAction({ status: 'ENGAGED', enrollment: e('Submitted') }).note, /Qualifiez-le à nouveau/);
+// An enrollment ended after its confirmation raises no server review: its note claims none.
+assert.deepEqual(enrollmentAction({ status: 'CONVERTED', enrollment: e('Ended') }), { row: 2, action: 'open', note: 'Inscription terminée après sa confirmation. Le prospect reste converti.' });
 assert.match(enrollmentAction({ status: 'QUALIFIED', enrollment: e('Rejected') }).note, /Inscription refusée/);
 const back = '/crm/leads?lead=a2000000-0000-0000-0000-000000000001';
-assert.equal(continueHref({ id: 'a2000000-0000-0000-0000-0000000000e1', student_id: 'a2000000-0000-0000-0000-0000000000a1' }, back),
-  '/students/a2000000-0000-0000-0000-0000000000a1?enrollment=a2000000-0000-0000-0000-0000000000e1&returnTo=%2Fcrm%2Fleads%3Flead%3Da2000000-0000-0000-0000-000000000001');
 assert.equal(studentHref({ student_id: 's1' }, back), '/students/s1?returnTo=%2Fcrm%2Fleads%3Flead%3Da2000000-0000-0000-0000-000000000001');
 assert.equal(enrollmentParam('A2000000-0000-0000-0000-0000000000E1'), 'a2000000-0000-0000-0000-0000000000e1');
 for (const bad of [null, undefined, '', 'x', 'a2000000-0000-0000-0000-0000000000e1;x', '<script>']) assert.equal(enrollmentParam(bad), null);
 
-// Result origin: discovered results never claim creation by this request.
-const base = { lead: { status: 'QUALIFIED' }, enrollment: { status: 'Submitted', student_name: 'Adam', session_type: 'Yearly', school_year: '2026/2027' } };
-const created = enrollmentSuccess({ ...base, enrollment_followup: { id: 't', created: true, local_date: '2026-10-08', local_time: '15:20:00' } }, 'request');
-assert.equal(created.heading, 'Pré-inscription créée');assert.equal(created.followup, 'Suivi « Finaliser l’inscription » prévu le 08/10/2026 à 15:20.');
-assert.match(created.lead, /Le prospect reste qualifié/);assert.equal(created.learner, 'Adam · Programme annuel · 2026/2027');
-assert.equal(enrollmentSuccess({ ...base, enrollment_followup: { id: 't', created: false, local_date: '2026-10-09', local_time: '10:00:00' } }, 'request').followup, 'Le suivi d’inscription déjà prévu est conservé : 09/10/2026 à 10:00.');
-assert.equal(enrollmentSuccess(base, 'request').followup, 'Le suivi d’inscription apparaît dans Prochaine action.', 'pre-migration replay without the field');
-assert.equal(enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status: 'Trial' } }, 'request').heading, 'Essai démarré');
-assert.equal(enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status: 'Under Review' } }, 'request').heading, 'Inscription rattachée');
-const confirmed = enrollmentSuccess({ lead: { status: 'CONVERTED' }, enrollment: { ...base.enrollment, status: 'Confirmed' }, enrollment_followup: null }, 'request');
-assert.equal(confirmed.heading, 'Inscription confirmée rattachée');assert.equal(confirmed.followup, null);assert.match(confirmed.lead, /Le suivi commercial est terminé/);
-// Owner wording amendment (2026-10-07): creation headings only for an enrollment this
-// request created; an existing enrollment linked by this request is "Inscription rattachée".
-const heading = (status, linkedExisting, origin = 'request') => enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status } }, origin, { linkedExisting }).heading;
-assert.equal(heading('Submitted', false), 'Pré-inscription créée', 'newly created Submitted');
-assert.equal(heading('Trial', false), 'Essai démarré', 'newly created Trial');
-assert.equal(heading('Submitted', true), 'Inscription rattachée', 'existing Submitted linked');
-assert.equal(heading('Trial', true), 'Inscription rattachée', 'existing Trial linked');
-assert.equal(heading('Under Review', true), 'Inscription rattachée');
-assert.equal(heading('Confirmed', true), 'Inscription confirmée rattachée');
-for (const status of ['Submitted','Trial']) assert.equal(heading(status, true, 'discovered'), 'Inscription déjà rattachée', `discovered ${status}`);
+// Result origin: discovered results never claim this request's work; the request's own
+// result names the receipt, the 100 % discount or the paid link (Q12), and the group.
+const enrolled = { student_name: 'Adam', session_type: 'Yearly', school_year: '2026/2027', status: 'Confirmed', group_name: null };
+const paidResult = { lead: { status: 'CONVERTED' }, enrollment: enrolled, receipt_id: 'r', receipt_number: '2026-0443', free_enrollment: false, replayed_enrollment: false, replayed_payment: false };
+const paidView = enrollmentSuccess(paidResult, 'request', { placement: null });
+assert.equal(paidView.heading, 'Inscription confirmée · reçu 2026-0443');assert.equal(paidView.learner, 'Adam · Programme annuel · 2026/2027');
+assert.equal(paidView.group, 'Groupe à affecter');assert.equal(paidView.intro, null);assert.match(paidView.lead, /Prospect converti/);
+assert.equal(enrollmentSuccess({ ...paidResult, receipt_id: null, receipt_number: null, free_enrollment: true }, 'request').heading, 'Inscription confirmée sans paiement (remise 100 %)');
+assert.equal(enrollmentSuccess({ ...paidResult, receipt_id: null, receipt_number: null }, 'request', { linkedPaid: true }).heading, 'Inscription payée rattachée');
+assert.match(enrollmentSuccess({ ...paidResult, replayed_enrollment: true, replayed_payment: true }, 'request').intro, /déjà enregistrée/);
+assert.equal(enrollmentSuccess(paidResult, 'request', { placement: { status: 'placed', name: 'Kids A' } }).group, 'Groupe : Kids A');
+assert.equal(enrollmentSuccess(paidResult, 'request', { placement: { status: 'failed', message: 'Ce groupe est complet.' } }).group,
+  'Groupe non affecté : Ce groupe est complet. Apprenant inscrit — groupe à affecter.', 'a placement refusal never reads as a payment failure');
+assert.equal(placementLine(null, { ...enrolled, group_name: 'Teens B' }), 'Groupe : Teens B', 'a linked Validated enrollment keeps its group');
 for (const status of ['Submitted','Trial','Under Review','Confirmed']) {
-  const found = enrollmentSuccess({ ...base, enrollment: { ...base.enrollment, status } }, 'discovered');
+  const found = enrollmentSuccess({ lead: { status: 'QUALIFIED' }, enrollment: { ...enrolled, status } }, 'discovered');
   assert.equal(found.heading, 'Inscription déjà rattachée');
-  assert(!/créée|démarré|Pré-inscription créée|Essai démarré/.test(JSON.stringify(found).replace('Pré-inscription créée · En attente', '')), `discovered ${status} never claims creation`);
+  assert(!/reçu|remise|payée rattachée/.test(JSON.stringify(found)), `discovered ${status} never claims this request's payment`);
 }
-assert.equal(enrollmentSuccess(base, 'discovered').followup, 'Le suivi d’inscription apparaît dans Prochaine action.');
-assert.equal(followupNotice({ local_date: '2026-10-09', local_time: '10:00:00' }), 'Un suivi d’inscription est déjà prévu le 09/10/2026 à 10:00. Il est conservé.');
 // Batch H (H5): the placement year check (egc.* hint) has its own French text, no "Réessayez".
 for (const [hint, message] of [['egc.school_year_mismatch', 'L’année scolaire de l’inscription (2025/2026) ne correspond pas à celle du groupe (2026/2027).'],
   ['egc.group_year_missing', 'Renseignez l’année scolaire du groupe.']]) {
@@ -189,4 +202,16 @@ for (const [hint, message] of [['egc.school_year_mismatch', 'L’année scolaire
   assert.equal(failure.definite, true, hint);assert.equal(failure.field, 'group', hint);assert.equal(failure.recovery, 'correct', hint);
   assert.equal(failure.message, YEAR_REASONS[hint.slice(4)].message, hint);assert.doesNotMatch(failure.message, /Réessayez|egc\./, hint);
 }
-console.log('PASS RCC-A2 reason table/vocabulary, definite vs uncertain, legacy compatibility, Casablanca bounds, contextual actions and result origin');
+// EAP (D3/D6) source contract of the dialog, the panel section and the follow-up label.
+const dialogSource = readFileSync(new URL('../src/components/crm/CrmEnrollmentDialog.jsx', import.meta.url), 'utf8');
+assert.equal((dialogSource.match(/crmRpc\('crm_enroll_and_collect'/g) || []).length, 1, 'one submit command');
+assert.match(dialogSource, /crmRpc\('crm_enroll_and_collect', \{ p_request_key: requestKey\.current, p_data: sent\.payload \}\)/, 'the request key of this dialog opening, reused for every resend');
+assert.match(dialogSource, /if \(!requestKey\.current\) requestKey\.current = crypto\.randomUUID\(\);/);
+assert.doesNotMatch(dialogSource, /crm_start_enrollment|initial_status|group_id|idempotency_key|Démarrage|'Trial'|Pré-inscription|followup_at|customDue/, 'no retired path or client-side idempotency key');
+assert.match(dialogSource, /if \(f\.mode === 'link' && f\.enrollment\) return \{ enrollment \};/, 'a paid link sends no payment object (Q12)');
+assert.match(dialogSource, /placeLearnerInGroup\(client, \{ student, group: groupId, enrollment \}\)/, 'placement after the payment on re-read rows');
+assert.match(dialogSource, /from\('students'\)\.select\('id,updated_at'\)[\s\S]*from\('enrollments'\)\.select\('id,updated_at'\)/);
+const sectionSource = readFileSync(new URL('../src/components/crm/LeadEnrollmentSection.jsx', import.meta.url), 'utf8');
+assert.match(sectionSource, />Inscrire et encaisser<\/Button>/);assert.doesNotMatch(sectionSource, /Commencer l|Continuer l/);
+assert.match(readFileSync(new URL('../src/components/crm/CrmActionDialog.jsx', import.meta.url), 'utf8'), /enrollment_followup: 'Suivi d’inscription'/);
+console.log('PASS RCC-A2 reason table/vocabulary, definite vs uncertain, legacy compatibility, Casablanca bounds, contextual actions, result origin and the « Inscrire et encaisser » dialog contract');

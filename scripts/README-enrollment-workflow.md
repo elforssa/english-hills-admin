@@ -27,7 +27,8 @@ through `end_learner`, `close_school_year`, `online_close_course` (D8 = A) or ar
 Manual creation and CSV imports create Prospect files (an imported Alumni or
 Inactive status is kept). Payments no longer set the status: it follows the
 enrollment the payment confirms, and an Other or legacy-balance receipt changes
-none. Public pre-registration still creates Prospect / Submitted records.
+none. Public pre-registration still creates Prospect / Submitted records in Production; migration 127 retires it
+(see [Enrollment at payment](#enrollment-at-payment-migration-127-on-a-branch)).
 
 ## Commands
 
@@ -71,6 +72,48 @@ Enrollment history is protected by `enrollments_history_guard`: an Ended row
 changes only by its notes, and Trial, Confirmed, Validated and Ended rows are
 deleted only by the commands. Submitted, Under Review and Rejected rows can still
 be deleted. Fixture teardown sets the transaction-local `eh.enrollment_command`.
+
+## Enrollment at payment (migration 127, on a branch)
+
+Plan [EAP-r4](../docs/architecture/plans/enrollment-at-payment.md) and
+[ADR-015](../docs/architecture/decisions/ADR-015-enrollment-at-payment.md); implemented on branch
+`feat/enrollment-at-payment` with `supabase/migrations/127_enrollment_at_payment.sql`, **not merged, not deployed,
+127 not applied on Production**. The sections above describe Production until the release. With 127:
+
+- **Statuses.** Live enrollments are Confirmed (paid, no group, « Inscrit — groupe à affecter »), Validated (paid, in a
+  group) and Ended. Submitted, Under Review, Trial and Rejected are retired: old rows keep them, and the trigger
+  `enrollments_retired_status_guard` refuses any insert or update into them for every role (`23514`, hint
+  `eap.status_retired`), except under the two transaction-local flags `eh.membership_sync` and `eh.enrollment_command`
+  both `on` (the archive revert). Membership readers, `remove_learner_from_group` (Trial → Under Review) and the derived
+  status keep their Trial branches, which read no row once the archive step has run.
+- **Creation.** An enrollment is born at the payment: `create_charge_payment` confirms on any payment above zero, or on a
+  new tuition charge discounted at 100 % with its reason (no receipt). For a CRM prospect, `crm_enroll_and_collect` runs
+  `crm_start_enrollment` (Confirmed only, no group, no longer callable by API roles) and the payment in one transaction.
+  The group is placed afterwards with `place_learner_in_group` and the enrollment's fresh `updated_at`.
+- **Retired paths.** `create_enrollment` always refuses; `save_enrollment_changes` refuses a status change
+  (`egc.status_not_permitted`; level, date and notes unchanged); the pre-enrollment branch of
+  `save_receptionist_enrollment` refuses (its group assignment on Confirmed/Validated rows stays);
+  `create_public_registration` and `portal_request_reenrollment` refuse; `/api/public/inscription` answers 410.
+- **Placement.** `academic_security.place` and `place_learner_in_group` take a last parameter
+  `p_without_enrollment_reason`. A receptionist places only a Confirmed or Validated enrollment of the group's programme
+  and year (`eap.paid_enrollment_required`), on every path including `assign_receptionist_student_group`; director and
+  admin may place a learner without one, or on a legacy unpaid row, with a reason of 1–200 characters
+  (`eap.placement_reason_required`), separate from the capacity-override reason and logged to `activity_log` as
+  `placement_without_enrollment`.
+- **Reopen and year close.** `reopen_enrollment` refuses a row the archive step ended (`eap.archived_not_reopenable`)
+  unless the archive was reverted, and logs every reopen; « Clôturer l'année » moves to the Students list header
+  (director only).
+- **Existing rows.** `supabase/manual/enrollment_at_payment_archive.sql` (prepared, not run; dry run by default; declared
+  counts checked first) journals before-images in `maintenance.eap_archive_journal`, confirms the paid waiting rows,
+  ends the unpaid ones with « Pré-inscription abandonnée (retrait des pré-inscriptions, DD/MM/YYYY) » or « Essai terminé
+  (retrait des essais, …) », resyncs learner statuses and detaches the non-converted leads of ended rows (activity
+  `enrollment_detached`). `supabase/manual/enrollment_at_payment_archive_revert.sql` restores enrollments, learner
+  statuses and lead links from the journal and refuses if anything changed since; conversions caused by the step stay.
+  `scripts/rollback/127_enrollment_at_payment_restore.sql` restores the 126 function bodies and grants (application
+  first), keeps the journal and changes no data.
+- **Tests.** `scripts/test-enrollment-at-payment.sql` (rollback-only acceptance),
+  `scripts/test-enrollment-at-payment-upgrade.mjs` (126 → 127 rehearsal with the archive, revert and no-op) and
+  `scripts/test-enrollment-at-payment-absence.mjs` (no retired-status writer or wording left in `src/`).
 
 ## Local verification
 

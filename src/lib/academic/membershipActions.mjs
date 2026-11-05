@@ -41,6 +41,24 @@ export const EGC_REASON_TEXT = {
   group_year_locked: 'Réaffectez les apprenants avant de changer l’année scolaire du groupe.',
 };
 
+// EAP (migration 127): enrollment at payment. The server's own French message is the
+// same text; these keep the client independent of it.
+export const EAP_REASON_TEXT = {
+  status_retired: 'La pré-inscription et l’essai n’existent plus : l’inscription se confirme à l’encaissement.',
+  payment_required: 'L’inscription se confirme à l’encaissement : saisissez un paiement.',
+  paid_enrollment_required: 'Inscrivez et encaissez d’abord : l’affectation suit une inscription payée.',
+  placement_reason_required: 'Motif requis pour affecter sans inscription payée (200 caractères au plus).',
+  archived_not_reopenable: 'Une pré-inscription archivée ne se rouvre pas : inscrivez et encaissez.',
+  program_not_enrollable: 'Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.',
+  enrollment_already_charged: 'Cette inscription a déjà un montant enregistré : encaissez sur ce montant depuis le reçu, ou rattachez-la si elle est payée.',
+  public_registration_retired: 'Les inscriptions en ligne sont fermées. Contactez le centre.',
+};
+
+export function eapReason(hint) {
+  const match = /^eap\.([a-z_]+)$/.exec(typeof hint === 'string' ? hint : '');
+  return match && Object.hasOwn(EAP_REASON_TEXT, match[1]) ? match[1] : null;
+}
+
 const GENERIC = 'L’action n’a pas pu aboutir. Réessayez ; si le problème persiste, contactez la direction.';
 
 export function egcReason(hint) {
@@ -62,6 +80,8 @@ export function membershipErrorMessage(error) {
   // The year mismatch names both years in the server's own French words.
   if (reason === 'school_year_mismatch' && /^L’année scolaire/.test(error.message || '')) return error.message;
   if (reason && Object.hasOwn(EGC_REASON_TEXT, reason)) return EGC_REASON_TEXT[reason];
+  const eap = eapReason(error.hint);
+  if (eap) return EAP_REASON_TEXT[eap];
   const online = onlineReason(error.hint);
   if (online) return ONLINE_REASON_TEXT[online];
   const text = `${error.message || ''} ${error.details || ''}`;
@@ -77,11 +97,16 @@ export function groupDeleteErrorMessage(error) {
   return error?.code === '23503' ? GROUP_HISTORY_MESSAGE : membershipErrorMessage(error);
 }
 
-export function placeLearnerInGroup(client, { student, group, enrollment = null, schoolYear = null, overrideReason = null }) {
+// EAP (Q3 = B): reception places a paid (Confirmed/Validated) enrollment only;
+// director/admin may place a learner without one with withoutEnrollmentReason, a
+// reason distinct from the capacity override (overrideReason).
+export function placeLearnerInGroup(client, { student, group, enrollment = null, schoolYear = null, overrideReason = null,
+  withoutEnrollmentReason = null }) {
   return client.rpc('place_learner_in_group', {
     p_student: student.id, p_group: group, p_student_updated_at: student.updated_at,
     p_enrollment: enrollment?.id ?? null, p_school_year: schoolYear || null,
     p_enrollment_updated_at: enrollment?.updated_at ?? null, p_capacity_override_reason: overrideReason || null,
+    p_without_enrollment_reason: withoutEnrollmentReason || null,
   });
 }
 
@@ -115,8 +140,9 @@ export function listArchivedStudents(client, page = 1, pageSize = 20) {
   return client.rpc('list_archived_students', { p_page: page, p_page_size: pageSize });
 }
 
-// ACA-5: admin enrollment edits send the changed allow-listed fields only.
-export const ENROLLMENT_EDIT_FIELDS = ['status', 'level', 'date_inscription', 'notes', 'session_type', 'school_year'];
+// ACA-5: admin enrollment edits send the changed allow-listed fields only. EAP: the
+// status is never edited (payment, placement and « Ancien apprenant » set it).
+export const ENROLLMENT_EDIT_FIELDS = ['level', 'date_inscription', 'notes', 'session_type', 'school_year'];
 export function changedEnrollmentFields(original, form) {
   const changes = {};
   for (const key of ENROLLMENT_EDIT_FIELDS) {
@@ -127,10 +153,6 @@ export function changedEnrollmentFields(original, form) {
   // Programme and year are set once (the server refuses a change).
   for (const key of ['session_type', 'school_year']) if (original?.[key] && key in changes) delete changes[key];
   return changes;
-}
-
-export function createEnrollment(client, studentId, changes) {
-  return client.rpc('create_enrollment', { p_student: studentId, p_changes: changes });
 }
 
 export function saveEnrollmentChanges(client, enrollment, changes) {

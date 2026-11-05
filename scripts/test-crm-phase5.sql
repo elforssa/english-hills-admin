@@ -181,7 +181,10 @@ do $$ declare l uuid:=pg_temp.qualified(); p uuid; student uuid:=gen_random_uuid
  update public.placement_tests set student_id=student where id=p;
  perform pg_temp.denied(format('update public.placement_tests set student_id=%L where id=%L',other,p));
  perform pg_temp.denied(format('update public.crm_leads set student_id=%L where id=%L',other,l));
+ -- EAP (127): a Submitted row is a legacy fixture, written under the two-flag exemption.
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
  insert into public.enrollments(id,student_id,status) values(enrollment,student,'Submitted');
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
  insert into public.crm_activities(id,lead_id,occurred_at,actor_kind,event_type,source_key,enrollment_id)
  values(evidence,l,now(),'system','test_evidence','phase5-converted-fixture:'||l,enrollment);
  update public.crm_leads set status='CONVERTED',enrollment_id=enrollment,converted_at=now(),conversion_activity_id=evidence where id=l;

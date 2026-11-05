@@ -158,7 +158,7 @@ try {
  // B1_ENGINES narrows a local iteration; the acceptance run uses both engines.
  for(const engine of (process.env.B1_ENGINES||'chromium,webkit').split(',').map(name=>({chromium,webkit})[name])){
   const E=engine.name();browser=await engine.launch({headless:true});await newContext(engine);
-  const startCalls=[];page.on('request',r=>{if(r.url().endsWith('/rpc/crm_start_enrollment'))startCalls.push(r.postDataJSON());});
+  const startCalls=[];page.on('request',r=>{if(r.url().endsWith('/rpc/crm_enroll_and_collect'))startCalls.push(r.postDataJSON());});
   let opportunities=null;page.on('response',async r=>{if(r.url().endsWith('/rpc/crm_get_opportunities')&&r.ok()){const args=r.request().postDataJSON();if(!args.p_cursor&&!(args.p_layout==='board'&&args.p_stage)){const data=await r.json().catch(()=>null);if(data)opportunities={args,data};}}});
 
   if(on(1)){
@@ -334,7 +334,7 @@ try {
   phase=`${E} reachability 390`;await setSize({width:390,height:844});await gotoLeads();
   const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${qualified[0]}"]:visible`);await card.scrollIntoViewIfNeeded();await card.getByRole('button',{name:/^Actions ·/}).click();
   const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer comme perdu','Clôturer comme non qualifié','Attribuer un responsable'],'grouped overflow keeps exactly today’s items');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
-  await openDrawer(qualified[0]);for(const name of ['Marquer comme fait','Replanifier','Annuler l’action','Appel','WhatsApp','Note','Planifier','Autres actions',"Commencer l'inscription",'Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
+  await openDrawer(qualified[0]);for(const name of ['Marquer comme fait','Replanifier','Annuler l’action','Appel','WhatsApp','Note','Planifier','Autres actions','Inscrire et encaisser','Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
   await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Conversation au centre / autre canal','Clôturer comme perdu','Clôturer comme non qualifié','Attribuer un responsable','Réattribuer la prochaine action']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
   phase=`${E} focus trap 390`;const noteButton=sheet().getByRole('button',{name:'Note',exact:true});await noteButton.focus();await page.keyboard.press('Enter');await top().getByLabel('Note',{exact:true}).waitFor();await dialogFocused();
   for(let i=0;i<8;i++){await page.keyboard.press(i%3===2?'Shift+Tab':'Tab');assert(await page.evaluate(()=>!!document.activeElement?.closest('[role=dialog]:last-of-type')||document.activeElement===document.querySelectorAll('[role=dialog]')[1]||!!document.querySelectorAll('[role=dialog]')[1]?.contains(document.activeElement)),'focus stays in the dialog');}
@@ -353,40 +353,42 @@ try {
   // 8. Phone dialog with the long RCC-A2 uncertain alert; then the error-contract focus.
   phase=`${E} long alert 390`;await setSize({width:390,height:844});await openDrawer(qualified[1]);
 
-  await sheet().getByRole('button',{name:"Commencer l'inscription",exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();
+  await sheet().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();
   await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();
-  await top().getByRole('button',{name:'Choisir une autre date',exact:true}).click();await settled(top());
-  const step2=await top().evaluate(el=>{const f=el.querySelector('[data-dialog-footer]').getBoundingClientRect(),r=el.getBoundingClientRect();return {scrolls:el.scrollHeight>el.clientHeight,fb:f.bottom,bottom:r.bottom,top:r.top,vh:innerHeight};});
-  assert(step2.scrolls,'step 2 scrolls at 390×844');assert(Math.abs(step2.fb-step2.bottom)<=2&&step2.bottom<=step2.vh,`sticky footer visible while the body scrolls ${JSON.stringify(step2)}`);
-  await top().getByRole('button',{name:'Garder la date par défaut',exact:true}).click();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Vérification').waitFor();
+  // EAP: the payment step is the long one (price, discount, amount, date, method, reference, note).
+  await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Paiement').waitFor();await settled(top());
+  const step3=await top().evaluate(el=>{const f=el.querySelector('[data-dialog-footer]').getBoundingClientRect(),r=el.getBoundingClientRect();return {scrolls:el.scrollHeight>el.clientHeight,fb:f.bottom,bottom:r.bottom,top:r.top,vh:innerHeight};});
+  assert(step3.scrolls,'the payment step scrolls at 390×844');assert(Math.abs(step3.fb-step3.bottom)<=2&&step3.bottom<=step3.vh,`sticky footer visible while the body scrolls ${JSON.stringify(step3)}`);
+  await top().getByLabel('Prix brut convenu',{exact:true}).fill('3000');await top().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
   const responses=[{status:502,contentType:'text/plain',body:'Bad Gateway'},{status:400,contentType:'application/json',body:JSON.stringify({code:'22023',message:'Invalid new learner',details:null,hint:'crm_enrollment.birth_date_future'})}];
-  await page.route('**/rest/v1/rpc/crm_start_enrollment',route=>route.fulfill(responses.shift()));startCalls.length=0;
-  await top().getByRole('button',{name:'Créer la pré-inscription',exact:true}).click();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+  await page.route('**/rest/v1/rpc/crm_enroll_and_collect',route=>route.fulfill(responses.shift()));startCalls.length=0;
+  await top().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
   const footer=await top().evaluate(el=>{const footer=el.querySelector('[data-dialog-footer]'),alert=el.querySelector('[role=alert]');const buttons=[...footer.querySelectorAll('button')].map(b=>{const r=b.getBoundingClientRect();return {name:b.textContent.trim(),inView:r.top>=0&&r.bottom<=innerHeight&&r.left>=0&&r.right<=innerWidth};});return {inFooter:footer.contains(alert),buttons,frozen:el.querySelector('fieldset').disabled};});
-  assert(footer.inFooter,'the uncertain alert sits in the sticky footer');assert.deepEqual(footer.buttons.map(b=>b.name),['Annuler','Retour','Créer la pré-inscription']);assert(footer.buttons.every(b=>b.inView),`footer buttons visible ${JSON.stringify(footer.buttons)}`);assert(footer.frozen,'frozen state intact');
+  assert(footer.inFooter,'the uncertain alert sits in the sticky footer');assert.deepEqual(footer.buttons.map(b=>b.name),['Annuler','Retour','Inscrire et encaisser']);assert(footer.buttons.every(b=>b.inView),`footer buttons visible ${JSON.stringify(footer.buttons)}`);assert(footer.frozen,'frozen state intact');
   for(let i=0;i<10;i++){await page.keyboard.press(i%2?'Shift+Tab':'Tab');assert(await top().evaluate(el=>el.contains(document.activeElement)),'Tab/Shift+Tab stay in the dialog');}
   await noOverflow('long alert');
-  await top().getByRole('button',{name:'Créer la pré-inscription',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();assert.deepEqual(startCalls[1],startCalls[0],'same-key resend');
+  await top().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();assert.deepEqual(startCalls[1],startCalls[0],'same-key resend');
   const birth=top().getByLabel('Date de naissance (si connue)',{exact:true});await page.waitForFunction(()=>document.activeElement?.getAttribute('data-field')==='birth');
   const visible=await top().evaluate(el=>{const field=document.activeElement.getBoundingClientRect(),footer=el.querySelector('[data-dialog-footer]').getBoundingClientRect(),r=el.getBoundingClientRect();return field.top>=r.top&&field.bottom<=footer.top+1;});assert(visible,'the focused error field is fully visible above the footer');void birth;
-  await page.unroute('**/rest/v1/rpc/crm_start_enrollment');await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
-  console.log(`PASS ${E} 390×844 enrollment dialog: sticky footer while step 2 scrolls; long uncertain alert in the footer with Annuler/Retour/submit visible; Tab trapped; error field visible above the footer`);
+  await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
+  console.log(`PASS ${E} 390×844 enrollment dialog: sticky footer while the payment step scrolls; long uncertain alert in the footer with Annuler/Retour/submit visible; Tab trapped; error field visible above the footer`);
 
   }
   if(on(9)){
   // 9. Frozen RCC-A2 retry survives breakpoint crossings (I5): same dialog node, same key/payload.
   phase=`${E} frozen across breakpoints`;await setSize({width:390,height:844});const frozenLead=qualified[2+(engine===chromium?0:1)];await openDrawer(frozenLead);
-  await sheet().getByRole('button',{name:"Commencer l'inscription",exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();
-  await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Vérification').waitFor();
-  await page.route('**/rest/v1/rpc/crm_start_enrollment',route=>route.fulfill({status:502,contentType:'text/plain',body:'Bad Gateway'}));startCalls.length=0;
-  await top().getByRole('button',{name:'Créer la pré-inscription',exact:true}).click();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
+  await sheet().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText('1 / 3 · Apprenant').waitFor();await top().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();
+  await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('2 / 3 · Inscription').waitFor();await top().getByRole('button',{name:'Continuer',exact:true}).click();await top().getByText('3 / 3 · Paiement').waitFor();
+  await top().getByLabel('Prix brut convenu',{exact:true}).fill('3000');await top().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
+  await page.route('**/rest/v1/rpc/crm_enroll_and_collect',route=>route.fulfill({status:502,contentType:'text/plain',body:'Bad Gateway'}));startCalls.length=0;
+  await top().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();
   const handle=await top().elementHandle(),before=await top().evaluate(el=>el.innerText);const frozen=startCalls[0];assert(frozen?.p_request_key);
   for(const viewport of [{width:700,height:844},{width:390,height:844},{width:1000,height:800},{width:1100,height:800},{width:1000,height:800}]){await setSize(viewport);assert(await handle.evaluate(el=>el.isConnected),`dialog survives ${viewport.width}`);}
   assert.equal(await handle.evaluate(el=>el.innerText),before,'frozen view unchanged after crossing 640 and 1024');assert(await top().evaluate(el=>el.querySelector('fieldset').disabled));
-  await page.unroute('**/rest/v1/rpc/crm_start_enrollment');await top().getByRole('button',{name:'Créer la pré-inscription',exact:true}).click();await top().getByText('Pré-inscription créée',{exact:true}).waitFor();
+  await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');await top().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await top().getByText(/^Inscription confirmée · reçu /).waitFor();
   assert.equal(startCalls.length,2);assert.equal(startCalls[1].p_request_key,frozen.p_request_key,'identical request key');assert.deepEqual(startCalls[1].p_data,frozen.p_data,'identical frozen payload');
-  assert.equal(sql(`select count(*) from public.enrollments where student_id=(select student_id from public.crm_leads where id='${frozenLead}')`),'1');await footerlessSpacing('enrollment success');await top().getByRole('button',{name:'Terminé',exact:true}).click();await closeDrawer();
-  console.log(`PASS ${E} frozen RCC-A2 request across 390→700→390 and 1000→1100→1000: same dialog node, unchanged frozen view, identical key and payload, one enrollment`);
+  assert.equal(sql(`select count(*) from public.enrollments where student_id=(select student_id from public.crm_leads where id='${frozenLead}')`),'1');assert.equal(sql(`select count(*) from public.receipts where student_id=(select student_id from public.crm_leads where id='${frozenLead}')`),'1');await footerlessSpacing('enrollment success');await top().getByRole('button',{name:'Terminé',exact:true}).click();await closeDrawer();
+  console.log(`PASS ${E} frozen RCC-A2 request across 390→700→390 and 1000→1100→1000: same dialog node, unchanged frozen view, identical key and payload, one enrollment and one receipt`);
   }
   await context.close();
 
@@ -565,11 +567,14 @@ try {
 } finally {
  if(browser)await browser.close();
  if(users.length){const ids=users.map(u=>quote(u.id)).join(',');const linked=JSON.parse(sql(`select coalesce(json_agg(student_id) filter(where student_id is not null),'[]') from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))`));const studentIds=linked.map(quote).join(',')||'null';sql(`begin;
- lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks in access exclusive mode;
+ lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks,public.crm_revenue_entries in access exclusive mode;
  alter table public.placement_tests disable trigger crm_placement_integrity;alter table public.crm_activities disable trigger crm_activities_immutable;alter table public.crm_submissions disable trigger crm_submission_immutable;alter table public.crm_command_requests disable trigger crm_requests_immutable;alter table public.crm_followup_policies disable trigger crm_policy_immutable;
+ -- EAP (127): every CRM enrollment now collects a payment, so its lead has revenue entries.
+ alter table public.crm_revenue_entries disable trigger crm_revenue_immutable;delete from public.crm_revenue_entries where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));alter table public.crm_revenue_entries enable trigger crm_revenue_immutable;
  with removed_placements as(delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
  alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
- set local eh.enrollment_command = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);
+ set local english_hills.receipt_test_cleanup = 'on';delete from public.financial_events where actor_id in(${ids});delete from public.financial_requests where actor_id in(${ids});delete from public.receipts where student_id in(${studentIds});delete from public.charge_discount_reasons where charge_id in(select id from public.charges where student_id in(${studentIds}));delete from public.charges where student_id in(${studentIds});
+ set local eh.enrollment_command = on; set local eh.membership_sync = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);
  assert.equal(sql(`select count(*) from public.crm_leads`),'0');console.log('PASS synthetic browser fixtures removed; history guards restored');}
 }

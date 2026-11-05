@@ -114,9 +114,9 @@ select pg_temp.fails(format($$insert into public.enrollments(student_id, group_i
   values (%L, %L, 'Validated', 'Yearly', '2025/2026', 'Child 1')$$, pg_temp.id(206), pg_temp.id(302)), '23514', 'egc.school_year_mismatch');
 select pg_temp.fails(format($$insert into public.enrollments(student_id, group_id, status, session_type, school_year, level)
   values (%L, %L, 'Validated', 'Yearly', '2026/2027', 'Child 1')$$, pg_temp.id(206), pg_temp.id(306)), '23514', 'egc.group_year_missing');
--- A placement without a year takes its group's.
+-- A placement without a year takes its group's. EAP (127): Validated, as Trial is retired.
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
-  (pg_temp.id(411), pg_temp.id(207), pg_temp.id(303), 'Trial', 'Yearly', null, 'Child 1');
+  (pg_temp.id(411), pg_temp.id(207), pg_temp.id(303), 'Validated', 'Yearly', null, 'Child 1');
 select pg_temp.ok((pg_temp.enr(pg_temp.id(411))).school_year = '2027/2028', 'the year comes from the group');
 -- Changing an enrollment's year away from its group's is refused; a status change is not checked.
 select pg_temp.fails(format($$update public.enrollments set school_year = '2027/2028' where id = %L$$, pg_temp.id(410)),
@@ -160,13 +160,18 @@ select pg_temp.fails(format($$select public.assign_receptionist_student_group(%L
 select public.assign_receptionist_student_group(pg_temp.id(204), pg_temp.id(404), pg_temp.id(301), pg_temp.su(pg_temp.id(204)),
   pg_temp.eu(pg_temp.id(404)));
 select pg_temp.ok((pg_temp.enr(pg_temp.id(404))).group_id = pg_temp.id(301), 'reception places the same year');
--- save_receptionist_enrollment: a trial without a year takes the group's; another year is refused.
+-- save_receptionist_enrollment: another year is refused (the year check runs before
+-- the branch). EAP (127): a reception trial is no longer created; the year from the
+-- group is shown on the admin's reasoned placement without an enrollment.
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Trial', 'Child 1', current_date, null, 'Yearly', '2025/2026')$$,
   pg_temp.id(208), pg_temp.id(301)), '23514', 'egc.school_year_mismatch');
-create temp table afu_trial as select public.save_receptionist_enrollment(pg_temp.id(209), null, pg_temp.id(303), 'Trial', 'Child 1',
-  current_date, null, 'Yearly', null) id;
+select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Trial', 'Child 1', current_date, null, 'Yearly', null)$$,
+  pg_temp.id(209), pg_temp.id(303)), '42501', 'eap.status_retired');
+select pg_temp.act(2);
+create temp table afu_trial as select public.place_learner_in_group(pg_temp.id(209), pg_temp.id(303), pg_temp.su(pg_temp.id(209)),
+  p_without_enrollment_reason => 'AFU fixture') id;
 select pg_temp.owner();
-select pg_temp.ok((pg_temp.enr((select id from afu_trial))).school_year = '2027/2028', 'reception trial takes the group year');
+select pg_temp.ok((pg_temp.enr((select id from afu_trial))).school_year = '2027/2028', 'a placement without an enrollment takes the group year');
 select pg_temp.act(3);
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, null, %L, 'Trial', 'Child 1', current_date, null, 'Yearly', null)$$,
   pg_temp.id(210), pg_temp.id(306)), '23514', 'egc.group_year_missing');
@@ -205,21 +210,23 @@ insert into public.groups(id, name, session_type, niveau, annee) values
   (pg_temp.id(321), 'AFU reactivation direct', 'Yearly', 'Child 1', '2025-2026'),
   (pg_temp.id(322), 'AFU reactivation null status', 'Yearly', 'Child 1', '2025-2026'),
   (pg_temp.id(323), 'AFU reactivation same year', 'Yearly', 'Child 1', '2025-2026');
+-- EAP (127): the rejected rows are history (seeded under the two-flag exemption);
+-- 430 is seeded Rejected, as the director RPC no longer changes a status.
+select set_config('eh.membership_sync', 'on', true), set_config('eh.enrollment_command', 'on', true);
 insert into public.enrollments(id, student_id, group_id, status, session_type, school_year, level) values
-  (pg_temp.id(430), pg_temp.id(212), pg_temp.id(320), 'Submitted', 'Yearly', '2025/2026', 'Child 1'),
+  (pg_temp.id(430), pg_temp.id(212), pg_temp.id(320), 'Rejected', 'Yearly', '2025/2026', 'Child 1'),
   (pg_temp.id(431), pg_temp.id(206), pg_temp.id(321), 'Rejected', 'Yearly', '2025/2026', 'Child 1'),
   (pg_temp.id(432), pg_temp.id(208), pg_temp.id(322), null, 'Yearly', '2025/2026', 'Child 1'),
   (pg_temp.id(433), pg_temp.id(210), pg_temp.id(323), 'Rejected', 'Yearly', '2025/2026', 'Child 1');
--- Director RPC: Submitted → Rejected (keeps the group), the group moves to 2026-2027, back to live.
-select pg_temp.act(1);
-select public.save_enrollment_changes(pg_temp.id(430), pg_temp.eu(pg_temp.id(430)), '{"status":"Rejected"}');
-select pg_temp.owner();
+select set_config('eh.membership_sync', '', true), set_config('eh.enrollment_command', '', true);
 select pg_temp.ok((pg_temp.enr(pg_temp.id(430))).status = 'Rejected' and (pg_temp.enr(pg_temp.id(430))).group_id = pg_temp.id(320),
   'fixture: a rejected row keeps its group');
+-- Director RPC: the group moves to 2026-2027; the RPC cannot bring the row back to
+-- live (EAP, Q5: it changes no status at all).
 update public.groups set annee = '2026-2027' where id in (pg_temp.id(320), pg_temp.id(321), pg_temp.id(322));
 select pg_temp.act(1);
 select pg_temp.fails(format($$select public.save_enrollment_changes(%L, %L, '{"status":"Under Review"}')$$, pg_temp.id(430),
-  pg_temp.eu(pg_temp.id(430))), '23514', 'egc.school_year_mismatch');
+  pg_temp.eu(pg_temp.id(430))), '23514', 'egc.status_not_permitted');
 select pg_temp.owner();
 -- Direct writes, every role (here the owner): Rejected → Validated, and no status → Submitted.
 select pg_temp.fails(format($$update public.enrollments set status = 'Validated' where id = %L$$, pg_temp.id(431)),
@@ -227,8 +234,9 @@ select pg_temp.fails(format($$update public.enrollments set status = 'Validated'
 select pg_temp.fails(format($$update public.enrollments set status = 'Submitted' where id = %L$$, pg_temp.id(432)),
   '23514', 'egc.school_year_mismatch');
 -- Reverse order: the same year reactivates; then the group's year is locked.
-update public.enrollments set status = 'Submitted' where id = pg_temp.id(433);
-select pg_temp.ok((pg_temp.enr(pg_temp.id(433))).status = 'Submitted', 'a same-year row becomes live again');
+-- EAP (127): to Validated (it has a group), as Submitted is retired.
+update public.enrollments set status = 'Validated' where id = pg_temp.id(433);
+select pg_temp.ok((pg_temp.enr(pg_temp.id(433))).status = 'Validated', 'a same-year row becomes live again');
 select pg_temp.fails(format($$update public.groups set annee = '2026-2027' where id = %L$$, pg_temp.id(323)), '23514', 'egc.group_year_locked');
 -- A live-to-live status change is not a placement, and a non-live change is not checked.
 update public.enrollments set status = 'Rejected' where id = pg_temp.id(430);

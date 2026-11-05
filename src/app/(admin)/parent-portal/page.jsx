@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
-import { Download, Bell, ShieldCheck, Phone, RefreshCw, FileDown, MessageSquare, Video } from 'lucide-react';
+import { Download, Bell, ShieldCheck, Phone, FileDown, MessageSquare, Video } from 'lucide-react';
 import { exportToCsv } from '@/utils/exportCsv';
 import { openStoredFile as openFile } from '@/lib/storage';
 import { downloadReceiptPDF, showReceiptPdfError } from '@/lib/receiptPdf';
@@ -13,7 +13,7 @@ import { getOfficeRecipient } from '@/lib/centerInfo';
 import { markMyNotificationsRead } from '@/lib/notifications';
 import MessagesTab from '@/components/portals/MessagesTab';
 import { PAYMENT_STATUS_COLORS, ATTENDANCE_STATUS_COLORS } from '@/lib/statusColors';
-import { getLearnerRecord, getMyLearners, getMyMessages, portalErrorMessage, requestReenrollment } from '@/lib/portal';
+import { getLearnerRecord, getMyLearners, getMyMessages } from '@/lib/portal';
 import { money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -52,7 +52,6 @@ export default function ParentPortal() {
   const [notifications, setNotifications] = useState([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [office, setOffice] = useState(null);
-  const [reEnrolling, setReEnrolling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('overview');
   const [previewReceipt, setPreviewReceipt] = useState(null);
@@ -128,20 +127,6 @@ export default function ParentPortal() {
       setNotifications(prev => prev.map(n => (n.read_at ? n : { ...n, read_at: new Date().toISOString() })));
     }).catch(() => toast.error('Lecture des notifications non enregistrée. Réessayez.'));
   }, [tab, notifications]);
-
-  const handleReEnroll = async () => {
-    if (!selectedStudent) return;
-    if (!confirm(`Envoyer une demande de réinscription pour ${selectedStudent.full_name} ? Le centre vous recontactera pour finaliser.`)) return;
-    setReEnrolling(true);
-    try {
-      await requestReenrollment(selectedStudent.id);
-      toast.success('Demande de réinscription envoyée. Le centre vous recontactera.');
-    } catch (error) {
-      toast.error(portalErrorMessage(error, 'Demande non envoyée. Réessayez.'));
-    } finally {
-      setReEnrolling(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -294,13 +279,18 @@ export default function ParentPortal() {
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">{selectedStudent.status}</span>
                 </div>
               </div>
-              <button
-                onClick={handleReEnroll}
-                disabled={reEnrolling}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted disabled:opacity-50 self-start"
-              >
-                <RefreshCw size={14} /> {reEnrolling ? 'Envoi…' : 'Demander une réinscription'}
-              </button>
+              {/* Re-enrollment starts at the centre with a payment (plan Enrollment at payment, D4):
+                  the family writes to the office through the existing portal composer. */}
+              <div className="flex flex-col gap-2 self-start sm:items-end">
+                <p className="text-sm text-muted-foreground">Pour une réinscription, contactez l’accueil</p>
+                <button
+                  type="button"
+                  onClick={() => setTab('messages')}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted self-start sm:self-end"
+                >
+                  <MessageSquare size={14} /> Écrire à l’accueil
+                </button>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
