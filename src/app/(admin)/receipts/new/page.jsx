@@ -44,6 +44,18 @@ export default function ReceiptNew() {
     }
   };
 
+  // The enrollment a payment confirmed: returned by a first run; for a replay with a
+  // receipt, read from the charge. A replay without a receipt (a 100 % discount
+  // agreement) places nothing: its group is assigned by hand from the learner's file.
+  const paidEnrollmentId = async (client, data) => {
+    if (data.enrollment_id) return data.enrollment_id;
+    if (!data.replayed || !data.receipt_id || !data.charge_id) return null;
+    const { data: charge, error: chargeError } = await client.from('charge_balances')
+      .select('enrollment_id').eq('id', data.charge_id).maybeSingle();
+    if (chargeError) return { placementError: membershipErrorMessage(chargeError) };
+    return charge?.enrollment_id || null;
+  };
+
   const handleSubmit = async (payload, { groupId = '' } = {}) => {
     setSaving(true);
     const client = getBrowserClient();
@@ -55,8 +67,11 @@ export default function ReceiptNew() {
     }
     clearPendingPayment();
     // A replay keeps the chosen group: placed now if the lost first response never got to it.
-    const placement = groupId && data.enrollment_id
-      ? await placeAfterPayment(client, data.enrollment_id, groupId) : {};
+    // A replayed payment returns only its charge and receipt, so the enrollment is the one
+    // the first run linked to that charge.
+    const paid = groupId ? await paidEnrollmentId(client, data) : null;
+    const placement = paid?.placementError ? paid
+      : paid ? await placeAfterPayment(client, paid, groupId) : {};
     await Promise.all([
       invalidateAfterFinance(queryClient),
     ]);

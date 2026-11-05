@@ -476,7 +476,11 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
   assert.match(newPage, /const message = paymentResultMessage\(data, placement\);/);
   // D3: after the payment, fresh versions of the enrollment and the learner, then the placement
   // with the enrollment; a refusal is a message, never an undo of the payment.
-  assert.match(newPage, /const placement = groupId && data\.enrollment_id\n\s+\? await placeAfterPayment\(client, data\.enrollment_id, groupId\) : \{\};/);
+  assert.match(newPage, /const paid = groupId \? await paidEnrollmentId\(client, data\) : null;\n\s+const placement = paid\?\.placementError \? paid\n\s+: paid \? await placeAfterPayment\(client, paid, groupId\) : \{\};/);
+  // N1′: a replayed payment returns no enrollment_id; the enrollment is the one its charge
+  // carries, read only for a replay with a receipt.
+  assert.match(newPage, /if \(data\.enrollment_id\) return data\.enrollment_id;\n\s+if \(!data\.replayed \|\| !data\.receipt_id \|\| !data\.charge_id\) return null;/);
+  assert.match(newPage, /from\('charge_balances'\)\s*\.select\('enrollment_id'\)\.eq\('id', data\.charge_id\)\.maybeSingle\(\)/);
   assert.match(newPage, /from\('enrollments'\)\s*\.select\('id,updated_at,student_id,group_id'\)\.eq\('id', enrollmentId\)/);
   // A replay whose lost first response already placed the learner is not placed twice.
   assert.match(newPage, /if \(enrollment\.group_id === groupId\) return \{ placed: true \};\n\s+if \(enrollment\.group_id\) return \{\};/);

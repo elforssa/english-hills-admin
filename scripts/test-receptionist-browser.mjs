@@ -42,7 +42,7 @@ const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const confirmedName = run + ' confirmed', multipleName = run + ' multiple';
 // EAP (migration 127): learners created in this run through the learner form and the walk-in desk.
-const fileName = run + ' file', walkInName = run + ' walk-in', walkInGroupedName = run + ' walk-in grouped';
+const fileName = run + ' file', walkInName = run + ' walk-in', walkInGroupedName = run + ' walk-in grouped', walkInReplayName = run + ' walk-in replay';
 let user, browser, pdfStudent;
 const portalUsers = [];
 try {
@@ -183,7 +183,7 @@ try {
   // « Inscrire et encaisser » at the desk (receipt form): any payment confirms the
   // enrollment; a chosen group is placed right after, on fresh versions.
   const field = label => page.getByText(label, { exact: true }).locator('..');
-  async function payAtDesk({ name = null, groupId = '', amount }) {
+  async function payAtDesk({ name = null, groupId = '', amount, loseFirstResponse = false }) {
     if (name) {
       await page.goto(app + '/receipts/new');
       await page.getByRole('tab', { name: 'Nouvel apprenant' }).click();
@@ -201,22 +201,52 @@ try {
     assert.equal(await groupSelect.locator(`option[value="${incompatibleGroup}"]`).count(), 0, 'only groups of the programme, level and year');
     assert.equal(await groupSelect.locator(`option[value="${wrongLevelGroup}"]`).count(), 0);
     if (groupId) await groupSelect.selectOption(groupId);
+    const submit = page.getByRole('button', { name: 'Enregistrer et générer le reçu', exact: true });
+    let first = null;
+    if (loseFirstResponse) {
+      // The payment commits but its response is lost, so the first run places nothing;
+      // the same key is then sent again and the server replays it.
+      const placementCalls = [];
+      const countPlacement = request => { if (request.url().includes('/rest/v1/rpc/place_learner_in_group')) placementCalls.push(request); };
+      page.on('request', countPlacement);
+      await page.route('**/rest/v1/rpc/create_charge_payment', async route => {
+        first = await (await route.fetch()).json();
+        await route.abort('failed');
+      }, { times: 1 });
+      const failed = page.waitForEvent('requestfailed', request => request.url().includes('/rest/v1/rpc/create_charge_payment'));
+      await submit.click();
+      await failed;
+      assert.ok(first?.receipt_id && first.enrollment_id && first.replayed === false, 'the lost first run committed');
+      assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${first.enrollment_id}'`), 'unset');
+      page.off('request', countPlacement);
+      assert.equal(placementCalls.length, 0, 'nothing is placed after a lost response');
+    }
     const paid = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/create_charge_payment'));
     const placed = groupId ? page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group')) : null;
-    await page.getByRole('button', { name: 'Enregistrer et générer le reçu', exact: true }).click();
+    await submit.click();
     const payment = await paid;
     assert.equal(payment.status(), 200, await payment.text());
     const result = await payment.json();
-    assert.equal(result.enrollment_confirmed, true, 'a payment of any amount confirms');
-    assert.equal('enrollment_confirmation_pending' in result, false);
-    assert.ok(result.receipt_id && result.enrollment_id);
+    if (first) {
+      // A replay returns only its charge and receipt; the page reads the enrollment from the charge.
+      assert.equal(result.replayed, true);
+      assert.equal(result.receipt_id, first.receipt_id, 'the existing receipt, not a second one');
+      assert.equal(result.charge_id, first.charge_id);
+      assert.equal('enrollment_id' in result, false);
+    } else {
+      assert.equal(result.enrollment_confirmed, true, 'a payment of any amount confirms');
+      assert.equal('enrollment_confirmation_pending' in result, false);
+      assert.ok(result.receipt_id && result.enrollment_id);
+    }
+    const enrollmentId = first ? first.enrollment_id : result.enrollment_id;
     if (placed) {
       const placement = await placed;
       assert.equal(placement.status(), 200, await placement.text());
-      assert.equal(placement.request().postDataJSON().p_enrollment, result.enrollment_id, 'the placement names the paid enrollment');
+      assert.equal(placement.request().postDataJSON().p_enrollment, enrollmentId, 'the placement names the paid enrollment');
     }
     await page.waitForURL(new RegExp(`/receipts/${result.receipt_id}/print$`));
-    return result;
+    if (first && groupId) await page.getByText('Paiement déjà enregistré — reçu existant affiché. Groupe affecté.', { exact: true }).waitFor();
+    return { ...result, enrollment_id: enrollmentId };
   }
   // 1. An existing file, from its learner file, with a group.
   await page.getByRole('link', { name: 'Inscrire et encaisser' }).click();
@@ -230,7 +260,12 @@ try {
   assert.equal(sql(`select status from public.students where full_name='${walkInName}'`), 'Enrolled');
   const walkInGrouped = await payAtDesk({ name: walkInGroupedName, groupId: group, amount: 130 });
   assert.equal(sql(`select status||':'||group_id from public.enrollments where id='${walkInGrouped.enrollment_id}'`), `Validated:${group}`);
-  console.log('PASS « Inscrire et encaisser »: learner file with group, walk-ins without and with group, any amount confirms, no status select');
+  // 3. A lost first response, sent again with the same key: one receipt, and the chosen group kept.
+  const walkInReplay = await payAtDesk({ name: walkInReplayName, groupId: group, amount: 140, loseFirstResponse: true });
+  assert.equal(sql(`select status||':'||group_id from public.enrollments where id='${walkInReplay.enrollment_id}'`), `Validated:${group}`);
+  assert.equal(sql(`select count(*) from public.receipts r join public.students s on s.id=r.student_id where s.full_name='${walkInReplayName}'`), '1');
+  assert.equal(sql(`select count(*) from public.students where full_name='${walkInReplayName}'`), '1');
+  console.log('PASS « Inscrire et encaisser »: learner file with group, walk-ins without and with group, a replayed payment keeps its group, any amount confirms, no status select');
 
   // Q3 = B: an unpaid learner is never placed by reception. The group picker lists the
   // matching file greyed out with its reason; the database refusal itself is checked below
@@ -611,7 +646,7 @@ try {
   if (user) sql(`begin;
     set local english_hills.receipt_test_cleanup = 'on';
     create temporary table eap_cleanup_students on commit drop as
-      select id from public.students where id='${student}' or full_name in ('${fileName}','${walkInName}','${walkInGroupedName}');
+      select id from public.students where id='${student}' or full_name in ('${fileName}','${walkInName}','${walkInGroupedName}','${walkInReplayName}');
     create temporary table eap_cleanup_ids on commit drop as
       select id from public.receipts where student_id in (select id from eap_cleanup_students)
       union select id from public.charges where student_id in (select id from eap_cleanup_students)

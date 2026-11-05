@@ -614,7 +614,7 @@ Both independent reviews (database and application) returned CHANGES REQUIRED wi
 2. **C6 quotes the dialog's own messages:** « Inscription confirmée · reçu … », « Groupe : … » or « Groupe à affecter », « Groupe non affecté : … Apprenant inscrit — groupe à affecter. », « Inscription payée rattachée », and the 100 % title.
 3. **`test-crm-rcc-a2-browser.mjs`.** An enrollment ended after confirmation is not flagged by the server (`evaluate_conversion`, 120). Its note now says so: « Inscription terminée après sa confirmation. Le prospect reste converti. » The test asserts `conversion_review_required = false`. A case that the server does flag is checked separately: a confirmed row moved back by the journalled revert, asserted `true`, with the review sentence.
 4. **Nits:**
-   - A replayed receipt payment keeps the chosen group: it is placed if the lost first response never got to it, and the message says so.
+   - A replayed receipt payment keeps the chosen group: it is placed if the lost first response never got to it, and the message says so. (As first written, this code never ran; see N1′ below.)
    - Reception's group picker greys out learners without a paid enrollment (« sans inscription payée ») and says once, above the list, « Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord. ». The receptionist and placement browser suites now assert the disabled row. The database refusal stays covered by the SQL suites and by the receptionist suite's direct request.
    - The Students list default filter reads « Dossiers actifs », in the guide and in `docs/ai/WORKFLOWS.md` too. It still lists legacy Trial files until they are archived.
    - The guide says that a full group is shown greyed out (« complet »), and drops « Only operational pre-enrollment is permitted » from its message table.
@@ -655,6 +655,26 @@ The replay itself found four test-side defects, all fixed:
 - the reception picker's first, longer note, which hid the learner's name on the row.
 
 Three intermediate failures were load timeouts, with a load average up to 99 from other stacks on this machine: a speed budget, a storage health check, and a page load. Each passed on rerun with no change.
+
+## Final-review nit N1′ (re-reviews of #182 at `ebbacde`, 2026-11-05)
+
+Both re-reviews at `ebbacde` returned READY FOR FINAL REVIEW, with one nit. The App 4 replay fix above did not run: a replayed `create_charge_payment` returns only `charge_id`, `receipt_id` and `replayed` (125, the inner replay branch), never `enrollment_id`. So the condition `groupId && data.enrollment_id` was always false on a replay, and the chosen group was dropped.
+
+Fixed in `src/app/(admin)/receipts/new/page.jsx`:
+- A first run still uses the `enrollment_id` it returns.
+- A replay with a receipt reads the enrollment that its charge carries, from `charge_balances` (the security-invoker view the receipt form already reads). It then places the learner as before, on fresh versions.
+  - If the lost first response had already placed the learner in that group, nothing is placed twice.
+  - If the learner is already in another group, nothing changes.
+  - If reading the charge fails, the message says « Groupe non affecté : … » and the payment stays recorded.
+- A replay without a receipt (a 100 % discount agreement) places nothing. Its group is then assigned by hand from the learner's file.
+
+No server body changed.
+
+Covered by:
+- `test-receipt-client-regressions.mjs`.
+- A new case in `test-receptionist-browser.mjs`. A walk-in payment with a group commits, but its response is aborted, and nothing is placed. The same key is then sent again. The server replays it: same receipt, no `enrollment_id`. The page places the learner from the charge's enrollment and shows « Paiement déjà enregistré — reçu existant affiché. Groupe affecté. ». The case then checks one learner, one receipt, and the enrollment Validated in that group.
+
+Local evidence (same private stack and CI image, synthetic data only): the `browser-security` shard passes in full with the new case. `npm test`, ESLint on the changed files, and the docs check pass. Before this fix the case would have failed: on a replay the page sent no `place_learner_in_group` request at all.
 
 ## Production steps deferred to the release task
 
