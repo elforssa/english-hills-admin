@@ -378,6 +378,77 @@ Plan: [enrollment at payment](../architecture/plans/enrollment-at-payment.md), r
 - **Release approvals (Maroine, 2026-11-05):** R0, R1 and R2 together (the read-only R0 again, the private export, migration 127 in the 05:00–07:30 UTC window, then the archive step with the day's declared counts, accepting their G2 conversions and G7 review flags, both 0 that day); the merge of PR #182 kept separate; after the merge, R3 and R4 as written in the plan: zero-payment rolled-back probes as reception only, no receipt-producing probe, no data change, no revert or restore.
 - **Release status (2026-11-05):** R0–R4 done ([closeout](CURRENT_STATE.md#enrollment-at-payment-migration-127-production-closeout-r0r4--2026-11-05), [release record](../architecture/plans/enrollment-at-payment.md#release-record-r0r4--2026-11-05)). The archive step ended the 14 waiting enrollments, set their 14 learner files to Inactive and detached the one LOST lead; it converted no lead and raised no review flag. The archive revert and the function restore were not run and each still needs its own approval. **Pending:** R5 (the owner's first reception morning: one walk-in and one prospect through « Inscrire et encaisser », the group assignment, Contrôles) and R6 (the eh-website PR, with its own approval). Dropping the retired status values stays a later optional release. No new owner decision.
 
+## Courses with dates — close a finished course — APPROVED FOR IMPLEMENTATION (2026-11-05)
+
+Plan: [course dates and close](../architecture/plans/course-dates-close.md), revision **CDC-r3 approved for implementation at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19`** (Tier 3; [ADR-016](../architecture/decisions/ADR-016-course-dates-and-close.md), accepted for implementation planning with this approval).
+
+- **Review of CDC-r1 (PR #185 head `c2fbb12…`), 2026-11-05: CHANGES REQUIRED.** The report had 1 blocker and 10 should-fix items. As relayed by the coordinator:
+  - **B1:** the close must show and handle the paid enrollments without a group of the course's programme, year and level.
+  - **Should-fix:** S1 (never end more than counted), S2 (reopen lock order), S3 (share lock on the online course), S5 (date window independent of trigger order), S6 (a later payment must not re-create a Confirmed enrollment), S8 (release and rollback order with the old application), S9 (data-step counts per approved programme set, one `leave` per learner and programme, revert refuses changed rows).
+  - **Nits.**
+
+  S4, S7 and S10 were not relayed individually. CDC-r2 applied the relayed items.
+- **Re-review of CDC-r2 (head `09e7b4e…`), 2026-11-05: CHANGES REQUIRED, three small fixes.** As relayed by the coordinator:
+  - **N-1:** CDC-r2's claim that the close could never deadlock was wrong (reproduced by the reviewer). The close now marks the group row right after the learner locks and before any « A suivi ce cours » attach, and every placement path takes the group row before the seat lock.
+  - **N-2:** only partly paid open unlinked charges are linked; « engagements » with nothing paid are shown and never linked; undated pre-057 charges of earlier years are excluded.
+  - **N-3:** the year close locks the year's group rows after the learners and never marks a group that still has a live learner.
+  - **Nits.**
+
+  CDC-r3 applies them. The re-review relayed no remaining item for S4, S7 or S10.
+- **Independent plan review of CDC-r3 (head `47a02e6…`), 2026-11-05: READY FOR OWNER APPROVAL.** Its points (R3-1 and five others) are carried into the implementation record by the owner's instruction 2 below, without a plan revision.
+- **Owner answers to the review (Maroine, proposed by the coordinator, 2026-11-05), recorded as proposed and confirmed by the plan approval below:**
+  1. Yearly groups appear on « Cours terminés à clôturer » only if they have a `date_fin`. « Clôturer l'année » also marks its Yearly groups closed. This replaces the implicit 31 August rule for the card.
+  2. Empty groups (no live enrollment) can be closed by the director and move to « Clôturés ».
+  3. Parents and students read only their own groups (restrict the policies at 123:1463 / 124:386); staff unchanged. Existing group names are reviewed so none contains a learner's name.
+  4. « Clôturer l'année » never closes a group whose `date_fin` is after the close date (summer courses).
+  5. After the one-time step, the dashboard card counts only paid enrollments without a group for programmes that use groups. The plan states what it will show: 20 / 10 / 17 / 7 depending on the programmes the step ends (2026-11-05 figures; R0 gives the release-day numbers).
+- **Owner answer to the re-review (Maroine, proposed by the coordinator, 2026-11-05), recorded as proposed and confirmed by the plan approval below:**
+  6. The June « Clôturer l'année » does not end the paid enrollments without a group of short programmes (Summer Camp, Mise à niveau) whose course has not ended; it leaves them waiting. Plan Q18 asks about rows whose course does not exist yet.
+
+- **Problem (owner, 2026-11-05):** groups have no start or end date, so finished short courses (Mise à niveau, Adults sessions) leave paid enrollments « Confirmed/Validated » for ever. The dashboard card « Inscrits — groupe à affecter » shows 38 (18 Mise à niveau, 10 Adults, 7 Yearly, 2 One-to-One, 1 Online One-to-One, all 2026/2027, no group). Only « Clôturer l'année » exists.
+- **Direction proposed by the coordinator, recorded as proposed (confirmed through the plan's Q1 and Q3–Q18, all A, at the plan approval below):**
+  1. Groups get `date_debut` and `date_fin`: required for short programmes (Mise à niveau, Adults, Summer Camp, One-to-One); for Yearly, proposed as the end of the school year; validated against the group's school year.
+  2. A director dashboard card « Cours terminés à clôturer » (end date passed, still active enrollments).
+  3. A director command « Clôturer le cours »: ends every live enrollment of that group with the reason « Cours terminé », resyncs the files (Ancien apprenant unless another live enrollment keeps Inscrit), balances stay owed, attendance and receipts kept, journalled and idempotent, reusing the Batch D leaver/year-close machinery and ADR-009 conflicts. Not automatic.
+  4. One-to-One as a course of capacity 1 with its own dates (recommendation; the owner is asked).
+  5. One-time data step, counted first and approved separately: end the 18 Mise à niveau Confirmed enrollments without group with the reason « Mise à niveau terminée » (learners with another live enrollment keep Inscrit); Adults (10) and One-to-One (3) only after the owner's confirmation per programme.
+- **Plan questions Q1 and Q3–Q18, all answered A at the plan approval below (Q2 is superseded by answer 1 above):**
+  - which programmes require dates, and existing groups without them;
+  - the date window against the school year;
+  - One-to-One;
+  - who closes and sees the card;
+  - closing before the end date;
+  - the closed state;
+  - reopening a course;
+  - online courses;
+  - teachers and past rosters;
+  - timing of the one-time step;
+  - which backlog programmes it ends;
+  - reopening an enrollment it ended;
+  - the unplaced paid enrollments at a close (B1);
+  - payments after a close;
+  - which groups the year close marks closed;
+  - which programmes « use groups » for the card;
+  - paid enrollments without a group at the June year close when their course does not exist yet (answer 6).
+- **Plan approval (Maroine, 2026-11-05), verbatim, after the independent plan review returned READY FOR OWNER APPROVAL at head `47a02e6…`:**
+
+> Owner approval (Maroine, 2026-11-05): approve the "Courses with dates — close a finished course" plan at exact head 47a02e6a56f08290f85fe2bf0c703b12fc6a6c19 (revision CDC-r3), Q1 and Q3–Q18 all A, OA1–OA6 as recorded. Independent plan review: READY FOR OWNER APPROVAL at 47a02e6 (after CHANGES REQUIRED at c2fbb12 and 09e7b4e).
+>
+> 1. Record this approval verbatim in the plan's Approval record and in OWNER_DECISIONS (approved for implementation), update ADR-016 and both index rows, push to PR #185. Do not merge; I merge separately.
+> 2. Carry these reviewer points into the implementation record (no plan revision needed):
+>    - R3-1: word the stop condition and the concurrency harness as "through place, or a direct write of a learner the command does not hold"; record the same-learner direct API update deadlock as a known, pre-existing, out-of-scope limitation (the app never writes enrollments.group_id directly).
+>    - Year close locks groups with `for no key update` instead of `for update`.
+>    - One-to-One: in the close dialog and OA6 matching, never offer another learner's course of one (restrict or label).
+>    - Close preview flags receipts for a next-session deposit attached to the enrollment being ended (the learner would need « Rouvrir l'inscription »).
+>    - Flag waiting rows carried over from an earlier school year in the year-close preview and on the card.
+>    - T7b3a is expected 0 (057 made the year required); keep the line.
+> 3. This approves the plan only. The R0 count, implementation, migration 128, the one-time step (Adults and One-to-One only after my confirmation per programme), merge and deploy each need their own approval.
+>
+> Stop and report when the approval is recorded.
+
+  Approved: CDC-r3 at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19`, Q1 and Q3–Q18 all A, OA1–OA6 as recorded above. The six reviewer points of instruction 2 are carried into the implementation record ([plan approval record](../architecture/plans/course-dates-close.md#owner-decisions-required)).
+- **Not approved by this record:** the read-only R0 count on Production, implementation, migration 128, the one-time data step (Adults and One-to-One only after the owner's confirmation per programme), the merge and the deployment; each needs its own approval. The owner merges PR #185 separately.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
