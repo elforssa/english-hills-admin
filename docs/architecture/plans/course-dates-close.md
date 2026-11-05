@@ -1342,3 +1342,32 @@ New:
 - `scripts/test-course-close.mjs` (`npm test`): helpers, French texts equal to the migration's, pickers and lists excluding closed courses, name lookups keeping them, the director-only card, the RPC wrappers, the guide text.
 
 Updated (fixture dates, One-to-One capacity 1, past end dates for year closes, or the planned rules): `test-audit-follow-ups.sql`, `test-audit-follow-ups-ui.mjs`, `test-crm-rcc-a2.sql`, `test-enrollment-at-payment.sql`, `test-enrollment-group-concurrency.py`, `test-enrollment-group-consistency.sql`, `test-enrollment-workflow.sql`, `test-online-learning.sql`, `test-paid-enrollment.sql`, `test-portal-readiness.sql`, `test-receipt-client-regressions.mjs`, `test-receptionist-batch1.sql`, `test-receptionist-browser.mjs`, `test-receptionist-group-filter.sql`, `test-receptionist-security.sql`, `test-report-data.mjs`, `test-student-placement-browser.mjs`. Ledger ceiling 127 → 128: `test-conflicts-without-retry-upgrade.mjs`, `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-premium-retirement-upgrade-113-current.sql`.
+
+## Local verification (2026-11-05)
+
+Private local Supabase stack (CI image `supabase/postgres 17.6.1.165`, its own ports and project id), synthetic data only, on a clone of this branch.
+
+- **A first, full replay of the six `local-database` shards stopped on the local machine, not on a test.** Nine local Supabase stacks shared the 8 GB Docker VM (about 6.7 GB used), and the shards failed on Auth 504 timeouts, an unhealthy database container after a reset, a connection timeout and a container setup error. No assertion failed. The steps that completed passed:
+  - in sql-and-concurrency, the rollback-only SQL suites, including `test-course-dates-close.sql` and every updated suite, then advisory D2 and H3-02;
+  - in upgrades-from-097-to-105, the synthetic 097 and stateful 100 upgrades;
+  - in browser-security, Batch 2 (798 checks), Batch 1 (153), Batch 3A (197), Batch 3B (198) and Batch 4A (182).
+
+  The owner then stopped the replay (instruction of 2026-11-05). **GitHub's Verify run on the implementation pull request is the reference for the six shards.**
+- **Then only what is new**, as the owner instructed, on the code of this pull request:
+  - `test-course-dates-close.sql` on a fresh reset to 128: **pass**, 83 checks, rolled back.
+  - `test-course-close-concurrency.py`: **pass**, ten cases, no `40P01`.
+    - The first run failed in the new N-3 direct-write case. The two N-3 year closes before it had already marked the empty fixture groups that it uses, so its insert met « Ce cours est clôturé » before any race.
+    - The case now reopens those groups first. This is a test-only fix: the migration is unchanged.
+  - `test-course-dates-close-upgrade.mjs` after a reset to 127: **pass**. It covers:
+    - the R0 counts and the manifest-only catalog change;
+    - the step for S1 and S4: refused on a wrong count, dry run, run, and a re-run that changes nothing;
+    - the revert with a declared skip;
+    - the restore to the 127 functions.
+
+    The stack was then reset to 128.
+  - `npm test`: **pass**.
+  - `npm run lint`: **clean**. Its one warning (`<img>` in `Sidebar.jsx`) is in a file this branch does not touch.
+  - `npm run build`: **pass**, with the app lane's environment (placeholder Supabase keys, no Sentry DSN).
+- **Not run locally; open before merge:**
+  - **The browser checks of acceptance 2 (D8).** CI's browser shards run the updated browser suites but have no dedicated course-close browser suite.
+  - **The guide's group-form screenshot.** `public/helpdesk/q08-groupe-formulaire.jpg` is still the guide 2.1 image, without the two date fields, while the legend under it now has six items, including « Date de début » and « Date de fin ».

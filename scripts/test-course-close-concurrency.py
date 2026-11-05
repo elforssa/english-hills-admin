@@ -353,6 +353,11 @@ commit;""")
     print('PASS N-3: the year close and a placement serialize on the group row in both orders')
 
     # N-3 through a direct management write (R3-1): the insert in flight keeps its group open.
+    # The two year closes above also marked this run's empty far3 and far4: reopen them first.
+    sql(f"""begin;set local eh.course_command = on;
+update public.groups set closed_at=null, closed_by=null where id in ({quote(groups['far3'])},{quote(groups['far4'])});
+delete from maintenance.course_close_journal where group_id in ({quote(groups['far3'])},{quote(groups['far4'])});
+commit;""")
     _, result = race(ADMIN, direct('y_far3', 'far3', 'Yearly', FAR_YEAR, 'Child 1'), DIRECTOR, far_close)
     assert 'ok' in result, result
     assert value(f"select closed_at is null from public.groups where id={quote(groups['far3'])}") == 't'
