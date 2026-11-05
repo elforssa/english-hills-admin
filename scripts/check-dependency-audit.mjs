@@ -76,10 +76,13 @@ const minimatchEdges = [
 // that root and only when the suggested major is below the installed one; an upgrade
 // suggestion or any other package requires reassessment. ESLint itself no longer
 // reaches the affected copy and is no longer accepted as a fix root (2026-11-05).
-// npm also marks propagated entries `fixAvailable: true` although `npm audit fix
-// --dry-run` changes nothing, so a bare `true` is accepted only on a propagated entry
-// and only while that dry-run plan is empty; a real compatible fix shows up in the plan
-// and retires the exception.
+// npm also marks entries `fixAvailable: true` although `npm audit fix --dry-run`
+// changes nothing, so a bare `true` is accepted only while that dry-run plan is empty;
+// a real compatible fix shows up in the plan and retires the exception. Since
+// 2026-11-05 npm marks the advisory root (minimatch) itself this way on every run:
+// the plan is still empty, and the latest @typescript-eslint/typescript-estree
+// (8.72.1) still requires minimatch ^10.2.2. Owner approval (2026-11-05) extends the
+// empty-plan rule to the root, on the same condition as its consumers.
 const minimatchFixRoots = ['eslint-config-next'];
 // Stable releases newer than the approved copy in its line that were assessed and found
 // still inside the advisory range (10.2.6, assessed 2026-11-03). Any other newer stable
@@ -246,7 +249,6 @@ export function validateAudit(report, lock, manifest, publishedBracesVersions, p
     assert.ok(expectedNodes.length > 0, 'Unapproved minimatch consumer');
     assert.deepEqual([...entry.nodes].sort(), expectedNodes.sort(), 'Unapproved minimatch audit dependency paths');
     if (entry.fixAvailable === true) {
-      assert.ok(name !== 'minimatch', 'Compatible minimatch advisory fix available; remove exception');
       assert.ok(object(fixPlan) && object(fixPlan.audit) && fixPlan.audit.auditReportVersion === 2
         && [fixPlan.added, fixPlan.removed, fixPlan.changed].every((count) => Number.isInteger(count)), 'Invalid npm fix plan');
       assert.ok(fixPlan.added === 0 && fixPlan.removed === 0 && fixPlan.changed === 0, 'Compatible minimatch advisory fix available; remove exception');

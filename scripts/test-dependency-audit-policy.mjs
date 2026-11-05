@@ -160,7 +160,18 @@ rejectMinimatch('affected range change', ({ report: r }) => { r.vulnerabilities.
 rejectMinimatch('other advisory on the same package', ({ report: r }) => { r.vulnerabilities.minimatch.via.push({ name: 'minimatch', dependency: 'minimatch', url: 'https://github.com/advisories/GHSA-other', severity: 'moderate', range: '<12' }); });
 rejectMinimatch('other advisory package', ({ report: r }) => { r.vulnerabilities.minimatch.via[0].dependency = 'other'; });
 rejectMinimatch('compatible fix', ({ report: r }) => { r.vulnerabilities['@typescript-eslint/parser'].fixAvailable = { name: 'eslint-config-next', version: '15.5.25', isSemVerMajor: false }; });
-rejectMinimatch('boolean fix on the advisory root', ({ report: r }) => { r.vulnerabilities.minimatch.fixAvailable = true; });
+// 2026-11-05 (owner-approved): npm's bare `true` on the advisory root itself is accepted
+// only while the dry-run fix plan is empty, as on its consumers; any planned change fails.
+const rootBoolean = structuredClone(minimatchReport);
+rootBoolean.vulnerabilities.minimatch.fixAvailable = true;
+assert.equal(check(rootBoolean).permitted, 6, 'root boolean with an empty fix plan');
+for (const count of ['added', 'removed', 'changed']) {
+  assert.throws(() => check(rootBoolean, lock, manifest, versions, minimatchVersions, { ...fixPlan, [count]: 1 }),
+    /Compatible minimatch advisory fix available; remove exception/, `root boolean with a planned ${count}`);
+}
+assert.throws(() => check(rootBoolean, lock, manifest, versions, minimatchVersions, { added: 0, removed: 0, changed: 0 }), /Invalid npm fix plan/, 'root boolean with an invalid fix plan');
+assert.throws(() => check(rootBoolean, lock, manifest, versions, minimatchVersions, null), /Invalid npm fix plan/, 'root boolean without a fix plan');
+rejectMinimatch('root fix metadata naming a compatible minimatch', ({ report: r }) => { r.vulnerabilities.minimatch.fixAvailable = { name: 'minimatch', version: '10.2.7', isSemVerMajor: false }; });
 rejectMinimatch('boolean fix with a non-empty fix plan', ({ fixPlan: f }) => { f.changed = 1; });
 rejectMinimatch('boolean fix with an invalid fix plan', (inputs) => { inputs.fixPlan = { added: 0, removed: 0, changed: 0 }; });
 for (const fix of [{ name: 'eslint-config-next', version: '15.6.0', isSemVerMajor: true }, { name: 'eslint-config-next', version: '16.0.0', isSemVerMajor: true },
