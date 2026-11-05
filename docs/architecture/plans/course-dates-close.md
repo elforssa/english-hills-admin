@@ -1,6 +1,6 @@
-# Courses with dates — close a finished course, revision CDC-r2
+# Courses with dates — close a finished course, revision CDC-r3
 
-**Status: PROPOSED (plan only; not approved).** Revision **CDC-r2**, 2026-11-05, superseding CDC-r1 (PR #185 head `c2fbb12a59f2d482a7476ba5ea206934e826ab71`). Risk tier: **3**: enrollment integrity, director commands that end enrollments in bulk, a guard on every placement path, a re-created year close, a narrower read policy on `groups`, and a counted Production data step. Owner: Maroine.
+**Status: PROPOSED (plan only; not approved).** Revision **CDC-r3**, 2026-11-05, superseding CDC-r2 (PR #185 head `09e7b4e1348299231a18917b97de5ee1fbf931a0`) and CDC-r1 (head `c2fbb12a59f2d482a7476ba5ea206934e826ab71`). Risk tier: **3**: enrollment integrity, director commands that end enrollments in bulk, a guard on every placement path, a re-created year close, a narrower read policy on `groups`, and a counted Production data step. Owner: Maroine.
 
 Nothing is implemented, merged, applied or deployed, and **no Production read, count or mutation occurred** while writing this plan.
 
@@ -20,7 +20,17 @@ Planned, implemented, merged, deployed and Production-verified are distinct stat
   - **Five owner answers**, proposed by the coordinator.
 
   The review reported ten should-fix items, but only seven were relayed individually. S4, S7 and S10 were not. This revision assumes the five owner answers settle them. **The re-review should confirm that or restate them.**
-- **CDC-r2** (this revision) applies the relayed items as follows.
+- **CDC-r2** (head `09e7b4e…`) applied the relayed items as in the first table below.
+- **Re-review of CDC-r2** (2026-11-05, head `09e7b4e…`): **CHANGES REQUIRED**, three small fixes and nits, as relayed by the coordinator:
+  - **N-1:** CDC-r2 claimed the close could never deadlock. That claim was **wrong**: « A suivi ce cours » runs `academic_security.place`, which takes the group's seat advisory lock (held to commit), and the close then updated the group row. A concurrent placement held the group share lock and waited for the seat lock, so the two transactions deadlocked (reproduced by the reviewer).
+  - **N-2:** link only open unlinked tuition charges with something paid; zero-paid charges are « engagements », shown and never linked; pre-057 charges without a year from earlier years are excluded.
+  - **N-3:** the year close must lock the year's group rows after the learners and never mark a group that still has a live learner.
+  - **Owner answer OA6** (proposed by the coordinator) and **nits** (second table).
+
+  The re-review relayed no remaining item for S4, S7 or S10.
+- **CDC-r3** (this revision) applies the re-review as in the second table.
+
+**CDC-r2 changes (review of CDC-r1):**
 
 | Item | Where |
 | --- | --- |
@@ -30,14 +40,24 @@ Planned, implemented, merged, deployed and Production-verified are distinct stat
 | OA3 — parents and students read only their own groups; group names reviewed | D6, R0 line B6, R5 |
 | OA4 — the year close never closes a group ending after the close date | D5 |
 | OA5 — the card counts only programmes that use groups; what it will show | D7, Q17, R0 lines A3–A4 |
-| S1 — a close never ends more than it counted and journalled | D3 step 9 |
+| S1 — a close never ends more than it counted and journalled | D3 step 11 |
 | S2 — reopen locks learners before the group | D3 « Rouvrir le cours » |
 | S3 — the guard share-locks the online course row | D4 |
 | S5 — the date window does not depend on trigger order | D1 (window inside the re-created year guard), tests |
-| S6 — a later payment never re-creates a Confirmed enrollment | D3 step 8, D10 step 4, Q15, R0 line T7b |
+| S6 — a later payment never re-creates a Confirmed enrollment | D3 charge link rule and step 10, D10 step 4, Q15, R0 lines T7b1–T7b3b |
 | S8 — release and rollback order with the old application | Release and rollback order |
 | S9 — data step counts per approved programme set, one `leave` per learner and programme, revert refuses changed rows | D10, R0 lines T2–T4 |
 | Nits | Logged date edits (D1); a run row for every close, including a replay on an empty group (D3); the missing group readers (D4); fixtures and CI wiring (tests); explicit zero rows and the T7 split (R0); dates refused on online groups (D1); the card loaded for the director only (D7); One-to-One end dates (D1, Q4) |
+
+**CDC-r3 changes (re-review of CDC-r2):**
+
+| Item | Where |
+| --- | --- |
+| N-1 — the close marks (locks) the group row right after the learner locks and before any attach; every path takes the group row before the seat lock; the false "never a deadlock" claims are corrected | D3 lock order and steps 5–11, D3 « Rouvrir le cours », D4 (lock order on every path; `enforce_group_capacity` re-created with a share lock), concurrency tests, manifest, restore |
+| N-2 — only partly paid open unlinked tuition charges are linked; « engagements » (nothing paid) are shown and never linked; pre-057 charges without a year from earlier years are excluded | D3 charge link rule, preview and step 10, D8 dialog, D10 step 4, Q15, invariants, R0 lines T7b1–T7b3b, tests |
+| N-3 — the year close locks the year's group rows after the learners, then, in a separate statement, marks only those without a live learner | D5, concurrency tests |
+| OA6 — the June « Clôturer l'année » leaves waiting the paid enrollments without a group of short programmes whose course has not ended | Owner answers, D5, Q18, release and rollback order, tests |
+| Nits | What « A suivi ce cours » means for attendance (D3 step 9, Q14); the U-lines exclude archived learner files (R0); OWNER_DECISIONS question range; year-close fixtures need past end dates (tests); the guide citation (application inventory) |
 
 # Owner summary
 
@@ -67,16 +87,17 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
   - how many learners the close ends;
   - how many stay « Inscrit » because they have another live enrollment;
   - how many still owe money;
-  - the **paid learners of the same programme, year and level who were never placed**. For each one the director chooses « A suivi ce cours » (placed, then ended with the course), « Terminer sans groupe » or « Laisser en attente » (B1, Q14).
+  - the **paid learners of the same programme, year and level who were never placed**. For each one the director chooses « A suivi ce cours » (placed, then ended with the course; no attendance is created), « Terminer sans groupe » or « Laisser en attente » (B1, Q14);
+  - the open **« engagements »**: amounts committed with nothing paid yet, often for a next session. They are shown and left as they are.
 
   On confirmation every live enrollment of that course ends with the reason « Cours terminé »:
   - Learner files become « Ancien apprenant » unless another live enrollment keeps them « Inscrit ».
-  - Balances stay owed. A later payment lands on the ended enrollment's own charge and never puts the learner back in « Groupe à affecter » (Q15).
+  - Balances stay owed. A later payment on a partly paid charge lands on the ended enrollment's own charge and never puts the learner back in « Groupe à affecter » (Q15). A later payment on an « engagement » creates a new enrollment, as for any new session.
   - Attendance, receipts and the CRM conversion are untouched.
   - The close is journalled and refuses a stale count (« rechargez »). A repeated click after a lost response changes nothing.
 - **An empty group** can be closed by the director at any time (OA2).
 - **A closed course** no longer accepts learners and disappears from the group pickers, from attendance and from « Groupes actifs ». It stays readable under a « Clôturés » filter with its past learners (Q7). « Rouvrir le cours » undoes a close made by mistake (Q8).
-- **« Clôturer l'année »** also marks closed its Yearly groups, and the other groups it empties (Q16). It never touches a course that ends after the close date, such as a summer course (OA4). Its dialog now shows the exact numbers from the database.
+- **« Clôturer l'année »** also marks closed its Yearly groups, and the other groups it empties (Q16), but never a group that still has a learner. It never touches a course that ends after the close date, such as a summer course (OA4). It also leaves waiting the paid learners without a group of a short programme whose course has not ended, such as a Summer Camp paid in May (OA6, Q18). Its dialog now shows the exact numbers from the database.
 - **Parents and students** see only their own groups. Staff are unchanged (OA3). Existing group names are reviewed so that none contains a learner's name.
 - **« Inscrits — groupe à affecter »** counts only paid enrollments without a group for programmes that use groups (OA5, Q17). From the 2026-11-05 figures it will show:
 
@@ -138,7 +159,7 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
   - « Groupes actifs » counts only groups not closed (today it counts every group, [dashboard 87](../../../src/app/(admin)/dashboard/page.jsx));
   - « Inscrits — groupe à affecter » counts only programmes that use groups (OA5).
 - **Learner file:** an ended row already shows « Ancien groupe », the reason and the date. Nothing new.
-- **Guide (`/helpdesk`):** the group form (section Q8); a new « Clôturer un cours terminé »; the missing « Clôturer l'année » entry under the director part; the rule that a group name never contains a learner's name.
+- **Guide (`/helpdesk`, reception guide):** the group form dates and the rule that a group name never contains a learner's name (`#q8`); the message « Ce cours est clôturé » (`#q9`); the course close next to the year close as a way enrollments end (lines 1594 and 1625); « Clôturer un cours terminé ou le rouvrir » and « Clôturer l'année scolaire » in the `#direction` table (« Académique » row).
 
 ## Database impact
 
@@ -154,7 +175,8 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
   - the year guard `guard_group_year` and its trigger (125);
   - `save_receptionist_group` (125);
   - `crm_enrollment_groups` (125);
-  - `close_school_year` (120).
+  - `close_school_year` (120);
+  - the capacity trigger function `enforce_group_capacity` (120), changed only to share-lock the group row before its seat lock (N-1).
 
   No existing row changes: existing groups keep empty dates.
 - **One separately approved, counted, journalled data step** (`supabase/manual/`) for the backlog, programme by programme, with a revert from its journal.
@@ -165,7 +187,7 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
 - **Director only** (Q5), checked inside the definer functions from the stored role, as `close_school_year` does.
 - **The closed mark is trigger-protected.** `closed_at`/`closed_by` change only under the commands' transaction-local flag, so the management RLS policy on `groups` (direct writes by admin and director) cannot close or reopen a course silently.
 - **The placement guard is a trigger on `enrollments`**, like Batch H's year guard. Every path therefore refuses a closed course: group page, learner file, learner form, receipt form, CRM, « Groupe à affecter » and direct writes.
-- **Group rows become family-scoped for parents and students** (OA3). Today every signed-in role, parents and students included, reads every group row: policy « groups read all auth », [123 line 1463](../../../supabase/migrations/123_portal_readiness.sql), rewritten by [124 line 386](../../../supabase/migrations/124_speed_as_the_centre_grows.sql). CDC-r2 restricts parents and students to the groups of their own learners. Staff keep the current rule. Group names must still never carry a learner's name, because every staff role reads them.
+- **Group rows become family-scoped for parents and students** (OA3). Today every signed-in role, parents and students included, reads every group row: policy « groups read all auth », [123 line 1463](../../../supabase/migrations/123_portal_readiness.sql), rewritten by [124 line 386](../../../supabase/migrations/124_speed_as_the_centre_grows.sql). This plan restricts parents and students to the groups of their own learners. Staff keep the current rule. Group names must still never carry a learner's name, because every staff role reads them.
 
 ## Risks / owner review points
 
@@ -179,9 +201,10 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
    - Only the one-time step, or the close of a course of the same programme, year and level (B1), can reach them.
    - The step ends paid enrollments. T8 counts those with no receipt at all.
    - Adults and One-to-One need the owner's confirmation per programme (Q12).
-5. **The year close changes behaviour** (OA4, Q16):
+5. **The year close changes behaviour** (OA4, OA6, Q16, Q18):
    - Enrollments in a course ending after the close date are no longer ended.
-   - Groups it empties are marked closed.
+   - Paid enrollments without a group of a short programme whose course has not ended are left waiting. They stay on « Inscrits — groupe à affecter » until their course's close or « Ancien apprenant » reaches them.
+   - Groups it empties are marked closed; a group that still has a learner is left open.
    - Its dialog switches to a database preview.
 
    During the release gap or after an application rollback, the old dialog can get « rechargez »; nothing changes when it does. See the release and rollback order section.
@@ -197,7 +220,7 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
 - **Baseline:** `origin/main` `6e724ab…`; migrations 001–127 on file; Production ledger 001–127 (CURRENT_STATE); next free number 128.
 - **Method:** static inspection of migrations 001–127, `src/`, `scripts/`, `.github/workflows/verify.yml` and the docs. The read-only count query below was run on a private local stack at migration 127. On an empty database every category returns an explicit zero. With a few synthetic rows inside a rolled-back transaction it returns the expected scenario counts. **No Production read occurred.**
 - **The 38:** the owner's figure is the dashboard of 2026-11-05. It agrees with the EAP release record of the same morning, which recorded Confirmed 38 before and after the archive step ([CURRENT_STATE](../../ai/CURRENT_STATE.md#enrollment-at-payment-migration-127-production-closeout-r0r4--2026-11-05)). A Confirmed row placed in a group becomes Validated, so every Confirmed row has no group.
-- **Charges:** the local 127 catalog has no trigger on `public.charges`. Linking an open charge to an enrollment (D3 step 8) meets no finance guard today; re-checked at implementation.
+- **Charges:** the local 127 catalog has no trigger on `public.charges`. Linking an open charge to an enrollment (the D3 charge link rule) meets no finance guard today; re-checked at implementation.
 - **Line numbers:** those of the baseline files. The implementer re-reads every function to re-create with `pg_get_functiondef` on a local database first.
 
 ## Database dependency inventory (latest definitions)
@@ -208,12 +231,12 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
 | Group reads | RLS « groups read all auth » ([123 line 1463](../../../supabase/migrations/123_portal_readiness.sql), [124 line 386](../../../supabase/migrations/124_speed_as_the_centre_grows.sql)): every role except `pending` | Parents and students read every group row. | **Replaced** by « groups read staff » (unchanged rule for every role but parent, student and pending) and « groups read family » (D6). |
 | Group writes | RLS « groups admin all » ([124 line 380](../../../supabase/migrations/124_speed_as_the_centre_grows.sql); admin and director; direct insert/update/delete); reception through `public.save_receptionist_group` ([125 line 1762](../../../supabase/migrations/125_audit_follow_ups.sql); key allowlist `assert_keys`; create replay identity check) | The form writes the table directly for management and calls the RPC for reception ([groups/page.jsx 72–78](../../../src/app/(admin)/groups/page.jsx)). | **Re-created** `save_receptionist_group`: the 125 body plus the two date keys (allowlist, insert, update, replay identity). Management keeps its direct writes; the guards cover them. |
 | Group guards | `groups_year_guard` → `academic_security.guard_group_year` ([125 lines 117–141](../../../supabase/migrations/125_audit_follow_ups.sql): fills the default year on insert (D-H5a), checks the format, locks the year while live learners of another year exist; trigger `before insert or update of annee`); `groups_membership_level_guard` ([120 line 398](../../../supabase/migrations/120_enrollment_group_consistency.sql), D7); `online_group_guard` ([117 line 875](../../../supabase/migrations/117_online_learning_pilot.sql)) | Year rules only. | **Re-created** `guard_group_year` and its trigger, with the date window (D1, S5). **New** `groups_course_guard` (D1, D4). |
-| Placement guards on `enrollments` | `enrollment_group_year_guard` → `guard_enrollment_group_year` ([125 lines 87–111](../../../supabase/migrations/125_audit_follow_ups.sql), share-locks the group); capacity `enforce_group_capacity` ([120 lines 404–421](../../../supabase/migrations/120_enrollment_group_consistency.sql)); online capacity ([117 lines 894–913](../../../supabase/migrations/117_online_learning_pilot.sql)); EAP retired-status guard (127) | No closed-course notion. Placement into a closed online course is **not** refused: open Batch D follow-up 2, review DB-N3 ([OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-and-group-consistency-batch-d--released-2026-10-26)). | Unchanged. **New** `enrollment_course_guard` (D4). |
-| Placement command | `academic_security.place` / `public.place_learner_in_group` ([127 lines 1013–1148](../../../supabase/migrations/127_enrollment_at_payment.sql)): reception needs a paid enrollment (Q3 = B); management gives a logged reason; capacity override with reason. `assign_receptionist_student_group` ([120 line 979](../../../supabase/migrations/120_enrollment_group_consistency.sql)) calls the same core. | — | **Unchanged.** The new trigger refuses closed courses and undated short groups underneath it. « A suivi ce cours » (B1) calls the core. |
+| Placement guards on `enrollments` | `enrollment_group_year_guard` → `guard_enrollment_group_year` ([125 lines 87–111](../../../supabase/migrations/125_audit_follow_ups.sql), share-locks the group, line 103); capacity `enrollment_group_capacity` → `enforce_group_capacity` ([120 lines 404–421](../../../supabase/migrations/120_enrollment_group_consistency.sql): a plain read of the group at line 411, then the seat advisory lock `group:seats:<id>` at line 413); online capacity ([117 lines 894–913](../../../supabase/migrations/117_online_learning_pilot.sql)); EAP retired-status guard (127) | No closed-course notion. Placement into a closed online course is **not** refused: open Batch D follow-up 2, review DB-N3 ([OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#enrollment-and-group-consistency-batch-d--released-2026-10-26)). Same-event triggers fire in name order, so on a direct write the capacity trigger takes the seat lock **before** the year guard share-locks the group. | **New** `enrollment_course_guard` (D4). **Re-created** `enforce_group_capacity`: its group read takes `for share`, so the group row is locked before the seat lock on every path (N-1). No rule changes. |
+| Placement command | `academic_security.place` / `public.place_learner_in_group` ([127 lines 1013–1148](../../../supabase/migrations/127_enrollment_at_payment.sql)): reception needs a paid enrollment (Q3 = B); management gives a logged reason; capacity override with reason. Lock order: learner (line 1023), enrollment, group row `for share` (line 1057), then the seat advisory lock (line 1096), held to commit. `assign_receptionist_student_group` ([120 line 979](../../../supabase/migrations/120_enrollment_group_consistency.sql)) calls the same core. | — | **Unchanged.** The new trigger refuses closed courses and undated short groups underneath it. « A suivi ce cours » (B1) calls the core after the close holds the group row (N-1). |
 | Leaver core | `academic_security.end_enrollment` ([120 lines 602–613](../../../supabase/migrations/120_enrollment_group_consistency.sql): sets `Ended`, `ended_at`, `ended_by`, `end_reason`, `ended_group_id`); `academic_security.leave` (lines 624–666: ends the chosen enrollments; file → Alumni/Inactive only when nothing else is live; never touches charges, receipts or attendance); `academic_security.end_group_enrollments` (lines 1529–1548: every live enrollment of one group, learners locked in id order, loops until none is left) | Shared by `end_learner`, `close_school_year`, archive and `online_close_course`. | **Reused unchanged.** |
-| Year close | `public.close_school_year(text, integer, text)` ([120 lines 704–736](../../../supabase/migrations/120_enrollment_group_consistency.sql); not re-created since): director only; ends every live enrollment of the year; the live count must equal the expected count (`egc.stale`, `PT409`); Alumni; logged | The dialog counts live enrollments of the year in the browser ([students/page.jsx 81–86](../../../src/app/(admin)/students/page.jsx)) and calls the command. | **Re-created** from 120: spares courses ending later, marks the groups it empties closed, plus a preview (D5). |
+| Year close | `public.close_school_year(text, integer, text)` ([120 lines 704–736](../../../supabase/migrations/120_enrollment_group_consistency.sql); not re-created since): director only; ends every live enrollment of the year; the live count must equal the expected count (`egc.stale`, `PT409`); Alumni; logged | The dialog counts live enrollments of the year in the browser ([students/page.jsx 81–86](../../../src/app/(admin)/students/page.jsx)) and calls the command. It locks learners only; it locks no group. | **Re-created** from 120: spares courses ending later, leaves waiting the paid unplaced rows of short programmes whose course has not ended (OA6), locks the year's group rows after the learners and marks closed only those left without a live learner (N-3), plus a preview (D5). |
 | Online close | `public.online_close_course(uuid, bigint)` ([120 lines 1557–1580](../../../supabase/migrations/120_enrollment_group_consistency.sql), from 117/118): director or admin; version-checked; takes the course row `for update`; revokes join passes; ends enrollments with « Cours en ligne clôturé » (first pass, seat lock, second pass, lines 1574–1576). `online_courses.term_start`/`term_end` are limited to 182 days ([117 lines 323–347](../../../supabase/migrations/117_online_learning_pilot.sql)). | Online courses already have dates and a close. | Unchanged (Q9). The course guard share-locks the course row and refuses placement into a closed online course (D4, S3). |
-| Payment and enrollment | `create_charge_payment` ([127](../../../supabase/migrations/127_enrollment_at_payment.sql)): a payment on an unlinked tuition charge looks for the learner's **live** enrollment of that programme and year (lines 209–214). If none exists it **inserts a new Confirmed enrollment** (lines 248–252) and links the charge (line 260). An ended enrollment takes payments only on its own linked charge (lines 227–228). | After a close, a payment on an open charge that was never linked would create a fresh Confirmed enrollment and put the learner back on « Groupe à affecter ». | Unchanged. The close and the data step link such charges first (D3 step 8, D10, Q15, S6). |
+| Payment and enrollment | `create_charge_payment` ([127](../../../supabase/migrations/127_enrollment_at_payment.sql)): a payment on an unlinked tuition charge looks for the learner's **live** enrollment of that programme and year (lines 209–214). If none exists it **inserts a new Confirmed enrollment** (lines 248–252) and links the charge (line 260). An ended enrollment takes payments only on its own linked charge (lines 227–228). | After a close, a payment on an open charge that was never linked would create a fresh Confirmed enrollment and put the learner back on « Groupe à affecter ». An undated charge (only charges created before 057, which made the year required at [057 line 169](../../../supabase/migrations/057_receipt_school_year_workflow.sql)) is treated as the current school year (127 lines 204–217). A charge with nothing paid is an EAP commitment (« engagement »), often for a next session. | Unchanged. The close and the data step first link the **partly paid** such charges, never an « engagement » and never an undated charge created before the enrollment's school year (the D3 charge link rule, D10, Q15, S6, N-2). |
 | Conflicts | `academic_security.stale()` ([120 lines 75–78](../../../supabase/migrations/120_enrollment_group_consistency.sql); `PT409`, `egc.stale`), ADR-009 | The browser maps `PT409` to « rechargez » ([membershipActions.mjs 71–93](../../../src/lib/academic/membershipActions.mjs)). | New commands raise `PT409` only; no `40001`. |
 | Reopen | `public.reopen_enrollment` ([127 line 882](../../../supabase/migrations/127_enrollment_at_payment.sql)): director or admin; Ended → Confirmed without group; refuses rows ended by the EAP archive (journal membership) | — | Unchanged. Rows ended by a close or the data step stay reopenable (Q13). |
 | Learner status | `public.sync_student_from_enrollments` ([121 line 51](../../../supabase/migrations/121_enrollment_group_consistency_enforce.sql)), D3-A | Enrolled while a Confirmed/Validated enrollment exists; Alumni/Inactive only through the leaver paths. | Unchanged. |
@@ -249,7 +272,15 @@ The only bulk close today is « Clôturer l'année », for a whole school year. 
 - **Parent and student portals:** `/parent-portal` and `/student-portal` ([roleAccess.mjs 92–93](../../../src/lib/roleAccess.mjs)) do **not** read `groups` directly. Their data comes through definer projections.
 - **Reports:** [reportData.mjs 75–111](../../../src/lib/reportData.mjs) and [AcademicOperationsReport.jsx 94–129](../../../src/components/reports/AcademicOperationsReport.jsx); `report_student_mix` ([124 line 1242](../../../supabase/migrations/124_speed_as_the_centre_grows.sql)).
 - **Programmes:** [programCatalog.mjs 21–31](../../../src/lib/programCatalog.mjs) (`SESSION_TYPES`). A payment for the `Other` programme never creates an enrollment ([127 lines 154–173](../../../supabase/migrations/127_enrollment_at_payment.sql)).
-- **Guide:** [GuideContent.jsx](../../../src/app/(admin)/helpdesk/GuideContent.jsx): `#q8` 1015–1060; `#q9` 1061–1103; `#q10` 1109–1141; status cards 1595–1626 (line 1625); `#direction` 1853. **No section describes « Clôturer l'année ».**
+- **Guide** ([GuideContent.jsx](../../../src/app/(admin)/helpdesk/GuideContent.jsx), the reception guide « Guide Accueil »):
+  - `#q8` 1015–1060: the group form (school year 1033, edit 1048, the year callout 1050);
+  - `#q9` 1061–1103 and `#q10` 1109–1141: placement and moves;
+  - `#q14` « La rentrée », the groups line 1262;
+  - reception's Groups screen, line 1472;
+  - the « Terminée » paragraph, line 1594, and the file-status table 1595–1626. Lines 1594 and 1625 already name « la clôture de l'année scolaire ou d'un cours en ligne » as a way enrollments end;
+  - `#direction` 1853: the table « Réservé à la direction » of what reception must ask the director; its « Académique » row is line 1880.
+
+  The year close is mentioned only in passing (lines 1594 and 1625): the guide is for reception, and the director's commands appear only as rows of the `#direction` table.
 
 ## Tests that touch the changed areas, fixtures and CI wiring
 
@@ -297,6 +328,12 @@ Recorded as **proposed**. They stand once the owner approves this revision.
 - **OA3:** parents and students read only their own groups, by restricting the policies at 123:1463 / 124:386. Staff are unchanged. Existing group names are reviewed so that none contains a learner's name.
 - **OA4:** « Clôturer l'année » never closes a group whose `date_fin` is after the close date (summer courses).
 - **OA5:** after the one-time step, the dashboard card counts only paid enrollments without a group for programmes that use groups. The plan states what it will show (D7).
+
+## Owner answer to the CDC-r2 re-review (Maroine, proposed by the coordinator, 2026-11-05)
+
+Recorded as **proposed**, like OA1–OA5 above.
+
+- **OA6:** the June « Clôturer l'année » does **not** end the paid enrollments without a group of short programmes (Summer Camp, Mise à niveau) whose course has not ended; it leaves them waiting. D5 defines « whose course has not ended »; Q18 asks about rows whose course does not exist yet.
 
 # Scope and non-goals
 
@@ -376,7 +413,7 @@ Recorded as **proposed**. They stand once the owner approves this revision.
 
 The list is ordered by end date, oldest first, and bounded to 200 rows. « Live » means the Batch D live set (`Submitted, Under Review, Confirmed, Validated, Trial`); since 127 only Validated rows can be in a group.
 
-## D3 — « Clôturer le cours » (director; Q5–Q8, Q14, Q15, OA2, B1, S1, S2, S6)
+## D3 — « Clôturer le cours » (director; Q5–Q8, Q14, Q15, OA2, B1, S1, S2, S6, N-1, N-2)
 
 **Matching paid enrollments without a group (B1).** For a group of programme P, school year Y and level L, the « unplaced paid enrollments » are those that meet all of:
 
@@ -387,18 +424,41 @@ The list is ordered by end date, oldest first, and bounded to 200 rows. « Live 
 
 R0 counts them (U1–U3).
 
+**The charge link rule (S6, N-2).** Before an enrollment ends (course close or one-time step), an open charge of its learner is linked to it only when all of these hold:
+
+- tuition: `session_type` is the enrollment's programme; not `legacy`; not voided; `enrollment_id is null`;
+- open and **partly paid**: in `charge_balances`, `balance > 0` **and** `paid_amount > 0`;
+- of the enrollment's school year. A charge **without a year** (created before 057, which made the year required at [057 line 169](../../../supabase/migrations/057_receipt_school_year_workflow.sql)) qualifies only when the enrollment's year is the current centre year, which is the payment path's rule for undated charges ([127 lines 204–217](../../../supabase/migrations/127_enrollment_at_payment.sql)), **and** the charge was created during that school year (`public.centre_school_year(public.business_date(created_at))` equals it). An undated charge of an earlier year is never linked.
+
+**Never linked:**
+
+- **« Engagements »:** open unlinked tuition charges of the same learner and programme, of that year or undated, with **nothing paid** (`paid_amount = 0`). Under EAP an engagement is a commitment, often for the next session of the programme. A later payment on one finds no live enrollment and creates a new Confirmed enrollment (127 lines 248–252), which is right for a new session. The preview shows them, and the dialog says so.
+- Undated charges of earlier years (above).
+
+Each link is journalled as `charge_linked`. Amounts, receipts and settlement are untouched.
+
 ### Preview
 
 `public.close_course_preview(p_group uuid) returns jsonb` (director) returns the dialog's numbers:
 
 - `live_count`, `stay_enrolled`, `become_alumni`;
-- `open_balance_count` (on linked charges), `unlinked_open_charges` (S6);
+- `open_balance_count` (balances on charges already linked to the enrollments that end);
+- `charges_to_link`: count and total balance of the charges the link rule will link (S6, N-2);
+- `engagements`: count and total of the « engagements » of those learners, programme and year, shown and never linked (N-2);
 - `date_fin`, `closed_at`, `empty`;
 - `unplaced`: one entry per unplaced paid enrollment, `{enrollment_id, student_id, full_name, level, paid_total, has_other_live}`, which the dialog shows by name. Only the director, who already reads every learner, receives it.
 
 ### Command
 
 `public.close_course(p_group uuid, p_expected_count integer, p_reason text default 'Cours terminé', p_attach uuid[] default '{}', p_end_unplaced uuid[] default '{}') returns jsonb`. Properties: `security definer`; `search_path = pg_catalog, pg_temp`; execute granted to `authenticated` only (revoked from `public`, `anon`, `service_role`); the role is checked inside (`get_my_role() = 'director'`, else `42501`).
+
+**Lock order (N-1).** The close takes, in this order: the learners (id order), then the group row, then the group's seat advisory lock (`group:seats:<id>`, only through « A suivi ce cours »). Every path that enters a group follows the same order (D4):
+
+- `academic_security.place`: learner (127 line 1023), enrollment, group row `for share` (line 1057), seat lock (line 1096);
+- a direct write: the course guard and the re-created capacity trigger share-lock the group row before the seat lock;
+- `reopen_course` and the year close: learners, then group rows.
+
+So a transaction that holds a group row never waits for a seat lock held by a transaction waiting for that row. **CDC-r2 claimed the close could never deadlock; that was wrong.** It marked the group after « A suivi ce cours » had taken the seat lock, while a concurrent placement held the group share lock and waited for that seat lock, and the reviewer reproduced the deadlock. CDC-r3 marks the group before any attach, and the concurrency harness covers that case (tests).
 
 1. **Reason:** `academic_security.valid_reason` (1–200 characters; the dialog prefills « Cours terminé »).
 2. **Group:**
@@ -407,33 +467,31 @@ R0 counts them (U1–U3).
 3. **Replay (idempotency):**
    - Every close writes a **run row** in the journal holding its inputs and its result (nit: an empty close too).
    - If `closed_at` is set, the command returns the latest run row's result with `replayed: true` and writes nothing, which holds for an empty group as well (nit).
-   - The same check runs again right after the locks of step 5, so a second director whose close waited on the first one's locks also gets the replay instead of a stale count.
 4. **When a close is allowed (Q6 = A, OA2):**
    - A group with no live learner, called with an expected count of 0 and both lists empty, can be closed **at any time, with or without dates**; nothing ends.
    - Otherwise `date_fin` must exist and be before `public.business_date()`, else `23514` `course.not_finished` (« Ce cours n'est pas terminé : sa date de fin est le … »). There is no computed end for Yearly (OA1).
-5. **Locks and counts:**
-   - The learners of the group's live enrollments and of the `p_attach`/`p_end_unplaced` enrollments are locked together, in one pass in id order (the Batch D order learner → enrollment → group).
-   - The live count must equal `p_expected_count`, else `PT409` `course.count_changed` (« Le nombre d'apprenants a changé, rechargez. »).
+5. **Learner locks:** the learners of the group's live enrollments (read without locks) and of the `p_attach`/`p_end_unplaced` enrollments are locked together, in one pass in id order.
+6. **Mark the group, right after the learner locks and before any attach or end (N-1):** `update public.groups set closed_at = now(), closed_by = auth.uid() where id = p_group and closed_at is null` and the step 4 rule still holds, under the transaction-local flag `eh.course_command = 'on'`. This takes the group row lock.
+   - No row: the group is re-read. If it is now closed (a second director's close waited on this row), the command returns the replay of step 3. Otherwise `PT409` `egc.stale`.
+   - From here no placement can enter the group. Every path takes the group row before its seat lock, so it waits until this transaction ends and is then refused `course.closed` (D4).
+7. **Counts, in a new statement after the mark,** so they see every placement that committed before the mark:
+   - The live count must equal `p_expected_count`, and every live member's learner must be one locked in step 5, else `PT409` `course.count_changed` (« Le nombre d'apprenants a changé, rechargez. »). Everything rolls back, the mark included. The close therefore never locks a learner after the group row.
    - Each id in the two lists must still be an unplaced paid enrollment matching the course, and must appear in only one list, else `PT409` `course.unplaced_changed`.
-6. **Journal first:** in `maintenance.course_close_journal` (`source = 'close_course'`, one `run_id`), write:
+8. **Journal first:** in `maintenance.course_close_journal` (`source = 'close_course'`, one `run_id`), write:
    - the run row;
    - the before-images of every enrollment the close will touch: action `ended` for members, `attached` and `ended_unplaced` for the two lists (`status`, `group_id`, `level`, `school_year`);
    - the before-image of each learner file (`status`, `groupe_id`).
-7. **Attach (B1, « A suivi ce cours »):** each `p_attach` enrollment is placed in the group through the existing placement core (`academic_security.place`, director path). Capacity is overridden with the logged reason « Rattaché à la clôture du cours », because the course is over. These learners then appear in the course's history (`ended_group_id`).
-8. **Charges (S6, Q15 = A):**
-   - Before anything ends, every **open unlinked tuition charge** of the same learner, programme and school year as an enrollment about to end is linked to that enrollment. The rule is the payment path's own matching rule ([127 lines 209–214](../../../supabase/migrations/127_enrollment_at_payment.sql)): same year, or no year when the enrollment is of the current centre year. Each link is journalled as `charge_linked`.
-   - A later payment on such a charge lands on the ended enrollment's own charge. That is accepted without reviving the enrollment (127 lines 227–228), instead of inserting a fresh Confirmed enrollment (127 lines 248–252) that would put the learner back on « Groupe à affecter ».
-   - Amounts, receipts and settlement are untouched.
-9. **End (S1):**
-   - `academic_security.end_group_enrollments(p_group, 'Alumni', reason)` ends the members and the attached rows.
-   - Then, per `p_end_unplaced` learner in id order, `academic_security.leave(student, 'Alumni', reason, array[those ids])`.
-   - Then the group is marked closed (`closed_at = now()`, `closed_by = auth.uid()`) under the transaction-local flag `eh.course_command = 'on'`. The update re-checks `closed_at is null` and the end date; no row → `PT409` `egc.stale`, and everything rolls back. The group row is not locked before the learners, because locking it first would invert the placement order.
-   - Then a second `end_group_enrollments` pass runs (the `online_close_course` pattern, [120 lines 1574–1576](../../../supabase/migrations/120_enrollment_group_consistency.sql)).
-   - **The total ended across all passes must equal `p_expected_count + cardinality(p_attach) + cardinality(p_end_unplaced)`, which is exactly the journalled rows.** Anything more means a placement slipped in after the count. The command then raises `PT409` `course.count_changed`, everything rolls back, and the director reloads. « Rouvrir le cours » can therefore always restore exactly what a close ended.
-   - A placement that starts after the mark waits on the group row (the year guard and the course guard share-lock it) and is refused once the close commits (D4). There is no lock cycle: placements lock the learner and then the group; the close holds learners first, then the group row.
-10. **Log and result:** the command logs `academic_security.log('close_course', null, null, p_group, {run_id, reason, ended, attached, ended_unplaced, alumni, still_enrolled, open_balances, charges_linked})` and writes the same result into the run row. It returns `{group_id, closed_at, ended, attached, ended_unplaced, alumni, still_enrolled, open_balance_count, charges_linked, run_id, replayed: false}`.
+9. **Attach (B1, « A suivi ce cours »):** each `p_attach` enrollment is placed in the now-marked group through the existing placement core (`academic_security.place`, director path), under the `eh.course_command` exemption of the course guard (D4). `place` takes its learner (already held), the enrollment, the group row (already held by this transaction) and then the seat lock. Capacity is overridden with the logged reason « Rattaché à la clôture du cours », because the course is over. These learners then appear in the course's history (`ended_group_id`).
+   - **Attendance (nit):** « A suivi ce cours » creates **no** attendance row. It records the course in the learner's history only. The learner was never a member of this group, so they have no attendance in it. Their attendance in other groups is kept unchanged, like every other attendance row.
+10. **Charges (S6, Q15 = A):** before anything ends, the charge link rule above links the qualifying charges to the enrollments about to end (members, attached and listed rows). A later payment on such a charge lands on the ended enrollment's own charge. That is accepted without reviving the enrollment (127 lines 227–228), instead of inserting a fresh Confirmed enrollment (127 lines 248–252) that would put the learner back on « Groupe à affecter ».
+11. **End (S1):**
+    - `academic_security.end_group_enrollments(p_group, 'Alumni', reason)` ends the members and the attached rows. Their learners are already held (step 7).
+    - Then, per `p_end_unplaced` learner in id order, `academic_security.leave(student, 'Alumni', reason, array[those ids])`.
+    - No second pass is needed, because no row can enter the group after the mark.
+    - **The total ended must equal `p_expected_count + cardinality(p_attach) + cardinality(p_end_unplaced)`, which is exactly the journalled rows.** This stays as an assertion: any difference raises `PT409` `course.count_changed` and everything rolls back. « Rouvrir le cours » can therefore always restore exactly what a close ended.
+12. **Log and result:** the command logs `academic_security.log('close_course', null, null, p_group, {run_id, reason, ended, attached, ended_unplaced, alumni, still_enrolled, open_balances, charges_linked, engagements})` and writes the same result into the run row. It returns `{group_id, closed_at, ended, attached, ended_unplaced, alumni, still_enrolled, open_balance_count, charges_linked, engagements, run_id, replayed: false}`.
 
-**What the close does not touch:** charge amounts, receipts, payments, attendance rows, CRM conversions (D5-A, no review flag), the lifecycle outbox, and the learners' other enrollments. The only change outside enrollments and files is the journalled charge links of step 8.
+**What the close does not touch:** charge amounts, receipts, payments, attendance rows, CRM conversions (D5-A, no review flag), the lifecycle outbox, and the learners' other enrollments. The only change outside enrollments and files is the journalled charge links of step 10.
 
 **Learner files:** `leave` sets Alumni (« Ancien apprenant ») when nothing else is live. Otherwise the file stays Enrolled (« Inscrit ») and the main group moves to the remaining membership, exactly as the year close does.
 
@@ -442,7 +500,7 @@ R0 counts them (U1–U3).
 `public.reopen_course(p_group uuid, p_expected_closed_at timestamptz) returns jsonb` (director):
 
 1. Read, without locks, the group's latest run in the journal (`close_course` or `close_school_year`).
-2. **Lock the learners of that run's rows in id order first (S2)**, which is the placement order, so no deadlock (`40P01`) is possible.
+2. **Lock the learners of that run's rows in id order first (S2).**
 3. Then clear the mark: `update … set closed_at = null, closed_by = null where id = p_group and closed_at = p_expected_closed_at`, under `eh.course_command`. No row → `PT409`.
 4. Restore each journalled row that is still `Ended` with that run's `ended_at` and reason, and whose learner has no other live enrollment of that programme and year:
    - members return to Validated in the group;
@@ -453,18 +511,28 @@ R0 counts them (U1–U3).
 6. A group closed by the year close carries a run with no enrollment rows. Reopening it only clears the mark, because the year close has no per-course undo, as today.
 7. Journal action `reopened`; log `reopen_course`. The placement rules for new learners apply again once the course is reopened.
 
+The reopen follows the close's lock order (learners, group row, then the seat lock when it restores members). The concurrency harness tests it against a placement and against a leaver (tests).
+
 **Errors** reuse the browser's `PT409` handling (« rechargez »). `membershipActions.mjs` gains French texts for the new hints.
 
-## D4 — The course guard on `enrollments`, and closed courses everywhere (Q7, Q9, S3)
+## D4 — The course guard on `enrollments`, and closed courses everywhere (Q7, Q9, S3, N-1)
 
-**Placement guard.** `academic_security.guard_course_placement()` (`security definer`, no API grant) runs on trigger `enrollment_course_guard before insert or update of group_id, status on public.enrollments`. It acts only when a row **enters** a group: a new grouped row, a new `group_id`, or a grouped row becoming live again (the same notion as the year guard, 125 lines 99–103). It then refuses:
+**Placement guard.** `academic_security.guard_course_placement()` (`security definer`, no API grant) runs on trigger `enrollment_course_guard before insert or update of group_id, status on public.enrollments`. It acts only when a row **enters** a group: a new grouped row, a new `group_id`, or a grouped row becoming live again (the same notion as the year guard, 125 lines 98–102). For every such row it first share-locks the group row (`for share`, the lock `place` and the year guard already take), then refuses:
 
-- a **closed in-person course** (`closed_at is not null`), with the group row share-locked;
+- a **closed in-person course** (`closed_at is not null`);
 - a **closed online course** (Q9 = A; Batch D follow-up 2, second half). The guard reads `select status from public.online_courses where group_id = new.group_id **for share**` (S3), so it serialises with `online_close_course`, which takes that row `for update`. A placement that holds the share lock first is ended by the online close's passes; one that waits sees `closed`. Either way the error is `23514` `course.closed` (« Ce cours est clôturé. »).
-  - **No lock cycle:** a placement holds its learner, then the group row, then the online course row. The online close holds the course row, then the learners of the course's committed members, never the learner being placed. A concurrency test proves it (tests).
+  - **Lock order:** a placement holds its learner, then the group row, then the online course row. The online close holds the course row, then the learners of the course's committed members, never the learner being placed. The concurrency harness tests this pair (tests).
 - a **short-programme group without both dates** (Q1 = A), with `23514` `course.dates_required`.
 
-Exemptions: the Batch D two-flag restore (`eh.membership_sync` and `eh.enrollment_command`, as for every Batch D/H guard), and `eh.course_command` for « Rouvrir le cours ».
+Exemptions: the Batch D two-flag restore (`eh.membership_sync` and `eh.enrollment_command`, as for every Batch D/H guard), and `eh.course_command` for the close's own « A suivi ce cours » attach into its just-marked group (D3 step 9) and for « Rouvrir le cours ».
+
+**The group row before the seat lock, on every path (N-1).** The close holds the group row and may then take the seat lock (D3), so no other path may take the seat lock first and then wait for the group row:
+
+- `place` takes the group row (127 line 1057) before the seat lock (127 line 1096).
+- On a direct write, Postgres fires same-event triggers in name order, so `enrollment_course_guard` (this guard) already fires before `enrollment_group_capacity`. Today the capacity trigger takes the seat lock (120 line 413) after a plain read of the group (line 411), **before** the year guard's share lock (125 line 103).
+- The plan does not rest the lock order on trigger names (the S5 principle). `academic_security.enforce_group_capacity()` is **re-created** from its 120 body (lines 404–419) with one change: its group read takes `for share`. The seat lock then always follows the group row lock inside the function that takes it.
+- No rule, message, exemption or trigger changes. An unchanged-from-120 proof except that clause is required, as for the other re-created bodies.
+- `reopen_course` and the year close take learners, then group rows (D3, D5).
 
 **Group guard (D1 trigger).**
 
@@ -484,13 +552,28 @@ A finished but **not yet closed** course stays selectable, marked « terminé le
 
 **Readers that keep every group** (name lookups): the learner file (students/[id] 140, « Ancien groupe »), students-directory 63, leave-requests 87 and the cache keys. Their history must keep its names.
 
-## D5 — « Clôturer l'année » learns about course dates (OA1, OA4, Q16)
+## D5 — « Clôturer l'année » learns about course dates (OA1, OA4, OA6, Q16, Q18, N-3)
 
-`public.close_school_year(text, integer, text)` is re-created from its [120 body](../../../supabase/migrations/120_enrollment_group_consistency.sql) (lines 704–736) with the same signature, role, reason and count rules.
+`public.close_school_year(text, integer, text)` is re-created from its [120 body](../../../supabase/migrations/120_enrollment_group_consistency.sql) (lines 704–736). It keeps the same signature and integer result (the number of enrollments ended), the director-only role, the reason, and the learner locks in id order before the count. The expected count is now the number of rows it will end (the preview's `to_end`).
 
-- **Spares later-ending courses (OA4).** A live enrollment of that year whose group ends **after** `public.business_date()` is neither counted nor ended, and its group is not marked. For an in-person group that means `date_fin` after today; for an online course, `term_end` after today. Every other live enrollment of the year ends as today, including Confirmed rows without a group.
-- **Marks groups closed (OA1, Q16 = A).** After ending, the command marks closed, under `eh.course_command`, every in-person group of that school year (`school_year_of(annee)` = the year) that is not already closed and does not end later. That is its Yearly groups (OA1) and, under Q16 = A, the other in-person groups it emptied. Each marked group gets a run row (`source = 'close_school_year'`, no enrollment rows), so « Rouvrir le cours » only clears its mark. Lock order: learners (as in 120), then group rows.
-- **Preview.** `public.close_school_year_preview(p_school_year text) returns jsonb` (director) returns `{to_end, kept_in_later_courses, groups_to_mark, unplaced_of_running_programmes}`. The last figure counts paid enrollments without a group of a programme that still has a course of that year ending later. It is shown as a warning so the director can place them first; the command still ends them, as today. The dialog uses this preview instead of its browser count ([students/page.jsx 81–86](../../../src/app/(admin)/students/page.jsx)) and shows the four numbers.
+- **Spares later-ending courses (OA4).** A live enrollment of that year whose group ends **after** `public.business_date()` is neither counted nor ended, and its group is not marked. For an in-person group that means `date_fin` after today; for an online course, `term_end` after today.
+- **Leaves waiting the paid enrollments without a group whose course has not ended (OA6, Q18 = A).**
+  - **Scope:** Confirmed enrollments without a group, of that year, of a programme whose courses carry dates. These are the Q1 short programmes (Mise à niveau, Adults, Summer Camp, One-to-One) and the two online programmes.
+  - **« Its course »** means the courses that match it by the D3 rule: same programme and year, its level or no level, open or closed.
+  - **Kept waiting** (neither counted nor ended) when:
+    - a matching course has not ended: in person, not closed and its `date_fin` is after today or still empty; online, not closed and its `term_end` is after today;
+    - **or no matching course exists yet** (Q18 = A). A Summer Camp group, for instance, is often created after the June close.
+  - **Ended** as today when matching courses exist and every one has ended (closed, or its end date is today or earlier).
+  - Kept rows stay on « Inscrits — groupe à affecter » (OA5). The close of their course (B1) or « Ancien apprenant » reaches them later. A later year close never touches them, because it only ends its own year.
+- **Every other live enrollment of the year ends as today:** Yearly, Communication and the other rows without a group, and the members of every group that does not end later.
+- **Marks groups closed (OA1, Q16 = A), never a group with a live learner (N-3).** After ending:
+  1. **Lock the candidate group rows** with `for update`, in id order: the in-person groups of that school year (`school_year_of(annee)` = the year) that are not closed and do not end later. The learners were locked first (as in 120), so the order is learners, then group rows, the order of every placement path (D4). While these locks are held, no placement can enter the groups: it waits for the group row and is refused `course.closed` if the group gets marked.
+  2. **Then, in a separate statement,** mark closed (under `eh.course_command`) only the locked groups that have **no live enrollment**. Under READ COMMITTED a new statement takes a new snapshot, so it sees every placement that committed while the year close waited for those row locks. A single `update … where not exists (…)` would instead check the enrollments against the snapshot taken before it waited, and could mark a group whose placement committed during the wait.
+  3. A locked group that still has a live learner (a placement that committed during the close) is **left unmarked**. The log entry reports it as `groups_left_open`, and the director closes it later with « Clôturer le cours ». Raising `PT409` instead was rejected: the year's enrollments were already ended correctly, and one late placement would force the director to repeat the whole close.
+  - Under Q16 = A the marked groups are its Yearly groups and the other in-person groups of that year left without learners; under Q16 = B, its Yearly groups only. Each marked group gets a run row (`source = 'close_school_year'`, no enrollment rows), so « Rouvrir le cours » only clears its mark.
+  - The year close takes no seat lock.
+- **Log.** The `close_school_year` log entry gains `kept_in_later_courses`, `kept_waiting`, `groups_marked` and `groups_left_open`.
+- **Preview.** `public.close_school_year_preview(p_school_year text) returns jsonb` (director) returns `{to_end, kept_in_later_courses, kept_waiting_unplaced, groups_to_mark}`; `kept_waiting_unplaced` is given per programme. The dialog uses this preview instead of its browser count ([students/page.jsx 81–86](../../../src/app/(admin)/students/page.jsx)) and shows the four numbers, including « N inscriptions payées sans groupe restent en attente de leur cours ».
 
 ## D6 — Group visibility for parents and students (OA3)
 
@@ -533,7 +616,8 @@ A finished but **not yet closed** course stays selectable, marked « terminé le
 - **Close dialog:**
   - the course name and dates;
   - « N apprenants : X deviennent Ancien apprenant, Y restent Inscrits (autre inscription en cours) » and « Z ont un solde à payer : il reste dû »;
-  - **« Inscriptions payées sans groupe pour ce cours »** (B1): one line per matching enrollment with the learner's name, level and amount paid. Each needs an explicit choice before the close button is enabled (Q14 = A): « A suivi ce cours », « Terminer sans groupe » or « Laisser en attente »;
+  - **« Inscriptions payées sans groupe pour ce cours »** (B1): one line per matching enrollment with the learner's name, level and amount paid. Each needs an explicit choice before the close button is enabled (Q14 = A): « A suivi ce cours », « Terminer sans groupe » or « Laisser en attente ». A note under « A suivi ce cours » says « Ajoute le cours à son historique ; aucune présence n'est créée. »;
+  - the charges (N-2): « W soldes partiellement payés seront rattachés à l'inscription terminée » and « E engagements sans paiement (total …) restent ouverts : un paiement ultérieur créera une nouvelle inscription »;
   - the reminder « Vérifiez que les présences sont saisies : après la clôture, la liste d'appel du cours n'est plus proposée. »;
   - the reason, prefilled « Cours terminé », and « Clôturer le cours ».
 
@@ -541,14 +625,14 @@ A finished but **not yet closed** course stays selectable, marked « terminé le
 - **Group page:**
   - « Clôturer le cours » (director) once finished, or at any time when empty;
   - when closed: a banner « Cours clôturé le … », « Rouvrir le cours » (director), no placement or removal, and a read-only « Anciens apprenants du cours » list (enrollments with `ended_group_id` = the group; staff only, existing RLS).
-- **Year-close dialog:** the D5 preview numbers. The warning about unplaced paid learners of running programmes links to « Groupe à affecter ».
+- **Year-close dialog:** the D5 preview numbers. The line about the paid learners left waiting for their course (OA6) links to « Groupe à affecter ».
 - **Group form:** the two dates with the D1 messages; One-to-One capacity 1 and the neutral name proposal.
-- **Guide:**
-  - `#q8`: dates, plus the naming rule that a group name never contains a learner's name;
-  - a new direction entry « Clôturer un cours terminé » (card, dialog, unplaced paid learners, balances, reopening);
-  - the missing « Clôturer l'année » entry (later-ending courses spared, groups marked closed);
-  - the status cards at line 1625;
-  - screenshots of the group form and the close dialog, with synthetic data.
+- **Guide** (the reception guide; citations in the application inventory):
+  - `#q8`: the two dates, their messages, and the naming rule that a group name never contains a learner's name; `#q14` (line 1262): course dates at the rentrée; reception's Groups screen (line 1472): dates and the « Clôturés » filter;
+  - `#q9`: « Ce cours est clôturé » and « Renseignez les dates du cours » when placing;
+  - the « Terminée » paragraph (line 1594) and the status note (line 1625): « la clôture d'un cours terminé » joins the year close and the online close;
+  - the `#direction` table, « Académique » row (line 1880): « Clôturer un cours terminé ou le rouvrir » and « Clôturer l'année scolaire », so reception knows to ask the director. The director's dialog itself is not described in the reception guide;
+  - a screenshot of the group form with synthetic data.
 
 ## D9 — Online courses (Q9)
 
@@ -558,11 +642,11 @@ Added:
 
 - online courses appear in « Cours terminés à clôturer » once past `term_end`;
 - the D4 guard refuses placement into a closed online course (share lock, S3);
-- the year close spares an online course whose `term_end` is after the close date (D5).
+- the year close spares an online course whose `term_end` is after the close date, and leaves waiting a paid online enrollment without a group whose course has not ended (D5, OA6).
 
 Past online rosters (Batch D follow-up 2, first half) stay a follow-up.
 
-## D10 — The one-time data step (Q11–Q13, S6, S9)
+## D10 — The one-time data step (Q11–Q13, S6, S9, N-2)
 
 **R0 count query.** It is read-only, returns counts only and holds no personal data. It runs through the guarded transport, which runs the file as one implicit transaction and returns only the last statement's rows, so the file is `set transaction read only;` plus exactly one query ([WORKFLOWS convention](../../ai/WORKFLOWS.md#guarded-release-wrapper)).
 
@@ -573,7 +657,7 @@ Every per-programme and per-scenario line returns an explicit zero row (nit). Li
 - **S3:** + both One-to-One programmes;
 - **S4:** all four.
 
-The query was run on a local 127 stack (empty, and with synthetic rows in a rolled-back transaction). It has not run on Production.
+The query was run on a local 127 stack, empty and with synthetic rows in a rolled-back transaction, including an archived learner and one charge for each T7b line. It has not run on Production.
 
 ```sql
 set transaction read only;
@@ -590,6 +674,7 @@ with live as (
   ('S3 Mise à niveau + One-to-One + Online One-to-One', array['Mise à niveau', 'One-to-One', 'Online One-to-One']),
   ('S4 all four programmes', array['Mise à niveau', 'Adults', 'One-to-One', 'Online One-to-One']))
 , u as (select x.* from live x where x.status = 'Confirmed' and x.group_id is null)
+, ua as (select x.* from u x where exists (select 1 from public.students s where s.id = x.student_id and s.deleted_at is null))
 , t as (select x.* from u x where x.session_type in (select p from progs))
 , g as (
   select gr.id, gr.name, gr.session_type, gr.niveau, gr.capacite_max, gr.annee,
@@ -631,14 +716,14 @@ union all select 'C2 online courses past their term end and not closed', count(*
   where c.term_end < public.business_date() and c.status <> 'closed'
 union all select 'C3 live enrollments in the C2 courses', count(*) from live x
   where x.group_id in (select c.group_id from public.online_courses c where c.term_end < public.business_date() and c.status <> 'closed')
-union all select 'U1 paid without group · ' || session_type || ' · ' || coalesce(school_year, '(none)') || ' · ' || coalesce(level, '(no level)'),
-  count(*) from u group by session_type, school_year, level
+union all select 'U1 paid without group, learner file not archived · ' || session_type || ' · ' || coalesce(school_year, '(none)') || ' · ' || coalesce(level, '(no level)'),
+  count(*) from ua group by session_type, school_year, level
 union all select 'U2 of U1: matches a group of the same programme, year and level (online: course not closed) · ' || ty.st, count(x.id)
-  from types ty left join u x on x.session_type = ty.st and exists (select 1 from g where g.open_course
+  from types ty left join ua x on x.session_type = ty.st and exists (select 1 from g where g.open_course
     and g.session_type = x.session_type and g.yr = x.school_year and (x.level is null or x.level = g.niveau))
   group by ty.st
 union all select 'U3 groups with at least one matching paid enrollment without group · ' || ty.st, count(g.id)
-  from types ty left join g on g.session_type = ty.st and g.open_course and exists (select 1 from u x
+  from types ty left join g on g.session_type = ty.st and g.open_course and exists (select 1 from ua x
     where x.session_type = g.session_type and x.school_year = g.yr and (x.level is null or x.level = g.niveau))
   group by ty.st
 union all select 'T1 one-time step candidates · ' || pr.p || ' · ' || coalesce(x.school_year, '—'), count(x.id)
@@ -660,11 +745,33 @@ union all select 'T7a candidates with an open balance on a charge linked to the 
   from progs pr left join t x on x.session_type = pr.p
     and exists (select 1 from public.charge_balances b where b.enrollment_id = x.id and b.voided_at is null and b.balance > 0)
   group by pr.p
-union all select 'T7b candidates with an open balance on an unlinked tuition charge of the same programme and year (linked by the step, S6) · ' || pr.p, count(x.id)
+union all select 'T7b1 candidates with a partly paid open unlinked tuition charge of the same programme and year (linked by the step) · ' || pr.p, count(x.id)
   from progs pr left join t x on x.session_type = pr.p
     and exists (select 1 from public.charge_balances b where b.student_id = x.student_id and b.enrollment_id is null
-      and b.voided_at is null and b.balance > 0 and not b.legacy and b.session_type = x.session_type
-      and (b.school_year = x.school_year or (b.school_year is null and x.school_year = public.centre_school_year())))
+      and b.voided_at is null and not b.legacy and b.session_type = x.session_type
+      and b.balance > 0 and b.paid_amount > 0 and b.school_year = x.school_year)
+  group by pr.p
+union all select 'T7b2 candidates with an engagement: open unlinked tuition charge of the same programme, that year or no year, nothing paid (never linked) · ' || pr.p, count(x.id)
+  from progs pr left join t x on x.session_type = pr.p
+    and exists (select 1 from public.charge_balances b where b.student_id = x.student_id and b.enrollment_id is null
+      and b.voided_at is null and not b.legacy and b.session_type = x.session_type
+      and b.balance > 0 and b.paid_amount = 0 and (b.school_year = x.school_year or b.school_year is null))
+  group by pr.p
+union all select 'T7b3a candidates with a partly paid open unlinked tuition charge without a year, created during the candidate''s school year, the current one (linked by the step) · ' || pr.p, count(x.id)
+  from progs pr left join t x on x.session_type = pr.p
+    and exists (select 1 from public.charge_balances b where b.student_id = x.student_id and b.enrollment_id is null
+      and b.voided_at is null and not b.legacy and b.session_type = x.session_type
+      and b.balance > 0 and b.paid_amount > 0 and b.school_year is null
+      and x.school_year = public.centre_school_year()
+      and public.centre_school_year(public.business_date(b.created_at)) = x.school_year)
+  group by pr.p
+union all select 'T7b3b candidates with a partly paid open unlinked tuition charge without a year from an earlier school year (pre-057, never linked) · ' || pr.p, count(x.id)
+  from progs pr left join t x on x.session_type = pr.p
+    and exists (select 1 from public.charge_balances b where b.student_id = x.student_id and b.enrollment_id is null
+      and b.voided_at is null and not b.legacy and b.session_type = x.session_type
+      and b.balance > 0 and b.paid_amount > 0 and b.school_year is null
+      and not (x.school_year = public.centre_school_year()
+        and public.centre_school_year(public.business_date(b.created_at)) = x.school_year))
   group by pr.p
 union all select 'T8 candidates with no live receipt on the enrollment or its charges · ' || pr.p, count(x.id)
   from progs pr left join t x on x.session_type = pr.p
@@ -697,14 +804,18 @@ union all select 'J2 learner files Alumni', count(*) from public.students where 
   - T3 counts files that stay « Inscrit » because of a live enrollment outside the scenario's targets.
   - T4 counts files that become « Ancien apprenant ».
   - The approved scenario's T2, T3 and T4 become the step's declared counts.
-- **Balances:**
+- **Balances (N-2):**
   - T7a: balances that stay owed on linked charges.
-  - T7b: unlinked open charges that the step links to the ended enrollment (S6). Their balances stay owed too.
+  - T7b1: partly paid open unlinked charges of the same programme and year, which the step links to the ended enrollment (S6).
+  - T7b2: « engagements » with nothing paid, never linked. A later payment on one creates a new enrollment.
+  - T7b3a: partly paid charges without a year created during the candidate's school year, the current one, which the step links.
+  - T7b3b: partly paid charges without a year from an earlier school year (pre-057), never linked.
+  - Every balance stays owed.
 - **Receipts and CRM:**
   - T8: rows listed today in the director's « Inscriptions confirmées sans aucun paiement »; they leave that list once ended.
   - T9: conversions that stay valid with no review flag (D5-A).
   - T11: helps the owner judge whether a whole programme is finished (Q12).
-- **Unplaced enrollments (B1):**
+- **Unplaced enrollments (B1):** the U-lines exclude archived learner files, like the matching rule.
   - U1: the paid enrollments without a group by programme, year and level.
   - U2: those a course close could reach.
   - U3: the groups whose close dialog will list unplaced learners.
@@ -726,7 +837,7 @@ union all select 'J2 learner files Alumni', count(*) from public.students where 
    - a targeted learner is mid-enrollment or mid-payment (the intent locks of the payment path);
    - a target is no longer Confirmed without a group.
 3. **Journal first** in `maintenance.course_close_journal` (`source = 'backlog_step'`, one `run_id`, a run row): enrollment before-images, learner-file before-images and the charge links of step 4.
-4. **Charges (S6):** each open unlinked tuition charge of a target's learner, programme and year (T7b) is linked to that target, using the D3 step 8 rule.
+4. **Charges (S6, N-2):** the D3 charge link rule links each qualifying charge of a target's learner, programme and year to that target: partly paid charges of that year (T7b1) and undated ones created during that year (T7b3a). « Engagements » with nothing paid (T7b2) and undated charges of earlier years (T7b3b) are never linked.
 5. **End (S9):** **one `academic_security.leave(student, 'Alumni', <that programme's reason>, <that learner's targets of that programme>)` per learner and programme.**
    - Programmes run in the fixed order Mise à niveau, Adults, One-to-One, Online One-to-One; learners in id order.
    - Each ended row keeps its own programme's reason.
@@ -758,7 +869,7 @@ Rows ended by the step are ordinary ended enrollments: « Rouvrir l'inscription 
 
 # Security boundaries
 
-- **New public functions:** `list_courses_to_close`, `close_course_preview`, `close_course`, `reopen_course`, `close_school_year_preview`. Re-created: `close_school_year`.
+- **New public functions:** `list_courses_to_close`, `close_course_preview`, `close_course`, `reopen_course`, `close_school_year_preview`. Re-created: `close_school_year`. The re-created trigger function `academic_security.enforce_group_capacity()` keeps its 120 posture (no API grant).
   - All are `security definer` with `search_path = pg_catalog, pg_temp` and execute for `authenticated` only (revoked from `public`, `anon`, `service_role`). The director role is checked inside from the stored role.
   - Tests prove refusal for admin (if Q5 = A), reception, teacher, parent, student, `anon` and `service_role`.
 - **Family helper:** `portal_security.family_group_ids()` is a definer, `stable`, fixed `search_path`, and returns only group ids visible to the caller.
@@ -774,7 +885,7 @@ Rows ended by the step are ordinary ended enrollments: « Rouvrir l'inscription 
 
 | Step | Gate | Action |
 | --- | --- | --- |
-| R0 | Owner authorizes the read-only count | Run the D10 query through the guarded transport and record the counts. Check ledger 001–127 and the catalog digests against a clean local 127 build. Export the functions 128 replaces (`save_receptionist_group`, `crm_enrollment_groups`, `guard_group_year`, `close_school_year`) and the 124 text of the dropped policy to the owner's private folder, with `SHA256SUMS`. |
+| R0 | Owner authorizes the read-only count | Run the D10 query through the guarded transport and record the counts. Check ledger 001–127 and the catalog digests against a clean local 127 build. Export the functions 128 replaces (`save_receptionist_group`, `crm_enrollment_groups`, `guard_group_year`, `close_school_year`, `enforce_group_capacity`) and the 124 text of the dropped policy to the owner's private folder, with `SHA256SUMS`. |
 | R0b | Owner reads the counts | Approves the release with the exact numbers, the approved scenario (Q12) and its declared counts. |
 | R1 | Release approval; window outside reception hours | Apply migration 128 through the guarded wrapper (dry run `DRYRUN_OK`, then apply). Read-only checks: the four columns, the triggers, the journal posture, the functions and their ACLs, the re-created bodies, the two policies; the catalog diff is exactly the manifest. |
 | R2 | Same approval, right after R1 | Data step (D10) for the approved scenario: dry run, then run with the declared counts; read-only post-conditions. A raise changes nothing, and the release reports before deploying. |
@@ -789,7 +900,7 @@ In two situations the database runs 128 while the browser runs the **previous** 
 
 - **Group creation:** the old form cannot create a Mise à niveau, Adults, Summer Camp or One-to-One group. It has no date fields, so the database refuses with `course.dates_required`. One-to-One creation is also refused for a capacity other than 1, since the old form defaults to 12. Editing other fields of an existing group works.
 - **Placement** into an undated short-programme group is refused. That is the intended rule.
-- **Old year-close dialog:** its browser count includes enrollments in courses that end later. When such a course exists, the command answers `PT409` « rechargez » and nothing changes.
+- **Old year-close dialog:** its browser count includes enrollments in courses that end later and the paid rows without a group now left waiting (OA6). When either exists, the command answers `PT409` « rechargez » and nothing changes.
 - **Closed courses** still appear in the old pickers, but placement into them is refused by the guard.
 - **Parent and student screens:** unaffected (no direct `groups` read).
 
@@ -802,7 +913,7 @@ The restore is `scripts/rollback/128_course_dates_close_restore.sql`. It:
 
 - drops the new functions, the family helper, the two new triggers and the two new policies;
 - re-creates « groups read all auth » with its 124 text;
-- restores the 125 bodies of `guard_group_year` (and its 125 trigger), `save_receptionist_group` and `crm_enrollment_groups`, and the 120 body of `close_school_year`;
+- restores the 125 bodies of `guard_group_year` (and its 125 trigger), `save_receptionist_group` and `crm_enrollment_groups`, and the 120 bodies of `close_school_year` and `enforce_group_capacity`;
 - keeps the columns, the journal and the marks, which become inert. Dropping them is a separate decision.
 
 While the restore is in effect, closed courses are no longer protected and parents and students again read every group row.
@@ -833,7 +944,9 @@ While the restore is in effect, closed courses are no longer protected and paren
   - charges, receipts, attendance and CRM untouched except the journalled charge links;
   - conversion kept without a review flag.
 - **B1:** `p_attach` places the row and ends it with the course (`ended_group_id` set); `p_end_unplaced` ends it without a group; a listed id that changed raises `PT409` `course.unplaced_changed`; an id in both lists is refused; a non-matching programme, year or level is refused.
-- **S1:** a row placed between the count and the mark makes the close raise `PT409` and change nothing.
+- **N-1 order:** the group is marked before any attach; « A suivi ce cours » enters the closed group only under the close's `eh.course_command`, and the same attach outside the command is refused `course.closed`.
+- **S1:** a placement that commits between the learner locks and the mark makes the count of step 7 raise `PT409` and change nothing, the mark included (driven by the concurrency harness).
+- **`enforce_group_capacity`:** an unchanged-from-120 proof except the `for share` clause; the existing capacity tests pass unchanged.
 - **Replay:** after success, and on an **empty group**, it returns `replayed: true` and writes nothing.
 - **Refusals:** stale count; not finished; online group; every other role refused.
 - **Empty group:** closable without dates.
@@ -841,12 +954,18 @@ While the restore is in effect, closed courses are no longer protected and paren
 - **Exemptions:** the two-flag restore and `eh.course_command`.
 - **Closed mark:** direct writes of `closed_at` refused for admin, director and `service_role`; the frozen fields of a closed group.
 - **`reopen_course`:** restores exactly the journalled rows (members to the group; attached and ended-unplaced rows to Confirmed without group), skips a row reopened or re-enrolled meanwhile, logs the capacity override, and only clears the mark of a year-closed group.
-- **S6:** after a close, a payment on a charge that was open and unlinked lands on the ended enrollment. No new Confirmed enrollment, the learner file is unchanged, and the card is unchanged. A payment on a **new** charge created after the close still creates a new enrollment (a genuine re-enrollment).
+- **S6 and N-2:**
+  - After a close, a payment on a **partly paid** charge that was open and unlinked lands on the ended enrollment: no new Confirmed enrollment, and the learner file and the card are unchanged.
+  - An **« engagement »** with nothing paid is not linked; a later payment on it creates a new Confirmed enrollment (a next session).
+  - An undated charge created during the current school year is linked; one created in an earlier school year (pre-057) is not.
+  - A payment on a **new** charge created after the close still creates a new enrollment (a genuine re-enrollment).
+  - The preview's `charges_to_link` and `engagements` match what the command links and leaves.
 - **Attendance and payments after the close:** attendance before the end date is still insertable for an ended learner; a payment on the ended enrollment's own charge is accepted without reviving it.
 - **Year close (D5):**
   - spares an in-person course with a later `date_fin` and an online course with a later `term_end`;
-  - marks the Yearly groups (and, under Q16 = A, the other emptied groups) closed with run rows;
-  - its count excludes the spared rows;
+  - **OA6:** leaves waiting a paid Summer Camp row without a group whose matching course ends later, and one with no matching course yet (Q18 = A); ends a paid Mise à niveau row without a group whose only matching course has ended; ends a paid Yearly row without a group as today;
+  - marks the Yearly groups (and, under Q16 = A, the other emptied groups) closed with run rows, and logs `groups_marked` and `groups_left_open`;
+  - its count excludes the spared and the kept-waiting rows;
   - the preview matches the command.
 - **Policies:** parent and student read only their learners' groups, including past ones through `ended_group_id`; teacher, reception, admin and director read every group; `pending` and `anon` read none.
 - **Lists:** `list_courses_to_close` (Yearly only with `date_fin`; empty groups flagged) and the D10 R0 query on the fixture, which must return the expected counts with explicit zeros.
@@ -859,7 +978,7 @@ While the restore is in effect, closed courses are no longer protected and paren
   - the backlog shape: Confirmed-without-group rows of the four programmes;
     - one whose learner has another live enrollment;
     - one learner with targets in two programmes;
-    - one with an open linked balance and one with an open unlinked charge;
+    - one with an open linked balance, one with a partly paid unlinked charge, one with an « engagement » (nothing paid) and one with an undated charge of an earlier school year;
     - one linked to a converted lead;
   - a summer course of the current year;
   - a group named after a synthetic learner.
@@ -874,13 +993,20 @@ While the restore is in effect, closed courses are no longer protected and paren
 
 **Concurrency** (CI, the Python harnesses, wired like line 424), with two sessions each:
 
-- a close against a placement into the same group: either the placement commits first and the close raises `PT409` (S1), or the placement is refused `course.closed`. Never a live enrollment in a closed group, never a deadlock;
+- **N-1, the reviewer's reproduction:** a close with « A suivi ce cours » against a placement into the same group, through `place_learner_in_group` and through a direct management insert, in both orders. Either the placement commits first and the close raises `PT409` at its count (S1), or the placement waits for the group row and is then refused `course.closed`. Never a live enrollment in a closed group; no `40P01`;
+- the same against a close without attach;
 - `reopen_course` against a placement and against a leaver on one of its learners: no `40P01` (S2);
 - `online_close_course` against a placement into that online course: no `40P01`, and never a live enrollment in a closed course (S3);
 - two closes of one group: one ends, the other replays;
-- the year close against a course close in the same year.
+- **N-3:** the year close against a placement into a group of that year, through `place_learner_in_group` and through a direct insert. Either the placement commits first and that group stays unmarked (`groups_left_open` = 1), or it waits and is refused `course.closed`. Never a live learner in a closed group; no `40P01`;
+- the year close against a course close in the same year: no `40P01`.
 
-**Fixtures:** the scripts listed under « Tests that touch the changed areas » gain dates (and One-to-One capacity 1) on their short-programme groups. This is a test-only change with no assertion changes.
+CDC-r2 asserted that the close could never deadlock; the reviewer's reproduction showed otherwise. Deadlock-freedom is now a claim about one lock order (learners, group row, seat lock; D3, D4), and these harness cases are its evidence.
+
+**Fixtures:** the scripts listed under « Tests that touch the changed areas » gain dates (and One-to-One capacity 1) on their short-programme groups. This is a test-only change with no assertion changes, with one exception for the year close:
+
+- The fixtures that call `close_school_year` (`test-enrollment-group-consistency.sql` 751–759, `test-egc-upgrade.mjs`, `test-audit-follow-ups-ui.mjs`; re-grepped at implementation) give their dated groups **end dates in the past**: before the run's `business_date()` and inside their year's window. The re-created year close then still ends their learners, as these tests expect.
+- A paid short-programme row without a group in those fixtures needs a matching course that has ended. Otherwise OA6 keeps it waiting, and the test takes its expected count from the preview.
 
 **Node (`npm test`):** helpers and error texts (`membershipActions`), pickers excluding closed courses (including communications and placement tests), name lookups keeping them, the dashboard counts and the director-only call, the cache invalidation rules for the new commands, and the guide content test.
 
@@ -890,7 +1016,7 @@ While the restore is in effect, closed courses are no longer protected and paren
 - the director closes an empty group;
 - reception sees no close button;
 - the closed group's page; reopening;
-- the year-close dialog with a running summer course;
+- the year-close dialog with a running summer course and a paid Summer Camp learner without a group left waiting;
 - the group form dates and One-to-One capacity;
 - the parent and student portals still load their pages.
 
@@ -927,7 +1053,7 @@ Local failures are diagnosed and fixed autonomously. Production failures stop an
 
 # Owner decisions required
 
-Each question has a recommendation; none is decided until the owner answers. **The proposed owner answers OA1–OA5 above are confirmed with the approval of this revision.**
+Each question has a recommendation; none is decided until the owner answers. **The proposed owner answers OA1–OA6 above are confirmed with the approval of this revision.**
 
 **Q1 — Which programmes require dates, and existing groups without dates.**
 - **A (recommended):** required for Mise à niveau, Adults, Summer Camp and One-to-One, on creation and on a change into one of these programmes, and never cleared. An existing group of these programmes without dates keeps its learners but refuses any new placement until its dates are entered (« Renseignez les dates du cours »). Yearly, Other and the Communication programmes: optional. Consequence: the director enters the dates of the short groups counted at R0 (B2) right after the release; no guessed data. Existing test fixtures gain dates.
@@ -986,7 +1112,7 @@ Each question has a recommendation; none is decided until the owner answers. **T
 
 **Q14 — Paid enrollments without a group at the close of their course (B1).**
 - **A (recommended):** the preview lists every paid enrollment without a group of the course's programme and school year, with no level or the course's level. The dialog requires an explicit choice for each before it can close:
-  - « A suivi ce cours »: placed in the course (capacity override logged), then ended with it, so the history shows the course;
+  - « A suivi ce cours »: placed in the course (capacity override logged), then ended with it, so the history shows the course. No attendance row is created, and the learner's existing attendance (in other groups) is kept;
   - « Terminer sans groupe »: ended with the close's reason, without a group;
   - « Laisser en attente »: untouched; stays on « Groupe à affecter ».
 
@@ -995,7 +1121,7 @@ Each question has a recommendation; none is decided until the owner answers. **T
 - **C:** they are ended automatically with the close. Consequence: a learner waiting for the next session of the same programme would be ended by mistake.
 
 **Q15 — Payments after a close (S6).**
-- **A (recommended):** at the close (and in the one-time step), every open unlinked tuition charge of the same learner, programme and year is linked to the enrollment being ended, using the payment path's own matching rule and journalling each link. A later payment then lands on the ended enrollment's own charge: it is accepted, the balance goes down, and nothing is revived. A payment on a **new** charge created after the close still creates a new enrollment, as a genuine re-enrollment does today. Consequence: no change to the payment command.
+- **A (recommended):** at the close (and in the one-time step), every **partly paid** open unlinked tuition charge of the same learner, programme and year is linked to the enrollment being ended, journalling each link (the D3 charge link rule, N-2). An undated charge qualifies only when it was created during the enrollment's school year and that year is the current one; undated charges of earlier years (pre-057) are never linked. A later payment on a linked charge lands on the ended enrollment's own charge: it is accepted, the balance goes down, and nothing is revived. **« Engagements »** (nothing paid, often for a next session) are shown in the preview and never linked: a later payment on one creates a new enrollment, as for any new session. A payment on a **new** charge created after the close also creates a new enrollment, as a genuine re-enrollment does today. Consequence: no change to the payment command.
 - **B:** re-create `create_charge_payment` to refuse an implicit new enrollment when an ended one of the same programme and year exists. Consequence: a finance-critical function changes, and a genuine second session in the same year needs an explicit enrollment first.
 
 **Q16 — Which groups « Clôturer l'année » marks closed (OA1).**
@@ -1006,6 +1132,10 @@ Each question has a recommendation; none is decided until the owner answers. **T
 - **A (recommended):** every programme except `Other` (the programme a payment never turns into an enrollment). On 2026-11-05 this changes nothing: no `Other` row among the 38.
 - **B:** also exclude One-to-One, if Q4 = C keeps individual lessons outside groups. Consequence: the 2 One-to-One rows leave the card (18 instead of 20 after S1).
 
+**Q18 — Paid enrollments without a group at the June year close when their course does not exist yet (OA6).** OA6 keeps waiting the paid rows without a group of a short programme whose course has not ended (D5). The open point is a row with no matching course at all, open or closed.
+- **A (recommended):** kept waiting too. A Summer Camp or a summer Mise à niveau is often paid before its group is created. The row stays on « Inscrits — groupe à affecter » (OA5), and the close of its course (B1) or « Ancien apprenant » reaches it later. Consequence: a paid short-programme row whose course is never created stays on the card until the director ends it.
+- **B:** ended as today; the preview lists these rows first so the director can create the course and place them. Consequence: a Summer Camp paid in May whose group is created in July is ended by the June close.
+
 **Approval record.** None yet. The owner approves an exact revision after an independent plan re-review. Implementation, the R0 count, the migration, the data step, the merge and the deployment each need their own approval.
 
 ---
@@ -1014,17 +1144,17 @@ Each question has a recommendation; none is decided until the owner answers. **T
 
 ### Scope
 
-Deliver D1–D11 with the owner's answers to Q1–Q17 and OA1–OA5, which stand only once the plan is approved.
+Deliver D1–D11 with the owner's answers to Q1–Q18 and OA1–OA6, which stand only once the plan is approved.
 
-The implementer may not widen scope to the leaver core, `online_close_course`, `place`, capacity, membership, the payment command, finance amounts, CRM or teacher projections. The re-created functions change only as D1, D4 and D5 state.
+The implementer may not widen scope to the leaver core, `online_close_course`, `place`, capacity, membership, the payment command, finance amounts, CRM or teacher projections. The one exception is the lock-order-only re-creation of `enforce_group_capacity` (D4): no capacity rule changes. The re-created functions change only as D1, D4 and D5 state.
 
 ### Prerequisites
 
-1. Owner approval of this revision with Q1–Q17 and OA1–OA5, recorded in the approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md). Implementation itself is authorized separately.
+1. Owner approval of this revision with Q1–Q18 and OA1–OA6, recorded in the approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md). Implementation itself is authorized separately.
 2. Fresh `origin/main` and the next migration number re-verified (provisionally 128).
 3. These definitions re-read with `pg_get_functiondef` (or `pg_policies`) on a local database and compared with the bodies cited:
    - from 125: `save_receptionist_group`, `crm_enrollment_groups`, `guard_group_year` and its trigger, `guard_enrollment_group_year`;
-   - from 120: `end_group_enrollments`, `leave`, `end_enrollment`, `close_school_year`, `online_close_course`;
+   - from 120: `end_group_enrollments`, `leave`, `end_enrollment`, `close_school_year`, `online_close_course`, `enforce_group_capacity` and its trigger `enrollment_group_capacity`;
    - from 127: `place`/`place_learner_in_group`, `reopen_enrollment`, `create_charge_payment` (the matching rule at lines 209–214);
    - from 123: `get_visible_student_ids`;
    - the policies « groups read all auth » and « groups admin all » (124);
@@ -1043,7 +1173,7 @@ The implementer may not widen scope to the leaver core, `online_close_course`, `
 - **New guards:** `academic_security.guard_course_group()` + trigger `groups_course_guard`; `academic_security.guard_course_placement()` + trigger `enrollment_course_guard`.
 - **Journal:** `maintenance.course_close_journal` (RLS on; all privileges revoked from `public`, `anon`, `authenticated`, `service_role`).
 - **New functions:** `public.list_courses_to_close()`, `public.close_course_preview(uuid)`, `public.close_course(uuid, integer, text, uuid[], uuid[])`, `public.reopen_course(uuid, timestamptz)`, `public.close_school_year_preview(text)`.
-- **Re-created functions:** `create or replace` of `public.close_school_year(text, integer, text)` (120 body plus D5), `public.save_receptionist_group(uuid, timestamptz, jsonb)` and `public.crm_enrollment_groups(text, text, integer, integer)` (125 bodies plus D1/D4).
+- **Re-created functions:** `create or replace` of `public.close_school_year(text, integer, text)` (120 body plus D5), `public.save_receptionist_group(uuid, timestamptz, jsonb)` and `public.crm_enrollment_groups(text, text, integer, integer)` (125 bodies plus D1/D4); `academic_security.enforce_group_capacity()` (120 body, with `for share` on its group read only; trigger unchanged).
 - **Policies:** `portal_security.family_group_ids()`; `drop policy "groups read all auth"`; `create policy "groups read staff"` and `"groups read family"`.
 - **Finally:** `notify pgrst, 'reload schema'`.
 
@@ -1063,10 +1193,11 @@ Every untouched function keeps identical owners, security modes, `search_path` a
 - A close ends exactly the rows it counted, attached or listed and journalled; anything more rolls it back.
 - A close ends only the live enrollments of that course and the unplaced enrollments the director chose, through the Batch D leaver core. Files become Alumni only when nothing else is live.
 - Charge amounts, receipts, payments, attendance, CRM conversions and the lifecycle outbox are untouched. The only exception is the journalled linking of open unlinked charges to the enrollments being ended.
-- A later payment never re-creates a Confirmed enrollment for a charge that was open at the close.
+- A later payment never re-creates a Confirmed enrollment for a partly paid charge that was open at the close. « Engagements » with nothing paid and undated charges of earlier school years are never linked.
 - No enrollment enters a closed course (in person or online) by any role or path, except through the two-flag restore and « Rouvrir le cours ».
 - The closed mark changes only inside the commands.
-- The year close never ends an enrollment in a course that ends after the close date.
+- The year close never ends an enrollment in a course that ends after the close date, nor a paid enrollment without a group whose course has not ended (OA6). It never marks closed a group that has a live learner.
+- Every path that enters a group takes the group row before the seat lock; the close, the reopen and the year close take learners, then group rows (N-1, N-3).
 - Parents and students read only the groups of their own learners; every staff role reads every group, as before.
 - A repeated close of a closed course returns the original result and writes nothing; a stale count raises `PT409`.
 - Placement, capacity, the year check, one live enrollment per programme and year, membership from enrollments, and every role's other capabilities are unchanged.
@@ -1090,7 +1221,7 @@ Every untouched function keeps identical owners, security modes, `search_path` a
    - parent and student portals work, and parents and students read only their groups.
 3. Dates and One-to-One rules work from both the reception RPC and the management form, including a create without a year.
 4. The guide is updated and its content test passes. `npm run lint`, `npm run build` and the changed-Markdown checks are clean.
-5. The PR lists the migration filename, the Q1–Q17 options applied, any deviation, and the Production steps deferred to the release task.
+5. The PR lists the migration filename, the Q1–Q18 options applied, any deviation, and the Production steps deferred to the release task.
 
 ### Stop conditions
 
@@ -1100,7 +1231,7 @@ Stop and report if:
 - a trigger exists on `public.charges`;
 - an ACL snapshot differs;
 - an existing EGC, EAP, online, portal or finance test fails for a reason other than the planned rules (closed course, undated short group, family-scoped group read, course-aware year close);
-- the close or reopen cannot be shown deadlock-free against placement and the online close;
+- the close, the reopen or the year close cannot be shown deadlock-free against placement (through `place` and a direct write) and the online close;
 - the data step cannot be rehearsed with a revert that restores its journal;
 - the owner changes a decision;
 - Production access, credentials or data would be needed.

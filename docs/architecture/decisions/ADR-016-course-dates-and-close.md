@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-05) with the [course dates and close plan](../plans/course-dates-close.md), revision CDC-r2 (Tier 3, plan only). CDC-r1 was reviewed CHANGES REQUIRED. CDC-r2 applies that review and records five owner answers as proposed. It is not re-reviewed, approved or implemented. The owner's answers to the plan's Q1–Q17 and OA1–OA5 may change the decision below. The ADR is updated when the plan is approved.
+**Proposed** (2026-11-05) with the [course dates and close plan](../plans/course-dates-close.md), revision CDC-r3 (Tier 3, plan only). CDC-r1 and CDC-r2 were each reviewed CHANGES REQUIRED. CDC-r3 applies the re-review of CDC-r2 and records six owner answers as proposed. It is not re-reviewed, approved or implemented. The owner's answers to the plan's Q1–Q18 and OA1–OA6 may change the decision below. The ADR is updated when the plan is approved.
 
 ## Date
 
@@ -31,21 +31,22 @@ Every signed-in role, parents and students included, can read every group row.
    - The close reuses the Batch D leaver core (`end_group_enrollments` → `leave` → `end_enrollment`). It ends only that course's live enrollments, plus the unplaced paid enrollments of the same programme, year and level that the director chooses to attach or end.
    - A learner file becomes « Ancien apprenant » only when nothing else is live.
    - The close never touches charge amounts, receipts, payments, attendance or CRM conversions.
-   - It links open unlinked tuition charges to the enrollment it ends, so a later payment cannot re-create a Confirmed enrollment.
-   - It checks the expected count (`PT409`, ADR-009), journals before it writes, rolls back if it would end anything it did not count, and returns the original result when repeated.
+   - It links the partly paid open unlinked tuition charges to the enrollment it ends, so a later payment on them cannot re-create a Confirmed enrollment. Commitments with nothing paid (« engagements », often for a next session) and undated charges of earlier school years are shown and never linked.
+   - It takes the learners, then marks (locks) the group row, and only then attaches or ends anything. Every path that enters a group takes the group row before the group's seat lock (the capacity trigger is re-created with a share lock for that order only), so the close and a placement cannot deadlock on the seat lock.
+   - It checks the expected count after the mark (`PT409`, ADR-009), journals before it writes, rolls back if it would end anything it did not count, and returns the original result when repeated.
 3. **A closed course is a state of the group.**
    - The mark is `closed_at`/`closed_by`. Only the close, reopen and year-close commands can write it; a trigger protects it against direct table writes.
    - A closed course refuses placement on every path through a trigger on `enrollments`. That trigger share-locks the online course row for online groups.
    - A closed course is hidden from pickers and active lists, while name lookups and its page keep it readable with its past learners.
    - « Rouvrir le cours » undoes a close made by mistake. It restores exactly the journalled enrollments that are unchanged since, locking learners before the group.
-4. **The year close knows about courses.** « Clôturer l'année » never ends an enrollment in a course that ends after the close date. It marks closed the Yearly groups of that year, and (plan Q16) the other groups it empties. Its dialog reads its numbers from a director preview.
+4. **The year close knows about courses.** « Clôturer l'année » never ends an enrollment in a course that ends after the close date, and leaves waiting the paid enrollments without a group of a short programme whose course has not ended (plan Q18 for courses not created yet). It locks the year's group rows after the learners and marks closed, in a separate statement, only those left without a live learner: the Yearly groups of that year and (plan Q16) the other groups it empties. Its dialog reads its numbers from a director preview.
 5. **Group rows are family-scoped for parents and students.** They read only the groups of their own learners, past groups included. Staff keep reading every group. A group name never carries a learner's name.
 6. **Individual lessons are courses of capacity 1** with their own dates, the model Online One-to-One already follows (plan Q4, recommendation).
 
 ## Consequences
 
 - Short-programme groups need dates. An existing one without dates refuses new placements until they are entered (plan Q1). Existing test fixtures gain dates.
-- « Clôturer l'année » remains the year-end tool. The course close is for courses that end earlier, and summer courses survive the year close.
+- « Clôturer l'année » remains the year-end tool. The course close is for courses that end earlier, and summer courses survive the year close, together with their paid learners who are not placed yet.
 - A paid enrollment without a group is reached either by the close of a course of its programme, year and level (the director chooses per row) or by the counted, journalled, separately approved one-time step for the current backlog.
 - « Inscrits — groupe à affecter » counts only programmes that use groups.
 - While the previous application build runs against the new database (release gap, application rollback), it cannot create short-programme groups. A longer rollback needs the database restore.
