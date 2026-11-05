@@ -1,13 +1,13 @@
 # Courses with dates — close a finished course, revision CDC-r3
 
-**Status: PROPOSED (plan only; not approved).** Revision **CDC-r3**, 2026-11-05, superseding CDC-r2 (PR #185 head `09e7b4e1348299231a18917b97de5ee1fbf931a0`) and CDC-r1 (head `c2fbb12a59f2d482a7476ba5ea206934e826ab71`). Risk tier: **3**: enrollment integrity, director commands that end enrollments in bulk, a guard on every placement path, a re-created year close, a narrower read policy on `groups`, and a counted Production data step. Owner: Maroine.
+**Status: APPROVED FOR IMPLEMENTATION (Maroine, 2026-11-05) at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19`, revision CDC-r3, after the independent plan review returned READY FOR OWNER APPROVAL on that head. Q1 and Q3–Q18 all A and OA1–OA6 as recorded, verbatim in the [approval record](#owner-decisions-required) and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#courses-with-dates--close-a-finished-course--approved-for-implementation-2026-11-05). This approves the plan only: the R0 count, implementation, migration 128, the one-time step (Adults and One-to-One only after the owner's confirmation per programme), merge and deploy each need their own approval.** Revision **CDC-r3**, 2026-11-05, superseding CDC-r2 (PR #185 head `09e7b4e1348299231a18917b97de5ee1fbf931a0`) and CDC-r1 (head `c2fbb12a59f2d482a7476ba5ea206934e826ab71`). Risk tier: **3**: enrollment integrity, director commands that end enrollments in bulk, a guard on every placement path, a re-created year close, a narrower read policy on `groups`, and a counted Production data step. Owner: Maroine.
 
 Nothing is implemented, merged, applied or deployed, and **no Production read, count or mutation occurred** while writing this plan.
 
 - **Baseline:** freshly fetched `origin/main` = `6e724ab67f3aa501e99a028b3390cf05aaf9ef74` (PR #184, the enrollment-at-payment closeout, docs only).
 - **Migrations:** latest migration file `127_enrollment_at_payment.sql`; Production ledger **001–127** per [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries); next free migration number **128**. That number is provisional and is re-read at implementation. The two other open PRs, #121 and #140, are docs only and claim no number from 128 on.
 - **Patterns reused:** Batch D's year close and online course close ([EGC-r2](enrollment-group-consistency.md), [ADR-010](../decisions/ADR-010-group-membership-from-enrollments.md)); conflicts as in [ADR-009](../decisions/ADR-009-conflicts-never-retryable.md); the counted data step of [enrollment at payment](enrollment-at-payment.md) D7.
-- **Proposed ADR:** [ADR-016](../decisions/ADR-016-course-dates-and-close.md).
+- **ADR:** [ADR-016](../decisions/ADR-016-course-dates-and-close.md), accepted for implementation planning with this approval.
 
 Planned, implemented, merged, deployed and Production-verified are distinct states.
 
@@ -1053,7 +1053,7 @@ Local failures are diagnosed and fixed autonomously. Production failures stop an
 
 # Owner decisions required
 
-Each question has a recommendation; none is decided until the owner answers. **The proposed owner answers OA1–OA6 above are confirmed with the approval of this revision.**
+Each question has a recommendation; none is decided until the owner answers. **The proposed owner answers OA1–OA6 above are confirmed with the approval of this revision.** **Answered (Maroine, 2026-11-05): Q1 and Q3–Q18 all A, OA1–OA6 as recorded; see the approval record at the end of this section.**
 
 **Q1 — Which programmes require dates, and existing groups without dates.**
 - **A (recommended):** required for Mise à niveau, Adults, Summer Camp and One-to-One, on creation and on a change into one of these programmes, and never cleared. An existing group of these programmes without dates keeps its learners but refuses any new placement until its dates are entered (« Renseignez les dates du cours »). Yearly, Other and the Communication programmes: optional. Consequence: the director enters the dates of the short groups counted at R0 (B2) right after the release; no guessed data. Existing test fixtures gain dates.
@@ -1136,7 +1136,34 @@ Each question has a recommendation; none is decided until the owner answers. **T
 - **A (recommended):** kept waiting too. A Summer Camp or a summer Mise à niveau is often paid before its group is created. The row stays on « Inscrits — groupe à affecter » (OA5), and the close of its course (B1) or « Ancien apprenant » reaches it later. Consequence: a paid short-programme row whose course is never created stays on the card until the director ends it.
 - **B:** ended as today; the preview lists these rows first so the director can create the course and place them. Consequence: a Summer Camp paid in May whose group is created in July is ended by the June close.
 
-**Approval record.** None yet. The owner approves an exact revision after an independent plan re-review. Implementation, the R0 count, the migration, the data step, the merge and the deployment each need their own approval.
+**Approval record.** CDC-r1 at head `c2fbb12…` was reviewed CHANGES REQUIRED on 2026-11-05 (B1, should-fix items, nits); CDC-r2 at head `09e7b4e…` applied them, and its re-review returned CHANGES REQUIRED (N-1, N-2, N-3, nits), applied by CDC-r3. The independent plan review returned **READY FOR OWNER APPROVAL** at head `47a02e6…`. This record is a documentation-only commit on top of that head; it changes no design text, scope or invariant. **Owner approval (Maroine, 2026-11-05), verbatim:**
+
+> Owner approval (Maroine, 2026-11-05): approve the "Courses with dates — close a finished course" plan at exact head 47a02e6a56f08290f85fe2bf0c703b12fc6a6c19 (revision CDC-r3), Q1 and Q3–Q18 all A, OA1–OA6 as recorded. Independent plan review: READY FOR OWNER APPROVAL at 47a02e6 (after CHANGES REQUIRED at c2fbb12 and 09e7b4e).
+>
+> 1. Record this approval verbatim in the plan's Approval record and in OWNER_DECISIONS (approved for implementation), update ADR-016 and both index rows, push to PR #185. Do not merge; I merge separately.
+> 2. Carry these reviewer points into the implementation record (no plan revision needed):
+>    - R3-1: word the stop condition and the concurrency harness as "through place, or a direct write of a learner the command does not hold"; record the same-learner direct API update deadlock as a known, pre-existing, out-of-scope limitation (the app never writes enrollments.group_id directly).
+>    - Year close locks groups with `for no key update` instead of `for update`.
+>    - One-to-One: in the close dialog and OA6 matching, never offer another learner's course of one (restrict or label).
+>    - Close preview flags receipts for a next-session deposit attached to the enrollment being ended (the learner would need « Rouvrir l'inscription »).
+>    - Flag waiting rows carried over from an earlier school year in the year-close preview and on the card.
+>    - T7b3a is expected 0 (057 made the year required); keep the line.
+> 3. This approves the plan only. The R0 count, implementation, migration 128, the one-time step (Adults and One-to-One only after my confirmation per programme), merge and deploy each need their own approval.
+>
+> Stop and report when the approval is recorded.
+
+**Approved answers:** Q1 A and Q3–Q18 A (Q2 is superseded by OA1); OA1–OA6 as recorded under [Owner answers to the CDC-r1 review](#owner-answers-to-the-cdc-r1-review-maroine-proposed-by-the-coordinator-2026-11-05) and [Owner answer to the CDC-r2 re-review](#owner-answer-to-the-cdc-r2-re-review-maroine-proposed-by-the-coordinator-2026-11-05).
+
+**Carried into the implementation record (owner instruction 2, no plan revision).** The implementation applies these points where the approved text says otherwise:
+
+- **R3-1, lock-order scope.** The [stop condition](#stop-conditions) on deadlock-freedom and the concurrency harness ([local test strategy](#local-test-strategy-synthetic-data-only)) are worded "through `place`, or a direct write of a learner the command does not hold". A direct API update of `enrollments.group_id` for a learner the close (or reopen, or year close) already holds can still deadlock with it. That is recorded as a known, pre-existing, out-of-scope limitation: the application never writes `enrollments.group_id` directly.
+- **Year-close group lock strength.** D5's year close locks the candidate group rows `for no key update` instead of `for update`.
+- **One-to-One.** The close dialog (« A suivi ce cours » candidates) and the OA6 matching of D5 never offer or match another learner's course of one (capacity 1); the implementation restricts those courses out or labels them.
+- **Next-session deposits.** The close preview flags receipts for a next-session deposit attached to an enrollment it ends; that learner would then need « Rouvrir l'inscription ».
+- **Carried-over waiting rows.** Waiting rows carried over from an earlier school year are flagged in the year-close preview and on the card « Inscrits — groupe à affecter ».
+- **T7b3a.** Expected 0, because migration 057 made the school year required on charges; the line stays in the R0 query.
+
+Plan approval authorizes architecture only. The R0 count, implementation, migration 128, the one-time step (Adults and One-to-One only after the owner's confirmation per programme), the merge and the deployment each need their own approval. The owner merges PR #185 separately. Nothing is implemented, merged, applied or deployed.
 
 ---
 
@@ -1150,7 +1177,7 @@ The implementer may not widen scope to the leaver core, `online_close_course`, `
 
 ### Prerequisites
 
-1. Owner approval of this revision with Q1–Q18 and OA1–OA6, recorded in the approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md). Implementation itself is authorized separately.
+1. Owner approval of this revision with Q1–Q18 and OA1–OA6, recorded in the approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md) (given 2026-11-05 for CDC-r3 at head `47a02e6…`). Implementation itself is authorized separately.
 2. Fresh `origin/main` and the next migration number re-verified (provisionally 128).
 3. These definitions re-read with `pg_get_functiondef` (or `pg_policies`) on a local database and compared with the bodies cited:
    - from 125: `save_receptionist_group`, `crm_enrollment_groups`, `guard_group_year` and its trigger, `guard_enrollment_group_year`;
