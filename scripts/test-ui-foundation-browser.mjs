@@ -24,6 +24,9 @@ const student={id:studentId,full_name:longName,status:'Enrolled',session_type:'Y
 // Batch H (H2, H4): a grouped file (read-only programme pill), a former learner and a prospect without a group.
 const pillRows=[{...student,id:randomUUID(),full_name:'UIF grouped learner',session_type:'Mise à niveau',niveau_cefr:'A2',groupe_id:randomUUID(),group_name:'UIF groupe A2'},
  {...student,id:randomUUID(),full_name:'UIF former learner',status:'Alumni'},{...student,id:randomUUID(),full_name:'UIF prospect file',status:'Prospect'}];
+const finishedCourse={kind:'in_person',group_id:randomUUID(),name:'UIF cours terminé A2',session_type:'Mise à niveau',niveau:'A2',school_year:'2029/2030',date_debut:'2030-03-02',date_fin:'2030-05-30',live_count:2,unplaced_count:1,empty:false};
+const coursesToClose=[finishedCourse,{...finishedCourse,group_id:randomUUID(),name:'UIF cours vide B1',niveau:'B1',live_count:0,unplaced_count:0,empty:true},
+ {...finishedCourse,kind:'online',group_id:randomUUID(),name:'UIF cours en ligne',session_type:'Online',niveau:'B2',date_fin:'2030-05-31',live_count:1,unplaced_count:0}];
 const answers={total:6,rows:[{id:randomUUID(),source_label:'Site web · Demande synthétique',occurred_at:'2026-10-01T10:00:00Z',answers:[{label:'Tranche d’âge',display_value:'13–17 ans'},{label:'Déplacement au centre',value:'Possible le mercredi'},{label:'Programme souhaité',value:program},{label:'Question complémentaire',value:'Réponse complète conservée'}]}]};
 let browser,page,phase,hold=null;
 // Drain the previous route's reads/prefetches before replacing its document.
@@ -138,6 +141,10 @@ const studentPills=async role=>{
      if(studentMode==='unavailable')return json(null);
      const rows=studentMode==='empty'||args.p_search==='absent'?[]:studentMode==='pills'?[student,...pillRows]:[student];return json({rows,count:rows.length?41:0,total:41});
     }
+    // Migration 128 (D7): only the director's dashboard reads the finished-course list for « Cours terminés à clôturer ».
+    // Synthetic rows of the RPC's shape: a finished course with learners, an empty one (not counted) and an online course
+    // past its term (counted), so the card shows 2.
+    if(name==='list_courses_to_close')return json(coursesToClose);
     if(name==='get_finance_charge_summary'||name==='get_monthly_finance_summary') {
      const mode=name==='get_finance_charge_summary'?financeMode:monthlyMode;
      if(mode==='error')return failure();if(mode==='missing')return json(null);if(mode==='malformed')return json({encaisse:null});
@@ -235,9 +242,12 @@ const studentPills=async role=>{
   await page.getByRole('button',{name:'Ouvrir le menu'}).click();assert(await page.locator('#main-content').evaluate(el=>el.inert));await page.keyboard.press('Escape');assert(!(await page.locator('#main-content').evaluate(el=>el.inert)));
   await touchTargets();
   phase=engine.name()+' Placement read truth';placementMode='error';await navigate(app+'/placement-tests');await page.getByRole('alert').filter({hasText:'Impossible de charger'}).waitFor();assert.equal(await page.getByText('Aucun test de niveau enregistré.',{exact:false}).count(),0);assert(await page.getByRole('button',{name:'Planifier un test'}).isDisabled());placementMode='ready';await page.getByRole('button',{name:'Réessayer',exact:true}).click();await page.getByText('Aucun test de niveau enregistré. Planifiez un test pour un apprenant existant.',{exact:true}).waitFor();
+  assert(!requests.some(r=>r.name==='list_courses_to_close'),'reception never reads the finished-course list');
   await ctx.clearCookies();await page.evaluate(()=>localStorage.clear());await login(users[1]);
   await studentPills('director');
   phase=engine.name()+' Dashboard read truth';await navigate(app+'/dashboard');await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'));
+  const toCloseCard=page.getByRole('link').filter({hasText:'Cours terminés à clôturer'});await toCloseCard.locator('p').first().filter({hasText:/^2$/}).waitFor();assert.equal(await toCloseCard.getAttribute('href'),'/groups?vue=a-cloturer');
+  assert(requests.some(r=>r.name==='list_courses_to_close')&&requests.filter(r=>r.name==='list_courses_to_close').every(r=>!r.args||Object.keys(r.args).length===0),'the director dashboard reads the finished-course list without arguments');
   for(const mode of ['error','missing','malformed']) {
    financeMode=mode;monthlyMode=mode;await navigate(app+'/dashboard');await page.getByText(mode==='error' ? 'Impossible de charger les totaux financiers.' : 'Totaux financiers indisponibles.',{exact:true}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('Indisponible'));assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);assert.equal(await page.getByText('0 MAD',{exact:true}).count(),0,'failure never numeric zero');
   }

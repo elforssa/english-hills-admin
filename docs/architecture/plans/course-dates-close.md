@@ -1419,3 +1419,7 @@ On the code of `52c0b41` (only what is new or changed, as the owner instructed):
 - `npm run lint`: **clean** apart from the existing `<img>` warning in `Sidebar.jsx`. `npm run build`: **pass**, with the app lane's environment.
 
 GitHub's Verify run on the pull request remains the reference for the six shards.
+
+### CI at `eb67f83` and the presentation-harness stub (2026-11-06)
+
+Verify at `eb67f83`: every shard passed except `browser-crm`, which failed in « CRM work and calendar browser suites ». `scripts/test-ui-foundation-browser.mjs` (the presentation harness, which answers every RPC itself and fails on an unknown one) met `list_courses_to_close`, which the director's dashboard now sends. The harness gains a stub of the RPC's shape (a finished course with learners, an empty one and an online course past its term) without loosening its unexpected-RPC rule. It now also asserts that reception never sends `list_courses_to_close`, that the director's dashboard sends it without arguments, and that the card « Cours terminés à clôturer » shows 2 and links to `/groups?vue=a-cloturer`. The dashboard's other new reads (closed groups excluded from « Groupes actifs », closed online courses, carried-over waiting rows) are table reads, which the harness already answers. Local run against a production build on the private stack: **pass** in Chromium and WebKit.
