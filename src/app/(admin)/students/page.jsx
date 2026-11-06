@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { STUDENT_STATUS_COLORS, SESSION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '@/lib/statusColors';
 import ProgrammePill from '@/components/operational/ProgrammePill';
 import { currentSchoolYear, fileAwaitsGroup, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { closeSchoolYearPreview, programmeBreakdown, yearCloseHasWork } from '@/lib/academic/courseClose.mjs';
 import { PILL_CLASS, PILL_SELECT_CLASS } from '@/lib/ui/pill.mjs';
 import { money } from '@/lib/receiptFinance';
 import { ALL_LEVELS, SESSION_TYPES, getLevelsForSession } from '@/lib/academicPrograms';
@@ -68,23 +69,27 @@ function ArchivedStudentsDialog({ onClose, onRestored }) {
 }
 
 // Director (D2-B, moved here from the retired pre-registration page, EAP Q7 = A):
-// ends every active enrollment of a finished school year; learners left with
-// nothing active become Ancien apprenant. The count is the one close_school_year
-// checks (every row not yet ended or refused) and the database refuses if it
-// changed meanwhile.
+// ends the live enrollments of a finished school year; learners left with nothing
+// active become Ancien apprenant. CDC (D5): the preview gives what close_school_year
+// counts (to_end), spares the courses that end later and leaves waiting the paid
+// learners whose course has not ended; the database refuses if the count changed.
 function YearCloseDialog({ onClose, onDone }) {
   const [year, setYear] = useState(() => { const [start] = currentSchoolYear().split('/'); return `${Number(start) - 1}/${start}`; });
-  const [count, setCount] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const valid = /^[0-9]{4}\/[0-9]{4}$/.test(year);
   useEffect(() => {
-    setCount(null);
+    setPreview(null);
     if (!valid) return;
-    getBrowserClient().from('enrollments').select('id', { count: 'exact', head: true })
-      .eq('school_year', year).not('status', 'in', '(Ended,Rejected)')
-      .then(({ count: live, error }) => setCount(error ? undefined : live ?? 0));
+    let active = true;
+    closeSchoolYearPreview(getBrowserClient(), year)
+      .then(({ data, error }) => { if (active) setPreview(error ? undefined : data); });
+    return () => { active = false; };
   }, [year, valid]);
+  const count = preview ? Number(preview.to_end || 0) : null;
+  const waiting = Number(preview?.kept_waiting_unplaced?.total || 0);
+  const carried = Number(preview?.carried_over_waiting?.total || 0);
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -100,12 +105,19 @@ function YearCloseDialog({ onClose, onDone }) {
       <form className="space-y-3" onSubmit={submit}>
         <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Année scolaire
           <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" value={year} pattern="[0-9]{4}/[0-9]{4}" required onChange={e => setYear(e.target.value)} /></label>
-        <p className="text-sm" role="status">{count === null ? 'Calcul…' : count === undefined ? 'Impossible de compter les inscriptions.'
-          : `${count} inscription(s) active(s) seront terminées. Les apprenants sans autre inscription deviennent « Ancien apprenant ». Paiements et soldes ne changent pas.`}</p>
+        {preview === null ? <p className="text-sm" role="status">Calcul…</p>
+          : preview === undefined ? <p className="text-sm" role="status">Impossible de calculer la clôture.</p>
+          : <div className="space-y-1 text-sm" role="status">
+            <p>{count} inscription(s) active(s) seront terminées. Les apprenants sans autre inscription deviennent « Ancien apprenant ». Paiements et soldes ne changent pas.</p>
+            {Number(preview.kept_in_later_courses) > 0 && <p>{preview.kept_in_later_courses} inscription(s) d’un cours qui se termine plus tard restent en cours.</p>}
+            {waiting > 0 && <p>{waiting} inscription(s) payée(s) sans groupe restent en attente de leur cours ({programmeBreakdown(preview.kept_waiting_unplaced?.by_programme)}) (<Link href="/students?group=unassigned" className="text-primary underline">Groupe à affecter</Link>).</p>}
+            {carried > 0 && <p className="text-amber-700">{carried} inscription(s) payée(s) sans groupe d’une année scolaire précédente attendent toujours un groupe ({programmeBreakdown(preview.carried_over_waiting?.by_programme)}).</p>}
+            <p>{Number(preview.groups_to_mark || 0)} groupe(s) seront marqués clôturés.</p>
+          </div>}
         <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motif *
           <input className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm" maxLength={200} required value={reason} onChange={e => setReason(e.target.value)} /></label>
         <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button type="submit" disabled={saving || !count || !reason.trim()}>{saving ? '…' : 'Clôturer'}</Button></div>
+          <Button type="submit" disabled={saving || !yearCloseHasWork(preview) || !reason.trim()}>{saving ? '…' : 'Clôturer'}</Button></div>
       </form>
     </DialogContent>
   </Dialog>;

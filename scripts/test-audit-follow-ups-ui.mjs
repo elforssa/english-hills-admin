@@ -50,7 +50,10 @@ assert.doesNotMatch(students, /DossierGroupPlacement|p_enrollment: null/, 'no pl
 // Q7 = A: « Clôturer l’année » (director) beside « Dossiers archivés », counting what close_school_year counts.
 assert.match(students, /\{role === 'director' && <button onClick=\{\(\) => setYearClose\(true\)\}/);
 assert.match(students, /closeSchoolYear\(getBrowserClient\(\), \{ schoolYear: year, expectedCount: count, reason: reason\.trim\(\) \}\)/);
-assert.match(students, /\.eq\('school_year', year\)\.not\('status', 'in', '\(Ended,Rejected\)'\)/);
+// CDC (D5): the expected count is the preview's to_end, never a browser count.
+assert.match(students, /closeSchoolYearPreview\(getBrowserClient\(\), year\)/);
+assert.match(students, /const count = preview \? Number\(preview\.to_end \|\| 0\) : null;/);
+assert.doesNotMatch(students, /\.eq\('school_year', year\)\.not\('status', 'in', '\(Ended,Rejected\)'\)/);
 // The status filter offers Inscrit, Prospect, Ancien apprenant, Inactif; « Essai (dossier) » stays readable only.
 assert.match(students, /DOSSIER_FILTER_STATUSES\.map/);
 assert.doesNotMatch(students, /'Enrolled','Trial'/);
@@ -108,7 +111,10 @@ assert.match(studentForm, /withoutEnrollmentReason: withoutEnrollmentReason\.tri
 assert.match(read('src/app/(admin)/settings/page.jsx'), /desc: 'Tests de niveau, apprenants, inscriptions et encaissements'/);
 // Dashboard: the paid learners awaiting a group, nothing linking to the retired page.
 const dashboard = read('src/app/(admin)/dashboard/page.jsx');
-assert.match(dashboard, /\.eq\('status', 'Confirmed'\)\.is\('group_id', null\)/);
+assert.match(dashboard, /\.eq\('status', 'Confirmed'\)\.is\('group_id', null\)\.not\('session_type', 'in'/);
+// CDC (D7): the finished-course card is the director's only; closed courses leave « Groupes actifs ».
+assert.match(dashboard, /userRole === 'director' \? listCoursesToClose\(sb\)/);
+assert.match(dashboard, /\.is\('closed_at', null\)/);
 assert.match(dashboard, /label: 'Inscrits — groupe à affecter'/);
 assert.doesNotMatch(dashboard, /\/enrollments|Inscriptions en attente|Valider des inscriptions/);
 

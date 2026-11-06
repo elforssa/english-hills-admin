@@ -8,9 +8,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { entities, reportError } from '@/lib/entities';
-import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut } from 'lucide-react';
+import { Users, GraduationCap, BookOpen, TrendingUp, Clock, CheckCircle, ArrowRight, FileText, UserPlus, ClipboardCheck, LogOut, Lock } from 'lucide-react';
 import { getBrowserClient } from '@/lib/supabase';
-import { ACTIVE_STUDENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { ACTIVE_STUDENT_STATUSES, currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
+import { coursesToCloseCount, listCoursesToClose } from '@/lib/academic/courseClose.mjs';
+import { PROGRAMMES_WITHOUT_GROUPS } from '@/lib/programCatalog.mjs';
 import { businessMonthStart, money, receiptAmounts, receiptStatus } from '@/lib/receiptFinance';
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
@@ -38,7 +40,7 @@ export default function Dashboard() {
   const [authError, setAuthError] = useState(false);
   const [authRetry, setAuthRetry] = useState(0);
   const [userRole, setUserRole] = useState('');
-  const [stats, setStats] = useState({ students: 0, teachers: 0, groups: 0, totalEncaisse: 0, awaitingGroup: 0, testsPlanifies: 0 });
+  const [stats, setStats] = useState({ students: 0, teachers: 0, groups: 0, totalEncaisse: 0, awaitingGroup: 0, awaitingCarriedOver: 0, coursesToClose: null, testsPlanifies: 0 });
   const [recentReceipts, setRecentReceipts] = useState([]);
   const [monthlyRead, setMonthlyRead] = useState({state:'loading'});
   const [financeRead, setFinanceRead] = useState({state:'loading'});
@@ -81,17 +83,31 @@ export default function Dashboard() {
     // "Apprenants actifs": Inscrit and Essai only (EGC, ACA-2); Ancien apprenant is not active.
     const ACTIVE_STATUSES = ACTIVE_STUDENT_STATUSES;
     const sb = getBrowserClient();
+    // EAP: an enrollment is born at the payment; a paid one waits only for its group.
+    // CDC (OA5, Q17 = A): only the programmes that use groups (never « Other »).
+    const awaitingQuery = () => sb.from('enrollments').select('id', { count: 'exact', head: true })
+      .eq('status', 'Confirmed').is('group_id', null).not('session_type', 'in', `(${PROGRAMMES_WITHOUT_GROUPS.map(p => `"${p}"`).join(',')})`);
     Promise.all([
       countRows('Student', sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),
       countRows('Teacher', sb.from('teachers').select('id', { count: 'exact', head: true })),
-      countRows('Group', sb.from('groups').select('id', { count: 'exact', head: true })),
+      // « Groupes actifs »: not closed (in person, the closed mark; online, the online close).
+      Promise.all([
+        countRows('Group', sb.from('groups').select('id', { count: 'exact', head: true }).is('closed_at', null)),
+        countRows('OnlineCourse', sb.from('online_courses').select('group_id', { count: 'exact', head: true }).eq('status', 'closed')),
+      ]).then(([open, closedOnline]) => Math.max(0, open - closedOnline)),
       entities.Receipt.list('-created_date', 5),
-      // EAP: an enrollment is born at the payment; a paid one waits only for its group.
-      countRows('Enrollment', sb.from('enrollments').select('id', { count: 'exact', head: true }).eq('status', 'Confirmed').is('group_id', null)),
+      countRows('Enrollment', awaitingQuery()),
       countRows('PlacementTest', sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
       getBrowserClient().rpc('get_finance_charge_summary'),
       getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
-    ]).then(([students, teachers, groups, receipts, awaitingGroup, testsPlanifies, financeResult, monthlyResult]) => {
+      // Waiting rows carried over from an earlier school year are flagged on the card.
+      countRows('Enrollment', awaitingQuery().lt('school_year', currentSchoolYear())),
+      // D7: only the director's dashboard calls the finished-course list (admin never does).
+      userRole === 'director' ? listCoursesToClose(sb).then(({ data, error }) => {
+        if (error) { reportError('rpc', 'list_courses_to_close', error); return null; }
+        return coursesToCloseCount(data);
+      }) : Promise.resolve(null),
+    ]).then(([students, teachers, groups, receipts, awaitingGroup, testsPlanifies, financeResult, monthlyResult, awaitingCarriedOver, coursesToClose]) => {
       if (!active) return;
       const finance = financeReadResult(financeResult, ['total_encaisse','total_restant']);
       const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
@@ -103,6 +119,8 @@ export default function Dashboard() {
         groups,
         totalEncaisse: finance.data?.total_encaisse,
         awaitingGroup,
+        awaitingCarriedOver,
+        coursesToClose,
         testsPlanifies,
       });
       setRecentReceipts(receipts.slice(0, 5));
@@ -156,12 +174,16 @@ export default function Dashboard() {
           { label: 'Groupes actifs', value: stats.groups, icon: BookOpen, href: '/groups', color: '#0891b2', bg: '#ECFEFF' },
           ...(isAdmin ? [
             { label: 'Total encaissé', value: financeRead.data ? `${financeRead.data.total_encaisse.toLocaleString('fr-MA')} MAD` : 'Indisponible', icon: TrendingUp, href: '/finance', color: '#059669', bg: '#ECFDF5' },
-            { label: 'Inscrits — groupe à affecter', value: stats.awaitingGroup, icon: Clock, href: '/students?group=unassigned', color: '#d97706', bg: '#FFFBEB' },
+            { label: 'Inscrits — groupe à affecter', value: stats.awaitingGroup, icon: Clock, href: '/students?group=unassigned', color: '#d97706', bg: '#FFFBEB',
+              note: stats.awaitingCarriedOver > 0 ? `dont ${stats.awaitingCarriedOver} d’une année scolaire précédente` : '' },
+            ...(userRole === 'director' ? [
+              { label: 'Cours terminés à clôturer', value: stats.coursesToClose ?? 'Indisponible', icon: Lock, href: '/groups?vue=a-cloturer', color: '#475569', bg: '#F1F5F9' },
+            ] : []),
             { label: 'Tests planifiés', value: stats.testsPlanifies, icon: CheckCircle, href: '/placement-tests', color: '#B91C2E', bg: '#FFF1F2' },
           ] : [
             { label: 'Tests planifiés', value: stats.testsPlanifies, icon: CheckCircle, href: '/placement-tests', color: '#B91C2E', bg: '#FFF1F2' },
           ]),
-        ].map(({ label, value, icon: Icon, href, color, bg }) => (
+        ].map(({ label, value, icon: Icon, href, color, bg, note }) => (
           <Link
             key={label}
             href={href}
@@ -175,6 +197,7 @@ export default function Dashboard() {
             </div>
             <p className="text-2xl font-bold text-foreground mb-1">{label === 'Total encaissé' && financeRead.data ? value : loading ? '—' : readError && label !== 'Total encaissé' ? 'Indisponible' : value}</p>
             <p className="text-xs text-muted-foreground font-medium">{label}</p>
+            {note && !loading && <p className="mt-1 text-[11px] text-amber-700">{note}</p>}
           </Link>
         ))}
       </div>

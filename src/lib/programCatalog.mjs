@@ -30,6 +30,17 @@ export const SESSION_TYPES = [
   ...ONLINE_SESSION_TYPES,
 ];
 
+// CDC (migration 128, Q1 = A): the programmes whose groups carry a start and an end
+// date (courses). Yearly, Other and the Communication programmes may carry dates.
+export const COURSE_DATE_PROGRAMMES = ['Mise à niveau', 'Adults', 'Summer Camp', 'One-to-One'];
+
+// CDC (OA5, Q17 = A): every programme uses groups except Other, which a payment never
+// turns into an enrollment; « Inscrits — groupe à affecter » counts only these.
+export const PROGRAMMES_WITHOUT_GROUPS = ['Other'];
+export function programmeUsesGroups(sessionType) {
+  return Boolean(sessionType) && !PROGRAMMES_WITHOUT_GROUPS.includes(sessionType);
+}
+
 // The public /inscription page and its API accept exactly these programmes.
 export const PUBLIC_SESSION_TYPES = SESSION_TYPES.filter(type => !ONLINE_SESSION_TYPES.includes(type));
 

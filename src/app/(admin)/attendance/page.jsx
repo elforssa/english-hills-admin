@@ -15,6 +15,8 @@ import { loadTeacherAcademicRows } from '@/lib/portal';
 import { getMyTeacher } from '@/lib/teacher-directory';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { queryClientInstance } from '@/lib/query-client';
+import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 const todayInCasablanca = () => centreDate();
 
@@ -28,6 +30,8 @@ const STATUS_CONFIG = {
 export default function Attendance() {
   const { role } = useAuth();
   const [groups, setGroups] = useState([]);
+  // CDC (D4): after the close, a course's roll call is no longer offered.
+  const closedOnline = useClosedOnlineGroupIds();
   const [students, setStudents] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [sessionDate, setSessionDate] = useState(todayInCasablanca);
@@ -133,7 +137,7 @@ export default function Attendance() {
           <label htmlFor="attendance-group" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Groupe</label>
           <select id="attendance-group" className="w-full border border-border rounded-md px-3 py-2 text-sm bg-white" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
             <option value="">— Choisir un groupe —</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
+            {groups.filter(g => !isClosedCourse(g, closedOnline)).map(g => <option key={g.id} value={g.id}>{g.name} ({g.niveau})</option>)}
           </select>
         </div>
         <div>

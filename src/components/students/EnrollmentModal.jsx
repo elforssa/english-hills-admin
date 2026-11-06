@@ -14,6 +14,8 @@ import { displayLabel, ENROLLMENT_LABELS } from '@/lib/ui/presentation.mjs';
 import { changedEnrollmentFields, eapReason, egcReason, membershipErrorMessage, placeLearnerInGroup, removeLearnerFromGroup,
   saveEnrollmentChanges } from '@/lib/academic/membershipActions.mjs';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { courseEndedSuffix, isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { queryClientInstance } from '@/lib/query-client';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -49,8 +51,11 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   // H5: when the enrollment's school year is known, only groups of that year (or the
   // current one) are offered; a group without a year cannot take a placement.
   const yearOk = group => !isSchoolYear(form.school_year) || schoolYearOfGroup(group) === form.school_year;
+  // CDC (D4): a closed course is never offered (the current group stays shown);
+  // a finished one not yet closed is marked « terminé le … ».
+  const closedOnline = useClosedOnlineGroupIds();
   const availableGroups = groups.filter(group => (
-    (!selectedStudent || groupMatchesEnrollment(group, form, selectedStudent)) && yearOk(group)
+    (!selectedStudent || groupMatchesEnrollment(group, form, selectedStudent)) && yearOk(group) && !isClosedCourse(group, closedOnline)
   ) || group.id === form.group_id);
   const before = enrollment.group_id || null;
   const groupId = form.group_id || null;
@@ -179,7 +184,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
               setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
             }} required={operationalAssignmentOnly}>
               <option value="">— Choisir un groupe —</option>
-              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}</option>)}
+              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}{courseEndedSuffix(g)}</option>)}
             </select>
             {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de cette inscription.</p>}
             {selectedGroup && (

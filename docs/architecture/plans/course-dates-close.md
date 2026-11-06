@@ -1,8 +1,10 @@
 # Courses with dates — close a finished course, revision CDC-r3
 
+**Implementation: IMPLEMENTED ON BRANCH `feat/course-dates-close` (2026-11-05), implementation PR open, not merged, not deployed; migration 128 not applied on Production; the one-time step, its revert and the restore are prepared and not run. R0 ran once on Production, read-only, 2026-11-05 13:05Z. See the [implementation record](#implementation-record-cdc-r3-2026-11-05).**
+
 **Status: APPROVED FOR IMPLEMENTATION (Maroine, 2026-11-05) at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19`, revision CDC-r3, after the independent plan review returned READY FOR OWNER APPROVAL on that head. Q1 and Q3–Q18 all A and OA1–OA6 as recorded, verbatim in the [approval record](#owner-decisions-required) and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#courses-with-dates--close-a-finished-course--approved-for-implementation-2026-11-05). This approves the plan only: the R0 count, implementation, migration 128, the one-time step (Adults and One-to-One only after the owner's confirmation per programme), merge and deploy each need their own approval.** Revision **CDC-r3**, 2026-11-05, superseding CDC-r2 (PR #185 head `09e7b4e1348299231a18917b97de5ee1fbf931a0`) and CDC-r1 (head `c2fbb12a59f2d482a7476ba5ea206934e826ab71`). Risk tier: **3**: enrollment integrity, director commands that end enrollments in bulk, a guard on every placement path, a re-created year close, a narrower read policy on `groups`, and a counted Production data step. Owner: Maroine.
 
-Nothing is implemented, merged, applied or deployed, and **no Production read, count or mutation occurred** while writing this plan.
+At approval nothing was implemented, merged, applied or deployed, and **no Production read, count or mutation occurred** while writing this plan.
 
 - **Baseline:** freshly fetched `origin/main` = `6e724ab67f3aa501e99a028b3390cf05aaf9ef74` (PR #184, the enrollment-at-payment closeout, docs only).
 - **Migrations:** latest migration file `127_enrollment_at_payment.sql`; Production ledger **001–127** per [CURRENT_STATE](../../ai/CURRENT_STATE.md#deployment-and-credential-evidence-boundaries); next free migration number **128**. That number is provisional and is re-read at implementation. The two other open PRs, #121 and #140, are docs only and claim no number from 128 on.
@@ -1266,3 +1268,158 @@ Stop and report if:
 ### Docs / status reporting
 
 Report per [AGENTS](../../../AGENTS.md#implementation-handoff) with branch, head SHA, PR, tier rationale, checks tied to the SHA, self-check, plan revision, migration filename and unresolved decisions. Independent review is mandatory (Tier 3).
+
+# Implementation record (CDC-r3, 2026-11-05)
+
+**State at implementation (2026-11-05): IMPLEMENTED ON BRANCH `feat/course-dates-close`, in the implementation pull request; not merged, not deployed; migration 128 not applied on Production; the one-time step, its revert and the restore are prepared and not run.** Implemented under the owner's authorization of 2026-11-05 (Maroine), Tier 3, from a fresh `origin/main` at `9211a5a` (the plan merge, PR #185). Planned, implemented, merged, deployed and Production-verified remain distinct states; CURRENT_STATE changes only at closeout with dated evidence.
+
+## Prerequisites as found
+
+- Next free migration number: **128**, confirmed from `supabase/migrations` on `origin/main` `9211a5a` and from CURRENT_STATE (Production ledger 001–127).
+- `pg_get_functiondef` of every definition listed in prerequisite 3 on a clean local build at 127 (CI image `supabase/postgres 17.6.1.165`) equals the body this plan cites, and the two `groups` policies are as cited. No trigger exists on `public.charges`. No stop condition.
+
+## R0 count (Production, read-only, run once)
+
+Run **once** on 2026-11-05 from 13:05:04 to 13:05:09 UTC, under the owner's approval in the implementation instruction of that day: `set transaction read only;` and the plan's single SELECT, committed unchanged as [`supabase/manual/course_close_r0_counts.sql`](../../../supabase/manual/course_close_r0_counts.sql). It returned 145 count rows and no personal data. Nothing else touched Production.
+
+| Line | Count |
+| --- | --- |
+| A1 live enrollments, 2026/2027 | Yearly Validated in a group 86; Yearly Confirmed without group 7; Mise à niveau 18, Adults 10, One-to-One 2, Online One-to-One 1 (all Confirmed without group) |
+| A2 card today / A3 card under OA5 | 38 / 38 |
+| A4 card after the step, S1 / S2 / S3 / S4 | 20 / 10 / 17 / 7 |
+| B1 groups / B2 with live learners / B3 live learners in groups | Yearly 8 / 8 / 86; every other programme 0 |
+| B4 / B5 / B6 / C2 / C3 | 0 / 0 / 0 / 0 / 0 |
+| U1 paid without group (file not archived) | Yearly 7 (Child 1: 5, Junior 3: 1, no level: 1); Mise à niveau 18, Adults 10, One-to-One 2, Online One-to-One 1 (no level) |
+| U2 that a course close could reach / U3 groups that would list them | Yearly 7 / 8; every other programme 0 |
+| T1 candidates (2026/2027), Mise à niveau / Adults / One-to-One / Online One-to-One | 18 / 10 / 2 / 1 |
+| T2 per scenario | the T1 figures of each scenario's programmes |
+| T3 files that stay « Inscrit » / T4 files that become « Ancien apprenant » | S1 6 / 12, S2 6 / 22, S3 6 / 14, S4 6 / 24 |
+| T5 / T6 | 0 / 0 for every programme |
+| T7a open balance on a linked charge | Adults 3; others 0 |
+| T7b1 / T7b2 / T7b3a / T7b3b | 0 / 0 / 0 / 0 for every programme |
+| T8 no live receipt / T10 Batch D clean-up rows | Mise à niveau 10 / 10; others 0 / 0 |
+| T9 linked to a CRM lead | 0 |
+| T11 by enrollment month | Mise à niveau 2026-09: 7, 2026-10: 11; Adults 2026-09: 7, 2026-10: 3; One-to-One 2026-09: 2; Online One-to-One 2026-10: 1 |
+| T12 Yearly paid without group | 7 |
+| J1 Ended enrollments / J2 Alumni files | 23 / 97 |
+
+Every figure the plan states matches: A2 = A3 = 38, T1 = 18 / 10 / 2 / 1, A4 = 20 / 10 / 17 / 7, T5 = T6 = B4 = 0, T12 = 7, and T7b3a = 0 (reviewer point six; the line stays). Counts that are not a mismatch but need the owner's attention; none changes the design:
+
+- **No short-programme group and no online course exist.** The eight groups are all Yearly (86 learners); there is no Mise à niveau, Adults, Summer Camp or One-to-One group and no online course (B1–B3, C2 = C3 = 0). On day one « Cours terminés à clôturer » is therefore empty, no group needs dates before its next placement, and every short-programme waiting row (31) is a paid enrollment that never had a group: only the one-time step (or « Ancien apprenant », row by row) takes them off the card. The close dialog's unplaced list applies today only to Yearly groups once they have a `date_fin` (U2 = 7 rows, U3 = 8 groups); a learner with no level matches any level of the course, as D3 states.
+- **T3 + T4 against T2.** S1 has 18 targets for 18 learners (6 + 12). S3 has 21 targets for 20 learners and S4 31 targets for 30: one learner has targets in two programmes (Mise à niveau and one of the two One-to-One programmes), counted once; the step calls `leave` once per learner and programme, as D10 states. The six T3 learners keep another live enrollment.
+- **T8 = T10 = 10.** The ten Mise à niveau rows without a live receipt are the ten rows of the Batch D clean-up (« Rattrapage EGC »). They are today's content of the director's « Inscriptions confirmées sans aucun paiement » and leave that list when the step ends them.
+- **T7a = 3** Adults candidates keep an owed balance on their linked charge (only if the owner turns Adults on). No charge would be linked by the step (T7b1 = T7b3a = 0) and no CRM conversion is touched (T9 = 0).
+
+The declared counts of [`course_close_backlog.sql`](../../../supabase/manual/course_close_backlog.sql) follow these numbers: T2 per programme 18 / 10 / 2 / 1; T3 / T4 / A4 per scenario S1 `6/12/20`, S2 `6/22/10`, S3 `6/14/17`, S4 `6/24/7`; Mise à niveau only by default (`cdc.adults` and `cdc.one_to_one` stay `off` until the owner confirms each programme). The release task re-runs R0 before the step and re-declares if anything moved.
+
+## Reviewer points carried into the implementation (approval instruction 2)
+
+1. **R3-1, lock-order scope.** Deadlock-freedom is claimed and tested **through `place`, or a direct write of a learner the command does not hold**: the harness drives `place_learner_in_group`, reception's assignment and an admin's direct insert (through RLS) of a learner the command does not hold, against the close (N-1) and the year close (N-3), and placements and leavers against the reopen. A direct API update of `enrollments.group_id` for a learner that a close, reopen or year close already holds can still deadlock with it. That is a **known, pre-existing, out-of-scope limitation**: the application never writes `enrollments.group_id` directly.
+2. **Year-close group lock strength.** The re-created `close_school_year` locks the candidate group rows `for no key update` (after the learners, in id order), then marks them in a separate statement.
+3. **One-to-One.** `academic_security.course_of_one_allows` keeps a capacity-1 course to its own learner (a live or ended enrollment in that group). The close dialog's « A suivi ce cours » candidates (`course_unplaced`) and the OA6 matching of the year close (`year_close_rows`) never offer or match another learner's course of one.
+4. **Next-session deposits.** The close preview flags, per member and per unplaced row, live receipts on charges of the enrollment being ended (its own and those the close links) created after the course's `date_fin` (`next_session_deposit`, with `created_after_end` on each receipt), and the dialog says that such a learner would need « Rouvrir l'inscription ». The close result counts them over every row it ends. Limitation: a deposit paid before the end date cannot be told apart from an instalment and is not flagged.
+5. **Carried-over waiting rows.** `close_school_year_preview` returns `carried_over_waiting` (Confirmed rows without a group, programme other than « Autre », of a school year earlier than the one being closed), shown in the year-close dialog; the card « Inscrits — groupe à affecter » adds « dont N d'une année scolaire précédente » for rows of a year earlier than the centre's current school year.
+6. **T7b3a.** Expected 0 and found 0; the line stays in the R0 query.
+
+## Deviations and clarifications (none changes a decision)
+
+1. **The family read helper is `public.family_group_ids()`**, not `portal_security.family_group_ids()`: `authenticated` has no USAGE on any `*_security` schema and every existing policy helper lives in `public` (as `get_visible_student_ids`). It is SECURITY DEFINER with a fixed `search_path`, executable by `authenticated` only, and returns the groups of the caller's visible learners (current `group_id`, past `ended_group_id`, and the file's `groupe_id`).
+2. **The preview's `paid_total`** for a member or an unplaced row includes the receipts on the charges the close would link, so the dialog shows what the learner paid for that course.
+3. **The preview's `charges_to_link` and `engagements`** count the members; each unplaced row carries its own counts. The command links the charges of every row it ends (members, attached and ended-unplaced).
+4. **« Rouvrir le cours »** restores members through `academic_security.place` with the capacity-override reason « Rouvrir le cours » (logged as a capacity override when the group is full meanwhile); attached and ended-unplaced rows return to Confirmed without a group. Rows changed since the close are left ended and returned in `skipped` (each with its reason); the toast counts them.
+5. **Teacher-facing pickers** (attendance, assessments, the teacher portal) exclude closed in-person courses only: teachers cannot read `online_courses`. The database guard refuses a placement into a closed online course on every path.
+6. **The dashboard card** counts Confirmed rows without group of every programme but « Autre » (OA5); a row without a programme is not counted either.
+7. **Risk noted, not changed:** `academic_security.leave` keeps a file Enrolled when its `groupe_id` still names a group without a matching membership (a legacy shape). The step's post-conditions (T3 files Enrolled, T4 files Alumni) catch it, and the step then refuses and changes nothing.
+8. **Fixtures beyond the inventory.** The re-grep found more suites with short-programme groups or year closes than the inventory listed; they gained dates (One-to-One capacity 1) or past end dates without assertion changes, except where the planned rules apply (see Tests).
+
+## Tests
+
+New:
+
+- `scripts/test-course-dates-close.sql` (CI SQL step): the dates (window, order, required programmes, never cleared, Yearly optional, refused on online groups, create without a year then window-checked, year change re-checked, logged date edits, One-to-One capacity 1); `save_receptionist_group` with dates; the close as director (ended count, Alumni versus Enrolled, main group, balances, journal and run row, activity log, finance and CRM untouched except the journalled links, B1 attach and end-unplaced with every refusal, N-1 order, replay, empty group, refusals by state and role); placement refused into a closed course on every path, in person and online, with the two exemptions; the protected mark and frozen fields; `reopen_course` (restored, skipped, capacity override, year-closed group); S6/N-2 (later payments on linked, engagement, undated and new charges; preview equals command); attendance and payments after the close; the year close (D5, OA4, OA6, Q16, Q18, carried-over rows, preview equals command); the policies by role; `list_courses_to_close`; the R0 query on the fixture with explicit zeros.
+- `scripts/test-course-dates-close-upgrade.mjs` (upgrades shard, 127 → 128): seeded 127 patterns, R0 counts, the 128 manifest and posture, the step for S1 and S4 (refused on a wrong count, dry run, run, journal, no-op rerun), the revert (refused after a reopen without a declared skip, with it, full revert, second revert refused), and the restore back to the 127 catalog.
+- `scripts/test-course-close-concurrency.py` (concurrency shard): N-1 against `place_learner_in_group` (director), reception's assignment and a direct management insert of a learner the close does not hold, in both orders, with and without attach; two closes of one group; reopen against a placement, `reopen_enrollment` and `remove_learner_from_group`; S3 online close against a placement; N-3 year close against a placement and against a direct management insert, in both orders; the year close against a course close. No `40P01` in any case.
+- `scripts/test-course-close.mjs` (`npm test`): helpers, French texts equal to the migration's, pickers and lists excluding closed courses, name lookups keeping them, the director-only card, the RPC wrappers, the guide text.
+
+Updated (fixture dates, One-to-One capacity 1, past end dates for year closes, or the planned rules): `test-audit-follow-ups.sql`, `test-audit-follow-ups-ui.mjs`, `test-crm-rcc-a2.sql`, `test-enrollment-at-payment.sql`, `test-enrollment-group-concurrency.py`, `test-enrollment-group-consistency.sql`, `test-enrollment-workflow.sql`, `test-online-learning.sql`, `test-paid-enrollment.sql`, `test-portal-readiness.sql`, `test-receipt-client-regressions.mjs`, `test-receptionist-batch1.sql`, `test-receptionist-browser.mjs`, `test-receptionist-group-filter.sql`, `test-receptionist-security.sql`, `test-report-data.mjs`, `test-student-placement-browser.mjs`. Ledger ceiling 127 → 128: `test-conflicts-without-retry-upgrade.mjs`, `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-premium-retirement-upgrade-113-current.sql`.
+
+## Local verification (2026-11-05)
+
+Private local Supabase stack (CI image `supabase/postgres 17.6.1.165`, its own ports and project id), synthetic data only, on a clone of this branch.
+
+- **A first, full replay of the six `local-database` shards stopped on the local machine, not on a test.** Nine local Supabase stacks shared the 8 GB Docker VM (about 6.7 GB used), and the shards failed on Auth 504 timeouts, an unhealthy database container after a reset, a connection timeout and a container setup error. No assertion failed. The steps that completed passed:
+  - in sql-and-concurrency, the rollback-only SQL suites, including `test-course-dates-close.sql` and every updated suite, then advisory D2 and H3-02;
+  - in upgrades-from-097-to-105, the synthetic 097 and stateful 100 upgrades;
+  - in browser-security, Batch 2 (798 checks), Batch 1 (153), Batch 3A (197), Batch 3B (198) and Batch 4A (182).
+
+  The owner then stopped the replay (instruction of 2026-11-05). **GitHub's Verify run on the implementation pull request is the reference for the six shards.**
+- **Then only what is new**, as the owner instructed, on the code of this pull request:
+  - `test-course-dates-close.sql` on a fresh reset to 128: **pass**, 83 checks, rolled back.
+  - `test-course-close-concurrency.py`: **pass**, ten cases, no `40P01`.
+    - The first run failed in the new N-3 direct-write case. The two N-3 year closes before it had already marked the empty fixture groups that it uses, so its insert met « Ce cours est clôturé » before any race.
+    - The case now reopens those groups first. This is a test-only fix: the migration is unchanged.
+  - `test-course-dates-close-upgrade.mjs` after a reset to 127: **pass**. It covers:
+    - the R0 counts and the manifest-only catalog change;
+    - the step for S1 and S4: refused on a wrong count, dry run, run, and a re-run that changes nothing;
+    - the revert with a declared skip;
+    - the restore to the 127 functions.
+
+    The stack was then reset to 128.
+  - `npm test`: **pass**.
+  - `npm run lint`: **clean**. Its one warning (`<img>` in `Sidebar.jsx`) is in a file this branch does not touch.
+  - `npm run build`: **pass**, with the app lane's environment (placeholder Supabase keys, no Sentry DSN).
+- **Open at `b293391`, closed by the review fixes below:** the browser checks of acceptance 2 (D8) had no dedicated suite, and `public/helpdesk/q08-groupe-formulaire.jpg` was still the guide 2.1 image without the date fields.
+
+## Review fixes (independent reviews of PR #186 at `b293391`, 2026-11-06)
+
+The database and application reviews both returned CHANGES REQUIRED; neither asked for a change to migration 128, and none was made. No rule is weakened: every change below either narrows the screens to what the database already allows or adds a test. Commits `f93a6d5` (application) and `52c0b41` (tests) on `feat/course-dates-close`.
+
+### Application
+
+- **B1, a course-close browser suite.** New `scripts/test-course-close-browser.mjs`, wired into the `browser-security` shard after the student-placement flow (step « Course close browser flow (CDC-r3) »). Synthetic data only; every fixture is tagged with the run and removed at the end, pass or fail. It checks:
+  1. the director: the card « Cours terminés à clôturer » equals the rule's count, the « À clôturer » view, the close dialog with one row « A suivi ce cours » and one « Terminer sans groupe » (« Confirmer » disabled until both are chosen), the database after the close (the members and the attached row Ended with the course as their last group, the « Terminer sans groupe » row Ended without one, each file « Inscrit » or « Ancien apprenant » as its other enrollments require, and the mark), « Groupes actifs » one lower, then « Rouvrir le cours » and the database after it;
+  2. the director closing an empty group;
+  3. admin and reception: no card, no « Clôturer » or « Rouvrir » button anywhere, `?vue=a-cloturer` explains that the list is the director's, and the admin dashboard sends no `list_courses_to_close` request (reception lands on `/crm/leads`);
+  4. closed courses absent from the enrollment dialog's group picker (admin), the receipt form's group picker (reception), the closed group's page (no « Ajouter des apprenants ») and the « Groupes actifs » count; a finished course not yet closed stays in the pickers, marked « terminé le … »;
+  5. the year-close dialog with a Summer Camp course still running (its member kept in it) and a Summer Camp row left waiting, both split by programme; in a later year with only groups to mark, the button is enabled once a reason is given (never clicked);
+  6. the group form on the management and the reception path: dates outside the year refused, One-to-One forced to capacity 1 with the neutral name, back to 12 on leaving One-to-One, and a Yearly group saved with one date; a closed undated Adults group from before 128 is still renamed from its « Clôturés » row.
+
+  It also checks S2 and S3 below in the browser.
+- **S1, the guide screenshots.** `q08-groupe-formulaire.jpg` and `s17-groups.jpg` are re-captured on synthetic data at the guide's size (1700 × 1075). q08: « Nouveau groupe » for a Mise à niveau, with the six markers of the legend (name, teacher, days, school year, the two dates, « Enregistrer ») and French dates. s17: reception's list in the « En cours » view, with the view filter and the « Dates » column, one course marked « terminé le … ». Both alt texts follow.
+- **S2.** Before its end date only an empty course closes, and that close sends no attach or end list (`close_course` refuses `course.not_finished` otherwise). The dialog of a course that is not finished now offers « Laisser en attente » only, already chosen, and sends empty lists.
+- **S3.** The page of an online course closed on its « Cours en ligne » page hides « Ajouter des apprenants » (the closed-online set, as the pickers use) and says the course is closed.
+- **Nits:**
+  - The form is never stricter than the database (D1): a programme with optional dates may carry one date; on an edit, the required dates are checked only on a programme or date change, and the window only on a date or year change, as the trigger does, so a closed undated short-programme group stays editable (its name, for instance).
+  - SECURITY_RULES: the protected mark raises `42501` (hint `course.mark_protected`), not `23514`.
+  - « Clôturer l'année » is enabled when it would only mark groups (no enrollment to end).
+  - The year-close dialog splits the rows left waiting, and the carried-over waiting rows, by programme.
+  - `?vue=a-cloturer` for admin and reception says that the « À clôturer » list is the director's and shows the courses in progress instead of an empty list.
+  - Leaving One-to-One in the form gives the group back its saved capacity, or 12 for a new group.
+
+### Database (tests only)
+
+- **S1, One-to-One (128 `course_of_one_allows`).** New SQL section « 7b »: a finished One-to-One B1 course of capacity 1 with its learner, and another learner's paid One-to-One B1 row without a group. The preview never lists that row and `list_courses_to_close` counts it nowhere; `close_course` with it as « A suivi ce cours » or as « Terminer sans groupe » is refused `PT409 course.unplaced_changed`; the close ends only the member. After the close, the member pays a new One-to-One B1 row: in the June year close, the other learner's row is `kept_waiting` and stays Confirmed, while the member's new row matches its own finished course and ends.
+- **S2, lock order.** New harness case with three sessions: a blocker holds the listed learner's file (`students` row) while a close (and, separately, a reopen) waits on it; a third session's placement into the same group must then finish at once, because the waiting command holds no group row yet. The blocker then places the listed learner (or reopens first), and the command refuses with `PT409` (`course.count_changed`; `egc.stale` for the reopen); no `40P01`. **Mutation check:** with the group row taken before the learners, in `close_course` and then in `reopen_course` (a local copy of each function, applied on the private stack and restored after), this case fails (« a placement waited behind a command that waits on a learner: the command holds the group row before its learners ») while every case before it still passes: the earlier cases did not catch the flip.
+- **S3, fixture dates.** No fixture date depends on today near 31 August. The SQL suite's later dates go through `pg_temp.ahead(n)` (n from 2 to 10), which never passes 31 August of the fixture school year's second year and stays after today, and a first check asserts that every offset the suite uses falls inside that year's window; the harness's end date is the window's last day (`WINDOW_END`), as in the browser suite.
+- **Nits:**
+  - **The overshoot check is unreachable, kept.** The last `PT409 course.count_changed` in `close_course` (after the ends: ended rows ≠ expected + attached + ended-unplaced) cannot fire: the learners are locked, the group is marked before the counts and nothing can enter it, and the lists are re-checked against `course_unplaced` after the mark. It stays as a guard against a later change of the cores it calls.
+  - **Run-row entities.** The migration is unchanged and the convention is now asserted: a command's run row (`close_course`, `close_school_year`; and `reopen_course`'s `reopened` row) has entity `groups` with `row_id` = the group; the one-time step's and the revert's run rows have entity `runs` with `row_id` = the run and no group.
+  - **Placement on every path is the trigger's.** Section 5 drives four paths into a closed course (the director's placement, reception's assignment, a management insert and update through RLS, and an insert as the table owner). Every other path that writes `enrollments.group_id` or `status` passes through the same row trigger `enrollment_course_guard` (`before insert or update of group_id, status`), which the owner's refused insert shows applies below RLS; the manifest asserts the trigger exists. The suite therefore does not drive every application path one by one.
+  - **A zero-target re-run writes nothing.** `course_close_backlog.sql` now stops before the run row when it has no target: the dry run says `run=none`, a real run raises a notice and returns. The upgrade rehearsal checks that the journal count is unchanged after a zero-target re-run and that a re-run declaring the original counts is refused.
+
+### Local verification of the fixes (2026-11-06, private stack, synthetic data only)
+
+On the code of `52c0b41` (only what is new or changed, as the owner instructed):
+
+- `test-course-dates-close.sql` on a fresh reset to 128: **pass**, including section 7b and the window check.
+- `test-course-close-concurrency.py`: **pass**, eleven cases, including the lock-order case; no `40P01`.
+- `test-course-dates-close-upgrade.mjs` after a reset to 127: **pass**, including the zero-target re-run and the run-row entities; the stack was then reset to 128.
+- `test-course-close-browser.mjs` against a production build of the branch: **pass**, 16 checks; fixtures removed.
+- `npm test`: **pass** (including `test-course-close.mjs` and the helpdesk content test).
+- `npm run lint`: **clean** apart from the existing `<img>` warning in `Sidebar.jsx`. `npm run build`: **pass**, with the app lane's environment.
+
+GitHub's Verify run on the pull request remains the reference for the six shards.
+
+### CI at `eb67f83` and the presentation-harness stub (2026-11-06)
+
+Verify at `eb67f83`: every shard passed except `browser-crm`, which failed in « CRM work and calendar browser suites ». `scripts/test-ui-foundation-browser.mjs` (the presentation harness, which answers every RPC itself and fails on an unknown one) met `list_courses_to_close`, which the director's dashboard now sends. The harness gains a stub of the RPC's shape (a finished course with learners, an empty one and an online course past its term) without loosening its unexpected-RPC rule. It now also asserts that reception never sends `list_courses_to_close`, that the director's dashboard sends it without arguments, and that the card « Cours terminés à clôturer » shows 2 and links to `/groups?vue=a-cloturer`. The dashboard's other new reads (closed groups excluded from « Groupes actifs », closed online courses, carried-over waiting rows) are table reads, which the harness already answers. Local run against a production build on the private stack: **pass** in Chromium and WebKit.

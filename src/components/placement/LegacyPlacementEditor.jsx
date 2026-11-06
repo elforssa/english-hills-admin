@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import PlacementTestModal from './PlacementTestModal';
 import { Button } from '@/components/ui/button';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 // Full placement detail and bounded option reads occur only after an explicit
 // click. Calendar's fixed projection never includes notes/scores/student rows.
@@ -13,13 +14,15 @@ export default function LegacyPlacementEditor({ id,onClose,onSave }) {
   const [studentSearch,setStudentSearch]=useState(''), [groupSearch,setGroupSearch]=useState('');
   const [studentPage,setStudentPage]=useState(0), [groupPage,setGroupPage]=useState(0);
   const [test,setTest]=useState(null);
+  const closedOnline=useClosedOnlineGroupIds();
   const query=useQuery({queryKey:['crm',user?.id,role,'calendar-editor',id,studentSearch,studentPage,groupSearch,groupPage],enabled:!!user,
     queryFn:async()=>{
       const sb=getBrowserClient();
       const detail=await sb.from('placement_tests').select('*').eq('id',id).is('crm_lead_id',null).single();
       if(detail.error)throw detail.error;
       const studentQuery=sb.from('students').select('id,full_name,session_type,niveau_cefr,parent_email,email').is('deleted_at',null).order('full_name').order('id').range(studentPage*25,studentPage*25+25);
-      const groupQuery=sb.from('groups').select('id,name,session_type,niveau').order('name').order('id').range(groupPage*25,groupPage*25+25);
+      // CDC (D4): a closed course is never offered; the group already chosen stays shown.
+      const groupQuery=sb.from('groups').select('id,name,session_type,niveau').is('closed_at',null).order('name').order('id').range(groupPage*25,groupPage*25+25);
       if(studentSearch)studentQuery.ilike('full_name',`%${studentSearch}%`);
       if(groupSearch)groupQuery.ilike('name',`%${groupSearch}%`);
       const results=await Promise.all([studentQuery,groupQuery,
@@ -40,5 +43,5 @@ export default function LegacyPlacementEditor({ id,onClose,onSave }) {
     {query.isError&&<p role="alert">Données indisponibles. <Button type="button" variant="ghost" onClick={()=>query.refetch()}>Réessayer</Button></p>}
   </div>;
   if(!test)return <div role="status" className="rounded-md border p-4 text-sm">{query.isError ? 'Test indisponible.' : 'Chargement du test…'} <Button variant="ghost" onClick={onClose}>Fermer</Button>{query.isError&&<Button variant="outline" onClick={()=>query.refetch()}>Réessayer</Button>}</div>;
-  return <PlacementTestModal test={test} students={query.data?.students || []} groups={query.data?.groups || []} optionControls={options} onClose={onClose} onSave={onSave}/>;
+  return <PlacementTestModal test={test} students={query.data?.students || []} groups={(query.data?.groups || []).filter(g=>g.id===query.data?.test?.groupe_affecte_id || !closedOnline.has(g.id))} optionControls={options} onClose={onClose} onSave={onSave}/>;
 }

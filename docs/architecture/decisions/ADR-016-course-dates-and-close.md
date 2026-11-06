@@ -4,6 +4,8 @@
 
 **Accepted for implementation planning** (Maroine, 2026-11-05) with the [course dates and close plan](../plans/course-dates-close.md), revision CDC-r3 approved at exact head `47a02e6a56f08290f85fe2bf0c703b12fc6a6c19` after the independent plan review returned READY FOR OWNER APPROVAL (CDC-r1 and CDC-r2 were each reviewed CHANGES REQUIRED the same day). Answers: Q1 and Q3–Q18 all A; OA1–OA6 as recorded. They are recorded verbatim in the plan's approval record and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#courses-with-dates--close-a-finished-course--approved-for-implementation-2026-11-05). Implementation, migration 128, the one-time step and every Production step need their own approval. Nothing is implemented.
 
+**Implementation (2026-11-05):** implemented on branch `feat/course-dates-close` with `128_course_dates_close.sql`, in the implementation pull request; not merged, not deployed, 128 not applied on Production; the one-time step, its revert and the restore prepared and not run. The plan's [implementation record](../plans/course-dates-close.md#implementation-record-cdc-r3-2026-11-05) lists the R0 counts and the deviations, among them the family read helper created as `public.family_group_ids()` (no API role has USAGE on the `*_security` schemas).
+
 ## Date
 
 2026-11-05.

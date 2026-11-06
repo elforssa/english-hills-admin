@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { learnerNoticeTargets } from '@/lib/portal';
 import { createDeliveryTracker } from '@/lib/deliveryOnce.mjs';
+import { openCourses } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -197,6 +199,7 @@ export default function Communications() {
   const [announcements, setAnnouncements] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const closedOnline = useClosedOnlineGroupIds();
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('announcements');
   const [announcementModal, setAnnouncementModal] = useState(false);
@@ -279,7 +282,7 @@ export default function Communications() {
           {messages.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucun message.</div>}
         </div>
       )}
-      {announcementModal && <AnnouncementModal groups={groups} onSave={() => { setAnnouncementModal(false); load(); }} onClose={() => setAnnouncementModal(false)} />}
+      {announcementModal && <AnnouncementModal groups={openCourses(groups, closedOnline)} onSave={() => { setAnnouncementModal(false); load(); }} onClose={() => setAnnouncementModal(false)} />}
       {messageModal && <MessageModal students={students} onSave={() => { setMessageModal(false); load(); }} onClose={() => setMessageModal(false)} />}
     </div>
   );

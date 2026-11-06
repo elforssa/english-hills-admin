@@ -232,15 +232,16 @@ select pg_temp.ok(cardinality(academic_security.egc_enforcement_failures()) = 0,
 -- ===========================================================================
 -- Fixtures.
 -- ===========================================================================
-insert into public.groups(id, name, session_type, niveau, teacher_id, annee, capacite_max) values
-  (pg_temp.id(301), 'EGC Yearly C1', 'Yearly', 'Child 1', pg_temp.id(101), '2026-2027', 15),
-  (pg_temp.id(302), 'EGC MAN A1', 'Mise à niveau', 'A1', pg_temp.id(102), '2026-2027', 10),
-  (pg_temp.id(303), 'EGC Yearly C2', 'Yearly', 'Child 2', null, '2026-2027', 15),
-  (pg_temp.id(304), 'EGC Adults B1', 'Adults', 'Beginning 1', null, '2026-2027', 2),
-  (pg_temp.id(305), 'EGC level lock', 'Yearly', 'Child 1', null, '2026-2027', 15),
-  (pg_temp.id(306), 'EGC mismatch', 'Yearly', 'Child 1', null, '2026-2027', 15),
-  (pg_temp.id(307), 'EGC Online one', 'Online', 'B1', null, '2026-2027', 15),
-  (pg_temp.id(308), 'EGC Online two', 'Online', 'B1', null, '2026-2027', 15);
+-- CDC (128, Q1 = A): short-programme groups carry their course dates.
+insert into public.groups(id, name, session_type, niveau, teacher_id, annee, capacite_max, date_debut, date_fin) values
+  (pg_temp.id(301), 'EGC Yearly C1', 'Yearly', 'Child 1', pg_temp.id(101), '2026-2027', 15, null, null),
+  (pg_temp.id(302), 'EGC MAN A1', 'Mise à niveau', 'A1', pg_temp.id(102), '2026-2027', 10, '2026-09-01', '2027-06-30'),
+  (pg_temp.id(303), 'EGC Yearly C2', 'Yearly', 'Child 2', null, '2026-2027', 15, null, null),
+  (pg_temp.id(304), 'EGC Adults B1', 'Adults', 'Beginning 1', null, '2026-2027', 2, '2026-09-01', '2027-06-30'),
+  (pg_temp.id(305), 'EGC level lock', 'Yearly', 'Child 1', null, '2026-2027', 15, null, null),
+  (pg_temp.id(306), 'EGC mismatch', 'Yearly', 'Child 1', null, '2026-2027', 15, null, null),
+  (pg_temp.id(307), 'EGC Online one', 'Online', 'B1', null, '2026-2027', 15, null, null),
+  (pg_temp.id(308), 'EGC Online two', 'Online', 'B1', null, '2026-2027', 15, null, null);
 insert into public.students(id, full_name, email, parent_email, telephone, status, session_type, niveau_cefr)
 select pg_temp.id(200 + i), 'EGC Learner ' || i,
   case when i = 6 then 'egc-user-7@example.test' else 'egc-l' || i || '@example.test' end,
@@ -360,7 +361,8 @@ select pg_temp.owner();
 -- ===========================================================================
 select pg_temp.act(2);
 select pg_temp.fails(format('update public.groups set niveau = %L where id = %L', 'Child 2', pg_temp.id(301)), '23514', 'egc.group_level_locked');
-select pg_temp.fails(format('update public.groups set session_type = %L, niveau = %L where id = %L', 'Adults', 'Beginning 1', pg_temp.id(301)), '23514', 'egc.group_level_locked');
+select pg_temp.fails(format('update public.groups set session_type = %L, niveau = %L, date_debut = %L, date_fin = %L where id = %L',
+  'Adults', 'Beginning 1', '2026-09-01', '2027-06-30', pg_temp.id(301)), '23514', 'egc.group_level_locked');
 select pg_temp.act(1);
 select pg_temp.fails(format('update public.groups set niveau = %L where id = %L', 'Child 2', pg_temp.id(301)), '23514', 'egc.group_level_locked');
 update public.groups set salle = 'Salle EGC' where id = pg_temp.id(301);
@@ -744,6 +746,9 @@ select pg_temp.ok(pg_temp.file(pg_temp.id(205))->>'status' = 'Enrolled', 'a new 
 -- ===========================================================================
 -- Year close (D2-B), reopen (I3), I10 history and the Ended shape.
 -- ===========================================================================
+-- CDC (128, OA6): the paid Summer Camp rows without a group have a matching course that has ended.
+insert into public.groups(id, name, session_type, niveau, annee, date_debut, date_fin) values
+  (pg_temp.id(309), 'EGC Summer Camp 2025', 'Summer Camp', 'A1', '2025-2026', '2025-07-01', '2025-08-15');
 insert into public.enrollments(student_id, status, session_type, school_year) values
   (pg_temp.id(219), 'Confirmed', 'Summer Camp', '2025/2026'), (pg_temp.id(220), 'Confirmed', 'Summer Camp', '2025/2026'),
   (pg_temp.id(220), 'Confirmed', 'Adults', '2026/2027');

@@ -406,7 +406,11 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
         { id: 'g3', name: 'A1 ancien', niveau: 'A1', session_type: 'Adults', annee: '2025-2026', capacite_max: 2 },
         { id: 'g4', name: 'A1 enfants', niveau: 'A1', session_type: 'Yearly', annee: '2026-2027', capacite_max: 2 },
         { id: 'g5', name: 'A1 sans limite', niveau: 'A1', session_type: 'Adults', annee: '2026-2027', capacite_max: null },
+        { id: 'g6', name: 'A1 clôturé', niveau: 'A1', session_type: 'Adults', annee: '2026-2027', capacite_max: 4, closed_at: '2026-10-01T00:00:00Z' },
+        { id: 'o1', name: 'En ligne A1', niveau: 'A1', session_type: 'Online', annee: '2026-2027', capacite_max: null },
+        { id: 'o2', name: 'En ligne A1 clôturé', niveau: 'A1', session_type: 'Online', annee: '2026-2027', capacite_max: null },
       ],
+      online_courses: [{ group_id: 'o1', status: 'active' }, { group_id: 'o2', status: 'closed' }],
       enrollments: [
         { student_id: 's1', group_id: 'g1', status: 'Validated' }, { student_id: 's1', group_id: 'g1', status: 'Ended' },
         { student_id: 's2', group_id: 'g1', status: 'Rejected' }, { student_id: 's3', group_id: 'g1', status: 'Validated' },
@@ -434,7 +438,9 @@ assert.equal(receiptAmounts({ montant_paye: 125, voided_at: '2026-09-15T00:00:00
     } };
     const choices = await loadGroupChoices(fakeClient, { sessionType: 'Adults', level: 'A1', schoolYear: '2026/2027' });
     assert.deepEqual(choices.map((group) => [group.id, group.free]), [['g1', 1], ['g2', 0], ['g5', null]],
-      'g1: s1 and s6 (s2 Rejected, s3 archived); g2 full; other years and programmes excluded');
+      'g1: s1 and s6 (s2 Rejected, s3 archived); g2 full; other years and programmes excluded; g6 closed (CDC D4)');
+    assert.deepEqual((await loadGroupChoices(fakeClient, { sessionType: 'Online', level: 'A1', schoolYear: '2026/2027' })).map((group) => group.id),
+      ['o1'], 'a closed online course is never offered');
     assert.deepEqual(await loadGroupChoices(fakeClient, { sessionType: 'Other', level: 'A1', schoolYear: '2026/2027' }), []);
     assert.deepEqual(await loadGroupChoices(fakeClient, { sessionType: 'Adults', level: '', schoolYear: '2026/2027' }), []);
   }

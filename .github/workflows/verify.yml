@@ -352,6 +352,12 @@ jobs:
           supabase db reset --local --version 126 --no-seed
           node scripts/test-enrollment-at-payment-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Courses with dates 127 to 128 upgrade, one-time step, revert and restore
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 127 --no-seed
+          node scripts/test-course-dates-close-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression
@@ -381,6 +387,7 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-portal-readiness.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-lead-ad-source.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-enrollment-at-payment.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-course-dates-close.sql
           python3 scripts/test-crm-dgi-b2-mutations.py
       - name: Payment, receipt deletion and receptionist rollback-only regression
         if: matrix.shard == 'sql-and-concurrency'
@@ -422,6 +429,9 @@ jobs:
       - name: Enrollment and group seat, payment-placement and course-close races
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-enrollment-group-concurrency.py
+      - name: Course close, reopen and year close races
+        if: matrix.shard == 'sql-and-concurrency'
+        run: python3 scripts/test-course-close-concurrency.py
       - name: Batch E numbering, void and payment races and owner-level session user
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-finance-batch-e-concurrency.py
@@ -492,6 +502,9 @@ jobs:
       - name: Student placement, second programme, capacity override and leaver browser flow
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: node scripts/test-student-placement-browser.mjs
+      - name: Course close browser flow (CDC-r3)
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: node scripts/test-course-close-browser.mjs
       - name: Portal readiness cross-role REST, route origin guard and portal browser checks
         if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
         run: |

@@ -98,9 +98,9 @@ insert into auth.users(id,email,aud,role,email_confirmed_at,created_at,updated_a
 values({quote(admin)},'egc-race-{run}@example.test','authenticated','authenticated',now(),now(),now());
 update public.profiles set role='admin' where id={quote(admin)};
 insert into public.teachers(id,full_name,email,contract_type) values({quote(ids['l5'])},'EGC race teacher {run}','egc-race-t-{run}@example.test','Freelance');
-insert into public.groups(id,name,session_type,niveau,annee,capacite_max) values
- ({quote(ids['group'])},'EGC race {run}','Adults','Beginning 1','2026-2027',1),
- ({quote(ids['online'])},'EGC race online {run}','Online','B1','2026-2027',null);
+insert into public.groups(id,name,session_type,niveau,annee,capacite_max,date_debut,date_fin) values
+ ({quote(ids['group'])},'EGC race {run}','Adults','Beginning 1','2026-2027',1,'2026-09-01','2027-06-30'),
+ ({quote(ids['online'])},'EGC race online {run}','Online','B1','2026-2027',null,null,null);
 insert into public.students(id,full_name,status,session_type) values
  ({quote(ids['l1'])},'EGC race one {run}','Prospect','Adults'),({quote(ids['l2'])},'EGC race two {run}','Prospect','Adults'),
  ({quote(ids['l3'])},'EGC race three {run}','Prospect','Adults'),({quote(ids['l4'])},'EGC race four {run}','Prospect','Online');

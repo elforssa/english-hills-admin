@@ -11,6 +11,7 @@ import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTer
 import { clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
 import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH, addDays, deskGuardError, isFreeEnrollment, isPayableEnrollmentCandidate, paymentBackdateDays } from '@/lib/financeCorrections.mjs';
 import { groupSeatsLabel, loadGroupChoices } from '@/lib/receiptGroupChoices.mjs';
+import { courseEndedSuffix } from '@/lib/academic/courseClose.mjs';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { AlertCircle, ChevronRight, CircleDollarSign, LoaderCircle, Mail, Search, UserPlus, Users, X } from 'lucide-react';
@@ -347,7 +348,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
       {groupOffered && <div className="mt-4">
         {groupChoices.state === 'loading' && <SearchMessage icon={LoaderCircle} spin>Chargement des groupes…</SearchMessage>}
         {groupChoices.state === 'error' && <SearchMessage icon={AlertCircle} tone="error">Groupes indisponibles : {groupChoices.error}</SearchMessage>}
-        {groupChoices.state === 'ready' && <Field label="Groupe (facultatif)"><select className={input} value={groupId} disabled={!confirmsEnrollment || !groupChoices.rows.length} onChange={(e) => setGroupId(e.target.value)}><option value="">{groupChoices.rows.length ? 'Sans groupe — groupe à affecter' : 'Aucun groupe pour ce programme, ce niveau et cette année'}</option>{groupChoices.rows.map((group) => <option key={group.id} value={group.id} disabled={group.free === 0}>{group.name}{group.horaire ? ` · ${group.horaire}` : ''}{group.jours ? ` (${group.jours})` : ''} · {groupSeatsLabel(group.free)}</option>)}</select><p className="mt-1 text-xs text-muted-foreground">{confirmsEnrollment ? 'Le groupe est affecté juste après l’encaissement. S’il est refusé (complet, année, inscription modifiée), le paiement reste enregistré et l’apprenant reste « groupe à affecter ».' : 'Le groupe s’affecte avec un paiement (ou une remise de 100 %).'}</p></Field>}
+        {groupChoices.state === 'ready' && <Field label="Groupe (facultatif)"><select className={input} value={groupId} disabled={!confirmsEnrollment || !groupChoices.rows.length} onChange={(e) => setGroupId(e.target.value)}><option value="">{groupChoices.rows.length ? 'Sans groupe — groupe à affecter' : 'Aucun groupe pour ce programme, ce niveau et cette année'}</option>{groupChoices.rows.map((group) => <option key={group.id} value={group.id} disabled={group.free === 0}>{group.name}{group.horaire ? ` · ${group.horaire}` : ''}{group.jours ? ` (${group.jours})` : ''} · {groupSeatsLabel(group.free)}{courseEndedSuffix(group)}</option>)}</select><p className="mt-1 text-xs text-muted-foreground">{confirmsEnrollment ? 'Le groupe est affecté juste après l’encaissement. S’il est refusé (complet, année, inscription modifiée), le paiement reste enregistré et l’apprenant reste « groupe à affecter ».' : 'Le groupe s’affecte avec un paiement (ou une remise de 100 %).'}</p></Field>}
       </div>}
     </Step>
 

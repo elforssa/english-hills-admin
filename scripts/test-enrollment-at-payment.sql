@@ -66,10 +66,11 @@ from generate_series(1, 6) i;
 update public.profiles p set role = r.role
 from (values (1, 'director'), (2, 'admin'), (3, 'receptionist'), (4, 'teacher'), (5, 'parent'), (6, 'student')) r(i, role)
 where p.id = pg_temp.id(r.i);
-insert into public.groups(id, name, session_type, niveau, annee, capacite_max) values
-  (pg_temp.id(500), 'EAP T Yearly C2', 'Yearly', 'Child 2', '2026-2027', 10),
-  (pg_temp.id(501), 'EAP T Yearly C2 full', 'Yearly', 'Child 2', '2026-2027', 1),
-  (pg_temp.id(502), 'EAP T Adults B1', 'Adults', 'B1', '2026-2027', 10);
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id, name, session_type, niveau, annee, capacite_max, date_debut, date_fin) values
+  (pg_temp.id(500), 'EAP T Yearly C2', 'Yearly', 'Child 2', '2026-2027', 10, null, null),
+  (pg_temp.id(501), 'EAP T Yearly C2 full', 'Yearly', 'Child 2', '2026-2027', 1, null, null),
+  (pg_temp.id(502), 'EAP T Adults B1', 'Adults', 'B1', '2026-2027', 10, '2026-09-01', '2027-06-30');
 select pg_temp.act(1);
 select crm_create_followup_policy(gen_random_uuid(), '{"weekly_hours":{"1":[["00:00","23:59"]],"2":[["00:00","23:59"]],"3":[["00:00","23:59"]],"4":[["00:00","23:59"]],"5":[["00:00","23:59"]],"6":[["00:00","23:59"]],"7":[["00:00","23:59"]]}}');
 select pg_temp.owner();

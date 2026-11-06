@@ -4,6 +4,7 @@
 import {
   ACTIVE_STUDENT_STATUSES, LIVE_ENROLLMENT_STATUSES, MEMBERSHIP_STATUSES, groupMemberIds, studentNeedsGroup,
 } from './enrollmentWorkflow.mjs';
+import { openCourses } from './academic/courseClose.mjs';
 
 export const ATTENDANCE_STATUSES = ['Présent', 'Absent', 'Retard', 'Justifié'];
 
@@ -72,7 +73,10 @@ export async function loadAcademicSources(entities, groups, chunkSize = 100) {
   return { students, enrollments };
 }
 
-export function academicOperationsData({ students, teachers, groups, enrollments, sessionFilter = '', sessionTypes }) {
+// CDC (D4): a closed course counts neither as a group without a teacher nor in the
+// occupancy (in person, its closed mark; online, closedOnlineIds).
+export function academicOperationsData({ students, teachers, groups: allGroups, enrollments, sessionFilter = '', sessionTypes, closedOnlineIds = null }) {
+  const groups = openCourses(allGroups, closedOnlineIds);
   const active = new Set(ACTIVE_STUDENT_STATUSES);
   const membersByGroup = new Map(groups.map((group) => [group.id, groupMemberIds(students, enrollments, group.id)]));
 

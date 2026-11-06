@@ -263,7 +263,7 @@ do $$ declare s uuid:=pg_temp.student('A2 enrolled'); s2 uuid:=pg_temp.student('
  perform pg_temp.rejects(pg_temp.pick(b,s2,e2)||'{"expected_enrollment_updated_at":"garbage"}','22023','Invalid enrollment fields or incompatible group','record_rejected');
  -- An enrollment whose own group no longer matches it (session NULL bypasses the row trigger).
  -- EAP (127): a legacy Submitted row, inserted under the two-flag exemption.
- insert into public.groups(name,session_type,niveau) values('A2 adults group','Adults','Beginning 1') returning id into g;
+ insert into public.groups(name,session_type,niveau,date_debut,date_fin) values('A2 adults group','Adults','Beginning 1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30)) returning id into g;
  x:=pg_temp.student('A2 mismatched');
  perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
  insert into public.enrollments(student_id,session_type,school_year,status,group_id) values(x,null,'2026/2027','Submitted',g) returning id into e1;
@@ -287,7 +287,7 @@ select 'PASS existing enrollment selection, linked elsewhere, incompatible, stal
 -- no longer reachable (the group is refused before either check).
 do $$ declare l uuid:=pg_temp.lead(); g1 uuid; g2 uuid; d jsonb; r jsonb; begin
  insert into public.groups(name,session_type,niveau) values('A2 child group','Yearly','Child 2') returning id into g1;
- insert into public.groups(name,session_type,niveau) values('A2 adult group','Adults','Beginning 1') returning id into g2;
+ insert into public.groups(name,session_type,niveau,date_debut,date_fin) values('A2 adult group','Adults','Beginning 1',make_date(left(public.centre_school_year(),4)::int,9,1),make_date(left(public.centre_school_year(),4)::int+1,6,30)) returning id into g2;
  d:=pg_temp.new_data(l);
  perform pg_temp.rejects(d||jsonb_build_object('group_id',g1),'22023','Valid bounded enrollment request required','request_invalid');
  perform pg_temp.rejects(d||jsonb_build_object('group_id',g2),'22023','Valid bounded enrollment request required','request_invalid');

@@ -19,6 +19,8 @@ import {
   groupMatchesSelection,
 } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { courseEndedSuffix, isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { useAuth } from '@/context/AuthContext';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
@@ -149,8 +151,10 @@ export default function StudentForm() {
     } : { ...f, groupe_id: '' });
   };
 
+  // CDC (D4): a closed course is never offered (the current group stays shown).
+  const closedOnline = useClosedOnlineGroupIds();
   const availableGroups = groups.filter(group => (
-    groupMatchesSelection(group, form.session_type, form.niveau_cefr)
+    (groupMatchesSelection(group, form.session_type, form.niveau_cefr) && !isClosedCourse(group, closedOnline))
     || group.id === form.groupe_id
   ));
 
@@ -352,7 +356,7 @@ export default function StudentForm() {
             <label htmlFor="groupe_id" className={labelClass}>Affecter à un groupe (facultatif)</label>
             <select id="groupe_id" className={inputClass} value={form.groupe_id || ''} onChange={e => changeGroup(e.target.value)}>
               <option value="">— Aucun groupe —</option>
-              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}</option>)}
+              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name}{g.niveau ? ` (${g.niveau})` : ''}{courseEndedSuffix(g)}</option>)}
             </select>
             <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau. Sans paiement, l’affectation crée une inscription non payée : préférez « Inscrire et encaisser » depuis la fiche apprenant.</p>
           </div>

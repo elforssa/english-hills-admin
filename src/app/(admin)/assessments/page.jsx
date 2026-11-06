@@ -17,6 +17,8 @@ import { finalGrade, parseGrade } from '@/lib/assessmentGrades.mjs';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { loadTeacherAcademicRows } from '@/lib/portal';
 import { hasCapability } from '@/lib/roleAccess.mjs';
+import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
+import { useClosedOnlineGroupIds } from '@/lib/queries';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -146,6 +148,7 @@ function Assessments({ role }) {
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const closedOnline = useClosedOnlineGroupIds();
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -295,7 +298,7 @@ function Assessments({ role }) {
           </>
         )}
       </div>
-      {modal !== null && <AssessmentModal assessment={modal.id ? modal : null} students={students} groups={groups} enrollments={enrollments} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {modal !== null && <AssessmentModal assessment={modal.id ? modal : null} students={students} groups={groups.filter(g => !isClosedCourse(g, closedOnline) || g.id === modal.group_id)} enrollments={enrollments} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
       {printing && <ReportCardPrint student={students.find(s => s.id === printing.student_id)} assessment={printing} groupName={groupName(printing.group_id)} onClose={() => setPrinting(null)} />}
     </div>
   );

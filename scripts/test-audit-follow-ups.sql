@@ -82,11 +82,12 @@ select pg_temp.ok(not has_function_privilege('authenticated', 'academic_security
 insert into public.groups(id, name, session_type, niveau) values (pg_temp.id(301), 'AFU default year', 'Yearly', 'Child 1');
 select pg_temp.ok((select annee from public.groups where id = pg_temp.id(301)) = replace(public.centre_school_year(), '/', '-'),
   'D-H5a: a new group without a year takes the current school year');
-insert into public.groups(id, name, session_type, niveau, annee) values
-  (pg_temp.id(302), 'AFU 2026 slash', 'Yearly', 'Child 1', '2026/2027'),
-  (pg_temp.id(303), 'AFU 2027', 'Yearly', 'Child 1', '2027-2028'),
-  (pg_temp.id(304), 'AFU Adults 2026', 'Adults', 'Beginning 1', '2026-2027'),
-  (pg_temp.id(305), 'AFU explicit null', 'Yearly', 'Child 2', null);
+-- CDC (128, Q1 = A): a short-programme group carries its course dates.
+insert into public.groups(id, name, session_type, niveau, annee, date_debut, date_fin) values
+  (pg_temp.id(302), 'AFU 2026 slash', 'Yearly', 'Child 1', '2026/2027', null, null),
+  (pg_temp.id(303), 'AFU 2027', 'Yearly', 'Child 1', '2027-2028', null, null),
+  (pg_temp.id(304), 'AFU Adults 2026', 'Adults', 'Beginning 1', '2026-2027', '2026-09-01', '2027-06-30'),
+  (pg_temp.id(305), 'AFU explicit null', 'Yearly', 'Child 2', null, null, null);
 select pg_temp.ok((select annee from public.groups where id = pg_temp.id(305)) = replace(public.centre_school_year(), '/', '-'),
   'an explicit NULL also takes the current school year');
 select pg_temp.fails($$insert into public.groups(name, session_type, niveau, annee) values ('Bad', 'Yearly', 'Child 1', '2026')$$,
@@ -137,9 +138,10 @@ select pg_temp.fails(format($$update public.groups set annee = '2027-2028' where
 select pg_temp.fails(format($$update public.groups set annee = null where id = %L$$, pg_temp.id(302)), '22023', 'egc.group_year_missing');
 update public.groups set annee = '2026-2027' where id = pg_temp.id(302);
 select pg_temp.ok((select annee from public.groups where id = pg_temp.id(302)) = '2026-2027', 'the same year in the other form is accepted');
-update public.groups set annee = '2028-2029' where id = pg_temp.id(304);
+-- CDC (128, S5): a year change re-checks the course dates, so they move with it.
+update public.groups set annee = '2028-2029', date_debut = '2028-09-01', date_fin = '2029-06-30' where id = pg_temp.id(304);
 select pg_temp.ok((select annee from public.groups where id = pg_temp.id(304)) = '2028-2029', 'an empty group changes year');
-update public.groups set annee = '2026-2027' where id = pg_temp.id(304);
+update public.groups set annee = '2026-2027', date_debut = '2026-09-01', date_fin = '2027-06-30' where id = pg_temp.id(304);
 
 -- place_learner_in_group (director, admin) and assign_receptionist_student_group (reception).
 select pg_temp.act(1);

@@ -51,11 +51,11 @@ try {
     body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'director' } }) });
   assert.equal(response.status, 200); user = (await response.json()).id;
   sql(`update public.profiles set role='receptionist' where id='${user}';
-    insert into public.groups(id,name,session_type,niveau,annee) values
-      ('${group}','${run}','Yearly','Child 1','2026-2027'),
-      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027'),
-      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027'),
-      ('${nextYearGroup}','${run} next year','Yearly','Child 1','2027-2028');
+    insert into public.groups(id,name,session_type,niveau,annee,date_debut,date_fin) values
+      ('${group}','${run}','Yearly','Child 1','2026-2027',null,null),
+      ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027','2026-09-01','2027-06-30'),
+      ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027',null,null),
+      ('${nextYearGroup}','${run} next year','Yearly','Child 1','2027-2028',null,null);
     -- Status follows enrollments (EGC); the two Enrolled files without any enrollment
     -- (paid on a historical receipt) are seeded as Production holds them, with
     -- triggers bypassed. EAP: no pre-enrollment exists; the paid (Confirmed) rows
