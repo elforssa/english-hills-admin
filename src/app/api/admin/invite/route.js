@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
 import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
@@ -20,6 +21,33 @@ const InviteSchema = z.object({
   studentIds: z.array(z.guid()).min(1).max(10).optional(),
   teacherId: z.guid().optional(),
 });
+
+const NOT_CONFIRMED = "Envoi non confirmé. Réessayez l'invitation; aucun rôle existant n'a été modifié.";
+
+// The route's answer never carries the queue id (the public functions already drop it).
+function answer(data) {
+  if (!data || typeof data !== 'object') return data;
+  const { queueId: _queueId, ...rest } = data;
+  return rest;
+}
+
+// Plan ELW-r3 section 4 (D2 = A): a confirmed account that is still pending gets a
+// sign-in e-mail, so a re-invitation always produces a working link. A cookie-less
+// anon client with the implicit flow: under the default templates the link lands on
+// /inscription-compte with a fragment, like an invitation. Never creates an account.
+async function sendSignInLink(email, request) {
+  const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    auth: { flowType: 'implicit', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { error } = await anon.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: new URL('/inscription-compte', request.url).toString(),
+    },
+  });
+  return !error;
+}
 
 // A closed portal.* refusal carries its French message; other errors stay generic.
 function portalRefusal(error) {
@@ -97,7 +125,23 @@ export async function POST(request) {
       ? "Ce compte existe déjà ou a changé. Utilisez la gestion des rôles puis réessayez."
       : "Échec de la préparation de l'invitation." }, { status });
   }
-  if (!data.needsDelivery) return NextResponse.json(data);
+  if (!data.needsDelivery) {
+    // The decision uses only needsDelivery, userId and the stored role, read with the
+    // caller's own client. An active account gets no e-mail, as before.
+    if (data.userId) {
+      const { data: target, error: targetError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.userId)
+        .maybeSingle();
+      if (targetError) return NextResponse.json({ error: NOT_CONFIRMED }, { status: 502 });
+      if (target?.role === 'pending' && !(await sendSignInLink(email, request))) {
+        // The queue row stays: the invitation can be retried.
+        return NextResponse.json({ error: NOT_CONFIRMED }, { status: 502 });
+      }
+    }
+    return NextResponse.json(answer(data));
+  }
 
   // Service key is used only for Auth delivery, never profile/queue writes.
   // Delivery and the DB transaction cannot be atomic: on failure the bounded,
@@ -106,7 +150,7 @@ export async function POST(request) {
   const redirectTo = new URL('/inscription-compte', request.url).toString();
   const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
   if (inviteError) {
-    return NextResponse.json({ error: "Envoi non confirmé. Réessayez l'invitation; aucun rôle existant n'a été modifié." }, { status: 502 });
+    return NextResponse.json({ error: NOT_CONFIRMED }, { status: 502 });
   }
-  return NextResponse.json(data);
+  return NextResponse.json(answer(data));
 }

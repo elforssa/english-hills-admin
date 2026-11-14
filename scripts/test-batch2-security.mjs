@@ -291,6 +291,9 @@ try {
       ok(await app(actor,'/api/admin/update-role',{userId:target.id,role}));
       assert.equal(getRole(target.id),role);
       setRole(target.id,'pending');
+      // ELW-r3 D2: each re-invite of this never-activated account sends a sign-in e-mail;
+      // wait past the local one-e-mail-per-second-per-address Auth limit (owner-approved 2026-11-14).
+      await new Promise(resolve=>setTimeout(resolve,1100));
       ok(await app(actor,'/api/admin/invite',{email:target.email,role,...(role==='teacher'?{teacherId:fixtureTeacher}:{})}));
       assert.equal(ok(await rpc(target,'apply_pending_role')),role); checks+=2;
     }

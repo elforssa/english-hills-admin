@@ -1,12 +1,18 @@
 // =============================================================================
 // /inscription-compte — public account-activation page
 //
-// Reached via the link in Supabase's invite email. The invite token is
-// exchanged for a session on mount (so we can show the invitee their email
-// and detect expired/invalid links immediately). On submit, the user sets
-// their password + full name; we then call apply_pending_role() to bump
-// their profile from 'pending' to the role queued by /api/admin/invite,
-// and redirect to the role-appropriate dashboard.
+// New-format links (plan ELW-r3) are verified on /auth/confirm by a click, which
+// then sends a never-activated account here with a session. A `token_hash` in
+// this page's address is never verified here: it is forwarded to /auth/confirm
+// with no Auth call. The fragment (#access_token) and ?code= branches stay for
+// invitations sent with the old template and for rollback; those tokens were
+// already verified by Supabase.
+//
+// Whether the form is shown is decided by the activation mark (a completed
+// profiles.full_name), never by the role: the AuthContext sweep may already have
+// applied the invited role. Submit order (review B7): the password, then the
+// name (the mark, the form's last write), then apply_pending_role() and the read
+// of the stored role.
 // =============================================================================
 
 'use client';
@@ -18,12 +24,13 @@ import { AlertCircle, ArrowRight, CheckCircle, Loader2, Lock, Mail, User as User
 import { getBrowserClient } from '@/lib/supabase';
 
 import { ROLE_HOME as PORTAL_FOR_ROLE } from '@/lib/roleAccess.mjs';
+import { destinationFor, isActivated, isSamePassword, MESSAGES, passwordErrorMessage } from '@/lib/authLinks.mjs';
 
 function InscriptionCompteInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
-  // phase: 'exchanging' | 'form' | 'submitting' | 'done' | 'expired'
+  // phase: 'exchanging' | 'form' | 'submitting' | 'done' | 'used' | 'activated'
   const [phase, setPhase]       = useState('exchanging');
   const [email, setEmail]       = useState('');
   const [prenom, setPrenom]     = useState('');
@@ -31,15 +38,26 @@ function InscriptionCompteInner() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
+  const [storedRole, setStoredRole] = useState(null);
 
-  // ── Exchange the invite code on mount ────────────────────────────────────
+  // ── Install an old-format session on mount; never verify a token_hash ────
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const sb = getBrowserClient();
       const tokenHash = searchParams.get('token_hash');
-      const otpType   = searchParams.get('type');
-      const code      = searchParams.get('code');
+      if (tokenHash !== null) {
+        // Plan ELW-r3 section 2: forward to the click-to-verify page, client-side,
+        // with no Auth call (an old bookmark or a template mistake cannot bring
+        // back verification on load).
+        const forward = new URLSearchParams();
+        forward.set('token_hash', tokenHash);
+        forward.set('type', searchParams.get('type') || 'invite');
+        window.location.replace(`/auth/confirm?${forward.toString()}`);
+        return;
+      }
+
+      const sb = getBrowserClient();
+      const code = searchParams.get('code');
 
       // Hash-based implicit flow: Supabase's default {{ .ConfirmationURL }}
       // template appends #access_token=…&refresh_token=… to the URL.
@@ -52,31 +70,15 @@ function InscriptionCompteInner() {
         hashRefreshToken = hashParams.get('refresh_token');
       }
 
-      const hasToken = !!(tokenHash || code || hashAccessToken);
-
-      // Drop any pre-existing local session before consuming the invite —
+      // Drop any pre-existing local session before installing the invitee's —
       // commonly the inviter's session in the same browser. Without this,
       // the singleton client can keep returning the inviter's user object
       // even after the new session is installed.
-      if (hasToken) {
+      if (code || hashAccessToken) {
         await sb.auth.signOut({ scope: 'local' });
       }
 
-      if (tokenHash) {
-        // Preferred path: the email template links directly to
-        //   /inscription-compte?token_hash=…&type=invite
-        // verifyOtp is a single POST and avoids the cross-domain cookie
-        // chain that breaks the ?code= flow in incognito / Safari.
-        const { error } = await sb.auth.verifyOtp({
-          token_hash: tokenHash,
-          type:       otpType || 'invite',
-        });
-        if (cancelled) return;
-        if (error) {
-          setPhase('expired');
-          return;
-        }
-      } else if (hashAccessToken) {
+      if (hashAccessToken) {
         // Hash-based implicit flow (default Supabase email template).
         // Install the invitee's tokens directly — no cookie exchange needed.
         const { error } = await sb.auth.setSession({
@@ -84,35 +86,46 @@ function InscriptionCompteInner() {
           refresh_token: hashRefreshToken || '',
         });
         if (cancelled) return;
+        // Clean up the hash so tokens aren't exposed in browser history.
+        window.history.replaceState(null, '', window.location.pathname);
         if (error) {
-          setPhase('expired');
+          setPhase('used');
           return;
         }
-        // Clean up the hash so tokens aren't exposed in browser history.
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
       } else if (code) {
         // Fallback: classic /verify → ?code= redirect from the default
-        // Supabase email template. Works when third-party cookies are
-        // allowed; breaks otherwise.
+        // Supabase email template. Works only in the browser that asked.
         const { error } = await sb.auth.exchangeCodeForSession(code);
         if (cancelled) return;
+        window.history.replaceState(null, '', window.location.pathname);
         if (error) {
-          setPhase('expired');
+          setPhase('used');
           return;
         }
       }
 
-      // The session now belongs to the invitee. (Refresh-mid-flow lands
-      // here with no token params; we fall back to whatever session is in
-      // cookies, e.g. a still-pending user mid-activation.)
+      // The session now belongs to the invitee (or, after a reload or a click on
+      // /auth/confirm, it is already in cookies).
       const { data: { user } } = await sb.auth.getUser();
       if (cancelled) return;
       if (!user) {
-        setPhase('expired');
+        setPhase('used');
         return;
       }
 
+      // The activation mark decides, not the role (plan ELW-r3, review B1).
+      const { data: profile, error: readError } = await sb
+        .from('profiles')
+        .select('full_name, role')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
       setEmail(user.email || '');
+      if (!readError && isActivated(profile)) {
+        setStoredRole(profile.role || null);
+        setPhase('activated');
+        return;
+      }
 
       // Best-effort name prefill if Supabase already has user_metadata.
       const existingFullName = user.user_metadata?.full_name || '';
@@ -148,33 +161,37 @@ function InscriptionCompteInner() {
     const sb = getBrowserClient();
     const fullName = `${prenom.trim()} ${nom.trim()}`;
 
-    const { error: updateError } = await sb.auth.updateUser({
-      password,
-      data: { full_name: fullName },
-    });
-    if (updateError) {
-      setErrorMsg(updateError.message || "Échec de l'activation. Veuillez réessayer.");
+    // (1) The password. Supabase refuses a password equal to the current one
+    // (same_password): it is already set, so the form continues.
+    const { error: updateError } = await sb.auth.updateUser({ password });
+    if (updateError && !isSamePassword(updateError)) {
+      setErrorMsg(passwordErrorMessage(updateError));
       setPhase('form');
       return;
     }
 
-    // Mirror full_name onto the profiles row so the rest of the app picks
-    // it up without a round-trip via user_metadata.
     const { data: { user }, error: userError } = await sb.auth.getUser();
     if (userError || !user) {
-      setErrorMsg("Impossible de vérifier ce compte. Veuillez rouvrir votre lien d'invitation.");
-      setPhase('form');
-      return;
-    }
-    const { error: profileError } = await sb.from('profiles').update({ full_name: fullName }).eq('id', user.id);
-    if (profileError) {
-      setErrorMsg("Le profil n'a pas pu être mis à jour. Veuillez réessayer.");
+      setErrorMsg(userError ? passwordErrorMessage(userError) : MESSAGES.sessionExpired);
       setPhase('form');
       return;
     }
 
-    // Apply the role queued by the inviter. The RPC returns the applied
-    // role (or null if none was queued — shouldn't happen for an invitee).
+    // (2) The name: the activation mark, the form's last write. Never present
+    // without a password.
+    const { data: written, error: profileError } = await sb
+      .from('profiles')
+      .update({ full_name: fullName })
+      .eq('id', user.id)
+      .select('id');
+    if (profileError || !written?.length) {
+      setErrorMsg(MESSAGES.nameFailed);
+      setPhase('form');
+      return;
+    }
+
+    // (3) Apply the role queued by the inviter (the AuthContext sweep may already
+    // have done it), then read the stored role. Neither writes for the form.
     let appliedRole = null;
     const { data: rpcRole, error: roleError } = await sb.rpc('apply_pending_role');
     if (roleError) {
@@ -199,7 +216,8 @@ function InscriptionCompteInner() {
     }
 
     if (!PORTAL_FOR_ROLE[appliedRole]) {
-      setErrorMsg("Aucun rôle actif n'est associé à cette invitation. Veuillez contacter l'administration.");
+      // The password is kept; the next password sign-in applies a new invitation.
+      setErrorMsg(MESSAGES.invitationInvalid);
       setPhase('form');
       return;
     }
@@ -232,29 +250,50 @@ function InscriptionCompteInner() {
           {phase === 'exchanging' && (
             <div className="flex flex-col items-center py-6 text-center">
               <Loader2 size={22} className="animate-spin mb-3" style={{ color: 'var(--brand)' }} />
-              <p className="text-sm text-muted-foreground">Vérification du lien d&apos;invitation…</p>
+              <p className="text-sm text-muted-foreground">Chargement…</p>
             </div>
           )}
 
-          {phase === 'expired' && (
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-                <AlertCircle size={22} className="text-red-600" />
+          {phase === 'used' && (
+            <div className="text-center space-y-4" data-state="used">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                <AlertCircle size={22} className="text-amber-700" />
+              </div>
+              <p className="text-sm text-foreground leading-relaxed">{MESSAGES.used}</p>
+              <div className="flex flex-col gap-2">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition bg-primary"
+                >
+                  Se connecter
+                </Link>
+                <Link href="/login?mode=reset" className="text-xs font-medium hover:underline" style={{ color: 'var(--brand)' }}>
+                  Mot de passe oublié ?
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {phase === 'activated' && (
+            <div className="text-center space-y-4" data-state="activated">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                <CheckCircle size={22} className="text-emerald-600" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-foreground mb-1.5">
-                  Lien d&apos;invitation expiré
-                </h1>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Ce lien d&apos;invitation a expiré. Veuillez contacter l&apos;administration.
+                <h1 className="text-lg font-semibold text-foreground mb-1.5">{MESSAGES.alreadyActivated}</h1>
+                <p className="text-sm text-muted-foreground">
+                  Vous êtes connecté avec <strong className="text-foreground">{email}</strong>.
                 </p>
               </div>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white rounded-lg hover:opacity-90 transition bg-primary"
+              <button
+                type="button"
+                onClick={() => router.replace(destinationFor(storedRole))}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white rounded-lg transition-all shadow-sm hover:shadow-md"
+                style={{ background: 'linear-gradient(135deg, #1E4D8B 0%, #1a3f75 100%)' }}
               >
-                Retour à la connexion
-              </Link>
+                Continuer vers mon espace
+                <ArrowRight size={14} />
+              </button>
             </div>
           )}
 
@@ -379,7 +418,7 @@ function InscriptionCompteInner() {
                 </div>
 
                 {errorMsg && (
-                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                  <div role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
                     {errorMsg}
                   </div>
                 )}

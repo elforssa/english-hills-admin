@@ -48,8 +48,9 @@ let checks = 0;
   const { sb } = client({ reads: [{ data: null, error: null }, failure] });
   assert.deepEqual(await resolveProfile(sb, user), { status: 'unavailable' }); checks += 1;
 }
-// The screen never covers the sign-in pages.
-for (const [path, shown] of [['/login', false], ['/login/callback', false], ['/dashboard', true], ['/', true], ['/loginx', true], ['/students/1', true]]) {
+// The screen never covers the sign-in pages nor the e-mail link page (plan ELW-r3).
+for (const [path, shown] of [['/login', false], ['/login/callback', false], ['/dashboard', true], ['/', true], ['/loginx', true], ['/students/1', true],
+  ['/auth/confirm', false], ['/auth', true], ['/auth/confirmx', true], ['/auth/confirm/x', true], ['/inscription-compte', true]]) {
   assert.equal(showsUnavailable(true, path), shown, path); checks += 1;
 }
 assert.equal(showsUnavailable(false, '/dashboard'), false); checks += 1;

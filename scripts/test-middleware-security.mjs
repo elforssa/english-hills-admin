@@ -114,6 +114,10 @@ assert.equal(expected('pending', ROOM), '/unauthorized'); assert.equal(expected(
 assert.equal(expected('receptionist', ROOM), null); assert.equal(expected('receptionist', '/online/room/x'), '/crm/leads');
 checks += 6;
 
+// E-mail link page (plan ELW-r3, section 5): exactly one new public path.
+const authLinkPaths = ['/auth/confirm', '/auth', '/auth/confirmx', '/auth/confirm/x', '/AUTH/confirm'];
+for (const path of authLinkPaths) { assert.equal(matched(path), true, 'Behind middleware: ' + path); checks++; }
+
 // Execute the unmodified middleware body with only its Auth dependency replaced.
 const middlewareSource = readFileSync(new URL('src/middleware.js', root), 'utf8')
   .replace(/^import .*;\n/gm, '').replace('export async function middleware', 'async function middleware')
@@ -133,7 +137,7 @@ for (const role of roles) {
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role === 'missing' ? null : { role } }) }) }) }),
   });
   const middleware = new Function('createServerClient', 'NextResponse', 'receptionistCanAccess', 'isDirectorAnalyticsPath', 'isDirectorLifecyclePath', 'ROLE_HOME', 'isOnlineRoomPath', 'familyCanAccess', middlewareSource + '\nreturn middleware;')(fake, NextResponse, receptionistCanAccess, isDirectorAnalyticsPath, isDirectorLifecyclePath, ROLE_HOME, isOnlineRoomPath, familyCanAccess);
-  for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite', ...onlineDenials]) {
+  for (const path of ['/dashboard', '/teachers', '/login', '/login/callback', '/api/admin/invite', ...onlineDenials, ...authLinkPaths]) {
     const r = await middleware(new NextRequest(app + path));
     for (const cookie of cookies) {
       const actual = r.cookies.get(cookie.name);
@@ -142,8 +146,14 @@ for (const role of roles) {
       if (cookie.options.secure) assert.equal(actual.secure, true);
       if (cookie.options.maxAge !== undefined) assert.equal(actual.maxAge, cookie.options.maxAge);
     }
-    if (!path.startsWith('/login') && !path.startsWith('/api/')) {
+    // The e-mail link page (plan ELW-r3): public for every session, never a redirect,
+    // with no Referer leaving it; look-alikes stay gated.
+    if (path === '/auth/confirm') {
+      assert.equal(r.status, 200, role + ' /auth/confirm'); assert.equal(r.headers.get('location'), null);
+      assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
+    } else if (!path.startsWith('/login') && !path.startsWith('/api/')) {
       const target = expected(role, path);
+      assert.notEqual(r.headers.get('referrer-policy'), 'no-referrer');
       assert.equal(r.status, target ? 307 : 200);
       if (target) assert.equal(new URL(r.headers.get('location'), app).pathname, target);
     }
@@ -251,6 +261,28 @@ try {
       assert.deepEqual(await closed.json(), { error: 'Les inscriptions en ligne sont fermées. Contactez le centre.' });
       checks += 2;
     }
+    {
+      // Plan ELW-r3: /auth/confirm answers 200 for every session (pending included), with
+      // Referrer-Policy: no-referrer on the response; the server never renders the token.
+      const token = 'a3f1c9e0b2d84f6a9c1e7b5d3f0a2c4e6b8d0f1a3c5e7b9d1f3a5c7e';
+      const r = await fetch(app + '/auth/confirm?token_hash=' + token + '&type=invite', { headers: { Cookie }, redirect: 'manual' });
+      assert.equal(r.status, 200, role + ' /auth/confirm');
+      assert.equal(r.headers.get('referrer-policy'), 'no-referrer', role + ' /auth/confirm referrer');
+      const html = await r.text();
+      assert.ok(!html.includes(token), 'the token is not rendered by the server');
+      assert.match(html, /<meta name="robots" content="noindex, nofollow/); assert.match(html, /<title>English Hills<\/title>/);
+      for (const path of ['/auth', '/auth/confirmx', '/auth/confirm/x']) {
+        const gated = await fetch(app + path, { headers: { Cookie }, redirect: 'manual' });
+        const target = expected(role, path);
+        assert.equal(gated.status, target ? 307 : 404, role + ' ' + path);
+        if (target) assert.equal(new URL(gated.headers.get('location'), app).pathname, target, role + ' ' + path);
+        assert.notEqual(gated.headers.get('referrer-policy'), 'no-referrer');
+        await gated.arrayBuffer(); checks++;
+      }
+      const login = await fetch(app + '/login', { headers: { Cookie }, redirect: 'manual' });
+      assert.equal(login.headers.get('referrer-policy'), 'strict-origin-when-cross-origin'); await login.arrayBuffer();
+      checks += 3;
+    }
     for (const path of ['/dashboard', '/groups/00000000-0000-4000-8000-000000000001']) {
       for (const extras of [{ RSC: '1' }, { RSC: '1', 'Next-Router-Prefetch': '1', purpose: 'prefetch' }]) {
         const r = await fetch(app + path + '?_rsc=fixture', { headers: { Cookie, ...extras }, redirect: 'manual' });
@@ -270,7 +302,7 @@ try {
       assert.equal((await foreign.json()).error, 'Requête refusée : origine non autorisée.'); checks++;
     }
   }
-  console.log('PASS direct HTTP full role/route matrix, RSC/prefetch and independent API 401/403 gates');
+  console.log('PASS direct HTTP full role/route matrix, RSC/prefetch, /auth/confirm public with no-referrer, and independent API 401/403 gates');
   const beforeRefresh = refreshes;
   for (const role of ['parent', 'missing', 'admin']) {
     const r = await fetch(app + '/dashboard', { headers: { Cookie: await cookie(role, true) }, redirect: 'manual' });

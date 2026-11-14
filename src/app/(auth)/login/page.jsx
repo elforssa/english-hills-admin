@@ -1,22 +1,31 @@
 // =============================================================================
 // /login — primary sign-in page.
 //
-// Default: email + password. Falls back to a magic-link flow (Supabase OTP)
-// for users who have forgotten or never set a password.
+// Three modes (plan ELW-r3, section 3): `password` (default), `link`
+// (« Recevoir un lien de connexion », Supabase OTP, never creates an account)
+// and `reset` (« Mot de passe oublié ? », a new-password e-mail). `?mode=` and
+// `?error=` are closed lists; nothing from the address is rendered.
+//
+// Both request forms answer the same sentence for every answer Supabase gives,
+// so the page never reveals whether an address has an account. The redirect
+// values are kept exactly so a template rollback restores today's behaviour.
 //
 // After a successful password sign-in we apply any queued pending_role and
-// route the user to their role's dashboard. Magic-link recipients land back
-// on /login/callback, which performs the same role-based redirect.
+// route the user to their role's dashboard. Old-format links land back on
+// /login/callback, which performs the same role-based redirect.
 // =============================================================================
 
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getBrowserClient } from '@/lib/supabase';
 import { ArrowRight, CheckCircle, KeyRound, Loader2, Lock, Mail } from 'lucide-react';
 
 import { loginDestination } from '@/lib/roleAccess.mjs';
+import {
+  parseLoginError, parseLoginMode, REQUEST_COOLDOWN_SECONDS, requestMessage, requestOutcome,
+} from '@/lib/authLinks.mjs';
 
 function safeReturnTo(raw) {
   if (typeof raw !== 'string' || raw.length === 0) return null;
@@ -44,16 +53,27 @@ function LoginInner() {
   const searchParams = useSearchParams();
   const returnTo     = safeReturnTo(searchParams.get('returnTo'));
 
-  // mode: 'password' (default) | 'magic'
-  const [mode, setMode] = useState('password');
+  const linkError    = parseLoginError(searchParams.get('error'));
+
+  // mode: 'password' (default) | 'link' | 'reset'
+  const [mode, setMode] = useState(() => linkError?.mode || parseLoginMode(searchParams.get('mode')) || 'password');
+  // A failed old-format link (closed map, never echoed).
+  const [linkNotice, setLinkNotice] = useState(linkError?.message || null);
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
 
-  // password mode: idle | signing-in | error
-  // magic mode:    idle | sending | sent | error
+  // password mode:      idle | signing-in | error
+  // link / reset modes: idle | sending | sent | connection
   const [status, setStatus] = useState('idle');
   const [error,  setError]  = useState(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
 
   // ── Password sign-in ─────────────────────────────────────────────────────
   async function handlePasswordSubmit(event) {
@@ -99,39 +119,54 @@ function LoginInner() {
     router.replace(target);
   }
 
-  // ── Magic-link request ───────────────────────────────────────────────────
-  async function handleMagicSubmit(event) {
+  // ── Sign-in link or new-password request ─────────────────────────────────
+  async function handleRequestSubmit(event) {
     event.preventDefault();
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) return;
+    if (!trimmedEmail || cooldown > 0) return;
 
     setStatus('sending');
     setError(null);
+    setLinkNotice(null);
 
     const sb = getBrowserClient();
-    const next = returnTo ? `?next=${encodeURIComponent(returnTo)}` : '';
-    const { error: otpError } = await sb.auth.signInWithOtp({
-      email: trimmedEmail,
-      options: {
-        emailRedirectTo: `${window.location.origin}/login/callback${next}`,
-        // Accounts come only from invitations (plan PRF-r2 D11): an unknown
-        // address gets no account from the magic-link form.
-        shouldCreateUser: false,
-      },
-    });
-
-    if (otpError) {
-      setError(frenchifyAuthError(otpError.message));
-      setStatus('error');
-      return;
+    let requestError = null;
+    try {
+      if (mode === 'reset') {
+        const { error: resetError } = await sb.auth.resetPasswordForEmail(trimmedEmail, {
+          redirectTo: `${window.location.origin}/login/callback`,
+        });
+        requestError = resetError;
+      } else {
+        const next = returnTo ? `?next=${encodeURIComponent(returnTo)}` : '';
+        const { error: otpError } = await sb.auth.signInWithOtp({
+          email: trimmedEmail,
+          options: {
+            emailRedirectTo: `${window.location.origin}/login/callback${next}`,
+            // Accounts come only from invitations (plan PRF-r2 D11): an unknown
+            // address gets no account from this form.
+            shouldCreateUser: false,
+          },
+        });
+        requestError = otpError;
+      }
+    } catch (thrown) {
+      requestError = thrown;
     }
-    setStatus('sent');
+
+    // Same sentence for every answer, 429 included (plan ELW-r3, review B5); only a
+    // request that got no answer at all shows the connection message.
+    setError(requestMessage(requestError));
+    const outcome = requestOutcome(requestError);
+    setStatus(outcome);
+    if (outcome === 'sent') setCooldown(REQUEST_COOLDOWN_SECONDS);
   }
 
   function switchTo(nextMode) {
     setMode(nextMode);
     setStatus('idle');
     setError(null);
+    setLinkNotice(null);
   }
 
   return (
@@ -153,30 +188,7 @@ function LoginInner() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-7">
-          {mode === 'magic' && status === 'sent' ? (
-            <div className="text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
-                <CheckCircle size={22} className="text-emerald-600" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground mb-1.5">
-                  Lien de connexion envoyé
-                </h1>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Un lien de connexion vient d&apos;être envoyé à <strong className="text-foreground">{email}</strong>.
-                  <br />
-                  Cliquez sur le lien dans votre boîte mail pour vous connecter. Le lien expire dans 1 heure.
-                </p>
-              </div>
-              <button
-                onClick={() => { setEmail(''); switchTo('password'); }}
-                className="text-xs font-medium hover:underline"
-                style={{ color: 'var(--brand)' }}
-              >
-                Retour à la connexion par mot de passe
-              </button>
-            </div>
-          ) : mode === 'password' ? (
+          {mode === 'password' ? (
             <>
               <h1 className="text-xl font-bold text-foreground mb-1">Connexion</h1>
               <p className="text-sm text-muted-foreground mb-6">
@@ -233,7 +245,7 @@ function LoginInner() {
                 <div className="text-right">
                   <button
                     type="button"
-                    onClick={() => switchTo('magic')}
+                    onClick={() => switchTo('reset')}
                     className="text-xs font-medium hover:underline"
                     style={{ color: 'var(--brand)' }}
                   >
@@ -264,33 +276,41 @@ function LoginInner() {
               <div className="mt-5 pt-4 border-t border-border text-center">
                 <button
                   type="button"
-                  onClick={() => switchTo('magic')}
+                  onClick={() => switchTo('link')}
                   className="text-xs font-medium hover:underline inline-flex items-center gap-1.5"
                   style={{ color: 'var(--brand)' }}
                 >
                   <KeyRound size={12} />
-                  Connexion par lien magique
+                  Recevoir un lien de connexion
                 </button>
               </div>
             </>
           ) : (
             <>
               <h1 className="text-xl font-bold text-foreground mb-1">
-                Connexion par lien magique
+                {mode === 'reset' ? 'Mot de passe oublié ?' : 'Recevoir un lien de connexion'}
               </h1>
               <p className="text-sm text-muted-foreground mb-6">
-                Vous recevrez un lien de connexion sécurisé par email. Utile si vous avez oublié votre mot de passe.
+                {mode === 'reset'
+                  ? 'Saisissez votre adresse email : vous recevrez un lien pour choisir un nouveau mot de passe.'
+                  : 'Saisissez votre adresse email : vous recevrez un lien de connexion sécurisé.'}
               </p>
 
-              <form onSubmit={handleMagicSubmit} className="space-y-4">
+              {linkNotice && (
+                <div role="alert" data-testid="login-link-error" className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-4">
+                  {linkNotice}
+                </div>
+              )}
+
+              <form onSubmit={handleRequestSubmit} className="space-y-4" data-mode={mode}>
                 <div>
-                  <label htmlFor="magic-email" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                  <label htmlFor="request-email" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
                     Adresse email
                   </label>
                   <div className="relative">
                     <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
                     <input
-                      id="magic-email"
+                      id="request-email"
                       type="email"
                       required
                       autoComplete="email"
@@ -304,15 +324,21 @@ function LoginInner() {
                   </div>
                 </div>
 
-                {error && (
-                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                {status === 'sent' && error && (
+                  <div role="status" data-testid="request-answer" className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex gap-2">
+                    <CheckCircle size={14} className="shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                {status === 'connection' && error && (
+                  <div role="alert" data-testid="request-answer" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
                     {error}
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={status === 'sending' || !email}
+                  disabled={status === 'sending' || !email || cooldown > 0}
                   className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md"
                   style={{ background: 'linear-gradient(135deg, #1E4D8B 0%, #1a3f75 100%)' }}
                 >
@@ -321,14 +347,27 @@ function LoginInner() {
                       <Loader2 size={14} className="animate-spin" />
                       Envoi en cours…
                     </>
+                  ) : cooldown > 0 ? (
+                    <>Nouvel envoi possible dans {cooldown} s</>
                   ) : (
                     <>
-                      Recevoir un lien de connexion
+                      {mode === 'reset' ? 'Recevoir le lien' : 'Recevoir un lien de connexion'}
                       <ArrowRight size={14} />
                     </>
                   )}
                 </button>
               </form>
+
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => switchTo(mode === 'reset' ? 'link' : 'reset')}
+                  className="text-xs font-medium hover:underline"
+                  style={{ color: 'var(--brand)' }}
+                >
+                  {mode === 'reset' ? 'Recevoir plutôt un lien de connexion' : 'Mot de passe oublié ?'}
+                </button>
+              </div>
 
               <div className="mt-5 pt-4 border-t border-border text-center">
                 <button
