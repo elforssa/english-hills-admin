@@ -247,7 +247,7 @@ Open items:
 
 ## E-mail links that work: release closeout (R0–R3) — 2026-11-14
 
-**MERGED / DEPLOYED / FOUR PRODUCTION E-MAIL TEMPLATES REPLACED. R4 PRODUCTION PROOF POSTPONED BY OWNER DECISION; R5 TEST-ACCOUNT CLEAN-UP NOT STARTED.** No migration. Owner decision ([OWNER_DECISIONS](OWNER_DECISIONS.md#e-mail-links-that-work--released-2026-11-14)); plan [ELW-r3](../architecture/plans/email-links-that-work.md#release-record-r0r6--2026-11-14), [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md), Tier 3. Dates Casablanca.
+**MERGED / DEPLOYED / FOUR PRODUCTION E-MAIL TEMPLATES REPLACED. R4 PRODUCTION PROOF POSTPONED BY OWNER DECISION; R5 TEST-ACCOUNT CLEAN-UP NOT STARTED.** No migration. Owner decision ([OWNER_DECISIONS](OWNER_DECISIONS.md#e-mail-links-that-work--released-2026-11-14)); plan [ELW-r3](../architecture/plans/email-links-that-work.md#release-record-r0-to-r6-2026-11-14), [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md), Tier 3. Dates Casablanca.
 
 - **R0 (read-only, by the guide):** four default templates (rollback text in the owner's project notes, not in the repository); Site URL `…/inscription-compte` and an allow-list with only `/login/callback` (stop conditions); sign-ups ON, confirm e-mail ON; custom SMTP (Resend); 30 e-mails/h, 60 s per address. Not read: link lifetime, secure-password-change setting, Auth version. Blank-name active accounts: director, receptionist, one test student.
 - **Owner-approved fix before R3:** Site URL `https://admin.english-hills.com`; `https://admin.english-hills.com/inscription-compte` added to Redirect URLs.

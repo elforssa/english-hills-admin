@@ -1,6 +1,6 @@
 # E-mail links that work — architecture, revision ELW-r3
 
-**Release: RELEASED 2026-11-14 (R0–R3); R4 Production proof POSTPONED by owner decision; R5 test-account clean-up NOT STARTED.** PR #190 merged as `87ab19e`; the four Production e-mail templates replaced by the repository text. See the [release record](#release-record-r0r6--2026-11-14). **Implementation: IMPLEMENTED ON BRANCH `feat/email-links-that-work`, in the implementation pull request (2026-11-14); not merged, not deployed; the Production e-mail templates are unchanged.** See the [implementation record](#implementation-record-elw-r3-2026-11-14). **Plan approval: APPROVED FOR IMPLEMENTATION** by the owner (Maroine, 2026-11-14) at exact head `f43e0b72b5290010a514d3cc9b974d44c47de4ad`, D1–D5 = A (approval comment on PR #188; the plan merged as `15befb0`). Merge, the dashboard steps and every Production step still need the owner's separate approval ([release steps](#release-steps)).
+**Release: RELEASED 2026-11-14 (R0–R3); R4 Production proof POSTPONED by owner decision; R5 test-account clean-up NOT STARTED.** PR #190 merged as `87ab19e`; the four Production e-mail templates replaced by the repository text. See the [release record](#release-record-r0-to-r6-2026-11-14). **Implementation: IMPLEMENTED ON BRANCH `feat/email-links-that-work`, in the implementation pull request (2026-11-14); not merged, not deployed; the Production e-mail templates are unchanged.** See the [implementation record](#implementation-record-elw-r3-2026-11-14). **Plan approval: APPROVED FOR IMPLEMENTATION** by the owner (Maroine, 2026-11-14) at exact head `f43e0b72b5290010a514d3cc9b974d44c47de4ad`, D1–D5 = A (approval comment on PR #188; the plan merged as `15befb0`). Merge, the dashboard steps and every Production step still need the owner's separate approval ([release steps](#release-steps)).
 
 **Status at plan approval: PROPOSED (2026-11-14). Not approved, not implemented.** Revision ELW-r2 applies the independent review of ELW-r1 at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76` (CHANGES REQUIRED: B1–B6, N1–N9 and test gaps; [review corrections](#review-corrections-elw-r2)) and records the owner's answers D1–D5 = A (Maroine, 2026-11-14). Revision ELW-r3 applies the re-review of ELW-r2 at head `d5878d953c1b61b6d54ddcd2b90cf0335f4061c6` (CHANGES REQUIRED: B7, B8, N1–N5; [corrections](#review-corrections-elw-r3)); it needs no new owner decision and awaits re-review and owner approval. Architecture only: no application code, no migration, no Supabase or Vercel change is made by this plan. **Tier 3** (sign-in, invitation and password paths for every role; Supabase Auth e-mail templates and URL configuration in Production; a new public page). Presence in the [plans index](README.md) is not approval.
 
@@ -483,7 +483,7 @@ The French wording of the screens and the four e-mails above is approved with th
 - The owner-accepted Production consequence of D2 (a second re-invitation of the same never-activated address within about a minute shows « Envoi non confirmé ») is in the staff note under [release steps](#release-steps).
 - SECURITY_RULES, WORKFLOWS, CURRENT_STATE and the ADR-017 status change at R6, not in this PR.
 
-# Release record (R0–R6) — 2026-11-14
+# Release record R0 to R6, 2026-11-14
 
 All dates 2026-11-14, Casablanca. Each step under the owner's approval (Maroine).
 
