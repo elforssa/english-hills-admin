@@ -376,7 +376,7 @@ The French wording of the screens and the four e-mails above is approved with th
 - **Owner answers (Maroine, 2026-11-14, with the ELW-r2 revision task):** D1 = A, D2 = A, D3 = A, D4 = A, D5 = A.
 - **Independent review of ELW-r1** at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76`: CHANGES REQUIRED. Applied in ELW-r2.
 - **Independent re-review of ELW-r2** at head `d5878d953c1b61b6d54ddcd2b90cf0335f4061c6`: CHANGES REQUIRED (B7, B8, N1–N5). Applied in ELW-r3; no new owner decision.
-- **Plan approval:** APPROVED FOR IMPLEMENTATION by the owner (Maroine, 2026-11-14) at exact head `f43e0b72b5290010a514d3cc9b974d44c47de4ad`, D1–D5 = A, with review notes N1–N3 for the implementation (comment on PR #188; plan merged as `15befb0`). Before that approval: ELW-r3 awaited re-review of its exact head and the owner's approval. Recorded also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#e-mail-links-that-work--proposed-2026-11-14).
+- **Plan approval:** APPROVED FOR IMPLEMENTATION by the owner (Maroine, 2026-11-14) at exact head `f43e0b72b5290010a514d3cc9b974d44c47de4ad`, D1–D5 = A, with review notes N1–N3 for the implementation (comment on PR #188; plan merged as `15befb0`). Before that approval: ELW-r3 awaited re-review of its exact head and the owner's approval. Recorded also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#e-mail-links-that-work--released-2026-11-14).
 
 # Review corrections (ELW-r2)
 
