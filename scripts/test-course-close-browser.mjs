@@ -74,7 +74,7 @@ async function signIn(key, landing, onRequest = null) {
   await page.goto(APP + '/login');
   await page.waitForLoadState('networkidle');
   // Prove React is handling events before filling the login fields.
-  await page.getByRole('button', { name: 'Connexion par lien magique', exact: true }).click();
+  await page.getByRole('button', { name: 'Recevoir un lien de connexion', exact: true }).click();
   await page.getByRole('button', { name: 'Retour à la connexion par mot de passe', exact: true }).click();
   await page.locator('input[type=email]').fill(users[key].email);
   await page.locator('input[type=password]').fill(password);

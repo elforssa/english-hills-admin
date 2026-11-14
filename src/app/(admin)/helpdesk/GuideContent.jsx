@@ -53,7 +53,7 @@ export default function GuideContent() {
 </ol>
 <ul className="tight">
 <li>Mot de passe oublié&nbsp;: <span className="ui">Mot de passe oublié&nbsp;?</span> sous le champ du mot de passe.</li>
-<li>Autre option&nbsp;: <span className="ui">Connexion par lien magique</span>. Vous recevez un lien par email, valable 1 heure.</li>
+<li>Autre option&nbsp;: <span className="ui">Recevoir un lien de connexion</span>, en bas de la page. Vous recevez un lien par email, valable 1 heure&nbsp;; ouvrez-le puis appuyez sur <span className="ui">Se connecter</span>. Pour choisir un nouveau mot de passe, utilisez plutôt <span className="ui">Mot de passe oublié&nbsp;?</span>.</li>
 <li>Pour quitter&nbsp;: <span className="ui">Déconnexion</span>, en bas du menu de gauche. Il n’y a pas de message de confirmation.</li>
 </ul>
 <div className="callout warn">
