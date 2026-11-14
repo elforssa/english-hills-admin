@@ -1,6 +1,6 @@
-# E-mail links that work — architecture, revision ELW-r2
+# E-mail links that work — architecture, revision ELW-r3
 
-**Status: PROPOSED (2026-11-14). Not approved, not implemented.** Revision ELW-r2 applies the independent review of ELW-r1 at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76` (CHANGES REQUIRED: B1–B6, N1–N9 and test gaps; [review corrections](#review-corrections-elw-r2)) and records the owner's answers D1–D5 = A (Maroine, 2026-11-14). It awaits re-review and owner approval. Architecture only: no application code, no migration, no Supabase or Vercel change is made by this plan. **Tier 3** (sign-in, invitation and password paths for every role; Supabase Auth e-mail templates and URL configuration in Production; a new public page). Presence in the [plans index](README.md) is not approval.
+**Status: PROPOSED (2026-11-14). Not approved, not implemented.** Revision ELW-r2 applies the independent review of ELW-r1 at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76` (CHANGES REQUIRED: B1–B6, N1–N9 and test gaps; [review corrections](#review-corrections-elw-r2)) and records the owner's answers D1–D5 = A (Maroine, 2026-11-14). Revision ELW-r3 applies the re-review of ELW-r2 at head `d5878d953c1b61b6d54ddcd2b90cf0335f4061c6` (CHANGES REQUIRED: B7, B8, N1–N5; [corrections](#review-corrections-elw-r3)); it needs no new owner decision and awaits re-review and owner approval. Architecture only: no application code, no migration, no Supabase or Vercel change is made by this plan. **Tier 3** (sign-in, invitation and password paths for every role; Supabase Auth e-mail templates and URL configuration in Production; a new public page). Presence in the [plans index](README.md) is not approval.
 
 Baseline: `origin/main` `9f0c911fa52a32351a4ec79d5d2e00ffa1c3fbd6` (2026-11-14). Source: PR A of the R4 diagnosis of 2026-11-14, findings 1, 2 and 3. Related: [portal readiness PRF-r2](portal-readiness.md) (D11 sign-in rules, D10 origin check), [ADR-011](../decisions/ADR-011-portal-access-model.md), proposed [ADR-017](../decisions/ADR-017-auth-links-verify-on-click.md).
 
@@ -80,7 +80,9 @@ Baseline: `origin/main` `9f0c911fa52a32351a4ec79d5d2e00ffa1c3fbd6` (2026-11-14).
 | Monitoring | [rumScrub](../../../src/lib/rumScrub.mjs) strips query and fragment. [sentry-scrub](../../../src/lib/sentry-scrub.js) removes the query from **absolute** `http(s)` addresses, from values under keys named like `url`/`href`/`src`, and from the request context. It does **not** remove it from a relative path under another key: a navigation breadcrumb's `from` / `to` (`/auth/confirm?token_hash=…`) would keep the token. CSP `connect-src` already allows the Supabase project ([next.config.mjs](../../../next.config.mjs)); `Referrer-Policy: strict-origin-when-cross-origin`. | The Sentry filter needs a change (review B4). No CSP change. |
 | Libraries | `@supabase/supabase-js` and `auth-js` 2.105.4: `verifyOtp({ token_hash, type })` is available. Supabase's [e-mail template guide](https://supabase.com/docs/guides/auth/auth-email-templates) documents `{{ .SiteURL }}`, `{{ .TokenHash }}`, the prefetch problem and the custom-link remedy, and uses `type=email` for sign-in and sign-up links. | — |
 
-Not verified here (read at R0): the Production templates, Site URL, redirect allow-list, link lifetime, sign-up and confirmation settings, Auth rate limits, and the state of the accounts r4a and r4b.
+Not verified here (read at R0): the Production templates, Site URL, redirect allow-list, link lifetime, sign-up and confirmation settings, the Auth version, Auth rate limits, and the state of the accounts r4a and r4b.
+
+**If sign-ups are disabled in Production** (read at R0): a sign-in link requested for an invited address that is not confirmed yet sends nothing, and the form shows the same neutral sentence as for any address. « Mot de passe oublié ? » still works for that person and leads to the activation form, and so does a re-invitation by staff. Sign-ups must **not** be enabled to change this: the Confirm signup template is prepared only so that, where Supabase does send that e-mail, its link is a click-to-verify link.
 
 # Scope and non-goals
 
@@ -138,7 +140,7 @@ Why this option and not stopping the sweep on these two pages:
 
 | Case | What happens |
 | --- | --- |
-| Invitation, happy path | Click → verified → the sweep may apply the role at once → no mark → activation form → submit sets password and name, calls `apply_pending_role()` (nothing left to apply if the sweep won), reads the stored role → the role's home. |
+| Invitation, happy path | Click → verified → the sweep may apply the role at once → no mark → activation form → submit sets the password first, then writes the name (the mark, the form's last write), then calls `apply_pending_role()` (nothing left to apply if the sweep won) and reads the stored role → the role's home. |
 | Reload during the form | `/inscription-compte` with a session and no mark → the form again, whatever the role now is. |
 | Old-format invitation (fragment or `?code=`) | Lands on `/inscription-compte` as today; the session is installed; no mark → the form. Invariant 7 holds. |
 | Recovery or sign-in link for a never-activated account, including reload | Verified → no mark → `/inscription-compte` → the form (it sets the password the person asked for). A reload shows the form again. |
@@ -151,13 +153,17 @@ Why this option and not stopping the sweep on these two pages:
 - The `#access_token` fragment and `?code=` branches stay, for invitations sent before the template change and for rollback. They do not carry a link token: Supabase has already verified it.
 - After the session is known: activation mark present → « Votre compte est déjà activé. » and the destination (finding 3). No mark → the form, whatever the role.
 - No session and no token, or a failed old-format exchange → the same used-or-expired screen and wording as the landing page, instead of « expiré ».
+- **Submit order (review B7).** (1) the password, with `updateUser({ password })`; (2) the name, written to the caller's own `profiles.full_name`: this is the activation mark and the form's last write; (3) `apply_pending_role()` and the read of the stored role, which write nothing on behalf of the form. The mark is therefore never present without a password.
+- **An account that already has this password.** Supabase refuses a password equal to the current one (HTTP 422, code `same_password`, « New password should be different from the old password »). The form treats that answer as "password already set" and continues to the name write. This covers an active account with a blank name that re-enters its current password, and a retry after the name write failed.
+- **A failed name write** after the password succeeded shows « Votre nom n'a pas pu être enregistré. Réessayez. » and keeps the form; the retry, with the same password, passes through the rule above.
+- **Auth errors are never shown as received.** Closed French map, used by this form and by the new-password form of the landing page: weak password → « Ce mot de passe est trop faible. Choisissez-en un autre d'au moins 8 caractères. »; missing or expired session (401, 403) → « Votre session a expiré. Rouvrez votre lien ou demandez-en un nouveau. »; 429 → « Trop de tentatives. Réessayez dans quelques minutes. »; no answer → the connection message; anything else → « Le mot de passe n'a pas pu être enregistré. Réessayez. » On the new-password form, `same_password` also counts as success.
 - Submit, when no role is active afterwards (`apply_pending_role()` applied nothing and the stored role is still pending): « Votre invitation n'est plus valide. Demandez au centre de vous réinviter, puis connectez-vous avec le mot de passe que vous venez de choisir. » (replaces today's « Aucun rôle actif… »). The password is kept; the next password sign-in applies the new invitation, as it does today. The implementer confirms on the local stack that a still-pending account can write its own name; if it cannot, this message is shown at that point instead of the profile error, and no policy is changed.
 
 ## 3. Login page `/login`
 
 - Modes: `password` (default), `link` (« Recevoir un lien de connexion »), `reset` (« Mot de passe oublié ? »). `?mode=reset` and `?mode=link` preselect a mode (closed list).
 - « Mot de passe oublié ? » calls `resetPasswordForEmail(email, { redirectTo: <origin>/login/callback })`. « Recevoir un lien de connexion » keeps `signInWithOtp` with `shouldCreateUser: false` and today's `emailRedirectTo`. The redirect values are kept exactly so a template rollback restores today's behaviour.
-- **Same answer for every address (review B5).** Both forms end on « Si un compte existe pour cette adresse, un e-mail vient de lui être envoyé. Pensez à vérifier vos courriers indésirables. » for **every** answer Supabase gives: success and any error status, 429 included (Supabase's one-per-minute limit applies only to an existing account, so a rate-limit message would disclose it). The only other message is for a request that got no answer at all: « Connexion impossible. Vérifiez votre connexion puis réessayez. » The submit button stays disabled for 60 seconds after a send.
+- **Same answer for every address (review B5).** Both forms end on « Si un compte existe pour cette adresse, un e-mail vient de lui être envoyé. Pensez à vérifier vos courriers indésirables. » for **every** answer Supabase gives: success and any error status, 429 included (Supabase's one-per-minute limit applies only to an existing account, so a rate-limit message would disclose it). The only other message is for a request that got no answer at all: « Connexion impossible. Vérifiez votre connexion puis réessayez. » The submit button stays disabled for 60 seconds after every answered request, whatever the answer.
 - `?error=` is read from a closed map and never echoed: `callback_failed` and `missing_code` → « Ce lien de connexion n'a pas pu être vérifié. Il a peut-être déjà été utilisé, a expiré, ou a été ouvert dans un autre navigateur. Demandez un nouveau lien. » and the page opens in `link` mode. Unknown values show nothing.
 - [login/callback](../../../src/app/(auth)/login/callback/route.js) is unchanged (old links, rollback).
 
@@ -182,7 +188,7 @@ When the invitation function answers `needsDelivery = false` with a `userId`, an
 - [sessionProfile](../../../src/lib/sessionProfile.mjs): the retry screen is not shown on `/auth/confirm` (same treatment as `/login`).
 - **Sentry (review B4).** [sentry-scrub](../../../src/lib/sentry-scrub.js) is changed so that no `token_hash` value can leave the browser: the query and fragment are removed from relative paths as well as absolute addresses (breadcrumb `from` and `to` included), and any `token_hash=…` left in free text is redacted.
 - **Origin guard:** the plan adds no cookie-authenticated state-changing route; verification, reset request and password change go from the browser to Supabase Auth, as sign-in does today. The existing `rejectCrossOrigin` on the invite route is unchanged.
-- **Rate limits:** Supabase Auth's own limits apply (verifications per IP, one e-mail per address per minute, e-mails per hour). They are read at R0 and recorded. The application adds the 60-second button cooldown only.
+- **Rate limits:** Supabase Auth's own limits apply (verifications per IP, one e-mail per address per minute, e-mails per hour). They are read at R0 and recorded. The application adds the 60-second button cooldown (after every answered request) only.
 - **CSP:** unchanged.
 - **Logs:** no `console` output on these pages; no parameter is sent to Sentry, speed monitoring or the activity log.
 
@@ -198,10 +204,12 @@ Kept in the repository as `supabase/templates/invite.html`, `magic_link.html`, `
 | --- | --- | --- |
 | Invite user | `invite` | The invitation token. |
 | Magic Link | `email` | Supabase's current value for a sign-in link; `magiclink` is the older spelling and is still accepted by the page. |
-| Confirm signup | `email` | Sent instead of the Magic Link e-mail when a sign-in link is requested for an invited address that is not confirmed yet (review B3). |
+| Confirm signup | `email` | Where sign-ups are enabled, sent instead of the Magic Link e-mail when a sign-in link is requested for an invited address that is not confirmed yet (review B3). Where they are disabled, nothing is sent ([current state](#verified-current-state-baseline-9f0c911)). |
 | Reset Password | `recovery` | The recovery token. |
 
-The implementer confirms each row on the local stack, including which e-mail Supabase sends to an invited, unconfirmed address that requests a link or a new password. A different `type` value for a row is corrected in the implementation PR and is not a design change; a flow that cannot be verified by token hash is a stop condition.
+Each template ends with an invisible marker comment naming it (`<!-- eh-template: invite -->`, `magic_link`, `confirmation`, `recovery`), so a test can tell which one Supabase sent.
+
+The implementer confirms each row on the local stack. Which e-mail Supabase sends to an invited, unconfirmed address that requests a link or a new password is confirmed in two settings: under the repository's shared local configuration (e-mail confirmations off), in CI, by the marker of the e-mail that arrives ([local test 9](#test-plan)); and with e-mail confirmations on, in one recorded author run on a private stack ([local test 9b](#test-plan)), because switching confirmations on in the shared `supabase/config.toml` would change sign-up behaviour for every other local suite. A different `type` value for a row is corrected in the implementation PR and is not a design change; a flow that cannot be verified by token hash is a stop condition.
 
 **Invite user** — subject: `Votre invitation à l'espace English Hills`
 
@@ -213,6 +221,7 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 <p>Ce lien est personnel et ne peut servir qu'une seule fois. S'il ne fonctionne plus, demandez une nouvelle invitation au centre.</p>
 <p>Si vous n'attendiez pas ce message, vous pouvez l'ignorer.</p>
 <p>English Hills Language Center, Casablanca</p>
+<!-- eh-template: invite -->
 ```
 
 **Magic Link** — subject: `Votre lien d'accès à l'espace English Hills`
@@ -225,6 +234,7 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 <p>Ce lien ne peut servir qu'une seule fois. S'il ne fonctionne plus, demandez-en un nouveau depuis la page de connexion.</p>
 <p>Si vous n'attendiez pas ce message, ignorez-le : votre compte reste protégé.</p>
 <p>English Hills Language Center, Casablanca</p>
+<!-- eh-template: magic_link -->
 ```
 
 **Confirm signup** — subject: `Votre lien d'accès à l'espace English Hills`
@@ -237,6 +247,7 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 <p>Ce lien ne peut servir qu'une seule fois. S'il ne fonctionne plus, demandez-en un nouveau depuis la page de connexion.</p>
 <p>Si vous n'attendiez pas ce message, ignorez-le.</p>
 <p>English Hills Language Center, Casablanca</p>
+<!-- eh-template: confirmation -->
 ```
 
 **Reset Password** — subject: `Choisir un nouveau mot de passe English Hills`
@@ -249,6 +260,7 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 <p>Ce lien ne peut servir qu'une seule fois. S'il ne fonctionne plus, utilisez « Mot de passe oublié ? » sur la page de connexion.</p>
 <p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : votre mot de passe ne change pas.</p>
 <p>English Hills Language Center, Casablanca</p>
+<!-- eh-template: recovery -->
 ```
 
 # Security review points
@@ -258,7 +270,7 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 3. The landing page takes no destination parameter; `returnTo` on `/login` still reaches only `loginDestination`; `mode` and `error` are closed lists; nothing from the address is rendered.
 4. The new-password form is reachable only through the in-page state set by a successful `recovery` verification; reloading drops it.
 5. A link opened in a browser where someone else is signed in never changes that person's account: the page shows the signed-in state first, and a verification always signs the local session out first.
-6. A never-activated account gains nothing new: a role is applied only through the unchanged `apply_pending_role()`, by the same callers as today.
+6. A never-activated account gains nothing new: `apply_pending_role()` is unchanged; the landing page calls it only for an account with the mark.
 7. `shouldCreateUser: false` stays on every `signInWithOtp` call, including the re-invitation send.
 8. The token is absent from Sentry events and breadcrumbs (relative paths included), speed-monitoring routes, application logs and the activity log; `Referrer-Policy: no-referrer` on the landing page response.
 9. Middleware: only the exact path is public; look-alikes stay gated; a pending session on `/auth/confirm` and `/inscription-compte` is not redirected to `/unauthorized`.
@@ -279,6 +291,12 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 - `/auth/confirm` answers 200 without a session, with a pending session and with each role, with `Referrer-Policy: no-referrer`; `/auth`, `/auth/confirmx`, `/auth/confirm/x` are gated; the existing callback cases still pass.
 
 **Local Supabase with the four custom templates (new `scripts/test-email-links-local.mjs`, script `test:email-links-local`, browser-driven, local mail catcher, synthetic addresses).** It runs in CI: it is added to the `browser-security` shard of [verify.yml](../../../.github/workflows/verify.yml), so the required gate covers it on the exact head. The author also records one local run in the PR.
+
+How the suite runs anywhere (review B8):
+- **New-format links.** The suite never follows the address printed in the e-mail, because `{{ .SiteURL }}` is the fixed local value (`127.0.0.1:3000`) while the application under test listens elsewhere (port 3101 in CI). It reads `token_hash` and `type` from the caught e-mail, asserts the printed link has the form `<SiteURL>/auth/confirm?token_hash=…&type=…`, and opens `/auth/confirm` with those two values on its own application origin.
+- **Old-format links.** The custom templates stay in place for the whole run. An old-format link is synthesised from the same caught token: `<API>/auth/v1/verify?token=<token_hash>&type=<type>&redirect_to=<application origin>/inscription-compte` (or `/login/callback`). This is what the default template would have printed.
+- **Redirect allow-list.** `supabase/config.toml` gains one `additional_redirect_urls` entry for the test application origin, so the synthesised links may redirect to it. Local configuration only.
+- **Template identity.** Asserted by the marker comment in the e-mail body.
 1. Invitation and previews: read the link from the mail catcher and the account's stored confirmation token from the database. `curl` the link twice (plain GET, WhatsApp user agent). Load it in a headless browser with JavaScript and **no click**, wait for the network to settle: zero requests to `/auth/v1/verify`. Read the database again: the confirmation token is unchanged and the address is still unconfirmed. Then click → activation form → account active. **The link still works after the previews.**
 2. Second browser: request a sign-in link in browser context A, open it in a fresh context B → signed in.
 3. Recovery end to end: request, open in a fresh context, set a new password, old password refused, new password accepted. A second, already signed-in context then fails to refresh its session (D5) and is sent to `/login`.
@@ -286,13 +304,16 @@ The implementer confirms each row on the local stack, including which e-mail Sup
 5. Signed-in activated user opens an invitation link → « Votre compte est déjà activé » with the second action; the invitation is still usable afterwards; using the second action signs out and activates the invitee.
 6. Never-activated account (confirmed, no password, no name): recovery → activation form → role active; a sign-in link does the same; with an expired queue → the "no longer valid" message, account still pending, `/unauthorized` on other pages.
 7. Reload (B1): during the activation form after an invitation, after a recovery for a never-activated account, and after an old-format fragment invitation → the form is shown again each time, although the stored role is already active.
-8. Request forms (B5): a known, an unknown, a never-activated and an invited-unconfirmed address, and a second request inside the one-minute limit, all end on the same sentence; no account is created for the unknown address.
-9. Invited, unconfirmed address requests a sign-in link (B3): one e-mail arrives, its link is an `/auth/confirm?token_hash=…` link, and a click leads to the activation form. Same check for « Mot de passe oublié ? ».
-10. Old-format links: with the default templates restored, an invitation (fragment) and a same-browser sign-in link (code) still work; a cross-browser one shows the new French message on `/login`.
+8. Request forms (B5): a known, an unknown, a never-activated and an invited-unconfirmed address, and a second request for the same address inside the local per-address limit (`max_frequency` in `supabase/config.toml`, line 229), all end on the same sentence; no account is created for the unknown address.
+9. Invited, unconfirmed address requests a sign-in link (B3), under the shared local configuration: the suite records which e-mail arrives by its marker (or that none does), asserts that any link is an `/auth/confirm?token_hash=…` link, and that a click leads to the activation form. Same check for « Mot de passe oublié ? ».
+9b. The same case with e-mail confirmations **on**. Not run in CI. One recorded author run on a private stack whose own configuration copy sets `enable_confirmations = true` (the repository's `supabase/config.toml` is not changed for this): the e-mail carries the `confirmation` marker, its link is an `/auth/confirm?token_hash=…&type=email` link, and a click leads to the activation form. The run's output is attached to the PR.
+10. Old-format links, synthesised as described above: an invitation (fragment) and a same-browser sign-in link (code) still work; a cross-browser one shows the new French message on `/login`.
 11. Re-invitation (D2) with the custom templates: re-inviting a confirmed, never-activated account produces one e-mail whose link reaches the activation form; re-inviting an active account produces none.
-12. Re-invitation (D2) with the **default** templates: the e-mail's link lands on `/inscription-compte` and reaches the activation form.
+12. Re-invitation (D2) in the old format: the link synthesised from the re-invitation e-mail's token, with `redirect_to` `/inscription-compte`, lands there and reaches the activation form.
 13. `/inscription-compte?token_hash=…` forwards to `/auth/confirm` without any Auth call.
 14. Connection error on the click (verify request blocked): the connection message is shown, the address still carries the token, a reload shows the button again and a second click succeeds.
+15. Active account with a blank name and a password (B7): sign-in link → activation form → the current password re-entered and a name → the name is saved → the role's destination; no Auth error text is shown.
+16. Name write fails after the password succeeded (B7; the profile write is blocked for one attempt): the French name message is shown and the form stays; the retry with the same password saves the name and reaches the destination.
 
 Required CI is the full lane (source and workflow change). No database suite changes.
 
@@ -302,12 +323,12 @@ Each step needs the owner's explicit approval; R0 and R3 are done by the owner i
 
 | Step | What | Who | Stop if |
 | --- | --- | --- | --- |
-| R0 | Read-only. **Dashboard:** copy the four current templates and subjects (Invite user, Magic Link, Confirm signup, Reset Password: the rollback text); Site URL; redirect allow-list; the "allow new users to sign up" and "confirm e-mail" settings; e-mail link lifetime; access-token lifetime; "secure password change"; Auth rate limits; sender. **Read-only query:** for r4a and r4b, the exact address and Auth user id of each account that R5 will delete, with its confirmation state, stored role, name, queue row and expiry, and pending links; the number of active accounts with a blank name (they will see the activation form once on their next e-mail link). The addresses and ids are recorded in the private release notes, not in the repository. | Owner; operator for the query | Site URL is not `https://admin.english-hills.com`; the allow-list lacks `/login/callback` or `/inscription-compte` (fix first, separately approved). |
+| R0 | Read-only. **Dashboard:** copy the four current templates and subjects (Invite user, Magic Link, Confirm signup, Reset Password: the rollback text); Site URL; redirect allow-list; the "allow new users to sign up" and "confirm e-mail" settings; e-mail link lifetime; access-token lifetime; "secure password change"; Auth rate limits; sender; the Production Auth version. **Read-only query:** for r4a and r4b, the exact address and Auth user id of each account that R5 will delete, with its confirmation state, stored role, name, queue row and expiry, and pending links; the list of active accounts with a blank name, by role only (they will see the activation form once on their next e-mail link, where they may re-enter their current password; the owner can warn them). The addresses, ids and the blank-name list are recorded in the private release notes, not in the repository. | Owner; operator for the query | Site URL is not `https://admin.english-hills.com`; the allow-list lacks `/login/callback` or `/inscription-compte` (fix first, separately approved). |
 | R1 | Independent review READY on the implementation PR's exact head; owner merge approval. | Owner | — |
 | R2 | Merge → Vercel deploys. Check: `/auth/confirm` answers 200 signed out; a same-browser sign-in link and password sign-in still work; `/login?error=callback_failed` shows the message. | Operator | Any sign-in regression → Vercel rollback to the previous deployment. |
 | R3 | Owner pastes the four templates and subjects (Invite user, Magic Link, Confirm signup, Reset Password); confirms Site URL has no trailing slash; keeps the existing allow-list entries. No allow-list entry is needed for `/auth/confirm` (it is built from Site URL). | Owner | — |
 | R4 | Production proof with owner-controlled test addresses: (a) a fresh invitation pasted into WhatsApp, preview shown, then tapped → activation works; (b) a sign-in link opened in another browser; (c) « Mot de passe oublié ? » end to end; (d) a reopened link → neutral message; (e) r4a through « Mot de passe oublié ? » and r4b through « Recevoir un lien de connexion » reach the activation step (D4 = A; re-invite first if their 7-day invitation has expired, which also proves D2). Read Vercel runtime errors and Sentry for the window. | Owner with operator | Any step fails → rollback below. |
-| R5 | Clean-up, **only after the PR B room test is closed** (D4 = A). Deleted: exactly the accounts listed at R0 (r4a, r4b) and the fresh test account of R4 (a), by address and user id. **Never deleted by this plan:** the R4 room-test accounts, that is the teacher « Test R4 Prof » and the learners C and D, and any learner or teacher record. Immediately before the deletion, a fresh read-only count of what will go (Auth users, profiles, queue rows, pending links for those addresses) is taken and shown to the owner for approval; the deletion follows that count, not R0's. Then: delete the Auth users in the dashboard (profiles go with them: `profiles.id` is `ON DELETE CASCADE`), and a counted, separately approved statement removes any queue row left for those addresses (their pending links cascade). Read back zero rows. | Owner; operator for the statement | The fresh count names anything outside the R0 list; the PR B room test is still open. |
+| R5 | Clean-up, **only after the PR B room test is closed** (D4 = A). Deleted: exactly the accounts listed at R0 (r4a, r4b) and the fresh test account of R4 (a), by address and user id. **Never deleted by this plan:** the R4 room-test accounts, that is the teacher « Test R4 Prof » and the learners C and D, and any learner or teacher record. Immediately before the deletion, a fresh read-only count of what will go (Auth users, profiles, queue rows, pending links for those addresses) is taken and shown to the owner for approval; the deletion follows that count, not R0's. Then: delete the Auth users in the dashboard (profiles go with them: `profiles.id` is `ON DELETE CASCADE`), and a counted, separately approved statement removes any queue row left for those addresses (their pending links cascade). Read back zero rows. | Owner; operator for the statement | The fresh count names anything other than the R0 list and the R4 (a) test account created after R0; the PR B room test is still open. |
 | R6 | Documentation closeout PR: CURRENT_STATE, SECURITY_RULES (public path, L1 rule, activation mark), WORKFLOWS (invitation and reset), ADR-017 status, this plan's release record. | Operator | — |
 
 **Separate owner step, not part of this plan:** restoring the learners' own e-mail addresses on the R4 test learner files. R5 neither performs it nor waits for it.
@@ -324,7 +345,7 @@ No database restore exists or is needed.
 # Expected modules
 
 - New: `src/app/auth/confirm/page.jsx` (and a small client component), `src/lib/authLinks.mjs` (pure parsing and routing, unit-tested), `supabase/templates/{invite,magic_link,recovery,confirmation}.html`, `scripts/test-email-links.mjs`, `scripts/test-email-links-local.mjs`.
-- Changed: `src/app/(auth)/login/page.jsx`, `src/app/inscription-compte/page.jsx`, `src/middleware.js`, `src/lib/sessionProfile.mjs`, `src/lib/sentry-scrub.js`, `src/app/api/admin/invite/route.js`, `supabase/config.toml` (template blocks), `package.json` (test scripts), `.github/workflows/verify.yml` (one step in the `browser-security` shard), the middleware, navigation and session-profile suites.
+- Changed: `src/app/(auth)/login/page.jsx`, `src/app/inscription-compte/page.jsx`, `src/middleware.js`, `src/lib/sessionProfile.mjs`, `src/lib/sentry-scrub.js`, `src/app/api/admin/invite/route.js`, `supabase/config.toml` (template blocks, and one `additional_redirect_urls` entry for the test application origin), `package.json` (test scripts), `.github/workflows/verify.yml` (one step in the `browser-security` shard), the middleware, navigation and session-profile suites.
 - Unchanged: `src/context/AuthContext.jsx`, `src/app/providers.jsx`, `src/app/(auth)/login/callback/route.js`, `src/lib/roleAccess.mjs`, `next.config.mjs`, every migration.
 
 # Owner decisions (answered 2026-11-14)
@@ -348,7 +369,8 @@ The French wording of the screens and the four e-mails above is approved with th
 - **Owner decisions (Maroine, 2026-11-14, with the architecture task):** the click-to-verify page, the login split with `shouldCreateUser: false`, the neutral used-link wording, the signed-in rule, and that a pending account resetting its password must reach the activation step.
 - **Owner answers (Maroine, 2026-11-14, with the ELW-r2 revision task):** D1 = A, D2 = A, D3 = A, D4 = A, D5 = A.
 - **Independent review of ELW-r1** at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76`: CHANGES REQUIRED. Applied in ELW-r2.
-- **Plan approval:** none yet. ELW-r2 awaits re-review of its exact head and the owner's approval. Recorded also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#e-mail-links-that-work--proposed-2026-11-14).
+- **Independent re-review of ELW-r2** at head `d5878d953c1b61b6d54ddcd2b90cf0335f4061c6`: CHANGES REQUIRED (B7, B8, N1–N5). Applied in ELW-r3; no new owner decision.
+- **Plan approval:** none yet. ELW-r3 awaits re-review of its exact head and the owner's approval. Recorded also in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#e-mail-links-that-work--proposed-2026-11-14).
 
 # Review corrections (ELW-r2)
 
@@ -372,6 +394,18 @@ The French wording of the screens and the four e-mails above is approved with th
 | Test gaps | The local suite runs in CI (`browser-security` shard; `verify.yml` in the manifest); item 1 strengthened (database token check, headless load without a click); reload case 7; B3 case 9; B4 unit case; B5 cases; D2 under default templates case 12. |
 | Owner answers | D1–D5 = A recorded here, in risk 6, the decision section, OWNER_DECISIONS and the plans index; conditional wording removed. |
 
+# Review corrections (ELW-r3)
+
+| Finding | Correction |
+| --- | --- |
+| B7 — activation form dead end for an account that already has a password | Submit order, the `same_password` rule, the failed-name-write retry and the closed French error map in [section 2](#2-activation-page-inscription-compte); the happy-path row of section 1; local tests 15 and 16; R0 lists the blank-name accounts by role. |
+| B8 — local tests runnable in CI | "How the suite runs anywhere" in the [test plan](#test-plan): token taken from the e-mail and opened on the suite's own origin; old-format links synthesised (items 10 and 12); the redirect allow-list entry in the manifest; template markers and items 9 and 9b (confirmations on: a recorded private-stack run, acceptance amended); the template paragraph corrected; item 8 uses the local limit. |
+| N1 | Security point 6 and invariant 5. |
+| N2 | Cooldown after every answered request (sections 3 and 5). |
+| N3 | R5 stop condition allows the R4 (a) account. |
+| N4 | R0 reads the Production Auth version. |
+| N5 | Sign-ups disabled: paragraph after the current-state table; template type table. |
+
 ## IMPLEMENTATION CONTRACT
 
 **Scope.** Exactly the design above (D1–D5 = A), on a branch from the then-current `origin/main`, one PR, Tier 3, full CI lane. No migration. No Supabase dashboard or Vercel configuration change by the implementer.
@@ -385,12 +419,12 @@ The French wording of the screens and the four e-mails above is approved with th
 2. No account disclosure on any application screen or application route response.
 3. `shouldCreateUser: false` on every `signInWithOtp`.
 4. Destinations come from the stored role through `loginDestination(role)`; the landing page takes no destination parameter; `/auth/confirm` is the only new public path.
-5. `apply_pending_role`, its four callers including the AuthContext sweep, the invitation functions, RLS, grants, the callback route and the existing `redirectTo` values are unchanged.
+5. `apply_pending_role()` is unchanged; the landing page calls it only for an account with the mark. Its four existing callers including the AuthContext sweep, the invitation functions, RLS, grants, the callback route and the existing `redirectTo` values are unchanged.
 6. No token, address or parameter in logs, Sentry (relative paths included), speed monitoring or the activity log.
 7. Old-format links keep working.
 8. The activation form is decided by the activation mark, never by the role.
 
-**Acceptance.** Every item of the [test plan](#test-plan) passes; the local suite passes in CI on the exact head and one author run is recorded in the PR; `npm run lint` and `npm run build` pass; required CI is green on the exact head.
+**Acceptance.** Every item of the [test plan](#test-plan) passes; the local suite passes in CI on the exact head and one author run is recorded in the PR; local test 9b is a recorded private-stack run attached to the PR, not a CI result; `npm run lint` and `npm run build` pass; required CI is green on the exact head.
 
 **Stop conditions.** A flow in the template table cannot be verified by token hash on the local stack; the local stack cannot serve custom templates; a guard or test must be weakened to pass; any need for a database or policy change; any need to change `AuthContext.jsx`; any Production read or write.
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r2 (ELW-r1 was reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day). Not accepted, not implemented.
+**Proposed** (2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r3 (ELW-r1 and ELW-r2 were each reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day). Not accepted, not implemented.
 
 ## Date
 
