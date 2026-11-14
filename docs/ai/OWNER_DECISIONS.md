@@ -454,6 +454,20 @@ Plan: [course dates and close](../architecture/plans/course-dates-close.md), rev
 - **Release approvals (Maroine, 2026-11-06):** (1) R0, R1 and R2 for Mise à niveau only (`cdc.adults` and `cdc.one_to_one` off, declared counts from that day's R0), the merge kept separate, the revert and the restore never without their own approval; window: the centre closed, start at once, R1 before 07:30 UTC and never during 22:30–01:00 UTC (given at 09:30 Asia/Shanghai). (2) After R0 stopped on one new Adults enrollment: "approve S1 = 6/12/21", every other declared count unchanged. (3) After the merge: R3 and R4 as written in the plan (anonymous route checks; rolled-back probes as reception and as a synthetic parent), Postgres and API logs, 30 minutes of observation; no data change, no revert or restore.
 - **Release status (2026-11-06):** R0–R4 done ([closeout](CURRENT_STATE.md#courses-with-dates-migration-128-production-closeout-r0r4--2026-11-06), [release record](../architecture/plans/course-dates-close.md#release-record-r0r4--2026-11-06)). The step ended the 18 waiting Mise à niveau enrollments « Mise à niveau terminée »; 6 learner files stay « Inscrit », 12 became « Ancien apprenant »; no charge was linked; the card went from 39 to 21. Adults (11), One-to-One (2) and Online One-to-One (1) were not touched. The step's revert and the function restore were not run and each still needs its own approval. **Pending:** R5 (owner and director: dates on new short-programme groups, the group names, the parent and student portals, the first real « Clôturer le cours », the card and the Groups filters) and the step for Adults and One-to-One after the owner's confirmation per programme. No new owner decision.
 
+## E-mail links that work — PROPOSED (2026-11-14)
+
+Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), revision ELW-r1 (Tier 3; **proposed, not approved, not implemented**); [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md) proposed. PR A of the R4 diagnosis of 2026-11-14 (findings 1–3).
+
+- **Owner decisions given with the architecture task (Maroine, 2026-11-14):**
+  - Auth e-mail links open a public page that makes no Auth call on load; only the button verifies.
+  - The login page is split into « Recevoir un lien de connexion » and a real « Mot de passe oublié ? »; `shouldCreateUser: false` stays (PRF-r2 D11).
+  - A reopened link shows the neutral wording « Ce lien a déjà été utilisé ou a expiré. Si votre compte est déjà activé, connectez-vous. » with « Se connecter » and « Mot de passe oublié ? »; the pages never confirm whether an address has an account.
+  - A signed-in visitor whose role is not 'pending' is told « Votre compte est déjà activé » and sent to the portal.
+  - A 'pending' account that resets its password must still reach the activation step, not `/unauthorized`.
+- **Open:** D1–D5 of the plan (pending-account routing, re-invitation e-mail, the signed-in second action, the r4a/r4b test accounts, other devices after a new password).
+- **Not approved by this entry:** the plan, its implementation, the merge, the deployment, the Supabase template change and the test-account clean-up; each needs its own approval.
+- **Out of scope by owner instruction:** room and Zoom changes (PR B/C), the shared-address message (PR D), Supabase plan changes.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
