@@ -510,6 +510,9 @@ jobs:
         run: |
           node scripts/test-portal-readiness.mjs
           node scripts/test-portal-readiness-browser.mjs
+      - name: E-mail links with the custom Auth templates and the mail catcher (ELW-r3)
+        if: ${{ !cancelled() && matrix.shard == 'browser-security' && steps.app.outcome == 'success' }}
+        run: npm run test:email-links-local
 
       # Shard browser-crm.
       - name: CRM lifecycle and phase 11 browser suites

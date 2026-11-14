@@ -60,7 +60,7 @@ try {
     await target.goto('http://localhost:3101/login');
     await target.waitForLoadState('networkidle');
     // Prove React is handling events before filling the login fields.
-    await target.getByRole('button',{name:'Connexion par lien magique',exact:true}).click();
+    await target.getByRole('button',{name:'Recevoir un lien de connexion',exact:true}).click();
     await target.getByRole('button',{name:'Retour à la connexion par mot de passe',exact:true}).click();
     await target.locator('input[type=email]').fill(email);
     await target.locator('input[type=password]').fill(password);

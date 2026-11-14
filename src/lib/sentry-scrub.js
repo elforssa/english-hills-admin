@@ -26,6 +26,10 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function redactPhone(match) {
   return ISO_DATE_RE.test(match) || match.replace(/\D/g, '').length < 8 ? match : '[number]';
 }
+// A relative path's query or fragment (`/auth/confirm?token_hash=…`, a navigation
+// breadcrumb's from/to) and any token_hash value left in free text (plan ELW-r3, B4).
+const RELATIVE_QUERY_RE = /(^|[\s("'=,])(\/[^\s?#"'()]*)[?#][^\s"')]*/g;
+const TOKEN_HASH_RE = /token_hash=[^&#\s"'<>]*/gi;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
 const BEARER_RE = /\bBearer\s+[^\s,;]+/gi;
 
@@ -37,6 +41,8 @@ function redactText(value) {
   if (typeof value !== 'string') return value;
   return value
     .replace(/https?:\/\/[^\s]+/gi, match => safeUrl(match))
+    .replace(RELATIVE_QUERY_RE, '$1$2')
+    .replace(TOKEN_HASH_RE, 'token_hash=[redacted]')
     .replace(JWT_RE, '[token]')
     .replace(BEARER_RE, '[token]')
     .replace(EMAIL_RE, '[email]')
@@ -59,7 +65,7 @@ function redactDeep(node, depth = 0) {
       const val = node[key];
       if (PII_KEY.test(key)) {
         node[key] = '[redacted]';
-      } else if (/(^url$|_url$|href|src$)/i.test(key)) {
+      } else if (/(^url$|_url$|href|src$|^from$|^to$)/i.test(key)) {
         node[key] = redactText(safeUrl(val));
       } else if (val && typeof val === 'object') {
         redactDeep(val, depth + 1);

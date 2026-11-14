@@ -65,7 +65,7 @@ for (const path of PROTECTED) {
   assert.equal(director.status, 200); checks += 1;
 }
 // Public pages and API routes are unchanged by a failure: they pass through.
-for (const path of ['/login', '/login/callback', '/unauthorized', '/api/admin/invite']) {
+for (const path of ['/login', '/login/callback', '/unauthorized', '/api/admin/invite', '/auth/confirm']) {
   for (const options of [{ user: null, userError: network }, { profile: null, profileError: postgrest }]) {
     const r = await run(options)(path);
     assert.equal(r.status, 200, `${path} passes through`); assert.equal(r.headers.get('location'), null); checks += 1;

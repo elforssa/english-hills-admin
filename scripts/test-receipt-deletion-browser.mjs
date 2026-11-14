@@ -35,7 +35,7 @@ try {
   page.setDefaultTimeout(30000);
   await page.goto('http://localhost:3017/login');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: 'Connexion par lien magique', exact: true }).click();
+  await page.getByRole('button', { name: 'Recevoir un lien de connexion', exact: true }).click();
   await page.getByRole('button', { name: 'Retour à la connexion par mot de passe', exact: true }).click();
   await page.locator('input[type=email]').fill(email);
   await page.locator('input[type=password]').fill(password);

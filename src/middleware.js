@@ -16,6 +16,9 @@ const PUBLIC_PATHS = new Set([
   '/login/callback',
   '/inscription',
   '/inscription-compte',
+  // Landing page of every Auth e-mail link (plan ELW-r3, ADR-017): exact path only;
+  // /auth, /auth/confirmx and /auth/confirm/x stay gated.
+  '/auth/confirm',
   '/privacy',
   '/unauthorized',
 ]);
@@ -104,6 +107,9 @@ export async function middleware(request) {
 
   // Public routes: let through without further checks.
   if (isPublic(pathname)) {
+    // The link page's address carries the token: no Referer leaves it, set before
+    // any script runs (plan ELW-r3, section 5).
+    if (pathname === '/auth/confirm') response.headers.set('Referrer-Policy', 'no-referrer');
     return response;
   }
 
