@@ -456,7 +456,7 @@ Plan: [course dates and close](../architecture/plans/course-dates-close.md), rev
 
 ## E-mail links that work — PROPOSED (2026-11-14)
 
-Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), revision ELW-r1 (Tier 3; **proposed, not approved, not implemented**); [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md) proposed. PR A of the R4 diagnosis of 2026-11-14 (findings 1–3).
+Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), revision ELW-r2 (Tier 3; **proposed, not approved, not implemented**; ELW-r1 at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76` was reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day); [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md) proposed. PR A of the R4 diagnosis of 2026-11-14 (findings 1–3).
 
 - **Owner decisions given with the architecture task (Maroine, 2026-11-14):**
   - Auth e-mail links open a public page that makes no Auth call on load; only the button verifies.
@@ -464,8 +464,14 @@ Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), 
   - A reopened link shows the neutral wording « Ce lien a déjà été utilisé ou a expiré. Si votre compte est déjà activé, connectez-vous. » with « Se connecter » and « Mot de passe oublié ? »; the pages never confirm whether an address has an account.
   - A signed-in visitor whose role is not 'pending' is told « Votre compte est déjà activé » and sent to the portal.
   - A 'pending' account that resets its password must still reach the activation step, not `/unauthorized`.
-- **Open:** D1–D5 of the plan (pending-account routing, re-invitation e-mail, the signed-in second action, the r4a/r4b test accounts, other devices after a new password).
-- **Not approved by this entry:** the plan, its implementation, the merge, the deployment, the Supabase template change and the test-account clean-up; each needs its own approval.
+- **Owner answers (Maroine, 2026-11-14, with the ELW-r2 revision task): D1 = A, D2 = A, D3 = A, D4 = A, D5 = A.**
+  - D1 A: a never-activated account that asks for a new password or a sign-in link goes to the activation form.
+  - D2 A: re-inviting an account that exists but was never activated sends a sign-in e-mail.
+  - D3 A: a signed-in visitor is told « Votre compte est déjà activé », sees the signed-in address and may sign out to use the link for another account.
+  - D4 A: the test accounts r4a and r4b are kept as the Production proof and deleted afterwards, once the PR B room test is closed; the R4 room-test accounts (teacher « Test R4 Prof », learners C and D) are never deleted by this plan.
+  - D5 A: after a new password is chosen, the account's other devices are signed out.
+- **Open:** the re-review of ELW-r2 and the plan approval.
+- **Not approved by this entry:** the plan, its implementation, the merge, the deployment, the Supabase template change (four templates) and the test-account clean-up; each needs its own approval.
 - **Out of scope by owner instruction:** room and Zoom changes (PR B/C), the shared-address message (PR D), Supabase plan changes.
 
 ## Deferred backlog after RCC-r1

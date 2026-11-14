@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r1. Not accepted, not implemented.
+**Proposed** (2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r2 (ELW-r1 was reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day). Not accepted, not implemented.
 
 ## Date
 
@@ -15,11 +15,11 @@ Supabase's default e-mail templates link to `GET /auth/v1/verify`. Any GET consu
 ## Decision
 
 1. **Every Auth e-mail links to a page of the application** (`/auth/confirm?token_hash=…&type=…`), built from the Site URL and the token hash in the template.
-2. **That page verifies only on an explicit click.** No request carrying the token leaves the browser on load; a visitor without a session causes no Auth request.
+2. **That page verifies only on an explicit click.** No request carrying the token leaves the browser on load; a visitor without a session causes no Auth request. A signed-in visitor's browser makes only its usual requests with its own session, none of which includes the token.
 3. **Verification is `verifyOtp({ token_hash, type })`**, a POST without a PKCE verifier, so a link works in any browser.
-4. **The destination after verification comes from the account's stored role**, never from the link.
+4. **The destination after verification comes from the account's stored data**, never from the link; the page takes no destination parameter. Whether the activation form is shown is decided by a positive mark (a completed profile name), not by the role, because the shared session sweep may apply the invited role before any page reads it.
 5. **The templates are kept in the repository** and applied to Production by the owner as a release step.
-6. **Pages never reveal whether an address has an account**, and cannot tell a used link from an expired one.
+6. **The application's screens never reveal whether an address has an account**, and cannot tell a used link from an expired one.
 
 ## Consequences
 
