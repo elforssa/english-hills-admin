@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r3 (ELW-r1 and ELW-r2 were each reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day). Not accepted, not implemented.
+**Accepted and released** (Maroine, 2026-11-14) with the [e-mail links that work plan](../plans/email-links-that-work.md), revision ELW-r3 approved at exact head `f43e0b72b5290010a514d3cc9b974d44c47de4ad`, D1–D5 = A (ELW-r1 and ELW-r2 were each reviewed CHANGES REQUIRED and revised the same day). Implemented by PR #190 (independent review READY at `7556c59`), merged as `87ab19e` and **released on 2026-11-14**: deployed, `/auth/confirm` checked, and the four Production e-mail templates replaced (R3). The Production proof R4 was postponed by owner decision ([release record](../plans/email-links-that-work.md#release-record-r0-to-r6-2026-11-14)).
 
 ## Date
 
