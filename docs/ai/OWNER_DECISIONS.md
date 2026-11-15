@@ -477,6 +477,28 @@ Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), 
 - **Open:** R4 (owner); R5 test-account clean-up, not started, gated on the PR B room test (keep-list unchanged).
 - **Out of scope by owner instruction:** room and Zoom changes (PR B/C), the shared-address message (PR D), Supabase plan changes.
 
+## Online classroom tools — PROPOSED (2026-11-15)
+
+Plan: [online classroom tools](../architecture/plans/online-classroom-tools.md), revision OCT-r2 (Tier 3; **proposed, not approved, not implemented**; OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174` was independently reviewed CHANGES REQUIRED on 2026-11-15, findings B1–B5 and N1–N8, and revised the same day). Child of the online-learning pilot ([ADR-008](../architecture/decisions/ADR-008-online-learning-pilot.md)): whiteboard, breakout rooms (« Groupes »), later the toolkit upgrade and a raise-hand button.
+
+- **Owner answers (Maroine, 2026-11-15, with the OCT-r2 revision task):**
+  - D1: no separate PR to hide the broken « Start whiteboard » button. Only test lessons use the room until PR A ships; PR A fixes it.
+  - D2: the room header allows the exact Production whiteboard host only, path-scoped (`https://<host>/web_client_whiteboard/`) if the browser honours it. **No wildcard, and none approved in advance:** if Zoom moves the host, the console line names it and the new exact host needs a fresh owner decision. The A7 rule is kept: script and worker sources stay explicit (so no `blob:` in `script-src` or `worker-src` without a new owner decision).
+  - D3: learners on a computer may draw on the whiteboard; export is off for learners and on for the teacher.
+  - D4: groups are on for every course now, with the teacher rule: always a timer, and the teacher visits each group. **To be decided again before the first children's online course is activated** (plan stop condition S6).
+  - D5: the toolkit upgrade to 2.6.10-1 comes later, as its own PR, after the whiteboard and the groups are proven in Production.
+  - D6: raise hand is our own button later; chat until then.
+  - D7: chat files and the emoji picker stay off.
+  - D8: background blur is tested on a modest laptop later, then decided.
+  - D9: recording and captions stay off.
+  - D10: the French name for breakout rooms is « Groupes ».
+  - D11 (remedy for stop condition S5, given with review finding B5): if groups fail for a learner on a real phone, first the teacher rule (learners on a phone stay in the main room and are not assigned to a group); if a phone learner's room still breaks, PR B is reverted (groups off for everyone). No per-course or per-device switch.
+- **Open:**
+  - **P1, owner step before PR A:** the Production whiteboard host. In a Production test lesson the teacher clicks « Start whiteboard » and copies the console line naming the refused address; the host is recorded here. The probe of 2026-11-15 saw `us05st1.zoom.us` with the development credentials, which are not verified to be the Production key.
+  - The re-review of OCT-r2 and the plan approval at an exact head.
+  - D4 for children, before any children's online course is activated.
+- **Not approved by this entry:** the plan, any of its PRs (A whiteboard and room header, B groups, C toolkit upgrade, D raise hand), any merge or deployment, the Production test, and any change to the room path's Content-Security-Policy; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

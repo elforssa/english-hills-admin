@@ -1,13 +1,13 @@
 # Online classroom tools — whiteboard, breakout rooms and the rest of a real class
 
-**Revision OCT-r1, 2026-11-15. PROPOSED — architecture only, not approved, nothing implemented.** Risk tier: **Tier 3** for the outcome (it changes the security header of the room path, an OL-r6 decision); the pull requests inside it are tiered one by one in [PR split](#7-risk-tier-and-pr-split). Baseline: `main` at `ab3cc74` (PR #192 merged). Parent contract: [online learning — pilot architecture](online-learning.md) and [ADR-008](../decisions/ADR-008-online-learning-pilot.md).
+**Revision OCT-r2, 2026-11-15. PROPOSED — architecture only, not approved, nothing implemented.** OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174` was independently reviewed CHANGES REQUIRED (B1–B5, N1–N8); this revision applies every finding and records the owner's answers D1–D11 ([revision record](#revision-record), [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--proposed-2026-11-15)). Risk tier: **Tier 3** for the outcome (it changes the security header of the room path, an OL-r6 decision); the pull requests inside it are tiered one by one in [PR split](#7-risk-tier-and-pr-split). Baseline: `main` at `ab3cc74` (PR #192 merged). Parent contract: [online learning — pilot architecture](online-learning.md) and [ADR-008](../decisions/ADR-008-online-learning-pilot.md).
 
 # Owner summary
 
 The room passed its three-person test on 2026-11-15. This plan turns it into a classroom. The main finding: **almost every tool you asked for is already inside the Zoom toolkit version we ship; no new provider, no database change and no new Zoom purchase is needed.** Two things are in the way, and one tool does not exist.
 
-- **Why the whiteboard "is not working":** the teacher already has a « Start whiteboard » button today (the toolkit switches it on by default and your Zoom account allows it). Clicking it fails because the room's security header refuses the whiteboard program that Zoom loads from one more Zoom address. Proven in a real Chrome run on 2026-11-15; with three additions to that header the whiteboard opened, the learner on a computer saw it, the phone saw it as a picture, and a PDF export worked.
-- **Breakout rooms:** they work with the version we ship and your account allows them. In the same run two learners were moved into two rooms and brought back; **nobody was sent to the portal**, and the room page never left the lesson. They only need switching on, French text and a few safety lines.
+- **Why the whiteboard "is not working":** the teacher already has a « Start whiteboard » button today (the toolkit switches it on by default and the Zoom account used in my run allows it). Clicking it fails because the room's security header refuses the whiteboard program that Zoom loads from one more Zoom address: **observed in a real Chrome run on 2026-11-15 with the headers exactly as shipped.** In two further runs with a deliberately widened header (diagnosis only) the whiteboard opened, the learner on a computer saw it, the phone-shaped window received it as a picture and a PDF export worked. **The exact header PR A will ship has not been run yet, nobody drew a stroke, and the run used the development Zoom credentials, not a confirmed Production key.** PR A's own test proves the shipped header before it merges, and you confirm the Production address first (step P1).
+- **Breakout rooms:** they work with the version we ship and the account used in my run allows them. In the same run two learners were moved into two rooms and brought back; **nobody was sent to the portal**, and the room page never left the lesson. My run drove Zoom's client directly, **not the toolkit's own groups window**. So they need switching on, French text, a confirmation on our leave link, and a test before merge that drives the toolkit's own window through every step, with « return to the main room » both allowed and not allowed.
 - **Raise hand and reactions do not exist in the toolkit** (either version). A small button of our own is possible later.
 
 ## What will change
@@ -15,7 +15,7 @@ The room passed its three-person test on 2026-11-15. This plan turns it into a c
 1. The whiteboard works for teachers on a computer; learners on a computer see and use it; learners on a phone see it as a live picture (view only).
 2. Breakout rooms (« Groupes ») for group activities: create, assign, timer, message to all groups, ask for help, return.
 3. French text for both, and for the messages that already leak in English today.
-4. Clearer leave buttons so a learner in a group never leaves the lesson by mistake.
+4. A confirmation on our own « Quitter le cours » link, so nobody leaves the lesson by one mistaken tap.
 5. Later and separately: the toolkit upgrade to 2.6.10-1, and our own « Lever la main » button.
 
 ## What staff/users will be able to do
@@ -29,11 +29,11 @@ The room passed its three-person test on 2026-11-15. This plan turns it into a c
 - Only the teacher (host) starts a whiteboard or opens groups. Learners cannot.
 - Recording, captions, phone dial-in, invitations, chat files and the emoji picker stay off.
 - No change to who may enter a lesson, to passes, to attendance or to what the teacher sees about a learner.
-- Children's groups: breakout rooms put children in a room without the teacher. See decision D4 before the first children's course.
+- Children's groups: breakout rooms put children in a room without the teacher. Groups are on for every course with the teacher rule (D4); **no children's online course is activated before you have decided D4 again** ([stop condition S6](#stop-conditions)).
 
 ## UI impact
 
-Inside the room only: a whiteboard button and a « Groupes » button for the teacher; group dialogs for learners; « Quitter » at the top of our page becomes « Quitter le cours » and asks for confirmation while the participant is in a group; one line for phone learners while a whiteboard is open: « Le tableau blanc s’affiche en lecture seule sur téléphone. Pour écrire au tableau, utilisez un ordinateur. » No other page changes.
+Inside the room only: a whiteboard button and a « Groupes » button for the teacher; group dialogs for learners; « Quitter » at the top of our page becomes « Quitter le cours » and always asks for confirmation while the participant is in the room; one line for a participant whose device cannot open the whiteboard, while one is open: « Le tableau blanc s’affiche en lecture seule sur cet appareil. Pour écrire au tableau, utilisez un ordinateur. » A short « Guide de la salle » block on the teacher's own lesson list. No other page changes.
 
 ## Database impact
 
@@ -41,18 +41,18 @@ None. No migration, no new table, no change to passes, attendance or join eviden
 
 ## Important security decisions
 
-- **The room path's Content-Security-Policy gets three additions** (room path only, the rest of the site is untouched): scripts and styles from the Zoom whiteboard address `https://us05st1.zoom.us`, and `blob:` for data the page itself created. This amends decisions A6/A7 of the pilot plan, so it is Tier 3 and needs your approval (D2).
-- **New data goes to Zoom:** what is drawn or typed on a whiteboard is stored by Zoom's document service for the life of the whiteboard and is not kept after it is closed. The platform still sends Zoom only the display label.
+- **The room path's Content-Security-Policy gets three additions** (room path only, the rest of the site is untouched): scripts and styles from the Production whiteboard address only, written as narrowly as the browser allows (`https://<whiteboard host>/web_client_whiteboard/`, the host being the one you confirm in step P1; `us05st1.zoom.us` in my run), and `blob:` in `connect-src` for data the page itself created. No wildcard. This amends decisions A6/A7 of the pilot plan, so it is Tier 3 and needs your approval of this plan (D2 answered).
+- **New data goes to Zoom:** what is drawn or typed on a whiteboard is sent to Zoom's document service while the whiteboard is open. Zoom's developer page says the whiteboard is « not persisted by default » and the toolkit warns that it cannot be reopened after closing; **what Zoom's servers retain afterwards is UNVERIFIED.** The platform still sends Zoom only the display label.
 - **Breakout rooms and minors:** a group has no adult in it unless the teacher visits. Chat inside a group is visible only to that group.
 - Nothing in this plan touches secrets, the join route, tokens or the webhook.
 
 ## Risks / owner review points
 
-1. The whiteboard address belongs to Zoom and can change. With the exact address (recommended) a change breaks only the whiteboard, the lesson continues, and the room log says which address was refused.
+1. The whiteboard address belongs to Zoom and can change. Only the exact Production address is allowed (D2): a change breaks only the whiteboard, the lesson continues, the room log names the refused address, and the new address needs a fresh decision from you.
 2. Real phones were not tested (the run used a phone-shaped Chrome window). iPhone Safari is checked in your Production test.
 3. "Share with sound" and annotation were not exercised in the run; they are in your test script, with a stop condition.
 4. The toolkit upgrade is not needed for the whiteboard or the groups; it is proposed after both are proven, as its own small PR.
-5. The broken whiteboard button is visible to teachers in Production today. D1 hides it at once.
+5. The broken whiteboard button stays visible until PR A ships (D1: no separate PR; only test lessons use the room until then). PR A merges before PR B, so PR B never ships beside a broken button and needs no hidden button of its own.
 
 ---
 
@@ -74,9 +74,9 @@ The brief's facts were checked against the repository, the two npm bundles and a
 
 **Sources.** Repository at `ab3cc74`; installed `@zoom/videosdk-ui-toolkit` 2.5.0-1 and the 2.6.10-1 npm tarball (ESM bundles and `index.d.ts`, compared as text); the served `https://source.zoom.us/videosdk/{2.5.0,2.6.10}/lib/js_media.min.js`; Zoom's developer pages for whiteboard, subsessions, share, UI Toolkit, webhooks and developer pricing (the CSP, annotation, billing and changelog pages returned 404 and are **not** sources here); and a live probe.
 
-**Live probe, 2026-11-15, three runs of about two minutes each.** Installed Chrome (headless), the real toolkit 2.5.0-1, the room component and the room path's real headers through [the room harness](../../../scripts/lib/online-room-harness.mjs), throw-away sessions on the owner's Zoom developer account, no database. Participants: teacher (host, 1280 px), learner (1280 px), "phone" (390 px, touch, Android user agent). Run 1 used the headers as shipped. Runs 2 and 3 were **diagnosis runs with a widened policy** and prove nothing about the shipped policy; they exist to list what the whiteboard needs. The probe script was temporary and is not in the repository; PR B adds a permanent one.
+**Live probe, 2026-11-15, three runs of about two minutes each.** Installed Chrome (headless), the real toolkit 2.5.0-1, the room component and the room path's real headers through [the room harness](../../../scripts/lib/online-room-harness.mjs), throw-away sessions signed with the Video SDK key in the main checkout's git-ignored `.env.local` (the owner's Zoom developer credentials, in use for the acceptance runs since 2026-10-23; **not verified to be the key Production uses**, see [step P1](#4-content-security-policy-and-lazy-chunks)), no database. Participants: teacher (host, 1280 px), learner (1280 px), "phone" (390 px, touch, Android user agent). Run 1 used the headers as shipped. Runs 2 and 3 were **diagnosis runs with a widened policy** and prove nothing about the shipped policy; they exist to list what the whiteboard needs. **The exact policy PR A proposes (path-scoped source, Production host) was not run in any of them.** The probe script was temporary and is not in the repository; PR A adds the permanent whiteboard half and PR B the groups half, both under the shipped headers only.
 
-**Not covered:** real phones and iPhone Safari; a ≤ 2-core computer; drawing strokes, inserting an image, PNG export; share with sound; annotation; the toolkit's own subsession window (the probe drove the same SDK client directly); toolkit 2.6.10-1 live; webhook deliveries; billing reports. Each is marked **UNVERIFIED** where it matters and is covered by a test or a stop condition below.
+**Not covered:** real phones and iPhone Safari; a ≤ 2-core computer; drawing strokes, inserting an image, PNG export; share with sound; annotation; the toolkit's own subsession window in any of its steps (the probe drove the same SDK client directly); the « allow return to the main room » option switched off; the Production Zoom key; toolkit 2.6.10-1 live; webhook deliveries; billing reports. Each is marked **UNVERIFIED** where it matters and is covered by a test or a stop condition below.
 
 ## Verified current state
 
@@ -99,9 +99,9 @@ The brief's facts were checked against the repository, the two npm bundles and a
 
 | Tool | Pinned | New | Account / plan | Phone browser | Who | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- |
-| Whiteboard | Yes (undocumented key, on by default) | Same | Must be enabled; **already enabled** (probe) | No canvas; arrives as a share picture « ‹name›'s content » (probe, emulated phone). Same on ≤ 2 cores | Host or manager starts; desktop learners get the canvas with its tools | **Enable now** (PR A). Needs the header change |
+| Whiteboard | Yes (undocumented key, on by default) | Same | Must be enabled; **enabled on the account behind the development key** (probe); Production confirmed by step P1 | No canvas; arrives as a share picture « ‹name›'s content » (probe, emulated phone). Same on ≤ 2 cores | Host or manager starts; desktop learners get the canvas with its tools | **Enable now** (PR A). Needs the header change |
 | Whiteboard export | PDF and PNG; viewer export is a separate switch | Same | Export can be disabled by the account | No | Teacher; learners only if `enableViewerUserExport` | **Now**: teacher yes, learners no. Content is lost when the whiteboard closes, so the teacher exports first |
-| Breakout rooms: create, assign (automatic, manual, learners choose) | Yes (documented flag) | Yes, plus « move failed », « Main Session » and help labels | Must be allowed; **already allowed** (probe). Up to 50 rooms | Yes: moved in and back (probe, emulated) | Host or manager | **Enable now** (PR B) |
+| Breakout rooms: create, assign (automatic, manual, learners choose) | Yes (documented flag) | Yes, plus « move failed », « Main Session » and help labels | Must be allowed; **allowed on the account behind the development key** (probe); Production checked in PR B's Production test. Up to 50 rooms | Yes: moved in and back (probe, emulated) | Host or manager | **Enable now** (PR B) |
 | Breakout timer, auto-close, countdown | Yes | Yes | — | Yes | Host | **Now** |
 | Broadcast text / voice to all groups | Yes (text observed) | Yes | — | Receives | Host; voice needs the host on computer audio | **Now** (text); voice in the test script |
 | Ask for help | Yes (observed, dialog on the host) | Yes | — | UNVERIFIED on a real phone | Learner asks, host answers | **Now** |
@@ -151,7 +151,7 @@ The brief's facts were checked against the repository, the two npm bundles and a
 
 **Gains:** a « camera interrupted — touch to resume » path (useful on phones), an « unstable network » notice, the subsession fixes above, message deletion. **Risk:** medium. It replaces the media library that #192 stabilised, on the day after it was stabilised; headless Chromium cannot see that class of failure, so the proof is the real-Chrome scripts plus a real lesson on phones.
 
-**Recommendation:** upgrade **after** the whiteboard and the groups are proven in Production on the pinned version, as its own PR with its own Production test. Two moving parts at once would make a failure impossible to attribute.
+**Decided (D5):** upgrade **after** the whiteboard and the groups are proven in Production on the pinned version, as its own PR with its own Production test. Two moving parts at once would make a failure impossible to attribute.
 
 ## 3. Breakout rooms and the room lifecycle
 
@@ -159,16 +159,16 @@ The brief's facts were checked against the repository, the two npm bundles and a
 
 **Why a learner in a group is never sent to the portal by mistake:**
 
-1. The only code path to the portal is `onLeft`, called from the toolkit's "session closed" callbacks, which the toolkit raises only on the SDK state `Closed`. A move is `Reconnecting` → `Connected`. This is now pinned by tests: a unit test and a fake-toolkit browser test raise `Reconnecting` with each of the three reasons, then `Connected`, and assert that `onLeft` and `onError` were never called and the phase is still `in_room`; the real-Zoom script asserts the same against Zoom.
-2. The top-of-page link becomes « Quitter le cours » and, while the participant is in a group, asks « Quitter le cours ? Vous êtes dans un groupe. Pour revenir avec tout le monde, utilisez « Revenir à la salle principale ». ». The state comes from the same `connection-change` reasons, so no new SDK surface is used.
-3. The toolkit's own leave control inside a group offers the return to the main room; its French text is written so the two choices cannot be confused: « Revenir à la salle principale » and « Quitter le cours ». **UNVERIFIED:** the exact dialog the toolkit shows a learner; the Production test checks it, and S3 stops the release if a single tap leaves the lesson.
+1. There are three ways from the room to the portal, and a move triggers none of them. (a) `onLeft`, called from the toolkit's "session closed" callbacks, which the toolkit raises only on the SDK state `Closed`; a move is `Reconnecting` → `Connected`. (b) Our own top-of-page link ([page.jsx](../../../src/app/(admin)/online/room/[id]/page.jsx), the `room-leave` anchor), which only a tap follows. (c) The 30-second `online_check_join`, which ends the room when the server says the participant no longer qualifies; it does not look at Zoom at all. Path (a) is pinned by tests: a unit test and a fake-toolkit browser test raise `Reconnecting` with each of the three observed reasons **and with an unknown reason**, then `Connected`, and assert that `onLeft` and `onError` were never called and the phase is still `in_room`; the real-Zoom script asserts the same against Zoom through the toolkit's own groups window.
+2. Path (b): the link becomes « Quitter le cours » and **always** asks « Quitter le cours ? Vous sortirez de la salle pour tout le cours. » while the participant is in the room, in a group or not. It does not read Zoom's reason strings or any group state, so it cannot be wrong about where the participant is.
+3. The toolkit's own leave control inside a group: its French text is written so the choices cannot be confused, « Revenir à la salle principale » and « Quitter le cours ». **UNVERIFIED until PR B's script runs:** the exact dialog a learner gets, with « allow return to the main room » on and off. PR B's pre-merge script drives it both ways ([Tests](#tests)); S3 stops the merge if a single tap leaves the lesson.
 
 **Everything else that touches the lifecycle:**
 
 | Piece | Effect of a move | Change |
 | --- | --- | --- |
 | `leaveOnPageUnload`, `pagehide` leave | None. Closing the page in a group leaves Zoom as today | None |
-| 30-second `online_check_join` | Unchanged and still wanted: when the lesson window ends, a participant in a group is taken out too | None |
+| 30-second `online_check_join` | Unchanged and still wanted: when the lesson window ends, the lesson is cancelled or consent is revoked, a participant in a group is taken to the portal too. This is path (c) above and is the server's decision, not a mistake | None |
 | Tab guard | Keyed by lesson and person in the browser; a move stays in the same tab | None |
 | Passes | No new pass and no call to the join route. The token outlives the lesson window by design, so the re-post on each move is inside its life | None |
 | Failure during a move | A network drop mid-move is `Fail`: our error card with « Réessayer ». The retry lands in the **main room**; the teacher moves the learner again | Teacher guide |
@@ -200,9 +200,10 @@ With the three missing items allowed, no other violation was reported while star
 
 **Proposed change, room path only:**
 
-- `script-src` and `style-src`: add the whiteboard address. Option A (recommended) the exact host `https://us05st1.zoom.us`; option B `https://*.zoom.us`. See D2.
-- `connect-src`: add `blob:`. A `blob:` URL can only be created by a script already running in the page and is same-origin; `media-src` and `worker-src` already allow it. `script-src` does **not** get `blob:`.
+- `script-src` and `style-src`: add the Production whiteboard source and nothing wider (D2). First choice, the path-scoped source `https://<whiteboard host>/web_client_whiteboard/` (a source that ends in `/` matches only addresses under that path). If the real-Zoom script shows the browser does not honour the path for this load (for example after a redirect, where browsers ignore the path part), fall back to the exact host `https://<whiteboard host>` and record which one shipped. Never a wildcard: if Zoom moves the host, the `csp blocked` line names the new one and it needs a fresh owner decision. `<whiteboard host>` is the host confirmed in step P1; `us05st1.zoom.us` was the host in the probe.
+- `connect-src`: add `blob:`. A `blob:` URL can only be created by a script already running in the page and is same-origin; `media-src` and `worker-src` already allow it. `script-src` and `worker-src` gain no `blob:` and no wildcard: the A7 rule that script and worker sources stay explicit is kept (D2).
 - No change to `frame-src`, `worker-src`, `img-src`, `font-src`, the Permissions-Policy or any other path.
+- **P1, before PR A is written (owner step, with my help):** my probe signed its sessions with the Video SDK key in the main checkout's git-ignored `.env.local` (the owner's Zoom developer credentials used for the acceptance runs since 2026-10-23). **I have not verified that this is the key Production uses**, and the whiteboard host is chosen by Zoom per account. So: in a Production test lesson, the teacher opens the browser console (F12), clicks « Start whiteboard » and copies the line that begins `Loading the script 'https://…/web_client_whiteboard/…` (Chrome's refusal message). The host in that line is the Production whiteboard host; it is recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--proposed-2026-11-15) and is the only host PR A allows. Nothing secret appears in that line.
 
 **So that the next surprise is visible:** the room listens for `securitypolicyviolation` and writes `[online room] … csp blocked directive=… host=…` (directive and host only). Had this existed, the whiteboard and the #192 loop would each have been one line in a teacher's console.
 
@@ -210,7 +211,7 @@ With the three missing items allowed, no other violation was reported while star
 
 ## 5. Zoom account side
 
-**Nothing has to be switched on for the whiteboard or the breakout rooms**: the live run shows the account already allows both. The steps below are a read-only check, so the record does not rest on my run alone. Do not copy any key, secret or token anywhere; I only need what the screen says.
+**Nothing has to be switched on for the whiteboard or the breakout rooms**: the live run shows that the account behind the development key already allows both, and step P1 shows the same for Production the moment the teacher sees « Start whiteboard » there. The steps below are a read-only check, so the record does not rest on my run alone. Do not copy any key, secret or token anywhere; I only need what the screen says.
 
 1. Sign in at `zoom.us` with the account that owns the Video SDK key (the one where you created the SDK credentials in October).
 2. Left menu: **Admin → Account Management → Account Settings**.
@@ -231,21 +232,22 @@ Vocabulary: **« Tableau blanc »**, **« Groupes »** for breakout rooms, **« 
 | Teacher, computer | Audio, vidéo, partage d'écran, discussion, participants, affichage, **Tableau blanc**, **Groupes**, quitter. In the groups window: créer, répartir (automatiquement / manuellement / laisser choisir), minuteur, « Message à tous les groupes », « Fermer tous les groupes ». In the participants panel: couper tous les micros, retirer, mettre en avant |
 | Teacher, phone | No whiteboard button (Zoom does not offer it on phones). Teachers teach from a computer |
 | Learner, computer | Audio, vidéo, partage d'écran, discussion, participants, affichage. During a whiteboard: the canvas, without export. During groups: « Vous êtes invité à rejoindre le groupe … », « Demander de l'aide », « Revenir à la salle principale » |
-| Learner, phone | Audio, vidéo, discussion, participants. During a whiteboard: a live picture of it and, above the room, « Le tableau blanc s’affiche en lecture seule sur téléphone. Pour écrire au tableau, utilisez un ordinateur. » Groups as on a computer |
+| Learner, phone | Audio, vidéo, discussion, participants. During a whiteboard: a live picture of it and, above the room, « Le tableau blanc s’affiche en lecture seule sur cet appareil. Pour écrire au tableau, utilisez un ordinateur. » Groups as on a computer |
 
-- On the lesson list for families ([FamilyLessons.jsx](../../../src/components/online/FamilyLessons.jsx)), one standing line: « Conseil : pour les activités au tableau blanc, un ordinateur est préférable. Sur téléphone, le tableau s’affiche en lecture seule. »
+- **When the read-only line shows (N6):** while a whiteboard is open **and** Zoom reports that this participant cannot open the canvas, that is `isWhiteboardEnabled()` false on the SDK client. It is not keyed on screen width: a tablet, a two-core laptop and a phone all get it, a narrow desktop window does not. The whiteboard's start and stop come from the toolkit's documented `whiteboard-status-change` and `peer-whiteboard-state-change` events. The capability is read from the SDK client the toolkit exposes as `window.zmClient` (undocumented; already used by the repository's real-Zoom scripts); when that is missing the room falls back to Zoom's own rule read in the bundle (Android or iOS browser, or two cores or fewer). Both branches are unit-tested and both are on PR C's re-read list.
+
+- On the lesson list for families ([FamilyLessons.jsx](../../../src/components/online/FamilyLessons.jsx)), one standing line: « Conseil : pour les activités au tableau blanc, un ordinateur est préférable. Sur téléphone ou tablette, le tableau s’affiche en lecture seule. »
 - The whiteboard's own tools are drawn by Zoom's whiteboard program, which was already in French in the run (« Exporter au format PNG », « Collaborateurs », « Annuler », « Rétablir »). The toolkit's strings around it are ours to translate: `whiteboard.*` (29), `subsession.*` (174, or 177 after the upgrade), and the `share.*` lines that mention the whiteboard, already translated.
-- A one-page teacher guide in French (how to start a whiteboard and export it, open groups with a timer, share a tab with sound, what phones see, never give away the host role) goes with PR B, in the existing help centre.
+- **Teacher guide (N7).** `/helpdesk` is for operations staff only (`canViewHelp` in [roleAccess.mjs](../../../src/lib/roleAccess.mjs)); a teacher cannot open it. The simplest place a teacher can read is the page they already open before every lesson: a collapsed « Guide de la salle » block on `/teacher-portal/online`, static French text, no new route and no permission change. Content: start a whiteboard and export it before closing; open groups, **always with a timer, and visit each group** (D4); **leave learners who are on a phone in the main room** when a group fails for them (D11); share a Chrome tab with its sound; what a phone sees; never give away the host role; a retry after a drop lands in the main room. It ships with PR B; the whiteboard paragraph ships with PR A.
 
 ## 7. Risk tier and PR split
 
-The outcome is one: "a real classroom". Its parts have different tiers and land in this order.
+The outcome is one: "a real classroom". Its parts have different tiers and land in this order. There is no separate PR to hide the broken whiteboard button (D1): PR A fixes it, and PR B is not merged before PR A, so I see no safety reason to hide the button for PR B alone.
 
 | PR | Content | Tier | Why |
 | --- | --- | --- | --- |
-| **0 — hide the broken button** | `whiteboard: { enable: false }` in `FEATURES`, one unit assertion | 2, client only | A visible control that always fails, in Production today. Reverted by PR A |
-| **A — whiteboard that works** | Room CSP additions; `whiteboard: { enable: true, enableExport: true, enableViewerUserExport: false }`; French `whiteboard.*`; phone line; `csp blocked` and `whiteboard available` trace lines; header and unit tests; ADR-008 amendment | **3** | Security header of the room path (OL-r6 A6/A7) |
-| **B — groups** | `subsession: { enable: true }`; French `subsession.*`; « Quitter le cours » with confirmation in a group; trace reset on a move; fake-toolkit and real-Zoom tests; teacher guide | 2, client only | Shared room logic; no header, server or database change |
+| **A — whiteboard that works** | After step P1. Room CSP additions (D2); `whiteboard: { enable: true, enableExport: true, enableViewerUserExport: false }` (D3); French `whiteboard.*`; the read-only line; `csp blocked` and `whiteboard available` trace lines; header and unit tests, including the test that the toolkit still reads the whiteboard key; **the whiteboard half of `scripts/test-online-zoom-classroom.mjs`, run under the exact shipped headers before merge**; the whiteboard paragraph of the teacher guide; ADR-008 amendment | **3** | Security header of the room path (OL-r6 A6/A7) |
+| **B — groups** | After PR A is merged. `subsession: { enable: true }`; French `subsession.*`; « Quitter le cours » with confirmation; trace reset on a move; fake-toolkit tests; **the groups half of the classroom script, driving the toolkit's own groups window, run before merge**; teacher guide | 2, client only | Shared room logic; no header, server or database change |
 | **Production test** | The owner's script below, on the deployment that contains A and B | Operator step | Needs its own go-ahead |
 | **C — toolkit 2.6.10-1** | Pin, lockfile, media library version, 10 strings, re-read facts, real-Chrome scripts, a second short Production test | 2 | Dependency that carries the media path |
 | **D — « Lever la main »** | Our own button and a teacher-side list through the SDK's command channel | 2, own short design note first | New client surface; **UNVERIFIED** design |
@@ -256,15 +258,38 @@ Each PR: full CI (source changes), a fresh independent review of the exact head 
 
 **Unit ([test-online-room-unit.mjs](../../../scripts/test-online-room-unit.mjs), [test-online-headers.mjs](../../../scripts/test-online-headers.mjs)):**
 
-- `FEATURES` has an explicit `whiteboard` key with the three values, and `subsession.enable` true.
+- `FEATURES` has an explicit `whiteboard` key with the three values (PR A), and `subsession.enable` true (PR B).
+- **The toolkit still reads the key (N4):** the installed bundle's default configuration still contains `whiteboard: { enable, enableExport, enableViewerUserExport }` and its code still reads `featuresOptions?.whiteboard?.enable` and the two export options. The key is undocumented, so this test is what tells us if an upgrade drops or renames it.
 - Every reachable toolkit key has a French value; `whiteboard.` and `subsession.` are no longer in the unreachable list; no French value is left equal to the English one except an agreed list.
-- Session: `Reconnecting` with `join breakout room`, `move to breakout room`, `back to main session`, then `Connected`, never calls `onLeft`, `onError` or `onClosing`, never starts the join timer, and clears the participant list; `Closed` still leaves; `Fail` still shows the error card.
+- Session: `Reconnecting` with `join breakout room`, `move to breakout room`, `back to main session` **and with a reason the code has never seen**, then `Connected`, never calls `onLeft`, `onError` or `onClosing`, never starts the join timer, and clears the participant list; `Closed` still leaves; `Fail` still shows the error card. No behaviour depends on the reason text.
+- Read-only line: shown when a whiteboard is open and the capability is false; not shown when the capability is true, whatever the window width; the fallback rule is used only when the SDK client is not exposed.
 - Trace: a `securitypolicyviolation` event becomes one line with directive and host only; a blocked URL's path and query never appear.
-- Headers: the room path's `script-src` and `style-src` contain exactly the approved whiteboard source, `connect-src` contains `blob:`, `script-src` does **not** contain `blob:`, and the catch-all policy is byte-for-byte unchanged.
+- Headers: the room path's `script-src` and `style-src` contain exactly one whiteboard source, the approved one, and no `*.zoom.us`; `connect-src` contains `blob:`; `script-src` and `worker-src` do **not** contain `blob:`; the catch-all policy is byte-for-byte unchanged.
 
-**Browser, fake toolkit, CI ([test-online-room-lifecycle-browser.mjs](../../../scripts/test-online-room-lifecycle-browser.mjs)):** the same three moves leave the phase at `in_room`; « Quitter le cours » asks for confirmation only while in a group; cancelling keeps the room; the phone line appears only on a narrow screen while a whiteboard is open.
+**Browser, fake toolkit, CI ([test-online-room-lifecycle-browser.mjs](../../../scripts/test-online-room-lifecycle-browser.mjs)):** the moves above leave the phase at `in_room`; « Quitter le cours » asks for confirmation whenever the participant is in the room, in a group or not; cancelling keeps the room; confirming navigates; the read-only line follows the capability, not the width.
 
-**Real Zoom, local only, installed Chrome (new `scripts/test-online-zoom-classroom.mjs`, the permanent form of the probe):** teacher, desktop learner and emulated phone with the shipped headers. Asserts: no CSP violation; whiteboard reaches « in progress » for the teacher and the desktop learner; the phone receives a share; PDF export resolves; two groups open, both learners move and return with only `Reconnecting` → `Connected`; the toolbar is complete after the return; the phase is `in_room` throughout; `Closed` only when the host ends. The existing two-party and lifecycle scripts are re-run unchanged.
+**Real Zoom, local only, installed Chrome: new `scripts/test-online-zoom-classroom.mjs`.** Teacher, desktop learner and a phone-shaped participant. It serves the room with **the headers exactly as `next.config.mjs` ships them and has no option to widen them**; a diagnosis needs a separate throw-away script. Its report is attached to the PR and names the head it ran on. A failure of any assertion blocks the merge.
+
+*Whiteboard half, in PR A, before PR A merges (B1):*
+
+1. Zero `securitypolicyviolation` events for all three participants over the whole run.
+2. The teacher starts the whiteboard through the toolkit's own button; it reaches « in progress » for the teacher and the desktop learner.
+3. **A real stroke by the teacher:** a pointer drag on the canvas; the whiteboard's undo control becomes available to the teacher, and the learner's canvas changes (pixel comparison of the canvas area before and after).
+4. **A real stroke by the desktop learner** (D3): the same, the other way round; the teacher's canvas changes.
+5. The phone-shaped participant reports `isWhiteboardEnabled()` false, receives the whiteboard as a share stream, has no drawing tools and shows the read-only line.
+6. The teacher's PDF export resolves; the learner has no export control.
+7. Stop: everyone is back on the camera view; the connection never left `Connected`.
+
+*Groups half, in PR B, before PR B merges (B2).* Every step is done by clicking the **toolkit's own groups window and dialogs**, never by calling the SDK:
+
+1. The teacher creates two groups, assigns the two learners manually, opens them with a timer.
+2. Each learner accepts the toolkit's invitation and arrives; the teacher sends a broadcast message and both receive it.
+3. A learner asks for help; the teacher gets the dialog and joins that group, then returns.
+4. **A learner leaves the group through the toolkit's own leave control.** With « allow participants to return to the main session » **on**: the learner is back in the main room. With it **off** (second pass of the whole sequence): whatever the toolkit offers, one tap does not take the learner out of the lesson.
+5. The teacher closes all groups; after the countdown both learners are in the main room.
+6. Asserted for both passes and both learners at every step: the page phase is `in_room`, the address is still the room, `onLeft` was never called, the connection states are only `Reconnecting` and `Connected`, and after each return the toolbar has the same controls as before the move.
+
+This makes S3 a pre-merge fact, not something first seen in your Production test. The existing two-party and lifecycle scripts are re-run unchanged with each PR.
 
 ### Production test script for the owner
 
@@ -275,13 +300,13 @@ Needs: the deployment with PR A and PR B; one test lesson; **teacher on a laptop
 | 1 | All four join with sound and camera | Four tiles everywhere; no « Reconnexion » |
 | 2 | Teacher: **Tableau blanc**, draw a word and a shape | Opens within 10 s; no « Whiteboard Error » |
 | 3 | Learner laptop: look, then draw one line | Sees the teacher's drawing live; their line appears for the teacher |
-| 4 | Both phones: look | A live picture of the board and the line « … lecture seule sur téléphone … »; no drawing tools |
+| 4 | Both phones: look | A live picture of the board and the line « … lecture seule sur cet appareil … »; no drawing tools |
 | 5 | Teacher: export as PDF, then stop the whiteboard | A PDF downloads; everybody is back on the camera view |
 | 6 | Teacher: **Groupes**, 2 groups, automatic, timer 2 minutes, open | Each learner sees the invitation and arrives in a group within 15 s; **nobody lands on the portal** |
 | 7 | In a group: talk; learner laptop presses « Demander de l'aide » | Sound and camera work inside the group; the teacher gets the request and can join that group |
 | 8 | Teacher: « Message à tous les groupes » : `Encore une minute` | Shown in both groups |
 | 9 | Wait for the timer | Countdown, then everybody is back in the main room with a complete toolbar; again nobody on the portal |
-| 10 | A learner in a group (repeat 6 if needed) taps the toolkit's leave control once, then « Quitter le cours » at the top once and cancels | The first offers « Revenir à la salle principale »; the second asks for confirmation; the learner is still in the lesson |
+| 10 | A learner in a group (repeat 6 if needed) taps the toolkit's leave control once, then « Quitter le cours » at the top once and cancels | The first offers « Revenir à la salle principale »; the second asks « Quitter le cours ? » (it asks in the main room too); the learner is still in the lesson |
 | 11 | Raise hand | Not there yet (PR D): learners write in the chat |
 | 12 | Teacher: share a **Chrome tab** playing a short English audio or video, tick the audio box | All three learners hear the sound and see the tab |
 | 13 | Teacher: annotate the shared tab | The marks appear for learners |
@@ -305,7 +330,7 @@ In: the whiteboard, breakout rooms, their French text, the leave safeguards, the
 ## Security boundaries
 
 1. Only `/online/room/*` changes headers; the catch-all policy is asserted unchanged.
-2. `script-src` never gets `blob:` or a non-Zoom host. The emoji picker stays off so no third-party host is contacted.
+2. `script-src` and `worker-src` never get `blob:`, a wildcard or a non-Zoom host; the only new script and style source is the one Production whiteboard source of D2. The emoji picker stays off so no third-party host is contacted.
 3. The platform sends Zoom nothing new about a learner. Whiteboard content and group names are typed by participants and go to Zoom; the trace never logs them.
 4. Host-only powers (start whiteboard, open groups, mute all, remove) stay decided by Zoom from the signed `role_type`; nothing in the browser can raise a learner's role.
 5. Learner export of the whiteboard is off.
@@ -313,73 +338,83 @@ In: the whiteboard, breakout rooms, their French text, the leave safeguards, the
 
 ## Rollout and recovery
 
-Each PR deploys through the normal merge. Recovery is a revert of that PR: PR A's revert restores today's headers (the whiteboard fails again, lessons are unaffected); PR B's revert hides the groups button; PR C's revert restores 2.5.0-1 and its media library. No data to restore in any case. The live switch for online learning is not touched by this plan.
+Each PR deploys through the normal merge. Recovery is a revert of that PR: PR A's revert restores today's headers (the whiteboard fails again, lessons are unaffected); PR B's revert switches groups off for everyone and is the remedy of S5; PR C's revert restores 2.5.0-1 and its media library. No data to restore in any case. The live switch for online learning is not touched by this plan.
 
 ## Expected modules
 
-`src/components/online/ZoomRoom.jsx`, `src/lib/online/zoom-room-session.mjs`, `src/lib/online/zoom-fr-FR.json`, `src/app/(admin)/online/room/[id]/page.jsx`, `src/components/online/FamilyLessons.jsx`, `next.config.mjs` (PR A only), `scripts/lib/zoom-toolkit-resources.mjs`, `scripts/lib/online-room-harness.mjs`, the three test scripts above, a new `scripts/test-online-zoom-classroom.mjs`, the help-centre guide, `docs/ai/CURRENT_STATE.md`, `docs/ai/SECURITY_RULES.md` (room header), ADR-008. PR C adds `package.json`, the lockfile, `src/lib/online/zoom-media-chunks.mjs` and `src/lib/online/zoom-room-errors.mjs`.
+`src/components/online/ZoomRoom.jsx`, `src/lib/online/zoom-room-session.mjs`, `src/lib/online/zoom-fr-FR.json`, `src/app/(admin)/online/room/[id]/page.jsx`, `src/components/online/FamilyLessons.jsx`, `next.config.mjs` (PR A only), `scripts/lib/zoom-toolkit-resources.mjs`, `scripts/lib/online-room-harness.mjs`, the three test scripts above, a new `scripts/test-online-zoom-classroom.mjs`, `src/app/(admin)/teacher-portal/online/page.jsx` (the guide block), `docs/ai/CURRENT_STATE.md`, `docs/ai/SECURITY_RULES.md` (room header), ADR-008. PR C adds `package.json`, the lockfile, `src/lib/online/zoom-media-chunks.mjs` and `src/lib/online/zoom-room-errors.mjs`.
 
 ## Owner decisions required
 
-| # | Question | Options | Recommendation | Blocks |
-| --- | --- | --- | --- | --- |
-| **D1** | Hide the broken « Start whiteboard » button now, before the fix? | A: yes, PR 0 today. B: leave it until PR A | **A** | Nothing |
-| **D2** | Which whiteboard source does the room header allow? | A: the exact host `https://us05st1.zoom.us`; if Zoom moves it, only the whiteboard breaks and the log names the new host. B: `https://*.zoom.us` for scripts and styles; never breaks, but any Zoom subdomain may serve code to the room | **A**, with B approved in advance as the fallback if the host changes | PR A |
-| **D3** | May learners on a computer draw on the whiteboard and export it? | A: draw yes (Zoom's default), export no. B: also export. C: view only for learners, if the account offers it | **A** | PR A |
-| **D4** | Breakout rooms for children's courses | A: on for every course, with a written teacher rule (timer always set, the teacher visits every group, groups of three or more where possible). B: adults only, which needs the join route to tell the room the audience: a server change, Tier 3, later | **A now**, because no children's course has started; decide again before the first one | PR B for children only |
-| **D5** | Toolkit upgrade to 2.6.10-1 | A: after the whiteboard and groups are proven in Production. B: first | **A** | PR C |
-| **D6** | Raise hand | A: our own button later (PR D), chat until then. B: never | **A** | PR D |
-| **D7** | Chat files and the emoji picker | A: stay off. B: on | **A** | Nothing |
-| **D8** | Background blur | A: test on a modest laptop later, then decide. B: never | **A** | Nothing |
-| **D9** | Recording and captions | A: stay off; recording only with its own plan (consent for minors, retention, access). B: plan recording now | **A** | Nothing |
-| **D10** | French word for breakout rooms | A: « Groupes ». B: « Salles de groupe » | **A** | PR B |
+None is open for this revision.
+
+All answered by the owner (Maroine) on 2026-11-15 with the OCT-r2 revision task, and recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--proposed-2026-11-15). They answer the questions; they do not approve this plan, any PR, merge or deployment.
+
+| # | Question | Owner's answer |
+| --- | --- | --- |
+| **D1** | Hide the broken « Start whiteboard » button before the fix? | **No separate PR.** Only test lessons use the room until PR A ships; PR A fixes it |
+| **D2** | Which whiteboard source does the room header allow? | **The exact Production whiteboard host only**, path-scoped if the browser honours it. **No wildcard and none approved in advance:** if Zoom moves the host, the console line names it and the new exact host needs a fresh owner decision. The A7 rule stays: script and worker sources are explicit |
+| **D3** | May learners on a computer draw and export? | **Draw yes; export off for learners; teacher export on** |
+| **D4** | Breakout rooms and children's courses | **Groups on for every course now, with the teacher rule: always a timer, and the teacher visits each group.** To be decided again before the first children's online course is activated ([S6](#stop-conditions)) |
+| **D5** | Toolkit upgrade to 2.6.10-1 | **Later, its own PR, after the whiteboard and the groups are proven in Production** |
+| **D6** | Raise hand | **Our own button later; chat until then** |
+| **D7** | Chat files and the emoji picker | **Stay off** |
+| **D8** | Background blur | **Test on a modest laptop later, then decide** |
+| **D9** | Recording and captions | **Stay off** |
+| **D10** | French word for breakout rooms | **« Groupes »** |
+| **D11** | What happens if groups fail for a learner on a real phone (S5)? | **First a teacher rule: learners on a phone stay in the main room and are not assigned to a group. If a phone learner's room still breaks, PR B is reverted (groups off for everyone).** No per-course or per-device switch is built |
+
+**Still to come from the owner:** the Production whiteboard host (step P1); approval of this plan at an exact head after re-review; the D4 decision before any children's online course.
+
 
 ## Stop conditions
 
-- **S1:** the shipped headers still report a violation for the whiteboard in installed Chrome, or the whiteboard needs a source outside `zoom.us`: stop, report the directive and host, do not widen further without a new decision.
-- **S2:** share with sound, annotation or drawing is refused by the room headers (for example a `blob:` script): stop and report; `blob:` in `script-src` is a separate owner decision, as recorded after #192.
-- **S3:** any path sends a participant to the portal during a move, or one tap inside a group leaves the lesson: PR B does not merge.
+- **S1:** under the shipped headers the whiteboard still reports a violation in installed Chrome, or it needs any source other than the one Production whiteboard source of D2 (another Zoom host, a wildcard, a host outside `zoom.us`): stop, report the directive and host, widen nothing without a new owner decision.
+- **S2:** share with sound, annotation or drawing is refused by the room headers (for example a script run from a `blob:` URL): stop and report. `blob:` in `script-src` or `worker-src` would break the rule the owner kept in D2 (script and worker sources stay explicit), so it needs a new owner decision and is not part of this plan.
+- **S3:** any step of PR B's groups script, in either pass, takes a participant to the portal, calls `onLeft`, lets one tap inside a group leave the lesson, or returns an incomplete toolbar: PR B does not merge. Decided before merge by that script, and checked again on real devices in rows 6–10 of the Production test.
 - **S4:** the account's usage report shows more than people × minutes for a lesson with groups: no real lesson with groups until explained.
-- **S5:** a real iPhone or Android phone fails rows 4, 6 or 9 of the test: groups or whiteboard stay off for phone learners' courses until fixed.
+- **S5:** a real iPhone or Android phone fails row 4, 6 or 9 of the Production test. Row 4 (whiteboard picture): the whiteboard stays on; phone learners keep the camera view and the teacher is told. Rows 6 or 9 (groups): the remedy is the one of D11 and exists today. First the teacher rule, stated in the guide: learners on a phone are left unassigned, which keeps them in the main room (the teacher asks who is on a phone; Zoom does not show it). If a phone learner's room breaks all the same, in the test or in a real lesson, PR B is reverted and groups are off for everyone until fixed. No per-course or per-device switch.
+- **S6 — children's online course:** no online course whose audience is children is activated (the pilot plan's course activation step) until the owner has decided D4 again for children and that decision is recorded in OWNER_DECISIONS. Whether any such course exists today was not checked: it would need a Production read, which this plan does not ask for; the stop condition holds either way, and the release task that activates a children's course must cite the new decision.
 
 ## IMPLEMENTATION CONTRACT
 
 ### Scope
 
-PR 0, PR A and PR B exactly as in [the PR split](#7-risk-tier-and-pr-split), in that order, each on its own branch from current `main`. PR C and PR D only after the Production test passes and the owner says so. Nothing else.
+Step P1, then PR A, then PR B, exactly as in [the PR split](#7-risk-tier-and-pr-split), in that order, each on its own branch from current `main`; PR B is not merged before PR A. PR C and PR D only after the Production test passes and the owner says so. Nothing else.
 
 ### Prerequisites
 
-This plan approved by the owner at an exact head, with D1–D10 answered. PR A needs D2 and D3; PR B needs D4 and D10. Read [AGENTS](../../../AGENTS.md), [the pilot plan](online-learning.md) (decisions A6/A7, the room lifecycle record) and the facts in the headers of the modules listed above; re-check each fact in the installed bundle before relying on it.
+This plan approved by the owner at an exact head after re-review (D1–D11 are answered). PR A also needs the Production whiteboard host from step P1, recorded in OWNER_DECISIONS. Read [AGENTS](../../../AGENTS.md), [the pilot plan](online-learning.md) (decisions A6/A7, the room lifecycle record) and the facts in the headers of the modules listed above; re-check each fact in the installed bundle before relying on it.
 
 ### Object / module manifest
 
-As in [Expected modules](#expected-modules). No migration. No route. No environment variable. `next.config.mjs` changes only in PR A, only the three additions approved in D2.
+As in [Expected modules](#expected-modules). No migration. No route. No environment variable. `next.config.mjs` changes only in PR A, only the three additions of [section 4](#4-content-security-policy-and-lazy-chunks) within D2.
 
 ### Invariants
 
 1. A breakout move never calls `onLeft`, never navigates, never asks for a new pass.
 2. The catch-all Content-Security-Policy and every header outside `/online/room/*` are unchanged.
-3. `script-src` on the room path contains no `blob:` and no host outside `zoom.us`.
+3. On the room path, `script-src` and `worker-src` contain no `blob:` and no wildcard, and the only source added to `script-src` and `style-src` is the one Production whiteboard source.
 4. The trace prints display labels, connection reasons, directive names and hosts only: never a token, a session or group name, a URL path or whiteboard content.
 5. Learners cannot export the whiteboard; recording, captions, phone, invite, chat files and emoji stay off.
 6. No French string is added without its key existing in the installed bundle; no reachable key stays in English.
 
 ### Acceptance / tests
 
-All tests in [Tests](#tests) pass; the real-Zoom classroom script passes locally in installed Chrome with the shipped headers and its report is attached to the PR; full CI is green for the exact head; then the owner's Production test, rows 1–16.
+All tests in [Tests](#tests) pass; for PR A the whiteboard half and for PR B the groups half of the real-Zoom classroom script pass locally in installed Chrome **under the shipped headers, before the merge**, with the report attached to the PR; full CI is green for the exact head; then the owner's Production test, rows 1–16.
 
 ### Stop conditions
 
-S1–S5 above, plus the standing ones: any need to touch the join route, the token, the webhook, the database or a header outside the room path stops the work and returns to the owner.
+S1–S6 above, plus the standing ones: any need to touch the join route, the token, the webhook, the database or a header outside the room path stops the work and returns to the owner.
 
 ### Docs / status reporting
 
-PR A updates CURRENT_STATE, SECURITY_RULES (room header) and ADR-008 (amendment, with the D2 answer). PR B updates CURRENT_STATE and adds the teacher guide. Each PR reports under the AGENTS implementation handoff. This plan's revision record below is updated with approvals, PR numbers and the Production test result; planned, merged, deployed and Production-verified stay distinct.
+PR A updates CURRENT_STATE, SECURITY_RULES (room header) and ADR-008 (amendment, with the D2 answer and the host and source form that shipped). PR B updates CURRENT_STATE and adds the teacher guide. Each PR reports under the AGENTS implementation handoff. This plan's revision record below is updated with approvals, PR numbers and the Production test result; planned, merged, deployed and Production-verified stay distinct.
 
 ## Revision record
 
 - **OCT-r1 (2026-11-15):** first version, from the owner's request after the three-person Production test of 2026-11-15. Proposed; not reviewed; not approved.
+- **OCT-r2 (2026-11-15):** independent review of OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174`: **CHANGES REQUIRED**, B1–B5 blocking and N1–N8 non-blocking; all applied here, with the owner's answers D1–D11. **B1** the whiteboard half of the real-Zoom script moves into PR A, runs only under the shipped headers and includes real strokes by teacher and learner; the summary no longer suggests the proposed policy was already run. **B2** PR B's script drives the toolkit's own groups window, with return to the main room on and off; S3 is decided before merge. **B3** the probe's credentials are stated; owner step P1 confirms the Production whiteboard host; no pre-approved wildcard. **B4** D1–D10 recorded in OWNER_DECISIONS; S6 ties D4 to activating a children's online course; the unsourced "no children's course has started" claim is removed. **B5** S5 has a remedy that exists today (D11). **N1** the unsourced "recorded after #192" reference is replaced by the D2 rule. **N2** the three paths to the portal are named. **N3** the leave confirmation no longer depends on reason strings. **N4** a test that the toolkit still reads the whiteboard key, also on PR C's list. **N5** path-scoped source first. **N6** the read-only line follows capability, not width. **N7** the teacher guide moves from `/helpdesk` to the teacher's lesson list. **N8** whiteboard retention marked UNVERIFIED with its sources. PR 0 is removed (D1). Proposed; awaiting re-review; not approved.
 
 ## Approval record
 
