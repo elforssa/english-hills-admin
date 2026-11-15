@@ -351,8 +351,14 @@ function fakeChannels() {
   assert.match(page, /Vous êtes déjà connecté à ce cours dans un autre onglet\./);
   assert.match(page, /Utiliser cet onglet/);
   assert.match(page, /Touchez l’icône casque pour activer le son, puis le micro et la caméra\./);
-  assert.match(page, /await roomSettled\(\);\n\s+const result = await onlinePost\('\/api\/online\/join'/, 'a retry waits for the previous room before asking for a pass');
+  assert.match(page, /await roomSettled\(\);\n\s+if \(displaced\.current\) return;\n\s+const result = await onlinePost\('\/api\/online\/join'/, 'a retry waits for the previous room before asking for a pass');
   assert.ok(!/next\/link|useRouter/.test(page), 'the room page keeps full document navigation (A6)');
+  // Review B1: a takeover during a join in flight stops that join at every await.
+  assert.match(page, /onTakeover: \(\) => \{ if \(live\) \{ displaced\.current = true; setState\(\{ phase: 'displaced' \}\); \} \}/);
+  const joinBody = page.slice(page.indexOf('const join = useCallback'), page.indexOf('}, [id, student]);'));
+  assert.equal((joinBody.match(/if \(displaced\.current\) return;/g) || []).length, 4, 'entry, after roomSettled, after the pass request, after the window check');
+  assert.match(joinBody, /await roomSettled\(\);\n\s+if \(displaced\.current\) return;\n\s+const result = await onlinePost/);
+  assert.match(joinBody, /await onlinePost\([^\n]+\n[^\n]*\n\s+if \(displaced\.current\) return;\n\s+if \(result\.ok\)/);
 }
 
 console.log('online room unit regressions passed');

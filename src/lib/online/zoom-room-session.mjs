@@ -126,7 +126,12 @@ export function startZoomRoom({ loadToolkit, container, config, language, resour
     const toolkit = loaded?.default || loaded;
     if (s.stopped) return;
     s.toolkit = toolkit;
-    // joinSession creates the toolkit instance synchronously; everything below attaches to it.
+    // joinSession first awaits any leave or destroy the toolkit still has pending, then
+    // creates its instance. Our teardown has normally finished both by now, so the instance
+    // exists as soon as the call returns and everything below attaches to it. If the 8 s
+    // leave cap or the 25 s destroy cap ran out first, the handlers below can attach to the
+    // instance that is still being destroyed; that room ends as the error card with
+    // « Réessayer ».
     const joining = toolkit.joinSession(container, { ...config, language });
     if (resources && language) {
       const i18n = toolkit.i18n.getInstance();

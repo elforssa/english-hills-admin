@@ -28,17 +28,22 @@ function App() {
   const [state, setState] = useState({ phase: 'checking' });
   const [, rerender] = useState(0);
   const guard = useRef(null);
+  const displaced = useRef(false);
   window.__renders++;
   window.__rerender = () => rerender(n => n + 1);
   const join = useCallback(async () => {
+    if (displaced.current) return;
     setState({ phase: 'joining' });
     await roomSettled();
-    const embed = await fetch('/embed?' + new URLSearchParams({ lesson, person, role })).then(r => r.json());
+    if (displaced.current) return;
+    const embed = await fetch('/embed?' + new URLSearchParams({ lesson, person, role, delay: query.get('delay') || '0' })).then(r => r.json());
+    if (displaced.current) return;
     setState({ phase: 'in_room', embed });
   }, []);
   useEffect(() => {
     let live = true;
-    const tab = createTabGuard({ key: roomGuardKey(lesson, person), onTakeover: () => { if (live) setState({ phase: 'displaced' }); } });
+    displaced.current = false;
+    const tab = createTabGuard({ key: roomGuardKey(lesson, person), onTakeover: () => { if (live) { displaced.current = true; setState({ phase: 'displaced' }); } } });
     guard.current = tab;
     tab.acquire().then(result => { if (live) { if (result === 'busy') setState({ phase: 'other_tab' }); else join(); } });
     return () => { live = false; guard.current = null; tab.close(); };

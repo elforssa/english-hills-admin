@@ -12,6 +12,8 @@
 //     or lesson is not blocked;
 //   - leaving the page (pagehide) leaves the session; hiding the tab does not;
 //   - the scoped style hides the toolkit's « 1 / -1 » pager in an empty gallery only.
+//   - a takeover that arrives while the first tab still waits for its pass leaves that
+//     tab displaced: the late pass never opens the room there.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -21,7 +23,7 @@ import { buildRoomHarness, serveRoomHarness } from './lib/online-room-harness.mj
 setTimeout(() => { console.error('FAIL online room lifecycle browser test stalled'); process.exit(1); }, 4 * 60_000).unref();
 const harness = await buildRoomHarness({ fake: true });
 let passes = 0;
-const { server, origin } = await serveRoomHarness({ ...harness, embed: async query => ({ kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.' }) });
+const { server, origin } = await serveRoomHarness({ ...harness, embed: async query => (await new Promise(resolve => setTimeout(resolve, Number(query.delay) || 0)), { kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.' }) });
 const browser = await chromium.launch({ headless: true });
 const ok = name => console.log(`PASS ${name}`);
 const calls = page => page.evaluate(() => window.__zoom?.calls.slice() || []);
@@ -154,6 +156,29 @@ try {
   await first.reload();
   await first.getByTestId('room-other-tab').waitFor();
   ok('second tab is refused; « Utiliser cet onglet » moves the room after the first tab has left');
+
+  // Takeover while the first tab is still waiting for its pass (review B1): the late
+  // answer must not put the displaced tab back into the room.
+  const slow = await context.newPage();
+  await slow.goto(`${origin}/?lesson=l5&person=p1&delay=2500`);
+  await phase(slow, 'joining');
+  const taker = await context.newPage();
+  await taker.goto(`${origin}/?lesson=l5&person=p1`);
+  await taker.getByTestId('room-other-tab').waitFor();
+  await slow.evaluate(() => {
+    window.__sawRoom = false;
+    new MutationObserver(() => { if (document.querySelector('[data-testid="zoom-room"]')) window.__sawRoom = true; }).observe(document.body, { childList: true, subtree: true });
+  });
+  await taker.getByRole('button', { name: 'Utiliser cet onglet' }).click();
+  await slow.getByTestId('room-displaced').waitFor();
+  await joined(taker, 1);
+  await slow.waitForTimeout(3500); // well past the delayed pass
+  assert.equal(await slow.evaluate(() => window.__phase), 'displaced', 'the displaced tab stays displaced when its pass arrives late');
+  assert.equal(await slow.getByTestId('room-displaced').count(), 1);
+  assert.equal(await slow.evaluate(() => window.__sawRoom), false, 'the displaced tab never rendered the room');
+  assert.equal(await slow.evaluate(() => window.__zoom), undefined, 'the displaced tab never loaded or joined the room');
+  assert.deepEqual(order(await calls(taker)), ['join#1'], 'the taking tab is alone in the room');
+  ok('a takeover during a slow pass request leaves the first tab displaced, never in the room');
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

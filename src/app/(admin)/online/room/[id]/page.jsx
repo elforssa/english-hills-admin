@@ -49,20 +49,27 @@ function Room() {
   const { role, user } = useAuth();
   const [state, setState] = useState({ phase: 'checking' });
   const guard = useRef(null);
+  // Set when another tab takes the room over; a join in flight must then stop.
+  const displaced = useRef(false);
   const valid = UUID.test(id || '') && (!student || UUID.test(student));
   const back = BACK[role] || '/online';
 
   const join = useCallback(async () => {
+    if (displaced.current) return;
     setState({ phase: 'joining' });
     // Never ask for a new pass while an earlier room is still leaving Zoom.
     await roomSettled();
+    if (displaced.current) return;
     const result = await onlinePost('/api/online/join', { lesson: id, ...(student ? { student } : {}) });
+    // A takeover during the request: the late pass must not open the room in this tab.
+    if (displaced.current) return;
     if (result.ok) setState({ phase: 'in_room', ...result.body });
     else {
       let opensAt = null;
       if (result.body?.reason === 'window_closed') {
         opensAt = await onlineRpc('online_check_join', { p_lesson: id, p_student: student || null })
           .then(check => check?.opens_at).catch(() => null);
+        if (displaced.current) return;
       }
       setState({ phase: 'refused', reason: result.body?.reason, opensAt });
     }
@@ -73,7 +80,8 @@ function Room() {
   useEffect(() => {
     if (!valid) return undefined;
     let live = true;
-    const tab = createTabGuard({ key: roomGuardKey(id, person), onTakeover: () => { if (live) setState({ phase: 'displaced' }); } });
+    displaced.current = false;
+    const tab = createTabGuard({ key: roomGuardKey(id, person), onTakeover: () => { if (live) { displaced.current = true; setState({ phase: 'displaced' }); } } });
     guard.current = tab;
     tab.acquire().then(result => { if (live) { if (result === 'busy') setState({ phase: 'other_tab' }); else join(); } });
     return () => { live = false; guard.current = null; tab.close(); };

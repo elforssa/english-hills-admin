@@ -40,7 +40,7 @@ const BY_CODE = Object.freeze({
   3004: 'account', 3620: 'account', 3627: 'account', 4007: 'account',
   4011: 'account', 4012: 'account', 4013: 'account', 4014: 'account', 4015: 'account', 4017: 'account', 4018: 'account',
   5013: 'account', // CLIENT_INVALID_JOIN_PARAMETER
-  4016: 'pass', // a token Zoom reports as expired by its own code
+  4016: 'pass', // "recording token expired" in the bundle: the only expired-token code Zoom has
   // Everything else, e.g. 3000 and 4008 (already in the session), 3008 and 3625 (not
   // started), 3009 (removed by the host), 4004 (ended), 4006 (locked), `toolkit`: other.
 });
