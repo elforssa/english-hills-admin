@@ -115,6 +115,9 @@ export async function buildRoomHarness({ fake }) {
   const plugins = [{ name: 'room-harness', setup(b) {
     if (fake) {
       b.onResolve({ filter: /^@zoom\/videosdk-ui-toolkit(\/.*\.css)?$/ }, args => ({ path: args.path, namespace: 'fake-toolkit' }));
+      // No Zoom host is contacted with the fake toolkit: the media chunks are not loaded.
+      b.onResolve({ filter: /zoom-media-chunks\.mjs$/ }, () => ({ path: 'media-chunks', namespace: 'fake-media' }));
+      b.onLoad({ filter: /.*/, namespace: 'fake-media' }, () => ({ contents: 'export const preloadZoomMediaChunks = async () => ({ loaded: [], failed: [] });', loader: 'js' }));
       b.onLoad({ filter: /\.css$/, namespace: 'fake-toolkit' }, () => ({ contents: '', loader: 'css' }));
       b.onLoad({ filter: /.*/, namespace: 'fake-toolkit' }, () => ({ contents: FAKE_TOOLKIT, loader: 'js' }));
     }

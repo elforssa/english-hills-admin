@@ -27,3 +27,4 @@ supabase/.temp/
 scripts/.zoom-acceptance-report.json
 scripts/.zoom-room-report.json
 scripts/.zoom-lifecycle-report.json
+scripts/.zoom-two-party-report.json
