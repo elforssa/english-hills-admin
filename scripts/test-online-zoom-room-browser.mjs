@@ -6,8 +6,10 @@
 // learner in, enters the room from the student portal by a full document navigation and
 // checks, under the room's own Content-Security-Policy (no CSP bypass):
 //   - the join route answers with a zoom-video embed and no room reference;
-//   - the UI Toolkit joins the Zoom session (a websocket to a zoom.us host opens, the
-//     toolkit renders the participant list with the platform label, no "Verify JWT" error);
+//   - the toolkit's pre-join device screen is in French with the display label locked
+//     (owner decision 2026-11-14), and « Rejoindre le cours » joins the Zoom session (a
+//     websocket to a zoom.us host opens, the toolkit renders its French interface, no
+//     "Verify JWT" error); the French resources are inline, so the CSP blocks nothing new;
 //   - every request the browser blocked under the CSP is recorded (none may be a Zoom
 //     host), and the telemetry posts are captured and scanned for platform identifiers
 //     (the display label, the pass id, the learner's e-mail, the room reference): A7-record;
@@ -67,6 +69,9 @@ try {
   await createUser('student');
   sql(`insert into public.teachers(id, full_name, email, contract_type) values ('${ids.teacher}', 'Sara ${run}', '${run}-teacher@example.invalid', 'Freelance');
     insert into public.students(id, full_name, email, status, session_type, niveau_cefr) values ('${ids.adult}', 'Amal Bennani', '${users.student.email}', 'Enrolled', 'Online', 'B1');
+    -- Portal readiness (migration 123): a learner reaches its lessons through an explicit link.
+    insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+      ('${ids.adult}', 'self', '${users.student.id}', '${users.student.email}', 'active', now());
     insert into public.groups(id, name, session_type, niveau) values ('${ids.group}', 'Online B1 ${run}', 'Online', 'B1');
     insert into public.online_courses(group_id, teacher_id, audience, capacity, status, provider, provider_room_ref, term_start, term_end) values
       ('${ids.group}', '${ids.teacher}', 'adult', 8, 'active', 'zoom-video', '${roomRef}', current_date - 1, current_date + 30);
@@ -138,7 +143,16 @@ try {
   pass('join route: zoom-video embed, session per lesson, no room reference field', join.provider === 'zoom-video' && join.embed?.kind === 'zoom-video'
     && join.embed?.sessionName === `${roomRef}.${ids.open}`.toLowerCase() && !joinBodies.some(b => b.includes('"room_ref"')), report.join);
 
-  // The toolkit joins: a websocket to a zoom.us host opens and the participant label appears.
+  // Pre-join device screen: French, the platform label locked; then join.
+  const prejoin = page.getByRole('button', { name: 'Rejoindre le cours' });
+  await prejoin.waitFor({ timeout: 60000 });
+  const nameInput = page.locator('[data-testid="zoom-room"] input').first();
+  const hint = await page.getByTestId('room-audio-hint').innerText().catch(() => '');
+  pass('pre-join screen: French, display label locked, phone hint shown', (await nameInput.inputValue()) === 'Amal B.' && await nameInput.isDisabled()
+    && hint === 'Touchez l’icône casque pour activer le son, puis le micro et la caméra.', { name: await nameInput.inputValue(), locked: await nameInput.isDisabled(), hint });
+  await prejoin.click();
+
+  // The toolkit joins: a websocket to a zoom.us host opens and the French interface appears.
   const started = Date.now();
   while (Date.now() - started < 120000 && !report.websockets.some(w => w.host.endsWith('zoom.us'))) await new Promise(r => setTimeout(r, 1000));
   await new Promise(r => setTimeout(r, 8000));
@@ -149,7 +163,7 @@ try {
   report.cspBlocked = cspBlocked;
   const jwtError = report.console.some(c => /Verify JWT|JOIN_MEETING_FAILED/i.test(c.text));
   const wsHosts = [...new Set(report.websockets.map(w => w.host))];
-  const toolkitUi = /Join Audio|No other participants|Participants|Leave/i.test(text);
+  const toolkitUi = /Rejoindre l’audio|Aucun autre participant|Participants/.test(text) && !/Join Audio|No other participants/.test(text);
   pass('toolkit joined the Zoom session under the room CSP', wsHosts.some(h => h.endsWith('zoom.us')) && !jwtError && toolkitUi && !text.includes('n’a pas pu être ouverte'),
     { websocketHosts: wsHosts, toolkitUi, jwtError, cspBlockedCount: cspBlocked.length });
   const zoomBlocked = cspBlocked.filter(b => b.blocked.includes('zoom.us'));
@@ -170,7 +184,7 @@ try {
     .map(el => ({ tag: el.tagName, cls: String(el.className).slice(0, 120), parents: [el.parentElement, el.parentElement?.parentElement, el.parentElement?.parentElement?.parentElement].map(p => p ? `${p.tagName}.${String(p.className).slice(0, 80)}` : '').join(' < ') })), roomRef);
   pass('the technical session name is not displayed to the learner', !(await page.evaluate(() => document.body.innerText)).includes(roomRef), { elements: report.sessionNameElements.slice(0, 3) });
   // Dismiss the toolkit's audio prompt if it is still up, so that Quitter is clickable.
-  const notNow = page.getByRole('button', { name: 'Not Now' });
+  const notNow = page.getByRole('button', { name: 'Pas maintenant' });
   if (await notNow.count()) await notNow.first().click().catch(() => {});
 
   // Quitter: full document navigation back to the portal.
@@ -194,6 +208,7 @@ try {
     delete from public.online_join_tokens where lesson_id = '${ids.open}';
     delete from public.online_lessons where group_id = '${ids.group}';
     delete from public.online_courses where group_id = '${ids.group}';
+    delete from public.family_links where student_id = '${ids.adult}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id = '${ids.adult}';
     delete from public.students where id = '${ids.adult}';
     delete from public.groups where id = '${ids.group}';
