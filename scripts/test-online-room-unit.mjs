@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { startZoomRoom, roomSettled } from '../src/lib/online/zoom-room-session.mjs';
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
-import { roomErrorFor, roomErrorKey, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
+import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
 import { toolkitEnglish, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -266,21 +266,44 @@ function fakeChannels() {
   assert.equal(await createTabGuard({ key: key2, locks: null, Channel: null }).acquire(), 'unguarded');
 }
 
-// ---- Error mapping: by code, never by Zoom's text; unknown codes are a connection problem.
-assert.equal(roomErrorKey(3009), 'removed');
-assert.equal(roomErrorFor({ code: 3009, reason: 'anything' }).retry, false);
-assert.equal(roomErrorFor({ code: 4004 }).key, 'ended');
-assert.equal(roomErrorFor({ code: 4005 }).key, 'full');
-assert.equal(roomErrorFor({ code: 4006 }).key, 'locked');
-assert.equal(roomErrorFor({ code: 4008 }).key, 'duplicate');
-assert.equal(roomErrorFor({ code: 200 }).key, 'network');
-assert.equal(roomErrorFor({ code: 'join_timeout' }).key, 'join_timeout');
-assert.equal(roomErrorFor({ code: 987654, reason: 'Some English text' }).key, 'network');
-assert.equal(roomErrorFor({ code: '__proto__' }).key, 'network');
-assert.equal(roomErrorFor(undefined).retry, true);
-for (const [key, entry] of Object.entries(ROOM_ERRORS)) {
-  assert.ok(entry.text.length > 10 && typeof entry.retry === 'boolean', key);
-  assert.ok(!/\b(session|host|failed|error)\b/i.test(entry.text), `${key}: French text`);
+// ---- Error mapping (R4 diagnosis table): by code, never by Zoom's text.
+{
+  const text = detail => roomErrorFor(detail).text, retry = detail => roomErrorFor(detail).retry;
+  // Account or key refused.
+  for (const code of [3004, 3620, 3627, 4007, 4011, 4012, 4013, 4014, 4015, 4017, 4018, 5013]) {
+    assert.equal(text({ code }), 'La salle de cours n’est pas disponible pour le moment. Prévenez l’accueil.', String(code));
+    assert.equal(retry({ code }), false);
+  }
+  // Session full: the existing capacity text.
+  assert.equal(text({ code: 4005 }), 'Ce cours en ligne est complet.');
+  // Network or timeout.
+  for (const code of [200, 3621, 'join_timeout']) {
+    assert.equal(text({ code }), 'Connexion instable. Vérifiez votre réseau, puis réessayez.', String(code));
+    assert.equal(retry({ code }), true);
+  }
+  // Token expired or invalid: Zoom's own code, or code 200 once the platform knows the pass is past its expiry.
+  assert.equal(text({ code: 4016 }), 'Votre accès a expiré. Rouvrez la salle depuis votre espace.');
+  assert.equal(text({ code: 200, passExpired: true }), 'Votre accès a expiré. Rouvrez la salle depuis votre espace.');
+  assert.equal(retry({ code: 200, passExpired: true }), true);
+  assert.equal(roomErrorFor({ code: 4005, passExpired: true }).key, 'full', 'an expired pass only re-reads the catch-all code');
+  assert.equal(roomErrorFor({ code: 'join_timeout', passExpired: true }).key, 'network');
+  // Zoom's wording never decides: the same code with any reason gives the same text.
+  assert.equal(text({ code: 200, reason: 'Verify JWT failed' }), text({ code: 200, reason: 'The token has expired' }));
+  // Anything else: the existing provider_error text, with a retry.
+  for (const code of [3000, 3008, 3009, 3625, 4004, 4006, 4008, 5012, 'toolkit', 987654, '__proto__', undefined]) {
+    assert.equal(text({ code }), 'La salle de cours n’a pas pu être ouverte. Réessayez dans un instant.', String(code));
+    assert.equal(retry({ code }), true);
+  }
+  assert.equal(roomErrorFor(undefined).key, 'other');
+  assert.deepEqual(Object.keys(ROOM_ERRORS), ['account', 'pass', 'full', 'network', 'other']);
+  assert.equal(roomErrorKey(200), 'network');
+  // The pass expiry comes from the embed, on the participant's clock.
+  const at = Date.parse('2026-11-14T10:00:00Z');
+  assert.equal(passExpired({ tokenExpiresAt: '2026-11-14T10:00:00Z', expiresAt: '2026-11-14T09:00:00Z' }, at - 1), false);
+  assert.equal(passExpired({ tokenExpiresAt: '2026-11-14T10:00:00Z' }, at), true);
+  assert.equal(passExpired({ expiresAt: '2026-11-14T10:00:00Z' }, at + 1), true);
+  assert.equal(passExpired({}, at), false);
+  assert.equal(passExpired(undefined, at), false);
 }
 
 // ---- French resources against the installed toolkit bundle ----

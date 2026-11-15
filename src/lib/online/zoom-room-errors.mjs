@@ -1,51 +1,63 @@
 // French text for a Zoom room that failed to open or dropped, chosen by the SDK's numeric
-// error code and never by Zoom's own (English) wording. The codes are the ones the pinned
-// toolkit bundle (@zoom/videosdk-ui-toolkit 2.5.0-1) can put in a `connection-change`
-// event with state "Fail" (its join-result table and client error enum), plus two of our
-// own: `join_timeout` (no answer from Zoom) and `toolkit` (the room could not be loaded).
-// `retry` says whether « Réessayer » is offered; a retry always asks for a new pass.
-
-// Code 200 is the SDK's catch-all: a lost connection, and also a token Zoom refuses
-// (observed 2026-11-14: reason "Verify JWT failed" or "The token has expired, …", both
-// with errorCode 200). A retry asks for a new pass, which is the remedy for both.
-const NETWORK = 'La connexion à la salle a échoué. Vérifiez votre connexion Internet, puis réessayez.';
+// error code and never by Zoom's own (English) wording, as in the table of the R4
+// diagnosis of 2026-11-14 (finding 5):
+//   account or key refused  → « … n’est pas disponible pour le moment. Prévenez l’accueil. »
+//   token expired or invalid → the pass_invalid text, with « Réessayer »
+//   session full             → the capacity text
+//   network or timeout       → « Connexion instable. … », with « Réessayer »
+//   anything else            → the provider_error text, with « Réessayer »
+// The codes are the ones the pinned toolkit bundle (@zoom/videosdk-ui-toolkit 2.5.0-1) can
+// put in a `connection-change` event with state "Fail", plus two of our own: `join_timeout`
+// (no answer from Zoom) and `toolkit` (the room could not be loaded). A retry always asks
+// for a new pass.
+//
+// What cannot be told apart: code 200 is the SDK's catch-all ("connection error"). Zoom
+// sends it for a lost connection, for a token it refuses as expired, and for a token it
+// cannot verify (a wrong key or secret, i.e. "account or key refused"); observed
+// 2026-11-14: reasons "Verify JWT failed" and "The token has expired, …", both 200. So
+// 200 shows the network text with « Réessayer », except when the platform itself knows
+// the pass is past its expiry (`passExpired`, from the embed's own expiry time), which
+// shows the pass text. An account or key refusal that arrives as 200 therefore reads as
+// "Connexion instable"; only the codes Zoom reserves for a refused account show the
+// account text.
+import { ONLINE_REASON_TEXT } from './reasons.mjs';
 
 export const ROOM_ERRORS = Object.freeze({
-  network: { text: NETWORK, retry: true },
-  join_timeout: { text: 'La salle met trop de temps à répondre. Vérifiez votre connexion Internet, puis réessayez.', retry: true },
-  toolkit: { text: 'La salle de cours n’a pas pu être chargée. Actualisez la page, puis réessayez.', retry: true },
-  not_started: { text: 'Le cours n’a pas encore commencé. Réessayez dans un instant.', retry: true },
-  removed: { text: 'L’enseignant vous a retiré de la salle. Vous ne pouvez plus y revenir pour ce cours.', retry: false },
-  ended: { text: 'Ce cours est terminé.', retry: false },
-  full: { text: 'La salle est complète. Contactez l’accueil.', retry: true },
-  locked: { text: 'L’enseignant a verrouillé la salle. Réessayez dans un instant.', retry: true },
-  duplicate: { text: 'Vous êtes déjà connecté à ce cours sur un autre appareil ou dans un autre onglet. Fermez-le, puis réessayez.', retry: true },
-  refused: { text: 'La salle a refusé la connexion. Réessayez ; si le problème persiste, contactez l’accueil.', retry: true },
+  account: { text: 'La salle de cours n’est pas disponible pour le moment. Prévenez l’accueil.', retry: false },
+  pass: { text: ONLINE_REASON_TEXT.pass_invalid, retry: true },
+  full: { text: ONLINE_REASON_TEXT.capacity, retry: false },
+  network: { text: 'Connexion instable. Vérifiez votre réseau, puis réessayez.', retry: true },
+  other: { text: ONLINE_REASON_TEXT.provider_error, retry: true },
 });
 
-// SDK error code → entry above. Anything unknown is treated as a connection problem.
+// SDK error code → row of the table. Any code not listed is "anything else".
 const BY_CODE = Object.freeze({
-  200: 'network', // "connection error": the SDK's catch-all
-  3000: 'duplicate', // a session of this participant is already in progress
-  3004: 'refused', // incorrect passcode (we set none)
-  3008: 'not_started',
-  3009: 'removed', // "user has been removed"
-  3620: 'refused', 3621: 'network', 3625: 'not_started', 3627: 'refused',
-  4004: 'ended', 4005: 'full', 4006: 'locked', 4007: 'refused',
-  4008: 'duplicate', // "participant exist"
-  4011: 'refused', 4012: 'refused', 4013: 'refused', 4014: 'refused', 4015: 'refused', 4016: 'refused', 4017: 'refused', 4018: 'refused',
-  5012: 'duplicate', // CLIENT_DUPLICATED_JOIN
-  5013: 'refused', // CLIENT_INVALID_JOIN_PARAMETER
-  join_timeout: 'join_timeout',
-  toolkit: 'toolkit',
+  200: 'network', // "connection error": the catch-all (see above)
+  3621: 'network', // no response from the web server
+  join_timeout: 'network',
+  4005: 'full', // "meeting is at capacity"
+  // Refused for the account, the key or the way the join was signed.
+  3004: 'account', 3620: 'account', 3627: 'account', 4007: 'account',
+  4011: 'account', 4012: 'account', 4013: 'account', 4014: 'account', 4015: 'account', 4017: 'account', 4018: 'account',
+  5013: 'account', // CLIENT_INVALID_JOIN_PARAMETER
+  4016: 'pass', // a token Zoom reports as expired by its own code
+  // Everything else, e.g. 3000 and 4008 (already in the session), 3008 and 3625 (not
+  // started), 3009 (removed by the host), 4004 (ended), 4006 (locked), `toolkit`: other.
 });
 
-export function roomErrorKey(code) {
-  const key = typeof code === 'number' || typeof code === 'string' ? String(code) : '';
-  return Object.hasOwn(BY_CODE, key) ? BY_CODE[key] : 'network';
+export function roomErrorKey(code, passExpired = false) {
+  const name = typeof code === 'number' || typeof code === 'string' ? String(code) : '';
+  const key = Object.hasOwn(BY_CODE, name) ? BY_CODE[name] : 'other';
+  return key === 'network' && passExpired === true && name === '200' ? 'pass' : key;
 }
 
 export function roomErrorFor(detail) {
-  const key = roomErrorKey(detail?.code);
+  const key = roomErrorKey(detail?.code, detail?.passExpired);
   return { key, ...ROOM_ERRORS[key] };
+}
+
+// True when the pass in this embed is past its own expiry on the participant's clock.
+export function passExpired(embed, now = Date.now()) {
+  const at = Date.parse(embed?.tokenExpiresAt || embed?.expiresAt || '');
+  return Number.isFinite(at) && now >= at;
 }

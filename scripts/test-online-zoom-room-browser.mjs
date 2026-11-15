@@ -69,6 +69,9 @@ try {
   await createUser('student');
   sql(`insert into public.teachers(id, full_name, email, contract_type) values ('${ids.teacher}', 'Sara ${run}', '${run}-teacher@example.invalid', 'Freelance');
     insert into public.students(id, full_name, email, status, session_type, niveau_cefr) values ('${ids.adult}', 'Amal Bennani', '${users.student.email}', 'Enrolled', 'Online', 'B1');
+    -- Portal readiness (migration 123): a learner reaches its lessons through an explicit link.
+    insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
+      ('${ids.adult}', 'self', '${users.student.id}', '${users.student.email}', 'active', now());
     insert into public.groups(id, name, session_type, niveau) values ('${ids.group}', 'Online B1 ${run}', 'Online', 'B1');
     insert into public.online_courses(group_id, teacher_id, audience, capacity, status, provider, provider_room_ref, term_start, term_end) values
       ('${ids.group}', '${ids.teacher}', 'adult', 8, 'active', 'zoom-video', '${roomRef}', current_date - 1, current_date + 30);
@@ -205,6 +208,7 @@ try {
     delete from public.online_join_tokens where lesson_id = '${ids.open}';
     delete from public.online_lessons where group_id = '${ids.group}';
     delete from public.online_courses where group_id = '${ids.group}';
+    delete from public.family_links where student_id = '${ids.adult}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id = '${ids.adult}';
     delete from public.students where id = '${ids.adult}';
     delete from public.groups where id = '${ids.group}';

@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { onlinePost, onlineRpc, casablancaTime } from '@/lib/online/queries';
 import { ONLINE_REASON_TEXT, onlineErrorText } from '@/lib/online/reasons.mjs';
-import { roomErrorFor } from '@/lib/online/zoom-room-errors.mjs';
+import { roomErrorFor, passExpired } from '@/lib/online/zoom-room-errors.mjs';
 import { roomSettled } from '@/lib/online/zoom-room-session.mjs';
 import { createTabGuard, roomGuardKey } from '@/lib/online/room-tab-guard.mjs';
 
@@ -104,7 +104,8 @@ function Room() {
 
   const onLeft = useCallback(() => leaveRoom(back), [back]);
   // The room has already left Zoom and been destroyed when this is called.
-  const onError = useCallback(detail => setState({ phase: 'refused', reason: 'provider_error', room: roomErrorFor(detail) }), []);
+  const onError = useCallback(detail => setState(previous => ({ phase: 'refused', reason: 'provider_error',
+    room: roomErrorFor({ ...detail, passExpired: passExpired(previous.embed) }) })), []);
   // An automatic leave shows its reason for a moment, then returns to the portal by a
   // full document navigation, so the room-only headers never outlive the room (A6).
   useEffect(() => {

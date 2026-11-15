@@ -18,7 +18,7 @@ import { createRoot } from 'react-dom/client';
 import ZoomRoom from './src/components/online/ZoomRoom.jsx';
 import { createTabGuard, roomGuardKey } from './src/lib/online/room-tab-guard.mjs';
 import { roomSettled } from './src/lib/online/zoom-room-session.mjs';
-import { roomErrorFor } from './src/lib/online/zoom-room-errors.mjs';
+import { roomErrorFor, passExpired } from './src/lib/online/zoom-room-errors.mjs';
 
 const query = new URLSearchParams(location.search);
 const lesson = query.get('lesson') || 'lesson', person = query.get('person') || 'person', role = query.get('role') || 'participant';
@@ -54,7 +54,7 @@ function App() {
   }, [state.phase]);
   // New function identities on every render, like a page whose role or back link changes.
   const onLeft = () => setState({ phase: 'left' });
-  const onError = detail => setState({ phase: 'refused', room: roomErrorFor(detail), code: detail?.code });
+  const onError = detail => setState(previous => ({ phase: 'refused', room: roomErrorFor({ ...detail, passExpired: passExpired(previous.embed) }), code: detail?.code }));
   window.__phase = state.phase;
   return (
     <div>

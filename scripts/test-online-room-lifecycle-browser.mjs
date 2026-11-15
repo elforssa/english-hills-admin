@@ -88,7 +88,7 @@ try {
   await page.evaluate(() => window.__zoom.emit('connection-change', { state: 'Fail', errorCode: 4008, reason: 'participant exist' }));
   await page.getByTestId('room-refused').waitFor();
   assert.equal(await page.getByTestId('room-refused').getAttribute('data-code'), '4008');
-  assert.match(await page.getByTestId('room-refused').innerText(), /Vous êtes déjà connecté à ce cours sur un autre appareil/);
+  assert.match(await page.getByTestId('room-refused').innerText(), /La salle de cours n’a pas pu être ouverte\. Réessayez dans un instant\./);
   assert.ok(!(await page.getByTestId('room-refused').innerText()).includes('participant exist'), 'Zoom text is never shown');
   list = await calls(page);
   assert.deepEqual(list.slice(-3), ['leave', 'destroy:start', 'destroy:end'], 'the card appears after leave and destroy');
@@ -104,7 +104,7 @@ try {
   assert.equal(sequence.filter(c => c.startsWith('join#')).length, 6);
   for (let i = 0; i < sequence.length; i += 3) assert.deepEqual(sequence.slice(i, i + 3).map(c => c.replace(/#\d+/, '')), ['join', 'destroy:start', 'destroy:end'], sequence.join(' '));
   assert.equal(new Set(list.filter(c => c.startsWith('join#')).map(c => c.split(':')[1])).size, 6, 'each retry used a new pass');
-  assert.match(await page.getByTestId('room-refused').innerText(), /La connexion à la salle a échoué/);
+  assert.match(await page.getByTestId('room-refused').innerText(), /Connexion instable\. Vérifiez votre réseau, puis réessayez\./);
   ok('a failure closes the toolkit before « Réessayer »; retries never overlap');
 
   // Page exit leaves; hiding the tab does not.
