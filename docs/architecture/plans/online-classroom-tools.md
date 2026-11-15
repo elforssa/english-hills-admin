@@ -2,6 +2,8 @@
 
 **Revision OCT-r3, 2026-11-15. PROPOSED — architecture only, not approved, nothing implemented.** OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174` (B1–B5, N1–N8) and OCT-r2 at head `0f0d83954cb6d4c6518bae922ff8523775ca087e` (B6 and four notes) were each independently reviewed CHANGES REQUIRED; this revision applies every finding and records the owner's answers D1–D11, confirmed by the owner on 2026-11-15 ([revision record](#revision-record), [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--proposed-2026-11-15)). Risk tier: **Tier 3** for the outcome (it changes the security header of the room path, an OL-r6 decision); the pull requests inside it are tiered one by one in [PR split](#7-risk-tier-and-pr-split). Baseline: `main` at `ab3cc74` (PR #192 merged). Parent contract: [online learning — pilot architecture](online-learning.md) and [ADR-008](../decisions/ADR-008-online-learning-pilot.md).
 
+**Status update, 2026-11-15 (PR A implementation):** step P1 is done (Production whiteboard host `us04st1.zoom.us`), S1 was decided by the owner (two exact path-scoped sources), and PR A is implemented on a pull request, not merged. What the implementation found and how it differs from the text below is in the [implementation record for PR A](#implementation-record--pr-a-whiteboard); the body of the plan is left as approved.
+
 # Owner summary
 
 The room passed its three-person test on 2026-11-15. This plan turns it into a classroom. The main finding: **almost every tool you asked for is already inside the Zoom toolkit version we ship; no new provider, no database change and no new Zoom purchase is needed.** Two things are in the way, and one tool does not exist.
@@ -413,6 +415,30 @@ S1–S6 above, plus the standing ones: any need to touch the join route, the tok
 
 PR A updates CURRENT_STATE, SECURITY_RULES (room header) and ADR-008 (amendment, with the D2 answer and the host and source form that shipped). PR B updates CURRENT_STATE and adds the teacher guide. Each PR reports under the AGENTS implementation handoff. This plan's revision record below is updated with approvals, PR numbers and the Production test result; planned, merged, deployed and Production-verified stay distinct.
 
+## Implementation record — PR A (whiteboard)
+
+Implemented on branch `feat/online-whiteboard` from `main` `00e9756` on 2026-11-15; a pull request, **not merged, not deployed**, waiting for independent review. Evidence is the real-Zoom script report attached to the pull request and CI on its exact head.
+
+**P1 and S1.** The owner's Production console (2026-11-15 14:43) names `us04st1.zoom.us`; the development key gets `us05st1.zoom.us` (local run of the same day, same build segment `mveoc7k9`). S1 was triggered and decided by the owner: exactly the two path-scoped sources `https://us04st1.zoom.us/web_client_whiteboard/` and `https://us05st1.zoom.us/web_client_whiteboard/` in `script-src` and `style-src` of the room path; never a wildcard; any further host needs a new decision ([OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--proposed-2026-11-15)). The path form is honoured by installed Chrome (the whiteboard loaded with zero refusals), so the exact-host fallback was not used. **The Production source itself has not been exercised:** the pre-merge script runs on the development key; the owner's Production test is its proof.
+
+**The three `blob:` scripts in the owner's console.** Checked before any code, in installed Chrome (headless, fake camera and microphone, development key), with the headers of `main` served unchanged and a report-only copy added only so that refusals inside workers were seen too:
+
+| Run under `main`'s headers | `blob:` refused on `script-src` | Other refusals |
+| --- | --- | --- |
+| Teacher and learner join, audio and camera, no whiteboard | 0 | 0 |
+| The same, then « Start whiteboard » | 0 | the whiteboard script and stylesheet on `us05st1.zoom.us`, for both |
+| Three participants (one phone-shaped), audio, camera, a screen share, then « Start whiteboard », Production-mode policy | 0 | the same two |
+
+So the three `blob:` scripts were **not reproduced**: they are not raised by every join in this environment, and starting the whiteboard did not raise them either. In the same runs each participant's page created `blob:` workers (allowed by `worker-src`) and loaded an audio worklet module from a `blob:` URL without any refusal. Under the PR A headers the whiteboard was started, drawn on by teacher and learner, viewed on the phone-shaped participant, exported as PDF and stopped with **zero** refusals, so **the whiteboard does not need `blob:` in `script-src`**; S2 is not triggered and `script-src` has no `blob:`. **What raised the three lines in Production is UNVERIFIED.** Differences from the local runs that could explain them: a real camera and microphone, the owner's own Chrome profile (an extension that injects a `blob:` script is refused by the page's policy and reported against the page), real phones in the session, and the Production build of the page. The room now writes `[online room] … csp blocked directive=… host=blob` for such a refusal, so the next Production test shows whether they still appear and whether anything visibly fails with them.
+
+**Differences from the plan text, each from evidence of the real-Zoom runs:**
+
+1. **The read-only line cannot be keyed on Zoom's events (section 6).** A participant without the canvas receives neither `whiteboard-status-change` nor `peer-whiteboard-state-change`; the whiteboard reaches it as a share stream with exactly the events and participant fields of a screen share. Owner decision, 2026-11-15: the presenter's page sends one fixed marker on the SDK's command channel when its whiteboard opens or closes and again when somebody joins; the receiving page believes it only from the host or a manager. The capability is still `isWhiteboardEnabled()` on `window.zmClient`, with Zoom's device rule as the fallback; nothing is keyed on the window width. New data to Zoom: the two fixed texts `eh-whiteboard:open` and `eh-whiteboard:closed`, nothing else.
+2. **Learner export (D3).** With the three values of the plan, a learner still has Zoom's own « Exporter au format PNG » link and it downloads a file. The room therefore gives a learner `{ enable: true, enableExport: false, enableViewerUserExport: false }` and the teacher the plan's `{ enable: true, enableExport: true, enableViewerUserExport: false }`; with that, the learner has no export control in the toolkit or in the whiteboard's own menus (asserted by the script).
+3. **The script evaluates the Production policy.** `next.config.mjs` adds `'unsafe-eval'` and local hosts outside Production; the classroom script sets `NODE_ENV=production` before reading the configuration, so the header it serves is the one Production sends.
+
+**Not covered by PR A's evidence (UNVERIFIED):** the Production key and `us04st1.zoom.us`; real phones and iPhone Safari; a computer with two cores; image insertion and PNG export by the teacher; what Zoom retains of a whiteboard; the cause of the three `blob:` lines. The teacher's exported file is named after the technical session name unless the teacher types another name in the export dialog.
+
 ## Revision record
 
 - **OCT-r1 (2026-11-15):** first version, from the owner's request after the three-person Production test of 2026-11-15. Proposed; not reviewed; not approved.
@@ -421,4 +447,4 @@ PR A updates CURRENT_STATE, SECURITY_RULES (room header) and ADR-008 (amendment,
 
 ## Approval record
 
-None yet.
+- **2026-11-15:** the PR A implementation task given by the owner names this plan (OCT-r3) as approved and merged as PR #193 (`main` `00e9756`), and carries the P1 result and the S1 decision. The verbatim approval and the independent re-review verdict of the OCT-r3 head (`711d49286bd6462072ebc508ed69eaaeb1adcaa2`) are not recorded in the repository; the coordinator adds them here. The header line of this document still reads « PROPOSED » for that reason.

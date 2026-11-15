@@ -137,7 +137,7 @@ export async function buildRoomHarness({ fake }) {
 // `embed(query)` returns the embed for one pass. `headers` are response headers for the
 // page itself, e.g. the room path's own Content-Security-Policy and Permissions-Policy.
 export async function serveRoomHarness({ js, css, embed, headers = [] }) {
-  const html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>room harness</title><link rel="stylesheet" href="/room.css"><body><div id="app"></div><script src="/room.js"></script></body></html>';
+  const html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>room harness</title><link rel="stylesheet" href="/room.css"><link rel="stylesheet" href="/harness.css"><body><div id="app"></div><script src="/room.js"></script></body></html>';
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     try {
@@ -147,6 +147,8 @@ export async function serveRoomHarness({ js, css, embed, headers = [] }) {
         return res.end(html);
       }
       if (url.pathname === '/room.js') { res.setHeader('content-type', 'text/javascript; charset=utf-8'); return res.end(js); }
+      // The harness has no Tailwind: give the room container the height its class gives it in the app.
+      if (url.pathname === '/harness.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end('[data-testid="zoom-room"] { height: 78vh; width: 100%; overflow: hidden; }'); }
       if (url.pathname === '/room.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end(css); }
       if (url.pathname === '/embed') { res.setHeader('content-type', 'application/json'); res.setHeader('cache-control', 'no-store'); return res.end(JSON.stringify(await embed(Object.fromEntries(url.searchParams)))); }
     } catch (error) { res.statusCode = 500; return res.end(String(error?.message || error)); }

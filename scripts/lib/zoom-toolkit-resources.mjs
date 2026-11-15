@@ -44,7 +44,6 @@ export const UNREACHABLE_PREFIXES = Object.freeze([
   'phone.', 'call.', 'room.', // phone: off (dial-in, call-out, room systems)
   'recording.', // recording: off
   'broadcast_', 'livestream.', 'real_time_media_streams.', // live streaming and RTMS: not enabled
-  'whiteboard.', // whiteboard: not enabled
   'feedback.', // feedback: off
   'invite.', // invite: off
   'playback.', // playback: off

@@ -51,6 +51,15 @@ export default function TeacherOnlineLessons() {
           );
         })}
       </ul>
+      {/* Guide de la salle (plan online-classroom-tools.md, section 6): static text on the page a
+          teacher opens before every lesson. PR A carries the whiteboard paragraph. */}
+      <details className="mt-6 rounded-xl border bg-card p-4 text-sm" data-testid="room-guide">
+        <summary className="cursor-pointer font-semibold">Guide de la salle</summary>
+        <div className="mt-3 space-y-2 text-muted-foreground">
+          <p><span className="font-medium text-foreground">Tableau blanc.</span> Sur ordinateur, ouvrez-le avec le bouton « Ouvrir le tableau blanc » de la salle. Les apprenants sur ordinateur peuvent écrire avec vous ; sur téléphone ou tablette, ils le voient en lecture seule.</p>
+          <p>Le tableau blanc ne peut pas être rouvert après sa fermeture : choisissez « Exporter et fermer » pour garder une copie PDF. Seul l’enseignant peut l’exporter.</p>
+        </div>
+      </details>
       <p className="mt-6 text-xs text-muted-foreground">Pour annuler ou déplacer un cours, ou pour inviter un apprenant, contactez l’accueil.</p>
     </div>
   );

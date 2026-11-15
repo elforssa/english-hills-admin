@@ -52,6 +52,7 @@ export default function FamilyLessons({ title, query, showLearner = false, backH
         })}
       </ul>
       <p className="mt-6 text-xs text-muted-foreground">Le bouton s’active 15 minutes avant le cours. Pour toute absence, contactez l’accueil.</p>
+      <p className="mt-2 text-xs text-muted-foreground">Conseil : pour les activités au tableau blanc, un ordinateur est préférable. Sur téléphone ou tablette, le tableau s’affiche en lecture seule.</p>
     </div>
   );
 }

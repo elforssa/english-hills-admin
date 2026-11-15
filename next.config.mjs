@@ -60,9 +60,21 @@ const csp = [
 export const ZOOM_SCRIPT_HOSTS = ['https://source.zoom.us'];
 export const ZOOM_CONNECT_HOSTS = ['https://zoom.us', 'https://*.zoom.us', 'wss://*.zoom.us'];
 export const ZOOM_MEDIA_HOSTS = ['https://st1.zoom.us'];
+// Whiteboard (plan online-classroom-tools.md, OCT-r3, decision D2 and the owner's S1
+// decision of 2026-11-15; amends A6/A7). Zoom's whiteboard program is a set of module
+// scripts and one stylesheet whose host and build segment Zoom's server sends at the
+// join, so it cannot be preloaded from source.zoom.us. Exactly two path-scoped sources,
+// in script-src and style-src only: the host the Production key gets (us04st1, owner
+// step P1) and the host the development key gets (us05st1, so the pre-merge real-Zoom
+// script runs under this exact header). Never a wildcard; any other host needs a new
+// owner decision. The whiteboard also fetches a blob: URL it created in the page, so
+// connect-src gains blob: and nothing else. script-src never gets blob:; worker-src is
+// unchanged.
+export const ZOOM_WHITEBOARD_SOURCES = ['https://us04st1.zoom.us/web_client_whiteboard/', 'https://us05st1.zoom.us/web_client_whiteboard/'];
 const roomCsp = csp.split('; ').map(directive => {
-  if (directive.startsWith('script-src ')) return `${directive} 'wasm-unsafe-eval' ${ZOOM_SCRIPT_HOSTS.join(' ')}`;
-  if (directive.startsWith('connect-src ')) return `${directive} ${ZOOM_CONNECT_HOSTS.join(' ')}`;
+  if (directive.startsWith('script-src ')) return `${directive} 'wasm-unsafe-eval' ${ZOOM_SCRIPT_HOSTS.join(' ')} ${ZOOM_WHITEBOARD_SOURCES.join(' ')}`;
+  if (directive.startsWith('style-src ')) return `${directive} ${ZOOM_WHITEBOARD_SOURCES.join(' ')}`;
+  if (directive.startsWith('connect-src ')) return `${directive} ${ZOOM_CONNECT_HOSTS.join(' ')} blob:`;
   if (directive.startsWith('worker-src ')) return `${directive} ${ZOOM_SCRIPT_HOSTS.join(' ')}`;
   if (directive.startsWith('media-src ')) return `${directive} ${ZOOM_MEDIA_HOSTS.join(' ')}`;
   return directive;

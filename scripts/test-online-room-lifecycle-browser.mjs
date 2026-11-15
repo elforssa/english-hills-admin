@@ -14,6 +14,8 @@
 //   - the scoped style hides the toolkit's « 1 / -1 » pager in an empty gallery only.
 //   - a takeover that arrives while the first tab still waits for its pass leaves that
 //     tab displaced: the late pass never opens the room there.
+//   - whiteboard: the learner's toolkit configuration has export off; the read-only line
+//     follows the capability the SDK reports and the presenter's marker, not the width.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -23,7 +25,7 @@ import { buildRoomHarness, serveRoomHarness } from './lib/online-room-harness.mj
 setTimeout(() => { console.error('FAIL online room lifecycle browser test stalled'); process.exit(1); }, 4 * 60_000).unref();
 const harness = await buildRoomHarness({ fake: true });
 let passes = 0;
-const { server, origin } = await serveRoomHarness({ ...harness, embed: async query => (await new Promise(resolve => setTimeout(resolve, Number(query.delay) || 0)), { kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.' }) });
+const { server, origin } = await serveRoomHarness({ ...harness, embed: async query => (await new Promise(resolve => setTimeout(resolve, Number(query.delay) || 0)), { kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.', role: query.role === 'host' ? 'host' : 'participant' }) });
 const browser = await chromium.launch({ headless: true });
 const ok = name => console.log(`PASS ${name}`);
 const calls = page => page.evaluate(() => window.__zoom?.calls.slice() || []);
@@ -179,6 +181,51 @@ try {
   assert.equal(await slow.evaluate(() => window.__zoom), undefined, 'the displaced tab never loaded or joined the room');
   assert.deepEqual(order(await calls(taker)), ['join#1'], 'the taking tab is alone in the room');
   ok('a takeover during a slow pass request leaves the first tab displaced, never in the room');
+
+  // Whiteboard (plan online-classroom-tools.md, PR A). The read-only line is shown while a
+  // whiteboard is open on a device whose SDK says it cannot open the canvas, whatever the
+  // window width; a device that can never shows it, however narrow.
+  const board = async (width, capable, role) => {
+    const boardContext = await browser.newContext({ viewport: { width, height: 800 } });
+    const tab = await boardContext.newPage();
+    tab.on('pageerror', error => errors.push(String(error?.message || error)));
+    await tab.goto(`${origin}/?lesson=l7&person=wb-${width}-${capable}${role ? `&role=${role}` : ''}`);
+    await joined(tab, 1);
+    await tab.evaluate(can => {
+      window.zmClient = { getWhiteboardClient: () => ({ isWhiteboardEnabled: () => can }), getAllUser: () => [{ userId: 7, isHost: true }, { userId: 8, isHost: false }],
+        getCommandClient: () => ({ send: async text => { (window.__sent = window.__sent || []).push(text); } }) };
+      window.__zoom.connect();
+    }, capable);
+    return tab;
+  };
+  const line = tab => tab.getByTestId('room-whiteboard-readonly');
+  const READ_ONLY = 'Le tableau blanc s’affiche en lecture seule sur cet appareil. Pour écrire au tableau, utilisez un ordinateur.';
+  // A wide window without the canvas (a tablet, a two-core laptop): the line shows.
+  const wide = await board(1280, false);
+  assert.deepEqual(await wide.evaluate(() => window.__zoom.config.featuresOptions.whiteboard), { enable: true, enableExport: false, enableViewerUserExport: false }, 'a learner cannot export');
+  assert.equal(await line(wide).count(), 0, 'no line before a whiteboard is open');
+  await wide.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-whiteboard:open' }));
+  await wide.waitForTimeout(200);
+  assert.equal(await line(wide).count(), 0, 'a learner\'s marker is not believed');
+  await wide.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-whiteboard:open' }));
+  await line(wide).waitFor();
+  assert.equal(await line(wide).textContent(), READ_ONLY);
+  assert.equal(await wide.evaluate(() => window.__phase), 'in_room');
+  await wide.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-whiteboard:closed' }));
+  await line(wide).waitFor({ state: 'detached' });
+  // A narrow window with the canvas (a small desktop window): never the line.
+  const narrow = await board(390, true);
+  await narrow.evaluate(() => { window.__zoom.emit('peer-whiteboard-state-change', { action: 'Start', userId: 7 }); window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-whiteboard:open' }); });
+  await narrow.waitForTimeout(400);
+  assert.equal(await line(narrow).count(), 0, 'not keyed on the window width');
+  // The teacher: export on; its own whiteboard sends the marker, and it never sees the line.
+  const host = await board(1280, true, 'host');
+  assert.deepEqual(await host.evaluate(() => window.__zoom.config.featuresOptions.whiteboard), { enable: true, enableExport: true, enableViewerUserExport: false }, 'the teacher exports');
+  await host.evaluate(() => { window.__zoom.emit('whiteboard-status-change', 1); window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('whiteboard-status-change', 0); });
+  await host.waitForTimeout(200);
+  assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
+  assert.equal(await line(host).count(), 0);
+  ok('whiteboard: learner export off, teacher export on; the read-only line follows capability and the presenter\'s marker, not the width');
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

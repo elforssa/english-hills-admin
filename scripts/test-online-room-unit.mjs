@@ -9,6 +9,7 @@ import { startZoomRoom, roomSettled } from '../src/lib/online/zoom-room-session.
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
+import { whiteboardCapability, whiteboardDeviceRule, cspBlockedDetail, WHITEBOARD_SIGNAL, WHITEBOARD_READ_ONLY_TEXT } from '../src/lib/online/zoom-whiteboard.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -55,7 +56,10 @@ function fakeContainer(labels = []) {
 }
 function fakeWindow() {
   const listeners = {};
-  return { reloaded: 0, document: { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} },
+  const docListeners = {};
+  return { reloaded: 0, document: { visibilityState: 'visible',
+    addEventListener: (type, fn) => { (docListeners[type] ||= []).push(fn); }, removeEventListener: (type, fn) => { docListeners[type] = (docListeners[type] || []).filter(f => f !== fn); },
+    fire(type, event) { for (const fn of docListeners[type] || []) fn(event); }, count: type => (docListeners[type] || []).length },
     location: { reload() { this.count = (this.count || 0) + 1; } },
     addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); }, removeEventListener: (type, fn) => { listeners[type] = (listeners[type] || []).filter(f => f !== fn); },
     fire(type, event) { for (const fn of listeners[type] || []) fn(event); }, count: type => (listeners[type] || []).length };
@@ -78,7 +82,8 @@ function open(toolkit, calls, logs, extra = {}) {
   const { room, win } = open(toolkit, calls, logs);
   await room.ready;
   assert.deepEqual(calls, ['join#1', 'resources:fr-FR', 'languageList:fr-FR', 'changeLanguage:fr-FR', 'setLanguage:fr-FR',
-    'onSessionClosed#1', 'onSessionDestroyed#1', 'on:connection-change#1', 'on:user-added#1', 'on:user-removed#1'], 'registration order');
+    'onSessionClosed#1', 'onSessionDestroyed#1', 'on:connection-change#1', 'on:user-added#1', 'on:user-removed#1',
+    'on:whiteboard-status-change#1', 'on:peer-whiteboard-state-change#1', 'on:command-channel-message#1'], 'registration order');
   assert.equal(toolkit.lastConfig.language, 'fr-FR');
   assert.deepEqual(toolkit.lastConfig.featuresOptions.preview, { enable: true, isAllowModifyName: false });
   assert.equal(win.count('pagehide'), 1, 'pagehide listener registered');
@@ -247,6 +252,165 @@ function open(toolkit, calls, logs, extra = {}) {
   assert.match(read('src/components/online/ZoomRoom.jsx'), /preloadMedia: preloadZoomMediaChunks,/);
 }
 
+// 8. Whiteboard (plan online-classroom-tools.md, PR A): the read-only line follows the
+//    capability the SDK reports, never the window width; a device without the canvas
+//    learns that a whiteboard is open from the presenter's marker only; the presenter
+//    sends that marker; and a refused address becomes one trace line, directive and host.
+{
+  // The SDK client the toolkit exposes, as far as the room reads it.
+  const sdk = ({ capable, users = [], sent = [] }) => ({ sent,
+    getWhiteboardClient: () => ({ isWhiteboardEnabled: () => capable }),
+    getAllUser: () => users, getCommandClient: () => ({ send: async text => { sent.push(text); } }) });
+  const HOST = { userId: 16778240, displayName: 'Sara L.', isHost: true }, LEARNER = { userId: 16781312, displayName: 'Amal B.', isHost: false };
+  const start = async (client, extra = {}) => {
+    const calls = [], logs = [], board = [], toolkit = fakeToolkit(calls);
+    const { room, win } = open(toolkit, calls, logs, { onWhiteboard: state => board.push(state), ...extra });
+    if (client !== undefined) win.zmClient = client;
+    await room.ready;
+    toolkit.connect();
+    return { calls, logs, board, toolkit, room, win };
+  };
+  const lines = logs => logs.filter(([event]) => event === 'whiteboard').map(([, d]) => `${d.open}/${d.readonly || 'no'}`);
+
+  // A device without the canvas (phone, tablet, two cores): Zoom sends it no whiteboard
+  // event; the host's marker opens the line and closes it.
+  {
+    const r = await start(sdk({ capable: false, users: [HOST, LEARNER] }));
+    assert.deepEqual(r.logs.find(([event]) => event === 'whiteboard available')?.[1], { available: 'no', source: 'sdk' });
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+    assert.deepEqual(r.board, [{ open: true, readOnly: true }]);
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+    assert.equal(r.board.length, 1, 'a repeated marker (sent again when somebody joins) changes nothing');
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.closed });
+    assert.deepEqual(r.board.at(-1), { open: false, readOnly: false });
+    // Only the host or a manager is believed; any other text is ignored.
+    r.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.open });
+    r.toolkit.emit('command-channel-message', { senderId: '999', text: WHITEBOARD_SIGNAL.open });
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: 'eh-whiteboard:open ' });
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: 'anything else' });
+    assert.equal(r.board.length, 2, 'markers from a learner, an unknown sender or with another text are ignored');
+    // A presenter who leaves without closing takes the line away; so does the session closing.
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+    r.toolkit.emit('user-removed', [{ userId: HOST.userId, displayName: HOST.displayName }]);
+    assert.deepEqual(r.board.slice(2), [{ open: true, readOnly: true }, { open: false, readOnly: false }]);
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+    r.toolkit.emit('connection-change', { state: 'Closed', reason: 'ended by host' });
+    assert.deepEqual(r.board.at(-1), { open: false, readOnly: false });
+    assert.deepEqual(lines(r.logs), ['yes/yes', 'no/no', 'yes/yes', 'no/no', 'yes/yes', 'no/no']);
+    assert.deepEqual(r.calls.filter(c => c.startsWith('page:')), [], 'a whiteboard never ends or fails the room');
+    assert.deepEqual(r.win.zmClient.sent, [], 'a viewer sends no marker');
+    await r.room.stop();
+  }
+  // A device with the canvas: the SDK's own events open the whiteboard, and the line
+  // stays hidden whatever the window width is (the fake window has none at all).
+  {
+    const r = await start(sdk({ capable: true, users: [HOST, LEARNER] }));
+    assert.deepEqual(r.logs.find(([event]) => event === 'whiteboard available')?.[1], { available: 'yes', source: 'sdk' });
+    r.toolkit.emit('peer-whiteboard-state-change', { action: 'Start', userId: HOST.userId });
+    r.toolkit.emit('whiteboard-status-change', 1);
+    r.toolkit.emit('whiteboard-status-change', 2);
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+    assert.deepEqual(r.board, [{ open: true, readOnly: false }]);
+    // The presenter stops: Zoom raises the viewer's own status change too. A viewer never
+    // sends the marker, at the start or at the stop.
+    r.toolkit.emit('peer-whiteboard-state-change', { action: 'Stop', userId: HOST.userId });
+    r.toolkit.emit('whiteboard-status-change', 0);
+    r.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.closed });
+    assert.deepEqual(r.board.at(-1), { open: false, readOnly: false });
+    r.toolkit.emit('user-added', [{ userId: 3, displayName: 'Nour K.' }]);
+    assert.deepEqual(r.win.zmClient.sent, [], 'a viewer sends no marker');
+    await r.room.stop();
+  }
+  // The presenter: its own status change sends the marker, once per change, and again
+  // when somebody joins while the whiteboard is open. Nothing but the two fixed texts.
+  {
+    const r = await start(sdk({ capable: true, users: [HOST] }));
+    r.toolkit.emit('whiteboard-status-change', 1);
+    r.toolkit.emit('whiteboard-status-change', 2);
+    assert.deepEqual(r.win.zmClient.sent, [WHITEBOARD_SIGNAL.open], 'pending then in progress: one marker');
+    r.toolkit.emit('user-added', [{ userId: LEARNER.userId, displayName: LEARNER.displayName }]);
+    assert.deepEqual(r.win.zmClient.sent, [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open], 'told again to a participant who joins later');
+    r.toolkit.emit('whiteboard-status-change', 0);
+    r.toolkit.emit('user-added', [{ userId: 3, displayName: 'Nour K.' }]);
+    assert.deepEqual(r.win.zmClient.sent, [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.closed]);
+    assert.deepEqual([WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.closed], ['eh-whiteboard:open', 'eh-whiteboard:closed']);
+    assert.deepEqual(r.board, [{ open: true, readOnly: false }, { open: false, readOnly: false }]);
+    // A command channel that throws or is missing never breaks the room.
+    r.win.zmClient = { getWhiteboardClient: () => ({ isWhiteboardEnabled: () => true }), getCommandClient: () => { throw new Error('gone'); } };
+    r.toolkit.emit('whiteboard-status-change', 2);
+    r.win.zmClient = undefined;
+    r.toolkit.emit('whiteboard-status-change', 0);
+    assert.deepEqual(r.calls.filter(c => c.startsWith('page:')), []);
+    await r.room.stop();
+  }
+  // The SDK client is not exposed: Zoom's own device rule decides (read in the bundle:
+  // not an Android or iOS browser, and more than two cores), and the trace says so.
+  {
+    const desktop = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36', hardwareConcurrency: 8, maxTouchPoints: 0 };
+    assert.equal(whiteboardDeviceRule(desktop), true);
+    assert.equal(whiteboardDeviceRule({ ...desktop, hardwareConcurrency: 2 }), false, 'two cores');
+    assert.equal(whiteboardDeviceRule({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/130.0.0.0 Mobile Safari/537.36', hardwareConcurrency: 8 }), false, 'Android');
+    assert.equal(whiteboardDeviceRule({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1', hardwareConcurrency: 6 }), false, 'iPhone');
+    assert.equal(whiteboardDeviceRule({ ...desktop, maxTouchPoints: 5 }), false, 'iPad presenting itself as a Mac');
+    assert.equal(whiteboardDeviceRule(undefined), false);
+    assert.deepEqual(whiteboardCapability({ navigator: desktop }), { capable: true, source: 'device' });
+    assert.deepEqual(whiteboardCapability({ navigator: { ...desktop, hardwareConcurrency: 2 } }), { capable: false, source: 'device' });
+    // The SDK's answer wins over the device rule, both ways.
+    assert.deepEqual(whiteboardCapability({ navigator: desktop, zmClient: sdk({ capable: false }) }), { capable: false, source: 'sdk' });
+    assert.deepEqual(whiteboardCapability({ navigator: { ...desktop, hardwareConcurrency: 2 }, zmClient: sdk({ capable: true }) }), { capable: true, source: 'sdk' });
+    assert.deepEqual(whiteboardCapability({ navigator: desktop, zmClient: { getWhiteboardClient() { throw new Error('not ready'); } } }), { capable: true, source: 'device' });
+    const r = await start(undefined);
+    r.win.navigator = { ...desktop, hardwareConcurrency: 2 };
+    r.toolkit.emit('peer-whiteboard-state-change', { action: 'Start', userId: HOST.userId });
+    assert.deepEqual(r.board, [{ open: true, readOnly: true }], 'device rule used only when the SDK client is not exposed');
+    assert.equal(r.logs.find(([event]) => event === 'whiteboard available')?.[1].source, 'device');
+    await r.room.stop();
+  }
+  // Refused addresses: one line each, directive and host only.
+  {
+    assert.deepEqual(cspBlockedDetail({ effectiveDirective: 'script-src-elem', blockedURI: 'https://us06st1.zoom.us/web_client_whiteboard/mveoc7k9/dist/es/whiteboard-sdk.js?token=SECRET#frag' }), { directive: 'script-src-elem', host: 'us06st1.zoom.us' });
+    assert.deepEqual(cspBlockedDetail({ effectiveDirective: 'script-src-elem', blockedURI: 'blob:https://admin.english-hills.com/6117af9a-0000-4000-8000-000000000000' }), { directive: 'script-src-elem', host: 'blob' });
+    assert.deepEqual(cspBlockedDetail({ violatedDirective: "style-src 'self' 'unsafe-inline'", blockedURI: 'inline' }), { directive: 'style-src', host: 'inline' });
+    assert.deepEqual(cspBlockedDetail({ effectiveDirective: 'connect-src', blockedURI: 'wss://rwcff.cloud.zoom.us:443/wc/media/123?jwt=SECRET' }), { directive: 'connect-src', host: 'rwcff.cloud.zoom.us' });
+    assert.deepEqual(cspBlockedDetail({ effectiveDirective: 'img-src', blockedURI: 'data' }), { directive: 'img-src', host: 'data' });
+    assert.deepEqual(cspBlockedDetail({ effectiveDirective: 'script-src', blockedURI: 'not a url / with a path' }), { directive: 'script-src', host: 'unknown' });
+    assert.deepEqual(cspBlockedDetail(undefined), { directive: 'unknown', host: 'unknown' });
+
+    const calls = [], logs = [], toolkit = fakeToolkit(calls);
+    const { room, win } = open(toolkit, calls, logs);
+    assert.equal(win.document.count('securitypolicyviolation'), 1, 'listening before the toolkit has loaded');
+    await room.ready;
+    const refused = 'https://us06st1.zoom.us/web_client_whiteboard/mveoc7k9/dist/es/whiteboard-sdk.js?token=SECRET';
+    win.document.fire('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: refused, disposition: 'enforce', sourceFile: 'https://admin.example/online/room/24040756' });
+    win.document.fire('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: refused.replace('whiteboard-sdk.js', 'other.js'), disposition: 'enforce' });
+    win.document.fire('securitypolicyviolation', { effectiveDirective: 'style-src-elem', blockedURI: refused.replace('.js', '.css'), disposition: 'enforce' });
+    win.document.fire('securitypolicyviolation', { effectiveDirective: 'script-src-elem', blockedURI: 'blob:https://admin.example/6117af9a', disposition: 'enforce' });
+    win.document.fire('securitypolicyviolation', { effectiveDirective: 'img-src', blockedURI: 'https://elsewhere.example/x.png', disposition: 'report' });
+    const blocked = logs.filter(([event]) => event === 'csp blocked').map(([, detail]) => detail);
+    assert.deepEqual(blocked, [{ directive: 'script-src-elem', host: 'us06st1.zoom.us' }, { directive: 'style-src-elem', host: 'us06st1.zoom.us' }, { directive: 'script-src-elem', host: 'blob' }],
+      'one line per directive and host; a report-only policy is not a refusal');
+    const printed = JSON.stringify(logs);
+    for (const secret of ['web_client_whiteboard', 'mveoc7k9', 'SECRET', 'whiteboard-sdk', '24040756', '6117af9a', '/online/room']) assert.ok(!printed.includes(secret), `the trace never carries ${secret}`);
+    await room.stop();
+    assert.equal(win.document.count('securitypolicyviolation'), 0, 'listener removed with the room');
+  }
+  assert.equal(WHITEBOARD_READ_ONLY_TEXT, 'Le tableau blanc s’affiche en lecture seule sur cet appareil. Pour écrire au tableau, utilisez un ordinateur.');
+
+  // The toolkit still reads the undocumented whiteboard key (N4): its default
+  // configuration carries the three values and its code reads each of them. An upgrade
+  // that drops or renames the key fails here.
+  const bundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
+  assert.ok(/whiteboard:\s*\{\s*enable:\s*!0,\s*enableExport:\s*!0,\s*enableViewerUserExport:\s*!0\s*\}/.test(bundle), 'toolkit default configuration has the whiteboard key');
+  assert.ok(/featuresOptions\?\.whiteboard\?\.enable(?![\w$])/.test(bundle), 'toolkit reads whiteboard.enable');
+  assert.ok(/featuresOptions\?\.whiteboard\?\.enableExport(?![\w$])/.test(bundle), 'toolkit reads whiteboard.enableExport');
+  assert.ok(/whiteboard:\s*\{\s*enableExport:\s*[\w$]+,\s*enableViewerUserExport:\s*[\w$]+\s*\}/.test(bundle), 'toolkit reads whiteboard.enableViewerUserExport');
+  // What the room relies on besides the key: the SDK client under window.zmClient, the
+  // two whiteboard events, the command channel event and Zoom's device rule.
+  assert.ok(bundle.includes('window.zmClient = '), 'toolkit exposes the SDK client');
+  for (const event of ['"whiteboard-status-change"', '"peer-whiteboard-state-change"', '"command-channel-message"']) assert.ok(bundle.includes(event), event);
+  assert.ok(/navigator\.hardwareConcurrency\s*>\s*2\s*&&\s*![\w$]+\)/.test(bundle), 'the device rule is still: more than two cores and not Android or iOS');
+}
+
 // ---- Tab guard ----
 function fakeLocks() {
   const held = new Map(), queue = new Map();
@@ -372,6 +536,15 @@ function fakeChannels() {
   }
   for (const key of Object.keys(french)) assert.ok(Object.hasOwn(english, key) && reachable(key), `fr-FR has an unknown or unreachable key: ${key}`);
   for (const prefix of UNREACHABLE_PREFIXES) assert.ok(Object.keys(english).some(key => key.startsWith(prefix)), `stale exclusion ${prefix}`);
+  // Whiteboard strings are reachable since PR A (plan online-classroom-tools.md) and are
+  // French: none is left equal to the English one, except the two file formats.
+  assert.ok(!UNREACHABLE_PREFIXES.includes('whiteboard.'));
+  const whiteboardKeys = Object.keys(english).filter(key => key.startsWith('whiteboard.'));
+  assert.equal(whiteboardKeys.length, 29);
+  for (const key of whiteboardKeys) assert.equal(french[key] === english[key], ['whiteboard.format_pdf', 'whiteboard.format_png'].includes(key), `${key} is French`);
+  assert.equal(french['whiteboard.start_tooltip'], 'Ouvrir le tableau blanc');
+  assert.equal(french['whiteboard.stop_button'], 'Fermer le tableau blanc');
+  assert.equal(french['whiteboard.export_and_close'], 'Exporter et fermer');
   // Spot checks: the screens every participant sees.
   assert.equal(french['preview.join_button'], 'Rejoindre le cours');
   assert.equal(french['gallery.no_other_participants'], 'Aucun autre participant');
@@ -388,14 +561,23 @@ function fakeChannels() {
   for (const off of ['recording', 'invite', 'phone', 'feedback', 'troubleshoot', 'caption', 'subsession', 'header', 'playback', 'virtualBackground'])
     assert.match(component, new RegExp(`${off}: \\{ enable: false`), `${off} stays off`);
   assert.match(component, /ROOM_LANGUAGE = 'fr-FR'/);
+  // Whiteboard (D3): on, the teacher exports, learners draw but do not export. The
+  // learner's enableExport is false as well: enableViewerUserExport alone leaves Zoom's
+  // own « Exporter au format PNG » link in the learner's whiteboard.
+  assert.match(component, /\n  whiteboard: \{ enable: true, enableExport: true, enableViewerUserExport: false \},\n/);
+  assert.match(component, /LEARNER_WHITEBOARD = Object\.freeze\(\{ enable: true, enableExport: false, enableViewerUserExport: false \}\)/);
+  assert.match(component, /featuresFor = role => \(role === 'host' \? FEATURES : Object\.freeze\(\{ \.\.\.FEATURES, whiteboard: LEARNER_WHITEBOARD \}\)\)/);
+  assert.match(component, /featuresOptions: featuresFor\(role\), leaveOnPageUnload: true/);
+  assert.match(component, /\{boardReadOnly && !closing && <p [^\n]*data-testid="room-whiteboard-readonly">\{WHITEBOARD_READ_ONLY_TEXT\}<\/p>\}/);
+  assert.ok(!/innerWidth|matchMedia|sm:hidden[^\n]*whiteboard/.test(component), 'the read-only line is not keyed on the window width');
   // The room effect depends on the embed only; the page's callbacks are read through a ref.
   const deps = [...component.matchAll(/\}, \[([^\]]*)\]\);/g)].map(m => m[1]);
-  assert.deepEqual(deps, ['token, sessionName, displayName'], 'one effect with dependencies, on the embed only');
+  assert.deepEqual(deps, ['token, sessionName, displayName, role'], 'one effect with dependencies, on the embed only');
   assert.ok(!/onLeft, onError\]/.test(component));
   assert.match(component, /callbacks\.current\.onLeft/);
   // French resources are inline: no language file is fetched from any host.
   assert.match(component, /import frFR from '@\/lib\/online\/zoom-fr-FR\.json'/);
-  assert.ok(!/https?:\/\//.test(component) && !/https?:\/\//.test(read('src/lib/online/zoom-room-session.mjs')), 'no URL in the room code');
+  assert.ok(!/https?:\/\//.test(component) && !/https?:\/\//.test(read('src/lib/online/zoom-room-session.mjs')) && !/https?:\/\//.test(read('src/lib/online/zoom-whiteboard.mjs')), 'no URL in the room code');
   // The one URL the room adds is the Zoom library host, in zoom-media-chunks.mjs (checked above).
   assert.deepEqual(read('src/lib/online/zoom-media-chunks.mjs').match(/https?:\/\/[^\s'"`$)]+/g).filter(url => !url.startsWith('https://source.zoom.us/videosdk/')), []);
   // The empty-gallery pager rule is scoped to the room container.

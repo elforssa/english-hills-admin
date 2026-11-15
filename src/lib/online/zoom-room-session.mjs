@@ -18,6 +18,14 @@
 // retry; `pagehide` leaves; and the console gets a dated trace of connection states and
 // of participants joining and leaving (display label only: never the token, the session
 // name or anything else).
+// Whiteboard (plan online-classroom-tools.md, PR A): the room tells the page when a
+// whiteboard is open on a device that cannot open the canvas, writes `whiteboard
+// available=yes|no` once the participant is in, and writes one `csp blocked` line per
+// directive and host the browser refuses on this page (directive and host only). A
+// device without the canvas gets no whiteboard event from Zoom, so the presenter's page
+// sends a fixed marker on the command channel (see zoom-whiteboard.mjs).
+
+import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoom-whiteboard.mjs';
 
 let chain = Promise.resolve();
 
@@ -37,9 +45,10 @@ export function roomLog(event, detail) {
 }
 
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
-  onLeft, onError, onClosing, log = roomLog, win = globalThis.window }) {
+  onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
-    teardown: null, settle: null, people: new Map() };
+    teardown: null, settle: null, people: new Map(),
+    board: { own: false, peer: false, told: null, presenting: false, open: false, readOnly: false, traced: false }, blocked: new Set() };
   const preview = config?.featuresOptions?.preview?.enable === true;
   const stopWatchdog = () => { if (s.watchdog) { clearTimeout(s.watchdog); s.watchdog = null; } };
   const settled = () => { s.attempting = false; stopWatchdog(); s.settle?.(); };
@@ -61,18 +70,71 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   const onConnection = payload => {
     const state = payload?.state;
     log('connection', { state, code: payload?.errorCode, reason: payload?.reason });
-    if (state === 'Connected') { s.joined = true; settled(); }
+    if (state === 'Connected') {
+      s.joined = true; settled();
+      if (!s.board.traced) { s.board.traced = true; const { capable, source } = whiteboardCapability(win); log('whiteboard available', { available: capable ? 'yes' : 'no', source }); }
+    }
     else if (state === 'Fail') { settled(); fail({ code: payload?.errorCode, reason: payload?.reason }); }
-    else if (state === 'Closed') settled();
+    else if (state === 'Closed') { settled(); board({ own: false, peer: false, told: null, presenting: false }); }
+  };
+  // A whiteboard is open when this participant presents one, when Zoom says somebody
+  // else does (devices with the canvas), or when the presenter's page said so (devices
+  // without it). The page shows its read-only line while one is open and this device
+  // cannot open the canvas.
+  function board(change) {
+    Object.assign(s.board, change);
+    const open = s.board.own || s.board.peer || s.board.told !== null;
+    const readOnly = open && !whiteboardCapability(win).capable;
+    if (open === s.board.open && readOnly === s.board.readOnly) return;
+    s.board.open = open; s.board.readOnly = readOnly;
+    log('whiteboard', { open: open ? 'yes' : 'no', readonly: readOnly ? 'yes' : undefined });
+    if (!s.silent && !s.stopped) onWhiteboard?.({ open, readOnly });
+  }
+  // The presenter's marker for the participants Zoom tells nothing (fixed text only).
+  const tellBoard = text => {
+    try { Promise.resolve(win?.zmClient?.getCommandClient?.()?.send?.(text)).catch(() => {}); } catch { /* no command channel */ }
+  };
+  // Zoom raises the status change for a viewer too, after `peer … Start`: only the
+  // participant whose own whiteboard opened without a peer presenting is the presenter.
+  const onBoardStatus = status => {
+    const own = Number(status) > 0;
+    if (own === s.board.own) return;
+    board({ own });
+    if (own && !s.board.peer) { s.board.presenting = true; tellBoard(WHITEBOARD_SIGNAL.open); }
+    else if (!own && s.board.presenting) { s.board.presenting = false; tellBoard(WHITEBOARD_SIGNAL.closed); }
+  };
+  const onBoardPeer = payload => { if (payload?.action === 'Start') board({ peer: true }); else if (payload?.action === 'Stop') board({ peer: false }); };
+  const onCommand = payload => {
+    const text = payload?.text;
+    if (text !== WHITEBOARD_SIGNAL.open && text !== WHITEBOARD_SIGNAL.closed) return;
+    // Believed only from the host or a manager, as Zoom lists them.
+    let users = null;
+    try { users = win?.zmClient?.getAllUser?.() || null; } catch { /* client gone */ }
+    const sender = users?.find(user => String(user.userId) === String(payload.senderId));
+    if (!sender || !(sender.isHost || sender.isManager)) return;
+    if (text === WHITEBOARD_SIGNAL.open) board({ told: String(payload.senderId) });
+    else if (s.board.told === String(payload.senderId)) board({ told: null });
+  };
+  // One line per refused directive and host, so a blocked Zoom address is visible in a
+  // teacher's console. Report-only policies are not refusals.
+  const onCspBlocked = event => {
+    if (event?.disposition && event.disposition !== 'enforce') return;
+    const detail = cspBlockedDetail(event), key = `${detail.directive} ${detail.host}`;
+    if (s.blocked.has(key) || s.blocked.size >= 20) return;
+    s.blocked.add(key);
+    log('csp blocked', detail);
   };
   const people = (event, list) => {
     for (const user of Array.isArray(list) ? list : [list]) {
       if (user?.userId === undefined) continue;
       if (event === 'added') s.people.set(user.userId, user.displayName); else s.people.delete(user.userId);
+      // A presenter who leaves without closing takes the whiteboard along.
+      if (event === 'removed' && s.board.told === String(user.userId)) board({ told: null });
       log(`participant ${event}`, { id: user.userId, label: user.displayName, host: user.isHost || undefined, total: s.people.size });
     }
   };
-  const onAdded = list => people('added', list);
+  // Somebody who joins while this participant presents the whiteboard is told too.
+  const onAdded = list => { people('added', list); if (s.board.presenting) tellBoard(WHITEBOARD_SIGNAL.open); };
   const onRemoved = list => people('removed', list);
   const onVisibility = () => log('page visibility', { state: win.document?.visibilityState });
   // Leaving on visibilitychange would drop a learner who only switches tab or app, and the
@@ -91,6 +153,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     win?.removeEventListener?.('pagehide', onPageHide);
     win?.removeEventListener?.('pageshow', onPageShow);
     win?.document?.removeEventListener?.('visibilitychange', onVisibility);
+    win?.document?.removeEventListener?.('securitypolicyviolation', onCspBlocked);
     s.teardown = chain = chain.then(() => ready).then(async () => {
       const toolkit = s.toolkit;
       if (!toolkit) return;
@@ -99,7 +162,9 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       if (s.attempting) await Promise.race([new Promise(resolve => { s.settle = resolve; }), delay(15000)]);
       stopWatchdog();
       try { await capped(toolkit.leaveSession(), 8000); } catch { /* not in a session */ }
-      try { toolkit.off?.('connection-change', onConnection); toolkit.off?.('user-added', onAdded); toolkit.off?.('user-removed', onRemoved); } catch { /* client gone */ }
+      try { toolkit.off?.('connection-change', onConnection); toolkit.off?.('user-added', onAdded); toolkit.off?.('user-removed', onRemoved);
+        toolkit.off?.('whiteboard-status-change', onBoardStatus); toolkit.off?.('peer-whiteboard-state-change', onBoardPeer);
+        toolkit.off?.('command-channel-message', onCommand); } catch { /* client gone */ }
       try { await capped(toolkit.destroy(), 25000); } catch { /* already destroyed */ }
       s.toolkit = null;
       log('room closed');
@@ -122,6 +187,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     capped(teardown(), 3000).then(() => { if (!s.silent) onLeft?.(); });
   }
 
+  win?.document?.addEventListener?.('securitypolicyviolation', onCspBlocked);
   const ready = chain.then(async () => {
     if (s.stopped) return;
     // The media chunks download beside the toolkit bundle and are in place before the
@@ -151,6 +217,9 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     toolkit.on('connection-change', onConnection);
     toolkit.on('user-added', onAdded);
     toolkit.on('user-removed', onRemoved);
+    toolkit.on('whiteboard-status-change', onBoardStatus);
+    toolkit.on('peer-whiteboard-state-change', onBoardPeer);
+    toolkit.on('command-channel-message', onCommand);
     container?.addEventListener?.('click', onClick, true);
     win?.addEventListener?.('pagehide', onPageHide);
     win?.addEventListener?.('pageshow', onPageShow);
