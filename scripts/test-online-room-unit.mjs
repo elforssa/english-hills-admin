@@ -8,7 +8,8 @@ import { readFileSync } from 'node:fs';
 import { startZoomRoom, roomSettled } from '../src/lib/online/zoom-room-session.mjs';
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
-import { toolkitEnglish, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
+import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
+import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
@@ -196,6 +197,56 @@ function open(toolkit, calls, logs, extra = {}) {
   for (const secret of [SECRET.token, SECRET.sessionName, 'pass-jti', 'guid']) assert.ok(!printed.includes(secret), `diagnostics never carry ${secret}`);
 }
 
+// 7. Media chunks (reconnect loop of 2026-11-15): the room loads the SDK's lazy chunks as
+//    plain scripts from the library host and version the pinned toolkit uses, before the
+//    join; a chunk that does not load does not stop the room and may be tried again.
+{
+  // The toolkit builds its library URL from a version constant; ours must be the same.
+  const bundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
+  const versions = [...bundle.matchAll(/"https:\/\/source\.zoom\.us\/videosdk\/"\.concat\(([\w$]+), "\/lib"\)/g)]
+    .map(([, name]) => new RegExp(`[ ,]${name.replace(/\$/g, '\\$')} = "([^"]+)"`).exec(bundle)?.[1]);
+  assert.ok(versions.length > 0, 'toolkit bundle: media library URL found');
+  for (const version of versions) assert.equal(ZOOM_MEDIA_LIB, `https://source.zoom.us/videosdk/${version}/lib`, 'media chunk version matches the pinned toolkit');
+  assert.match(bundle, /const [\w$]+ = "js_media\.min\.js"/);
+  // The host is one the room path's script-src already allows; no header changes for it.
+  assert.ok(read('next.config.mjs').includes(`ZOOM_SCRIPT_HOSTS = ['${new URL(ZOOM_MEDIA_LIB).origin}']`));
+  assert.deepEqual([...ZOOM_MEDIA_CHUNKS], ['wmsc', 'pako', 'annoter']);
+
+  const fakeDoc = fail => {
+    const added = [];
+    return { added, head: { appendChild(el) { added.push(el); queueMicrotask(() => (fail(el.src) ? el.onerror : el.onload)?.()); } },
+      createElement: () => ({ remove() { this.removed = true; } }) };
+  };
+  let doc = fakeDoc(src => src.includes('annoter'));
+  let result = await preloadZoomMediaChunks({ doc });
+  assert.deepEqual(result, { loaded: ['wmsc', 'pako'], failed: ['annoter'] });
+  assert.deepEqual(doc.added.map(el => el.src), ZOOM_MEDIA_CHUNKS.map(name => `${ZOOM_MEDIA_LIB}/${name}.min.js`));
+  assert.ok(doc.added.every(el => el.async === true) && doc.added[2].removed === true && !doc.added[0].removed);
+  // A second room on the same page: loaded chunks are not loaded twice, the failed one is retried.
+  doc = fakeDoc(() => false);
+  result = await preloadZoomMediaChunks({ doc });
+  assert.deepEqual(result, { loaded: ['wmsc', 'pako', 'annoter'], failed: [] });
+  assert.deepEqual(doc.added.map(el => el.src), [`${ZOOM_MEDIA_LIB}/annoter.min.js`]);
+  assert.deepEqual(await preloadZoomMediaChunks({ doc: null }), { loaded: [], failed: ['wmsc', 'pako', 'annoter'] }, 'no document: nothing loaded, nothing thrown');
+
+  // In the room: asked for once, in place before joinSession, and traced by chunk name only.
+  const calls = [], logs = [], toolkit = fakeToolkit(calls);
+  const { room } = open(toolkit, calls, logs, { preloadMedia: async () => { await tick(15); calls.push('media'); return { loaded: ['wmsc', 'pako'], failed: ['annoter'] }; } });
+  await room.ready;
+  assert.deepEqual(calls.slice(0, 2), ['media', 'join#1'], 'chunks are in place before the join');
+  assert.deepEqual(logs.find(([event]) => event === 'media chunks')?.[1], { loaded: 'wmsc,pako', failed: 'annoter' });
+  await room.stop();
+  // A preload that throws does not stop the room.
+  const calls2 = [], logs2 = [], toolkit2 = fakeToolkit(calls2);
+  const second = open(toolkit2, calls2, logs2, { preloadMedia: () => { throw new Error('no network'); } });
+  await second.room.ready;
+  assert.equal(calls2[0], 'join#1');
+  assert.deepEqual(logs2.find(([event]) => event === 'media chunks')?.[1], { loaded: '', failed: 'all' });
+  assert.ok(!calls2.some(c => c.startsWith('page:')));
+  await second.room.stop();
+  assert.match(read('src/components/online/ZoomRoom.jsx'), /preloadMedia: preloadZoomMediaChunks,/);
+}
+
 // ---- Tab guard ----
 function fakeLocks() {
   const held = new Map(), queue = new Map();
@@ -345,6 +396,8 @@ function fakeChannels() {
   // French resources are inline: no language file is fetched from any host.
   assert.match(component, /import frFR from '@\/lib\/online\/zoom-fr-FR\.json'/);
   assert.ok(!/https?:\/\//.test(component) && !/https?:\/\//.test(read('src/lib/online/zoom-room-session.mjs')), 'no URL in the room code');
+  // The one URL the room adds is the Zoom library host, in zoom-media-chunks.mjs (checked above).
+  assert.deepEqual(read('src/lib/online/zoom-media-chunks.mjs').match(/https?:\/\/[^\s'"`$)]+/g).filter(url => !url.startsWith('https://source.zoom.us/videosdk/')), []);
   // The empty-gallery pager rule is scoped to the room container.
   assert.match(component, /\[data-testid="zoom-room"\] \.flex-grow[^\n]*:has\(/);
   const page = read('src/app/(admin)/online/room/[id]/page.jsx');

@@ -11,6 +11,8 @@
 //     Closed with a reason); the toolkit then shows its own English dialog;
 //   - the SDK leaves on `beforeunload` only (`leaveOnPageUnload`), which phones often skip;
 //   - a language is used only if its resources are registered before the room renders.
+//   - the SDK's media library loads its lazy chunks from blob: URLs, which the room path's
+//     script-src refuses; the room loads them itself first (zoom-media-chunks.mjs).
 // So: every start waits for the previous teardown; callbacks go on the new instance;
 // a failure or a timed-out join always leaves and destroys before the page offers a
 // retry; `pagehide` leaves; and the console gets a dated trace of connection states and
@@ -34,7 +36,7 @@ export function roomLog(event, detail) {
   console.info(`[online room] ${new Date().toISOString()} ${event}${fields ? ' ' + fields : ''}`);
 }
 
-export function startZoomRoom({ loadToolkit, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
+export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
   onLeft, onError, onClosing, log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
     teardown: null, settle: null, people: new Map() };
@@ -122,7 +124,11 @@ export function startZoomRoom({ loadToolkit, container, config, language, resour
 
   const ready = chain.then(async () => {
     if (s.stopped) return;
-    const loaded = await loadToolkit();
+    // The media chunks download beside the toolkit bundle and are in place before the
+    // join; if they are not there after 20 s the room opens anyway and the trace says so.
+    const [loaded, media] = await Promise.all([loadToolkit(),
+      preloadMedia ? Promise.resolve().then(preloadMedia).catch(() => ({ loaded: [], failed: ['all'] })) : null]);
+    if (media && !s.stopped) log('media chunks', { loaded: media.loaded?.join(','), failed: media.failed?.join(',') });
     const toolkit = loaded?.default || loaded;
     if (s.stopped) return;
     s.toolkit = toolkit;

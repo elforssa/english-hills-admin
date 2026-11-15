@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 import '@zoom/videosdk-ui-toolkit/dist/videosdk-ui-toolkit.css';
 import { startZoomRoom } from '@/lib/online/zoom-room-session.mjs';
+import { preloadZoomMediaChunks } from '@/lib/online/zoom-media-chunks.mjs';
 import frFR from '@/lib/online/zoom-fr-FR.json';
 
 export const ROOM_LANGUAGE = 'fr-FR';
@@ -67,6 +68,8 @@ export default function ZoomRoom({ embed, onLeft, onError }) {
     setClosing(false);
     const room = startZoomRoom({
       loadToolkit,
+      // The SDK's WebRTC and annotation chunks, loaded as plain scripts (see the module).
+      preloadMedia: preloadZoomMediaChunks,
       container: container.current,
       config: { videoSDKJWT: token, sessionName, userName: displayName, featuresOptions: FEATURES, leaveOnPageUnload: true },
       language: ROOM_LANGUAGE,
