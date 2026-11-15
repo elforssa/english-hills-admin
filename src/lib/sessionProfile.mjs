@@ -33,7 +33,7 @@ export async function resolveProfile(sb, authUser, log = () => {}) {
   return { status: 'ok', profile: recovered };
 }
 
-/** The retry screen never covers the sign-in pages. */
+/** The retry screen never covers the sign-in pages nor the e-mail link page (plan ELW-r3). */
 export function showsUnavailable(unavailable, pathname = '') {
-  return Boolean(unavailable) && !(pathname === '/login' || pathname.startsWith('/login/'));
+  return Boolean(unavailable) && !(pathname === '/login' || pathname.startsWith('/login/') || pathname === '/auth/confirm');
 }

@@ -455,6 +455,28 @@ Plan: [course dates and close](../architecture/plans/course-dates-close.md), rev
 - **Release approvals (Maroine, 2026-11-06):** (1) R0, R1 and R2 for Mise à niveau only (`cdc.adults` and `cdc.one_to_one` off, declared counts from that day's R0), the merge kept separate, the revert and the restore never without their own approval; window: the centre closed, start at once, R1 before 07:30 UTC and never during 22:30–01:00 UTC (given at 09:30 Asia/Shanghai). (2) After R0 stopped on one new Adults enrollment: "approve S1 = 6/12/21", every other declared count unchanged. (3) After the merge: R3 and R4 as written in the plan (anonymous route checks; rolled-back probes as reception and as a synthetic parent), Postgres and API logs, 30 minutes of observation; no data change, no revert or restore.
 - **Release status (2026-11-06):** R0–R4 done ([closeout](CURRENT_STATE.md#courses-with-dates-migration-128-production-closeout-r0r4--2026-11-06), [release record](../architecture/plans/course-dates-close.md#release-record-r0r4--2026-11-06)). The step ended the 18 waiting Mise à niveau enrollments « Mise à niveau terminée »; 6 learner files stay « Inscrit », 12 became « Ancien apprenant »; no charge was linked; the card went from 39 to 21. Adults (11), One-to-One (2) and Online One-to-One (1) were not touched. The step's revert and the function restore were not run and each still needs its own approval. **Pending:** R5 (owner and director: dates on new short-programme groups, the group names, the parent and student portals, the first real « Clôturer le cours », the card and the Groups filters) and the step for Adults and One-to-One after the owner's confirmation per programme. No new owner decision.
 
+## E-mail links that work — RELEASED (2026-11-14)
+
+Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), revision ELW-r3 (Tier 3; **approved and released 2026-11-14**; ELW-r1 at head `b3b63e827d3a6b8857c0662f30e06dbb1ccabb76` and ELW-r2 at head `d5878d953c1b61b6d54ddcd2b90cf0335f4061c6` were each reviewed CHANGES REQUIRED on 2026-11-14 and revised the same day; ELW-r3 needed no new owner decision); [ADR-017](../architecture/decisions/ADR-017-auth-links-verify-on-click.md) accepted. PR A of the R4 diagnosis of 2026-11-14 (findings 1–3).
+
+- **Owner decisions given with the architecture task (Maroine, 2026-11-14):**
+  - Auth e-mail links open a public page that makes no Auth call on load; only the button verifies.
+  - The login page is split into « Recevoir un lien de connexion » and a real « Mot de passe oublié ? »; `shouldCreateUser: false` stays (PRF-r2 D11).
+  - A reopened link shows the neutral wording « Ce lien a déjà été utilisé ou a expiré. Si votre compte est déjà activé, connectez-vous. » with « Se connecter » and « Mot de passe oublié ? »; the pages never confirm whether an address has an account.
+  - A signed-in visitor whose role is not 'pending' is told « Votre compte est déjà activé » and sent to the portal.
+  - A 'pending' account that resets its password must still reach the activation step, not `/unauthorized`.
+- **Owner answers (Maroine, 2026-11-14, with the ELW-r2 revision task): D1 = A, D2 = A, D3 = A, D4 = A, D5 = A.**
+  - D1 A: a never-activated account that asks for a new password or a sign-in link goes to the activation form.
+  - D2 A: re-inviting an account that exists but was never activated sends a sign-in e-mail.
+  - D3 A: a signed-in visitor is told « Votre compte est déjà activé », sees the signed-in address and may sign out to use the link for another account.
+  - D4 A: the test accounts r4a and r4b are kept as the Production proof and deleted afterwards, once the PR B room test is closed; the R4 room-test accounts (teacher « Test R4 Prof », learners C and D) are never deleted by this plan.
+  - D5 A: after a new password is chosen, the account's other devices are signed out.
+- **Approved and released (Maroine, 2026-11-14):** ELW-r3 approved for implementation at exact head `f43e0b72…` with D1–D5 = A; PR #190 merge approved after the independent review READY at `7556c59` (merged `87ab19e`); the Site URL fix (`https://admin.english-hills.com`) and the `/inscription-compte` Redirect URL, approved separately after R0 stopped on them; R3, the four Production templates. [Release record](../architecture/plans/email-links-that-work.md#release-record-r0-to-r6-2026-11-14).
+- **R4 postponed (owner decision, 2026-11-14):** no Production proof at release; the owner runs test (a) before inviting the first real family and reports problems.
+- **Accepted staff consequence of D2:** a second re-invitation of the same never-activated address within about a minute shows « Envoi non confirmé »; staff wait a minute and retry.
+- **Open:** R4 (owner); R5 test-account clean-up, not started, gated on the PR B room test (keep-list unchanged).
+- **Out of scope by owner instruction:** room and Zoom changes (PR B/C), the shared-address message (PR D), Supabase plan changes.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

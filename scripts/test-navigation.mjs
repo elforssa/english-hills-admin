@@ -137,5 +137,14 @@ assert.equal(safeReturnTo(`/online/${studentId}?returnTo=%2Fonline`), `/online/$
 assert.equal(safeReturnTo(`/online/room/${lessonId}`), '/students', 'the room is never a return target');
 console.log('PASS online learning route policy: capabilities, exact room form, family sections');
 
+// E-mail link page (plan ELW-r3): public in the middleware only; never a role home, a
+// receptionist route or a default destination.
+assert.ok(!Object.values(ROLE_HOME).some(path => path.startsWith('/auth')));
+for (const path of ['/auth/confirm', '/auth', '/auth/confirm/x']) assert.equal(receptionistCanAccess(path), false, path);
+assert.equal(loginDestination('receptionist', '/auth/confirm?token_hash=x&type=invite'), '/crm/leads');
+assert.equal(loginDestination('pending', '/auth/confirm'), '/unauthorized');
+for (const role of Object.keys(ROLE_HOME)) assert.equal(loginDestination(role), ROLE_HOME[role]);
+console.log('PASS e-mail link page is never a role home nor a receptionist route');
+
 assert.equal(safeReturnTo('/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001'), '/crm/leads?view=mine&layout=list&lead=00000000-0000-0000-0000-000000000001');
 assert.equal(safeReturnTo('/crm/leads/anything'), '/students');

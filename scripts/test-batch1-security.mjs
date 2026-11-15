@@ -218,9 +218,12 @@ try {
       success(await appRequest(actor, '/api/admin/update-role', { userId: pending.id, role }));
       assert.equal((await rows('profiles', pending.id))[0].role, role);
       sql(`update public.profiles set role='pending' where id='${pending.id}';`);
-      // Existing-account invitation queues a role without delivering email.
+      // Existing-account invitation queues a role; for this never-activated account it also
+      // sends a sign-in e-mail (ELW-r3 D2), so wait past the local one-e-mail-per-second-per-address
+      // Auth limit before each re-invite (owner-approved 2026-11-14).
       pendingEmails.push(pending.email);
       if (role === 'teacher') preparePortalFixture(role, pending.email);
+      await new Promise(resolve => setTimeout(resolve, 1100));
       success(await appRequest(actor, '/api/admin/invite', { email: pending.email, role, ...portalInvitation(role) }));
       assert.equal(success(await request(pending, '/rest/v1/rpc/apply_pending_role', 'POST', {})), role);
       sql(`update public.profiles set role='pending', linked_teacher_id=null where id='${pending.id}';`);
