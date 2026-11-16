@@ -58,7 +58,7 @@
 //       address is the room, the room never reported « left » or « failed », the
 //       connection states are only Reconnecting and Connected, the participant without a
 //       group never moved, and after each return the toolbar has the controls it had
-//       before the move.
+//       before the move (none missing; one that appears in addition is reported).
 // Then whiteboard and groups together: the read-only line of a phone follows it into a
 // group (no whiteboard there: no line) and back (the phone asks, the presenter answers:
 // the line returns), and the phone that stayed keeps it.
@@ -409,6 +409,11 @@ const assignTo = (teacher, index, label) => step(teacher, `assign ${label} to gr
   await teacher.locator(modal).waitFor({ state: 'detached', timeout: 5000 });
 });
 
+// A toolbar is complete when no control it had before is missing afterwards. A control
+// that is there in addition is reported, not failed: the toolkit shows some (the arrow
+// of the share options, for instance) a moment later than the others.
+const missing = (before, after) => before.toolbar.filter(id => !after.toolbar.includes(id)).concat(after.headerButtons < before.headerButtons ? ['a button of the phone header'] : []);
+const added = (before, after) => after.toolbar.filter(id => !before.toolbar.includes(id));
 const leaveMenu = page => page.evaluate(() => [...document.querySelectorAll('#end-for-all-button, #leave-meeting-button, #leave-subsession-button')].filter(b => b.offsetParent !== null).map(b => ({ id: b.id, text: b.textContent.trim() })));
 
 async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignFirst }) {
@@ -509,8 +514,8 @@ async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignF
   const teacherBack = await untilWhere(teacher, w => !w.inGroup && w.status === 2 && w.toolbar.length >= teacherBefore.toolbar.length, 40000);
   const teacherAfter = await where(teacher);
   pass(`${tag} G3. a learner asks for help; the teacher gets the dialog, joins that group and returns with a complete toolbar`,
-    visiting && together && teacherBack && JSON.stringify(teacherAfter.toolbar) === JSON.stringify(teacherBefore.toolbar),
-    { request: record.helpRequest, visiting, together, teacherBack, toolbarBefore: teacherBefore.toolbar, toolbarAfter: teacherAfter.toolbar });
+    visiting && together && teacherBack && missing(teacherBefore, teacherAfter).length === 0,
+    { request: record.helpRequest, visiting, together, teacherBack, toolbarMissing: missing(teacherBefore, teacherAfter), toolbarAdded: added(teacherBefore, teacherAfter), toolbarAfter: teacherAfter.toolbar });
   strays.push(...await everyoneStill('after the visit'));
 
   // G4. The toolkit's own leave control inside a group: one tap takes nobody out of the lesson.
@@ -533,14 +538,15 @@ async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignF
     await step(learner, 'the learner returns with « Revenir à la salle principale »', () => learner.locator('#leave-subsession-button').click({ timeout: 10000 }));
     const phoneTapped = await phoneDialogButton(phone, b => /principale/.test(b.title));
     const back = { learner: await untilWhere(learner, w => !w.inGroup, 40000), phone: phoneTapped && await untilWhere(phone, w => !w.inGroup, 40000) };
-    // Still assigned, so the toolkit invites again: the toolbar is compared with the one at the first invitation.
+    // Still assigned, so the toolkit invites again: the toolbar must have every control it had before the groups and at the first invitation.
     await untilWhere(learner, w => w.toolbar.length >= atInvitation.learner.toolbar.length, 20000);
     await untilWhere(phone, w => w.toolbar.length >= atInvitation.phone.toolbar.length, 20000);
     const after = { learner: await where(learner), phone: await where(phone) };
     pass(`${tag} G4. with the return allowed: one tap on the toolkit's leave control leaves nobody out of the lesson; it offers « Revenir à la salle principale », which brings each back to the main room with a complete toolbar`,
       oneTapSafe && offersReturn.computer && offersReturn.phone && menu.find(item => item.id === 'leave-subsession-button')?.text === 'Revenir à la salle principale' && menu.find(item => item.id === 'leave-meeting-button')?.text === 'Quitter le cours'
-        && back.learner && back.phone && JSON.stringify(after.learner.toolbar) === JSON.stringify(atInvitation.learner.toolbar) && JSON.stringify(after.phone.toolbar) === JSON.stringify(atInvitation.phone.toolbar) && after.phone.headerButtons === atInvitation.phone.headerButtons,
-      { oneTapSafe, leaveControl: record.leaveControl, back, toolbar: { learner: after.learner.toolbar, learnerAtInvitation: atInvitation.learner.toolbar, phone: after.phone.toolbar, phoneAtInvitation: atInvitation.phone.toolbar } });
+        && back.learner && back.phone && ['learner', 'phone'].every(p => missing(atInvitation[p], after[p]).length === 0 && missing(before[p], after[p]).length === 0),
+      { oneTapSafe, leaveControl: record.leaveControl, back, toolbarMissing: Object.fromEntries(['learner', 'phone'].map(p => [p, [...new Set([...missing(atInvitation[p], after[p]), ...missing(before[p], after[p])])]])),
+        toolbarAdded: Object.fromEntries(['learner', 'phone'].map(p => [p, added(before[p], after[p])])), toolbarAfter: { learner: after.learner.toolbar, phone: after.phone.toolbar } });
   } else {
     // Nothing to return with: close what the tap opened, and check that both are still there.
     await learner.keyboard.press('Escape');
@@ -578,9 +584,10 @@ async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignF
   const home = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await untilWhere(page, w => !w.inGroup && !w.invited && w.inMeeting, 60000)])));
   await teacher.waitForTimeout(3000);
   const after = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await where(page)])));
-  const toolbars = Object.fromEntries(Object.keys(all).map(p => [p, JSON.stringify(after[p].toolbar) === JSON.stringify(before[p].toolbar) && after[p].headerButtons === before[p].headerButtons]));
+  const toolbars = Object.fromEntries(Object.keys(all).map(p => [p, missing(before[p], after[p]).length === 0]));
+  record.toolbarAddedAfterTheGroups = Object.fromEntries(Object.keys(all).map(p => [p, added(before[p], after[p])]));
   const timed = closedBy !== 'timer' || (closedAfterSeconds >= minutes * 60 - 5 && closedAfterSeconds <= minutes * 60 + 45);
-  pass(`${tag} G5. ${closedBy === 'timer' ? `nobody closes the groups: the timer does, ${minutes} minute(s) after the opening` : 'the teacher closes all groups'}; everybody is back in the main room with the toolbar they had before the groups`,
+  pass(`${tag} G5. ${closedBy === 'timer' ? `nobody closes the groups: the timer does, ${minutes} minute(s) after the opening` : 'the teacher closes all groups'}; everybody is back in the main room with every control they had before the groups`,
     closed && timed && Object.values(home).every(Boolean) && Object.values(toolbars).every(Boolean),
     { closed, closedAfterSeconds, home, toolbars, ...(Object.values(toolbars).every(Boolean) ? {} : { before: Object.fromEntries(Object.keys(all).map(p => [p, before[p].toolbar])), after: Object.fromEntries(Object.keys(all).map(p => [p, after[p].toolbar])) }) });
   strays.push(...await everyoneStill('after the groups'));
