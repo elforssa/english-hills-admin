@@ -223,9 +223,20 @@ try {
   assert.deepEqual(await host.evaluate(() => window.__zoom.config.featuresOptions.whiteboard), { enable: true, enableExport: true, enableViewerUserExport: false }, 'the teacher exports');
   await host.evaluate(() => { window.__zoom.emit('whiteboard-status-change', 1); window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('whiteboard-status-change', 0); });
   await host.waitForTimeout(200);
-  assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
+  assert.deepEqual(await host.evaluate(() => window.__sent.filter(text => text !== 'eh-whiteboard:ask')), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
+  // A participant who arrives or reconnects asks; the presenter answers while its whiteboard is open.
+  await host.evaluate(() => { window.__sent.length = 0; window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-whiteboard:ask' }); });
+  assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open', 'eh-whiteboard:open']);
+  // On the device without the canvas: a reconnection drops the line and asks again.
+  await wide.evaluate(() => { window.__sent = []; window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-whiteboard:open' }); });
+  await line(wide).waitFor();
+  await wide.evaluate(() => window.__zoom.emit('connection-change', { state: 'Reconnecting', reason: 'failover' }));
+  await line(wide).waitFor({ state: 'detached' });
+  await wide.evaluate(() => window.__zoom.emit('connection-change', { state: 'Connected' }));
+  assert.deepEqual(await wide.evaluate(() => window.__sent), ['eh-whiteboard:ask']);
+  assert.equal(await wide.evaluate(() => window.__phase), 'in_room');
   assert.equal(await line(host).count(), 0);
-  ok('whiteboard: learner export off, teacher export on; the read-only line follows capability and the presenter\'s marker, not the width');
+  ok('whiteboard: learner export off, teacher export on; the read-only line follows capability and the presenter\'s marker, not the width; late arrivals and reconnections ask');
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

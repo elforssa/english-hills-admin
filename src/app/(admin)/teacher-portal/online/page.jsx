@@ -56,7 +56,7 @@ export default function TeacherOnlineLessons() {
       <details className="mt-6 rounded-xl border bg-card p-4 text-sm" data-testid="room-guide">
         <summary className="cursor-pointer font-semibold">Guide de la salle</summary>
         <div className="mt-3 space-y-2 text-muted-foreground">
-          <p><span className="font-medium text-foreground">Tableau blanc.</span> Sur ordinateur, ouvrez-le avec le bouton « Ouvrir le tableau blanc » de la salle. Les apprenants sur ordinateur peuvent écrire avec vous ; sur téléphone ou tablette, ils le voient en lecture seule.</p>
+          <p><span className="font-medium text-foreground">Tableau blanc.</span> Sur ordinateur, ouvrez-le avec le bouton « Ouvrir le tableau blanc » de la salle. Les apprenants sur ordinateur peuvent écrire avec vous ; sur téléphone, sur tablette ou sur un ordinateur peu puissant, ils le voient en lecture seule.</p>
           <p>Le tableau blanc ne peut pas être rouvert après sa fermeture : choisissez « Exporter et fermer » pour garder une copie PDF. Seul l’enseignant peut l’exporter.</p>
         </div>
       </details>
