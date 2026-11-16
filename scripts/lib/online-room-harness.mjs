@@ -5,7 +5,8 @@
 //   - with the real UI Toolkit against Zoom (local acceptance only).
 // The page mirrors the glue of src/app/(admin)/online/room/[id]/page.jsx: tab guard
 // first, then an embed from GET /embed (a new pass, so a new Zoom identity, per call, as
-// the join route does), « Réessayer » after the previous room has settled.
+// the join route does), « Réessayer » after the previous room has settled, and the
+// page's own « Quitter le cours » link, which leads to a stand-in portal page (/portal).
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -16,6 +17,7 @@ const ENTRY = `
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ZoomRoom from './src/components/online/ZoomRoom.jsx';
+import RoomLeaveLink from './src/components/online/RoomLeaveLink.jsx';
 import { createTabGuard, roomGuardKey } from './src/lib/online/room-tab-guard.mjs';
 import { roomSettled } from './src/lib/online/zoom-room-session.mjs';
 import { roomErrorFor, passExpired } from './src/lib/online/zoom-room-errors.mjs';
@@ -64,6 +66,7 @@ function App() {
   return (
     <div>
       <p data-testid="phase">{state.phase}</p>
+      <RoomLeaveLink href="/portal" inRoom={state.phase === 'in_room'} />
       {state.phase === 'other_tab' && <div data-testid="room-other-tab"><p>Vous êtes déjà connecté à ce cours dans un autre onglet.</p><button onClick={takeThisTab}>Utiliser cet onglet</button></div>}
       {state.phase === 'displaced' && <p data-testid="room-displaced">Ce cours est maintenant ouvert dans un autre onglet.</p>}
       {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} />}
@@ -146,6 +149,7 @@ export async function serveRoomHarness({ js, css, embed, headers = [] }) {
         for (const { key, value } of headers) res.setHeader(key, value);
         return res.end(html);
       }
+      if (url.pathname === '/portal') { res.setHeader('content-type', 'text/html; charset=utf-8'); return res.end('<!doctype html><html lang="fr"><meta charset="utf-8"><title>portal</title><body><p data-testid="portal">portal</p></body></html>'); }
       if (url.pathname === '/room.js') { res.setHeader('content-type', 'text/javascript; charset=utf-8'); return res.end(js); }
       // The harness has no Tailwind: give the room container the height its class gives it in the app.
       if (url.pathname === '/harness.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end('[data-testid="zoom-room"] { height: 78vh; width: 100%; overflow: hidden; }'); }

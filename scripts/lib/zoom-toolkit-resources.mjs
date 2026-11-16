@@ -38,7 +38,6 @@ export function toolkitEnglish(source = readFileSync(TOOLKIT_BUNDLE, 'utf8')) {
 // that the toolkit never renders in a session (demo and web-app shells). They stay in
 // English in the bundle and are never shown.
 export const UNREACHABLE_PREFIXES = Object.freeze([
-  'subsession.', // subsession: off
   'troubleshooting.', // troubleshoot: off
   'caption.', 'language.', // caption: off (language.* are caption languages)
   'phone.', 'call.', 'room.', // phone: off (dial-in, call-out, room systems)

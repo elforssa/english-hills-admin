@@ -5,7 +5,9 @@
 // every 30 seconds, leaving as soon as the participant no longer qualifies. This path
 // carries its own security headers (camera, microphone and the Zoom hosts; OL-r6 A6),
 // so every way in and out is a full document navigation: plain anchors in, and
-// window.location.assign out (Quitter, the toolkit's leave button, an ended lesson).
+// window.location.assign out (the toolkit's leave button, an ended lesson). « Quitter le
+// cours » at the top is a plain anchor that asks first while the participant is in the
+// room (RoomLeaveLink.jsx).
 // One tab per lesson and person: a second tab in the same browser is told so and may
 // take the room over, which makes the first tab leave before the second one joins.
 // A retry first waits until the previous room has left Zoom and been destroyed, so a
@@ -13,8 +15,9 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Video, LogOut, RefreshCw } from 'lucide-react';
+import { Video, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import RoomLeaveLink from '@/components/online/RoomLeaveLink';
 import { useAuth } from '@/context/AuthContext';
 import { onlinePost, onlineRpc, casablancaTime } from '@/lib/online/queries';
 import { ONLINE_REASON_TEXT, onlineErrorText } from '@/lib/online/reasons.mjs';
@@ -131,7 +134,7 @@ function Room() {
     <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-4xl flex-col gap-4 p-3 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold sm:text-xl">Cours en ligne</h1>
-        <Button asChild variant="outline" size="sm"><a href={back} data-testid="room-leave"><LogOut /> Quitter</a></Button>
+        <RoomLeaveLink href={back} inRoom={state.phase === 'in_room'} />
       </div>
       {!valid && <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.not_found}</p>}
       {valid && (state.phase === 'joining' || state.phase === 'checking') && <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Ouverture de la salle…</p>}
