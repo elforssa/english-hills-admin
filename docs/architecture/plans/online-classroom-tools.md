@@ -2,6 +2,8 @@
 
 **Revision OCT-r3, 2026-11-15. APPROVED by the owner on 2026-11-15 at exact head `711d49286bd6462072ebc508ed69eaaeb1adcaa2` ([approval record](#approval-record)); architecture only, the pull requests of the plan each need their own review and merge approval.** OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174` (B1–B5, N1–N8) and OCT-r2 at head `0f0d83954cb6d4c6518bae922ff8523775ca087e` (B6 and four notes) were each independently reviewed CHANGES REQUIRED; this revision applies every finding and records the owner's answers D1–D11, confirmed by the owner on 2026-11-15 ([revision record](#revision-record), [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--approved-2026-11-15)). Risk tier: **Tier 3** for the outcome (it changes the security header of the room path, an OL-r6 decision); the pull requests inside it are tiered one by one in [PR split](#7-risk-tier-and-pr-split). Baseline: `main` at `ab3cc74` (PR #192 merged). Parent contract: [online learning — pilot architecture](online-learning.md) and [ADR-008](../decisions/ADR-008-online-learning-pilot.md).
 
+**Status update, 2026-11-17 (PR D, raise hand):** PR B was merged as #195 (`b581d95`) and the classroom polish as #197 (`95eff1b`). PR D (« Lever la main ») is designed in the [PR D design addendum](#pr-d--raise-hand--lever-la-main--design-addendum-2026-11-17), which records the owner's design decisions of 2026-11-17 and flags two contradictions with the text below; it is implemented on a pull request, not merged.
+
 **Status update, 2026-11-16 (PR B implementation):** PR A was merged as #194 (`b2198bf`); PR B (groups) is implemented on a pull request, not merged. The toolkit's own groups window turned out to have a timer that does not work, and four other defects; the owner decided how the timer is handled. See the [implementation record for PR B](#implementation-record--pr-b-groups).
 
 **Status update, 2026-11-15 (PR A implementation):** step P1 is done (Production whiteboard host `us04st1.zoom.us`), S1 was decided by the owner (two exact path-scoped sources), and PR A is implemented on a pull request, not merged. What the implementation found and how it differs from the text below is in the [implementation record for PR A](#implementation-record--pr-a-whiteboard); the body of the plan is left as approved.
@@ -315,9 +317,9 @@ Needs: the deployment with PR A and PR B; one test lesson; **teacher on a laptop
 | 8 | **Replaced:** row G-l (« Message à tous » and « Parler à tous les groupes ») | — |
 | 9 | **Replaced:** row G-f (the timer, sound after the return) | — |
 | 10 | **Replaced:** rows G-c, G-d, G-e and G-h. The old row expected « Revenir à la salle principale » on every device; a phone never shows it (D12) | — |
-| 11 | Raise hand | Not there yet (PR D): learners write in the chat |
+| 11 | **Replaced** (PR D): raise hand is rows H-a to H-f of the [PR D addendum](#production-test) (« Production test » under PR D) | — |
 | 12 | Teacher: share a **Chrome tab** playing a short English audio or video, tick the audio box. While it plays, the teacher says one sentence, then closes their microphone with the toolkit's button and opens it again | All three learners hear the sound and see the tab; they hear the teacher's sentence over it; the sound goes on while the teacher's microphone is closed. **iPhone: if the sound does not play, the learner taps the screen once and says whether it then plays** |
-| 13 | Teacher: annotate the shared tab (pencil); then learner 1 (laptop) annotates too | The teacher's marks appear for all learners; learner 1's marks appear for the teacher. Phones only look |
+| 13 | Teacher: annotate the shared tab (pencil); then learner 1 (laptop) annotates too | The teacher's marks appear for all learners; learner 1's marks appear for the teacher. Phones only look. **Note (PR D, from the classroom polish run):** a phone learner is offered the full annotation toolbar on a shared screen; that is Zoom's, not a fault. Write down whether a real phone's marks reach the teacher |
 | 13a | **Added (classroom polish).** Teacher: participants button, hover learner 1, « … », « Couper le micro »; then « Couper tous les micros » | Learner 1 is muted, then all learners; the teacher is not. Each learner can open their microphone again themself (headless: they can; this row confirms it on real devices) |
 | 14 | Everyone stays 5 minutes without touching anything | No « Reconnexion », no flicker, sound continuous |
 | 15 | Teacher ends the lesson for all | Learners return to their portal |
@@ -563,6 +565,73 @@ Implemented on branch `feat/classroom-polish` from `main` `b581d95` (PR B merged
 **Stop conditions.** S2 not triggered (zero refusals with share, sound and annotation). No header, package, server, route or migration change was needed.
 
 **Not covered (UNVERIFIED):** real phones and iPhone Safari, including the automatic audio rejoin after a move (G-f) and whether an iPhone plays a shared sound without a tap (row 12); a real camera failure; the Production key and account; « let participants choose », voice broadcast, a teacher visit while presenting the whiteboard and a network drop during a move (rows G-k to G-n); toolkit 2.6.10-1.
+
+## PR D — raise hand « Lever la main » (design addendum, 2026-11-17)
+
+This is the « own short design note first » that [the PR split](#7-risk-tier-and-pr-split) asks of PR D. It is committed first on the PR D branch, so the reviewer reviews the design and the code together. It records the owner's design decisions of 2026-11-17 ([OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--approved-2026-11-15)) and the three facts a real-Zoom probe of the same day established before any code was written. **Tier 2, client only:** no header, host, package, lockfile, server, route, token, webhook, database or migration change; if one turns out to be needed, the work stops and returns to the owner.
+
+**Contradictions with the approved text, flagged (not silently resolved):**
+
+1. **Order.** The [implementation contract](#scope) says « PR C and PR D only after the Production test passes and the owner says so ». The Production test of A and B is not recorded ([CURRENT_STATE](../../ai/CURRENT_STATE.md)); the owner asked for PR D on 2026-11-17 all the same. PR D is built on that instruction. It changes nothing the Production test checks except row 11, which it replaces; its own merge remains the owner's decision.
+2. **« Fixed messages only. »** Six of the seven markers are fixed texts. The seventh, the answer to a question, carries one whole number: the seconds since that learner's hand went up (0–10800). Without it a teacher whose page asks again (a reload, or the return from a visit to a group, when Zoom drops every message the teacher missed) would rebuild the list in the order the answers happen to arrive, not in the order the hands went up. It is not free text and says nothing about a person; the receiver reads only `^\d{1,5}$` and ignores anything else. If the owner prefers strictly fixed texts, the cost is that order after a teacher's reload or group visit.
+
+### What the owner decided (2026-11-17)
+
+- **Learners:** our own button « Lever la main » / « Baisser la main », on computer and phone, **above the room, outside the toolkit**, so it never covers a toolkit control. It works in the main room; **inside a group it is hidden** (hands are for the main room).
+- **Teacher (host or manager):** a small panel « Mains levées (n) » above the room with the names in the order the hands went up, « Baisser » for each and « Baisser toutes les mains ». A brief visual cue when a hand goes up; **no sound**.
+- A hand goes down by itself when the learner leaves, moves into a group or reconnects. The teacher can lower any hand; a learner raises and lowers only their own.
+- Transport: Zoom's command channel, like the whiteboard markers. No attendance, no database, no trace of who raised a hand beyond the room's console totals.
+
+### Facts the design rests on (probe in installed Chrome, development key, 2026-11-17)
+
+1. **A message sent to one participant** (`getCommandClient().send(text, userId)`) reaches only that participant, but **the receiver's payload has no `receiverId`**: it cannot tell a message sent to it from one sent to everybody. Each received payload has `senderId` as a string set by Zoom.
+2. **Zoom also raises a copy of some messages without `senderId`** (seen for `eh-whiteboard:ask` just after a join). Such a payload is never believed.
+3. **A learner who moves into a group** reaches the teacher's page in the main room as `user-removed` (old id), then a `user-added` with the new id and a `subsessionId`, and is absent from `getAllUser()`. When the **teacher** visits a group and returns, the teacher gets a new id, the main-room learners keep theirs, and the teacher's page has missed every message sent in the main room meanwhile. A reload is `user-removed` plus `user-added` with a new id. The learner's own subsession state is `getSubsessionClient().getUserStatus()`: `'in room'` inside a group; anything else (`initial`, `invited`, `main session`) is the main room.
+
+### Design
+
+Seven markers, all with the prefix `eh-hand:`, matched exactly; anything else with that prefix is ignored. A payload without a numeric `senderId` is ignored.
+
+| Marker | Sent by | To | Believed when |
+| --- | --- | --- | --- |
+| `eh-hand:raise` | a learner, for themself | everybody | always, for the sender only (Zoom sets `senderId`), unless the sender is the host or a manager |
+| `eh-hand:lower-self` | a learner, for themself | everybody | always, for the sender only |
+| `eh-hand:ask` | a teacher's page, at its join, after each reconnection and when its command channel connects | everybody | from anybody; a learner whose hand is up answers at most once per 2 s (the whiteboard's interval) |
+| `eh-hand:raised:<seconds>` | a learner whose hand is up, answering | everybody | like `raise`; the seconds are used only within 10 s of this page's own question (outside that window the hand counts from its arrival), capped at 10800 |
+| `eh-hand:lower` | the host or a manager | one learner (by its id) | only from the host or a manager; the learner lowers its own hand and sends `lower-self`, so every other teacher page updates |
+| `eh-hand:lower-all` | the host or a manager | everybody | only from the host or a manager |
+
+- **The teacher's page** keeps the list: one entry per sender id, in the order the hands went up, at most 100 entries; a marker whose sender is not yet in its participant list waits for that sender (at most 64 waiting, like the whiteboard). An entry goes when the learner lowers it, when the teacher lowers it, on `user-removed` (leave, reload, move into a group), on `lower-all`, and on the teacher's own reconnection; after that reconnection the page asks again and rebuilds the list from the answers. The page does not show a teacher's or manager's own « hand ».
+- **The learner's page** shows the button only while it is connected and not inside a group. A reconnection of any kind (a move into a group or back, a network drop) lowers the hand locally; the teacher's page has already dropped the old id. A send that fails puts the button back. When the teacher lowers the hand, the learner sees « Votre main a été baissée par l’enseignant. » for a few seconds.
+- **Who is trusted** is read from Zoom's own participant list (`isHost` or `isManager` for the sender's id), as for the whiteboard. A learner who sends `lower` or `lower-all` by hand changes nothing; a learner can raise and lower only the hand Zoom attributes to their own id.
+- **Trace:** the teacher's page writes `hands total=<n>` when the count changes; a learner's page writes `hand state=up|down by=self|teacher|move|leave`. No name, no id.
+- **Cue:** the panel's badge turns amber with a ring for 3 s when the count rises (at most once per 3 s), and a hidden polite live region says « <label> lève la main ». No sound.
+- **Modules:** `src/lib/online/zoom-hands.mjs` (the markers and both sides, without React, unit-tested with a fake client), wired in `zoom-room-session.mjs`; `src/components/online/RoomHands.jsx` (button and panel) mounted by `ZoomRoom.jsx` above the room; a « Mains levées » paragraph in the « Guide de la salle ».
+
+### Tests
+
+- **Unit** ([test-online-room-unit.mjs](../../../scripts/test-online-room-unit.mjs)): every marker accepted and refused as in the table; a spoofed `lower` / `lower-all` from a learner and a payload without `senderId` change nothing; a learner cannot raise or lower another's hand; order kept, and rebuilt from the answers' seconds after the teacher's reconnection; the answer window and the cap; the 2 s answer interval; the bounds (100 hands, 64 waiting); auto-lowering on leave, move, reconnection and `Closed`; the button hidden in a group.
+- **Browser, fake toolkit** ([test-online-room-lifecycle-browser.mjs](../../../scripts/test-online-room-lifecycle-browser.mjs)): the learner's button states and the markers it sends; hidden in a group and back after the return; the teacher's panel, order, « Baisser », « Baisser toutes les mains », the cue; nothing for a spoofed lower.
+- **Real Zoom** ([test-online-zoom-classroom.mjs](../../../scripts/test-online-zoom-classroom.mjs), new hands part, under the shipped headers, by clicks on our own button and panel): learner and phone raise and the teacher sees both, in order; a spoofed `lower` and `lower-all` from a learner's page change nothing; a teacher reload (a late joiner) gets the list back in order; the teacher lowers one, then all; a raised hand goes down when its learner moves into a group (button hidden there, back down after the return), reloads, and leaves; zero Content-Security-Policy refusals except the named whiteboard one.
+
+### Production test
+
+Row 11 becomes the rows below; run them after row 5 and before the groups rows. Recorded with this PR: row 13 now notes that a phone learner gets the full annotation toolbar on a shared screen (seen in the classroom polish run).
+
+| # | Do | Expect |
+| --- | --- | --- |
+| H-a | Learner 1 (laptop), then learner 3 (Android), then learner 2 (iPhone): « Lever la main », above the room | Each button turns into « Baisser la main ». The teacher sees « Mains levées (3) » turn amber for a moment, with the three names **in that order**; no sound. Laptop console: `[online room] … hands total=3` |
+| H-b | Teacher: « Baisser » next to learner 3 | Learner 3's button is « Lever la main » again, with « Votre main a été baissée par l’enseignant. »; the teacher's list keeps learners 1 and 2, in order |
+| H-c | Teacher reloads the room page and rejoins | Within 10 s the list is back: learners 1 and 2, in the same order |
+| H-d | Learner 2 (iPhone): « Baisser la main »; then learner 1 leaves the lesson with « Quitter le cours » and rejoins | Learner 2 leaves the list at once; learner 1 leaves it when they leave; after the rejoin learner 1's button is « Lever la main » |
+| H-e | All three raise; teacher: « Baisser toutes les mains » | Every button is « Lever la main » again; « Mains levées (0) » |
+| H-f | During the groups rows: learner 1 raises, then accepts a group invitation | The hand leaves the teacher's list when learner 1 moves; inside the group learner 1 has no « Lever la main » button; back in the main room it is there, hand down |
+
+### Also in this PR (notes of the #197 review, not blocking)
+
+- The pre-join « start devices » message (`preview.error_start_devices` + error) gets the same French-reason treatment as the camera message (it could still show « [object Object] »).
+- The comment of the console wrapper in `zoom-toolkit-messages.mjs` says what is true: it stays installed for the life of the document, also after an in-app navigation away from the room, which is accepted (it drops one line, nothing else).
+- The toolkit's English share label « …'s content » is accepted as known and revisited with the toolkit upgrade (PR C); recorded in OWNER_DECISIONS.
 
 ## Revision record
 
