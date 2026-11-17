@@ -10,6 +10,7 @@ import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.m
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
 import { whiteboardCapability, whiteboardDeviceRule, cspBlockedDetail, expectedCspRefusal, EXPECTED_CSP_REFUSAL, WHITEBOARD_SOURCES, WHITEBOARD_SIGNAL, WHITEBOARD_READ_ONLY_TEXT } from '../src/lib/online/zoom-whiteboard.mjs';
+import { groupOpenOptions, groupTimerSeconds, correctGroupTimer, GROUP_TIMER_DEFAULT_SECONDS } from '../src/lib/online/zoom-groups.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -335,6 +336,38 @@ function open(toolkit, calls, logs, extra = {}) {
     r2.toolkit.emit('user-added', [{ userId: 777, displayName: 'X' }]);
     assert.deepEqual(r2.board, []);
     await r2.room.stop();
+    // Review note N2 of 2026-11-16: a learner's early marker does not take the place of
+    // the host's. Both wait; the host's is believed when the host is listed, in either
+    // order of arrival, and the learner's is dropped.
+    for (const order of [[HOST, LEARNER], [LEARNER, HOST]]) {
+      const users3 = [{ userId: 9, displayName: 'Moi', isHost: false }];
+      const r3 = await start(sdk({ capable: false, users: users3 }));
+      for (const sender of order) r3.toolkit.emit('command-channel-message', { senderId: String(sender.userId), text: WHITEBOARD_SIGNAL.open });
+      assert.deepEqual(r3.board, []);
+      users3.push(LEARNER);
+      r3.toolkit.emit('user-added', [LEARNER]);
+      assert.deepEqual(r3.board, [], 'the learner appearing first changes nothing');
+      users3.push(HOST);
+      r3.toolkit.emit('user-added', [HOST]);
+      assert.deepEqual(r3.board, [{ open: true, readOnly: true }], `the host's marker survived the learner's (${order.map(u => u.displayName).join(' then ')})`);
+      await r3.room.stop();
+    }
+    // A learner's « closed » does not cancel the host's waiting « open »; the host's does.
+    {
+      const users4 = [{ userId: 9, displayName: 'Moi', isHost: false }];
+      const r4 = await start(sdk({ capable: false, users: users4 }));
+      r4.toolkit.emit('command-channel-message', { senderId: String(HOST.userId), text: WHITEBOARD_SIGNAL.open });
+      r4.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.open });
+      r4.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.closed });
+      users4.push(HOST, LEARNER);
+      r4.toolkit.emit('user-added', [HOST, LEARNER]);
+      assert.deepEqual(r4.board, [{ open: true, readOnly: true }]);
+      // Many unknown senders: the list of waiting markers is bounded, and nothing breaks.
+      for (let i = 0; i < 500; i++) r4.toolkit.emit('command-channel-message', { senderId: String(5000 + i), text: WHITEBOARD_SIGNAL.open });
+      r4.toolkit.emit('user-added', [{ userId: 4, displayName: 'Nour K.' }]);
+      assert.deepEqual(r4.board, [{ open: true, readOnly: true }]);
+      await r4.room.stop();
+    }
     // Reconnection: the line goes, the participant asks again, the presenter's answer restores it.
     const asked = r.win.zmClient.sent.length;
     r.toolkit.emit('connection-change', { state: 'Reconnecting', reason: 'failover' });
@@ -372,31 +405,61 @@ function open(toolkit, calls, logs, extra = {}) {
     assert.deepEqual(r.win.zmClient.sent, [WHITEBOARD_SIGNAL.ask], 'a viewer asks at the join and never sends « open », « closed » or an answer');
     await r.room.stop();
   }
-  // The presenter: its own status change sends the marker, once per change, and again
-  // when somebody joins while the whiteboard is open. Nothing but the two fixed texts.
+  // The presenter: its own status change sends the marker, once per change. Arrivals
+  // and questions are answered, at most once per interval (review note N1 of
+  // 2026-11-16): a burst gets one answer at once and one when the interval is over.
+  // Nothing but the fixed texts.
   {
-    const r = await start(sdk({ capable: true, users: [HOST] }));
+    const r = await start(sdk({ capable: true, users: [HOST] }), { boardAnswerMs: 40 });
     const sent = () => r.win.zmClient.sent.slice(1); // after the question every participant asks at the join
     assert.deepEqual(r.win.zmClient.sent, [WHITEBOARD_SIGNAL.ask]);
     r.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.ask });
-    assert.deepEqual(sent(), [], 'no whiteboard: a question gets no answer');
+    r.toolkit.emit('user-added', [{ userId: 5, displayName: 'Nour K.' }]);
+    await tick(60);
+    assert.deepEqual(sent(), [], 'no whiteboard: a question or an arrival gets no answer');
     r.toolkit.emit('whiteboard-status-change', 1);
     r.toolkit.emit('whiteboard-status-change', 2);
     assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open], 'pending then in progress: one marker');
+    // A class comes back from its groups: everybody appears again and asks, at once.
     r.toolkit.emit('user-added', [{ userId: LEARNER.userId, displayName: LEARNER.displayName }]);
-    assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open], 'told again when somebody joins');
-    // The question of a participant who has arrived, reloaded or reconnected is answered.
+    for (let i = 0; i < 25; i++) r.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId + i), text: WHITEBOARD_SIGNAL.ask });
+    for (let i = 0; i < 25; i++) r.toolkit.emit('user-added', [{ userId: 100 + i, displayName: 'X' }]);
+    assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open], 'inside the interval nothing more is sent at once');
+    await tick(70);
+    assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open], 'the whole burst gets one answer when the interval is over');
+    await tick(60);
+    assert.equal(sent().length, 2, 'and only one');
+    // After the interval a question is answered at once.
     r.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.ask });
     assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open], 'the presenter answers a question');
     // The presenter does not ask while presenting (a reconnection of its own included).
     r.toolkit.emit('command-channel-status', 'Connected');
     assert.equal(sent().length, 3);
+    // An answer that is still waiting is dropped when the whiteboard closes: « closed » is the last word.
+    r.toolkit.emit('command-channel-message', { senderId: String(LEARNER.userId), text: WHITEBOARD_SIGNAL.ask });
     r.toolkit.emit('whiteboard-status-change', 0);
     r.toolkit.emit('user-added', [{ userId: 3, displayName: 'Nour K.' }]);
     r.toolkit.emit('command-channel-message', { senderId: '3', text: WHITEBOARD_SIGNAL.ask });
+    await tick(70);
     assert.deepEqual(sent(), [WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.open, WHITEBOARD_SIGNAL.closed]);
+    // A new whiteboard is announced at once, whatever was answered just before.
+    r.toolkit.emit('whiteboard-status-change', 2);
+    assert.equal(sent().at(-1), WHITEBOARD_SIGNAL.open);
+    assert.equal(sent().length, 5);
+    r.toolkit.emit('whiteboard-status-change', 0);
     assert.deepEqual({ ...WHITEBOARD_SIGNAL }, { open: 'eh-whiteboard:open', closed: 'eh-whiteboard:closed', ask: 'eh-whiteboard:ask' }, 'three fixed texts and nothing else');
-    assert.deepEqual(r.board, [{ open: true, readOnly: false }, { open: false, readOnly: false }]);
+    assert.deepEqual(r.board, [{ open: true, readOnly: false }, { open: false, readOnly: false }, { open: true, readOnly: false }, { open: false, readOnly: false }]);
+    // A room that stops with an answer waiting sends nothing afterwards.
+    r.toolkit.emit('whiteboard-status-change', 2);
+    r.toolkit.emit('command-channel-message', { senderId: '3', text: WHITEBOARD_SIGNAL.ask });
+    const before = r.win.zmClient.sent.length;
+    const client = r.win.zmClient;
+    await r.room.stop();
+    await tick(70);
+    assert.equal(client.sent.length, before, 'no answer after the room has stopped');
+  }
+  {
+    const r = await start(sdk({ capable: true, users: [HOST] }));
     // A command channel that throws or is missing never breaks the room.
     r.win.zmClient = { getWhiteboardClient: () => ({ isWhiteboardEnabled: () => true }), getCommandClient: () => { throw new Error('gone'); } };
     r.toolkit.emit('whiteboard-status-change', 2);
@@ -508,6 +571,137 @@ function open(toolkit, calls, logs, extra = {}) {
   assert.ok(bundle.includes('window.zmClient = '), 'toolkit exposes the SDK client');
   for (const event of ['"whiteboard-status-change"', '"peer-whiteboard-state-change"', '"command-channel-message"', '"command-channel-status"']) assert.ok(bundle.includes(event), event);
   assert.ok(/navigator\.hardwareConcurrency\s*>\s*2\s*&&\s*![\w$]+\)/.test(bundle), 'the device rule is still: more than two cores and not Android or iOS');
+}
+
+// 9. Groups (plan online-classroom-tools.md, PR B). A move into a group or back is
+//    `Reconnecting` then `Connected`: never a leave, a failure or a closing, never the
+//    join timer, whatever the reason says; the participant list starts again. `Closed`
+//    still leaves and `Fail` still shows the error card.
+{
+  const REASONS = ['join breakout room', 'move to breakout room', 'back to main session', 'a reason this code has never seen', undefined];
+  const calls = [], logs = [], toolkit = fakeToolkit(calls);
+  const { room, container } = open(toolkit, calls, logs, { joinTimeoutMs: 40 });
+  await room.ready;
+  container.click('Rejoindre le cours');
+  toolkit.connect();
+  toolkit.emit('user-added', [{ userId: 1, displayName: 'Sara L.', isHost: true }, { userId: 2, displayName: 'Amal B.' }, { userId: 3, displayName: 'Nour K.' }]);
+  calls.length = 0;
+  for (const reason of REASONS) {
+    logs.length = 0;
+    toolkit.emit('connection-change', { state: 'Reconnecting', reason });
+    // Zoom lists everybody again with new ids and sends no « removed » event.
+    toolkit.emit('user-added', [{ userId: 100, displayName: 'Amal B.' }]);
+    toolkit.emit('connection-change', { state: 'Connected' });
+    toolkit.emit('user-added', [{ userId: 101, displayName: 'Nour K.' }]);
+    assert.deepEqual(logs.filter(([event]) => event.startsWith('participant')).map(([, d]) => d.total), [1, 2], `the list starts again on a move (${reason})`);
+    assert.deepEqual(logs.filter(([event]) => event === 'room move').map(([, d]) => d.reason), [reason]);
+    await tick(60); // well past the join timeout: a move never starts the join timer
+  }
+  assert.deepEqual(calls, [], 'a move never calls onLeft, onError or onClosing, never leaves and never destroys');
+  assert.ok(!logs.some(([event]) => event === 'join attempt' || event === 'room failed' || event === 'room left'));
+  // The source never looks at the reason text.
+  const source = read('src/lib/online/zoom-room-session.mjs').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/breakout|main session|subsession/i.test(source), 'no behaviour depends on the reason text');
+  assert.equal((source.match(/payload\?\.reason/g) || []).length, 3, 'the reason is only printed (connection, room move) or handed to the error mapping (on Fail)');
+  // Closed still leaves, once.
+  toolkit.emit('connection-change', { state: 'Closed', reason: 'ended by host' });
+  toolkit.close();
+  await tick(10);
+  assert.deepEqual(calls.filter(c => c.startsWith('page:')), ['page:onLeft']);
+  await room.stop();
+  // Fail after a move still shows the error card, after cleanup.
+  const calls2 = [], logs2 = [], toolkit2 = fakeToolkit(calls2);
+  const second = open(toolkit2, calls2, logs2);
+  await second.room.ready;
+  toolkit2.connect();
+  toolkit2.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' });
+  toolkit2.emit('connection-change', { state: 'Fail', errorCode: 200, reason: 'network' });
+  await tick(10);
+  assert.deepEqual(calls2.filter(c => c.startsWith('page:') || c.startsWith('destroy')), ['page:onClosing', 'destroy:start', 'destroy:end', 'page:onError:200']);
+  await second.room.stop();
+}
+
+// 10. The timer of the toolkit's groups window (owner decision of 2026-11-16). The
+//     toolkit passes what the teacher typed as a string and never switches Zoom's timer
+//     on; the room corrects the options on their way to Zoom and touches nothing else.
+{
+  // What the teacher typed is minutes; a number came from Zoom and is seconds.
+  assert.equal(GROUP_TIMER_DEFAULT_SECONDS, 1800);
+  assert.equal(groupTimerSeconds('10'), 600);
+  assert.equal(groupTimerSeconds(' 2 '), 120);
+  assert.equal(groupTimerSeconds('1.5'), 90);
+  assert.equal(groupTimerSeconds('1,5'), 90);
+  assert.equal(groupTimerSeconds(1800), 1800);
+  assert.equal(groupTimerSeconds(600), 600);
+  assert.equal(groupTimerSeconds('99999'), 24 * 60 * 60, 'capped at a day');
+  for (const bad of ['', ' ', '0', '-5', 'abc', '1e999', 0, -1, NaN, Infinity, null, undefined, {}, []]) assert.equal(groupTimerSeconds(bad), 1800, `unusable value ${JSON.stringify(bad)} is Zoom's default`);
+  // As the toolkit calls it (observed with Zoom, 2026-11-16): box ticked, value typed.
+  const typed = { isAutoJoinSubsession: false, isSubsessionSelectionEnabled: false, isBackToMainSessionEnabled: true, isTimerEnabled: false, timerDuration: '90', isTimerAutoEnabled: true, waitSeconds: 0, isAutoMoveBackToMainSession: false };
+  assert.deepEqual(groupOpenOptions(typed), { ...typed, isTimerEnabled: true, timerDuration: 5400 });
+  assert.equal(typed.timerDuration, '90', 'the toolkit\'s own object is not changed');
+  // Box ticked, nothing typed: Zoom's default duration, with the timer on.
+  assert.deepEqual(groupOpenOptions({ ...typed, timerDuration: 1800 }), { ...typed, isTimerEnabled: true, timerDuration: 1800 });
+  // Box not ticked: no timer, and a typed value can no longer make the call time out.
+  assert.deepEqual(groupOpenOptions({ ...typed, isTimerAutoEnabled: false }), { ...typed, isTimerAutoEnabled: false, isTimerEnabled: false, timerDuration: 5400 });
+  assert.deepEqual(groupOpenOptions({ ...typed, isTimerAutoEnabled: false, isTimerEnabled: true, timerDuration: 1800 }), { ...typed, isTimerAutoEnabled: false, isTimerEnabled: false, timerDuration: 1800 }, 'the timer follows the box only');
+  // Every other option goes through untouched, in every combination.
+  for (const back of [true, false]) for (const auto of [true, false]) {
+    const out = groupOpenOptions({ ...typed, isBackToMainSessionEnabled: back, isAutoJoinSubsession: auto, waitSeconds: 30 });
+    assert.deepEqual([out.isBackToMainSessionEnabled, out.isAutoJoinSubsession, out.waitSeconds, out.isAutoMoveBackToMainSession, out.isSubsessionSelectionEnabled], [back, auto, 30, false, false]);
+  }
+  assert.equal(groupOpenOptions(undefined), undefined);
+  assert.equal(groupOpenOptions(null), null);
+
+  // On the SDK client: once per client object, the list of groups untouched, the SDK's
+  // own answer (or refusal) handed back as it is.
+  const seen = [], opened = [];
+  const subsession = { openSubsessions(list, options) { seen.push([list, options, this === subsession]); return options?.fail ? Promise.reject({ type: 'INVALID_OPERATION' }) : Promise.resolve('opened'); } };
+  const win = { zmClient: { getSubsessionClient: () => subsession } };
+  assert.equal(correctGroupTimer(win, seconds => opened.push(seconds)), true);
+  const corrected = subsession.openSubsessions;
+  assert.equal(correctGroupTimer(win, () => opened.push('twice')), true);
+  assert.equal(subsession.openSubsessions, corrected, 'not wrapped twice');
+  const list = [{ subsessionId: '{A}', subsessionName: 'Subsession 1', userList: [{ userId: 2, displayName: 'Amal B.' }] }];
+  assert.equal(await subsession.openSubsessions(list, typed), 'opened');
+  assert.equal(seen[0][0], list, 'the same list object');
+  assert.deepEqual(seen[0][1], { ...typed, isTimerEnabled: true, timerDuration: 5400 });
+  assert.equal(seen[0][2], true, 'called on the client itself');
+  await subsession.openSubsessions(list, { ...typed, isTimerAutoEnabled: false });
+  await assert.rejects(subsession.openSubsessions(list, { ...typed, fail: true }), { type: 'INVALID_OPERATION' });
+  assert.deepEqual(opened, [5400, 0, 5400], 'the trace gets the timer in seconds, or 0 without one');
+  // A trace that throws does not stop the call; a missing client is not an error.
+  const other = { openSubsessions: async () => 'ok' };
+  assert.equal(correctGroupTimer({ zmClient: { getSubsessionClient: () => other } }, () => { throw new Error('trace'); }), true);
+  assert.equal(await other.openSubsessions([], typed), 'ok');
+  for (const missing of [undefined, {}, { zmClient: {} }, { zmClient: { getSubsessionClient: () => null } }, { zmClient: { getSubsessionClient() { throw new Error('not ready'); } } }, { zmClient: { getSubsessionClient: () => ({}) } }])
+    assert.equal(correctGroupTimer(missing), false);
+
+  // The room puts it on at every connection (a retry gets a new client), and traces the
+  // timer only: never a group name or who is in a group.
+  const calls = [], logs = [], toolkit = fakeToolkit(calls);
+  const r = open(toolkit, calls, logs);
+  const sub = { openSubsessions: async () => {} };
+  r.win.zmClient = { getSubsessionClient: () => sub };
+  await r.room.ready;
+  toolkit.connect();
+  const wrapped = sub.openSubsessions;
+  toolkit.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' });
+  toolkit.emit('connection-change', { state: 'Connected' });
+  assert.equal(sub.openSubsessions, wrapped);
+  await sub.openSubsessions([{ subsessionId: '{A}', subsessionName: 'Les Lions', userList: [{ userId: 2, displayName: 'Amal B.' }] }], { ...typed, timerDuration: '10' });
+  await sub.openSubsessions([], { ...typed, isTimerAutoEnabled: false });
+  assert.deepEqual(logs.filter(([event]) => event === 'groups open').map(([, d]) => d), [{ timer: '600s' }, { timer: 'off' }]);
+  assert.ok(!JSON.stringify(logs).includes('Les Lions') && !JSON.stringify(logs.filter(([event]) => event === 'groups open')).includes('Amal'), 'the trace never carries a group name');
+  await r.room.stop();
+
+  // The facts the correction rests on, read in the installed bundle. An upgrade that
+  // repairs the toolkit (or changes the call) fails here, and the correction is re-read.
+  const bundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
+  assert.ok(bundle.includes('window.zmClient = '), 'toolkit exposes the SDK client');
+  assert.ok(/onChange: \(\w+\) => \w+\("timerDuration", \w+\.target\.value\)/.test(bundle), 'the toolkit still passes the typed value as a string');
+  assert.ok(!/isTimerEnabled/.test(bundle.slice(bundle.indexOf('uikit-subsession-rooms-settings-dialog') - 6000, bundle.indexOf('uikit-subsession-rooms-settings-dialog') + 8000)), 'the toolkit\'s settings still never switch the timer on');
+  assert.ok(/\.isTimerEnabled && \w+\.timerDuration > 0/.test(bundle), 'Zoom counts down only when isTimerEnabled is true');
+  assert.ok(/await \w+\.openSubsessions\(\w+, \{\s*\.\.\.\w+,\s*waitSeconds:/.test(bundle), 'the toolkit opens the groups with openSubsessions(list, options)');
 }
 
 // ---- Tab guard ----
@@ -644,6 +838,25 @@ function fakeChannels() {
   assert.equal(french['whiteboard.start_tooltip'], 'Ouvrir le tableau blanc');
   assert.equal(french['whiteboard.stop_button'], 'Fermer le tableau blanc');
   assert.equal(french['whiteboard.export_and_close'], 'Exporter et fermer');
+  // Groups are reachable since PR B and are French, with the owner's words (D10):
+  // « Groupes », « salle principale ». None is left equal to the English one except the
+  // two words that are the same in both languages, and none says « sous-groupe ».
+  assert.ok(!UNREACHABLE_PREFIXES.includes('subsession.'));
+  const groupKeys = Object.keys(english).filter(key => key.startsWith('subsession.'));
+  assert.equal(groupKeys.length, 174);
+  for (const key of groupKeys) assert.equal(french[key] === english[key], ['subsession.minutes', 'subsession.options'].includes(key), `${key} is French`);
+  for (const [key, value] of Object.entries(french)) assert.ok(!/sous-groupe|subsession|breakout/i.test(value.replace(/\{\{\s*\w+\s*\}\}/g, '')), `${key} uses the owner's word`);
+  assert.equal(french['subsession.label'], 'Groupes');
+  assert.equal(french['subsession.menu_title'], 'Groupes');
+  assert.equal(french['subsession.ask_for_help'], 'Demander de l’aide');
+  assert.equal(french['subsession.broadcast_message_title'], 'Message à tous les groupes');
+  assert.equal(french['subsession.close_all_rooms'], 'Fermer tous les groupes');
+  assert.equal(french['subsession.invite_join_room_tip_content'], 'Vous êtes invité à rejoindre le groupe :');
+  // The toolkit's own leave menu inside a group: two choices that cannot be confused.
+  assert.equal(french['leave.button_leave_subsession'], 'Revenir à la salle principale');
+  assert.equal(french['leave.session'], 'Quitter le cours');
+  assert.equal(french['subsession.return_to_main_session'], 'Revenir à la salle principale');
+  assert.match(french['subsession.leave_room_tips'], /salle principale/);
   // Spot checks: the screens every participant sees.
   assert.equal(french['preview.join_button'], 'Rejoindre le cours');
   assert.equal(french['gallery.no_other_participants'], 'Aucun autre participant');
@@ -657,8 +870,11 @@ function fakeChannels() {
   const component = read('src/components/online/ZoomRoom.jsx');
   // Owner decision 2026-11-14: pre-join device screen on, name locked (T-P4 unchanged).
   assert.match(component, /preview: \{ enable: true, isAllowModifyName: false \}/);
-  for (const off of ['recording', 'invite', 'phone', 'feedback', 'troubleshoot', 'caption', 'subsession', 'header', 'playback', 'virtualBackground'])
+  for (const off of ['recording', 'invite', 'phone', 'feedback', 'troubleshoot', 'caption', 'header', 'playback', 'virtualBackground'])
     assert.match(component, new RegExp(`${off}: \\{ enable: false`), `${off} stays off`);
+  // Groups (PR B, D4): on; chat files and the emoji picker stay off (D7).
+  assert.match(component, /\n  subsession: \{ enable: true \},\n/);
+  assert.match(component, /chat: \{ enable: true, enableEmoji: false \}/);
   assert.match(component, /ROOM_LANGUAGE = 'fr-FR'/);
   // Whiteboard (D3): on, the teacher exports, learners draw but do not export. The
   // learner's enableExport is false as well: enableViewerUserExport alone leaves Zoom's
@@ -676,23 +892,61 @@ function fakeChannels() {
   assert.match(component, /callbacks\.current\.onLeft/);
   // French resources are inline: no language file is fetched from any host.
   assert.match(component, /import frFR from '@\/lib\/online\/zoom-fr-FR\.json'/);
-  assert.ok(!/https?:\/\//.test(component) && !/https?:\/\//.test(read('src/lib/online/zoom-room-session.mjs')) && read('src/lib/online/zoom-whiteboard.mjs').match(/https?:\/\/[^\s'"`]+/g).every(url => WHITEBOARD_SOURCES.includes(url)), 'no URL in the room code but the two whiteboard sources');
+  assert.ok(!/https?:\/\//.test(component) && !/https?:\/\//.test(read('src/lib/online/zoom-room-session.mjs')) && !/https?:\/\//.test(read('src/lib/online/zoom-groups.mjs')) && read('src/lib/online/zoom-whiteboard.mjs').match(/https?:\/\/[^\s'"`]+/g).every(url => WHITEBOARD_SOURCES.includes(url)), 'no URL in the room code but the two whiteboard sources');
   // The one URL the room adds is the Zoom library host, in zoom-media-chunks.mjs (checked above).
   assert.deepEqual(read('src/lib/online/zoom-media-chunks.mjs').match(/https?:\/\/[^\s'"`$)]+/g).filter(url => !url.startsWith('https://source.zoom.us/videosdk/')), []);
   // The empty-gallery pager rule is scoped to the room container.
   assert.match(component, /\[data-testid="zoom-room"\] \.flex-grow[^\n]*:has\(/);
+  // The toolkit's leave menu stays visible once placed (it hides itself on every redraw,
+  // every second while a group timer runs). The facts the rule rests on, in the bundle:
+  // the menu layer's inline style, and the clean-up that hides it.
+  assert.match(component, /\n\.zoom-ui-toolkit-root > div\[style\*="visibility: hidden"\]\[style\*="z-index: 1000"\]:not\(\[style\*="top: 0px"\]\) \{ visibility: visible !important; \}`;/);
+  const toolkitBundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
+  assert.ok(/visibility: \w+ \? "visible" : "hidden",\s*top: \w+\?\.top,\s*left: \w+\?\.left,\s*zIndex: 1e3/.test(toolkitBundle), 'the toolkit menu layer still has this inline style');
+  assert.ok(/window\.removeEventListener\("orientationchange", \w+\), \w+\(!1\);\s*\};\s*\}, \[\w+, \w+, \w+\]\)/.test(toolkitBundle), 'the toolkit menu still hides itself in the clean-up of an effect that depends on its onClickOutside');
+  assert.ok(/useState\(\{ top: 0, left: 0 \}\)/.test(toolkitBundle), 'an unplaced menu is at top 0');
   const page = read('src/app/(admin)/online/room/[id]/page.jsx');
   assert.match(page, /Vous êtes déjà connecté à ce cours dans un autre onglet\./);
   assert.match(page, /Utiliser cet onglet/);
   assert.match(page, /Touchez l’icône casque pour activer le son, puis le micro et la caméra\./);
   assert.match(page, /await roomSettled\(\);\n\s+if \(displaced\.current\) return;\n\s+const result = await onlinePost\('\/api\/online\/join'/, 'a retry waits for the previous room before asking for a pass');
   assert.ok(!/next\/link|useRouter/.test(page), 'the room page keeps full document navigation (A6)');
+  // « Quitter le cours » (PR B): asks first whenever the participant is in the room, and
+  // reads nothing from Zoom to decide; both ways out are plain anchors.
+  assert.match(page, /<RoomLeaveLink href=\{back\} inRoom=\{state\.phase === 'in_room'\} \/>/);
+  const leave = read('src/components/online/RoomLeaveLink.jsx');
+  assert.match(leave, /<a href=\{href\} data-testid="room-leave" onClick=\{event => \{ if \(inRoom\) \{ event\.preventDefault\(\); setAsking\(true\); \} \}\}><LogOut \/> Quitter le cours<\/a>/);
+  assert.match(leave, /<AlertDialogTitle>Quitter le cours \?<\/AlertDialogTitle>/);
+  assert.match(leave, /<AlertDialogDescription>Vous sortirez de la salle pour tout le cours\.<\/AlertDialogDescription>/);
+  assert.match(leave, /<AlertDialogAction asChild><a href=\{href\} data-testid="room-leave-yes">Quitter le cours<\/a><\/AlertDialogAction>/);
+  assert.ok(!/zmClient|subsession|next\/link|useRouter|location/.test(leave), 'the leave link knows nothing about Zoom or groups and navigates by plain anchors');
   // Review B1: a takeover during a join in flight stops that join at every await.
   assert.match(page, /onTakeover: \(\) => \{ if \(live\) \{ displaced\.current = true; setState\(\{ phase: 'displaced' \}\); \} \}/);
   const joinBody = page.slice(page.indexOf('const join = useCallback'), page.indexOf('}, [id, student]);'));
   assert.equal((joinBody.match(/if \(displaced\.current\) return;/g) || []).length, 4, 'entry, after roomSettled, after the pass request, after the window check');
   assert.match(joinBody, /await roomSettled\(\);\n\s+if \(displaced\.current\) return;\n\s+const result = await onlinePost/);
   assert.match(joinBody, /await onlinePost\([^\n]+\n[^\n]*\n\s+if \(displaced\.current\) return;\n\s+if \(result\.ok\)/);
+}
+
+// ---- « Guide de la salle » on the teacher's lesson list (static text) ----
+{
+  const guide = read('src/app/(admin)/teacher-portal/online/page.jsx');
+  const text = guide.slice(guide.indexOf('data-testid="room-guide"'), guide.indexOf('</details>')).replace(/<[^>]+>/g, '');
+  // Owner decision of 2026-11-16: teachers are told not to use « Zoom Canvas ».
+  assert.match(text, /N’utilisez pas l’outil « Zoom Canvas » du tableau blanc : la salle le bloque et il ne fonctionne pas\./);
+  // D4: always a timer, and the teacher visits each group; the duration is typed, in minutes.
+  assert.match(text, /Toujours un minuteur\. Dans « Paramètres », cochez « Fermer automatiquement les groupes après » et saisissez vous-même la durée en minutes/);
+  assert.match(text, /Passez dans chaque groupe\./);
+  // D11: a learner on a phone for whom a group fails stays in the main room.
+  assert.match(text, /Si un groupe ne fonctionne pas pour l’un d’eux, laissez-le sans groupe : il reste avec vous dans la salle principale\./);
+  assert.match(text, /Ne nommez jamais un apprenant animateur ou co-animateur\./);
+  assert.match(text, /« Réessayer » ramène un apprenant dans la salle principale/);
+  // The words of the guide are the words of the room.
+  const french = JSON.parse(read('src/lib/online/zoom-fr-FR.json'));
+  for (const key of ['whiteboard.start_tooltip', 'whiteboard.export_and_close', 'subsession.auto_close_after', 'subsession.open_all_rooms', 'subsession.unassigned_participants', 'subsession.assign', 'subsession.join', 'leave.button_leave_subsession',
+    'subsession.broadcast', 'subsession.ask_for_help', 'subsession.close_all_rooms'])
+    assert.ok(text.includes(`« ${french[key]} »`), `the guide quotes the room's own label for ${key}: « ${french[key]} »`);
+  assert.ok(!/sous-groupe|breakout|subsession/i.test(text));
 }
 
 console.log('online room unit regressions passed');

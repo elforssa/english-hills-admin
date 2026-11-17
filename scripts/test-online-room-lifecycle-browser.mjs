@@ -16,6 +16,10 @@
 //     tab displaced: the late pass never opens the room there.
 //   - whiteboard: the learner's toolkit configuration has export off; the read-only line
 //     follows the capability the SDK reports and the presenter's marker, not the width.
+//   - groups: a move into a group or back (Reconnecting then Connected, with any reason)
+//     leaves the participant in the room; « Quitter le cours » asks first whenever the
+//     participant is in the room, in a group or not: staying keeps the room, confirming
+//     is a full navigation; outside the room it does not ask.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -70,6 +74,17 @@ try {
   });
   assert.deepEqual(pagerVisibility, { empty: ['hidden', 'hidden', 'visible'], filled: ['hidden', 'visible', 'visible'] }, 'pager hidden only in the empty gallery');
   ok('the « 1 / -1 » pager is hidden while the gallery is empty, and only then');
+
+  // The toolkit's leave menu (markup and inline style read in the pinned bundle): hidden
+  // by the toolkit after a redraw, it stays visible once it has been placed; a menu that
+  // is not placed yet (top 0) and any other hidden element stay hidden.
+  const menuVisibility = await page.evaluate(() => {
+    const layer = style => { const root = document.createElement('div'); root.className = 'zoom-ui-toolkit-root'; root.innerHTML = `<div style="${style}" class="min-w-[200px] w-auto shadow-lg"><button id="probe-menu-item">Quitter le cours</button></div>`; document.body.appendChild(root); const seen = getComputedStyle(root.querySelector('button')).visibility; root.remove(); return seen; };
+    return { placedHidden: layer('position: absolute; visibility: hidden; top: 648px; left: 1057px; z-index: 1000;'), placedVisible: layer('position: absolute; visibility: visible; top: 648px; left: 1057px; z-index: 1000;'),
+      unplaced: layer('position: absolute; visibility: hidden; top: 0px; left: 0px; z-index: 1000;'), otherLayer: layer('position: absolute; visibility: hidden; top: 648px; left: 1057px; z-index: 50;') };
+  });
+  assert.deepEqual(menuVisibility, { placedHidden: 'visible', placedVisible: 'visible', unplaced: 'hidden', otherLayer: 'hidden' }, 'the leave menu stays visible once placed, and only then');
+  ok('the toolkit\'s leave menu stays visible once the toolkit has placed it');
 
   // Identity changes of onLeft / onError (new closures on every render) never restart the room.
   const rendersBefore = await page.evaluate(() => window.__renders);
@@ -226,7 +241,10 @@ try {
   assert.deepEqual(await host.evaluate(() => window.__sent.filter(text => text !== 'eh-whiteboard:ask')), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
   // A participant who arrives or reconnects asks; the presenter answers while its whiteboard is open.
   await host.evaluate(() => { window.__sent.length = 0; window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-whiteboard:ask' }); });
-  assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open', 'eh-whiteboard:open']);
+  assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open'], 'a question right after the marker is not answered at once (one answer per interval)');
+  await host.waitForFunction(() => window.__sent.length === 2 && window.__sent[1] === 'eh-whiteboard:open', null, { timeout: 5000 });
+  await host.waitForTimeout(2500);
+  assert.equal(await host.evaluate(() => window.__sent.length), 2, 'and it is answered once');
   // On the device without the canvas: a reconnection drops the line and asks again.
   await wide.evaluate(() => { window.__sent = []; window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-whiteboard:open' }); });
   await line(wide).waitFor();
@@ -237,6 +255,65 @@ try {
   assert.equal(await wide.evaluate(() => window.__phase), 'in_room');
   assert.equal(await line(host).count(), 0);
   ok('whiteboard: learner export off, teacher export on; the read-only line follows capability and the presenter\'s marker, not the width; late arrivals and reconnections ask');
+
+  // Groups (plan online-classroom-tools.md, PR B). A move is Reconnecting then Connected.
+  const mover = await context.newPage();
+  mover.on('pageerror', error => errors.push(String(error?.message || error)));
+  const moverLines = [];
+  mover.on('console', message => moverLines.push(message.text()));
+  await mover.goto(`${origin}/?lesson=l8&person=p1`);
+  await joined(mover, 1);
+  assert.equal(await mover.evaluate(() => window.__zoom.config.featuresOptions.subsession.enable), true, 'groups are on');
+  // Before the participant is in the room, the link is a plain link: it does not ask.
+  assert.equal((await mover.getByTestId('room-leave').innerText()).trim(), 'Quitter le cours');
+  await mover.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await mover.evaluate(() => { window.__zoom.connect(); window.__zoom.calls.length = 0; window.__left = 0; addEventListener('pagehide', () => { window.__left++; }); });
+  const address = mover.url();
+  for (const reason of ['join breakout room', 'move to breakout room', 'back to main session', 'a reason nobody has seen']) {
+    await mover.evaluate(why => { window.__zoom.emit('connection-change', { state: 'Reconnecting', reason: why }); window.__zoom.emit('user-added', [{ userId: 900, displayName: 'Amal B.' }]); window.__zoom.emit('connection-change', { state: 'Connected' }); }, reason);
+    await mover.waitForTimeout(150);
+    assert.equal(await mover.evaluate(() => window.__phase), 'in_room', `still in the room after « ${reason} »`);
+  }
+  assert.equal(mover.url(), address, 'the address is still the room');
+  assert.deepEqual(await calls(mover), [], 'a move never leaves and never destroys the room');
+  assert.equal(await mover.getByTestId('zoom-room').count(), 1);
+  assert.equal(moverLines.filter(line => /^\[online room\] \S+ room move reason=/.test(line)).length, 4, 'each move is one trace line with its reason');
+  assert.ok(moverLines.some(line => /participant added id=900 label=Amal B\. total=1$/.test(line)), 'the participant list starts again on a move');
+  // « Quitter le cours »: in the room it asks; staying keeps the room.
+  const ask = mover.getByTestId('room-leave-confirm');
+  await mover.getByTestId('room-leave').click();
+  await ask.waitFor();
+  assert.match(await ask.innerText(), /Quitter le cours \?/);
+  assert.match(await ask.innerText(), /Vous sortirez de la salle pour tout le cours\./);
+  assert.equal(mover.url(), address, 'one tap does not leave');
+  assert.equal(await mover.evaluate(() => window.__phase), 'in_room');
+  await mover.getByTestId('room-leave-stay').click();
+  await ask.waitFor({ state: 'detached' });
+  assert.equal(mover.url(), address);
+  assert.deepEqual(await calls(mover), [], 'staying keeps the room untouched');
+  // « Escape » is staying too.
+  await mover.getByTestId('room-leave').click();
+  await ask.waitFor();
+  await mover.keyboard.press('Escape');
+  await ask.waitFor({ state: 'detached' });
+  assert.equal(mover.url(), address);
+  // In a group it asks exactly the same (it does not know about groups), and confirming
+  // is a full document navigation to the portal.
+  await mover.evaluate(() => { window.__zoom.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' }); window.__zoom.emit('connection-change', { state: 'Connected' }); window.__eh_spa_marker = 'room'; });
+  await mover.getByTestId('room-leave').click();
+  await ask.waitFor();
+  assert.equal(await mover.evaluate(() => window.__phase), 'in_room');
+  await Promise.all([mover.waitForURL(`${origin}/portal`), mover.getByTestId('room-leave-yes').click()]);
+  await mover.getByTestId('portal').waitFor();
+  assert.equal(await mover.evaluate(() => window.__eh_spa_marker), undefined, 'leaving is a full document navigation');
+  // Outside the room (here: a refused join) the link does not ask.
+  await mover.goto(`${origin}/?lesson=l8&person=p1`);
+  await joined(mover, 1);
+  await mover.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await mover.evaluate(() => window.__zoom.emit('connection-change', { state: 'Fail', errorCode: 200 }));
+  await mover.getByTestId('room-refused').waitFor();
+  await Promise.all([mover.waitForURL(`${origin}/portal`), mover.getByTestId('room-leave').click()]);
+  ok('groups: a move keeps the participant in the room; « Quitter le cours » asks first in the room and in a group, and only there');
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

@@ -6,7 +6,7 @@
 // toolkit's pre-join device screen is shown with the name locked (owner decision of
 // 2026-11-14; T-P4 unchanged), so a participant chooses microphone and camera before
 // entering instead of arriving with both off. Invitations, recording, phone, captions,
-// subsessions, virtual backgrounds and the toolkit header are switched off for the pilot.
+// virtual backgrounds and the toolkit header are switched off for the pilot.
 // The whiteboard is on (plan online-classroom-tools.md, D3): the teacher starts and
 // exports it, learners on a computer draw but cannot export, and a participant whose
 // device cannot open the canvas gets it as a picture, with one line saying so.
@@ -42,7 +42,9 @@ export const FEATURES = Object.freeze({
   feedback: { enable: false },
   troubleshoot: { enable: false },
   caption: { enable: false },
-  subsession: { enable: false },
+  // Groups (« Groupes », plan online-classroom-tools.md, PR B, D4/D10): only the host or a
+  // co-host can create or open them, whatever the page says.
+  subsession: { enable: true },
   // Undocumented key (commented out in the toolkit's typings, read by its bundle). These
   // are the teacher's values; a learner gets LEARNER_WHITEBOARD below.
   whiteboard: { enable: true, enableExport: true, enableViewerUserExport: false },
@@ -68,8 +70,16 @@ export const featuresFor = role => (role === 'host' ? FEATURES : Object.freeze({
 //  - the toolkit's phone header prints the technical session name; it is not for learners;
 //  - with nobody else in the gallery the toolkit's pager prints « 1 / -1 »: hide the pager
 //    while the « Aucun autre participant » message is shown.
+// And one rule on the toolkit's own menu layer, which it draws outside the container:
+//  - the toolkit's leave menu (« Quitter le cours », « Revenir à la salle principale »,
+//    « Terminer le cours ») hides itself whenever the toolkit draws its button again, and
+//    nothing shows it again (read in the bundle: the menu's clean-up sets it hidden on
+//    every new render of its parent). While a group timer counts down that is every
+//    second, so the menu vanished under the pointer (observed with Zoom, 2026-11-16):
+//    once the toolkit has placed the menu, it stays visible until the toolkit removes it.
 const ROOM_STYLE = `[data-testid="zoom-room"] .uikit-mobile-header h1 { visibility: hidden; }
-[data-testid="zoom-room"] .flex-grow.items-center.justify-between:has(.text-2xl.font-semibold.m-2) > .flex.flex-col.items-center:has(> button.rounded-full) { visibility: hidden !important; }`;
+[data-testid="zoom-room"] .flex-grow.items-center.justify-between:has(.text-2xl.font-semibold.m-2) > .flex.flex-col.items-center:has(> button.rounded-full) { visibility: hidden !important; }
+.zoom-ui-toolkit-root > div[style*="visibility: hidden"][style*="z-index: 1000"]:not([style*="top: 0px"]) { visibility: visible !important; }`;
 
 const loadToolkit = () => import('@zoom/videosdk-ui-toolkit');
 

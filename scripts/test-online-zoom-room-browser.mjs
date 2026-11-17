@@ -191,7 +191,8 @@ try {
   await page.evaluate(() => { window.__eh_spa_marker = 'room'; });
   const [backResponse] = await Promise.all([
     page.waitForResponse(r => r.request().isNavigationRequest() && r.url().endsWith('/student-portal/online')),
-    page.getByTestId('room-leave').click(),
+    // « Quitter le cours » asks first while the participant is in the room.
+    page.getByTestId('room-leave').click().then(() => page.getByTestId('room-leave-yes').click()),
   ]);
   await page.waitForURL(app + '/student-portal/online');
   pass('Quitter leaves by a full document navigation', (await page.evaluate(() => window.__eh_spa_marker)) === undefined

@@ -31,7 +31,39 @@
 //   6. the learner has no export control; the teacher's PDF export downloads a file;
 //   7. after the stop everyone is back on the camera view, and the connection never left
 //      Connected.
-// The groups half belongs to PR B.
+//
+// Groups half (PR B, « Groupes »). The same session, with the second phone left without a
+// group (the teacher rule of D11). Every step is a click in the toolkit's OWN groups
+// window and dialogs; the SDK is only read, to know where each participant is. The whole
+// sequence runs twice, with « Autoriser les participants à revenir à la salle principale
+// à tout moment » ticked, then not ticked. In each pass:
+//   G1. the teacher creates two groups, sets the timer in the settings, assigns the
+//       learner and the phone by hand and opens the groups (first pass: assigned, then
+//       opened; second pass: opened, then assigned); the room's trace shows the timer it
+//       sent to Zoom (the toolkit's own timer is broken; zoom-groups.mjs corrects it);
+//   G2. each of the two accepts the toolkit's invitation and arrives in its group; the
+//       teacher's message to all groups reaches both;
+//   G3. the learner asks for help; the teacher gets the dialog, joins that group, then
+//       comes back through the toolkit's leave control;
+//   G4. ONE tap on the toolkit's own leave control inside a group leaves nobody out of
+//       the lesson, on the computer and on the phone, and the computer's menu is still
+//       visible three seconds later, while the timer counts down; with the return allowed the second
+//       tap, on « Revenir à la salle principale », brings the participant back to the
+//       main room; without it the toolkit offers no return, and the participant is still
+//       in the lesson and in the group; « Quitter le cours » at the top of the page asks
+//       first and « Rester dans le cours » keeps the room;
+//   G5. first pass: the teacher closes all groups; second pass: nobody closes them, the
+//       timer does. Everybody is back in the main room;
+//   G6. over the whole pass, for every participant: the page phase is in_room, the
+//       address is the room, the room never reported « left » or « failed », the
+//       connection states are only Reconnecting and Connected, the participant without a
+//       group never moved, and after each return the toolbar has the controls it had
+//       before the move (none missing; one that appears in addition is reported).
+// Then whiteboard and groups together: the read-only line of a phone follows it into a
+// group (no whiteboard there: no line) and back (the phone asks, the presenter answers:
+// the line returns), and the phone that stayed keeps it.
+// OL_CLASSROOM_PART=whiteboard|groups runs one half only, for repairs; such a run is
+// reported as PARTIAL and is not a proof.
 // OL_CLASSROOM_SHOTS=<directory> saves a screenshot per participant when the run breaks.
 // Writes a JSON report (OL_ZOOM_CLASSROOM_REPORT, default
 // scripts/.zoom-classroom-report.json, git-ignored). A failed assertion blocks the merge.
@@ -62,7 +94,8 @@ if (!env.ONLINE_VIDEO_PROVIDER_API_KEY || !env.ONLINE_VIDEO_PROVIDER_API_SECRET)
   process.exit(2);
 }
 const reportPath = process.env.OL_ZOOM_CLASSROOM_REPORT || 'scripts/.zoom-classroom-report.json';
-setTimeout(() => { console.error('FAIL zoom classroom stalled'); process.exit(1); }, 10 * 60_000).unref();
+setTimeout(() => { console.error('FAIL zoom classroom stalled'); process.exit(1); }, 25 * 60_000).unref();
+const PART = ['whiteboard', 'groups'].includes(process.env.OL_CLASSROOM_PART) ? process.env.OL_CLASSROOM_PART : 'all';
 
 const git = args => { try { return execFileSync('git', args, { encoding: 'utf8' }).trim(); } catch { return null; } };
 const zoom = createZoomVideoProvider(env);
@@ -105,7 +138,7 @@ async function enter(page) {
   await page.waitForFunction(() => window.zmClient?.getSessionInfo?.().isInMeeting === true, null, { timeout: 90000 });
 }
 async function open(label, role, options) {
-  const seen = report.people[label] = { connection: [], csp: [], expectedRefusals: [], trace: [], whiteboardHosts: [], whiteboardBuilds: [] };
+  const seen = report.people[label] = { connection: [], csp: [], expectedRefusals: [], trace: [], whiteboardHosts: [], whiteboardBuilds: [], elsewhere: [] };
   const context = await browser.newContext({ permissions: ['camera', 'microphone'], acceptDownloads: true, ...options });
   contexts.push(context);
   // Every refusal is recorded; only the named one goes to `expectedRefusals`.
@@ -121,7 +154,7 @@ async function open(label, role, options) {
     if (line) {
       const state = line.match(/^connection state=(\w+)(?: code=(\S+))?(?: reason=(.*))?/);
       if (state) seen.connection.push({ state: state[1], reason: state[3] });
-      if (/^(whiteboard|csp blocked)/.test(line)) seen.trace.push(line);
+      if (/^(whiteboard|csp blocked|room (left|failed|closed|move)|groups open)/.test(line)) seen.trace.push(line);
       if (line.startsWith('csp blocked')) refused({ via: 'trace', line, expected: /^csp blocked directive=script-src host=eval source=us0[45]st1\.zoom\.us expected=whiteboard-eval-probe$/.test(line) && line.endsWith(`expected=${EXPECTED_CSP_REFUSAL}`) });
     } else if (/Content Security Policy/.test(text)) {
       refused({ via: 'console', text: text.replace(/\?[^'"\s]*/g, '').slice(0, 220), expected: /'unsafe-eval'/.test(text) && /script-src/.test(text) && underWhiteboard(message.location()?.url) });
@@ -134,6 +167,8 @@ async function open(label, role, options) {
     if (!seen.whiteboardHosts.includes(host)) seen.whiteboardHosts.push(host);
     if (!seen.whiteboardBuilds.includes(build)) seen.whiteboardBuilds.push(build);
   });
+  // Any document other than the room (the stand-in portal of the harness, for instance).
+  page.on('framenavigated', frame => { if (frame === page.mainFrame() && new URL(frame.url()).pathname !== '/') seen.elsewhere.push(new URL(frame.url()).pathname); });
   await page.goto(`${origin}/?lesson=l1&person=${label}&role=${role}`);
   await enter(page);
   return page;
@@ -209,12 +244,8 @@ async function stroke(page, who, yFraction) {
 }
 const changedWithin = async (page, ms = 20000) => { let changed = 0; for (const end = Date.now() + ms; Date.now() < end;) { changed = await changedPixels(page); if (changed > 150) break; await page.waitForTimeout(500); } return changed; };
 
-try {
-  const teacher = await open('teacher', 'host', { viewport: { width: 1280, height: 900 } });
-  const learner = await open('learner', 'participant', { viewport: { width: 1280, height: 900 } });
-  const phone = await open('phone', 'participant', PHONE);
-  const pages = { teacher, learner, phone };
-  await teacher.waitForTimeout(3000);
+async function whiteboardHalf(pages) {
+  const { teacher, learner, phone } = pages;
   const before = { teacher: await boardState(teacher), learner: await boardState(learner), phone: await boardState(phone) };
 
   // 2. Start, through the toolkit's own button.
@@ -291,6 +322,363 @@ try {
     { stopped, after: Object.fromEntries(everyone.map(p => [p, { status: after[p].status, canvas: after[p].canvas, sharers: after[p].sharers, phase: after[p].phase }])) });
   pass('7. the connection never left Connected', everyone.every(p => report.people[p].connection.length > 0 && report.people[p].connection.every(c => c.state === 'Connected')),
     Object.fromEntries(everyone.map(p => [p, report.people[p].connection.map(c => c.state).join(' ')])));
+}
+
+// ---- Groups half ----
+const ROOM = '[data-testid="zoom-room"]';
+const where = page => page.evaluate(() => {
+  const sub = window.zmClient?.getSubsessionClient?.();
+  const current = sub?.getCurrentSubsession?.() || {};
+  const shown = el => el.offsetParent !== null;
+  return { status: sub?.getSubsessionStatus?.(), inGroup: current.userStatus === 'in room', invited: current.userStatus === 'invited', group: current.subsessionId || '',
+    // The audio control is one place in the toolbar whose button changes with the audio
+    // state (join audio, then the microphone): it is reported apart, not as a control.
+    toolbar: [...document.querySelectorAll('[data-testid="zoom-room"] button[id]')].filter(shown).map(b => b.id).filter(id => /^(uikit-footer-|footer-more-button$|leave-button$)/.test(id) && id !== 'uikit-footer-audio-button').sort(),
+    audio: [...document.querySelectorAll('[data-testid="zoom-room"] [id^="audio-unmuted"], [data-testid="zoom-room"] [id^="audio-muted"], #uikit-footer-audio-button')].filter(shown).map(el => el.id).sort().join(' ') || 'no audio button with an id',
+    headerButtons: document.querySelectorAll('#uikit-mobile-header button').length,
+    phase: window.__phase, path: location.pathname, inMeeting: !!window.zmClient?.getSessionInfo?.().isInMeeting,
+    readOnlyLine: document.querySelector('[data-testid="room-whiteboard-readonly"]')?.textContent || null,
+    boardStatus: window.zmClient?.getWhiteboardClient?.()?.getWhiteboardStatus?.() };
+});
+const untilWhere = async (page, test, ms = 30000) => { for (const end = Date.now() + ms; Date.now() < end;) { if (test(await where(page))) return true; await page.waitForTimeout(500); } return false; };
+const controls = page => page.evaluate(() => [...document.querySelectorAll('button, input[type="checkbox"], input[type="radio"]')].filter(b => b.offsetParent !== null).map(b => `${b.id ? '#' + b.id + ' ' : ''}${(b.getAttribute('aria-label') || b.title || b.textContent || '').trim().slice(0, 30)}`).filter(Boolean).slice(-30));
+// A step in the toolkit's own interface; when Zoom's markup has moved, the error names the step and what is on screen now.
+const step = async (page, what, action) => { try { return await action(); } catch (error) { throw new Error(`groups: ${what} — ${String(error?.message || error).split('\n')[0].slice(0, 700)}; controls now: ${JSON.stringify(await controls(page).catch(() => []))}`); } };
+const POPPER = '#uikit-subsession-popper';
+const groupsWindow = async teacher => { if (!(await teacher.locator(POPPER).count())) await teacher.locator('#uikit-footer-subsession-button').click({ timeout: 10000 }); await teacher.locator(POPPER).waitFor({ timeout: 10000 }); };
+// The body text of a page, for what the toolkit shows (messages, dialogs).
+const textOf = page => page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+const dialogOf = (page, id) => page.evaluate(selector => { const el = document.querySelector(selector); const box = el?.closest('div.fixed') || el?.parentElement?.parentElement; return box ? box.innerText.replace(/\s+/g, ' ').trim().slice(0, 200) : null; }, id);
+// The phone's leave control is the red button of the toolkit's phone header. The harness
+// has no page chrome above the room, so its phase line covers that header: the button is
+// clicked through the DOM, which is what a tap does on the real page.
+const phoneLeaveControl = page => page.locator('#uikit-mobile-header button.bg-red-500').evaluate(button => button.click());
+const phoneLeaveDialog = page => page.evaluate(() => {
+  const root = [...document.querySelectorAll('body > .zoom-ui-toolkit-root')].find(el => /Leave|Quitter|principale|Main/i.test(el.innerText));
+  return root ? { text: root.innerText.replace(/\s+/g, ' ').trim().slice(0, 200), buttons: [...root.querySelectorAll('button')].map(b => ({ text: b.textContent.trim(), title: b.title })) } : null;
+});
+const phoneDialogButton = (page, test) => page.evaluate(source => {
+  const wanted = new Function('b', `return (${source})(b)`);
+  const root = [...document.querySelectorAll('body > .zoom-ui-toolkit-root')].find(el => /Leave|Quitter|principale|Main/i.test(el.innerText));
+  const button = [...(root?.querySelectorAll('button') || [])].find(b => wanted({ text: b.textContent.trim(), title: b.title }));
+  if (button) button.click();
+  return !!button;
+}, test.toString());
+
+// Create two groups for assignment by hand and set the options, in the toolkit's window.
+async function prepareGroups(teacher, record, { allowReturn, minutes }) {
+  await step(teacher, 'open the groups window', () => groupsWindow(teacher));
+  await step(teacher, 'create two groups, assigned by hand', async () => {
+    if (await teacher.locator('#uikit-subsession-recreate-button').count()) {
+      await teacher.locator('#uikit-subsession-recreate-button').click();
+      await teacher.waitForTimeout(600);
+      const confirm = teacher.locator('#uikit-subsession-room-confirm-confirm-button');
+      if (await confirm.count()) await confirm.click();
+    }
+    await teacher.locator('#uikit-subsession-choice-room-count-input').fill('2', { timeout: 10000 });
+    await teacher.locator('#uikit-subsession-choice-manually-radio').check();
+    await teacher.locator('#uikit-subsession-choice-create-button').click();
+    await teacher.locator('#uikit-subsession-open-all-rooms-button').waitFor({ timeout: 15000 });
+  });
+  await step(teacher, 'set the options (return to the main room, timer)', async () => {
+    await teacher.locator('#uikit-subsession-settings-button').click();
+    const dialog = '#uikit-subsession-rooms-settings-dialog';
+    await teacher.locator(dialog).waitFor({ timeout: 10000 });
+    await teacher.locator(`${dialog}-back-to-main-session-checkbox`).setChecked(allowReturn);
+    await teacher.locator(`${dialog}-auto-join-subsession-checkbox`).setChecked(false);
+    await teacher.locator(`${dialog}-auto-close-subsession-rooms-checkbox`).setChecked(minutes > 0);
+    if (minutes > 0) await teacher.locator(`${dialog}-auto-close-subsession-rooms-input`).fill(String(minutes));
+    record.options = { allowReturn: await teacher.locator(`${dialog}-back-to-main-session-checkbox`).isChecked(), timerTicked: await teacher.locator(`${dialog}-auto-close-subsession-rooms-checkbox`).isChecked(),
+      timerField: await teacher.locator(`${dialog}-auto-close-subsession-rooms-input`).inputValue() };
+    // A click elsewhere in the window closes the settings: on its title, or on a tab when the title is under the whiteboard's banner.
+    for (const elsewhere of [`${POPPER} h2`, '#uikit-subsession-rooms-view-expand-tab', '#uikit-subsession-rooms-view-collapse-tab']) {
+      if (!(await teacher.locator(dialog).count())) break;
+      await teacher.locator(elsewhere).click({ timeout: 2500 }).catch(() => {});
+      await teacher.waitForTimeout(400);
+    }
+    await teacher.locator(dialog).waitFor({ state: 'detached', timeout: 5000 });
+  });
+}
+const assignTo = (teacher, index, label) => step(teacher, `assign ${label} to group ${index + 1}`, async () => {
+  await groupsWindow(teacher);
+  await teacher.locator('#uikit-subsession-rooms-view button', { hasText: 'Répartir' }).nth(index).click();
+  const modal = '#uikit-subsession-assign-participants-modal';
+  await teacher.locator(`${modal} input[role="combobox"]`).click({ timeout: 10000 });
+  await teacher.locator('[role="option"]', { hasText: LABEL[label] }).first().click({ timeout: 10000 });
+  await teacher.locator(`${modal}-assign-button`).click();
+  await teacher.locator(modal).waitFor({ state: 'detached', timeout: 5000 });
+});
+
+// A toolbar is complete when no control it had before is missing afterwards. A control
+// that is there in addition is reported, not failed: the toolkit shows some (the arrow
+// of the share options, for instance) a moment later than the others.
+const missing = (before, after) => before.toolbar.filter(id => !after.toolbar.includes(id)).concat(after.headerButtons < before.headerButtons ? ['a button of the phone header'] : []);
+const added = (before, after) => after.toolbar.filter(id => !before.toolbar.includes(id));
+const leaveMenu = page => page.evaluate(() => [...document.querySelectorAll('#end-for-all-button, #leave-meeting-button, #leave-subsession-button')].filter(b => b.offsetParent !== null).map(b => ({ id: b.id, text: b.textContent.trim() })));
+
+async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignFirst }) {
+  const { teacher, learner, phone, phone2 } = pages;
+  const movers = { learner, phone }, all = { teacher, learner, phone, phone2 };
+  const tag = `groups (${name})`;
+  const marks = Object.fromEntries(everyone.map(p => [p, { connection: report.people[p].connection.length, trace: report.people[p].trace.length }]));
+  const record = report.groups[name] = { allowReturn, timerMinutes: minutes, closedBy };
+  const before = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await where(page)])));
+  const everyoneStill = async when => {
+    const now = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await where(page)])));
+    const bad = Object.entries(now).filter(([p, w]) => w.phase !== 'in_room' || w.path !== '/' || !w.inMeeting || report.people[p].elsewhere.length > 0).map(([p, w]) => ({ who: p, when, phase: w.phase, path: w.path, inMeeting: w.inMeeting }));
+    return bad;
+  };
+  const strays = [];
+
+  // G1. Create two groups, set the options, assign by hand, open.
+  await prepareGroups(teacher, record, { allowReturn, minutes });
+  const assign = (index, label) => assignTo(teacher, index, label);
+  // How many participants the toolkit's window shows in each group.
+  const counts = () => teacher.evaluate(() => [...(document.querySelector('#uikit-subsession-rooms-view')?.innerText.replace(/\s+/g, ' ').matchAll(/Groupe \d+ (\d+)/g) || [])].map(m => Number(m[1])));
+  const plan = [[0, 'learner'], [1, 'phone']];
+  // The toolkit keeps an assignment made before the opening in its own window only, and
+  // forgets it whenever a participant's state changes (read in the bundle and observed):
+  // the first pass assigns then opens, and assigns again if the window forgot; the
+  // second pass opens first and assigns afterwards, which goes to Zoom at once.
+  record.assignment = { order: assignFirst ? 'assigned, then opened' : 'opened, then assigned', forgottenBeforeOpening: 0, assignedAgainAfterOpening: [] };
+  if (assignFirst) {
+    for (let round = 0; round < 4; round++) {
+      const shown = await counts();
+      if (shown[0] === 1 && shown[1] === 1) break;
+      if (round > 0) record.assignment.forgottenBeforeOpening++;
+      for (const [index, label] of plan) if ((await counts())[index] !== 1) await assign(index, label);
+    }
+  }
+  const openedAt = Date.now();
+  await step(teacher, 'open all groups', () => teacher.locator('#uikit-subsession-open-all-rooms-button').click());
+  const opened = await untilWhere(teacher, w => w.status === 2, 20000);
+  const invited = {};
+  for (const [index, label] of plan) {
+    invited[label] = assignFirst && await untilWhere(pages[label], w => w.invited, 8000);
+    if (!invited[label]) {
+      if (assignFirst) record.assignment.assignedAgainAfterOpening.push(label);
+      await assign(index, label);
+      invited[label] = await untilWhere(pages[label], w => w.invited, 20000);
+    }
+  }
+  const timerLine = report.people.teacher.trace.slice(marks.teacher.trace).filter(l => l.startsWith('groups open'));
+  pass(`${tag} G1. the teacher creates two groups, sets the timer, ${assignFirst ? 'assigns by hand and opens them' : 'opens them and assigns by hand'}, all in the toolkit's groups window; both get the invitation`,
+    opened && invited.learner && invited.phone && timerLine.length === 1 && timerLine[0] === `groups open timer=${minutes * 60}s` && record.options.allowReturn === allowReturn && record.options.timerTicked,
+    { opened, invited, options: record.options, sentToZoom: timerLine, assignment: record.assignment });
+  strays.push(...await everyoneStill('opened'));
+
+  // G2. The invitation, the arrival, the message to all groups.
+  const atInvitation = { learner: await where(learner), phone: await where(phone) };
+  record.invitation = { learner: await dialogOf(learner, '#uikit-subsession-join-subsession-join'), phone: await dialogOf(phone, '#uikit-subsession-join-subsession-join') };
+  for (const [p, page] of Object.entries(movers)) await step(page, `${p} accepts the invitation`, () => page.locator('#uikit-subsession-join-subsession-join').click({ timeout: 10000 }));
+  const arrived = { learner: await untilWhere(learner, w => w.inGroup, 40000), phone: await untilWhere(phone, w => w.inGroup, 40000) };
+  const inGroups = { learner: await where(learner), phone: await where(phone), phone2: await where(phone2) };
+  pass(`${tag} G2a. each accepts the toolkit's invitation and arrives in its own group; the participant without a group stays in the main room`,
+    arrived.learner && arrived.phone && inGroups.learner.group !== inGroups.phone.group && !inGroups.phone2.inGroup, { arrived, invitation: record.invitation, differentGroups: inGroups.learner.group !== inGroups.phone.group });
+  strays.push(...await everyoneStill('in groups'));
+  const message = `Encore une minute ${name}`;
+  await step(teacher, 'send a message to all groups', async () => {
+    await groupsWindow(teacher);
+    await teacher.locator('#uikit-subsession-broadcast-button').click({ timeout: 10000 });
+    await teacher.locator('#uikit-subsession-broadcast-dialog-message-input').fill(message);
+    await teacher.locator('#uikit-subsession-broadcast-dialog-send-button').click();
+  });
+  const received = {};
+  for (const end = Date.now() + 15000; Date.now() < end && !(received.learner && received.phone);) { for (const [p, page] of Object.entries(movers)) received[p] = received[p] || (await textOf(page)).includes(message); await teacher.waitForTimeout(400); }
+  pass(`${tag} G2b. the teacher's message to all groups reaches both groups`, !!received.learner && !!received.phone, received);
+
+  // G3. Ask for help; the teacher joins that group and comes back.
+  const teacherBefore = await where(teacher);
+  await step(learner, 'the learner asks for help', async () => {
+    await learner.locator('#uikit-footer-subsession-help-button').click({ timeout: 10000 });
+    await learner.locator('button#uikit-subsession-ask-for-help-confirm').click({ timeout: 10000 });
+  });
+  await step(teacher, 'the teacher gets the help request', () => teacher.locator('#uikit-subsession-ask-for-help-confirm-message').waitFor({ timeout: 20000 }));
+  record.helpRequest = (await teacher.locator('#uikit-subsession-ask-for-help-confirm-message').innerText()).replace(/\s+/g, ' ');
+  await step(teacher, 'the teacher joins the group that asked', () => teacher.locator('button#uikit-subsession-ask-for-help-confirm').click());
+  const visiting = await untilWhere(teacher, w => w.inGroup, 40000);
+  const together = (await where(teacher)).group === (await where(learner)).group;
+  await step(teacher, 'the teacher comes back through the leave control', async () => {
+    // The toolbar is drawn again just after the arrival, which closes a menu opened too early.
+    const seen = [];
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (!(await teacher.locator('#leave-meeting-button').isVisible())) await teacher.locator('#leave-button').click({ timeout: 10000 });
+      await teacher.waitForTimeout(1200);
+      seen.push((await leaveMenu(teacher)).map(item => item.id).join('+') || 'no menu');
+      if (await teacher.locator('#leave-subsession-button').isVisible()) break;
+      await teacher.waitForTimeout(1500);
+    }
+    if (!(await teacher.locator('#leave-subsession-button').isVisible())) throw new Error(`the teacher's leave menu never offered a visible return to the main room (seen: ${seen.join(', ')})`);
+    await teacher.locator('#leave-subsession-button').click({ timeout: 10000 });
+  });
+  const teacherBack = await untilWhere(teacher, w => !w.inGroup && w.status === 2 && w.toolbar.length >= teacherBefore.toolbar.length, 40000);
+  const teacherAfter = await where(teacher);
+  pass(`${tag} G3. a learner asks for help; the teacher gets the dialog, joins that group and returns with a complete toolbar`,
+    visiting && together && teacherBack && missing(teacherBefore, teacherAfter).length === 0,
+    { request: record.helpRequest, visiting, together, teacherBack, toolbarMissing: missing(teacherBefore, teacherAfter), toolbarAdded: added(teacherBefore, teacherAfter), toolbarAfter: teacherAfter.toolbar });
+  strays.push(...await everyoneStill('after the visit'));
+
+  // G4. The toolkit's own leave control inside a group: one tap takes nobody out of the lesson.
+  await learner.locator('#leave-button').click({ timeout: 10000 });
+  await learner.waitForTimeout(800);
+  const menu = await leaveMenu(learner);
+  // The timer counts down: the toolkit redraws its leave button every second. The menu must still be there.
+  await learner.waitForTimeout(3000);
+  const menuStays = await learner.locator('#leave-meeting-button').isVisible();
+  const learnerAfterTap = await where(learner);
+  await phoneLeaveControl(phone);
+  await phone.waitForTimeout(800);
+  const phoneDialog = await phoneLeaveDialog(phone);
+  const phoneAfterTap = await where(phone);
+  record.leaveControl = { computer: menu, phone: phoneDialog };
+  record.leaveControl.computerMenuStillVisibleAfter3s = menuStays;
+  const oneTapSafe = menuStays && learnerAfterTap.inGroup && learnerAfterTap.phase === 'in_room' && learnerAfterTap.inMeeting && phoneAfterTap.inGroup && phoneAfterTap.phase === 'in_room' && phoneAfterTap.inMeeting;
+  const offersReturn = { computer: menu.some(item => item.id === 'leave-subsession-button'), phone: !!phoneDialog?.buttons.some(b => /principale/.test(b.title)) };
+  if (allowReturn) {
+    await step(learner, 'the learner returns with « Revenir à la salle principale »', () => learner.locator('#leave-subsession-button').click({ timeout: 10000 }));
+    const phoneTapped = await phoneDialogButton(phone, b => /principale/.test(b.title));
+    const back = { learner: await untilWhere(learner, w => !w.inGroup, 40000), phone: phoneTapped && await untilWhere(phone, w => !w.inGroup, 40000) };
+    // Still assigned, so the toolkit invites again: the toolbar must have every control it had before the groups and at the first invitation.
+    await untilWhere(learner, w => w.toolbar.length >= atInvitation.learner.toolbar.length, 20000);
+    await untilWhere(phone, w => w.toolbar.length >= atInvitation.phone.toolbar.length, 20000);
+    const after = { learner: await where(learner), phone: await where(phone) };
+    pass(`${tag} G4. with the return allowed: one tap on the toolkit's leave control leaves nobody out of the lesson; it offers « Revenir à la salle principale », which brings each back to the main room with a complete toolbar`,
+      oneTapSafe && offersReturn.computer && offersReturn.phone && menu.find(item => item.id === 'leave-subsession-button')?.text === 'Revenir à la salle principale' && menu.find(item => item.id === 'leave-meeting-button')?.text === 'Quitter le cours'
+        && back.learner && back.phone && ['learner', 'phone'].every(p => missing(atInvitation[p], after[p]).length === 0 && missing(before[p], after[p]).length === 0),
+      { oneTapSafe, leaveControl: record.leaveControl, back, toolbarMissing: Object.fromEntries(['learner', 'phone'].map(p => [p, [...new Set([...missing(atInvitation[p], after[p]), ...missing(before[p], after[p])])]])),
+        toolbarAdded: Object.fromEntries(['learner', 'phone'].map(p => [p, added(before[p], after[p])])), toolbarAfter: { learner: after.learner.toolbar, phone: after.phone.toolbar } });
+  } else {
+    // Nothing to return with: close what the tap opened, and check that both are still there.
+    await learner.keyboard.press('Escape');
+    await learner.mouse.click(640, 300);
+    await phoneDialogButton(phone, b => b.text === 'Fermer');
+    await learner.waitForTimeout(1500);
+    const after = { learner: await where(learner), phone: await where(phone) };
+    pass(`${tag} G4. with the return NOT allowed: one tap on the toolkit's leave control leaves nobody out of the lesson, and the toolkit offers no return to the main room; both are still in their group`,
+      oneTapSafe && !offersReturn.computer && !offersReturn.phone && after.learner.inGroup && after.phone.inGroup && after.learner.phase === 'in_room' && after.phone.phase === 'in_room',
+      { oneTapSafe, leaveControl: record.leaveControl, stillInGroup: { learner: after.learner.inGroup, phone: after.phone.inGroup } });
+  }
+  // The page's own « Quitter le cours »: it asks, and staying keeps the room (asked from
+  // inside a group when the return is not allowed, from the main room otherwise).
+  const asker = allowReturn ? learner : phone, askerName = allowReturn ? 'learner' : 'phone';
+  const askerBefore = await where(asker);
+  await asker.getByTestId('room-leave').evaluate(link => link.click());
+  const asked = await asker.getByTestId('room-leave-confirm').waitFor({ timeout: 5000 }).then(() => true, () => false);
+  const askedText = asked ? (await asker.getByTestId('room-leave-confirm').innerText()).replace(/\s+/g, ' ') : null;
+  const afterTap = await where(asker);
+  if (asked) await asker.getByTestId('room-leave-stay').evaluate(button => button.click());
+  await asker.waitForTimeout(800);
+  const afterStay = await where(asker);
+  pass(`${tag} G4. « Quitter le cours » at the top of the page asks first (${askerBefore.inGroup ? 'inside a group' : 'in the main room, groups open'}); « Rester dans le cours » keeps the room`,
+    asked && /Quitter le cours \?/.test(askedText) && afterTap.phase === 'in_room' && afterTap.path === '/' && afterStay.phase === 'in_room' && afterStay.inMeeting && afterStay.inGroup === askerBefore.inGroup && (await asker.getByTestId('room-leave-confirm').count()) === 0,
+    { who: askerName, inGroup: askerBefore.inGroup, askedText });
+  strays.push(...await everyoneStill('after the leave controls'));
+
+  // G5. The end of the groups: closed by the teacher, or by the timer.
+  if (closedBy === 'teacher') {
+    await step(teacher, 'the teacher closes all groups', async () => { await groupsWindow(teacher); await teacher.locator('#uikit-subsession-close-all-rooms-button').click({ timeout: 10000 }); });
+  }
+  const waitMs = closedBy === 'timer' ? Math.max(0, minutes * 60000 - (Date.now() - openedAt)) + 100000 : 100000;
+  const closed = await untilWhere(teacher, w => w.status !== 2 && w.status !== 3, waitMs);
+  const closedAfterSeconds = Math.round((Date.now() - openedAt) / 1000);
+  const home = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await untilWhere(page, w => !w.inGroup && !w.invited && w.inMeeting, 60000)])));
+  await teacher.waitForTimeout(3000);
+  const after = Object.fromEntries(await Promise.all(Object.entries(all).map(async ([p, page]) => [p, await where(page)])));
+  const toolbars = Object.fromEntries(Object.keys(all).map(p => [p, missing(before[p], after[p]).length === 0]));
+  record.toolbarAddedAfterTheGroups = Object.fromEntries(Object.keys(all).map(p => [p, added(before[p], after[p])]));
+  const timed = closedBy !== 'timer' || (closedAfterSeconds >= minutes * 60 - 5 && closedAfterSeconds <= minutes * 60 + 45);
+  pass(`${tag} G5. ${closedBy === 'timer' ? `nobody closes the groups: the timer does, ${minutes} minute(s) after the opening` : 'the teacher closes all groups'}; everybody is back in the main room with every control they had before the groups`,
+    closed && timed && Object.values(home).every(Boolean) && Object.values(toolbars).every(Boolean),
+    { closed, closedAfterSeconds, home, toolbars, ...(Object.values(toolbars).every(Boolean) ? {} : { before: Object.fromEntries(Object.keys(all).map(p => [p, before[p].toolbar])), after: Object.fromEntries(Object.keys(all).map(p => [p, after[p].toolbar])) }) });
+  strays.push(...await everyoneStill('after the groups'));
+
+  // G6. Over the whole pass.
+  const since = Object.fromEntries(everyone.map(p => [p, { states: report.people[p].connection.slice(marks[p].connection), trace: report.people[p].trace.slice(marks[p].trace) }]));
+  record.moves = Object.fromEntries(everyone.map(p => [p, since[p].states.filter(c => c.state === 'Reconnecting').map(c => c.reason)]));
+  record.audio = Object.fromEntries(Object.keys(all).map(p => [p, { before: before[p].audio, after: after[p].audio }]));
+  pass(`${tag} G6. nobody reached the portal: the phase stayed in_room, the address stayed the room, and the room never reported « left », « failed » or « closed », for every participant at every step`,
+    strays.length === 0 && everyone.every(p => report.people[p].elsewhere.length === 0 && !since[p].trace.some(l => /^room (left|failed|closed)/.test(l))), { strays, elsewhere: Object.fromEntries(everyone.map(p => [p, report.people[p].elsewhere])) });
+  pass(`${tag} G6. the connection states were only Reconnecting and Connected; each move is a Reconnecting with Zoom's reason; the participant without a group never moved`,
+    everyone.every(p => since[p].states.every(c => ['Reconnecting', 'Connected'].includes(c.state))) && ['teacher', 'learner', 'phone'].every(p => record.moves[p].length >= 2) && record.moves.phone2.length === 0
+      && everyone.every(p => since[p].states.length === 0 || since[p].states.at(-1).state === 'Connected'), { moves: record.moves });
+}
+
+// Whiteboard and groups together: the read-only line of a device without the canvas
+// is shown exactly while a whiteboard is open in the room where that device is.
+async function boardAcrossGroups(pages) {
+  const { teacher, learner, phone, phone2 } = pages;
+  const tag = 'whiteboard and groups';
+  const record = report.groups[tag] = {};
+  const lineOf = async page => (await where(page)).readOnlyLine === WHITEBOARD_READ_ONLY_TEXT;
+  const lineBecomes = async (page, wanted, ms = 25000) => { for (const end = Date.now() + ms; Date.now() < end;) { if (await lineOf(page) === wanted) return true; await page.waitForTimeout(500); } return false; };
+  const boardOpen = async () => (await where(teacher)).boardStatus === 2;
+  await teacher.getByRole('button', { name: 'Ouvrir le tableau blanc' }).first().click({ timeout: 15000 });
+  const started = await untilWhere(teacher, w => w.boardStatus === 2, 60000);
+  const shownAtStart = { phone: await lineBecomes(phone, true), phone2: await lineBecomes(phone2, true) };
+  pass(`${tag}: a whiteboard is open in the main room; both phones show the read-only line`, started && shownAtStart.phone && shownAtStart.phone2, { started, shownAtStart });
+  await clearOverlays(teacher);
+
+  // Groups opened while the whiteboard is open; the first phone goes into a group.
+  await prepareGroups(teacher, record, { allowReturn: true, minutes: 10 });
+  await step(teacher, 'open all groups', () => teacher.locator('#uikit-subsession-open-all-rooms-button').click());
+  const opened = await untilWhere(teacher, w => w.status === 2, 20000);
+  record.whiteboardStillOpenAfterOpeningGroups = await boardOpen();
+  await assignTo(teacher, 0, 'phone');
+  const invited = await untilWhere(phone, w => w.invited, 20000);
+  await step(phone, 'the phone accepts the invitation', () => phone.locator('#uikit-subsession-join-subsession-join').click({ timeout: 10000 }));
+  const arrived = await untilWhere(phone, w => w.inGroup, 40000);
+  const goneInGroup = await lineBecomes(phone, false);
+  await phone.waitForTimeout(4000); // past the presenter's answer interval: no late marker brings it back
+  record.whiteboardStillOpenWithPhoneInGroup = await boardOpen();
+  const inGroup = { phoneLine: await lineOf(phone), phone2Line: await lineOf(phone2), learnerLine: await lineOf(learner) };
+  pass(`${tag}: in its group, where no whiteboard is open, the phone has no read-only line; the phone that stayed in the main room keeps it while the whiteboard is open there`,
+    opened && invited && arrived && goneInGroup && !inGroup.phoneLine && inGroup.phone2Line === record.whiteboardStillOpenWithPhoneInGroup && !inGroup.learnerLine,
+    { opened, invited, arrived, ...inGroup, whiteboardOpenInMainRoom: record.whiteboardStillOpenWithPhoneInGroup });
+
+  // Back to the main room: the phone asks, the presenter answers, the line returns.
+  await phoneLeaveControl(phone);
+  await phone.waitForTimeout(800);
+  const tapped = await phoneDialogButton(phone, b => /principale/.test(b.title));
+  const back = tapped && await untilWhere(phone, w => !w.inGroup, 40000);
+  record.whiteboardStillOpenAfterReturn = await boardOpen();
+  const lineBack = await lineBecomes(phone, record.whiteboardStillOpenAfterReturn);
+  pass(`${tag}: back in the main room, the phone asks and the presenter answers: the read-only line follows the whiteboard again`,
+    back && lineBack && (await lineOf(phone2)) === record.whiteboardStillOpenAfterReturn, { back, whiteboardOpen: record.whiteboardStillOpenAfterReturn, phoneLine: await lineOf(phone), phone2Line: await lineOf(phone2) });
+
+  // Close the groups, then the whiteboard: no line is left anywhere.
+  await step(teacher, 'the teacher closes all groups', async () => { await groupsWindow(teacher); await teacher.locator('#uikit-subsession-close-all-rooms-button').click({ timeout: 10000 }); });
+  const closed = await untilWhere(teacher, w => w.status !== 2 && w.status !== 3, 100000);
+  await teacher.locator(`${POPPER}-close-button`).click({ timeout: 5000 }).catch(() => {});
+  if (await boardOpen()) {
+    await clearOverlays(teacher);
+    const download = teacher.waitForEvent('download', { timeout: 60000 }).catch(() => null);
+    await teacher.getByRole('button', { name: 'Fermer le tableau blanc' }).first().click({ timeout: 10000 });
+    await teacher.getByRole('button', { name: 'Exporter et fermer' }).first().click({ timeout: 10000 });
+    await download;
+  }
+  const boardClosed = await untilWhere(teacher, w => w.boardStatus === 0, 30000);
+  const cleared = { phone: await lineBecomes(phone, false), phone2: await lineBecomes(phone2, false) };
+  const end = Object.fromEntries(await Promise.all(Object.entries(pages).map(async ([p, page]) => [p, await where(page)])));
+  pass(`${tag}: groups and whiteboard closed: no read-only line is left, and everybody is in the main room, in the lesson`,
+    closed && boardClosed && cleared.phone && cleared.phone2 && Object.values(end).every(w => w.phase === 'in_room' && w.inMeeting && !w.inGroup && w.readOnlyLine === null && w.path === '/'), { closed, boardClosed, cleared });
+}
+
+async function groupsHalf(pages) {
+  report.groups = {};
+  await groupsPass(pages, { name: 'return allowed', allowReturn: true, minutes: 10, closedBy: 'teacher', assignFirst: true });
+  await groupsPass(pages, { name: 'return not allowed', allowReturn: false, minutes: 2, closedBy: 'timer', assignFirst: false });
+  await boardAcrossGroups(pages);
+}
+
+try {
+  const teacher = await open('teacher', 'host', { viewport: { width: 1280, height: 900 } });
+  const learner = await open('learner', 'participant', { viewport: { width: 1280, height: 900 } });
+  const phone = await open('phone', 'participant', PHONE);
+  const pages = { teacher, learner, phone };
+  await teacher.waitForTimeout(3000);
+  if (PART !== 'groups') await whiteboardHalf(pages);
+  else pages.phone2 = await open('phone2', 'participant', PHONE);
+  if (PART !== 'whiteboard') await groupsHalf(pages);
 
   // 1. Over the whole run.
   await teacher.waitForTimeout(2000);
@@ -304,12 +692,13 @@ try {
   await learner.waitForTimeout(2000);
 } catch (error) {
   if (process.env.OL_CLASSROOM_SHOTS) for (const [i, context] of contexts.entries()) await context.pages()[0]?.screenshot({ path: `${process.env.OL_CLASSROOM_SHOTS}/fail-${everyone[i]}.png` }).catch(() => {});
-  pass('the run completed', false, { error: String(error?.message || error).slice(0, 300) });
+  pass('the run completed', false, { error: String(error?.message || error).slice(0, 1200) });
 } finally {
   for (const context of contexts) await context.close().catch(() => {});
   await browser.close();
   await new Promise(resolve => server.close(resolve));
-  report.verdict = process.exitCode ? 'FAIL' : 'PASS';
+  report.part = PART;
+  report.verdict = process.exitCode ? 'FAIL' : (PART === 'all' ? 'PASS' : `PARTIAL (${PART} half only, not a proof)`);
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
-  console.log(`${report.verdict} zoom classroom (whiteboard half) at ${report.head}${report.workingTreeClean ? '' : ' + uncommitted changes'}; report written to ${reportPath}`);
+  console.log(`${report.verdict} zoom classroom (${PART === 'all' ? 'whiteboard and groups' : PART + ' half'}) at ${report.head}${report.workingTreeClean ? '' : ' + uncommitted changes'}; report written to ${reportPath}`);
 }

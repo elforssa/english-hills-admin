@@ -26,8 +26,15 @@
 // no whiteboard event from Zoom, so the presenter's page sends a fixed marker on the
 // command channel, and a participant who arrives or reconnects asks for it (see
 // zoom-whiteboard.mjs).
+// Groups (PR B): a move into a group or back is `Reconnecting` then `Connected`, with a
+// reason the room prints and never interprets: it is not a leave, it does not start the
+// join timer and it does not ask for a new pass. Zoom gives every participant a new id
+// on each move and rebuilds the mover's list without « removed » events, so the list is
+// emptied on every `Reconnecting`. The timer of the toolkit's groups window is corrected
+// on its way to Zoom (zoom-groups.mjs).
 
 import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoom-whiteboard.mjs';
+import { correctGroupTimer } from './zoom-groups.mjs';
 
 let chain = Promise.resolve();
 
@@ -37,6 +44,7 @@ export function roomSettled() {
 }
 
 const TOOLKIT_JOIN_TIMEOUT = /Timed out waiting for session to join/i;
+const WAITING_SENDERS = 64;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const capped = (promise, ms) => Promise.race([Promise.resolve(promise).catch(() => {}), delay(ms)]);
 
@@ -47,10 +55,11 @@ export function roomLog(event, detail) {
 }
 
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
-  onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
+  boardAnswerMs = 2000, onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
     teardown: null, settle: null, people: new Map(),
-    board: { own: false, peer: false, told: null, waiting: null, presenting: false, open: false, readOnly: false, traced: false }, blocked: new Set() };
+    board: { own: false, peer: false, told: null, waiting: new Set(), presenting: false, open: false, readOnly: false, traced: false, answered: -Infinity, answer: null },
+    blocked: new Set() };
   const preview = config?.featuresOptions?.preview?.enable === true;
   const stopWatchdog = () => { if (s.watchdog) { clearTimeout(s.watchdog); s.watchdog = null; } };
   const settled = () => { s.attempting = false; stopWatchdog(); s.settle?.(); };
@@ -75,13 +84,15 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     if (state === 'Connected') {
       s.joined = true; settled();
       if (!s.board.traced) { s.board.traced = true; const { capable, source } = whiteboardCapability(win); log('whiteboard available', { available: capable ? 'yes' : 'no', source }); }
+      correctGroupTimer(win, seconds => log('groups open', { timer: seconds ? `${seconds}s` : 'off' }));
       askBoard();
     }
-    // What the presenter's page said may be stale after a reconnection: forget it, and
-    // ask again once connected.
-    else if (state === 'Reconnecting') board({ told: null, waiting: null });
+    // A reconnection: a move into a group or back, or the network. Whatever the reason
+    // says, the participant list starts again (Zoom rebuilds it with new ids), and what
+    // the presenter's page said may be stale: forget it, and ask again once connected.
+    else if (state === 'Reconnecting') { s.people.clear(); log('room move', { reason: payload?.reason }); s.board.waiting.clear(); board({ told: null }); }
     else if (state === 'Fail') { settled(); fail({ code: payload?.errorCode, reason: payload?.reason }); }
-    else if (state === 'Closed') { settled(); board({ own: false, peer: false, told: null, waiting: null, presenting: false }); }
+    else if (state === 'Closed') { settled(); s.board.waiting.clear(); stopAnswer(); board({ own: false, peer: false, told: null, presenting: false }); }
   };
   // A whiteboard is open when this participant presents one, when Zoom says somebody
   // else does (devices with the canvas), or when the presenter's page said so (devices
@@ -104,6 +115,17 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   // after a reconnection, and when its command channel connects (whichever comes last is
   // the one that gets through). The presenter does not ask.
   const askBoard = () => { if (s.joined && !s.board.presenting) tellBoard(WHITEBOARD_SIGNAL.ask); };
+  // The presenter's answer to a question or to an arrival: at most one « open » per
+  // `boardAnswerMs`. A burst (a class coming back from its groups, each participant
+  // asking and appearing again) gets one answer at once and one more when the interval
+  // is over, which reaches those whose channel was not ready for the first.
+  const stopAnswer = () => { if (s.board.answer) { clearTimeout(s.board.answer); s.board.answer = null; } };
+  const sendAnswer = () => { s.board.answer = null; if (!s.board.presenting || s.stopped) return; s.board.answered = Date.now(); tellBoard(WHITEBOARD_SIGNAL.open); };
+  const answerBoard = () => {
+    if (!s.board.presenting || s.board.answer) return;
+    const wait = s.board.answered + boardAnswerMs - Date.now();
+    if (wait <= 0) sendAnswer(); else s.board.answer = setTimeout(sendAnswer, wait);
+  };
   const onCommandStatus = status => { if (status === 'Connected') askBoard(); };
   // Zoom raises the status change for a viewer too, after `peer … Start`: only the
   // participant whose own whiteboard opened without a peer presenting is the presenter.
@@ -111,13 +133,15 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     const own = Number(status) > 0;
     if (own === s.board.own) return;
     board({ own });
-    if (own && !s.board.peer) { s.board.presenting = true; tellBoard(WHITEBOARD_SIGNAL.open); }
-    else if (!own && s.board.presenting) { s.board.presenting = false; tellBoard(WHITEBOARD_SIGNAL.closed); }
+    if (own && !s.board.peer) { s.board.presenting = true; stopAnswer(); s.board.answered = Date.now(); tellBoard(WHITEBOARD_SIGNAL.open); }
+    else if (!own && s.board.presenting) { s.board.presenting = false; stopAnswer(); tellBoard(WHITEBOARD_SIGNAL.closed); }
   };
   const onBoardPeer = payload => { if (payload?.action === 'Start') board({ peer: true }); else if (payload?.action === 'Stop') board({ peer: false }); };
   // « open » and « closed » are believed only from the host or a manager, as Zoom lists
   // them. A marker can arrive before its sender is in this participant's list (just
-  // after a join): it waits for the sender to appear.
+  // after a join): it waits for the sender to appear. Each sender waits on its own, so
+  // an early marker from a learner cannot take the place of the host's (at most
+  // WAITING_SENDERS of them; Zoom sets the sender id, so a participant holds one place).
   const trusted = senderId => {
     let users = null;
     try { users = win?.zmClient?.getAllUser?.() || null; } catch { /* client gone */ }
@@ -126,14 +150,14 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   };
   const onCommand = payload => {
     const text = payload?.text, from = String(payload?.senderId);
-    if (text === WHITEBOARD_SIGNAL.ask) { if (s.board.presenting) tellBoard(WHITEBOARD_SIGNAL.open); return; }
+    if (text === WHITEBOARD_SIGNAL.ask) { answerBoard(); return; }
     if (text !== WHITEBOARD_SIGNAL.open && text !== WHITEBOARD_SIGNAL.closed) return;
     const believed = trusted(from);
     if (text === WHITEBOARD_SIGNAL.open) {
-      if (believed === true) board({ told: from, waiting: null });
-      else if (believed === null) s.board.waiting = from;
+      if (believed === true) { s.board.waiting.delete(from); board({ told: from }); }
+      else if (believed === null && s.board.waiting.size < WAITING_SENDERS) s.board.waiting.add(from);
     } else {
-      if (s.board.waiting === from) s.board.waiting = null;
+      s.board.waiting.delete(from);
       if (believed === true && s.board.told === from) board({ told: null });
     }
   };
@@ -158,8 +182,13 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   // Somebody who joins while this participant presents the whiteboard is told too.
   const onAdded = list => {
     people('added', list);
-    if (s.board.presenting) tellBoard(WHITEBOARD_SIGNAL.open);
-    if (s.board.waiting !== null && trusted(s.board.waiting) !== null) { const from = s.board.waiting; s.board.waiting = null; if (trusted(from)) board({ told: from }); }
+    answerBoard();
+    for (const from of [...s.board.waiting]) {
+      const believed = trusted(from);
+      if (believed === null) continue;
+      s.board.waiting.delete(from);
+      if (believed) board({ told: from });
+    }
   };
   const onRemoved = list => people('removed', list);
   const onVisibility = () => log('page visibility', { state: win.document?.visibilityState });
@@ -175,6 +204,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   function teardown() {
     if (s.teardown) return s.teardown;
     s.stopped = true;
+    stopAnswer();
     container?.removeEventListener?.('click', onClick, true);
     win?.removeEventListener?.('pagehide', onPageHide);
     win?.removeEventListener?.('pageshow', onPageShow);
