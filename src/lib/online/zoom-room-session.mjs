@@ -31,10 +31,15 @@
 // join timer and it does not ask for a new pass. Zoom gives every participant a new id
 // on each move and rebuilds the mover's list without « removed » events, so the list is
 // emptied on every `Reconnecting`. The timer of the toolkit's groups window is corrected
-// on its way to Zoom (zoom-groups.mjs).
+// on its way to Zoom (zoom-groups.mjs); whether that correction is in place is traced
+// once, as `groups timer correction=on|off`.
+// Toolkit messages (classroom polish): the camera message of the pre-join screen gets a
+// French reason in place of « [object Object] », and the toolkit's console line with
+// the decoded token payload is dropped (zoom-toolkit-messages.mjs).
 
 import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoom-whiteboard.mjs';
 import { correctGroupTimer } from './zoom-groups.mjs';
+import { dropToolkitJwtLog, watchCameraMessage } from './zoom-toolkit-messages.mjs';
 
 let chain = Promise.resolve();
 
@@ -57,10 +62,11 @@ export function roomLog(event, detail) {
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
   boardAnswerMs = 2000, onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
-    teardown: null, settle: null, people: new Map(),
+    teardown: null, settle: null, people: new Map(), groupsTraced: false, stopCameraWatch: null,
     board: { own: false, peer: false, told: null, waiting: new Set(), presenting: false, open: false, readOnly: false, traced: false, answered: -Infinity, answer: null },
     blocked: new Set() };
   const preview = config?.featuresOptions?.preview?.enable === true;
+  const stopCameraWatch = () => { if (s.stopCameraWatch) { s.stopCameraWatch(); s.stopCameraWatch = null; } };
   const stopWatchdog = () => { if (s.watchdog) { clearTimeout(s.watchdog); s.watchdog = null; } };
   const settled = () => { s.attempting = false; stopWatchdog(); s.settle?.(); };
   const previewShown = () => !!joinLabel && [...(container?.querySelectorAll?.('button') || [])].some(button => button.textContent.trim() === joinLabel);
@@ -84,7 +90,9 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     if (state === 'Connected') {
       s.joined = true; settled();
       if (!s.board.traced) { s.board.traced = true; const { capable, source } = whiteboardCapability(win); log('whiteboard available', { available: capable ? 'yes' : 'no', source }); }
-      correctGroupTimer(win, seconds => log('groups open', { timer: seconds ? `${seconds}s` : 'off' }));
+      stopCameraWatch();
+      const corrected = correctGroupTimer(win, seconds => log('groups open', { timer: seconds ? `${seconds}s` : 'off' }));
+      if (!s.groupsTraced) { s.groupsTraced = true; log('groups timer', { correction: corrected ? 'on' : 'off' }); }
       askBoard();
     }
     // A reconnection: a move into a group or back, or the network. Whatever the reason
@@ -205,6 +213,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     if (s.teardown) return s.teardown;
     s.stopped = true;
     stopAnswer();
+    stopCameraWatch();
     container?.removeEventListener?.('click', onClick, true);
     win?.removeEventListener?.('pagehide', onPageHide);
     win?.removeEventListener?.('pageshow', onPageShow);
@@ -260,6 +269,8 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     // leave cap or the 25 s destroy cap ran out first, the handlers below can attach to the
     // instance that is still being destroyed; that room ends as the error card with
     // « Réessayer ».
+    dropToolkitJwtLog(win);
+    s.stopCameraWatch = watchCameraMessage(win, resources?.['preview.error_start_camera'], reason => log('camera message', { reason }));
     const joining = toolkit.joinSession(container, { ...config, language });
     if (resources && language) {
       const i18n = toolkit.i18n.getInstance();

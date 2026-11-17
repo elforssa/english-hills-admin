@@ -4,14 +4,17 @@
 // online-classroom-tools.md, section 3, path (b)). While the participant is in the room
 // it always asks first, in the main room or in a group: it reads nothing from Zoom, so
 // it cannot be wrong about where the participant is. Both ways out are plain anchors, so
-// leaving stays a full document navigation (A6).
-import { useState } from 'react';
+// leaving stays a full document navigation (A6). The question is forgotten when the
+// participant is no longer in the room (a failure, then « Réessayer »), so it cannot come
+// back by itself (review N3 of #195).
+import { useEffect, useState } from 'react';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function RoomLeaveLink({ href, inRoom }) {
   const [asking, setAsking] = useState(false);
+  useEffect(() => { if (!inRoom) setAsking(false); }, [inRoom]);
   return (
     <>
       <Button asChild variant="outline" size="sm">

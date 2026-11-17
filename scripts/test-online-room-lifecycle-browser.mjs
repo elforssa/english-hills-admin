@@ -19,12 +19,16 @@
 //   - groups: a move into a group or back (Reconnecting then Connected, with any reason)
 //     leaves the participant in the room; « Quitter le cours » asks first whenever the
 //     participant is in the room, in a group or not: staying keeps the room, confirming
-//     is a full navigation; outside the room it does not ask.
+//     is a full navigation; outside the room it does not ask; a question left open when
+//     the room fails does not come back after « Réessayer » (review N3 of #195).
+//   - the toolkit's camera message on the pre-join screen gets a French reason in place
+//     of « [object Object] » or an English error name; once in the room nothing is touched.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { buildRoomHarness, serveRoomHarness } from './lib/online-room-harness.mjs';
+import { CAMERA_REASON } from '../src/lib/online/zoom-toolkit-messages.mjs';
 
 setTimeout(() => { console.error('FAIL online room lifecycle browser test stalled'); process.exit(1); }, 4 * 60_000).unref();
 const harness = await buildRoomHarness({ fake: true });
@@ -256,6 +260,35 @@ try {
   assert.equal(await line(host).count(), 0);
   ok('whiteboard: learner export off, teacher export on; the read-only line follows capability and the presenter\'s marker, not the width; late arrivals and reconnections ask');
 
+  // The camera message of the pre-join screen (classroom polish, part C). The toolkit
+  // writes its French prefix followed by the error; the room replaces what follows.
+  const camera = await context.newPage();
+  camera.on('pageerror', error => errors.push(String(error?.message || error)));
+  await camera.goto(`${origin}/?lesson=l9&person=p1`);
+  await joined(camera, 1);
+  const toast = (page, text) => page.evaluate(t => { const el = document.createElement('div'); el.className = 'fake-toast'; el.textContent = t; document.body.appendChild(el); return document.querySelectorAll('.fake-toast').length - 1; }, text);
+  const toastText = (page, index) => page.evaluate(i => document.querySelectorAll('.fake-toast')[i].textContent, index);
+  const settles = async (page, index) => { for (let i = 0; i < 20; i++) { const t = await toastText(page, index); if (!/object Object|Error/.test(t)) return t; await page.waitForTimeout(100); } return toastText(page, index); };
+  const object = await toast(camera, 'La caméra n’a pas pu démarrer : [object Object]');
+  const objectText = await settles(camera, object);
+  assert.ok(Object.values(CAMERA_REASON).some(reason => objectText === `La caméra n’a pas pu démarrer : ${reason}`), `a French reason in place of [object Object]: ${objectText}`);
+  const named = await toast(camera, 'La caméra n’a pas pu démarrer : NotReadableError: Could not start video source');
+  assert.equal(await settles(camera, named), `La caméra n’a pas pu démarrer : ${CAMERA_REASON.busy}`);
+  // Inside a toolkit element, as a text node added later.
+  await camera.evaluate(() => { const box = document.createElement('div'); box.className = 'fake-toast'; document.body.appendChild(box); box.appendChild(document.createTextNode('La caméra n’a pas pu démarrer : NotAllowedError: Permission denied')); });
+  assert.equal(await settles(camera, 2), `La caméra n’a pas pu démarrer : ${CAMERA_REASON.blocked}`);
+  const unrelated = await toast(camera, 'Le micro n’a pas pu démarrer : [object Object]');
+  await camera.waitForTimeout(300);
+  assert.equal(await toastText(camera, unrelated), 'Le micro n’a pas pu démarrer : [object Object]', 'another message is not touched');
+  // In the room the watcher is gone.
+  await camera.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await camera.evaluate(() => window.__zoom.connect());
+  const late = await toast(camera, 'La caméra n’a pas pu démarrer : [object Object]');
+  await camera.waitForTimeout(500);
+  assert.equal(await toastText(camera, late), 'La caméra n’a pas pu démarrer : [object Object]', 'nothing is rewritten once in the room');
+  await camera.close();
+  ok('camera message: a French reason in place of « [object Object] » or an English error name, on the pre-join screen only');
+
   // Groups (plan online-classroom-tools.md, PR B). A move is Reconnecting then Connected.
   const mover = await context.newPage();
   mover.on('pageerror', error => errors.push(String(error?.message || error)));
@@ -306,6 +339,29 @@ try {
   await Promise.all([mover.waitForURL(`${origin}/portal`), mover.getByTestId('room-leave-yes').click()]);
   await mover.getByTestId('portal').waitFor();
   assert.equal(await mover.evaluate(() => window.__eh_spa_marker), undefined, 'leaving is a full document navigation');
+  // Review N3 of #195: a question left open when the room fails is forgotten; after
+  // « Réessayer » the participant is back in the room and nothing asks by itself.
+  await mover.goto(`${origin}/?lesson=l8&person=p1`);
+  await joined(mover, 1);
+  await mover.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await mover.evaluate(() => window.__zoom.connect());
+  await phase(mover, 'in_room');
+  await mover.getByTestId('room-leave').click();
+  await ask.waitFor();
+  await mover.evaluate(() => window.__zoom.emit('connection-change', { state: 'Fail', errorCode: 200 }));
+  await mover.getByTestId('room-refused').waitFor();
+  await ask.waitFor({ state: 'detached' });
+  await mover.getByRole('button', { name: 'Réessayer' }).click();
+  await joined(mover, 2);
+  await mover.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await mover.evaluate(() => window.__zoom.connect());
+  await mover.waitForTimeout(600);
+  assert.equal(await mover.evaluate(() => window.__phase), 'in_room');
+  assert.equal(await ask.count(), 0, 'the question does not come back by itself after « Réessayer »');
+  await mover.getByTestId('room-leave').click();
+  await ask.waitFor();
+  await mover.getByTestId('room-leave-stay').click();
+  await ask.waitFor({ state: 'detached' });
   // Outside the room (here: a refused join) the link does not ask.
   await mover.goto(`${origin}/?lesson=l8&person=p1`);
   await joined(mover, 1);
