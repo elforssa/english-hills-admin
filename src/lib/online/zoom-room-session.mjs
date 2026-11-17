@@ -33,13 +33,18 @@
 // emptied on every `Reconnecting`. The timer of the toolkit's groups window is corrected
 // on its way to Zoom (zoom-groups.mjs); whether that correction is in place is traced
 // once, as `groups timer correction=on|off`.
-// Toolkit messages (classroom polish): the camera message of the pre-join screen gets a
-// French reason in place of « [object Object] », and the toolkit's console line with
-// the decoded token payload is dropped (zoom-toolkit-messages.mjs).
+// Toolkit messages (classroom polish): the camera and « start devices » messages of the
+// pre-join screen get a French reason in place of « [object Object] », and the toolkit's
+// console line with the decoded token payload is dropped (zoom-toolkit-messages.mjs).
+// Raise hand (PR D, « Lever la main »): the teacher's page keeps the list of raised
+// hands, a learner's page the button; both ride on the command channel with fixed
+// markers (zoom-hands.mjs). The room passes it the connection states, the participants
+// added and removed, and the markers with the `eh-hand:` prefix; nothing else.
 
 import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoom-whiteboard.mjs';
 import { correctGroupTimer } from './zoom-groups.mjs';
-import { dropToolkitJwtLog, watchCameraMessage } from './zoom-toolkit-messages.mjs';
+import { dropToolkitJwtLog, watchDeviceMessages } from './zoom-toolkit-messages.mjs';
+import { createHands, HAND_PREFIX } from './zoom-hands.mjs';
 
 let chain = Promise.resolve();
 
@@ -60,11 +65,14 @@ export function roomLog(event, detail) {
 }
 
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
-  boardAnswerMs = 2000, onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
+  boardAnswerMs = 2000, hands: handRole, onHands, onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
     teardown: null, settle: null, people: new Map(), groupsTraced: false, stopCameraWatch: null,
     board: { own: false, peer: false, told: null, waiting: new Set(), presenting: false, open: false, readOnly: false, traced: false, answered: -Infinity, answer: null },
-    blocked: new Set() };
+    blocked: new Set(), hands: null };
+  // Raise hand: 'teacher' for the host's page, 'learner' for everybody else; off without a role.
+  if (handRole === 'teacher' || handRole === 'learner')
+    s.hands = createHands({ teacher: handRole === 'teacher', win, log, onChange: state => { if (!s.silent && !s.stopped) onHands?.(state); } });
   const preview = config?.featuresOptions?.preview?.enable === true;
   const stopCameraWatch = () => { if (s.stopCameraWatch) { s.stopCameraWatch(); s.stopCameraWatch = null; } };
   const stopWatchdog = () => { if (s.watchdog) { clearTimeout(s.watchdog); s.watchdog = null; } };
@@ -94,13 +102,14 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       const corrected = correctGroupTimer(win, seconds => log('groups open', { timer: seconds ? `${seconds}s` : 'off' }));
       if (!s.groupsTraced) { s.groupsTraced = true; log('groups timer', { correction: corrected ? 'on' : 'off' }); }
       askBoard();
+      s.hands?.connected();
     }
     // A reconnection: a move into a group or back, or the network. Whatever the reason
     // says, the participant list starts again (Zoom rebuilds it with new ids), and what
     // the presenter's page said may be stale: forget it, and ask again once connected.
-    else if (state === 'Reconnecting') { s.people.clear(); log('room move', { reason: payload?.reason }); s.board.waiting.clear(); board({ told: null }); }
+    else if (state === 'Reconnecting') { s.people.clear(); log('room move', { reason: payload?.reason }); s.board.waiting.clear(); board({ told: null }); s.hands?.reconnecting(); }
     else if (state === 'Fail') { settled(); fail({ code: payload?.errorCode, reason: payload?.reason }); }
-    else if (state === 'Closed') { settled(); s.board.waiting.clear(); stopAnswer(); board({ own: false, peer: false, told: null, presenting: false }); }
+    else if (state === 'Closed') { settled(); s.board.waiting.clear(); stopAnswer(); board({ own: false, peer: false, told: null, presenting: false }); s.hands?.closed(); }
   };
   // A whiteboard is open when this participant presents one, when Zoom says somebody
   // else does (devices with the canvas), or when the presenter's page said so (devices
@@ -134,7 +143,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     const wait = s.board.answered + boardAnswerMs - Date.now();
     if (wait <= 0) sendAnswer(); else s.board.answer = setTimeout(sendAnswer, wait);
   };
-  const onCommandStatus = status => { if (status === 'Connected') askBoard(); };
+  const onCommandStatus = status => { if (status === 'Connected') { askBoard(); s.hands?.commandReady(); } };
   // Zoom raises the status change for a viewer too, after `peer … Start`: only the
   // participant whose own whiteboard opened without a peer presenting is the presenter.
   const onBoardStatus = status => {
@@ -157,6 +166,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     return sender ? !!(sender.isHost || sender.isManager) : null;
   };
   const onCommand = payload => {
+    if (typeof payload?.text === 'string' && payload.text.startsWith(HAND_PREFIX)) { s.hands?.message(payload); return; }
     const text = payload?.text, from = String(payload?.senderId);
     if (text === WHITEBOARD_SIGNAL.ask) { answerBoard(); return; }
     if (text !== WHITEBOARD_SIGNAL.open && text !== WHITEBOARD_SIGNAL.closed) return;
@@ -197,8 +207,9 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       s.board.waiting.delete(from);
       if (believed) board({ told: from });
     }
+    s.hands?.added(list);
   };
-  const onRemoved = list => people('removed', list);
+  const onRemoved = list => { people('removed', list); s.hands?.removed(list); };
   const onVisibility = () => log('page visibility', { state: win.document?.visibilityState });
   // Leaving on visibilitychange would drop a learner who only switches tab or app, and the
   // event cannot tell that from closing the page; pagehide is the exit signal.
@@ -213,6 +224,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     if (s.teardown) return s.teardown;
     s.stopped = true;
     stopAnswer();
+    s.hands?.stop();
     stopCameraWatch();
     container?.removeEventListener?.('click', onClick, true);
     win?.removeEventListener?.('pagehide', onPageHide);
@@ -270,7 +282,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     // instance that is still being destroyed; that room ends as the error card with
     // « Réessayer ».
     dropToolkitJwtLog(win);
-    s.stopCameraWatch = watchCameraMessage(win, resources?.['preview.error_start_camera'], reason => log('camera message', { reason }));
+    s.stopCameraWatch = watchDeviceMessages(win, resources, (message, reason) => log(`${message} message`, { reason }));
     const joining = toolkit.joinSession(container, { ...config, language });
     if (resources && language) {
       const i18n = toolkit.i18n.getInstance();
@@ -306,5 +318,12 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     // Unmount: tear down without calling the page back. Resolves when the room is gone.
     stop() { s.silent = true; return teardown(); },
     ready,
+    // Raise hand, for the page's button and panel. Each returns false when it did nothing.
+    hands: {
+      raise: () => s.hands?.raise() || false,
+      lower: () => s.hands?.lower() || false,
+      lowerOf: id => s.hands?.lowerOf(id) || false,
+      lowerAll: () => s.hands?.lowerAll() || false,
+    },
   };
 }

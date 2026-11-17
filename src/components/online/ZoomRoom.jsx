@@ -17,11 +17,15 @@
 // The room is started once per pass: the effect depends on the embed only, the page's
 // callbacks are read through refs, and the lifecycle (serialised teardown, failures,
 // page exit, console trace) lives in zoom-room-session.mjs.
+// Raise hand (PR D, « Lever la main »): RoomHands.jsx above the room, outside the
+// toolkit: the button for a learner, « Mains levées (n) » for the teacher (the pass's
+// host). Who may lower another's hand is decided from Zoom's list, not from this role.
 import { useEffect, useRef, useState } from 'react';
 import '@zoom/videosdk-ui-toolkit/dist/videosdk-ui-toolkit.css';
 import { startZoomRoom } from '@/lib/online/zoom-room-session.mjs';
 import { preloadZoomMediaChunks } from '@/lib/online/zoom-media-chunks.mjs';
 import { WHITEBOARD_READ_ONLY_TEXT } from '@/lib/online/zoom-whiteboard.mjs';
+import RoomHands from '@/components/online/RoomHands';
 import frFR from '@/lib/online/zoom-fr-FR.json';
 
 export const ROOM_LANGUAGE = 'fr-FR';
@@ -88,12 +92,15 @@ export default function ZoomRoom({ embed, onLeft, onError }) {
   const callbacks = useRef({ onLeft, onError });
   const [closing, setClosing] = useState(false);
   const [boardReadOnly, setBoardReadOnly] = useState(false);
+  const [hands, setHands] = useState(null);
+  const room = useRef(null);
   useEffect(() => { callbacks.current = { onLeft, onError }; });
   const { token, sessionName, displayName, role } = embed;
   useEffect(() => {
     setClosing(false);
     setBoardReadOnly(false);
-    const room = startZoomRoom({
+    setHands(null);
+    const started = startZoomRoom({
       loadToolkit,
       // The SDK's WebRTC and annotation chunks, loaded as plain scripts (see the module).
       preloadMedia: preloadZoomMediaChunks,
@@ -107,13 +114,18 @@ export default function ZoomRoom({ embed, onLeft, onError }) {
       // Take the toolkit's own (English) error dialog off the screen while the room closes.
       onClosing: () => setClosing(true),
       onWhiteboard: board => setBoardReadOnly(board.readOnly === true),
+      hands: role === 'host' ? 'teacher' : 'learner',
+      onHands: setHands,
     });
-    return () => { room.stop(); };
+    room.current = started;
+    return () => { if (room.current === started) room.current = null; started.stop(); };
   }, [token, sessionName, displayName, role]);
   return (
     <>
       <style href="online-zoom-room" precedence="default">{ROOM_STYLE}</style>
       {boardReadOnly && !closing && <p className="rounded-lg border bg-card p-3 text-sm" role="status" data-testid="room-whiteboard-readonly">{WHITEBOARD_READ_ONLY_TEXT}</p>}
+      {!closing && <RoomHands state={hands} onRaise={() => room.current?.hands.raise()} onLower={() => room.current?.hands.lower()}
+        onLowerOf={id => room.current?.hands.lowerOf(id)} onLowerAll={() => room.current?.hands.lowerAll()} />}
       {closing && <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Fermeture de la salle…</p>}
       <div ref={container} data-testid="zoom-room" lang="fr" hidden={closing}
         className="min-h-[70vh] w-full overflow-hidden rounded-xl border bg-black" />

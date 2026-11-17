@@ -11,7 +11,8 @@ import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
 import { whiteboardCapability, whiteboardDeviceRule, cspBlockedDetail, expectedCspRefusal, EXPECTED_CSP_REFUSAL, WHITEBOARD_SOURCES, WHITEBOARD_SIGNAL, WHITEBOARD_READ_ONLY_TEXT } from '../src/lib/online/zoom-whiteboard.mjs';
 import { groupOpenOptions, groupTimerSeconds, correctGroupTimer, GROUP_TIMER_DEFAULT_SECONDS } from '../src/lib/online/zoom-groups.mjs';
-import { dropToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, cameraReasonFromText, cameraReasonFromDevice } from '../src/lib/online/zoom-toolkit-messages.mjs';
+import { dropToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, DEVICES_REASON, cameraReasonFromText, cameraReasonFromDevice, devicesReasonFromText, devicesReasonFromDevice, DEVICE_MESSAGES } from '../src/lib/online/zoom-toolkit-messages.mjs';
+import { createHands, parseHandMessage, HAND_SIGNAL, HAND_PREFIX, HAND_TEXT, MAX_HANDS, MAX_WAITING, MAX_AGE_SECONDS, ANSWER_WINDOW_MS } from '../src/lib/online/zoom-hands.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -1004,15 +1005,327 @@ function fakeChannels() {
   assert.equal(cameraReasonFromDevice({ permission: 'prompt', cameras: 2 }), CAMERA_REASON.other);
   assert.equal(cameraReasonFromDevice({ permission: 'unknown', cameras: null }), CAMERA_REASON.other);
   for (const reason of Object.values(CAMERA_REASON)) assert.ok(!/[A-Z]{3,}|Error|object/.test(reason) && /^[a-zé’]/.test(reason), `French, readable after the colon: ${reason}`);
+  // The « start devices » message (review note of #197): the same treatment, with reasons
+  // that name the camera or the microphone.
+  assert.equal(devicesReasonFromText('[object Object]'), null);
+  assert.equal(devicesReasonFromText('NotAllowedError: Permission denied'), DEVICES_REASON.blocked);
+  assert.equal(devicesReasonFromText('NotReadableError: Could not start audio source'), DEVICES_REASON.busy);
+  assert.equal(devicesReasonFromText('NotFoundError: Requested device not found'), DEVICES_REASON.missing);
+  assert.equal(devicesReasonFromText('OverconstrainedError'), DEVICES_REASON.unsupported);
+  assert.equal(devicesReasonFromDevice({ permission: 'granted', micPermission: 'denied', cameras: 1, mics: 1 }), DEVICES_REASON.blocked);
+  assert.equal(devicesReasonFromDevice({ permission: 'denied', micPermission: 'granted', cameras: 1, mics: 1 }), DEVICES_REASON.blocked);
+  assert.equal(devicesReasonFromDevice({ permission: 'granted', micPermission: 'granted', cameras: 1, mics: 0 }), DEVICES_REASON.missing);
+  assert.equal(devicesReasonFromDevice({ permission: 'granted', micPermission: 'granted', cameras: 1, mics: 1 }), DEVICES_REASON.busy);
+  assert.equal(devicesReasonFromDevice({ permission: 'prompt', micPermission: 'granted', cameras: 1, mics: 1 }), DEVICES_REASON.other);
+  assert.equal(devicesReasonFromDevice({ permission: 'unknown', micPermission: 'unknown', cameras: null, mics: null }), DEVICES_REASON.other);
+  for (const reason of Object.values(DEVICES_REASON)) assert.ok(!/[A-Z]{3,}|Error|object/.test(reason) && /^[a-zé’]/.test(reason) && /caméra|micro|appareil/.test(reason), `French, names the device: ${reason}`);
+  assert.deepEqual(DEVICE_MESSAGES.map(m => [m.key, m.name]), [['preview.error_start_camera', 'camera'], ['preview.error_start_devices', 'devices']]);
 
   // The facts these rest on, read in the installed bundle (re-read on any upgrade, PR C).
   const bundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
   assert.equal(bundle.split(`console.log("${TOOLKIT_JWT_LOG}", `).length - 1, 1, 'the toolkit still writes the decoded payload with exactly this call');
   assert.ok(/\w+\(\w+\("preview\.error_start_camera"\) \+ \w+, \{ variant: "error" \}\)/.test(bundle), 'the camera message is still the key followed by the error, concatenated');
+  assert.ok(/\w+\(\w+\("preview\.error_start_devices"\) \+ [\w$]+, \{ variant: "error" \}\)/.test(bundle), 'the « start devices » message is still the key followed by the error, concatenated');
   const french = JSON.parse(read('src/lib/online/zoom-fr-FR.json'));
   assert.equal(french['preview.error_start_camera'], 'La caméra n’a pas pu démarrer : ');
+  assert.equal(french['preview.error_start_devices'], 'Les périphériques n’ont pas pu démarrer : ');
   const session = read('src/lib/online/zoom-room-session.mjs');
-  assert.match(session, /dropToolkitJwtLog\(win\);\n\s+s\.stopCameraWatch = watchCameraMessage\(win, resources\?\.\['preview\.error_start_camera'\][^\n]*\n\s+const joining = toolkit\.joinSession/, 'both are in place before the join');
+  assert.match(session, /dropToolkitJwtLog\(win\);\n\s+s\.stopCameraWatch = watchDeviceMessages\(win, resources,[^\n]*\n\s+const joining = toolkit\.joinSession/, 'both are in place before the join');
+  // The wrapper's comment says what is true (review note of #197): never removed, also after an in-app navigation.
+  assert.match(read('src/lib/online/zoom-toolkit-messages.mjs'), /Idempotent, and never removed: it stays installed for the life of the document[\s\S]*in-app navigation[\s\S]*Accepted \(review note of #197\)/);
+}
+
+// 12. Raise hand « Lever la main » (PR D design addendum, owner decisions of 2026-11-17).
+//     Markers on the command channel: the sender acts only on its own hand (Zoom's sender
+//     id); « lower » and « lower-all » are believed only from the host or a manager; a
+//     payload without a sender id is never believed; order kept and rebuilt from the
+//     answers after the teacher's reconnection; bounded; answers rate-limited; a hand
+//     goes down on a move, a reconnection and a leave; no button inside a group.
+{
+  const HOST = { userId: 16778240, displayName: 'Sara L.', isHost: true }, MANAGER = { userId: 16779264, displayName: 'Co A.', isManager: true };
+  const AMAL = { userId: 16781312, displayName: 'Amal B.' }, NOUR = { userId: 16782336, displayName: 'Nour K.' };
+  const handClient = ({ users, self, status = 'main session', fail = false }) => {
+    const client = { sent: [], status, users,
+      getAllUser: () => client.users, getCurrentUserInfo: () => ({ userId: self }),
+      getSubsessionClient: () => ({ getUserStatus: () => client.status }),
+      getCommandClient: () => ({ send: async (text, target) => {
+        if (fail) throw new Error('not connected');
+        client.sent.push(target === undefined ? text : `${text}@${target}`); return { text, senderId: self };
+      } }) };
+    return client;
+  };
+  const hands = state => state.hands.map(h => h.name);
+
+  // Parsing: exact texts only, a numeric sender id only, the seconds capped.
+  assert.deepEqual(parseHandMessage({ senderId: '16781312', text: 'eh-hand:raise' }), { kind: 'raise', from: '16781312' });
+  assert.deepEqual(parseHandMessage({ senderId: 16781312, text: 'eh-hand:lower-self' }), { kind: 'lowerSelf', from: '16781312' });
+  assert.deepEqual(parseHandMessage({ senderId: '1', text: 'eh-hand:raised:12' }), { kind: 'raised', from: '1', age: 12 });
+  assert.deepEqual(parseHandMessage({ senderId: '1', text: 'eh-hand:raised:99999' }), { kind: 'raised', from: '1', age: MAX_AGE_SECONDS });
+  for (const bad of [{ text: 'eh-hand:raise' }, { senderId: 'undefined', text: 'eh-hand:raise' }, { senderId: '', text: 'eh-hand:raise' }, { senderId: 'Amal', text: 'eh-hand:raise' },
+    { senderId: '1', text: 'eh-hand:raise ' }, { senderId: '1', text: 'eh-hand:RAISE' }, { senderId: '1', text: 'eh-hand:raised:' }, { senderId: '1', text: 'eh-hand:raised:-1' },
+    { senderId: '1', text: 'eh-hand:raised:123456' }, { senderId: '1', text: 'eh-hand:raised:12 Amal' }, { senderId: '1', text: 'eh-hand:lower:16781312' }, { senderId: '1', text: 'eh-hand:hello' },
+    { senderId: '1', text: 'eh-whiteboard:open' }, { senderId: '1', text: 42 }, null, undefined])
+    assert.equal(parseHandMessage(bad), null, `refused: ${JSON.stringify(bad)}`);
+  assert.equal(HAND_PREFIX, 'eh-hand:');
+  assert.deepEqual(Object.values(HAND_SIGNAL), ['eh-hand:raise', 'eh-hand:lower-self', 'eh-hand:ask', 'eh-hand:raised:', 'eh-hand:lower', 'eh-hand:lower-all']);
+  assert.deepEqual([HAND_TEXT.raise, HAND_TEXT.lower, HAND_TEXT.panel(2), HAND_TEXT.lowerOne, HAND_TEXT.lowerAll],
+    ['Lever la main', 'Baisser la main', 'Mains levées (2)', 'Baisser', 'Baisser toutes les mains']);
+
+  // The teacher's list.
+  {
+    let t = 1_000_000;
+    const users = [HOST, MANAGER, AMAL, NOUR];
+    const client = handClient({ users, self: HOST.userId });
+    const states = [], logs = [];
+    const h = createHands({ teacher: true, win: { zmClient: client }, now: () => t, onChange: state => states.push(state), log: (event, detail) => logs.push([event, detail]) });
+    const msg = (from, text) => h.message({ senderId: from === undefined ? undefined : String(from), text });
+    h.connected();
+    assert.deepEqual(client.sent, ['eh-hand:ask'], 'the teacher asks at the join');
+    assert.equal(states.at(-1).available, true);
+    t += 1000; msg(NOUR.userId, 'eh-hand:raise');
+    t += 1000; msg(AMAL.userId, 'eh-hand:raise');
+    assert.deepEqual(hands(states.at(-1)), ['Nour K.', 'Amal B.'], 'in the order raised');
+    assert.deepEqual(states.at(-1).cue, { count: 2, label: 'Amal B.' });
+    const count = states.length;
+    msg(AMAL.userId, 'eh-hand:raise');
+    assert.equal(states.length, count, 'a repeated raise changes nothing (it keeps its place)');
+    // Spoofing: a learner's « lower » or « lower-all » changes nothing; nor does a payload
+    // without a sender id; a learner's lower-self lowers only their own hand.
+    msg(AMAL.userId, 'eh-hand:lower-all'); msg(AMAL.userId, 'eh-hand:lower'); msg(undefined, 'eh-hand:lower-all'); msg(undefined, 'eh-hand:lower-self');
+    msg('999', 'eh-hand:lower-all');
+    assert.equal(states.length, count, 'no spoofed lower is believed');
+    msg(NOUR.userId, 'eh-hand:lower-self');
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.']);
+    msg(NOUR.userId, 'eh-hand:lower-self');
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.'], 'nobody lowers another learner\'s hand');
+    // The host, a manager and this page itself have no hand; no raise for somebody else exists.
+    msg(MANAGER.userId, 'eh-hand:raise'); msg(HOST.userId, 'eh-hand:raise'); msg(undefined, 'eh-hand:raise');
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.']);
+    // A sender not yet in the list waits for it, with the time it raised.
+    t += 1000; msg(77, 'eh-hand:raise');
+    t += 1000; msg(NOUR.userId, 'eh-hand:raise');
+    users.push({ userId: 77, displayName: 'Late R.' });
+    h.added([{ userId: 77 }]);
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.', 'Late R.', 'Nour K.'], 'a waiting raise keeps the time it arrived');
+    // The teacher lowers one learner: at once on this page, and « lower » to that learner only.
+    client.sent.length = 0;
+    assert.equal(h.lowerOf(String(AMAL.userId)), true);
+    assert.deepEqual(client.sent, [`eh-hand:lower@${AMAL.userId}`]);
+    assert.deepEqual(hands(states.at(-1)), ['Late R.', 'Nour K.']);
+    assert.equal(h.lowerOf('123'), false, 'nothing to lower');
+    // A participant who leaves, reloads or moves into a group is « removed »: the hand goes.
+    h.removed([{ userId: 77 }]);
+    assert.deepEqual(hands(states.at(-1)), ['Nour K.']);
+    // « lower-all » from a manager is believed.
+    msg(MANAGER.userId, 'eh-hand:lower-all');
+    assert.deepEqual(hands(states.at(-1)), []);
+    // The teacher's own « Baisser toutes les mains ».
+    msg(AMAL.userId, 'eh-hand:raise');
+    client.sent.length = 0;
+    assert.equal(h.lowerAll(), true);
+    assert.deepEqual(client.sent, ['eh-hand:lower-all']);
+    assert.deepEqual(hands(states.at(-1)), []);
+    // The teacher's reconnection (a visit to a group, a network drop): the list is
+    // forgotten, then rebuilt from the answers, in the order the hands went up.
+    t = 2_000_000; msg(AMAL.userId, 'eh-hand:raise');
+    t = 2_010_000; msg(NOUR.userId, 'eh-hand:raise');
+    h.reconnecting();
+    assert.deepEqual(hands(states.at(-1)), []);
+    assert.equal(states.at(-1).available, false);
+    t = 2_060_000; client.sent.length = 0; h.connected();
+    assert.deepEqual(client.sent, ['eh-hand:ask']);
+    msg(NOUR.userId, 'eh-hand:raised:50');
+    msg(AMAL.userId, 'eh-hand:raised:60');
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.', 'Nour K.'], 'rebuilt in the order raised, whatever the order of the answers');
+    // An answer outside the window after this page's question counts from its arrival.
+    users.push({ userId: 78, displayName: 'Old A.' });
+    t += ANSWER_WINDOW_MS + 1; msg(78, `eh-hand:raised:${MAX_AGE_SECONDS}`);
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.', 'Nour K.', 'Old A.'], 'an unsolicited answer cannot jump the queue');
+    // The command channel connecting again: a question.
+    client.sent.length = 0; h.commandReady();
+    assert.deepEqual(client.sent, ['eh-hand:ask']);
+    // Closed: nothing left.
+    h.closed();
+    assert.deepEqual(hands(states.at(-1)), []);
+    // The trace: totals only, never a name or an id.
+    assert.ok(logs.length > 0 && logs.every(([event, detail]) => event === 'hands' && Object.keys(detail).join() === 'total'), JSON.stringify(logs.slice(0, 3)));
+    assert.ok(!/Amal|Nour|1678/.test(JSON.stringify(logs)));
+    // Stopped: no more drawing.
+    h.stop(); const n = states.length; h.connected(); msg(AMAL.userId, 'eh-hand:raise');
+    assert.equal(states.length, n);
+  }
+  // Bounds: at most MAX_HANDS hands and MAX_WAITING senders waiting.
+  {
+    const users = [HOST];
+    const client = handClient({ users, self: HOST.userId });
+    let last = null;
+    const h = createHands({ teacher: true, win: { zmClient: client }, onChange: state => { last = state; } });
+    h.connected();
+    for (let i = 0; i < MAX_HANDS + 50; i++) { users.push({ userId: 1000 + i, displayName: `L${i}` }); h.message({ senderId: String(1000 + i), text: 'eh-hand:raise' }); }
+    assert.equal(last.hands.length, MAX_HANDS);
+    // The waiting senders resolve against the list the page reads when they appear.
+    const later = [HOST, ...Array.from({ length: MAX_WAITING + 40 }, (_, i) => ({ userId: 5000 + i, displayName: `W${i}` }))];
+    const winH2 = { zmClient: handClient({ users: [HOST], self: HOST.userId }) };
+    const h4 = createHands({ teacher: true, win: winH2, onChange: state => { last = state; } });
+    h4.connected();
+    for (let i = 0; i < MAX_WAITING + 40; i++) h4.message({ senderId: String(5000 + i), text: 'eh-hand:raise' });
+    winH2.zmClient = handClient({ users: later, self: HOST.userId });
+    h4.added([{ userId: 5000 }]);
+    assert.equal(last.hands.length, MAX_WAITING, 'at most MAX_WAITING senders wait');
+  }
+  // A teacher inside a group: no panel and no question there.
+  {
+    const client = handClient({ users: [HOST, AMAL], self: HOST.userId, status: 'in room' });
+    let last = null;
+    const h = createHands({ teacher: true, win: { zmClient: client }, onChange: state => { last = state; } });
+    h.connected();
+    assert.equal(last.available, false);
+    assert.deepEqual(client.sent, []);
+  }
+
+  // The learner's button.
+  {
+    let t = 5_000_000;
+    const client = handClient({ users: [HOST, MANAGER, AMAL, NOUR], self: AMAL.userId });
+    const states = [], logs = [];
+    const h = createHands({ teacher: false, win: { zmClient: client }, now: () => t, answerMs: 60, onChange: state => states.push(state), log: (event, detail) => logs.push([event, detail]) });
+    const msg = (from, text) => h.message({ senderId: from === undefined ? undefined : String(from), text });
+    assert.equal(h.raise(), false, 'not before the participant is in');
+    h.connected();
+    assert.deepEqual(client.sent, [], 'a learner does not ask');
+    assert.deepEqual(states.at(-1), { teacher: false, available: true, up: false, loweredAt: 0 });
+    assert.equal(h.raise(), true);
+    assert.deepEqual(client.sent, ['eh-hand:raise']);
+    assert.equal(states.at(-1).up, true);
+    assert.equal(h.raise(), false, 'already up');
+    assert.equal(h.lowerOf(String(NOUR.userId)), false, 'a learner lowers nobody else');
+    assert.equal(h.lowerAll(), false);
+    // Spoofed lowers from a learner, a stranger or without a sender id: the hand stays up.
+    msg(NOUR.userId, 'eh-hand:lower'); msg(NOUR.userId, 'eh-hand:lower-all'); msg(undefined, 'eh-hand:lower'); msg(undefined, 'eh-hand:lower-all'); msg(999, 'eh-hand:lower');
+    msg(NOUR.userId, 'eh-hand:lower-self');
+    assert.equal(states.at(-1).up, true, 'no spoofed lower is believed');
+    // Answers: the seconds since the hand went up, at most one per interval.
+    client.sent.length = 0;
+    t += 7400;
+    msg(HOST.userId, 'eh-hand:ask'); msg(HOST.userId, 'eh-hand:ask'); msg(NOUR.userId, 'eh-hand:ask');
+    assert.deepEqual(client.sent, ['eh-hand:raised:7'], 'one answer at once');
+    await tick(120);
+    assert.deepEqual(client.sent, ['eh-hand:raised:7', 'eh-hand:raised:7'], 'and one more after the interval, for the burst');
+    msg(undefined, 'eh-hand:ask');
+    await tick(120);
+    assert.equal(client.sent.length, 2, 'a question without a sender id is not answered');
+    // The teacher lowers this hand: down, a line for the learner, and « lower-self » for the other teacher pages.
+    client.sent.length = 0;
+    t += 1000; msg(HOST.userId, 'eh-hand:lower');
+    assert.deepEqual(states.at(-1), { teacher: false, available: true, up: false, loweredAt: t });
+    assert.deepEqual(client.sent, ['eh-hand:lower-self']);
+    // « lower-all » from a manager.
+    h.raise(); assert.equal(states.at(-1).loweredAt, 0, 'raising again clears the line');
+    client.sent.length = 0; msg(MANAGER.userId, 'eh-hand:lower-all');
+    assert.equal(states.at(-1).up, false);
+    assert.deepEqual(client.sent, [], 'no lower-self is needed after lower-all');
+    // The learner's own « Baisser la main ».
+    h.raise(); client.sent.length = 0;
+    assert.equal(h.lower(), true);
+    assert.deepEqual(client.sent, ['eh-hand:lower-self']);
+    assert.equal(h.lower(), false);
+    // A move or a reconnection lowers the hand; the button is back, down, in the main room.
+    h.raise();
+    h.reconnecting();
+    assert.deepEqual(states.at(-1), { teacher: false, available: false, up: false, loweredAt: 0 });
+    assert.equal(h.raise(), false, 'no hand during a move');
+    // Inside a group: no button.
+    client.status = 'in room'; h.connected();
+    assert.equal(states.at(-1).available, false);
+    assert.equal(h.raise(), false);
+    client.status = 'joining'; h.reconnecting(); h.connected();
+    assert.equal(states.at(-1).available, false, 'on the way into a group counts as in the group');
+    // Back in the main room.
+    client.status = 'leaving'; h.reconnecting(); h.connected();
+    assert.equal(states.at(-1).available, true);
+    client.status = 'invited'; h.reconnecting(); h.connected();
+    assert.equal(states.at(-1).available, true, 'invited to a group is still the main room');
+    // Zoom updating the group state after « Connected »: read again later, and before raising.
+    client.status = 'main session'; h.reconnecting(); h.connected();
+    h.raise();
+    client.status = 'in room'; h.commandReady();
+    assert.deepEqual(states.at(-1), { teacher: false, available: false, up: false, loweredAt: 0 }, 'the hand goes down when the group state arrives late');
+    client.status = 'main session'; h.reconnecting(); h.connected();
+    client.status = 'in room';
+    assert.equal(h.raise(), false, 'checked again before raising');
+    assert.equal(states.at(-1).available, false);
+    // Leaving.
+    client.status = 'main session'; h.reconnecting(); h.connected(); h.raise(); h.closed();
+    assert.deepEqual(states.at(-1), { teacher: false, available: false, up: false, loweredAt: 0 });
+    // The trace: states and causes only.
+    assert.ok(logs.every(([event, detail]) => event === 'hand' && Object.keys(detail).join() === 'state,by'));
+    assert.deepEqual([...new Set(logs.map(([, d]) => d.by))].sort(), ['leave', 'move', 'self', 'teacher']);
+  }
+  // A raise Zoom refuses puts the button back.
+  {
+    const logs = [];
+    let last = null;
+    const h = createHands({ teacher: false, win: { zmClient: handClient({ users: [HOST, AMAL], self: AMAL.userId, fail: true }) }, onChange: state => { last = state; }, log: (event, detail) => logs.push(detail) });
+    h.connected();
+    assert.equal(h.raise(), true);
+    await tick(10);
+    assert.equal(last.up, false);
+    assert.deepEqual(logs.at(-1), { state: 'down', by: 'failed' });
+  }
+  // In the room: the markers reach the hands only; the room passes connection states,
+  // participants and the command channel; nothing is drawn without a role or after a stop.
+  {
+    const calls = [], logs = [], toolkit = fakeToolkit(calls), states = [];
+    const users = [HOST, AMAL];
+    const client = handClient({ users, self: HOST.userId });
+    const { room, win } = open(toolkit, calls, logs, { hands: 'teacher', onHands: state => states.push(state) });
+    win.zmClient = client;
+    await room.ready;
+    toolkit.connect();
+    assert.equal(states.at(-1).available, true);
+    assert.deepEqual(client.sent.filter(text => text.startsWith(HAND_PREFIX)), ['eh-hand:ask']);
+    toolkit.emit('command-channel-message', { senderId: String(AMAL.userId), text: 'eh-hand:raise' });
+    assert.deepEqual(hands(states.at(-1)), ['Amal B.']);
+    assert.equal(room.hands.lowerOf(String(AMAL.userId)), true);
+    assert.deepEqual(client.sent.filter(text => text.startsWith('eh-hand:lower')), [`eh-hand:lower@${AMAL.userId}`]);
+    toolkit.emit('command-channel-message', { senderId: String(AMAL.userId), text: 'eh-hand:raise' });
+    toolkit.emit('user-removed', [{ userId: AMAL.userId, displayName: AMAL.displayName }]);
+    assert.deepEqual(hands(states.at(-1)), [], 'a participant removed by Zoom takes the hand along');
+    toolkit.emit('command-channel-message', { senderId: String(AMAL.userId), text: 'eh-hand:raise' });
+    toolkit.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' });
+    assert.deepEqual(hands(states.at(-1)), []);
+    client.sent.length = 0;
+    toolkit.emit('connection-change', { state: 'Connected' });
+    toolkit.emit('command-channel-status', 'Connected');
+    assert.deepEqual(client.sent.filter(text => text.startsWith(HAND_PREFIX)), ['eh-hand:ask', 'eh-hand:ask'], 'asked again after the reconnection and when the channel connects');
+    // A hand marker never reaches the whiteboard, and a whiteboard marker never the hands.
+    toolkit.emit('command-channel-message', { senderId: String(AMAL.userId), text: 'eh-whiteboard:open' });
+    assert.ok(!logs.some(([event, d]) => event === 'whiteboard' && d.open === 'yes'));
+    assert.ok(logs.some(([event, d]) => event === 'hands' && d.total === 1));
+    assert.deepEqual(calls.filter(c => c.startsWith('page:')), [], 'raise hand never ends or fails the room');
+    await room.stop();
+    const n = states.length;
+    toolkit.emit('command-channel-message', { senderId: String(AMAL.userId), text: 'eh-hand:raise' });
+    assert.equal(states.length, n, 'nothing after the room stopped');
+    // Without a role: no hands, and the actions do nothing.
+    const calls2 = [], toolkit2 = fakeToolkit(calls2), states2 = [];
+    const r2 = open(toolkit2, calls2, [], { onHands: state => states2.push(state) });
+    r2.win.zmClient = handClient({ users: [HOST, AMAL], self: AMAL.userId });
+    await r2.room.ready;
+    toolkit2.connect();
+    assert.equal(r2.room.hands.raise(), false);
+    assert.deepEqual(states2, []);
+    await r2.room.stop();
+    // The component: the learner's role from the pass; the actions go through the room.
+    const component = read('src/components/online/ZoomRoom.jsx');
+    assert.match(component, /hands: role === 'host' \? 'teacher' : 'learner',\n\s+onHands: setHands,/);
+    assert.match(component, /\{!closing && <RoomHands state=\{hands\} onRaise=\{\(\) => room\.current\?\.hands\.raise\(\)\}/);
+    const panel = read('src/components/online/RoomHands.jsx');
+    assert.ok(!/zmClient|getCommandClient|eh-hand:/.test(panel), 'the button and the panel never talk to Zoom');
+    assert.match(panel, /<Button type="button" size="lg" variant=\{up \? 'default' : 'outline'\} aria-pressed=\{up\} data-testid="room-hand"\n\s+className=\{`min-h-11 /, 'the learner\'s button is at least 44 px high (a finger on a phone)');
+    assert.equal((panel.match(/min-h-11/g) || []).length, 4, 'every control of the button and the panel is 44 px high');
+    assert.ok(!/Audio|\.play\(|sound/i.test(panel.replace(/No sound\./, '')), 'no sound');
+  }
 }
 
 // ---- « Guide de la salle » on the teacher's lesson list (static text) ----
@@ -1031,6 +1344,12 @@ function fakeChannels() {
   assert.match(text, /Si un groupe ne fonctionne pas pour l’un d’eux, laissez-le sans groupe : il reste avec vous dans la salle principale\./);
   assert.match(text, /Ne nommez jamais un apprenant animateur ou co-animateur\./);
   assert.match(text, /« Réessayer » ramène un apprenant dans la salle principale/);
+  // Raise hand (PR D): the room's own words, no sound, hidden in a group, back after a reload or a visit.
+  assert.match(text, /Mains levées\. Les apprenants ont un bouton « Lever la main » au-dessus de la salle, sur ordinateur comme sur téléphone\./);
+  assert.ok(text.includes(`« ${HAND_TEXT.panel('…')} »`) && text.includes(`« ${HAND_TEXT.lowerOne} »`) && text.includes(`« ${HAND_TEXT.lowerAll} »`) && text.includes(`« ${HAND_TEXT.raise} »`), 'the guide quotes the panel and button labels');
+  assert.match(text, /sans aucun son/);
+  assert.match(text, /Dans un groupe, le bouton n’existe pas : les mains servent dans la salle principale\./);
+  assert.match(text, /Une main se baisse toute seule quand l’apprenant quitte le cours, part dans un groupe ou se reconnecte\./);
   // The words of the guide are the words of the room.
   const french = JSON.parse(read('src/lib/online/zoom-fr-FR.json'));
   for (const key of ['whiteboard.start_tooltip', 'whiteboard.export_and_close', 'subsession.auto_close_after', 'subsession.open_all_rooms', 'subsession.unassigned_participants', 'subsession.assign', 'subsession.join', 'leave.button_leave_subsession',

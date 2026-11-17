@@ -23,12 +23,17 @@
 //     the room fails does not come back after « Réessayer » (review N3 of #195).
 //   - the toolkit's camera message on the pre-join screen gets a French reason in place
 //     of « [object Object] » or an English error name; once in the room nothing is touched.
+//   - the « start devices » message gets the same treatment (review note of #197);
+//   - raise hand (PR D): the learner's « Lever la main » / « Baisser la main » (above the
+//     room, on a phone too, hidden inside a group, lowered by the teacher with a line
+//     saying so), the teacher's « Mains levées (n) » (order, cue, « Baisser », « Baisser
+//     toutes les mains », a leave), and spoofed lowers from a learner change nothing.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { chromium } from '@playwright/test';
 import { buildRoomHarness, serveRoomHarness } from './lib/online-room-harness.mjs';
-import { CAMERA_REASON } from '../src/lib/online/zoom-toolkit-messages.mjs';
+import { CAMERA_REASON, DEVICES_REASON } from '../src/lib/online/zoom-toolkit-messages.mjs';
 
 setTimeout(() => { console.error('FAIL online room lifecycle browser test stalled'); process.exit(1); }, 4 * 60_000).unref();
 const harness = await buildRoomHarness({ fake: true });
@@ -242,7 +247,7 @@ try {
   assert.deepEqual(await host.evaluate(() => window.__zoom.config.featuresOptions.whiteboard), { enable: true, enableExport: true, enableViewerUserExport: false }, 'the teacher exports');
   await host.evaluate(() => { window.__zoom.emit('whiteboard-status-change', 1); window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('whiteboard-status-change', 0); });
   await host.waitForTimeout(200);
-  assert.deepEqual(await host.evaluate(() => window.__sent.filter(text => text !== 'eh-whiteboard:ask')), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
+  assert.deepEqual(await host.evaluate(() => window.__sent.filter(text => text.startsWith('eh-whiteboard:') && text !== 'eh-whiteboard:ask')), ['eh-whiteboard:open', 'eh-whiteboard:closed']);
   // A participant who arrives or reconnects asks; the presenter answers while its whiteboard is open.
   await host.evaluate(() => { window.__sent.length = 0; window.__zoom.emit('whiteboard-status-change', 2); window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-whiteboard:ask' }); });
   assert.deepEqual(await host.evaluate(() => window.__sent), ['eh-whiteboard:open'], 'a question right after the marker is not answered at once (one answer per interval)');
@@ -277,6 +282,12 @@ try {
   // Inside a toolkit element, as a text node added later.
   await camera.evaluate(() => { const box = document.createElement('div'); box.className = 'fake-toast'; document.body.appendChild(box); box.appendChild(document.createTextNode('La caméra n’a pas pu démarrer : NotAllowedError: Permission denied')); });
   assert.equal(await settles(camera, 2), `La caméra n’a pas pu démarrer : ${CAMERA_REASON.blocked}`);
+  // The « start devices » message (review note of #197): the same, with reasons naming the camera or the microphone.
+  const devices = await toast(camera, 'Les périphériques n’ont pas pu démarrer : [object Object]');
+  const devicesText = await settles(camera, devices);
+  assert.ok(Object.values(DEVICES_REASON).some(reason => devicesText === `Les périphériques n’ont pas pu démarrer : ${reason}`), `a French reason in place of [object Object]: ${devicesText}`);
+  const devicesNamed = await toast(camera, 'Les périphériques n’ont pas pu démarrer : NotAllowedError: Permission denied');
+  assert.equal(await settles(camera, devicesNamed), `Les périphériques n’ont pas pu démarrer : ${DEVICES_REASON.blocked}`);
   const unrelated = await toast(camera, 'Le micro n’a pas pu démarrer : [object Object]');
   await camera.waitForTimeout(300);
   assert.equal(await toastText(camera, unrelated), 'Le micro n’a pas pu démarrer : [object Object]', 'another message is not touched');
@@ -287,7 +298,7 @@ try {
   await camera.waitForTimeout(500);
   assert.equal(await toastText(camera, late), 'La caméra n’a pas pu démarrer : [object Object]', 'nothing is rewritten once in the room');
   await camera.close();
-  ok('camera message: a French reason in place of « [object Object] » or an English error name, on the pre-join screen only');
+  ok('camera and « start devices » messages: a French reason in place of « [object Object] » or an English error name, on the pre-join screen only');
 
   // Groups (plan online-classroom-tools.md, PR B). A move is Reconnecting then Connected.
   const mover = await context.newPage();
@@ -370,6 +381,120 @@ try {
   await mover.getByTestId('room-refused').waitFor();
   await Promise.all([mover.waitForURL(`${origin}/portal`), mover.getByTestId('room-leave').click()]);
   ok('groups: a move keeps the participant in the room; « Quitter le cours » asks first in the room and in a group, and only there');
+
+  // Raise hand « Lever la main » (PR D). A fake SDK client: the participant list, this
+  // participant's id, its group state, and the command channel (recorded in __sent as
+  // « text » or « text@target »).
+  const handClient = (self, status = 'main session') => {
+    window.__sent = [];
+    window.__status = status;
+    window.zmClient = { getAllUser: () => [{ userId: 7, displayName: 'Sara L.', isHost: true }, { userId: 8, displayName: 'Amal B.' }, { userId: 9, displayName: 'Nour K.' }],
+      getCurrentUserInfo: () => ({ userId: self }), getSubsessionClient: () => ({ getUserStatus: () => window.__status }),
+      getWhiteboardClient: () => ({ isWhiteboardEnabled: () => true }),
+      getCommandClient: () => ({ send: async (text, target) => { window.__sent.push(target === undefined ? text : `${text}@${target}`); return { text }; } }) };
+  };
+  const handsSent = tab => tab.evaluate(() => window.__sent.filter(text => text.startsWith('eh-hand:')));
+  const move = (tab, status) => tab.evaluate(s => { window.__zoom.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' }); window.__status = s; window.__zoom.emit('connection-change', { state: 'Connected' }); }, status);
+  // The learner.
+  const learnerTab = await context.newPage();
+  learnerTab.on('pageerror', error => errors.push(String(error?.message || error)));
+  await learnerTab.goto(`${origin}/?lesson=l7&person=p1`);
+  await joined(learnerTab, 1);
+  const hand = learnerTab.getByTestId('room-hand');
+  assert.equal(await hand.count(), 0, 'no button before the participant is in');
+  await learnerTab.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await learnerTab.evaluate(handClient, 8);
+  await learnerTab.evaluate(() => window.__zoom.connect());
+  await hand.waitFor();
+  assert.equal((await hand.innerText()).trim(), 'Lever la main');
+  assert.equal(await hand.getAttribute('aria-pressed'), 'false');
+  // Above the room, outside the toolkit: it covers none of the toolkit's controls.
+  const layout = await learnerTab.evaluate(() => ({ hand: document.querySelector('[data-testid="room-hand"]').getBoundingClientRect().bottom, room: document.querySelector('[data-testid="zoom-room"]').getBoundingClientRect().top,
+    inside: !!document.querySelector('[data-testid="zoom-room"] [data-testid="room-hand"]') }));
+  assert.ok(layout.hand <= layout.room && !layout.inside, `the button is above the room: ${JSON.stringify(layout)}`);
+  await hand.click();
+  await learnerTab.waitForFunction(() => document.querySelector('[data-testid="room-hand"]')?.textContent.trim() === 'Baisser la main');
+  assert.equal(await hand.getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(await handsSent(learnerTab), ['eh-hand:raise']);
+  // Spoofed lowers (another learner, no sender id): the hand stays up.
+  await learnerTab.evaluate(() => { for (const p of [{ senderId: '9', text: 'eh-hand:lower' }, { senderId: '9', text: 'eh-hand:lower-all' }, { text: 'eh-hand:lower-all' }]) window.__zoom.emit('command-channel-message', p); });
+  await learnerTab.waitForTimeout(200);
+  assert.equal((await hand.innerText()).trim(), 'Baisser la main', 'a learner cannot lower another learner\'s hand');
+  // The teacher lowers it: the button is back, with a line saying so, and « lower-self » goes out.
+  await learnerTab.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '7', text: 'eh-hand:lower' }));
+  await learnerTab.getByTestId('room-hand-lowered').waitFor();
+  assert.equal(await learnerTab.getByTestId('room-hand-lowered').innerText(), 'Votre main a été baissée par l’enseignant.');
+  assert.equal((await hand.innerText()).trim(), 'Lever la main');
+  assert.deepEqual(await handsSent(learnerTab), ['eh-hand:raise', 'eh-hand:lower-self']);
+  // Into a group: no button; back in the main room: the button, hand down.
+  await hand.click();
+  await move(learnerTab, 'in room');
+  await hand.waitFor({ state: 'detached' });
+  await move(learnerTab, 'main session');
+  await hand.waitFor();
+  assert.equal((await hand.innerText()).trim(), 'Lever la main', 'the hand went down with the move');
+  // Its own « Baisser la main ».
+  await hand.click();
+  await learnerTab.waitForFunction(() => document.querySelector('[data-testid="room-hand"]')?.textContent.trim() === 'Baisser la main');
+  await hand.click();
+  await learnerTab.waitForFunction(() => document.querySelector('[data-testid="room-hand"]')?.textContent.trim() === 'Lever la main');
+  assert.deepEqual((await handsSent(learnerTab)).slice(-2), ['eh-hand:raise', 'eh-hand:lower-self']);
+  // On a phone: visible, above the room, within the screen.
+  await learnerTab.setViewportSize({ width: 390, height: 844 });
+  await learnerTab.waitForTimeout(200);
+  const phoneBox = await hand.boundingBox();
+  assert.ok(phoneBox && phoneBox.x >= 0 && phoneBox.x + phoneBox.width <= 390 && phoneBox.y >= 0 && phoneBox.y + phoneBox.height <= 844 && await hand.isVisible(), `visible within a phone's screen (the harness has no Tailwind: the 44 px height is a class, checked by the unit suite): ${JSON.stringify(phoneBox)}`);
+  await learnerTab.close();
+  // The teacher.
+  const teacherTab = await context.newPage();
+  teacherTab.on('pageerror', error => errors.push(String(error?.message || error)));
+  await teacherTab.goto(`${origin}/?lesson=l6&person=t1&role=host`);
+  await joined(teacherTab, 1);
+  await teacherTab.getByRole('button', { name: 'Rejoindre le cours' }).click();
+  await teacherTab.evaluate(handClient, 7);
+  await teacherTab.evaluate(() => window.__zoom.connect());
+  const panel = teacherTab.getByTestId('room-hands-panel');
+  await panel.waitFor();
+  assert.equal(await teacherTab.getByTestId('room-hand').count(), 0, 'the teacher has no « Lever la main »');
+  assert.equal((await teacherTab.getByTestId('room-hands-badge').innerText()).trim(), 'Mains levées (0)');
+  assert.deepEqual(await handsSent(teacherTab), ['eh-hand:ask'], 'the teacher asks for the hands already up');
+  assert.equal(await panel.getAttribute('data-cue'), 'off');
+  await teacherTab.evaluate(() => { window.__zoom.emit('command-channel-message', { senderId: '9', text: 'eh-hand:raise' }); window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-hand:raise' }); });
+  await teacherTab.waitForFunction(() => document.querySelector('[data-testid="room-hands-badge"]')?.textContent.trim() === 'Mains levées (2)');
+  assert.deepEqual(await teacherTab.getByTestId('room-hands-name').allInnerTexts(), ['Nour K.', 'Amal B.'], 'names in the order raised');
+  assert.equal(await panel.getAttribute('data-cue'), 'on', 'a brief cue when a hand goes up');
+  assert.equal(await teacherTab.getByTestId('room-hands-live').innerText(), 'Amal B. lève la main');
+  const above = await teacherTab.evaluate(() => document.querySelector('[data-testid="room-hands-panel"]').getBoundingClientRect().bottom <= document.querySelector('[data-testid="zoom-room"]').getBoundingClientRect().top);
+  assert.ok(above, 'the panel is above the room');
+  // A learner's spoofed « lower-all » changes nothing.
+  await teacherTab.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-hand:lower-all' }));
+  await teacherTab.waitForTimeout(200);
+  assert.equal(await teacherTab.getByTestId('room-hands-item').count(), 2);
+  // « Baisser » on the first: gone at once, « lower » to that learner only.
+  await teacherTab.getByTestId('room-hands-item').first().getByRole('button', { name: 'Baisser' }).click();
+  await teacherTab.waitForFunction(() => document.querySelectorAll('[data-testid="room-hands-item"]').length === 1);
+  assert.deepEqual(await teacherTab.getByTestId('room-hands-name').allInnerTexts(), ['Amal B.']);
+  assert.deepEqual((await handsSent(teacherTab)).slice(-1), ['eh-hand:lower@9']);
+  // The cue goes after a few seconds.
+  await teacherTab.waitForFunction(() => document.querySelector('[data-testid="room-hands-panel"]')?.getAttribute('data-cue') === 'off', null, { timeout: 5000 });
+  // « Baisser toutes les mains ».
+  await teacherTab.getByTestId('room-hands-lower-all').click();
+  await teacherTab.waitForFunction(() => document.querySelector('[data-testid="room-hands-badge"]')?.textContent.trim() === 'Mains levées (0)');
+  assert.equal(await teacherTab.getByTestId('room-hands-list').count(), 0);
+  assert.deepEqual((await handsSent(teacherTab)).slice(-1), ['eh-hand:lower-all']);
+  // A learner who leaves (Zoom's « removed ») takes the hand along.
+  await teacherTab.evaluate(() => { window.__zoom.emit('command-channel-message', { senderId: '8', text: 'eh-hand:raise' }); window.__zoom.emit('user-removed', [{ userId: 8, displayName: 'Amal B.' }]); });
+  await teacherTab.waitForTimeout(200);
+  assert.equal((await teacherTab.getByTestId('room-hands-badge').innerText()).trim(), 'Mains levées (0)');
+  // The teacher visiting a group: no panel there; back: the panel, and a new question.
+  await move(teacherTab, 'in room');
+  await panel.waitFor({ state: 'detached' });
+  await teacherTab.evaluate(() => { window.__sent.length = 0; });
+  await move(teacherTab, 'main session');
+  await panel.waitFor();
+  assert.deepEqual(await handsSent(teacherTab), ['eh-hand:ask']);
+  await teacherTab.close();
+  ok('raise hand: the learner\'s button (states, hidden in a group, phone), the teacher\'s panel (order, cue, « Baisser », « Baisser toutes les mains »); spoofed lowers change nothing');
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

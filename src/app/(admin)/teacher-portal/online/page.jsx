@@ -55,7 +55,8 @@ export default function TeacherOnlineLessons() {
           teacher opens before every lesson. Whiteboard: PR A. Groups and the rest: PR B. The timer,
           the forgotten assignment and the phone's English leave window are what the real-Zoom runs
           of 2026-11-16 showed about the toolkit; « Zoom Canvas » is the owner's decision of that day; phones in groups is D12 (2026-11-17).
-          Renaming groups and retyping the minutes: notes N8 and N6 of the #195 review (classroom polish). */}
+          Renaming groups and retyping the minutes: notes N8 and N6 of the #195 review (classroom polish).
+          Raised hands: PR D, owner decisions of 2026-11-17. */}
       <details className="mt-6 rounded-xl border bg-card p-4 text-sm" data-testid="room-guide">
         <summary className="cursor-pointer font-semibold">Guide de la salle</summary>
         <div className="mt-3 space-y-2 text-muted-foreground">
@@ -68,6 +69,8 @@ export default function TeacherOnlineLessons() {
           <p><span className="font-medium text-foreground">Passez dans chaque groupe.</span> « Rejoindre », à côté d’un groupe, vous y emmène ; pour revenir, bouton rouge puis « Revenir à la salle principale ». « Message à tous » envoie un texte à tous les groupes. Un apprenant peut « Demander de l’aide » : vous recevez sa demande et pouvez rejoindre son groupe. « Fermer tous les groupes » ramène tout le monde tout de suite.</p>
           <p><span className="font-medium text-foreground">Apprenants sur téléphone.</span> Demandez qui est sur téléphone (la salle ne l’indique pas) : ils peuvent être répartis dans un groupe comme les autres. Sur téléphone, dans un groupe, le bouton rouge ouvre une fenêtre en anglais : « To Main » ramène à la salle principale, « Leave » fait quitter le cours. Dites-le-leur une fois : « pour revenir, touchez To Main, jamais Leave ». Un apprenant sorti par erreur revient avec « Rejoindre le cours ». Si un groupe ne fonctionne pas pour l’un d’eux, laissez-le sans groupe : il reste avec vous dans la salle principale.</p>
           <p>Le tableau blanc n’existe pas dans les groupes : exportez-le avant de les ouvrir. Après une coupure, « Réessayer » ramène un apprenant dans la salle principale : répartissez-le de nouveau dans son groupe.</p>
+          <p data-testid="room-guide-hands"><span className="font-medium text-foreground">Mains levées.</span> Les apprenants ont un bouton « Lever la main » au-dessus de la salle, sur ordinateur comme sur téléphone. Vous voyez « Mains levées (…) » au-dessus de la salle, avec les noms dans l’ordre où les mains se sont levées ; le cadre devient orange un instant quand une main se lève, sans aucun son. « Baisser » baisse une main, « Baisser toutes les mains » les baisse toutes.</p>
+          <p>Une main se baisse toute seule quand l’apprenant quitte le cours, part dans un groupe ou se reconnecte. Dans un groupe, le bouton n’existe pas : les mains servent dans la salle principale. Si vous rechargez la page ou revenez d’un groupe, la liste revient en quelques secondes, dans le même ordre.</p>
           <p><span className="font-medium text-foreground">À savoir aussi.</span> Pour faire écouter un document sonore, partagez un onglet de Chrome et cochez la case du son de l’onglet. Ne nommez jamais un apprenant animateur ou co-animateur. « Quitter le cours », en haut de la page, demande toujours une confirmation.</p>
         </div>
       </details>
