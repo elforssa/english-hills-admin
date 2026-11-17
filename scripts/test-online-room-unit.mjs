@@ -11,6 +11,7 @@ import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
 import { whiteboardCapability, whiteboardDeviceRule, cspBlockedDetail, expectedCspRefusal, EXPECTED_CSP_REFUSAL, WHITEBOARD_SOURCES, WHITEBOARD_SIGNAL, WHITEBOARD_READ_ONLY_TEXT } from '../src/lib/online/zoom-whiteboard.mjs';
 import { groupOpenOptions, groupTimerSeconds, correctGroupTimer, GROUP_TIMER_DEFAULT_SECONDS } from '../src/lib/online/zoom-groups.mjs';
+import { dropToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, cameraReasonFromText, cameraReasonFromDevice } from '../src/lib/online/zoom-toolkit-messages.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -675,6 +676,20 @@ function open(toolkit, calls, logs, extra = {}) {
   assert.equal(await other.openSubsessions([], typed), 'ok');
   for (const missing of [undefined, {}, { zmClient: {} }, { zmClient: { getSubsessionClient: () => null } }, { zmClient: { getSubsessionClient() { throw new Error('not ready'); } } }, { zmClient: { getSubsessionClient: () => ({}) } }])
     assert.equal(correctGroupTimer(missing), false);
+  // Review N2 of #195: a client that refuses the assignment (frozen, or a setter that
+  // throws) is not an error either; the call stays Zoom's own.
+  const frozen = Object.freeze({ openSubsessions: async () => 'zoom' });
+  assert.equal(correctGroupTimer({ zmClient: { getSubsessionClient: () => frozen } }), false);
+  const guarded = {};
+  Object.defineProperty(guarded, 'openSubsessions', { get: () => async () => 'zoom', set() { throw new Error('read-only'); } });
+  assert.equal(correctGroupTimer({ zmClient: { getSubsessionClient: () => guarded } }), false);
+  const sealed = Object.preventExtensions({ openSubsessions: async () => 'zoom' });
+  assert.equal(correctGroupTimer({ zmClient: { getSubsessionClient: () => sealed } }), false, 'cannot be marked: not reported as corrected');
+  // Review N5: never below one second (Zoom reads 0 as no timer).
+  assert.equal(groupTimerSeconds('0.001'), 1);
+  assert.equal(groupTimerSeconds('0,004'), 1);
+  assert.equal(groupTimerSeconds(0.2), 1);
+  assert.equal(groupTimerSeconds(1e-9), 1);
 
   // The room puts it on at every connection (a retry gets a new client), and traces the
   // timer only: never a group name or who is in a group.
@@ -692,7 +707,24 @@ function open(toolkit, calls, logs, extra = {}) {
   await sub.openSubsessions([], { ...typed, isTimerAutoEnabled: false });
   assert.deepEqual(logs.filter(([event]) => event === 'groups open').map(([, d]) => d), [{ timer: '600s' }, { timer: 'off' }]);
   assert.ok(!JSON.stringify(logs).includes('Les Lions') && !JSON.stringify(logs.filter(([event]) => event === 'groups open')).includes('Amal'), 'the trace never carries a group name');
+  assert.deepEqual(logs.filter(([event]) => event === 'groups timer').map(([, d]) => d), [{ correction: 'on' }], 'traced once, at the first connection');
   await r.room.stop();
+  // Without the SDK client (or with one that refuses the correction) the room still
+  // connects, asks for the whiteboard and traces `correction=off`, once.
+  for (const client of [undefined, { getSubsessionClient: () => Object.freeze({ openSubsessions: async () => {} }) }, { getSubsessionClient() { throw new Error('gone'); } }]) {
+    const c2 = [], l2 = [], t2 = fakeToolkit(c2);
+    const r2 = open(t2, c2, l2);
+    const sent = [];
+    r2.win.zmClient = client && { ...client, getCommandClient: () => ({ send: async text => sent.push(text) }) };
+    await r2.room.ready;
+    t2.connect();
+    t2.emit('connection-change', { state: 'Reconnecting', reason: 'join breakout room' });
+    t2.emit('connection-change', { state: 'Connected' });
+    assert.deepEqual(l2.filter(([event]) => event === 'groups timer').map(([, d]) => d), [{ correction: 'off' }]);
+    assert.ok(!c2.some(call => call.startsWith('page:')), 'nothing reaches the page');
+    if (client) assert.deepEqual(sent, [WHITEBOARD_SIGNAL.ask, WHITEBOARD_SIGNAL.ask], 'the whiteboard question still goes out after each connection');
+    await r2.room.stop();
+  }
 
   // The facts the correction rests on, read in the installed bundle. An upgrade that
   // repairs the toolkit (or changes the call) fails here, and the correction is re-read.
@@ -928,6 +960,61 @@ function fakeChannels() {
   assert.match(joinBody, /await onlinePost\([^\n]+\n[^\n]*\n\s+if \(displaced\.current\) return;\n\s+if \(result\.ok\)/);
 }
 
+// 11. Toolkit messages (classroom polish, part C).
+{
+  // The decoded token payload is dropped; nothing else is.
+  const printed = [];
+  const out = { log(...args) { printed.push(args); } };
+  const original = out.log;
+  const win = { console: out };
+  assert.equal(dropToolkitJwtLog(win), true);
+  assert.equal(dropToolkitJwtLog(win), true, 'idempotent');
+  const filtered = out.log;
+  assert.notEqual(filtered, original);
+  out.log(TOOLKIT_JWT_LOG, { tpc: 'eh-roomref.lesson-uuid', user_identity: 'ref' });
+  out.log(`${TOOLKIT_JWT_LOG} again`);
+  out.log('[online room] 2026-11-17T10:00:00Z connection state=Connected');
+  out.log('other', TOOLKIT_JWT_LOG);
+  out.log({ a: 1 });
+  assert.deepEqual(printed, [['[online room] 2026-11-17T10:00:00Z connection state=Connected'], ['other', TOOLKIT_JWT_LOG], [{ a: 1 }]]);
+  assert.equal(dropToolkitJwtLog(win), true);
+  assert.equal(out.log, filtered, 'not wrapped twice');
+  for (const bad of [undefined, {}, { console: {} }, { console: Object.freeze({ log() {} }) }]) assert.equal(dropToolkitJwtLog(bad), false);
+  // In the room: installed before the join.
+  const calls = [], logs = [], toolkit = fakeToolkit(calls);
+  const roomWin = fakeWindow();
+  roomWin.console = { log: () => calls.push('console.log') };
+  const join = toolkit.joinSession;
+  toolkit.joinSession = (...args) => { calls.push(roomWin.console.log(TOOLKIT_JWT_LOG, {}) === undefined && calls.at(-1) !== 'console.log' ? 'jwt-dropped' : 'jwt-printed'); return join.apply(toolkit, args); };
+  const r = open(toolkit, calls, logs, { win: roomWin });
+  await r.room.ready;
+  assert.equal(calls[0], 'jwt-dropped');
+  await r.room.stop();
+
+  // The camera message: a French reason from the printed error name, else from the device.
+  assert.equal(cameraReasonFromText('[object Object]'), null);
+  assert.equal(cameraReasonFromText('NotReadableError: Could not start video source'), CAMERA_REASON.busy);
+  assert.equal(cameraReasonFromText('NotAllowedError: Permission denied'), CAMERA_REASON.blocked);
+  assert.equal(cameraReasonFromText('NotFoundError: Requested device not found'), CAMERA_REASON.missing);
+  assert.equal(cameraReasonFromText('OverconstrainedError'), CAMERA_REASON.unsupported);
+  assert.equal(cameraReasonFromText('VIDEO_CAMERA_IS_TAKEN'), CAMERA_REASON.busy);
+  assert.equal(cameraReasonFromDevice({ permission: 'denied', cameras: 1 }), CAMERA_REASON.blocked);
+  assert.equal(cameraReasonFromDevice({ permission: 'granted', cameras: 0 }), CAMERA_REASON.missing);
+  assert.equal(cameraReasonFromDevice({ permission: 'granted', cameras: 1 }), CAMERA_REASON.busy);
+  assert.equal(cameraReasonFromDevice({ permission: 'prompt', cameras: 2 }), CAMERA_REASON.other);
+  assert.equal(cameraReasonFromDevice({ permission: 'unknown', cameras: null }), CAMERA_REASON.other);
+  for (const reason of Object.values(CAMERA_REASON)) assert.ok(!/[A-Z]{3,}|Error|object/.test(reason) && /^[a-zé’]/.test(reason), `French, readable after the colon: ${reason}`);
+
+  // The facts these rest on, read in the installed bundle (re-read on any upgrade, PR C).
+  const bundle = readFileSync(TOOLKIT_BUNDLE, 'utf8');
+  assert.equal(bundle.split(`console.log("${TOOLKIT_JWT_LOG}", `).length - 1, 1, 'the toolkit still writes the decoded payload with exactly this call');
+  assert.ok(/\w+\(\w+\("preview\.error_start_camera"\) \+ \w+, \{ variant: "error" \}\)/.test(bundle), 'the camera message is still the key followed by the error, concatenated');
+  const french = JSON.parse(read('src/lib/online/zoom-fr-FR.json'));
+  assert.equal(french['preview.error_start_camera'], 'La caméra n’a pas pu démarrer : ');
+  const session = read('src/lib/online/zoom-room-session.mjs');
+  assert.match(session, /dropToolkitJwtLog\(win\);\n\s+s\.stopCameraWatch = watchCameraMessage\(win, resources\?\.\['preview\.error_start_camera'\][^\n]*\n\s+const joining = toolkit\.joinSession/, 'both are in place before the join');
+}
+
 // ---- « Guide de la salle » on the teacher's lesson list (static text) ----
 {
   const guide = read('src/app/(admin)/teacher-portal/online/page.jsx');
@@ -937,6 +1024,9 @@ function fakeChannels() {
   // D4: always a timer, and the teacher visits each group; the duration is typed, in minutes.
   assert.match(text, /Toujours un minuteur\. Dans « Paramètres », cochez « Fermer automatiquement les groupes après » et saisissez vous-même la durée en minutes/);
   assert.match(text, /Passez dans chaque groupe\./);
+  // Review N6 and N8 of #195: the field may show seconds after a first opening; a group not renamed reaches the learner as « Subsession 1 ».
+  assert.match(text, /Après une première ouverture, le champ peut afficher la durée en secondes : retapez toujours le nombre de minutes avant d’ouvrir\./);
+  assert.match(text, /Donnez un nom à chaque groupe avec « Renommer » : l’invitation que reçoit l’apprenant affiche ce nom, sinon elle dit « Subsession 1 »\./);
   // D11: a learner on a phone for whom a group fails stays in the main room.
   assert.match(text, /Si un groupe ne fonctionne pas pour l’un d’eux, laissez-le sans groupe : il reste avec vous dans la salle principale\./);
   assert.match(text, /Ne nommez jamais un apprenant animateur ou co-animateur\./);
@@ -944,9 +1034,10 @@ function fakeChannels() {
   // The words of the guide are the words of the room.
   const french = JSON.parse(read('src/lib/online/zoom-fr-FR.json'));
   for (const key of ['whiteboard.start_tooltip', 'whiteboard.export_and_close', 'subsession.auto_close_after', 'subsession.open_all_rooms', 'subsession.unassigned_participants', 'subsession.assign', 'subsession.join', 'leave.button_leave_subsession',
-    'subsession.broadcast', 'subsession.ask_for_help', 'subsession.close_all_rooms'])
+    'subsession.broadcast', 'subsession.ask_for_help', 'subsession.close_all_rooms', 'subsession.rename_button'])
     assert.ok(text.includes(`« ${french[key]} »`), `the guide quotes the room's own label for ${key}: « ${french[key]} »`);
-  assert.ok(!/sous-groupe|breakout|subsession/i.test(text));
+  // The one English word quoted on purpose is what Zoom shows the learner (N8).
+  assert.ok(!/sous-groupe|breakout|subsession/i.test(text.replace('« Subsession 1 »', '')));
 }
 
 console.log('online room unit regressions passed');

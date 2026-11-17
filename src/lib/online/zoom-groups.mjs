@@ -27,12 +27,13 @@ const MAX_MINUTES = 24 * 60;
 // toolkit labels « minutes »; a number is a value that came from Zoom, in seconds (its
 // default, or what an earlier open of this lesson set). Anything unusable is Zoom's
 // default, so a ticked box always gives a timer.
+// Never below one second: Zoom reads 0 as « no timer » (review N5 of #195).
 export function groupTimerSeconds(value) {
   if (typeof value === 'string') {
     const minutes = Number(value.trim().replace(',', '.'));
-    return Number.isFinite(minutes) && minutes > 0 ? Math.round(Math.min(minutes, MAX_MINUTES) * 60) : GROUP_TIMER_DEFAULT_SECONDS;
+    return Number.isFinite(minutes) && minutes > 0 ? Math.max(1, Math.round(Math.min(minutes, MAX_MINUTES) * 60)) : GROUP_TIMER_DEFAULT_SECONDS;
   }
-  return Number.isFinite(value) && value > 0 ? Math.round(value) : GROUP_TIMER_DEFAULT_SECONDS;
+  return Number.isFinite(value) && value > 0 ? Math.max(1, Math.round(value)) : GROUP_TIMER_DEFAULT_SECONDS;
 }
 
 // The options as Zoom needs them: the duration always a number of seconds, and the timer
@@ -45,18 +46,26 @@ export function groupOpenOptions(options) {
 const CORRECTED = Symbol.for('eh.online.groups.corrected');
 
 // Puts the correction on the SDK's subsession client, once per client object. Returns
-// true when the client carries it. `onOpen` gets the timer in seconds, or 0 without one.
+// true when the client carries it, false when it could not be put there (no client
+// exposed, no such call, or a client that refuses the assignment): the room then traces
+// `groups timer correction=off` and the toolkit's window behaves as Zoom ships it. It
+// never throws (review N2 of #195). `onOpen` gets the timer in seconds, or 0 without one.
 export function correctGroupTimer(win, onOpen) {
-  let client = null;
-  try { client = win?.zmClient?.getSubsessionClient?.() || null; } catch { /* client not ready */ }
-  if (!client || typeof client.openSubsessions !== 'function') return false;
-  if (client[CORRECTED]) return true;
-  const open = client.openSubsessions;
-  client.openSubsessions = function openSubsessions(list, options, ...rest) {
-    const fixed = groupOpenOptions(options);
-    try { onOpen?.(fixed?.isTimerEnabled ? fixed.timerDuration : 0); } catch { /* the trace never breaks the call */ }
-    return open.call(this, list, fixed, ...rest);
-  };
-  client[CORRECTED] = true;
-  return true;
+  try {
+    const client = win?.zmClient?.getSubsessionClient?.() || null;
+    if (!client || typeof client.openSubsessions !== 'function') return false;
+    if (client[CORRECTED]) return true;
+    const open = client.openSubsessions;
+    const corrected = function openSubsessions(list, options, ...rest) {
+      const fixed = groupOpenOptions(options);
+      try { onOpen?.(fixed?.isTimerEnabled ? fixed.timerDuration : 0); } catch { /* the trace never breaks the call */ }
+      return open.call(this, list, fixed, ...rest);
+    };
+    client.openSubsessions = corrected;
+    if (client.openSubsessions !== corrected) return false;
+    client[CORRECTED] = true;
+    return client[CORRECTED] === true;
+  } catch {
+    return false;
+  }
 }
