@@ -1,6 +1,6 @@
 # Shared-address refusal detail (PR D of the R4 diagnosis)
 
-Revision **SAR-r1**, 2026-11-17. **PROPOSED — awaiting owner approval; architecture only.** Nothing here is implemented. Tier 3 (see [risk tier](#risk-tier)).
+Revision **SAR-r1**, 2026-11-17. **PROPOSED — awaiting owner approval; architecture only.** Nothing here is implemented. Tier 3 (see [risk tier](#risk-tier)). Migration number: claimed at merge, not by this plan (correction of 2026-11-17, docs only, after the independent review of the online room reliability plan, PR #198, finding N9).
 
 Baseline: `origin/main` `b581d95` (2026-11-17). Source: PR D of the R4 diagnosis of 2026-11-14, listed as out of scope in [e-mail links that work](email-links-that-work.md) and in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#e-mail-links-that-work--released-2026-11-14). Related: [portal readiness PRF-r2](portal-readiness.md) (D3 invitation refusals), [ADR-011](../decisions/ADR-011-portal-access-model.md).
 
@@ -31,7 +31,7 @@ The red refusal box in the invitation form gains a short list (at most 10 names,
 
 ## Database impact
 
-One forward migration, `129_shared_address_refusal_detail.sql`, re-creates the read-only function `public.preview_family_invitation` from its 123 body (unchanged since), adding a `conflicts` list to its answer and one refusal it does not check today (an account of the other family role, Q2). No table, policy, grant or data change. The invitation, link and activation functions are not touched.
+One forward migration, `<n>_shared_address_refusal_detail.sql` (number at merge: `<n>` is the next free number on `main` when the file lands there, never reserved by a plan; 129 at this baseline), re-creates the read-only function `public.preview_family_invitation` from its 123 body (unchanged since), adding a `conflicts` list to its answer and one refusal it does not check today (an account of the other family role, Q2). No table, policy, grant or data change. The invitation, link and activation functions are not touched.
 
 ## Important security decisions
 
@@ -63,7 +63,7 @@ Out of scope: changing any refusal rule or limit; `prepare_family_invitation`, `
 
 # Design
 
-## 1. Migration 129 — `preview_family_invitation` with `conflicts`
+## 1. The migration — `preview_family_invitation` with `conflicts`
 
 Re-created from the 123 body with `create or replace`, same signature, `security definer`, `search_path = pg_catalog, pg_temp`, same grants (re-asserted: as 123: revoked from `public`, `anon`, `service_role`; execute to `authenticated`). `require_manager()` stays the first statement.
 
@@ -116,7 +116,7 @@ More than 10: « et N autres ». The form tolerates an answer without `conflicts
 # Owner decisions required
 
 **Q1 — Where the names come from. Blocking.**
-- **A (recommended):** migration 129, the server returns `conflicts` from the same rule (above). One rule; covers teacher and staff records exactly; Tier 3 with a Production migration.
+- **A (recommended):** one migration, the server returns `conflicts` from the same rule (above). One rule; covers teacher and staff records exactly; Tier 3 with a Production migration.
 - **B:** client only: on refusal, the form reads learners, teachers and profiles by address under existing RLS. No migration, Tier 2, but a second copy of the matching rule in the browser (normalisation drift: 4 `parent_email` and 2 learner `email` values were not normalised at PRF-r2 R0), and the account case cannot be read the same way.
 
 **Q2 — Existing account of the other family role (a parent account invited as Apprenant, or the reverse). Not blocking.**
@@ -130,7 +130,7 @@ More than 10: « et N autres ». The form tolerates an answer without `conflicts
 # Release (each step separately approved)
 
 - **R0 (optional, read-only):** ledger ceiling still 128. If the owner wants the 2026-11-14 case confirmed: one call of `preview_family_invitation` as a director for that address and role, result read only by the owner. Writes nothing.
-- **R1:** apply 129 (migration first; the old form ignores the new fields).
+- **R1:** apply the migration (migration first; the old form ignores the new fields).
 - **R2:** merge and deploy the form.
 - **R3:** in Production, the director previews one known shared address and sees the names; then a clean address shows no refusal.
 
@@ -143,9 +143,9 @@ Valid only after owner approval of SAR-r1 with Q1–Q3 answered. If Q1 = B, this
 **Prerequisites:** latest migration on `origin/main` is 128; `preview_family_invitation` still has its 123 body (re-check; if re-created later, build on that body).
 
 **Manifest:**
-- `supabase/migrations/129_shared_address_refusal_detail.sql` — re-create `public.preview_family_invitation` as in [design 1](#1-migration-129--preview_family_invitation-with-conflicts); guard that 128 is applied; re-assert grants.
+- `supabase/migrations/<n>_shared_address_refusal_detail.sql` (number at merge) — re-create `public.preview_family_invitation` as in [design 1](#1-the-migration--preview_family_invitation-with-conflicts); guard that 128 is applied; re-assert grants.
 - `src/lib/portalRefusalDetail.mjs` (new, pure) and `src/app/(admin)/settings/page.jsx` (`InviteUserForm` refusal box only).
-- Tests: `scripts/test-portal-readiness.sql` (new cases), a node unit test for the helper registered in `package.json`, upgrade/ledger ceiling scripts moved to 129, the invite form's existing browser coverage or a focused new check.
+- Tests: `scripts/test-portal-readiness.sql` (new cases), a node unit test for the helper registered in `package.json`, upgrade/ledger ceiling scripts moved to `<n>`, the invite form's existing browser coverage or a focused new check.
 - Docs: this plan's records, plans README row, CURRENT_STATE at release, OWNER_DECISIONS approval record, staff guide one sentence if the owner wants it.
 
 **Invariants:** refusal reasons, codes, messages and rules unchanged for every function; `require_manager()` first; the preview writes nothing; no name in any exception; at most 10 conflicts returned; no file under `src/components/online/` or the room touched.
