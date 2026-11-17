@@ -1,6 +1,6 @@
 # Online room reliability — newest connection wins, credential check, webhook evidence, recurring toolkit check
 
-**Revision ORR-r2 (2026-11-17). Status: APPROVED (plan only) by the owner on 2026-11-17 at exact head `fc4d44fe60dc4e7482ad98254a34be1b5433c8d2`, after the independent re-review verdict READY FOR FINAL REVIEW, with binding corrections applied in the recording commit ([approval record](#approval-record)). No migration, secret, Zoom setting or Production step is authorized.** ORR-r1 (head `7518d14b60c26ddb751969d38c4fa4ad6d307d51`) was independently reviewed **CHANGES REQUIRED** (B1–B6, N1–N10) on 2026-11-17; this revision applies every finding and the owner's answers of the same day ([revision record](#revision-record)). Tier 3 (tokens and passes, two migrations on online tables, an external provider webhook, a Production secret and provider configuration). Child of the online-learning pilot ([plan](online-learning.md), [ADR-008](../decisions/ADR-008-online-learning-pilot.md)) and sibling of [online classroom tools](online-classroom-tools.md). Nothing here is implemented; no migration is written; no Production step is approved.
+**Revision ORR-r2 (2026-11-17). Status: APPROVED (plan only) by the owner on 2026-11-17 at exact head `fc4d44fe60dc4e7482ad98254a34be1b5433c8d2`, after the independent re-review verdict READY FOR FINAL REVIEW, with binding corrections applied in the recording commit ([approval record](#approval-record)). No migration, secret, Zoom setting or Production step is authorized.** **Reliability PR implemented (2026-11-17) and STOPPED at S3 by the real-Zoom run: not pushed, not merged, migration 129 not applied to Production; owner decision needed: see the [implementation record](#implementation-record--reliability-pr).** ORR-r1 (head `7518d14b60c26ddb751969d38c4fa4ad6d307d51`) was independently reviewed **CHANGES REQUIRED** (B1–B6, N1–N10) on 2026-11-17; this revision applies every finding and the owner's answers of the same day ([revision record](#revision-record)). Tier 3 (tokens and passes, two migrations on online tables, an external provider webhook, a Production secret and provider configuration). Child of the online-learning pilot ([plan](online-learning.md), [ADR-008](../decisions/ADR-008-online-learning-pilot.md)) and sibling of [online classroom tools](online-classroom-tools.md). Nothing here is implemented; no migration is written; no Production step is approved.
 
 **Tier 3 for both pull requests** (note 8): the reliability PR changes passes, tokens and a migration; the webhook PR adds a provider webhook, a Production secret, provider configuration and a migration.
 
@@ -409,6 +409,76 @@ S1–S11 above. On any of them: stop, report the evidence, change nothing outsid
 ### Docs / status reporting
 
 The implementation records are added to this file. At each closeout: CURRENT_STATE (evidence only), SECURITY_RULES (pass supersession at confirmation and the leftover list; then the webhook gate, its kill switch and retention), WORKFLOWS (the emergency procedure and the monthly check), ADR-008 (amendments and status), the plans index. Handoff per AGENTS with the exact head SHA, the migration filename and the status **READY FOR INDEPENDENT REVIEW** only on terminal green CI.
+
+## Implementation record — reliability PR
+
+**Implemented on branch `feat/online-room-reliability` from `main` `420defd` (2026-11-17), Tier 3, on the owner's implementation task of 2026-11-17. Not merged; migration 129 applied only to private local stacks; no Production step taken.** The webhook PR is not part of it.
+
+### STOPPED at S3 (2026-11-17) — owner decision needed
+
+The real-Zoom run (development Video SDK key, installed Chrome, degraded network about 100 KB/s from `source.zoom.us`) and a follow-up probe show that **Zoom refuses, for the rest of the session, the browser whose connection was removed**, with `Fail` code `3009` « user has been removed ». The refusal is keyed on the browser's stored data, not on the pass (`user_key`) or the display name:
+
+| After a `removeUser` (the call behind « Retirer » and behind the sweep) | Result |
+| --- | --- |
+| The same browser presses « Rejoindre » (new pass, new `user_key`) | refused, 3009 (twice in the full run, once in the probe) |
+| A new browser for the same learner (same name, new pass) | enters |
+| The same browser after its site storage is cleared | enters |
+| **The same device comes back** (network cut 3 s, reload: new pass confirmed, marker sent); the teacher's sweep removes its old connection 1 s later | the new connection stays in the room… |
+| … then that device reloads once more | **refused, 3009** |
+
+This is S3 (« after a leftover is removed, Zoom refuses the same person's new connection: stop; the design rests on Zoom blocking the removed connection only »): Zoom blocks the removed connection's **browser**, so the automatic sweep would lock out a learner (or the teacher, T-R4) whose own phone or laptop came back after a drop, at their next reload or reconnection. It also contradicts owner note 6: **« Retirer » is a ban of that browser for the session** (the learner can come back only from another browser or device, or after clearing the site's data).
+
+Rows that passed before the stop (same run): T-R1 (`userKey` equals the pass id; `userIdentity` is present and equal to it but never read), T-R2 (first browser out 2.8 s after the second entered, the card shown, no automatic retry), T-R2b (a browser cut before its join takes nothing), T-R3 killed and cut (leftover removed in about 1 s, new connection stays — each time from a **different** browser), T-R5 (never two of one person for more than 15 s across five reloads of a learner and of the teacher), T-R4 recorded (new teacher host after 2 s, old connection removed by the sweep), T-R7 « Retirer » shows the removed text (reason `kicked by host`). Not reached: « Terminer pour tous » on real Zoom (proven only with the fake toolkit). A connection nothing removes stayed in Zoom's list for 181 s (killed Chrome).
+
+Nothing was pushed or merged; the work is committed on the local branch only. Possible ways forward, for the owner (none taken):
+
+1. **Ship without the automatic sweep**: newest connection wins only through the live page (marker and 10-second pass check, which never call `removeUser` and passed T-R2/T-R5); a dead device stays in the teacher's list until Zoom drops it (181 s measured); the guide says « Retirer » keeps that learner's browser out until the end of the lesson. `online_list_room_leftovers` and the sweep module would be removed (the migration loses one function).
+2. Keep the sweep only for connections whose device can no longer come back (no reliable signal exists in the room today): not recommended.
+3. Wait for a Zoom answer (support) on whether `removeUser` can remove a connection without blocking the browser.
+
+
+**What it changes**
+
+- **Migration `129_online_room_reliability.sql`** (the next free number on `main` today; re-checked at merge, S6): as listed in [Migrations](#migrations-listed-not-written). `online_issue_join` and `online_resolve_join` are re-created from their 117 bodies (S6 checked: no later re-creation) with exactly the named lines; the upgrade rehearsal [`scripts/test-online-room-reliability-upgrade.mjs`](../../../scripts/test-online-room-reliability-upgrade.mjs) proves the line diffs, the unchanged posture and privileges of every other object, no row rewritten, and that a pass issued before the migration resolves with its course's provider. Upgrade ceilings moved 128 → 129.
+- **One choice stricter than the plan text:** `online_confirm_pass` supersedes only when the caller's own pass is current **and its holder still qualifies** (`evaluate_join` ok). A device whose lesson was cancelled or whose consent was revoked between issue and confirmation takes nothing from anybody.
+- **Server:** the paste-mistake rule in the adapter (`credentialShape`, [`credential-shape.mjs`](../../../src/lib/online/provider/credential-shape.mjs)), applied by `onlineGate`; `handleJoin` takes the adapter of the pass's provider from the enabled set (today exactly `ONLINE_VIDEO_PROVIDER`), answers `pass` in the join body, and maps a superseded pass to 409 `superseded`; `GET /api/online/status` (director and admin only, outside the gate, `{ keys: correctes | incorrectes | absentes }`). The webhook secret's paste check belongs to the webhook gate of the webhook PR; `handleWebhook` is unchanged apart from passing the adapter lookup.
+- **Room (provider-neutral):** [`room-pass.mjs`](../../../src/lib/online/room-pass.mjs) confirms the pass once the room reports the participant inside (at once, N7), retries a failed confirmation at each 10-second round, checks the pass every 10 s in place of the 30-second `online_check_join`, and runs one check at once (at most once per 2 s) on the newer device's marker. The page shows « Utiliser cet appareil » with no automatic retry, the parent's notice, « L’enseignant vous a retiré du cours. » with « Rejoindre » and « L’enseignant a terminé le cours pour tous. » with « Quitter » only.
+- **Zoom room module:** `eh-room:newer` (sent after a confirmation that superseded something, again once when the command channel connects); [`zoom-room-leftovers.mjs`](../../../src/lib/online/zoom-room-leftovers.mjs) on the host's page (at the join, on `user-added`, every 20 s; `userKey` only; never itself; one trace line with the label); the three `ClosedReason` values mapped to `removed` / `ended`; the token-log wrapper restored at teardown (leave, error, superseded card, unmount) when it is still the room's.
+- **Reserved:** `/online/meeting/<lesson>` carries the catch-all headers only (header test). `next.config.mjs` and the middleware are unchanged (invariant 10).
+- **Toolkit facts:** [`scripts/check-zoom-toolkit-facts.mjs`](../../../scripts/check-zoom-toolkit-facts.mjs), 29 named facts each with its dependent module, in `npm test`; with a version argument it checks packed tarballs without installing them (run against `2.5.0-1` / `2.6.0` packed: all hold). The live part is logged in [online-toolkit-checks.md](../evidence/online-toolkit-checks.md).
+- **Raise hand, #199 review notes:** N2 (no button on a learner page Zoom lists as host or manager; a raised hand goes down, re-read on `user-updated`), N3 (« lower-self » owed after a drop with the hand up and after a refused send, paid once back in the main room), N5 (no cue or announcement for hands rebuilt from answers); N4 accepted (order only), N1/N6 wording fixed in the [PR D addendum](online-classroom-tools.md#pr-d--raise-hand--lever-la-main--design-addendum-2026-11-17), with its « Not covered » paragraph.
+- **Guide:** « Retirer » is not a ban; a learner who changes device or reloads has the old connection closed by the room.
+- **Expected behaviour changes in existing tests (invariant 9):** one-letter test credentials are now a paste mistake; the join body gains `pass`; the room registers `user-updated`; `onLeft` receives `{ closed }`.
+
+**S5 (credentials):** the development key and secret were measured against the rule printing « accepted: yes / no » only: both accepted, pair correct. The Production values are checked only at R-P3.
+
+**Evidence on the exact head** (filled in below with the head SHA): see [Evidence](#evidence-reliability-pr).
+
+### Release order, Production steps and rollback (for the owner)
+
+**Migration before deploy.** Reasons: (1) the old code runs unchanged on the new schema: `online_issue_join` and `online_resolve_join` keep their signatures and answers (the provider returned is the course's, as before; nothing sets `superseded_at` until the new code confirms), the three new functions are unused by it, and the upgrade rehearsal plus the unchanged SQL acceptance suite prove it; (2) the new code does not run on the old schema: the room's pass checks call `online_check_pass` / `online_confirm_pass`, which would not exist, so a room would never leave on a cancelled lesson or a revoked consent. Deploying first would therefore open a window without those checks; applying first opens none.
+
+| Step | What | Who / approval | Rollback |
+| --- | --- | --- | --- |
+| R-P0 | Read-only: ledger ceiling 128; `online_issue_join`, `online_resolve_join` and `evaluate_join` equal to their 117 bodies; no new function of these names; no real online course | operator, owner's approval | — |
+| R-P1 | Apply `129_online_room_reliability.sql` (dry run in a rolled-back transaction first), then read-only proofs: two nullable columns and their checks, the three functions with `security definer`, fixed `search_path`, `authenticated` only, `own_pass_state` without API grant, row counts unchanged | operator, owner's approval | Forward-only; the old code runs on it. A database rollback, if ever wanted, is a reviewed forward migration (drop the three functions, re-create the two from their 117 bodies; the columns may stay) |
+| R-P2 | Merge and deploy; the live switch stays as it is | owner | Revert the pull request: the old code runs on the new schema |
+| R-P3 | **Before any lesson, the director reads the status line** on « Cours en ligne »: « correctes » → continue; « incorrectes » or « absentes » → revert R-P2 the same day, no lesson until the revert is deployed (S5) | director | Revert |
+| R-P4 | Supervised test lesson on the test course (can be part of the full Production test of the week of 23/11 if the owner says so): second device takes over; a phone in aeroplane mode leaves the teacher's list; teacher reload; a parent takes the child's place; « Retirer »; « Terminer pour tous »; a group move | owner | Live switch off |
+| R-P5 | Documentation closeout (CURRENT_STATE, SECURITY_RULES, WORKFLOWS with section 7, ADR-008 status, plans index) | author of the closeout | — |
+
+### Evidence (reliability PR)
+
+Not filled: the work stopped at S3 before the final-head runs ([above](#stopped-at-s3-2026-11-17--owner-decision-needed)). On the uncommitted tree before the stop: `npm test` green, lint clean (one existing warning), SQL acceptance and SQLSTATE catalog green on a private stack, upgrade rehearsal 128→129 green, `test_verify.py` OK, lifecycle browser suite green (17 cases).
+
+### Not covered (UNVERIFIED)
+
+- **T-R6 (a learner in a group when a newer device takes over)**: not run against real Zoom; the marker and the pass check are the same code in a group (the command channel is per session and the pass check does not depend on it), proven only with the fake toolkit.
+- **Production key and secret**: the paste-mistake rule was measured on the development values only; the Production values are read at R-P3.
+- **Real phones** (iPhone Safari, Android Chrome), aeroplane mode on a real device, a closed laptop lid: simulated with a killed Chrome process and `setOffline` in installed Chrome on macOS.
+- **T-R4 on a real host's account settings**: the removal by the host page is proven with the development Video SDK account; the Production Video SDK account's settings are not read (no Zoom setting may be changed or read here).
+- **`scripts/test-online-learning-browser.mjs`** (real app, fake provider): its CSP is bound to the shared local stack on 54321, so it ran only in GitHub Verify's browser shard, not on the private stack.
+- **Webhook evidence**: belongs to the webhook PR.
 
 ## Revision record
 

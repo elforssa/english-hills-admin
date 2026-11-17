@@ -30,6 +30,19 @@
 // sender id); « lower » and « lower-all » are believed only from the host or a manager,
 // as Zoom lists them. The markers carry nothing about a person. No attendance, no
 // database. The trace says totals and states only, never a name or an id.
+//
+// Review notes of #199, applied with the reliability PR:
+//   - N2: a learner page whose participant Zoom lists as the host or a manager (an
+//     observer or a learner made co-host) gets no button: `available` is false for it, and
+//     a hand that was up goes down (« lower-self » is sent). Zoom's `user-updated` is read
+//     again for that;
+//   - N3: a hand that was up when the connection dropped, and a « lower-self » that Zoom
+//     refused, are owed: « lower-self » is sent again once the page is back in the main
+//     room (connected, or its command channel connected) until Zoom takes it, so the
+//     teacher's list never keeps a hand the learner no longer shows;
+//   - N5: a hand the teacher's page rebuilds from an answer to its question (after a
+//     reload of the teacher's page or a return from a group) joins the list without the
+//     amber cue or the screen-reader line; only a new « raise » gives them.
 
 export const HAND_PREFIX = 'eh-hand:';
 export const HAND_SIGNAL = Object.freeze({ raise: 'eh-hand:raise', lowerSelf: 'eh-hand:lower-self', ask: 'eh-hand:ask', raised: 'eh-hand:raised:', lower: 'eh-hand:lower', lowerAll: 'eh-hand:lower-all' });
@@ -71,7 +84,7 @@ export function parseHandMessage(payload) {
 //   learner: { teacher: false, available, up, loweredAt }
 export function createHands({ teacher, win, log = () => {}, onChange = () => {}, answerMs = 2000, now = () => Date.now() }) {
   const s = { stopped: false, connected: false, group: false, list: [], waiting: new Map(), askedAt: -Infinity, cue: { count: 0, label: '' },
-    up: false, raisedAt: 0, answered: -Infinity, answer: null, loweredAt: 0, traced: 0 };
+    up: false, raisedAt: 0, answered: -Infinity, answer: null, loweredAt: 0, traced: 0, owesLower: false, privileged: false };
 
   const client = () => win?.zmClient;
   const users = () => { try { return client()?.getAllUser?.() || null; } catch { return null; } };
@@ -89,7 +102,9 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
         .then(result => !(result instanceof Error) && !(result && typeof result === 'object' && 'reason' in result && !('text' in result)), () => false);
     } catch { return Promise.resolve(false); }
   };
-  const available = () => s.connected && !s.group;
+  // N2: Zoom lists this participant as the host or a manager (not for the teacher's list).
+  const privileged = () => { if (teacher) return false; const self = lookup(selfId()); return !!(self && (self.isHost || self.isManager)); };
+  const available = () => s.connected && !s.group && !(teacher ? false : s.privileged);
   // Zoom may update the participant's group state a moment after `Connected`: it is read
   // again when the command channel connects and when participants are added (both
   // follow every move), and once more before a hand goes up.
@@ -104,15 +119,16 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
 
   // ---- Teacher: the list ----
   const total = () => { if (s.list.length !== s.traced) { s.traced = s.list.length; log('hands', { total: s.list.length }); } };
-  const add = (id, at) => {
+  // `cue` false for a hand rebuilt from an answer (N5): no amber cue, no announcement.
+  const add = (id, at, cue = true) => {
     if (s.list.some(hand => hand.id === id)) return;
     const user = lookup(id);
-    if (!user) { if (!s.waiting.has(id) && s.waiting.size < MAX_WAITING) s.waiting.set(id, at); return; }
+    if (!user) { if (!s.waiting.has(id) && s.waiting.size < MAX_WAITING) s.waiting.set(id, { at, cue }); return; }
     if (user.isHost || user.isManager || id === selfId() || s.list.length >= MAX_HANDS) return;
     const name = String(user.displayName || '').trim() || HAND_TEXT.someone;
     const index = s.list.findIndex(hand => hand.at > at);
     s.list.splice(index < 0 ? s.list.length : index, 0, { id, name, at });
-    s.cue = { count: s.cue.count + 1, label: name };
+    if (cue) s.cue = { count: s.cue.count + 1, label: name };
     total(); emit();
   };
   const remove = id => {
@@ -125,7 +141,7 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
   const ask = () => { s.askedAt = now(); send(HAND_SIGNAL.ask); };
   const teacherMessage = ({ kind, from, age }) => {
     if (kind === 'raise') add(from, now());
-    else if (kind === 'raised') add(from, now() - s.askedAt <= ANSWER_WINDOW_MS ? now() - age * 1000 : now());
+    else if (kind === 'raised') add(from, now() - s.askedAt <= ANSWER_WINDOW_MS ? now() - age * 1000 : now(), false);
     else if (kind === 'lowerSelf') remove(from);
     else if (kind === 'lowerAll' && trusted(from) === true) { forget(); emit(); }
   };
@@ -152,11 +168,28 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
     const wait = s.answered + answerMs - now();
     if (wait <= 0) sendAnswer(); else s.answer = setTimeout(sendAnswer, wait);
   };
+  // N3: « lower-self » until Zoom takes it; sent only from the main room, where the
+  // teacher's list is.
+  const lowerSelf = () => {
+    s.owesLower = true;
+    if (s.up || !available()) return;
+    send(HAND_SIGNAL.lowerSelf).then(ok => { if (ok && !s.up) s.owesLower = false; });
+  };
+  const payDebt = () => { if (!teacher && s.owesLower && !s.up && available()) lowerSelf(); };
+  // N2: re-read whether Zoom lists this participant as the host or a manager.
+  const reprivilege = () => {
+    if (teacher) return false;
+    const now_ = s.connected && privileged();
+    if (now_ === s.privileged) return false;
+    s.privileged = now_;
+    if (now_ && s.up) { stopAnswer(); down('role'); s.owesLower = true; send(HAND_SIGNAL.lowerSelf).then(ok => { if (ok && !s.up) s.owesLower = false; }); }
+    return true;
+  };
   const learnerMessage = ({ kind, from }) => {
     if (kind === 'ask') answer();
     else if ((kind === 'lower' || kind === 'lowerAll') && s.up && trusted(from) === true) {
       down('teacher');
-      if (kind === 'lower') send(HAND_SIGNAL.lowerSelf);
+      if (kind === 'lower') lowerSelf();
     }
   };
 
@@ -170,15 +203,18 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
     connected() {
       if (s.stopped) return;
       s.connected = true; s.group = inGroup();
+      reprivilege();
       if (teacher && !s.group) ask();
+      payDebt();
       emit();
     },
     // Any reconnection (a move into a group or back, a network drop): the learner's hand
-    // goes down; the teacher's page forgets its list, which it rebuilds by asking.
+    // goes down and its « lower-self » is owed (N3); the teacher's page forgets its list,
+    // which it rebuilds by asking.
     reconnecting() {
       if (s.stopped) return;
       s.connected = false;
-      if (teacher) forget(); else { stopAnswer(); down('move'); }
+      if (teacher) forget(); else { stopAnswer(); if (s.up) s.owesLower = true; down('move'); }
       emit();
     },
     closed() {
@@ -189,18 +225,25 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
     },
     commandReady() {
       if (s.stopped) return;
-      if (regroup()) emit();
+      if (regroup() | reprivilege()) emit();
       if (teacher && available()) ask();
+      payDebt();
     },
     added() {
       if (s.stopped) return;
-      if (regroup()) emit();
-      if (!teacher) return;
-      for (const [id, at] of [...s.waiting]) {
+      if (regroup() | reprivilege()) emit();
+      if (!teacher) { payDebt(); return; }
+      for (const [id, { at, cue }] of [...s.waiting]) {
         if (!lookup(id)) continue;
         s.waiting.delete(id);
-        add(id, at);
+        add(id, at, cue);
       }
+    },
+    // Zoom's `user-updated`: a role may have changed (N2).
+    updated() {
+      if (s.stopped || teacher) return;
+      if (reprivilege()) emit();
+      payDebt();
     },
     removed(list) {
       if (s.stopped || !teacher) return;
@@ -208,9 +251,9 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
     },
     raise() {
       if (s.stopped || teacher || s.up) return false;
-      if (regroup()) emit();
+      if (regroup() | reprivilege()) emit();
       if (!available()) return false;
-      s.up = true; s.raisedAt = now(); s.loweredAt = 0;
+      s.up = true; s.raisedAt = now(); s.loweredAt = 0; s.owesLower = false;
       const raisedAt = s.raisedAt;
       log('hand', { state: 'up', by: 'self' });
       emit();
@@ -221,7 +264,7 @@ export function createHands({ teacher, win, log = () => {}, onChange = () => {},
       if (s.stopped || teacher || !s.up) return false;
       stopAnswer();
       down('self');
-      send(HAND_SIGNAL.lowerSelf);
+      lowerSelf();
       return true;
     },
     lowerOf(id) {

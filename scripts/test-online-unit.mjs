@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { baseLabel, courseLabels, providerDisplayName } from '../src/lib/online/label.mjs';
-import { onlineGate } from '../src/lib/online/gate.mjs';
+import { onlineGate, onlineCredentialShape } from '../src/lib/online/gate.mjs';
+import { hasPasteMistake, credentialPairShape } from '../src/lib/online/provider/credential-shape.mjs';
 import { getProvider, ADAPTER_METHODS } from '../src/lib/online/provider/index.mjs';
 import { onlineReason, onlineErrorText, ONLINE_REASON_TEXT } from '../src/lib/online/reasons.mjs';
-import { handleJoin, handleCourseAction, handleLessonAction, handleWebhook } from '../src/lib/online/handlers.mjs';
+import { handleJoin, handleCourseAction, handleLessonAction, handleWebhook, handleStatus } from '../src/lib/online/handlers.mjs';
 import { createZoomVideoProvider, zoomSessionName, ZOOM_SESSION_NAME } from '../src/lib/online/provider/zoom-video.mjs';
 
 // Labels: the same cases as the SQL suite (online_security.base_label).
@@ -36,8 +37,53 @@ assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO
 // zoom-video fails closed without both credential variables (A4).
 assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video' }), { open: false, reason: 'provider_invalid' });
 assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: 'k' }), { open: false, reason: 'provider_invalid' });
-assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: 'k', ONLINE_VIDEO_PROVIDER_API_SECRET: 's', VERCEL_ENV: 'production' }),
+assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: 'zoomKey1', ONLINE_VIDEO_PROVIDER_API_SECRET: 'zoomSecret1', VERCEL_ENV: 'production' }),
   { open: true, provider: 'zoom-video' });
+// [Reliability PR] One-letter values were accepted before ORR-r2; they are now a paste mistake (under 8 characters).
+assert.deepEqual(onlineGate({ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: 'k', ONLINE_VIDEO_PROVIDER_API_SECRET: 's', VERCEL_ENV: 'production' }),
+  { open: false, reason: 'provider_invalid' });
+
+// [Reliability PR] The paste-mistake rule (plan ORR-r2, section 2): no alphabet rule, no exact length.
+{
+  const KEY = 'AbC1-_.~xYz9', SECRETV = 'Zz9+/=!#$%&()*,:;<>?@[]^{|}';
+  for (const good of [KEY, SECRETV, 'a'.repeat(8), 'b'.repeat(512), 'x\\y-backslash', '0123456789']) assert.equal(hasPasteMistake(good), false, 'accepted: a well-formed value');
+  const CLASSES = {
+    leading: ' ' + KEY, trailing: KEY + ' ', tab: KEY + '\t', inner: 'AbC1 xYz9q', lineBreak: 'AbC1xYz9\nq', crlf: 'AbC1xYz9\r\n',
+    straightDouble: '"' + KEY + '"', straightSingle: "'" + KEY + "'", backtick: '`' + KEY, curlyLeft: '\u2018' + KEY, curlyRight: KEY + '\u2019',
+    curlyDoubleLeft: '\u201C' + KEY, curlyDoubleRight: KEY + '\u201D', guillemetLeft: '\u00AB' + KEY, guillemetRight: KEY + '\u00BB',
+    control: KEY + '\u0007', nul: KEY + '\u0000', del: KEY + '\u007F', zeroWidth: KEY + '\u200B', zeroWidthJoiner: 'AbC1\u200DxYz9', bom: '\uFEFF' + KEY,
+    noBreakSpace: 'AbC1\u00A0xYz9', nonAsciiLetter: 'AbC1éxYz9', cyrillic: 'AbC1\u0430xYz9', emoji: 'AbC1xYz9\u{1F600}',
+    seven: 'a'.repeat(7), fiveHundredThirteen: 'b'.repeat(513), empty: '',
+  };
+  for (const [name, value] of Object.entries(CLASSES)) assert.equal(hasPasteMistake(value), true, `refused: ${name}`);
+  assert.equal(hasPasteMistake(undefined), true); assert.equal(hasPasteMistake(12345678), true);
+  assert.equal(credentialPairShape(KEY, SECRETV), 'correct');
+  assert.equal(credentialPairShape(KEY, KEY), 'incorrect', 'the key pasted as the secret');
+  assert.equal(credentialPairShape('', SECRETV), 'absent'); assert.equal(credentialPairShape(KEY, undefined), 'absent');
+  for (const value of Object.values(CLASSES).filter(Boolean)) {
+    assert.equal(credentialPairShape(value, SECRETV), 'incorrect'); assert.equal(credentialPairShape(KEY, value), 'incorrect');
+  }
+  // The gate and the status words: a paste mistake in either value closes the gate with
+  // provider_invalid; the answers carry no value, length or class.
+  const ZENV = { ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: KEY, ONLINE_VIDEO_PROVIDER_API_SECRET: SECRETV };
+  assert.deepEqual(onlineGate(ZENV), { open: true, provider: 'zoom-video' });
+  for (const [name, value] of Object.entries(CLASSES).filter(([, v]) => v)) {
+    for (const field of ['ONLINE_VIDEO_PROVIDER_API_KEY', 'ONLINE_VIDEO_PROVIDER_API_SECRET']) {
+      const gate = onlineGate({ ...ZENV, [field]: value });
+      assert.deepEqual(gate, { open: false, reason: 'provider_invalid' }, `${name} in ${field}`);
+      assert.equal(onlineCredentialShape({ ...ZENV, [field]: value }), 'incorrect');
+    }
+  }
+  assert.deepEqual(onlineGate({ ...ZENV, ONLINE_VIDEO_PROVIDER_API_SECRET: KEY }), { open: false, reason: 'provider_invalid' }, 'key equal to secret');
+  assert.equal(onlineCredentialShape({ ...ZENV, ONLINE_VIDEO_PROVIDER_API_SECRET: '' }), 'absent');
+  assert.equal(onlineCredentialShape({ ONLINE_VIDEO_PROVIDER: 'fake' }), 'correct', 'the fake provider has no credential');
+  assert.equal(onlineCredentialShape({ ONLINE_VIDEO_PROVIDER: 'whereby' }), 'absent', 'a provider without an adapter');
+  assert.equal(onlineCredentialShape({}), 'absent');
+  assert.equal(getProvider('zoom-video').credentialShape({ ONLINE_VIDEO_PROVIDER_API_KEY: KEY, ONLINE_VIDEO_PROVIDER_API_SECRET: ' ' + SECRETV }), 'incorrect', 'the rule lives in the adapter');
+  // Nothing thrown or returned carries a value: the module has no log call and no message.
+  const source = (await import('node:fs')).readFileSync(new URL('../src/lib/online/provider/credential-shape.mjs', import.meta.url), 'utf8');
+  assert.ok(!/console\.|throw |Error\(/.test(source), 'the rule never logs or throws');
+}
 
 // Adapter interface with the fake provider.
 const fake = getProvider('fake');
@@ -114,7 +160,7 @@ for (const env of [{}, { ...LIVE, ONLINE_LEARNING_LIVE_ENABLED: 'false' }, { ...
   const result = await handleJoin({ body: { lesson: LESSON, student: null }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => service.client, getProvider });
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { provider: 'fake', embed: { kind: 'fake', displayName: 'Amal B.', role: 'participant', expiresAt: '2026-10-20T19:40:00.000Z' },
-    role: 'participant', display_label: 'Amal B.\u0007', expires_at: '2026-10-20T19:40:00.000Z' });
+    pass: JTI, role: 'participant', display_label: 'Amal B.\u0007', expires_at: '2026-10-20T19:40:00.000Z' });
   assert.deepEqual(user.calls, [['online_issue_join', { p_lesson: LESSON, p_student: null }]]);
   assert.deepEqual(service.calls, [['online_resolve_join', { p_jti: JTI }]]);
   noSecret(result);
@@ -123,6 +169,66 @@ for (const env of [{}, { ...LIVE, ONLINE_LEARNING_LIVE_ENABLED: 'false' }, { ...
   const user = userClient({ rpc: { online_issue_join: () => ({ data: { jti: JTI }, error: null }) } });
   const service = serviceClient({ online_resolve_join: () => ({ data: { provider: 'daily', room_ref: 'r1', display_label: 'A', provider_role: 'participant', expires_at: 'x' }, error: null }) });
   assert.equal((await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => service.client, getProvider })).body.reason, 'provider_invalid');
+}
+
+{ // [Reliability PR] Mint fails, old pass stays current: the adapter throws after the pass is
+  // inserted; the handler answers its error and confirms or supersedes nothing (B2).
+  const user = userClient({ rpc: { online_issue_join: () => ({ data: { jti: JTI }, error: null }) } });
+  const service = serviceClient({ online_resolve_join: () => ({ data: { provider: 'fake', room_ref: 'fake-room-0123456789abcdef', display_label: 'A', provider_role: 'participant', expires_at: '2026-10-20T19:40:00.000Z' }, error: null }) });
+  const failing = name => name === 'fake' ? { ...fake, mintJoinToken: async () => { throw new Error('mint failed ' + SECRET); } } : null;
+  const result = await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => service.client, getProvider: failing });
+  assert.deepEqual(result, { status: 502, body: { reason: 'provider_error' } });
+  assert.deepEqual([...user.calls, ...service.calls].map(([name]) => name), ['online_issue_join', 'online_resolve_join'], 'no confirmation and no supersession after a failed mint');
+  noSecret(result);
+}
+{ // [Reliability PR] The adapter is the pass's provider's, from the enabled set only.
+  const user = userClient({ rpc: { online_issue_join: () => ({ data: { jti: JTI }, error: null }) } });
+  const picked = [];
+  const pick = name => { picked.push(name); return getProvider(name); };
+  const service = serviceClient({ online_resolve_join: () => ({ data: { provider: 'fake', room_ref: 'fake-room-0123456789abcdef', display_label: 'A', provider_role: 'participant', expires_at: '2026-10-20T19:40:00.000Z' }, error: null }) });
+  const result = await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => service.client, getProvider: pick });
+  assert.equal(result.status, 200); assert.equal(result.body.provider, 'fake'); assert.equal(result.body.pass, JTI);
+  assert.equal(picked.at(-1), 'fake', 'the last adapter taken is the pass\'s provider');
+  // A pass of a provider that has an adapter but is not enabled (the configured one is fake).
+  const zoomPass = serviceClient({ online_resolve_join: () => ({ data: { provider: 'zoom-video', room_ref: 'eh-0123456789abcdef01234567', display_label: 'A', provider_role: 'participant', expires_at: '2026-10-20T19:40:00.000Z' }, error: null }) });
+  assert.deepEqual(await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => zoomPass.client, getProvider }),
+    { status: 503, body: { reason: 'provider_invalid' } }, 'a provider outside the enabled set is refused');
+  // A superseded pass is named as such; any other resolve refusal stays pass_invalid.
+  const superseded = serviceClient({ online_resolve_join: () => ({ data: null, error: { code: '42501', hint: 'online.superseded', message: 'x' } }) });
+  assert.deepEqual(await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => superseded.client, getProvider }),
+    { status: 409, body: { reason: 'superseded' } });
+  const other = serviceClient({ online_resolve_join: () => ({ data: null, error: { code: '42501', hint: 'online.course_inactive', message: 'x' } }) });
+  assert.deepEqual(await handleJoin({ body: { lesson: LESSON }, env: LIVE, getUserClient: async () => user.client, getServiceClient: () => other.client, getProvider }),
+    { status: 403, body: { reason: 'pass_invalid' } });
+  assert.equal(ONLINE_REASON_TEXT.superseded, 'Ce cours est ouvert sur un autre appareil ou dans un autre onglet.');
+}
+{ // [Reliability PR] GET /api/online/status: director and admin only, whatever the live switch
+  // and the gate say (binding note 1); words only.
+  const KEY = 'qKv7Wm-pZ0041x', SEC = 'rT8nB2-yH6xJ9w-0002';
+  const Z = { ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: KEY, ONLINE_VIDEO_PROVIDER_API_SECRET: SEC };
+  const cases = [
+    [{ ...Z }, 'correctes'],                                                           // live switch off
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true' }, 'correctes'],                     // gate open
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'false' }, 'correctes'],                    // gate_closed
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER_API_SECRET: SEC + '\n' }, 'incorrectes'], // provider_invalid: paste mistake
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER_API_SECRET: '' }, 'absentes'],          // provider_invalid: missing
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'nope' }, 'absentes'],                 // provider_invalid: unknown
+    [{ ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'fake', VERCEL_ENV: 'production' }, 'correctes'], // provider_invalid: fake in Production
+  ];
+  for (const role of ['director', 'admin']) for (const [env, keys] of cases) {
+    const user = userClient({ role });
+    const result = await handleStatus({ env, getUserClient: async () => user.client, getProvider });
+    assert.deepEqual(result, { status: 200, body: { keys } }, `${role}: ${keys}`);
+    assert.equal(user.calls.length, 0, 'the status reads no RPC');
+    const text = JSON.stringify(result);
+    for (const fragment of [KEY, SEC, KEY.slice(0, 6), SEC.slice(-6), 'line', 'quote', 'length']) assert.ok(!text.includes(fragment), `no ${fragment} in the status`);
+  }
+  for (const role of ['receptionist', 'teacher', 'parent', 'student', 'pending', null]) {
+    const user = userClient({ role });
+    assert.deepEqual(await handleStatus({ env: { ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true' }, getUserClient: async () => user.client, getProvider }), { status: 403, body: { reason: 'forbidden' } }, `${role} refused`);
+  }
+  const anon = userClient({ user: null });
+  assert.deepEqual(await handleStatus({ env: Z, getUserClient: async () => anon.client, getProvider }), { status: 401, body: { reason: 'unauthenticated' } });
 }
 
 // Activation route: refused with the gate off and for the fake provider in Production, before any provider call.
@@ -299,4 +405,4 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   assert.ok(!JSON.stringify(joinResult).includes(ZS) && !JSON.stringify(joinResult).includes('"room_ref"'), 'no secret, no room reference field in the join response');
 }
 
-console.log('PASS online unit regressions: labels, gate, fake and Zoom adapters, session names, webhook challenge, join/activation/close/lesson/webhook handlers, no secret, room reference or address in any response');
+console.log('PASS online unit regressions: labels, gate, paste-mistake rule, status route, per-pass adapter, mint fails keeps the old pass, fake and Zoom adapters, session names, webhook challenge, join/activation/close/lesson/webhook handlers, no secret, room reference or address in any response');

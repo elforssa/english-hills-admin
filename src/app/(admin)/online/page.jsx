@@ -3,8 +3,12 @@
 // Online courses for operations staff (D13). An online group is created in the group
 // form with an online programme; its course record, teacher, pattern and activation
 // are management actions on the course page.
+// Director and admin also see the status line (plan online-room-reliability.md, section 2,
+// reliability PR): whether the room provider's keys are correct, show a paste mistake or
+// are missing, from GET /api/online/status — words only, never a value.
 import { centreMonth } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Video, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,6 +22,28 @@ const STATUS = { draft: 'En préparation', active: 'Actif', closed: 'Clôturé' 
 
 function casablancaMonth() {
   return centreMonth();
+}
+
+const STATUS_KEYS_TEXT = { correctes: 'correctes', incorrectes: 'incorrectes', absentes: 'absentes' };
+
+function StatusLine() {
+  const status = useQuery({
+    queryKey: ['online', 'status'],
+    queryFn: async () => {
+      const response = await fetch('/api/online/status', { cache: 'no-store' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw body;
+      return body;
+    },
+    staleTime: 60000,
+    retry: false,
+  });
+  const keys = STATUS_KEYS_TEXT[status.data?.keys];
+  return (
+    <p className={`mb-4 rounded-lg border p-3 text-sm ${keys === 'correctes' ? 'bg-card' : keys ? 'border-red-200 bg-red-50 text-red-800' : 'bg-card text-muted-foreground'}`} data-testid="online-status-line">
+      Salle de cours en ligne — clés : {keys || (status.isPending ? '…' : 'état indisponible')}
+    </p>
+  );
 }
 
 function TeacherCounts() {
@@ -57,6 +83,7 @@ export default function OnlineCourses() {
         </div>
         <Button asChild variant="outline"><Link href="/groups"><Plus /> Nouveau groupe en ligne</Link></Button>
       </div>
+      {management && <StatusLine />}
       {courses.isPending && <p className="text-sm text-muted-foreground">Chargement…</p>}
       {courses.isError && <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{onlineErrorText(courses.error)}</p>}
       {courses.data?.length === 0 && <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">Aucun groupe en ligne. Créez un groupe avec le programme « Online » depuis Groupes & niveaux.</p>}

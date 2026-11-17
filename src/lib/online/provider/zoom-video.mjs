@@ -15,6 +15,7 @@
 // after the same checks (A3). No telemetry_tracking_id is ever set (A7). Zoom cannot
 // revoke an issued token, so supportsRevoke is false (D6 "where it does not").
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { credentialPairShape } from './credential-shape.mjs';
 
 export const ZOOM_SESSION_NAME = /^[a-z0-9._:-]{1,200}$/;
 const ROOM_REF = /^[A-Za-z0-9-]{1,40}$/;
@@ -55,6 +56,12 @@ export function createZoomVideoProvider(env = process.env, clock = () => Date.no
     id: 'zoom-video',
     supportsWebhooks: true,
     supportsRevoke: false,
+
+    // Paste mistakes only (plan ORR-r2, section 2): 'correct' | 'incorrect' | 'absent'.
+    // Never the value, its length or its class.
+    credentialShape(source = env) {
+      return credentialPairShape(source?.ONLINE_VIDEO_PROVIDER_API_KEY, source?.ONLINE_VIDEO_PROVIDER_API_SECRET);
+    },
 
     async createRoom({ courseRef }) {
       if (typeof courseRef !== 'string' || !courseRef) throw new Error('courseRef required');

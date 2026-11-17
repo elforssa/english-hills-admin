@@ -5,13 +5,15 @@
 // Run by npm test.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { startZoomRoom, roomSettled } from '../src/lib/online/zoom-room-session.mjs';
+import { startZoomRoom, roomSettled, closedKind, ROOM_NEWER } from '../src/lib/online/zoom-room-session.mjs';
+import { createLeftoverSweep } from '../src/lib/online/zoom-room-leftovers.mjs';
+import { createPassWatcher, passOutcome, closedOutcome, ROOM_PASS_TEXT } from '../src/lib/online/room-pass.mjs';
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
 import { whiteboardCapability, whiteboardDeviceRule, cspBlockedDetail, expectedCspRefusal, EXPECTED_CSP_REFUSAL, WHITEBOARD_SOURCES, WHITEBOARD_SIGNAL, WHITEBOARD_READ_ONLY_TEXT } from '../src/lib/online/zoom-whiteboard.mjs';
 import { groupOpenOptions, groupTimerSeconds, correctGroupTimer, GROUP_TIMER_DEFAULT_SECONDS } from '../src/lib/online/zoom-groups.mjs';
-import { dropToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, DEVICES_REASON, cameraReasonFromText, cameraReasonFromDevice, devicesReasonFromText, devicesReasonFromDevice, DEVICE_MESSAGES } from '../src/lib/online/zoom-toolkit-messages.mjs';
+import { dropToolkitJwtLog, restoreToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, DEVICES_REASON, cameraReasonFromText, cameraReasonFromDevice, devicesReasonFromText, devicesReasonFromDevice, DEVICE_MESSAGES } from '../src/lib/online/zoom-toolkit-messages.mjs';
 import { createHands, parseHandMessage, HAND_SIGNAL, HAND_PREFIX, HAND_TEXT, MAX_HANDS, MAX_WAITING, MAX_AGE_SECONDS, ANSWER_WINDOW_MS } from '../src/lib/online/zoom-hands.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
 
@@ -86,7 +88,7 @@ function open(toolkit, calls, logs, extra = {}) {
   await room.ready;
   assert.deepEqual(calls, ['join#1', 'resources:fr-FR', 'languageList:fr-FR', 'changeLanguage:fr-FR', 'setLanguage:fr-FR',
     'onSessionClosed#1', 'onSessionDestroyed#1', 'on:connection-change#1', 'on:user-added#1', 'on:user-removed#1',
-    'on:whiteboard-status-change#1', 'on:peer-whiteboard-state-change#1', 'on:command-channel-message#1', 'on:command-channel-status#1'], 'registration order');
+    'on:whiteboard-status-change#1', 'on:peer-whiteboard-state-change#1', 'on:command-channel-message#1', 'on:command-channel-status#1', 'on:user-updated#1'], 'registration order');
   assert.equal(toolkit.lastConfig.language, 'fr-FR');
   assert.deepEqual(toolkit.lastConfig.featuresOptions.preview, { enable: true, isAllowModifyName: false });
   assert.equal(win.count('pagehide'), 1, 'pagehide listener registered');
@@ -604,7 +606,7 @@ function open(toolkit, calls, logs, extra = {}) {
   // The source never looks at the reason text.
   const source = read('src/lib/online/zoom-room-session.mjs').replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/breakout|main session|subsession/i.test(source), 'no behaviour depends on the reason text');
-  assert.equal((source.match(/payload\?\.reason/g) || []).length, 3, 'the reason is only printed (connection, room move) or handed to the error mapping (on Fail)');
+  assert.equal((source.match(/payload\?\.reason/g) || []).length, 4, 'the reason is only printed (connection, room move), handed to the error mapping (on Fail) or mapped by closedKind (on Closed, reliability PR)');
   // Closed still leaves, once.
   toolkit.emit('connection-change', { state: 'Closed', reason: 'ended by host' });
   toolkit.close();
@@ -958,7 +960,7 @@ function fakeChannels() {
   const joinBody = page.slice(page.indexOf('const join = useCallback'), page.indexOf('}, [id, student]);'));
   assert.equal((joinBody.match(/if \(displaced\.current\) return;/g) || []).length, 4, 'entry, after roomSettled, after the pass request, after the window check');
   assert.match(joinBody, /await roomSettled\(\);\n\s+if \(displaced\.current\) return;\n\s+const result = await onlinePost/);
-  assert.match(joinBody, /await onlinePost\([^\n]+\n[^\n]*\n\s+if \(displaced\.current\) return;\n\s+if \(result\.ok\)/);
+  assert.match(joinBody, /await onlinePost\([^\n]+\n[^\n]*\n\s+if \(displaced\.current\) return;\n\s+if \(result\.ok[ )]/);
 }
 
 // 11. Toolkit messages (classroom polish, part C).
@@ -1030,9 +1032,9 @@ function fakeChannels() {
   assert.equal(french['preview.error_start_camera'], 'La caméra n’a pas pu démarrer : ');
   assert.equal(french['preview.error_start_devices'], 'Les périphériques n’ont pas pu démarrer : ');
   const session = read('src/lib/online/zoom-room-session.mjs');
-  assert.match(session, /dropToolkitJwtLog\(win\);\n\s+s\.stopCameraWatch = watchDeviceMessages\(win, resources,[^\n]*\n\s+const joining = toolkit\.joinSession/, 'both are in place before the join');
-  // The wrapper's comment says what is true (review note of #197): never removed, also after an in-app navigation.
-  assert.match(read('src/lib/online/zoom-toolkit-messages.mjs'), /Idempotent, and never removed: it stays installed for the life of the document[\s\S]*in-app navigation[\s\S]*Accepted \(review note of #197\)/);
+  assert.match(session, /s\.jwt = dropToolkitJwtLog\(win\);\n\s+s\.stopCameraWatch = watchDeviceMessages\(win, resources,[^\n]*\n\s+const joining = toolkit\.joinSession/, 'both are in place before the join');
+  // [Reliability PR] The wrapper's comment says what is true now: restored at the room's teardown.
+  assert.match(read('src/lib/online/zoom-toolkit-messages.mjs'), /Idempotent\. Restored at the room's teardown[\s\S]*only if the console still holds this\n\/\/ wrapper/);
 }
 
 // 12. Raise hand « Lever la main » (PR D design addendum, owner decisions of 2026-11-17).
@@ -1357,6 +1359,332 @@ function fakeChannels() {
     assert.ok(text.includes(`« ${french[key]} »`), `the guide quotes the room's own label for ${key}: « ${french[key]} »`);
   // The one English word quoted on purpose is what Zoom shows the learner (N8).
   assert.ok(!/sous-groupe|breakout|subsession/i.test(text.replace('« Subsession 1 »', '')));
+}
+
+// 13. [Reliability PR] Plan online-room-reliability.md (ORR-r2), section 1 and 4.
+// Manual timers for the watcher and the sweep.
+function manualTimers() {
+  let next = 1;
+  const intervals = new Map(), timeouts = new Map();
+  return {
+    setInterval(fn) { const id = next++; intervals.set(id, fn); return id; },
+    clearInterval(id) { intervals.delete(id); },
+    setTimeout(fn) { const id = next++; timeouts.set(id, fn); return id; },
+    clearTimeout(id) { timeouts.delete(id); },
+    async round() { for (const fn of [...intervals.values()]) fn(); await tick(0); await tick(0); },
+    async fire() { const all = [...timeouts.entries()]; timeouts.clear(); for (const [, fn] of all) fn(); await tick(0); await tick(0); },
+    get intervals() { return intervals.size; }, get timeouts() { return timeouts.size; },
+  };
+}
+const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222',
+  C = '33333333-3333-4333-8333-333333333333', D = '44444444-4444-4444-8444-444444444444';
+{
+  // The leftover sweep matches on userKey, never userIdentity; never itself; survives a refusal.
+  const removed = [], logs = [];
+  let refuse = false, users;
+  const win = { zmClient: {
+    getAllUser: () => users,
+    getCurrentUserInfo: () => ({ userId: 1 }),
+    removeUser: id => { removed.push(id); return refuse ? Promise.reject(new Error('not host')) : Promise.resolve(''); },
+  } };
+  const reset = () => { users = [
+    { userId: 1, displayName: 'Sara L.', userKey: A, isHost: true },          // itself, listed: never removed
+    { userId: 2, displayName: 'Amal B.', userKey: B },                        // listed: removed
+    { userId: 3, displayName: 'Nour K.', userIdentity: C, userKey: D },       // listed userIdentity, other userKey: kept
+    { userId: 4, displayName: 'Amal B.', userKey: B.toUpperCase() },          // listed, other case: removed
+    { userId: 5, displayName: 'Rim T.' },                                     // no userKey: kept
+  ]; };
+  reset();
+  let ids = [B, C, A, 'not-an-id', 42];
+  const timers = manualTimers();
+  const sweep = createLeftoverSweep({ win, listLeftovers: async () => ids, log: (event, detail) => logs.push([event, detail]), timers });
+  sweep.added();
+  await tick(0);
+  assert.deepEqual(removed, [], 'nothing before the page is connected as the host');
+  sweep.connected();
+  await tick(0); await tick(0);
+  assert.deepEqual(removed, [2, 4], 'removes the listed userKey only, never itself, never by userIdentity');
+  assert.deepEqual(logs.map(([event, detail]) => [event, detail.label, detail.state]), [['leftover removed', 'Amal B.', 'ok'], ['leftover removed', 'Amal B.', 'ok']]);
+  assert.ok(!JSON.stringify(logs).includes(B) && !JSON.stringify(logs).includes('userId'), 'the trace says the label only');
+  // Zoom refuses: nothing else happens, the next round tries again.
+  removed.length = 0; logs.length = 0; refuse = true; reset();
+  await timers.round();
+  assert.deepEqual(removed, [2, 4]);
+  assert.deepEqual(logs.map(([, detail]) => detail.state), ['refused', 'refused']);
+  refuse = false; removed.length = 0;
+  await timers.round();
+  assert.deepEqual(removed, [2, 4], 'the next round tries again');
+  // The list cannot be read (not the host, network): nothing else happens.
+  removed.length = 0; logs.length = 0; reset();
+  const failing = createLeftoverSweep({ win, listLeftovers: async () => { throw new Error('forbidden'); }, log: (event, detail) => logs.push([event, detail]), timers: manualTimers() });
+  failing.connected(); await tick(0); await tick(0);
+  assert.deepEqual(removed, []); assert.deepEqual(logs, [['leftovers', { state: 'refused' }]]);
+  // Arrivals are coalesced into one sweep.
+  const t2 = manualTimers();
+  const counted = [];
+  const sweep2 = createLeftoverSweep({ win, listLeftovers: async () => { counted.push(1); return []; }, timers: t2 });
+  sweep2.connected(); await tick(0);
+  sweep2.added(); sweep2.added(); sweep2.added();
+  assert.equal(t2.timeouts, 1, 'one coalesced sweep for a burst of arrivals');
+  await t2.fire();
+  assert.equal(counted.length, 2);
+  sweep2.stop(); assert.equal(t2.intervals, 0);
+  sweep.stop(); ids = [];
+  // The module never reads userIdentity.
+  const code = read('src/lib/online/zoom-room-leftovers.mjs').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!code.includes('userIdentity') && code.includes('userKey') && code.includes('removeUser'));
+}
+{
+  // In the room: the teacher's page sweeps at Connected and on user-added; a learner's page never does.
+  for (const [hands, expected] of [['teacher', 2], ['learner', 0]]) {
+    const calls = [], logs = [], toolkit = fakeToolkit(calls);
+    let asked = 0;
+    const r = open(toolkit, calls, logs, { hands, listLeftovers: async () => { asked++; return []; } });
+    await r.room.ready;
+    toolkit.connect(); await tick(0);
+    toolkit.emit('user-added', [{ userId: 9, displayName: 'Rim T.' }]);
+    await tick(1100);
+    assert.equal(asked, expected, `${hands}: ${expected} sweeps`);
+    await r.room.stop();
+  }
+}
+{
+  // Closed by the host: each of Zoom's three reasons, and none.
+  assert.equal(closedKind('kicked by host'), 'removed');
+  assert.equal(closedKind('expeled by host'), 'removed');
+  assert.equal(closedKind('ended by host'), 'ended');
+  for (const other of [undefined, '', 'free meeting ended', 'rejoin_timeout', 'Kicked By Host']) assert.equal(closedKind(other), null);
+  for (const [reason, closed] of [['kicked by host', 'removed'], ['expeled by host', 'removed'], ['ended by host', 'ended'], [undefined, null], ['free meeting ended', null]]) {
+    const calls = [], logs = [], toolkit = fakeToolkit(calls);
+    const seen = [];
+    const r = open(toolkit, calls, logs, { onLeft: detail => seen.push(detail) });
+    await r.room.ready;
+    toolkit.connect(); await tick(0);
+    toolkit.emit('connection-change', { state: 'Closed', reason });
+    if (!closed) toolkit.close();
+    toolkit.close();
+    await tick(20);
+    assert.deepEqual(seen, [{ closed }], `${reason}: onLeft once with closed=${closed}`);
+  }
+  // The page's answer.
+  const check = answer => async () => answer;
+  assert.deepEqual(await closedOutcome('ended', () => { throw new Error('no check for an end'); }), { kind: 'ended' });
+  assert.deepEqual(await closedOutcome(null, check(null)), { kind: 'portal' });
+  assert.deepEqual(await closedOutcome('removed', check({ ok: true, superseded: false, revoked: false })), { kind: 'removed' });
+  assert.deepEqual(await closedOutcome('removed', check({ ok: true, superseded: true, revoked: false })), { kind: 'superseded' });
+  assert.deepEqual(await closedOutcome('removed', check({ ok: true, superseded: false, revoked: true })), { kind: 'left', reason: 'pass_invalid' });
+  assert.deepEqual(await closedOutcome('removed', check({ ok: false, reason: 'guest_removed', superseded: false, revoked: true })), { kind: 'left', reason: 'guest_removed' });
+  assert.deepEqual(await closedOutcome('removed', async () => { throw new Error('network'); }), { kind: 'removed' });
+  assert.equal(ROOM_PASS_TEXT.removed, 'L’enseignant vous a retiré du cours.');
+  assert.equal(ROOM_PASS_TEXT.ended, 'L’enseignant a terminé le cours pour tous.');
+  assert.equal(ROOM_PASS_TEXT.superseded, 'Ce cours est ouvert sur un autre appareil ou dans un autre onglet.');
+  assert.equal(ROOM_PASS_TEXT.tookOver('Sara B.'), 'Vous avez pris la place de Sara B. dans ce cours : son autre connexion a été fermée.');
+}
+{
+  // The newer-device marker: sent on request, at most once per boardAnswerMs, again once
+  // when the command channel connects; received, it calls onNewer.
+  const calls = [], logs = [], toolkit = fakeToolkit(calls);
+  const sent = [];
+  let newer = 0;
+  const r = open(toolkit, calls, logs, { boardAnswerMs: 40, onNewer: () => { newer++; } });
+  r.win.zmClient = { getCommandClient: () => ({ send: text => { sent.push(text); return Promise.resolve(''); } }), getAllUser: () => [] };
+  await r.room.ready;
+  toolkit.connect(); await tick(0);
+  assert.equal(r.room.announceNewer(), true);
+  r.room.announceNewer(); r.room.announceNewer();
+  assert.deepEqual(sent.filter(t => t === ROOM_NEWER), [ROOM_NEWER], 'once at once');
+  await tick(60);
+  assert.deepEqual(sent.filter(t => t === ROOM_NEWER), [ROOM_NEWER, ROOM_NEWER], 'one trailing marker for a burst');
+  toolkit.emit('command-channel-status', 'Connected');
+  await tick(60);
+  assert.equal(sent.filter(t => t === ROOM_NEWER).length, 3, 'once more when the channel connects');
+  toolkit.emit('command-channel-status', 'Connected');
+  await tick(60);
+  assert.equal(sent.filter(t => t === ROOM_NEWER).length, 3, 'only once');
+  toolkit.emit('command-channel-message', { text: ROOM_NEWER, senderId: '12' });
+  toolkit.emit('command-channel-message', { text: ROOM_NEWER + 'x', senderId: '12' });
+  assert.equal(newer, 1, 'the exact marker only');
+  await r.room.stop();
+  assert.equal(r.room.announceNewer(), false, 'nothing after the room ended');
+}
+{
+  // The console wrapper is restored at teardown, and only if it is still ours.
+  const original = function log() {};
+  const win = { console: { log: original } };
+  assert.equal(dropToolkitJwtLog(win), true);
+  assert.equal(dropToolkitJwtLog(win), true);
+  assert.equal(restoreToolkitJwtLog(win), false, 'a second room still uses it');
+  assert.notEqual(win.console.log, original);
+  assert.equal(restoreToolkitJwtLog(win), true);
+  assert.equal(win.console.log, original, 'the original is back');
+  assert.equal(restoreToolkitJwtLog(win), false, 'nothing to restore twice');
+  dropToolkitJwtLog(win);
+  const other = function otherLog() {};
+  win.console.log = other;
+  assert.equal(restoreToolkitJwtLog(win), false);
+  assert.equal(win.console.log, other, 'a console.log replaced since is left alone');
+  // In the room: on leave (Closed), on an error and on unmount.
+  for (const end of ['closed', 'error', 'unmount']) {
+    const calls = [], logs = [], toolkit = fakeToolkit(calls);
+    const roomWin = fakeWindow();
+    const before = function log() {};
+    roomWin.console = { log: before };
+    const r = open(toolkit, calls, logs, { win: roomWin });
+    await r.room.ready;
+    assert.notEqual(roomWin.console.log, before, `${end}: wrapped while the room lives`);
+    toolkit.connect(); await tick(0);
+    if (end === 'closed') { toolkit.close(); await tick(20); }
+    else if (end === 'error') { toolkit.emit('connection-change', { state: 'Fail', errorCode: 1, reason: 'x' }); await tick(20); }
+    else await r.room.stop();
+    await roomSettled();
+    assert.equal(roomWin.console.log, before, `${end}: restored at teardown`);
+  }
+}
+{
+  // The pass watcher: confirm at join, retried after a failure, acting on the answer.
+  const timers = manualTimers();
+  const asked = [], outcomes = [], events = [];
+  const answers = { online_confirm_pass: [new Error('network'), new Error('503'), { ok: true, superseded: false, revoked: false, superseded_others: 1, took_over_other_account: true }], online_check_pass: [] };
+  const rpc = async (name, args) => {
+    asked.push([name, args.p_jti]);
+    const next = answers[name].shift() ?? { ok: true, superseded: false, revoked: false };
+    if (next instanceof Error) throw next;
+    return next;
+  };
+  let clock = 0;
+  const watch = createPassWatcher({ pass: A, rpc, timers, now: () => clock, onOutcome: o => outcomes.push(o),
+    onTookOver: () => events.push('took over'), onSupersededOthers: () => events.push('newer'), log: (event, detail) => events.push(`${event}:${detail.state}`) });
+  await timers.round();
+  assert.deepEqual(asked, [['online_check_pass', A]], 'before the join: the check only');
+  asked.length = 0;
+  watch.joined(); await tick(0); await tick(0);
+  assert.deepEqual(asked, [['online_confirm_pass', A]], 'confirmed at once when inside (N7)');
+  assert.deepEqual(outcomes, [], 'a failed confirmation keeps the room');
+  assert.equal(watch.confirmed, false);
+  watch.joined(); await tick(0);
+  assert.equal(asked.length, 1, 'a second Connected does not confirm again');
+  await timers.round();
+  assert.deepEqual(asked.map(([name]) => name), ['online_confirm_pass', 'online_confirm_pass'], 'retried at the next 10-second round');
+  assert.equal(watch.confirmed, false);
+  await timers.round();
+  assert.equal(watch.confirmed, true);
+  assert.deepEqual(events.filter(e => !e.includes(':')), ['newer', 'took over'], 'acts on the answer');
+  assert.deepEqual(outcomes, []);
+  await timers.round();
+  assert.equal(asked.at(-1)[0], 'online_check_pass', 'then checks every round');
+  // A newer device's marker: one check at once, at most once per gap, one trailing.
+  asked.length = 0; clock = 100000;
+  watch.checkNow(); await tick(0);
+  watch.checkNow(); watch.checkNow();
+  assert.equal(asked.length, 1); assert.equal(timers.timeouts, 1);
+  await timers.fire();
+  assert.equal(asked.length, 2, 'one trailing check');
+  // Superseded: the card, once; the watcher stops.
+  answers.online_check_pass.push({ ok: true, superseded: true, revoked: false });
+  await timers.round();
+  assert.deepEqual(outcomes, [{ kind: 'superseded' }]);
+  assert.equal(timers.intervals, 0, 'stopped: no automatic retry');
+  // An older pass confirming late is told superseded and acts on it.
+  const late = [];
+  const t2 = manualTimers();
+  const w2 = createPassWatcher({ pass: B, rpc: async () => ({ ok: true, superseded: true, revoked: false, superseded_others: 0, took_over_other_account: false }), timers: t2, onOutcome: o => late.push(o) });
+  w2.joined(); await tick(0); await tick(0);
+  assert.deepEqual(late, [{ kind: 'superseded' }]);
+  // Revoked, not qualifying, and a failed check.
+  assert.deepEqual(passOutcome({ ok: true, superseded: false, revoked: true }), { kind: 'left', reason: 'pass_invalid' });
+  assert.deepEqual(passOutcome({ ok: false, reason: 'lesson_cancelled', superseded: false, revoked: false }), { kind: 'left', reason: 'lesson_cancelled' });
+  assert.deepEqual(passOutcome({ ok: true, superseded: false, revoked: false }), { kind: 'stay' });
+  assert.deepEqual(passOutcome(null), { kind: 'stay' });
+  const t3 = manualTimers(); const kept = [];
+  const w3 = createPassWatcher({ pass: C, rpc: async () => { throw new Error('offline'); }, timers: t3, onOutcome: o => kept.push(o) });
+  await t3.round(); await t3.round();
+  assert.deepEqual(kept, [], 'a failed check keeps the room');
+  w3.stop();
+  // Provider-neutral: no Zoom word in the watcher.
+  const code = read('src/lib/online/room-pass.mjs').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/zoom|userKey|zmClient/i.test(code));
+}
+{
+  // Raise hand, review notes of #199: N2 (no button for a host or manager page), N3
+  // (lower-self owed after a drop or a refused send), N5 (no cue for a rebuilt hand).
+  const sent = [];
+  let me = { userId: 20, displayName: 'Amal B.' }, accept = true, sub = 'initial';
+  const users = () => [{ userId: 7, displayName: 'Sara L.', isHost: true }, me, { userId: 21, displayName: 'Nour K.' }];
+  const win = { zmClient: { getAllUser: users, getCurrentUserInfo: () => me, getSubsessionClient: () => ({ getUserStatus: () => sub }),
+    getCommandClient: () => ({ send: text => { sent.push(text); return accept ? Promise.resolve('') : Promise.reject(new Error('refused')); } }) } };
+  const states = [];
+  const learner = createHands({ teacher: false, win, onChange: state => states.push(state) });
+  learner.connected();
+  assert.equal(states.at(-1).available, true);
+  // N3: a drop with the hand up, then back: lower-self is sent.
+  assert.equal(learner.raise(), true); await tick(0);
+  sent.length = 0;
+  learner.reconnecting();
+  assert.deepEqual(sent, [], 'nothing can be sent while reconnecting');
+  learner.connected(); await tick(0);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf], 'owed lower-self sent once back');
+  learner.commandReady(); await tick(0);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf], 'paid: not sent again');
+  // N3: a refused lower-self is sent again at the next chance.
+  learner.raise(); await tick(0);
+  sent.length = 0; accept = false;
+  learner.lower(); await tick(0);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf]);
+  accept = true;
+  learner.commandReady(); await tick(0);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf, HAND_SIGNAL.lowerSelf], 'retried after a refusal');
+  learner.added(); await tick(0);
+  assert.equal(sent.length, 2, 'not after it was taken');
+  // Inside a group: owed, not sent there.
+  learner.raise(); await tick(0); sent.length = 0;
+  learner.reconnecting(); sub = 'in room'; learner.connected(); await tick(0);
+  assert.deepEqual(sent, [], 'not inside a group');
+  sub = 'initial'; learner.reconnecting(); learner.connected(); await tick(0);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf], 'sent back in the main room');
+  // N2: made co-host with the hand up: the hand goes down, lower-self is sent, no button.
+  learner.raise(); await tick(0); sent.length = 0;
+  me = { ...me, isManager: true };
+  learner.updated(); await tick(0);
+  assert.equal(states.at(-1).available, false, 'no button for a manager');
+  assert.equal(states.at(-1).up, false);
+  assert.deepEqual(sent, [HAND_SIGNAL.lowerSelf]);
+  assert.equal(learner.raise(), false, 'a manager cannot raise');
+  me = { userId: 20, displayName: 'Amal B.' };
+  learner.updated();
+  assert.equal(states.at(-1).available, true, 'the button comes back');
+  // N2 at the join: a page whose participant is the host has no button.
+  me = { userId: 7, displayName: 'Sara L.', isHost: true };
+  const hostStates = [];
+  const hostLearner = createHands({ teacher: false, win, onChange: state => hostStates.push(state) });
+  hostLearner.connected();
+  assert.equal(hostStates.at(-1).available, false);
+  me = { userId: 20, displayName: 'Amal B.' };
+  learner.stop(); hostLearner.stop();
+  // N5: a hand rebuilt from an answer joins without the cue; a new raise gives it.
+  const tStates = [];
+  let clock = 1000000;
+  const teacherWin = { zmClient: { ...win.zmClient, getCurrentUserInfo: () => ({ userId: 7 }), getCommandClient: () => ({ send: () => Promise.resolve('') }) } };
+  const teacherHands = createHands({ teacher: true, win: teacherWin, now: () => clock, onChange: state => tStates.push(state) });
+  teacherHands.connected();
+  teacherHands.message({ text: `${HAND_SIGNAL.raised}30`, senderId: '20' });
+  assert.deepEqual(tStates.at(-1).hands.map(h => h.name), ['Amal B.']);
+  assert.equal(tStates.at(-1).cue.count, 0, 'a restored hand gives no cue');
+  teacherHands.message({ text: HAND_SIGNAL.raise, senderId: '21' });
+  assert.equal(tStates.at(-1).cue.count, 1, 'a new raise gives the cue');
+  assert.equal(tStates.at(-1).cue.label, 'Nour K.');
+  // A restored hand waiting for its sender keeps no cue.
+  teacherHands.message({ text: `${HAND_SIGNAL.raised}5`, senderId: '99' });
+  teacherWin.zmClient.getAllUser = () => [...users(), { userId: 99, displayName: 'Rim T.' }];
+  teacherHands.added([{ userId: 99 }]);
+  assert.deepEqual(tStates.at(-1).hands.map(h => h.name).sort(), ['Amal B.', 'Nour K.', 'Rim T.']);
+  assert.equal(tStates.at(-1).cue.count, 1, 'still no cue for a rebuilt hand');
+  teacherHands.stop();
+}
+{
+  // The teacher guide: « Retirer » is not a ban.
+  const guide = read('src/app/(admin)/teacher-portal/online/page.jsx');
+  const text = guide.slice(guide.indexOf('data-testid="room-guide"'), guide.indexOf('</details>')).replace(/<[^>]+>/g, '');
+  assert.match(text, /« Retirer » n’est pas une exclusion : l’apprenant retiré peut revenir avec « Rejoindre »\./);
 }
 
 console.log('online room unit regressions passed');

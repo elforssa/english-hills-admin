@@ -12,6 +12,7 @@
 // development build. Run by npm test.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import config, { GLOBAL_PERMISSIONS_POLICY, ROOM_PERMISSIONS_POLICY, ZOOM_CONNECT_HOSTS, ZOOM_SCRIPT_HOSTS, ZOOM_WHITEBOARD_SOURCES } from '../next.config.mjs';
 
 const rules = await config.headers();
@@ -139,4 +140,15 @@ assert.equal(production.room, "default-src 'self'; base-uri 'self'; object-src '
   'the Production room policy, in full');
 checkWhiteboard(evaluate({ NODE_ENV: 'development' }), 'development build');
 console.log('PASS online room whiteboard sources: two path-scoped sources in script-src and style-src, blob: in connect-src only, worker-src as on main, no wildcard, catch-all unchanged');
-console.log('PASS online room headers: camera, microphone and the Zoom hosts on /online/room/* only; global headers elsewhere; no COOP/COEP; script and worker sources explicit');
+// [Reliability PR] /online/meeting/<lesson> is reserved for the Zoom Meeting SDK room (plan
+// online-room-reliability.md, section 6, D14): outside /online/room/*, it carries exactly
+// the catch-all headers today, and no rule names it.
+{
+  const catchAll = Object.fromEntries(rules[0].headers.map(h => [h.key, h.value]));
+  for (const path of ['/online/meeting/3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b', '/online/meeting', '/online/meeting/x/y'])
+    assert.deepEqual(effective(path), catchAll, `${path}: the catch-all headers only`);
+  assert.ok(!rules.some(rule => rule.source.includes('meeting')), 'no header rule for the reserved path yet');
+  assert.ok(!/online\/meeting/.test(readFileSync(new URL('../src/middleware.js', import.meta.url), 'utf8')), 'the middleware does not name it either');
+}
+
+console.log('PASS online room headers: camera, microphone and the Zoom hosts on /online/room/* only; global headers elsewhere; no COOP/COEP; script and worker sources explicit; /online/meeting/* reserved with the catch-all headers only');

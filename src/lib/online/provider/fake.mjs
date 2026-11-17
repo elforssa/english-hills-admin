@@ -10,6 +10,8 @@ export const fakeProvider = Object.freeze({
   id: 'fake',
   supportsWebhooks: true,
   supportsRevoke: true,
+  // The fake provider has no credential (the gate refuses it in Production).
+  credentialShape() { return 'correct'; },
 
   async createRoom({ courseRef }) {
     if (typeof courseRef !== 'string' || !courseRef) throw new Error('courseRef required');

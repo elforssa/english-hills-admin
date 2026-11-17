@@ -28,6 +28,13 @@
 //     room, on a phone too, hidden inside a group, lowered by the teacher with a line
 //     saying so), the teacher's « Mains levées (n) » (order, cue, « Baisser », « Baisser
 //     toutes les mains », a leave), and spoofed lowers from a learner change nothing.
+//   - [Reliability PR] newest connection wins (plan online-room-reliability.md): a second
+//     device that enters supersedes the first at confirmation; the first shows the card
+//     at once on the marker, with no automatic retry, and « Utiliser cet appareil » takes
+//     the room back; a device that never reaches the room takes nothing; a failed
+//     confirmation is retried and changes nothing meanwhile; the parent's notice; the
+//     removed and ended texts; the teacher's page removes a leftover by userKey; the
+//     token-log wrapper is gone once the room has ended.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -38,7 +45,7 @@ import { CAMERA_REASON, DEVICES_REASON } from '../src/lib/online/zoom-toolkit-me
 setTimeout(() => { console.error('FAIL online room lifecycle browser test stalled'); process.exit(1); }, 4 * 60_000).unref();
 const harness = await buildRoomHarness({ fake: true });
 let passes = 0;
-const { server, origin } = await serveRoomHarness({ ...harness, embed: async query => (await new Promise(resolve => setTimeout(resolve, Number(query.delay) || 0)), { kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.', role: query.role === 'host' ? 'host' : 'participant' }) });
+const { server, origin, model } = await serveRoomHarness({ ...harness, embed: async query => (await new Promise(resolve => setTimeout(resolve, Number(query.delay) || 0)), { kind: 'zoom-video', token: `pass-${++passes}-${randomBytes(4).toString('hex')}`, sessionName: `room.${query.lesson}`, displayName: 'Amal B.', role: query.role === 'host' ? 'host' : 'participant' }) });
 const browser = await chromium.launch({ headless: true });
 const ok = name => console.log(`PASS ${name}`);
 const calls = page => page.evaluate(() => window.__zoom?.calls.slice() || []);
@@ -495,6 +502,153 @@ try {
   assert.deepEqual(await handsSent(teacherTab), ['eh-hand:ask']);
   await teacherTab.close();
   ok('raise hand: the learner\'s button (states, hidden in a group, phone), the teacher\'s panel (order, cue, « Baisser », « Baisser toutes les mains »); spoofed lowers change nothing');
+
+  // ---- [Reliability PR] ----
+  {
+  const device = async (query, { route } = {}) => {
+    const ctx = await browser.newContext();
+    const tab = await ctx.newPage();
+    tab.on('pageerror', error => errors.push(String(error?.message || error)));
+    const lines = [];
+    tab.on('console', message => lines.push(message.text()));
+    if (route) await tab.route('**/rpc/online_confirm_pass', route);
+    await tab.goto(`${origin}/?${new URLSearchParams(query)}`);
+    await phase(tab, 'in_room');
+    await joined(tab, 1);
+    return { ctx, tab, lines };
+  };
+  const passOf = tab => tab.evaluate(() => window.__pass);
+  const passState = jti => model.passes.find(p => p.jti === jti);
+  const inside = tab => tab.evaluate(() => window.__zoom.connect());
+  const marker = tab => tab.evaluate(() => window.__zoom.emit('command-channel-message', { senderId: '55', text: 'eh-room:newer' }));
+  const SUPERSEDED = 'Ce cours est ouvert sur un autre appareil ou dans un autre onglet.';
+
+  // Two devices, one person: the newer one that reaches the room wins; the marker is
+  // enough (the older device's own round is a minute away here).
+  const first = await device({ lesson: 'r1', person: 'p9', passMs: '60000' });
+  await inside(first.tab);
+  const firstPass = await passOf(first.tab);
+  await new Promise(resolve => setTimeout(resolve, 200));
+  assert.equal(passState(firstPass).confirmed, true, 'the first device confirmed once inside');
+  // A second device that never reaches the room takes nothing.
+  const stalled = await device({ lesson: 'r1', person: 'p9', passMs: '300' });
+  await stalled.tab.waitForTimeout(800);
+  assert.equal(passState(firstPass).superseded, false, 'a device that never entered supersedes nothing');
+  assert.equal(await first.tab.evaluate(() => window.__phase), 'in_room');
+  await stalled.ctx.close();
+  // The second device enters: the first is superseded at its confirmation.
+  const second = await device({ lesson: 'r1', person: 'p9', passMs: '60000' });
+  await inside(second.tab);
+  await second.tab.waitForFunction(() => window.__zoom.sent.includes('eh-room:newer'), null, { timeout: 5000 });
+  assert.equal(passState(firstPass).superseded, true);
+  assert.equal(await first.tab.evaluate(() => window.__phase), 'in_room', 'not before its check');
+  await marker(first.tab);
+  await phase(first.tab, 'superseded');
+  assert.equal((await first.tab.getByTestId('room-superseded').locator('p').innerText()).trim(), SUPERSEDED);
+  await first.tab.waitForFunction(() => window.__zoom.calls.includes('destroy:end'));
+  await first.tab.waitForTimeout(1500);
+  assert.equal((await calls(first.tab)).filter(c => c.startsWith('join#')).length, 1, 'no automatic retry');
+  assert.equal(await second.tab.getByTestId('room-took-over').count(), 0, 'the same account is not told it took over');
+  // « Utiliser cet appareil »: a new pass, which takes the room back once inside.
+  await first.tab.getByRole('button', { name: 'Utiliser cet appareil' }).click();
+  await phase(first.tab, 'in_room');
+  await joined(first.tab, 2);
+  await inside(first.tab);
+  await first.tab.waitForFunction(() => window.__zoom.sent.includes('eh-room:newer'), null, { timeout: 5000 });
+  await marker(second.tab);
+  await phase(second.tab, 'superseded');
+  ok('[Reliability PR] two devices: the newer one in the room wins on the marker, no automatic retry, « Utiliser cet appareil » takes it back; a device that never entered takes nothing');
+
+  // The teacher's page removes the leftover by userKey, never by userIdentity, never itself.
+  const leftover = model.passes.find(p => p.lesson === 'r1' && p.superseded).jti;
+  const teacher = await device({ lesson: 'r1', person: 't1', role: 'host', passMs: '60000' });
+  await teacher.tab.evaluate(([key, other]) => {
+    window.__zoom.users = [{ userId: 1, self: true, isHost: true, displayName: 'Sara L.' }, { userId: 30, displayName: 'Amal B.', userKey: key },
+      { userId: 31, displayName: 'Nour K.', userIdentity: key, userKey: other }, { userId: 32, displayName: 'Rim T.' }];
+  }, [leftover, '99999999-9999-4999-8999-999999999999']);
+  await inside(teacher.tab);
+  await teacher.tab.waitForFunction(() => window.__zoom.removed.length > 0, null, { timeout: 5000 });
+  await teacher.tab.waitForTimeout(300);
+  assert.deepEqual(await teacher.tab.evaluate(() => window.__zoom.removed), [30]);
+  assert.ok(teacher.lines.some(line => /leftover removed label=Amal B\. state=ok/.test(line)));
+  assert.ok(!teacher.lines.some(line => line.includes(leftover)), 'the trace never prints a pass id');
+  // A learner's page never sweeps.
+  assert.equal(await second.tab.evaluate(() => window.__zoom.removed.length), 0);
+  ok('[Reliability PR] the teacher\'s page removes a leftover by userKey only; learners never sweep');
+
+  // A failed confirmation (network, then 503) keeps the room and supersedes nothing; the
+  // next rounds retry and act on the answer.
+  let refusals = 0;
+  const retry = await device({ lesson: 'r1', person: 'p9', passMs: '300' }, { route: route => (refusals++ === 0 ? route.abort() : refusals <= 2 ? route.fulfill({ status: 503, body: '{}' }) : route.continue()) });
+  const firstAgain = await passOf(first.tab);
+  await inside(retry.tab);
+  await retry.tab.waitForTimeout(150);
+  assert.equal(passState(firstAgain).superseded, false, 'nothing superseded while the confirmation fails');
+  assert.equal(await retry.tab.evaluate(() => window.__phase), 'in_room', 'the room stays');
+  await retry.tab.waitForFunction(() => window.__zoom.sent.includes('eh-room:newer'), null, { timeout: 5000 });
+  assert.ok(refusals >= 3);
+  assert.equal(passState(firstAgain).superseded, true, 'acts on the answer once it comes');
+  ok('[Reliability PR] a failed confirmation keeps the room, supersedes nothing, and is retried at the next round');
+
+  // A parent opens the room for the child: the child's connection is replaced and the
+  // parent is told once, with the pass's own label.
+  const child = await device({ lesson: 'r2', person: 'kid1', account: 'kid1', passMs: '60000' });
+  await inside(child.tab);
+  await child.tab.waitForTimeout(150);
+  const parent = await device({ lesson: 'r2', person: 'kid1', account: 'parent1', passMs: '60000' });
+  await inside(parent.tab);
+  await parent.tab.getByTestId('room-took-over').waitFor();
+  assert.equal((await parent.tab.getByTestId('room-took-over').innerText()).trim(), 'Vous avez pris la place de Amal B. dans ce cours : son autre connexion a été fermée.');
+  await marker(child.tab);
+  await phase(child.tab, 'superseded');
+  ok('[Reliability PR] a parent who takes the child\'s place is told once; the child\'s page shows the card');
+
+  // Closed by the host: removed (both reasons) and ended for all.
+  for (const reason of ['kicked by host', 'expeled by host']) {
+    const learner = await device({ lesson: 'r3', person: `x-${reason.split(' ')[0]}`, passMs: '60000' });
+    await inside(learner.tab);
+    await learner.tab.waitForTimeout(100);
+    await learner.tab.evaluate(r => window.__zoom.closeWith(r), reason);
+    await phase(learner.tab, 'removed');
+    assert.equal((await learner.tab.getByTestId('room-removed').locator('p').innerText()).trim(), 'L’enseignant vous a retiré du cours.');
+    await learner.tab.getByRole('button', { name: 'Rejoindre' }).click();
+    await phase(learner.tab, 'in_room');
+    await joined(learner.tab, 2);
+    await learner.ctx.close();
+  }
+  // A removal that follows a newer device's confirmation is that device's card.
+  const replaced = await device({ lesson: 'r3', person: 'x-replaced', passMs: '60000' });
+  await inside(replaced.tab);
+  await replaced.tab.waitForTimeout(100);
+  const replacing = await device({ lesson: 'r3', person: 'x-replaced', passMs: '60000' });
+  await inside(replacing.tab);
+  await replacing.tab.waitForFunction(() => window.__zoom.sent.includes('eh-room:newer'));
+  await replaced.tab.evaluate(() => window.__zoom.closeWith('kicked by host'));
+  await phase(replaced.tab, 'superseded');
+  // Ended for all: no check, « Quitter » only.
+  let checks = 0;
+  const ended = await device({ lesson: 'r3', person: 'x-ended', passMs: '60000' });
+  await ended.tab.route('**/rpc/online_check_pass', route => { checks++; return route.continue(); });
+  await inside(ended.tab);
+  await ended.tab.waitForTimeout(100);
+  // The token line is dropped while the room lives.
+  await ended.tab.evaluate(() => console.log('[JWT] participant decoded payload:', { probe: 1 }));
+  await ended.tab.evaluate(() => window.__zoom.closeWith('ended by host'));
+  await phase(ended.tab, 'ended');
+  assert.equal((await ended.tab.getByTestId('room-ended').locator('p').innerText()).trim(), 'L’enseignant a terminé le cours pour tous.');
+  assert.equal(await ended.tab.getByTestId('room-ended').getByRole('button').count(), 0, 'no « Rejoindre » or « Réessayer »');
+  assert.equal(await ended.tab.getByTestId('room-ended').getByRole('link', { name: 'Quitter' }).count(), 1);
+  assert.equal(checks, 0, 'no check after an end for all');
+  // Once the room has ended, console.log is the browser's own again: the same line goes through.
+  await ended.tab.waitForFunction(() => window.__zoom.calls.includes('destroy:end'));
+  await ended.tab.evaluate(() => console.log('[JWT] participant decoded payload:', 'after'));
+  await ended.tab.waitForTimeout(100);
+  assert.equal(ended.lines.filter(line => line.startsWith('[JWT] participant decoded payload:')).length, 1, 'dropped in the room, through after it');
+  assert.ok(ended.lines.some(line => line === '[JWT] participant decoded payload: after'));
+  assert.equal(await ended.tab.evaluate(() => /native code/.test(Function.prototype.toString.call(console.log))), true, 'the original console.log is back');
+  ok('[Reliability PR] « Retirer » (both reasons) shows the removed text with « Rejoindre »; after a newer device it is the card; « Terminer pour tous » shows the ended text with « Quitter » only; the token-log wrapper is gone after the room');
+  for (const d of [first, second, teacher, retry, child, parent, replaced, replacing, ended]) await d.ctx.close();
+  }
 
   assert.deepEqual(errors, [], 'no page error');
 } finally {

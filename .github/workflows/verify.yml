@@ -358,6 +358,12 @@ jobs:
           supabase db reset --local --version 127 --no-seed
           node scripts/test-course-dates-close-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Online room reliability 128 to 129 upgrade (ORR-r2 reliability PR)
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 128 --no-seed
+          node scripts/test-online-room-reliability-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression

@@ -3,7 +3,12 @@
 // route files. Every handler authenticates itself, checks the live gate first and
 // answers with a closed { reason } vocabulary only: no raw database or provider text,
 // no room reference and no secret ever reaches a response.
-import { onlineGate } from './gate.mjs';
+// Reliability PR (plan ORR-r2): the join route picks the adapter of the pass's own
+// provider (sections 6.1–6.2), from the set of enabled providers, which today holds
+// exactly ONLINE_VIDEO_PROVIDER, and answers the pass id so that the page can confirm
+// it from inside the room (online_confirm_pass) and check it (online_check_pass). The
+// status route answers director and admin whatever the live switch and the gate say.
+import { onlineGate, onlineCredentialShape } from './gate.mjs';
 import { onlineReason } from './reasons.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 import { providerDisplayName } from './label.mjs';
@@ -14,7 +19,7 @@ const STATUS = {
   forbidden: 403, not_eligible: 403, consent_missing: 403, window_closed: 403, lesson_cancelled: 403,
   course_inactive: 403, student_required: 403, pass_invalid: 403,
   capacity: 409, stale: 409, course_not_draft: 409, course_closed: 409, lesson_past: 409, lesson_overlap: 409,
-  lesson_in_use: 409,
+  lesson_in_use: 409, superseded: 409,
 };
 const refuse = reason => ({ status: STATUS[reason] || 400, body: { reason } });
 const isUuid = value => typeof value === 'string' && UUID.test(value);
@@ -34,11 +39,11 @@ async function caller(getUserClient, roles) {
 }
 
 function openGate(env, getProvider) {
-  const gate = onlineGate(env);
+  const gate = onlineGate(env, getProvider);
   if (!gate.open) return { failure: refuse(gate.reason) };
   const adapter = getProvider(gate.provider);
   if (!adapter) return { failure: refuse('provider_invalid') };
-  return { adapter };
+  return { adapter, enabled: enabledProviders(gate) };
 }
 
 // POST /api/online/join { lesson, student? }
@@ -51,19 +56,41 @@ export async function handleJoin({ body, env, getUserClient, getServiceClient, g
   const { data: pass, error } = await who.client.rpc('online_issue_join', { p_lesson: body.lesson, p_student: body.student ?? null });
   if (error || !pass?.jti) return fromDatabase(error);
   const { data: room, error: roomError } = await getServiceClient().rpc('online_resolve_join', { p_jti: pass.jti });
-  if (roomError || !room?.room_ref) return refuse('pass_invalid');
-  if (room.provider !== gate.adapter.id) return refuse('provider_invalid');
+  if (roomError) return refuse(onlineReason(roomError.hint) === 'superseded' ? 'superseded' : 'pass_invalid');
+  if (!room?.room_ref) return refuse('pass_invalid');
+  // The adapter of the pass's provider, and only from the enabled set.
+  if (!gate.enabled.includes(room.provider)) return refuse('provider_invalid');
+  const adapter = getProvider(room.provider);
+  if (!adapter || adapter.id !== room.provider) return refuse('provider_invalid');
+  // A failed mint leaves the pass issued and unconfirmed: it supersedes nothing, so the
+  // person's earlier connection stays current (B2).
   let minted;
   try {
-    minted = await gate.adapter.mintJoinToken({ roomRef: room.room_ref, displayName: providerDisplayName(room.display_label),
+    minted = await adapter.mintJoinToken({ roomRef: room.room_ref, displayName: providerDisplayName(room.display_label),
       role: room.provider_role, expiresAt: room.expires_at, participantRef: pass.jti, lessonRef: body.lesson });
   } catch {
     return refuse('provider_error');
   }
   // The embed descriptor carries whatever the provider's client needs; for a real
   // provider that is its short-lived token, never a durable room address.
-  return { status: 200, body: { provider: gate.adapter.id, embed: minted.embed,
+  return { status: 200, body: { provider: adapter.id, embed: minted.embed, pass: pass.jti,
     role: room.provider_role, display_label: room.display_label, expires_at: room.expires_at } };
+}
+
+// The providers a pass may use. Today exactly the configured one; the Meeting SDK plan
+// (D14) widens it.
+export function enabledProviders(gate) {
+  return gate?.open && gate.provider ? [gate.provider] : [];
+}
+
+// GET /api/online/status — director and admin only. Not behind the live gate: it says
+// what the gate sees (binding note 1). Words only: never a value, a length, a class of
+// mistake or a fragment of a credential.
+const KEY_WORDS = { correct: 'correctes', incorrect: 'incorrectes', absent: 'absentes' };
+export async function handleStatus({ env, getUserClient, getProvider }) {
+  const who = await caller(getUserClient, ['director', 'admin']);
+  if (who.failure) return who.failure;
+  return { status: 200, body: { keys: KEY_WORDS[onlineCredentialShape(env, getProvider)] || KEY_WORDS.absent } };
 }
 
 // POST /api/online/courses/activate|close { group, version } — management only.
@@ -142,7 +169,7 @@ export async function handleLessonAction({ action, body, env, getUserClient, get
 // the gate is off, for another provider name, for an adapter without webhooks, and for
 // the fake provider in Production (through the gate).
 export async function handleWebhook({ provider, rawBody, headers, env, getServiceClient, getProvider }) {
-  const gate = onlineGate(env);
+  const gate = onlineGate(env, getProvider);
   if (!gate.open || provider !== gate.provider) return { status: 404, body: { reason: 'not_found' } };
   const adapter = getProvider(provider);
   if (!adapter?.supportsWebhooks) return { status: 404, body: { reason: 'not_found' } };
