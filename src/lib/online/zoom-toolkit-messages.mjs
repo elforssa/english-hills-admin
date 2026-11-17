@@ -1,4 +1,4 @@
-// Two messages of the pinned toolkit (@zoom/videosdk-ui-toolkit 2.5.0-1) that the room
+// Messages of the pinned toolkit (@zoom/videosdk-ui-toolkit 2.5.0-1) that the room
 // corrects from its own side, without touching the bundle (classroom polish, part C).
 //
 // 1. The camera message of the pre-join screen. Read in the bundle: when the camera
@@ -13,6 +13,10 @@
 //    (permission refused, no camera, or most likely in use by another application).
 //    Only the text after the prefix of that one message is replaced, and only on the
 //    pre-join screen (the room stops looking once the participant is in).
+//    The « start devices » message of the same screen (`t("preview.error_start_devices")
+//    + error`, shown when the consent dialog starts the camera and the microphone
+//    together) has the same flaw and gets the same treatment, with reasons that name
+//    the camera or the microphone (review note of #197).
 // 2. The toolkit writes the decoded payload of the participant's token to the console
 //    at every join: `console.log("[JWT] participant decoded payload:", payload)`. The
 //    payload carries the technical session name and the participant's reference, which
@@ -25,8 +29,13 @@
 export const TOOLKIT_JWT_LOG = '[JWT] participant decoded payload:';
 const JWT_FILTER = Symbol.for('eh.online.toolkit.jwt-log-filter');
 
-// Idempotent; stays for the life of the page (only the room page loads the toolkit), so
-// two rooms that overlap during a teardown cannot leave a half-restored console.
+// Idempotent, and never removed: it stays installed for the life of the document, so two
+// rooms that overlap during a teardown cannot leave a half-restored console. That includes
+// an in-app navigation away from the room (the room's own ways out are full document
+// navigations, but a link of the surrounding layout may not be): the wrapper then stays
+// on other pages of the same document. Accepted (review note of #197): it drops only
+// console.log calls whose first argument starts with TOOLKIT_JWT_LOG, which only the
+// toolkit writes, and passes every other call through unchanged.
 export function dropToolkitJwtLog(win) {
   const out = win?.console;
   if (!out || typeof out.log !== 'function') return false;
@@ -48,15 +57,28 @@ export const CAMERA_REASON = Object.freeze({
   unsupported: 'la caméra choisie ne convient pas. Choisissez-en une autre dans la liste, ou continuez sans caméra.',
   other: 'vérifiez qu’elle est branchée, autorisée pour ce site et libre, puis réessayez.',
 });
+// After « Les périphériques n’ont pas pu démarrer : » (camera and microphone together).
+export const DEVICES_REASON = Object.freeze({
+  blocked: 'l’accès à la caméra ou au micro est bloqué pour ce site. Autorisez-le dans le navigateur (icône à gauche de l’adresse), puis rechargez la page.',
+  missing: 'aucune caméra ou aucun micro n’a été trouvé sur cet appareil. Branchez-le ou continuez sans.',
+  busy: 'la caméra ou le micro est sans doute utilisé par une autre application (Zoom, Teams, WhatsApp…). Fermez cette application, puis réessayez.',
+  unsupported: 'l’appareil choisi ne convient pas. Choisissez-en un autre dans la liste, ou continuez sans.',
+  other: 'vérifiez que la caméra et le micro sont branchés, autorisés pour ce site et libres, puis réessayez.',
+});
 const BY_ERROR_NAME = { NotAllowedError: 'blocked', PermissionDeniedError: 'blocked', SecurityError: 'blocked', NotFoundError: 'missing', DevicesNotFoundError: 'missing',
   NotReadableError: 'busy', TrackStartError: 'busy', AbortError: 'busy', OverconstrainedError: 'unsupported', ConstraintNotSatisfiedError: 'unsupported',
   VIDEO_USER_FORBIDDEN_CAPTURE: 'blocked', VIDEO_CAMERA_IS_TAKEN: 'busy', CAN_NOT_FIND_CAMERA: 'missing', CAN_NOT_DETECT_CAMERA: 'missing' };
-const isReason = tail => Object.values(CAMERA_REASON).includes(tail);
+const kindOf = (reasons, reason) => Object.keys(reasons).find(key => reasons[key] === reason);
 
-// The reason from what was printed after the prefix, when it names the error.
+// The kind of reason from what was printed after the prefix, when it names the error.
+const kindFromText = tail => BY_ERROR_NAME[String(tail || '').match(/[A-Za-z_]+/g)?.find(word => BY_ERROR_NAME[word])] || null;
 export function cameraReasonFromText(tail) {
-  const name = String(tail || '').match(/[A-Za-z_]+/g)?.find(word => BY_ERROR_NAME[word]);
-  return name ? CAMERA_REASON[BY_ERROR_NAME[name]] : null;
+  const kind = kindFromText(tail);
+  return kind ? CAMERA_REASON[kind] : null;
+}
+export function devicesReasonFromText(tail) {
+  const kind = kindFromText(tail);
+  return kind ? DEVICES_REASON[kind] : null;
 }
 
 // The reason from what the browser says about the camera. `permission` is the state of
@@ -68,37 +90,60 @@ export function cameraReasonFromDevice({ permission, cameras }) {
   if (permission === 'granted' && cameras > 0) return CAMERA_REASON.busy;
   return CAMERA_REASON.other;
 }
+// The same for camera and microphone together: either refused is « blocked », either
+// missing is « missing », both allowed and present is « busy ».
+export function devicesReasonFromDevice({ permission, cameras, micPermission, mics }) {
+  if (permission === 'denied' || micPermission === 'denied') return DEVICES_REASON.blocked;
+  if (cameras === 0 || mics === 0) return DEVICES_REASON.missing;
+  if (permission === 'granted' && micPermission === 'granted' && cameras > 0 && mics > 0) return DEVICES_REASON.busy;
+  return DEVICES_REASON.other;
+}
 
 async function deviceState(win) {
   const nav = win?.navigator;
-  let permission = 'unknown', cameras = null;
-  try { permission = (await nav.permissions.query({ name: 'camera' })).state || 'unknown'; } catch { /* not supported (Firefox, older Safari) */ }
-  try { cameras = (await nav.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput').length; } catch { /* not supported */ }
-  return { permission, cameras };
+  const state = async name => { try { return (await nav.permissions.query({ name })).state || 'unknown'; } catch { return 'unknown'; } };
+  let cameras = null, mics = null;
+  try {
+    const devices = await nav.mediaDevices.enumerateDevices();
+    cameras = devices.filter(device => device.kind === 'videoinput').length;
+    mics = devices.filter(device => device.kind === 'audioinput').length;
+  } catch { /* not supported */ }
+  return { permission: await state('camera'), micPermission: await state('microphone'), cameras, mics };
 }
 
-// Watches the page for the toolkit's camera message and rewrites what follows the
-// prefix. Returns a function that stops watching. `onFixed` gets the kind of reason.
-export function watchCameraMessage(win, prefix, onFixed) {
+// The two messages of the pre-join screen, by their key in the French resources.
+export const DEVICE_MESSAGES = Object.freeze([
+  { key: 'preview.error_start_camera', name: 'camera', reasons: CAMERA_REASON, fromText: cameraReasonFromText, fromDevice: cameraReasonFromDevice },
+  { key: 'preview.error_start_devices', name: 'devices', reasons: DEVICES_REASON, fromText: devicesReasonFromText, fromDevice: devicesReasonFromDevice },
+]);
+
+// Watches the page for the toolkit's camera and « start devices » messages and rewrites
+// what follows each prefix (taken from `resources`). Returns a function that stops
+// watching. `onFixed(name, kind)` gets the message ('camera' or 'devices') and the kind
+// of reason.
+export function watchDeviceMessages(win, resources, onFixed) {
   const doc = win?.document;
   const Observer = win?.MutationObserver;
-  const head = String(prefix || '').trim();
-  if (!doc?.body || typeof Observer !== 'function' || !head) return () => {};
+  const messages = DEVICE_MESSAGES.map(message => ({ ...message, head: String(resources?.[message.key] || '').trim() })).filter(message => message.head);
+  if (!doc?.body || typeof Observer !== 'function' || !messages.length) return () => {};
   const fix = async node => {
     const text = node.nodeValue || '';
-    const at = text.indexOf(head);
-    if (at < 0) return;
-    const start = at + head.length;
-    const tail = text.slice(start).trim();
-    if (!tail || isReason(tail)) return;
-    const reason = cameraReasonFromText(tail) || cameraReasonFromDevice(await deviceState(win));
-    if (node.nodeValue !== text) return;
-    node.nodeValue = `${text.slice(0, start)} ${reason}`;
-    try { onFixed?.(Object.keys(CAMERA_REASON).find(key => CAMERA_REASON[key] === reason)); } catch { /* the trace never breaks the page */ }
+    for (const message of messages) {
+      const at = text.indexOf(message.head);
+      if (at < 0) continue;
+      const start = at + message.head.length;
+      const tail = text.slice(start).trim();
+      if (!tail || Object.values(message.reasons).includes(tail)) return;
+      const reason = message.fromText(tail) || message.fromDevice(await deviceState(win));
+      if (node.nodeValue !== text) return;
+      node.nodeValue = `${text.slice(0, start)} ${reason}`;
+      try { onFixed?.(message.name, kindOf(message.reasons, reason)); } catch { /* the trace never breaks the page */ }
+      return;
+    }
   };
   const visit = node => {
     if (node.nodeType === 3) { fix(node); return; }
-    if (node.nodeType !== 1 || !node.textContent?.includes(head)) return;
+    if (node.nodeType !== 1 || !messages.some(message => node.textContent?.includes(message.head))) return;
     const walker = doc.createTreeWalker(node, 4);
     for (let text = walker.nextNode(); text; text = walker.nextNode()) fix(text);
   };

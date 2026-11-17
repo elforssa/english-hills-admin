@@ -87,10 +87,24 @@
 //       (pixels counted in screenshots of the shared area); the phone's annotation
 //       controls are recorded;
 //   M5. no Content-Security-Policy refusal during the media part (stop condition S2).
+// Hands part (PR D, « Lever la main »), by clicks on our own button and panel (no toolkit
+// control involved), with the teacher, the learner and both phones:
+//   H0. every learner has the button above the room, in the screen and covered by
+//       nothing (computer and phones); the teacher has « Mains levées (0) »;
+//   H1. the learner and a phone raise: the teacher sees both, in order, with a cue;
+//   H2. a spoofed « lower » and « lower-all » sent by hand from a learner's page change
+//       nothing;
+//   H3. a late joiner: the teacher reloads and joins again; the list comes back in order;
+//   H4. « Baisser » for one learner; H5. « Baisser toutes les mains »;
+//   H6. a raised hand goes down when its learner moves into a group (no button inside;
+//       back in the main room, hand down); a hand in the main room stays;
+//   H7. a reconnection (reload) and H8. a leave take the hand away;
+//   H9. nobody leaves the room by accident; the trace carries totals and states only.
 // Over the whole run: no participant's console has the toolkit's decoded-token line, and
-// each participant's trace says once per join that the groups timer correction is on.
-// OL_CLASSROOM_PART=whiteboard|groups|media runs one part only, for repairs; such a run is
-// reported as PARTIAL and is not a proof.
+// each participant's trace says once per join that the groups timer correction is on;
+// zero Content-Security-Policy refusals except the named whiteboard one (check 1).
+// OL_CLASSROOM_PART=whiteboard|groups|media|hands runs one part only, for repairs; such a
+// run is reported as PARTIAL and is not a proof.
 // OL_CLASSROOM_SHOTS=<directory> saves a screenshot per participant when the run breaks.
 // Writes a JSON report (OL_ZOOM_CLASSROOM_REPORT, default
 // scripts/.zoom-classroom-report.json, git-ignored). A failed assertion blocks the merge.
@@ -122,7 +136,7 @@ if (!env.ONLINE_VIDEO_PROVIDER_API_KEY || !env.ONLINE_VIDEO_PROVIDER_API_SECRET)
 }
 const reportPath = process.env.OL_ZOOM_CLASSROOM_REPORT || 'scripts/.zoom-classroom-report.json';
 setTimeout(() => { console.error('FAIL zoom classroom stalled'); process.exit(1); }, 25 * 60_000).unref();
-const PART = ['whiteboard', 'groups', 'media'].includes(process.env.OL_CLASSROOM_PART) ? process.env.OL_CLASSROOM_PART : 'all';
+const PART = ['whiteboard', 'groups', 'media', 'hands'].includes(process.env.OL_CLASSROOM_PART) ? process.env.OL_CLASSROOM_PART : 'all';
 
 const git = args => { try { return execFileSync('git', args, { encoding: 'utf8' }).trim(); } catch { return null; } };
 const zoom = createZoomVideoProvider(env);
@@ -189,7 +203,7 @@ async function open(label, role, options, { from = role === 'host' ? teacherBrow
     if (line) {
       const state = line.match(/^connection state=(\w+)(?: code=(\S+))?(?: reason=(.*))?/);
       if (state) seen.connection.push({ state: state[1], reason: state[3] });
-      if (/^(whiteboard|csp blocked|room (left|failed|closed|move)|groups (open|timer)|camera message)/.test(line)) seen.trace.push(line);
+      if (/^(whiteboard|csp blocked|room (left|failed|closed|move)|groups (open|timer)|(camera|devices) message|hands? )/.test(line)) seen.trace.push(line);
       if (line.startsWith('csp blocked')) refused({ via: 'trace', line, expected: /^csp blocked directive=script-src host=eval source=us0[45]st1\.zoom\.us expected=whiteboard-eval-probe$/.test(line) && line.endsWith(`expected=${EXPECTED_CSP_REFUSAL}`) });
     } else if (text.startsWith('[JWT]')) {
       seen.jwtLines++;
@@ -939,6 +953,146 @@ async function mediaPart(pages) {
   for (const page of [teacher, learner, phone]) if ((await micState(page)).muted === true) await tapOwnMic(page).catch(() => {});
 }
 
+// ---- Hands part (PR D, « Lever la main ») ----
+// What a page shows of raise hand, and where it is.
+const handsOf = page => page.evaluate(() => {
+  const button = document.querySelector('[data-testid="room-hand"]');
+  const box = button?.getBoundingClientRect();
+  const hit = box ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
+  const room = document.querySelector('[data-testid="zoom-room"]')?.getBoundingClientRect();
+  return { badge: document.querySelector('[data-testid="room-hands-badge"]')?.textContent.trim() || null,
+    names: [...document.querySelectorAll('[data-testid="room-hands-name"]')].map(el => el.textContent.trim()),
+    cue: document.querySelector('[data-testid="room-hands-panel"]')?.getAttribute('data-cue') || null,
+    button: button?.textContent.trim() || null, lowered: document.querySelector('[data-testid="room-hand-lowered"]')?.textContent.trim() || null,
+    // Our button is not covered by anything (what a finger at its centre would touch is the button) and sits above the room.
+    uncovered: !!(button && hit && button.contains(hit)), aboveRoom: !!(box && room && box.bottom <= room.top + 1), inViewport: !!(box && box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth),
+    inGroup: window.zmClient?.getSubsessionClient?.()?.getUserStatus?.() === 'in room', isHost: !!window.zmClient?.getCurrentUserInfo?.()?.isHost,
+    phase: window.__phase, inMeeting: !!window.zmClient?.getSessionInfo?.().isInMeeting };
+});
+const untilHands = async (page, test, ms = 20000) => { for (const end = Date.now() + ms; Date.now() < end;) { if (test(await handsOf(page))) return true; await page.waitForTimeout(300); } return false; };
+// A tap on our own button: a real click where nothing covers it, which is what the report proves.
+const tapHand = async page => { const state = await handsOf(page); if (state.uncovered) await page.getByTestId('room-hand').click({ timeout: 10000 }); else await page.getByTestId('room-hand').evaluate(b => b.click()); return state.uncovered; };
+const handTrace = p => report.people[p].trace.filter(line => /^hands? /.test(line));
+
+async function handsPart(pages) {
+  const { teacher, learner, phone, phone2 } = pages;
+  const record = report.hands = {};
+  const learners = { learner, phone, phone2 };
+  const D = LABEL.learner, T = LABEL.phone, U = LABEL.phone2;
+  // Close what an earlier part left over the footer.
+  await teacher.locator(`${POPPER}-close-button`).click({ timeout: 2000 }).catch(() => {});
+
+  // H0. Everybody in the main room: a « Lever la main » button for each learner, on the
+  // computer and on the phones, above the room and covered by nothing; « Mains levées (0) »
+  // for the teacher, who has no button.
+  const ready = { teacher: await untilHands(teacher, h => h.badge === 'Mains levées (0)'),
+    ...Object.fromEntries(await Promise.all(Object.entries(learners).map(async ([p, page]) => [p, await untilHands(page, h => h.button === 'Lever la main')]))) };
+  const placement = Object.fromEntries(await Promise.all(Object.entries(learners).map(async ([p, page]) => { const h = await handsOf(page); return [p, { uncovered: h.uncovered, aboveRoom: h.aboveRoom, inViewport: h.inViewport }]; })));
+  pass('H0. every learner has « Lever la main » above the room (computer and phones, in the screen, covered by nothing); the teacher has « Mains levées (0) » and no button',
+    Object.values(ready).every(Boolean) && Object.values(placement).every(p => p.uncovered && p.aboveRoom && p.inViewport) && (await handsOf(teacher)).button === null, { ready, placement });
+
+  // H1. The learner raises, then the phone: the teacher sees both, in that order, with a cue.
+  record.tappedForReal = { learner: await tapHand(learner) };
+  const cueSeen = await untilHands(teacher, h => h.cue === 'on' && h.names.join() === D, 15000);
+  await teacher.waitForTimeout(2500);
+  record.tappedForReal.phone = await tapHand(phone);
+  const both = await untilHands(teacher, h => h.names.join() === [D, T].join() && h.badge === 'Mains levées (2)');
+  const buttons = { learner: (await handsOf(learner)).button, phone: (await handsOf(phone)).button };
+  pass('H1. a learner and a phone raise their hand with our button; the teacher sees « Mains levées (2) » with both names in the order raised, and a brief cue', cueSeen && both && buttons.learner === 'Baisser la main' && buttons.phone === 'Baisser la main',
+    { cueSeen, teacher: await handsOf(teacher).then(h => ({ badge: h.badge, names: h.names })), buttons, tappedForReal: record.tappedForReal });
+
+  // H2. A learner's page sends « lower » to the phone and « lower-all » to everybody, by
+  // hand on Zoom's command channel: nothing changes anywhere.
+  record.spoof = await learner.evaluate(async label => {
+    const client = window.zmClient, channel = client.getCommandClient();
+    const target = client.getAllUser().find(u => u.displayName === label)?.userId;
+    const sent = [];
+    for (const [text, to] of [['eh-hand:lower', target], ['eh-hand:lower-all', undefined]]) {
+      try { await (to === undefined ? channel.send(text) : channel.send(text, to)); sent.push(text); } catch (error) { sent.push(`${text} refused: ${String(error?.reason || error?.message || error).slice(0, 60)}`); }
+    }
+    return { target: !!target, sent };
+  }, T);
+  await teacher.waitForTimeout(4000);
+  const afterSpoof = { teacher: (await handsOf(teacher)).names, phone: (await handsOf(phone)).button, learner: (await handsOf(learner)).button };
+  pass('H2. a spoofed « lower » and « lower-all » sent from a learner\'s page are ignored: the phone\'s hand stays up and the teacher\'s list is unchanged',
+    record.spoof.target && record.spoof.sent.join() === 'eh-hand:lower,eh-hand:lower-all' && afterSpoof.teacher.join() === [D, T].join() && afterSpoof.phone === 'Baisser la main' && afterSpoof.learner === 'Baisser la main', { spoof: record.spoof, afterSpoof });
+
+  // H3. The second phone raises; the teacher reloads the page and joins again (a late
+  // joiner): the list comes back, in the order raised.
+  await teacher.waitForTimeout(2500);
+  await tapHand(phone2);
+  const three = await untilHands(teacher, h => h.names.join() === [D, T, U].join());
+  await teacher.waitForTimeout(2500);
+  const reloadedAt = Date.now();
+  await teacher.reload();
+  await enter(teacher);
+  const back = await untilHands(teacher, h => h.names.join() === [D, T, U].join(), 30000);
+  record.listBackAfterSeconds = Math.round((Date.now() - reloadedAt) / 1000);
+  const teacherNow = await handsOf(teacher);
+  pass('H3. a late joiner: after the teacher reloads and joins again, « Mains levées (3) » comes back with the names in the order raised', three && back && teacherNow.isHost,
+    { three, back, names: teacherNow.names, teacherIsHostAgain: teacherNow.isHost, listBackAfterSeconds: record.listBackAfterSeconds });
+
+  // H4. The teacher lowers one hand: that learner's button is back, with a line saying so.
+  await teacher.getByTestId('room-hands-item').filter({ hasText: T }).getByRole('button', { name: 'Baisser' }).click({ timeout: 10000 });
+  const lowered = await untilHands(phone, h => h.button === 'Lever la main' && h.lowered === 'Votre main a été baissée par l’enseignant.');
+  const others = await untilHands(teacher, h => h.names.join() === [D, U].join());
+  pass('H4. « Baisser » next to one learner: that learner\'s button is « Lever la main » again with « Votre main a été baissée par l’enseignant. »; the others keep their place', lowered && others,
+    { phone: await handsOf(phone).then(h => ({ button: h.button, lowered: h.lowered })), teacher: (await handsOf(teacher)).names });
+
+  // H5. « Baisser toutes les mains ».
+  await teacher.getByTestId('room-hands-lower-all').click({ timeout: 10000 });
+  const allDown = Object.fromEntries(await Promise.all(Object.entries(learners).map(async ([p, page]) => [p, await untilHands(page, h => h.button === 'Lever la main')])));
+  const zero = await untilHands(teacher, h => h.badge === 'Mains levées (0)' && h.names.length === 0);
+  pass('H5. « Baisser toutes les mains »: every learner\'s button is « Lever la main » again and the teacher has « Mains levées (0) »', zero && Object.values(allDown).every(Boolean), { allDown, zero });
+
+  // H6. A raised hand goes down when its learner moves into a group; there is no button
+  // in the group; back in the main room the button is there, hand down. The phone, which
+  // stays in the main room with its hand up, stays on the list.
+  await tapHand(learner);
+  await teacher.waitForTimeout(2000);
+  await tapHand(phone);
+  const twoUp = await untilHands(teacher, h => h.names.join() === [D, T].join());
+  const groups = {};
+  await prepareGroups(teacher, groups, { allowReturn: true, minutes: 10 });
+  await step(teacher, 'open all groups', () => teacher.locator('#uikit-subsession-open-all-rooms-button').click());
+  await untilWhere(teacher, w => w.status === 2, 20000);
+  await assignTo(teacher, 0, 'learner');
+  await untilWhere(learner, w => w.invited, 20000);
+  await step(learner, 'the learner accepts the invitation', () => learner.locator('#uikit-subsession-join-subsession-join').click({ timeout: 10000 }));
+  const inGroup = await untilHands(learner, h => h.inGroup, 40000);
+  const dropped = await untilHands(teacher, h => h.names.join() === T, 20000);
+  await learner.waitForTimeout(3000);
+  const inside = await handsOf(learner);
+  await step(teacher, 'the teacher closes all groups', async () => { await groupsWindow(teacher); await teacher.locator('#uikit-subsession-close-all-rooms-button').click({ timeout: 10000 }); });
+  const home = await untilHands(learner, h => !h.inGroup && h.inMeeting && h.button === 'Lever la main', 100000);
+  await teacher.locator(`${POPPER}-close-button`).click({ timeout: 5000 }).catch(() => {});
+  const phoneStill = (await handsOf(teacher)).names;
+  pass('H6. a raised hand goes down when its learner moves into a group (gone from the teacher\'s list, no button inside the group); back in the main room the button is there, hand down; a hand in the main room stays',
+    twoUp && inGroup && dropped && inside.button === null && home && phoneStill.join() === T, { twoUp, inGroup, dropped, buttonInGroup: inside.button, home, teacherAfter: phoneStill });
+
+  // H7. A reconnection: the phone reloads its page with the hand up; the hand goes, and
+  // the new page's button is down.
+  await phone.reload();
+  await enter(phone);
+  const reloadDropped = await untilHands(teacher, h => h.names.length === 0, 20000);
+  const reloadButton = await untilHands(phone, h => h.button === 'Lever la main', 20000);
+  pass('H7. a learner who reconnects (page reloaded) loses the raised hand: gone from the teacher\'s list, and the button is « Lever la main »', reloadDropped && reloadButton, { reloadDropped, reloadButton });
+
+  // H8. A learner who leaves: the second phone raises, then leaves the lesson.
+  await tapHand(phone2);
+  const up = await untilHands(teacher, h => h.names.join() === U);
+  await phone2.close();
+  const leaveDropped = await untilHands(teacher, h => h.names.length === 0, 30000);
+  pass('H8. a learner who leaves the lesson with the hand up: the hand leaves the teacher\'s list', up && leaveDropped, { up, leaveDropped });
+
+  // H9. Over the part: nobody left the room by accident; the trace is totals and states only.
+  const traces = Object.fromEntries(['teacher', 'learner', 'phone', 'phone2'].map(p => [p, handTrace(p)]));
+  const end = { teacher: await handsOf(teacher), learner: await handsOf(learner), phone: await handsOf(phone) };
+  pass('H9. raise hand never takes anybody out of the room, and its trace lines carry totals and states only (no name, no id)',
+    Object.values(end).every(h => h.phase === 'in_room' && h.inMeeting) && Object.values(traces).flat().every(line => /^(hands total=\d+|hand state=(up|down) by=(self|teacher|move|leave|failed))$/.test(line)) && traces.teacher.length > 0 && traces.learner.length > 0,
+    { traces: Object.fromEntries(Object.entries(traces).map(([p, lines]) => [p, lines.slice(-8)])) });
+}
+
 try {
   const teacher = await open('teacher', 'host', { viewport: { width: 1280, height: 900 } });
   const learner = await open('learner', 'participant', { viewport: { width: 1280, height: 900 } });
@@ -946,9 +1100,10 @@ try {
   const pages = { teacher, learner, phone };
   await teacher.waitForTimeout(3000);
   if (PART === 'all' || PART === 'whiteboard') await whiteboardHalf(pages);
-  else if (PART === 'groups') pages.phone2 = await open('phone2', 'participant', PHONE);
+  else if (PART === 'groups' || PART === 'hands') pages.phone2 = await open('phone2', 'participant', PHONE);
   if (PART === 'all' || PART === 'groups') await groupsHalf(pages);
   if (PART === 'all' || PART === 'media') await mediaPart({ teacher, learner, phone });
+  if (PART === 'all' || PART === 'hands') await handsPart(pages);
 
   // 1. Over the whole run.
   await teacher.waitForTimeout(2000);
@@ -975,5 +1130,5 @@ try {
   report.part = PART;
   report.verdict = process.exitCode ? 'FAIL' : (PART === 'all' ? 'PASS' : `PARTIAL (${PART} part only, not a proof)`);
   writeFileSync(reportPath, JSON.stringify(report, null, 2));
-  console.log(`${report.verdict} zoom classroom (${PART === 'all' ? 'whiteboard, groups and media' : PART + ' part'}) at ${report.head}${report.workingTreeClean ? '' : ' + uncommitted changes'}; report written to ${reportPath}`);
+  console.log(`${report.verdict} zoom classroom (${PART === 'all' ? 'whiteboard, groups, media and hands' : PART + ' part'}) at ${report.head}${report.workingTreeClean ? '' : ' + uncommitted changes'}; report written to ${reportPath}`);
 }
