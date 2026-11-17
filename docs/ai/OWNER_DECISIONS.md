@@ -513,6 +513,35 @@ Plan: [online classroom tools](../architecture/plans/online-classroom-tools.md),
   - D4 for children, before any children's online course is activated.
 - **Not approved by this entry:** the merge or deployment of any PR of the plan (A whiteboard and room header, B groups, C toolkit upgrade, D raise hand) and the Production test; each needs its own approval. PR A was merged as #194 (`b2198bf`, 2026-11-16) with the owner's approval. PR B is implemented on a pull request and waits for independent review; its merge needs the owner's approval.
 
+## Online room reliability — decisions D1–D14 (2026-11-17)
+
+Plan: [online room reliability](../architecture/plans/online-room-reliability.md), revision ORR-r2 (Tier 3; **PROPOSED, NOT APPROVED**). ORR-r1 at head `7518d14b60c26ddb751969d38c4fa4ad6d307d51` was independently reviewed **CHANGES REQUIRED** (B1–B6, N1–N10) on 2026-11-17. With the revision task the owner (Maroine, 2026-11-17, chat relayed by the coordinating session) answered every open question. **These answers decide the questions; they do not approve the plan, either of its pull requests, either migration or any Production step.**
+
+- **D1–D9, D11, D12: option A as recommended, with the reviewer's refinements:**
+  - D1: « reliability PR » and « webhook PR » for this plan's two pull requests, « toolkit upgrade » for the 2.6.10-1 work of online classroom tools.
+  - D2: one connection per learner; a parent who opens the room for a child replaces the child's connection, **and the card tells the parent they have taken the child's place.**
+  - D3: the teacher's page removes dead connections automatically; « Retirer » by hand stays.
+  - D4: the automatic removal also covers revoked passes; **the list returns ids only, never the reason.**
+  - D5: the webhook route answers while the live switch is off, under its own exact gate (configured provider, credentials and webhook secret present and free of paste mistakes, never the fake provider in Production), closed by removing the webhook secret and redeploying.
+  - D6: four events stored (joined, left, session started, session ended), fixed fields.
+  - D7: evidence on the staff course page, monthly minutes and status for director and admin; attendance never written from events.
+  - D8: **the owner (Maroine) triggers the monthly live check** (also before each term and each room merge); **a failed run blocks the next room merge and any new online course until fixed.**
+  - D9: the status line and the monthly minutes are included.
+  - D11: the office sends the emergency link (refined below).
+  - D12: Zoom spending alert at 30 USD a month; at 40 USD the owner reads the usage report the same day.
+- **D10: option A without the per-lesson override column.** Provider kept on each pass, the adapter chosen per pass, `/online/meeting/<lesson>` reserved; the per-lesson room record is left to the later Meeting SDK plan.
+- **D13 (new): join and leave times stored from Zoom events are kept 12 months, then deleted** (a scheduled purge in the webhook migration).
+- **D14 (new), the Meeting SDK decision of 2026-11-17, recorded:** a second room provider, **Zoom Meeting SDK client view on Pro licences**, will be built **after the online module and the pilot**, selectable per course with a per-lesson emergency switch in the admin; students always use « Rejoindre ». Its own Tier 3 plan comes later; nothing of it is authorized here.
+- **Emergency procedure (B6, D11):** the office (the director) hosts on the centre's single Zoom Pro licence and makes the teacher co-host in the meeting; **the teacher never receives the centre's Zoom credentials**. Meeting settings: waiting room on, private chat off, participants told to join as « Prénom + initiale ». One emergency meeting at a time (other concurrent lessons are rescheduled). Not used for children's courses until the consent wording is confirmed. Whether Zoom lets a participant who is not signed in become co-host is UNVERIFIED; the plan gives the alternative ([section 7](../architecture/plans/online-room-reliability.md#7-pilot-safeguard--emergency-procedure-no-code)).
+- **Amendment texts approved with D5 and D10/D14, to be written into the documents when the plan is approved:**
+  - Adapter addendum decision A3 ([online-learning.md](../architecture/plans/online-learning.md), Z6 and A3), replacing « The route still answers 404 while the live gate is off, so the Zoom event subscription is created and validated only at R5, and a later gate-off period disables it after about 18 days (re-validate manually when the gate returns). » (Z6) and « (gate still required) » (A3's summary line):
+    > The webhook route has its own gate, independent of the live switch: it answers only when its provider is the configured provider, is not the fake provider in Production, supports webhooks, and its credentials and the webhook secret are set and free of paste mistakes; otherwise 404. Removing the webhook secret and redeploying closes it. The challenge and every event are still answered only after the signature, the 5-minute window and the `plainToken` bound are checked, and nothing is written for a challenge.
+  - [ADR-008](../architecture/decisions/ADR-008-online-learning-pilot.md), Consequences, replacing « The activation route, the lesson-action routes, the join route and the webhook route are gated; the fake provider is refused in Production. »:
+    > The activation route, the lesson-action routes and the join route are behind the live switch; the webhook route is behind its own gate (configured provider, credentials and webhook secret present and free of paste mistakes), independent of the live switch, and is closed by removing the webhook secret; the fake provider is refused in Production on every route.
+  - ADR-008, new amendment (D10, D14):
+    > The provider is a property of the course. A pass records the provider it was issued for, and the server picks the adapter per pass. Each provider has its own room path, headers, adapter, credentials and webhook route; `/online/meeting/<lesson>` is reserved for the Zoom Meeting SDK room decided on 2026-11-17, to be built after the online module and the pilot. Join evidence and attendance are independent of the provider. A per-lesson room record and the per-lesson emergency switch belong to the Meeting SDK plan.
+- **Open:** the independent re-review of ORR-r2 and the plan's approval at an exact head. **Not authorized:** implementation, a migration number, merge, the webhook secret, the Zoom subscription, the billing change and every Production step; each needs its own approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.
