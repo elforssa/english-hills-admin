@@ -844,6 +844,9 @@ async function mediaPart(pages) {
   const tag = 'media';
   const record = report.media = {};
   const marks = Object.fromEntries(Object.keys(pages).map(p => [p, report.people[p].csp.length]));
+  // After the groups part the teacher's groups window is still open over the footer.
+  if (await teacher.locator(POPPER).count()) await teacher.locator('#uikit-subsession-popper-close-button').click({ timeout: 5000 }).catch(() => {});
+  await teacher.locator(POPPER).waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
   for (const page of [learner, phone]) if ((await micState(page)).muted !== false) { await tapOwnMic(page).catch(() => {}); await untilMic(page, m => m.audio === 'computer' && m.muted === false, 20000); }
   record.start = Object.fromEntries(await Promise.all(Object.entries(pages).map(async ([p, page]) => [p, await micState(page)])));
 
