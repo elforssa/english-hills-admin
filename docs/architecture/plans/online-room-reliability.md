@@ -486,7 +486,26 @@ Nothing was pushed or merged at the stop. The ways forward offered to the owner 
 
 ### Evidence (reliability PR)
 
-Not filled: the work stopped at S3 before the final-head runs ([above](#stopped-at-s3-2026-11-17--owner-decision-needed)). On the uncommitted tree before the stop: `npm test` green, lint clean (one existing warning), SQL acceptance and SQLSTATE catalog green on a private stack, upgrade rehearsal 128→129 green, `test_verify.py` OK, lifecycle browser suite green (17 cases).
+**Code head `1dbbd20f7e4a0aaf8279c587b17239229367d733` (2026-11-18); the commit after it adds this evidence only (documentation).** Network at the final runs: healthy, about 3 MB/s from `source.zoom.us`, 47 ms (the 2026-11-17 runs were at about 100 KB/s; the reliability script's devices join without camera or headset since then, as no row needs media).
+
+- `npm test` green (includes the toolkit-facts check, 29 facts, and the room unit suite with the D15 guard); lint: 0 errors, the one existing warning (`Sidebar.jsx` `<img>`); `npm run build` green; `test_verify.py` OK; header test green (`/online/meeting/*` reserved).
+- Private local Supabase stack: online learning SQL acceptance green; SQLSTATE catalog green; stateful upgrade rehearsal 128→129 green (two bodies differ by their intended lines only, two authenticated functions and one private helper added, two nullable columns and two checks, 79 table hashes unchanged, an old pass resolves with the course's provider). Migration 129 contains no leftover function (asserted).
+- Lifecycle browser suite (fake toolkit): 17 of 17, among them the five reliability cases (newest wins on the marker; D15: no page removes anybody; failed confirmation retried; parent's notice; removed card with « Quitter » only, ended card, wrapper restored).
+- `scripts/test-online-learning-browser.mjs` runs in GitHub Verify only (its CSP is bound to the shared stack on 54321).
+- **Real Zoom, development key, installed Chrome, exact head `1dbbd20`, working tree clean:** two-party 5/5; lifecycle 7/7; classroom 59/59 (whiteboard, groups, media, hands); reliability 11/11:
+
+| Row | Result |
+| --- | --- |
+| T-R1 | `userKey` equals each pass id; `userIdentity` present and equal to it (never read) |
+| T-R2 | first browser out 1.0 s after the second entered; one participant after 0.3 s; card shown; no automatic retry |
+| T-R2b | a browser cut before its join takes nothing; the working browser stays, never shown the card |
+| T-R3 (D15) | the same browser drops and comes back: never locked out across three reloads; its old connection left Zoom's list 27 s after the return (166 s on the degraded network of 2026-11-17); no removal anywhere |
+| dead | a killed Chrome stays in Zoom's list 182 s when nothing removes it |
+| T-R5 | five fast reloads of a learner and of the teacher: never two of either |
+| T-R4 | the teacher back in a new browser is manager after 1.0 s while the old connection lingers (S2 not met), host at 169.6 s when Zoom drops the old one |
+| T-R7 | « Retirer »: removed text with « Quitter » only after 1.6 s (reason `kicked by host`); the same browser is refused with 3009 and shown the removed text without « Réessayer »; another browser of the learner enters; « Terminer pour tous »: four learner pages ended after 1.5 s (reason `ended by host`), « Quitter » only |
+| T-R6 | not run (groups): UNVERIFIED |
+
 
 ### Not covered (UNVERIFIED)
 
