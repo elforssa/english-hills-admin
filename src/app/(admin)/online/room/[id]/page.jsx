@@ -135,7 +135,6 @@ function Room() {
   }, [pass, fakeRoom, label]);
   const onJoined = useCallback(() => watcher.current?.joined(), []);
   const onNewer = useCallback(() => watcher.current?.checkNow(), []);
-  const listLeftovers = useCallback(() => onlineRpc('online_list_room_leftovers', { p_lesson: id }).then(answer => answer?.ids || []), [id]);
 
   // The room has already left Zoom and been destroyed when this is called.
   const onLeft = useCallback(async detail => {
@@ -159,7 +158,7 @@ function Room() {
   const room = state.phase === 'in_room' && (
     state.provider === 'fake' && state.embed?.kind === 'fake' ? <FakeRoom embed={state.embed} />
       : state.provider === 'zoom-video' && state.embed?.kind === 'zoom-video' ? <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError}
-        onJoined={onJoined} onNewer={onNewer} listLeftovers={state.embed.role === 'host' ? listLeftovers : undefined} link={roomLink} />
+        onJoined={onJoined} onNewer={onNewer} link={roomLink} />
         : <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.provider_invalid}</p>);
   return (
     <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-4xl flex-col gap-4 p-3 sm:p-6">
@@ -188,7 +187,7 @@ function Room() {
       {state.phase === 'removed' && (
         <div className="space-y-3 rounded-lg border bg-card p-6" data-testid="room-removed">
           <p className="text-sm">{ROOM_PASS_TEXT.removed}</p>
-          <Button onClick={join} size="lg" className="min-h-11">{ROOM_PASS_TEXT.rejoin}</Button>
+          <Button onClick={() => leaveRoom(back)} size="lg" className="min-h-11">{ROOM_PASS_TEXT.quit}</Button>
         </div>
       )}
       {state.phase === 'ended' && (

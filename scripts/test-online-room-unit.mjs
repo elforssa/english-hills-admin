@@ -4,9 +4,8 @@
 // toolkit bundle, and the approved room configuration. No network, browser or database.
 // Run by npm test.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { startZoomRoom, roomSettled, closedKind, ROOM_NEWER } from '../src/lib/online/zoom-room-session.mjs';
-import { createLeftoverSweep } from '../src/lib/online/zoom-room-leftovers.mjs';
 import { createPassWatcher, passOutcome, closedOutcome, ROOM_PASS_TEXT } from '../src/lib/online/room-pass.mjs';
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
@@ -833,12 +832,15 @@ function fakeChannels() {
   // Zoom's wording never decides: the same code with any reason gives the same text.
   assert.equal(text({ code: 200, reason: 'Verify JWT failed' }), text({ code: 200, reason: 'The token has expired' }));
   // Anything else: the existing provider_error text, with a retry.
-  for (const code of [3000, 3008, 3009, 3625, 4004, 4006, 4008, 5012, 'toolkit', 987654, '__proto__', undefined]) {
+  // Removed by the host (D15): Zoom refuses this browser for the session; no retry.
+  assert.equal(text({ code: 3009 }), 'L’enseignant vous a retiré du cours.');
+  assert.equal(retry({ code: 3009 }), false);
+  for (const code of [3000, 3008, 3625, 4004, 4006, 4008, 5012, 'toolkit', 987654, '__proto__', undefined]) {
     assert.equal(text({ code }), 'La salle de cours n’a pas pu être ouverte. Réessayez dans un instant.', String(code));
     assert.equal(retry({ code }), true);
   }
   assert.equal(roomErrorFor(undefined).key, 'other');
-  assert.deepEqual(Object.keys(ROOM_ERRORS), ['account', 'pass', 'full', 'network', 'other']);
+  assert.deepEqual(Object.keys(ROOM_ERRORS), ['account', 'pass', 'full', 'network', 'removed', 'other']);
   assert.equal(roomErrorKey(200), 'network');
   // The pass expiry comes from the embed, on the participant's clock.
   const at = Date.parse('2026-11-14T10:00:00Z');
@@ -1362,7 +1364,7 @@ function fakeChannels() {
 }
 
 // 13. [Reliability PR] Plan online-room-reliability.md (ORR-r2), section 1 and 4.
-// Manual timers for the watcher and the sweep.
+// Manual timers for the pass watcher.
 function manualTimers() {
   let next = 1;
   const intervals = new Map(), timeouts = new Map();
@@ -1379,73 +1381,16 @@ function manualTimers() {
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222',
   C = '33333333-3333-4333-8333-333333333333', D = '44444444-4444-4444-8444-444444444444';
 {
-  // The leftover sweep matches on userKey, never userIdentity; never itself; survives a refusal.
-  const removed = [], logs = [];
-  let refuse = false, users;
-  const win = { zmClient: {
-    getAllUser: () => users,
-    getCurrentUserInfo: () => ({ userId: 1 }),
-    removeUser: id => { removed.push(id); return refuse ? Promise.reject(new Error('not host')) : Promise.resolve(''); },
-  } };
-  const reset = () => { users = [
-    { userId: 1, displayName: 'Sara L.', userKey: A, isHost: true },          // itself, listed: never removed
-    { userId: 2, displayName: 'Amal B.', userKey: B },                        // listed: removed
-    { userId: 3, displayName: 'Nour K.', userIdentity: C, userKey: D },       // listed userIdentity, other userKey: kept
-    { userId: 4, displayName: 'Amal B.', userKey: B.toUpperCase() },          // listed, other case: removed
-    { userId: 5, displayName: 'Rim T.' },                                     // no userKey: kept
-  ]; };
-  reset();
-  let ids = [B, C, A, 'not-an-id', 42];
-  const timers = manualTimers();
-  const sweep = createLeftoverSweep({ win, listLeftovers: async () => ids, log: (event, detail) => logs.push([event, detail]), timers });
-  sweep.added();
-  await tick(0);
-  assert.deepEqual(removed, [], 'nothing before the page is connected as the host');
-  sweep.connected();
-  await tick(0); await tick(0);
-  assert.deepEqual(removed, [2, 4], 'removes the listed userKey only, never itself, never by userIdentity');
-  assert.deepEqual(logs.map(([event, detail]) => [event, detail.label, detail.state]), [['leftover removed', 'Amal B.', 'ok'], ['leftover removed', 'Amal B.', 'ok']]);
-  assert.ok(!JSON.stringify(logs).includes(B) && !JSON.stringify(logs).includes('userId'), 'the trace says the label only');
-  // Zoom refuses: nothing else happens, the next round tries again.
-  removed.length = 0; logs.length = 0; refuse = true; reset();
-  await timers.round();
-  assert.deepEqual(removed, [2, 4]);
-  assert.deepEqual(logs.map(([, detail]) => detail.state), ['refused', 'refused']);
-  refuse = false; removed.length = 0;
-  await timers.round();
-  assert.deepEqual(removed, [2, 4], 'the next round tries again');
-  // The list cannot be read (not the host, network): nothing else happens.
-  removed.length = 0; logs.length = 0; reset();
-  const failing = createLeftoverSweep({ win, listLeftovers: async () => { throw new Error('forbidden'); }, log: (event, detail) => logs.push([event, detail]), timers: manualTimers() });
-  failing.connected(); await tick(0); await tick(0);
-  assert.deepEqual(removed, []); assert.deepEqual(logs, [['leftovers', { state: 'refused' }]]);
-  // Arrivals are coalesced into one sweep.
-  const t2 = manualTimers();
-  const counted = [];
-  const sweep2 = createLeftoverSweep({ win, listLeftovers: async () => { counted.push(1); return []; }, timers: t2 });
-  sweep2.connected(); await tick(0);
-  sweep2.added(); sweep2.added(); sweep2.added();
-  assert.equal(t2.timeouts, 1, 'one coalesced sweep for a burst of arrivals');
-  await t2.fire();
-  assert.equal(counted.length, 2);
-  sweep2.stop(); assert.equal(t2.intervals, 0);
-  sweep.stop(); ids = [];
-  // The module never reads userIdentity.
-  const code = read('src/lib/online/zoom-room-leftovers.mjs').replace(/^\s*\/\/.*$/gm, '');
-  assert.ok(!code.includes('userIdentity') && code.includes('userKey') && code.includes('removeUser'));
-}
-{
-  // In the room: the teacher's page sweeps at Connected and on user-added; a learner's page never does.
-  for (const [hands, expected] of [['teacher', 2], ['learner', 0]]) {
-    const calls = [], logs = [], toolkit = fakeToolkit(calls);
-    let asked = 0;
-    const r = open(toolkit, calls, logs, { hands, listLeftovers: async () => { asked++; return []; } });
-    await r.room.ready;
-    toolkit.connect(); await tick(0);
-    toolkit.emit('user-added', [{ userId: 9, displayName: 'Rim T.' }]);
-    await tick(1100);
-    assert.equal(asked, expected, `${hands}: ${expected} sweeps`);
-    await r.room.stop();
+  // D15 (2026-11-18): the platform never removes a participant. Zoom refuses a removed
+  // connection's browser for the rest of the session (code 3009), so no module of the room
+  // calls removeUser, and no page asks for a leftover list.
+  const files = ['src/lib/online', 'src/components/online', 'src/app/(admin)/online'].flatMap(dir => readdirSync(dir, { recursive: true })
+    .filter(name => /\.(m?js|jsx)$/.test(name)).map(name => `${dir}/${name}`));
+  assert.ok(files.length > 10, 'the room modules were found');
+  for (const file of files) {
+    const code = read(file).replace(/^\s*\/\/.*$/gm, '');
+    assert.ok(!/removeUser\s*\(/.test(code), `${file} never calls removeUser`);
+    assert.ok(!code.includes('online_list_room_leftovers') && !/listLeftovers/.test(code), `${file} asks for no leftover list`);
   }
 }
 {
@@ -1681,10 +1626,12 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
   teacherHands.stop();
 }
 {
-  // The teacher guide: « Retirer » is not a ban.
+  // The teacher guide, owner decision D15 (2026-11-18): « Retirer » blocks the device for the
+  // lesson (Zoom 3009); a double disappears on its own.
   const guide = read('src/app/(admin)/teacher-portal/online/page.jsx');
   const text = guide.slice(guide.indexOf('data-testid="room-guide"'), guide.indexOf('</details>')).replace(/<[^>]+>/g, '');
-  assert.match(text, /« Retirer » n’est pas une exclusion : l’apprenant retiré peut revenir avec « Rejoindre »\./);
+  assert.ok(text.includes('Si un apprenant apparaît deux fois, ne le retirez pas : l’ancienne connexion disparaît seule en 3 minutes maximum. « Retirer » bloque cet appareil jusqu’à la fin du cours.'));
+  assert.ok(!/n’est pas une exclusion|peut revenir avec « Rejoindre »/.test(text), 'the « not a ban » sentence is gone');
 }
 
 console.log('online room unit regressions passed');

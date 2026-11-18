@@ -7,22 +7,28 @@
 // harness's in-memory pass model, which follows the SQL rules of migration 129; every
 // page load is a new pass whose id is the token's user_key, as the join route issues it.
 // Each « device » is its own installed-Chrome process, so it can be killed.
+// Owner decision D15 (2026-11-18): the platform never removes a participant (Zoom refuses a
+// removed connection's browser for the rest of the session, code 3009); newest connection
+// wins through the live page only, and a dead connection is left for Zoom to drop.
 //   T-R1  the host reads userKey of the other participants: it equals each pass id;
-//         userIdentity is recorded (expected empty);
+//         userIdentity is recorded (presence and equality only, never read by the room);
 //   T-R2  the same learner in two separate browsers: the first leaves within 15 s of the
 //         second entering Zoom, one participant remains, the card is shown;
 //   T-R2b a third browser of that learner whose network is cut before its join completes:
 //         the working browser stays in the room and is never shown the card;
-//   T-R3  a learner's browser killed, then (second pass) cut from the network, each time
-//         followed by a new connection: the teacher's page removes the leftover within
-//         30 s and the new connection is not refused;
+//   T-R3  the same browser drops (network cut) and comes back with a reload: it enters,
+//         is never locked out across three more reloads, and its old connection leaves
+//         Zoom's list within 4 minutes without any removal;
 //   dead  how long Zoom itself keeps a killed connection when nothing removes it;
 //   T-R5  five fast reloads of a learner and of the teacher: never more than one of each
 //         for longer than 15 s;
-//   T-R4  the teacher's browser killed and the teacher back: host rights of the new
-//         connection and the removal of the old one are recorded;
-//   T-R7  « Retirer » on a learner, then « Terminer pour tous »: the removed text, then
-//         the ended text on every page; the reason Zoom sends is recorded.
+//   T-R4  the teacher's browser killed and the teacher back in a new browser: host or
+//         manager rights within 60 s while the old one lingers (S2 is « neither »), host
+//         once Zoom drops the old one;
+//   T-R7  « Retirer » on a learner: the removed text with « Quitter » only; the same
+//         browser is refused (3009) and shows the removed text without « Réessayer »; a
+//         new browser of that learner enters; then « Terminer pour tous »: the ended text
+//         on every page; the reasons Zoom sends are recorded.
 //   T-R6  (groups) is not run by this script: recorded as not covered.
 // Writes a JSON report (OL_ZOOM_RELIABILITY_REPORT, default
 // scripts/.zoom-reliability-report.json, git-ignored). Touches no application database.
@@ -50,7 +56,7 @@ if (!env.ONLINE_VIDEO_PROVIDER_API_KEY || !env.ONLINE_VIDEO_PROVIDER_API_SECRET)
   process.exit(2);
 }
 const reportPath = process.env.OL_ZOOM_RELIABILITY_REPORT || 'scripts/.zoom-reliability-report.json';
-setTimeout(() => { console.error('FAIL zoom reliability stalled'); finish().finally(() => process.exit(1)); }, 30 * 60_000).unref();
+setTimeout(() => { console.error('FAIL zoom reliability stalled'); finish().finally(() => process.exit(1)); }, 45 * 60_000).unref();
 
 const git = args => { try { return execFileSync('git', args, { encoding: 'utf8' }).trim(); } catch { return null; } };
 const zoom = createZoomVideoProvider(env);
@@ -166,8 +172,9 @@ try {
 
   // ---- T-R2b: a third browser cut from the network before its join completes ----
   const r3 = await device('r3', 'r');
-  const r3Pass = await passOf(r3.page);
   await r3.page.getByRole('button', { name: 'Rejoindre le cours' }).waitFor({ timeout: 60000 });
+  await r3.page.waitForFunction(() => typeof window.__pass === 'string', null, { timeout: 30000 });
+  const r3Pass = await passOf(r3.page);
   await r3.context.setOffline(true);
   await r3.page.getByRole('button', { name: 'Rejoindre le cours' }).click();
   await r3.page.waitForTimeout(25000); // two rounds of the working browser's check
@@ -179,27 +186,30 @@ try {
   record('T-R2b what the cut browser shows', { phase: await phaseOf(r3.page), connection: report.traces.r3.filter(l => /^\S+ (connection|room failed)/.test(l)).slice(-4) });
   await close(r3);
 
-  // ---- T-R3: killed, then cut from the network; the teacher removes the leftover ----
-  const k1 = await device('k1', 'k');
-  await enter(k1.page);
+  // ---- T-R3: the same browser drops and comes back; nothing removes anybody (D15) ----
+  const k = await device('k', 'k');
+  await enter(k.page);
   await teacher.page.waitForTimeout(2000);
-  kill(k1);
-  const k2 = await device('k2', 'k');
-  await enter(k2.page);
-  const killedGone = await waitUntil(async () => (await countOf(teacher.page, LABEL.k)) === 1, 45000);
-  await teacher.page.waitForTimeout(1000);
-  pass('T-R3 a killed browser: the teacher\'s page removes the leftover within 30 s; the new connection stays',
-    killedGone !== null && killedGone <= 30000 && (await phaseOf(k2.page)) === 'in_room' && traceHas('teacher', /leftover removed label=Test K\. state=ok/),
-    { removedAfterMs: killedGone, newPhase: await phaseOf(k2.page), teacherTrace: report.traces.teacher.filter(l => /leftover/.test(l)).slice(-3) });
-  await k2.context.setOffline(true);
-  await teacher.page.waitForTimeout(2000);
-  const k3 = await device('k3', 'k');
-  await enter(k3.page);
-  const cutGone = await waitUntil(async () => (await countOf(teacher.page, LABEL.k)) === 1, 45000);
-  pass('T-R3 a browser cut from the network: the teacher\'s page removes the leftover within 30 s; the new connection stays',
-    cutGone !== null && cutGone <= 30000 && (await phaseOf(k3.page)) === 'in_room',
-    { removedAfterMs: cutGone, newPhase: await phaseOf(k3.page) });
-  await close(k2);
+  await k.context.setOffline(true);
+  await k.page.waitForTimeout(3000);
+  await k.context.setOffline(false);
+  await k.page.reload();
+  await enter(k.page);
+  const back = Date.now();
+  const doubleSeen = (await countOf(teacher.page, LABEL.k)) > 1;
+  let refusedReloads = 0;
+  const reloadFails = [];
+  for (let i = 0; i < 3; i++) {
+    await k.page.waitForTimeout(5000);
+    await k.page.reload();
+    const ok = await enterOnce(k.page).catch(() => false);
+    if (!ok) { refusedReloads++; reloadFails.push(report.traces.k.filter(l => /room failed/.test(l)).at(-1)?.replace(/^\S+ /, '') || 'timeout'); await k.page.reload(); await enterOnce(k.page).catch(() => false); }
+  }
+  const kGone = await waitUntil(async () => (await countOf(teacher.page, LABEL.k)) === 1, 240000, 2000);
+  const kGoneMs = kGone === null ? null : Date.now() - back;
+  pass('T-R3 the same browser drops and comes back: never locked out across three reloads; its old connection leaves Zoom\'s list within 4 min without any removal',
+    refusedReloads === 0 && kGone !== null && kGoneMs <= 240000 && (await phaseOf(k.page)) === 'in_room' && !Object.values(report.traces).flat().some(l => /removeUser|leftover/.test(l)),
+    { doubleSeenAfterBack: doubleSeen, refusedReloads, reloadFails, oldGoneAfterBackMs: kGoneMs, phase: await phaseOf(k.page) });
 
   // ---- dead: how long Zoom keeps a killed connection that nothing removes ----
   const dead = await device('dead', 'd');
@@ -235,12 +245,25 @@ try {
   await observer.page.waitForTimeout(3000);
   const teacher2 = await device('teacher2', 'teacher', 'host');
   await enter(teacher2.page);
-  const hostNow = await waitUntil(() => teacher2.page.evaluate(() => !!window.zmClient?.getCurrentUserInfo?.()?.isHost), 60000, 1000);
-  const oldGone = await waitUntil(async () => (await countOf(observer.page, LABEL.teacher)) === 1, 60000, 1000);
-  record('T-R4 the teacher killed and back: host rights and removal of the old connection', {
-    newHasHostAfterMs: hostNow, oldConnectionGoneAfterMs: oldGone, removedBySweep: traceHas('teacher2', /leftover removed label=Test P\. state=ok/),
-    refusedRemovals: report.traces.teacher2.filter(l => /leftover removed .*state=refused/.test(l)).length,
+  // S2 is « no host or manager rights while the old one lingers ». Measured 2026-11-18: Zoom
+  // makes the new host-role connection a manager while the old host lingers, and host once
+  // Zoom drops the old one.
+  const t4 = Date.now();
+  const rights = () => teacher2.page.evaluate(() => { const u = window.zmClient?.getCurrentUserInfo?.(); return { host: !!u?.isHost, manager: !!u?.isManager }; });
+  const privilegedAfter = await waitUntil(async () => { const r = await rights(); return r.host || r.manager; }, 60000, 1000);
+  const whilePrivileged = { ...(await rights()), teacherConnections: await countOf(observer.page, LABEL.teacher) };
+  let hostAfter = null, oldGoneMs = null;
+  while (Date.now() - t4 < 300000 && (hostAfter === null || oldGoneMs === null)) {
+    if (hostAfter === null && (await rights()).host) hostAfter = Date.now() - t4;
+    if (oldGoneMs === null && (await countOf(observer.page, LABEL.teacher)) === 1) oldGoneMs = Date.now() - t4;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  record('T-R4 the teacher killed and back in a new browser: rights while the old connection lingers, and when Zoom drops it', {
+    hostOrManagerAfterMs: privilegedAfter, rightsWhileOldLingers: whilePrivileged, hostAfterMs: hostAfter, oldConnectionGoneAfterMs: oldGoneMs,
     hostsSeenByObserver: (await users(observer.page)).filter(u => u.isHost).map(u => u.name) });
+  pass('T-R4 S2 not met: the teacher\'s new connection has host or manager rights within 60 s while the old one lingers; host once Zoom drops it',
+    privilegedAfter !== null && hostAfter !== null && oldGoneMs !== null && hostAfter <= oldGoneMs + 10000,
+    { hostOrManagerAfterMs: privilegedAfter, hostAfterMs: hostAfter, oldConnectionGoneAfterMs: oldGoneMs });
   teacher = teacher2;
 
   // ---- T-R7: « Retirer », then « Terminer pour tous » ----
@@ -262,14 +285,26 @@ try {
   }
   const removedShown = await waitUntil(async () => (await phaseOf(victim.page)) === 'removed', 30000);
   const removedReason = report.traces.victim.map(l => l.match(/connection state=Closed(?: code=\S+)? reason=(.*)$/)?.[1]).filter(Boolean).at(-1) || null;
-  pass('T-R7 « Retirer »: the learner\'s page shows the removed text with « Rejoindre »', removedShown !== null
-    && /L’enseignant vous a retiré du cours\./.test(await victim.page.getByTestId('room-removed').innerText()), { via, shownAfterMs: removedShown });
+  const removedCard = removedShown === null ? null : victim.page.getByTestId('room-removed');
+  pass('T-R7 « Retirer »: the learner\'s page shows the removed text with « Quitter » only', removedShown !== null
+    && /L’enseignant vous a retiré du cours\./.test(await removedCard.innerText())
+    && (await removedCard.getByRole('button').count()) === 0 && (await removedCard.getByRole('link', { name: 'Quitter' }).count()) === 1, { via, shownAfterMs: removedShown });
   record('T-R7 the reason Zoom sends for « Retirer »', { reason: removedReason, via });
-  await victim.page.getByRole('button', { name: 'Rejoindre' }).click();
-  await enter(victim.page);
-  pass('T-R7 a removed learner can come back with « Rejoindre » (not a ban)', (await phaseOf(victim.page)) === 'in_room', {});
+  // The same browser tries again (a reload): Zoom refuses it for the session (3009, D15).
+  await victim.page.reload();
+  const again = await enterOnce(victim.page).catch(() => false);
+  const refusedCard = again ? null : await victim.page.getByTestId('room-refused').innerText().catch(() => null);
+  const againFail = report.traces.victim.filter(l => /room failed/.test(l)).at(-1)?.replace(/^\S+ /, '') || null;
+  pass('T-R7 « Retirer » blocks that browser (Zoom 3009): the page shows the removed text, without « Réessayer »',
+    !again && /code=3009/.test(againFail || '') && /L’enseignant vous a retiré du cours\./.test(refusedCard || '') && (await victim.page.getByTestId('room-refused').getByRole('button').count()) === 0,
+    { entered: again, fail: againFail, text: refusedCard });
+  await close(victim);
+  // Another browser of the same learner enters.
+  const victim2 = await device('victim2', 'v');
+  const otherBrowser = await enterOnce(victim2.page).catch(() => false) || await (async () => { await victim2.page.reload(); return enterOnce(victim2.page).catch(() => false); })();
+  pass('T-R7 after « Retirer », the same learner enters from another browser', otherBrowser && (await phaseOf(victim2.page)) === 'in_room', {});
   await teacher.page.waitForTimeout(3000);
-  const learners = [r2, observer, k3, victim];
+  const learners = [r2, observer, k, victim2];
   let endVia = 'toolkit';
   try {
     await teacher.page.locator('[data-testid="zoom-room"] button.bg-red-500, [data-testid="zoom-room"] button:has-text("Quitter")').last().click({ timeout: 5000 });
@@ -283,7 +318,7 @@ try {
   const endReasons = learners.map(d => report.traces[d.name].map(l => l.match(/connection state=Closed(?: code=\S+)? reason=(.*)$/)?.[1]).filter(Boolean).at(-1) || null);
   pass('T-R7 « Terminer pour tous »: every learner page shows the ended text with « Quitter » only', endedAll !== null, { via: endVia, endedAfterMs: endedAll, phases: await Promise.all(learners.map(d => phaseOf(d.page))) });
   record('T-R7 the reason Zoom sends for the end for all', { reasons: endReasons, via: endVia });
-  record('T-R6 groups', { run: false, note: 'not covered by this script (leftover in a group, sweep while groups are open, network cut during a move): UNVERIFIED' });
+  record('T-R6 groups', { run: false, note: 'not covered by this script (a newer device while the learner is in a group, a network cut during a move): UNVERIFIED' });
   record('token console line after the room', { jwtLinesSeen: 'see the lifecycle and classroom reports; the wrapper restore is proven in the browser suite' });
 } finally {
   await finish();

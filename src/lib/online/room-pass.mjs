@@ -1,7 +1,7 @@
 // The room's own pass while the participant is in the room (plan online-room-reliability.md,
 // ORR-r2, section 1, « reliability PR »). Provider-neutral: it knows passes and the two
-// RPCs, never a Zoom field (N5); the Zoom-specific marker and sweep live in the Zoom room
-// module (zoom-room-session.mjs, zoom-room-leftovers.mjs).
+// RPCs, never a Zoom field (N5); the Zoom-specific marker lives in the Zoom room module
+// (zoom-room-session.mjs). The platform never removes a participant (D15).
 //
 //   - Once the provider reports the page inside the room (`joined()`), the page calls
 //     `online_confirm_pass(pass)` at once (N7): only then are the person's older passes
@@ -28,7 +28,6 @@ export const ROOM_PASS_TEXT = Object.freeze({
   useThisDevice: 'Utiliser cet appareil',
   tookOver: label => `Vous avez pris la place de ${label} dans ce cours : son autre connexion a été fermée.`,
   removed: 'L’enseignant vous a retiré du cours.',
-  rejoin: 'Rejoindre',
   ended: 'L’enseignant a terminé le cours pour tous.',
   quit: 'Quitter',
 });
@@ -47,9 +46,10 @@ export function passOutcome(answer) {
 // reason the room module reports: 'removed' (« Retirer »), 'ended' (« Terminer pour
 // tous »), or anything else (today's handling). `check` reads the pass once, for a
 // removal only: a removal that follows a newer device's confirmation is that device's
-// card; a revoked pass keeps its own text; otherwise the removed text with « Rejoindre »
-// (a removal by hand is not a ban: a new pass is a new identity). A failed read is the
-// removed text. Returns { kind: 'ended' } | { kind: 'removed' } | { kind: 'superseded' }
+// card; a revoked pass keeps its own text; otherwise the removed text with « Quitter »
+// only: Zoom refuses a removed browser for the rest of the session (code 3009, owner
+// decision D15 of 2026-11-18), so a « Rejoindre » here could only fail. A failed read is
+// the removed text. Returns { kind: 'ended' } | { kind: 'removed' } | { kind: 'superseded' }
 // | { kind: 'left', reason } | { kind: 'portal' }.
 export async function closedOutcome(closed, check) {
   if (closed === 'ended') return { kind: 'ended' };

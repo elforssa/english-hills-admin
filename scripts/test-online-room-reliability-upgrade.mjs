@@ -6,7 +6,7 @@
 //      ledger stays at 128; `supabase migration up` would also apply any later file);
 //   3. proves that online_issue_join and online_resolve_join differ from their 117 bodies
 //      by exactly the intended lines (same signature, posture, owner and grants), that
-//      exactly three public functions (authenticated only) and one private helper (no
+//      exactly two public functions (authenticated only) and one private helper (no
 //      API grant) are added, that online_join_tokens gains exactly two nullable columns
 //      and two checks, that nothing else in the catalog moved and that no existing row
 //      changed (the two new columns are empty on the old pass);
@@ -24,7 +24,7 @@ const sql = input => psql(['-qAt'], input).trim();
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '128', 'run on a database at migration 128');
 
 const RECREATED = ['public.online_issue_join(uuid,uuid)', 'public.online_resolve_join(uuid)'];
-const ADDED_PUBLIC = ['online_check_pass(uuid)', 'online_confirm_pass(uuid)', 'online_list_room_leftovers(uuid)'];
+const ADDED_PUBLIC = ['online_check_pass(uuid)', 'online_confirm_pass(uuid)'];
 const ADDED_PRIVATE = 'online_security.own_pass_state(uuid)';
 const NEW_COLUMNS = ['public.online_join_tokens.superseded_at', 'public.online_join_tokens.provider'];
 const NEW_CONSTRAINTS = ['online_join_tokens.online_join_tokens_provider_check', 'online_join_tokens.online_join_tokens_superseded_check'];
@@ -137,4 +137,4 @@ assert.match(acceptance, /PASS online learning SQL acceptance/);
 assert.deepEqual(data(), beforeData, 'the acceptance left no row');
 sql(`delete from public.online_join_tokens where id='${id(4)}'; delete from public.online_lessons where id='${id(3)}';
   delete from public.online_courses where group_id='${id(2)}'; delete from public.groups where id='${id(2)}'; delete from public.teachers where id='${id(1)}';`);
-console.log(`PASS stateful 128→129 (online room reliability): two bodies differ by exactly their intended lines with posture and grants intact, three authenticated functions and one private helper added, two nullable columns and two checks on online_join_tokens, ${tables.length} table hashes unchanged, the old pass resolves with the course's provider, acceptance green on the upgraded state`);
+console.log(`PASS stateful 128→129 (online room reliability): two bodies differ by exactly their intended lines with posture and grants intact, two authenticated functions and one private helper added, two nullable columns and two checks on online_join_tokens, ${tables.length} table hashes unchanged, the old pass resolves with the course's provider, acceptance green on the upgraded state`);

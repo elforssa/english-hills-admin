@@ -492,7 +492,8 @@ select pg_temp.ok((select report from public.online_lessons where id = pg_temp.i
 -- ---------------------------------------------------------------------------
 -- Room reliability (migration 129, plan ORR-r2, reliability PR): one current pass per
 -- lesson and person; an earlier pass is superseded only when a later-issued pass is
--- confirmed from inside the room (B2); the host's leftover list (D3, D4).
+-- confirmed from inside the room (B2). No leftover list: the platform never removes a
+-- participant (D15, 2026-11-18).
 -- ---------------------------------------------------------------------------
 savepoint orr;
 delete from public.online_join_tokens where lesson_id in (pg_temp.id(501), pg_temp.id(502), pg_temp.id(511));
@@ -513,12 +514,8 @@ create function pg_temp.confirm(who integer, jti uuid) returns jsonb language pl
 declare r jsonb; begin perform pg_temp.act(who); r := public.online_confirm_pass(jti); perform pg_temp.owner(); return r; end $$;
 create function pg_temp.check_pass(who integer, jti uuid) returns jsonb language plpgsql as $$
 declare r jsonb; begin perform pg_temp.act(who); r := public.online_check_pass(jti); perform pg_temp.owner(); return r; end $$;
-create function pg_temp.leftovers(who integer, lesson integer) returns jsonb language plpgsql as $$
-declare r jsonb; begin perform pg_temp.act(who); r := public.online_list_room_leftovers(pg_temp.id(lesson)); perform pg_temp.owner(); return r; end $$;
 create function pg_temp.is_current(p uuid) returns boolean language sql security definer as $$
   select superseded_at is null and revoked_at is null from public.online_join_tokens where jti = p $$;
-create function pg_temp.listed(r jsonb, p uuid) returns boolean language sql as $$
-  select exists (select 1 from jsonb_array_elements_text(r->'ids') x where x = p::text) $$;
 
 -- Issue: provider recorded from the course; issued_at in the order of issue, even inside
 -- one transaction (where now() is constant); the issue supersedes nothing.
@@ -544,7 +541,6 @@ select pg_temp.issue(4, 501) as orr_h1 \gset
 select pg_temp.ok((pg_temp.confirm(4, :'orr_h1'))->>'superseded_others' = '0', 'the host confirms');
 select pg_temp.ok((pg_temp.check_pass(8, :'orr_a'))->>'superseded' = 'false' and pg_temp.is_current(:'orr_a'),
   'mint fails, old pass stays current: an issued, unconfirmed pass takes nothing');
-select pg_temp.ok(jsonb_array_length(pg_temp.leftovers(4, 501)->'ids') = 0, 'mint fails: the leftover list is empty');
 -- The newer device confirms from inside the room: the older pass is superseded.
 select pg_temp.confirm(8, :'orr_b') as orr_b_confirm \gset
 select pg_temp.ok((:'orr_b_confirm'::jsonb)->>'superseded_others' = '1'
@@ -592,46 +588,9 @@ select pg_temp.fails(format('select public.online_check_pass(%L)', :'orr_d'), '4
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.is_current(:'orr_d'), 'refused confirmations wrote nothing');
 
--- Host: the teacher's own double; leftovers are ids only, for the host's own lesson.
+-- Host: the teacher's own double.
 select pg_temp.issue(4, 501) as orr_h2 \gset
 select pg_temp.ok((pg_temp.confirm(4, :'orr_h2'))->>'superseded_others' = '1' and not pg_temp.is_current(:'orr_h1'), 'the teacher''s new connection supersedes the old host pass');
-select pg_temp.ok(pg_temp.leftovers(4, 501) - 'ids' = '{}'::jsonb
-  and (select bool_and(jsonb_typeof(x) = 'string' and (x #>> '{}') ~ '^[0-9a-f-]{36}$') from jsonb_array_elements(pg_temp.leftovers(4, 501)->'ids') x),
-  'the leftover list holds ids only: no reason, no name');
-select pg_temp.ok(pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_a') and pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_b')
-  and pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_c') and pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_h1')
-  and pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_r'), 'superseded and revoked passes are listed (D4)');
-select pg_temp.ok(not pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_d') and not pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_h2')
-  and not pg_temp.listed(pg_temp.leftovers(4, 501), :'orr_x'), 'current and merely expired passes are never listed');
-select pg_temp.ok(pg_temp.leftovers(4, 501)::text not like '%guest_removed%' and pg_temp.leftovers(4, 501)::text not like '%Amal%',
-  'the list carries neither the revoke reason nor a label');
--- Refused to learners, parents, staff, another teacher, and a teacher without a current host pass.
-select pg_temp.act(8);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(7);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(1);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(2);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(3);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(5);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501', 'online.forbidden');
-select pg_temp.act(4);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(502)), '42501', 'online.forbidden');
-select pg_temp.owner();
-select pg_temp.issue(4, 502) as orr_h3 \gset
-select pg_temp.ok(jsonb_array_length(pg_temp.leftovers(4, 502)->'ids') = 0, 'a host pass opens the list of its own lesson');
-update public.online_join_tokens set revoked_at = now(), revoke_reason = 'teacher_changed' where jti = :'orr_h3';
-select pg_temp.act(4);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(502)), '42501', 'online.forbidden');
-select pg_temp.owner();
-select pg_temp.issue(4, 502) as orr_h4 \gset
-update public.online_join_tokens set superseded_at = issued_at where jti = :'orr_h4';
-select pg_temp.act(4);
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(502)), '42501', 'online.forbidden');
-select pg_temp.owner();
 
 -- Observers: per signed-in account; a learner's pass is never taken by an observer's.
 select pg_temp.issue(1, 501) as orr_o1 \gset
@@ -653,16 +612,17 @@ select pg_temp.ok((pg_temp.check_pass(14, :'orr_k1'))->>'superseded' = 'true', '
 select pg_temp.issue(7, 511, 206) as orr_k3 \gset
 select pg_temp.ok((pg_temp.confirm(7, :'orr_k3'))->>'took_over_other_account' = 'false', 'replacing one''s own pass is not another account''s place');
 
--- Catalog: the three functions are authenticated-only security definer; the private
--- helper is executable by no API role; the service role cannot call them.
+-- Catalog: the two functions are authenticated-only security definer; the private
+-- helper is executable by no API role; the service role cannot call them; no leftover
+-- list exists (D15).
 select pg_temp.ok((select bool_and(p.prosecdef and p.proacl::text = '{postgres=X/postgres,authenticated=X/postgres}') from pg_proc p
-  where p.oid in ('public.online_check_pass(uuid)'::regprocedure, 'public.online_confirm_pass(uuid)'::regprocedure, 'public.online_list_room_leftovers(uuid)'::regprocedure)),
+  where p.oid in ('public.online_check_pass(uuid)'::regprocedure, 'public.online_confirm_pass(uuid)'::regprocedure)),
   'new pass functions: security definer, authenticated only');
 select pg_temp.ok((select proacl::text from pg_proc where oid = 'online_security.own_pass_state(uuid)'::regprocedure) = '{postgres=X/postgres}', 'own_pass_state is private');
+select pg_temp.ok(to_regprocedure('public.online_list_room_leftovers(uuid)') is null, 'no leftover list function (D15)');
 set local role service_role;
 select pg_temp.fails(format('select public.online_check_pass(%L)', :'orr_d'), '42501');
 select pg_temp.fails(format('select public.online_confirm_pass(%L)', :'orr_d'), '42501');
-select pg_temp.fails(format('select public.online_list_room_leftovers(%L)', pg_temp.id(501)), '42501');
 reset role;
 rollback to savepoint orr;
 

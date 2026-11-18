@@ -48,8 +48,9 @@
 //     once when the channel connects, at most once per `boardAnswerMs`); a page that
 //     receives it calls `onNewer` and the page checks its pass at once. The marker carries
 //     nothing and decides nothing;
-//   - the teacher's page (`listLeftovers`) removes the participants whose `userKey` is one
-//     of the lesson's ended passes (zoom-room-leftovers.mjs);
+//   - the platform never removes a participant (owner decision D15, 2026-11-18): Zoom
+//     refuses a removed connection's browser for the rest of the session (code 3009), so a
+//     dead device's connection is left for Zoom to drop (about 3 minutes, 181 s measured);
 //   - `connection-change` `Closed` with Zoom's reason: 'kicked by host' and 'expeled by
 //     host' are reported to the page as `closed: 'removed'`, 'ended by host' as `closed:
 //     'ended'`; any other reason or none as before (`onLeft({ closed: null })`);
@@ -59,7 +60,6 @@ import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoo
 import { correctGroupTimer } from './zoom-groups.mjs';
 import { dropToolkitJwtLog, restoreToolkitJwtLog, watchDeviceMessages } from './zoom-toolkit-messages.mjs';
 import { createHands, HAND_PREFIX } from './zoom-hands.mjs';
-import { createLeftoverSweep } from './zoom-room-leftovers.mjs';
 
 export const ROOM_NEWER = 'eh-room:newer';
 // Zoom's ClosedReason values (@zoom/videosdk event-callback.d.ts) as the page's words.
@@ -88,18 +88,16 @@ export function roomLog(event, detail) {
 }
 
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
-  boardAnswerMs = 2000, hands: handRole, onHands, onLeft, onError, onClosing, onWhiteboard, onJoined, onNewer, listLeftovers,
+  boardAnswerMs = 2000, hands: handRole, onHands, onLeft, onError, onClosing, onWhiteboard, onJoined, onNewer,
   log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
     teardown: null, settle: null, people: new Map(), groupsTraced: false, stopCameraWatch: null,
     board: { own: false, peer: false, told: null, waiting: new Set(), presenting: false, open: false, readOnly: false, traced: false, answered: -Infinity, answer: null },
-    blocked: new Set(), hands: null, closed: null, jwt: false, sweep: null,
+    blocked: new Set(), hands: null, closed: null, jwt: false,
     newer: { afterChannel: false, sent: -Infinity, timer: null } };
   // Raise hand: 'teacher' for the host's page, 'learner' for everybody else; off without a role.
   if (handRole === 'teacher' || handRole === 'learner')
     s.hands = createHands({ teacher: handRole === 'teacher', win, log, onChange: state => { if (!s.silent && !s.stopped) onHands?.(state); } });
-  // Leftover connections: the teacher's page only (the database refuses anybody else).
-  if (handRole === 'teacher' && typeof listLeftovers === 'function') s.sweep = createLeftoverSweep({ win, listLeftovers, log });
   const preview = config?.featuresOptions?.preview?.enable === true;
   const stopCameraWatch = () => { if (s.stopCameraWatch) { s.stopCameraWatch(); s.stopCameraWatch = null; } };
   const stopWatchdog = () => { if (s.watchdog) { clearTimeout(s.watchdog); s.watchdog = null; } };
@@ -130,7 +128,6 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       if (!s.groupsTraced) { s.groupsTraced = true; log('groups timer', { correction: corrected ? 'on' : 'off' }); }
       askBoard();
       s.hands?.connected();
-      s.sweep?.connected();
       if (!s.silent && !s.stopped) { try { onJoined?.(); } catch { /* the page's own business */ } }
     }
     // A reconnection: a move into a group or back, or the network. Whatever the reason
@@ -268,7 +265,6 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       if (believed) board({ told: from });
     }
     s.hands?.added(list);
-    s.sweep?.added();
   };
   const onRemoved = list => { people('removed', list); s.hands?.removed(list); };
   // A participant made co-host (or no longer) changes what the raise-hand button offers.
@@ -289,7 +285,6 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     stopAnswer();
     stopNewer();
     s.hands?.stop();
-    s.sweep?.stop();
     stopCameraWatch();
     container?.removeEventListener?.('click', onClick, true);
     win?.removeEventListener?.('pagehide', onPageHide);

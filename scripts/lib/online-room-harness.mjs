@@ -9,9 +9,9 @@
 // page's own « Quitter le cours » link, which leads to a stand-in portal page (/portal).
 // Reliability PR (plan online-room-reliability.md): the page's pass glue too — the pass
 // watcher (room-pass.mjs) with `online_confirm_pass` / `online_check_pass` /
-// `online_list_room_leftovers` answered at POST /rpc/<name> by an in-memory pass model
-// that follows the SQL rules of migration 129 (supersede at confirmation only, earlier
-// issued passes of the same lesson, person and kind; ids only for the leftovers), the
+// answered at POST /rpc/<name> by an in-memory pass model that follows the SQL rules of
+// migration 129 (supersede at confirmation only, earlier issued passes of the same
+// lesson, person and kind), the
 // cards « Utiliser cet appareil », the removed and ended texts, and the parent's notice.
 // `embed(query, { pass })` may use the pass id as the token's user_key.
 import { createServer } from 'node:http';
@@ -94,7 +94,6 @@ function App() {
   }, [pass, label]);
   const onJoined = useCallback(() => watcher.current?.joined(), []);
   const onNewer = useCallback(() => watcher.current?.checkNow(), []);
-  const listLeftovers = useCallback(() => rpc('online_list_room_leftovers', { p_lesson: lesson }).then(answer => answer?.ids || []), []);
   // New function identities on every render, like a page whose role or back link changes.
   const onLeft = async detail => {
     const outcome = await closedOutcome(detail?.closed, () => rpc('online_check_pass', { p_jti: passRef.current }));
@@ -111,12 +110,11 @@ function App() {
       {state.phase === 'other_tab' && <div data-testid="room-other-tab"><p>Vous êtes déjà connecté à ce cours dans un autre onglet.</p><button onClick={takeThisTab}>Utiliser cet onglet</button></div>}
       {state.phase === 'displaced' && <p data-testid="room-displaced">Ce cours est maintenant ouvert dans un autre onglet.</p>}
       {state.phase === 'superseded' && <div data-testid="room-superseded"><p>{ROOM_PASS_TEXT.superseded}</p><button onClick={join}>{ROOM_PASS_TEXT.useThisDevice}</button></div>}
-      {state.phase === 'removed' && <div data-testid="room-removed"><p>{ROOM_PASS_TEXT.removed}</p><button onClick={join}>{ROOM_PASS_TEXT.rejoin}</button></div>}
+      {state.phase === 'removed' && <div data-testid="room-removed"><p>{ROOM_PASS_TEXT.removed}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'ended' && <div data-testid="room-ended"><p>{ROOM_PASS_TEXT.ended}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'left' && state.reason && <p data-testid="room-left-reason">{state.reason}</p>}
       {state.phase === 'in_room' && tookOver !== null && <p role="status" data-testid="room-took-over">{ROOM_PASS_TEXT.tookOver(tookOver)}</p>}
-      {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} onJoined={onJoined} onNewer={onNewer}
-        listLeftovers={state.embed.role === 'host' && query.get('sweep') !== 'off' ? listLeftovers : undefined} link={roomLink} />}
+      {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} onJoined={onJoined} onNewer={onNewer} link={roomLink} />}
       {state.phase === 'refused' && <div data-testid="room-refused" data-code={String(state.code)}><p>{state.room.text}</p>{state.room.retry && <button onClick={join}>Réessayer</button>}</div>}
     </div>
   );
@@ -226,7 +224,6 @@ export function createPassModel() {
       return { ...state(me), superseded_others: others, took_over_other_account: other };
     },
     check(jti, account) { const me = find(jti); return me && me.account === account ? state(me) : null; },
-    leftovers(lesson) { return { ids: passes.filter(p => p.lesson === lesson && (p.superseded || p.revoked)).map(p => p.jti).sort() }; },
     revoke(jti) { const p = find(jti); if (p) p.revoked = true; },
   };
 }
@@ -260,8 +257,7 @@ export async function serveRoomHarness({ js, css, embed, headers = [], model = c
         const args = JSON.parse(raw || '{}');
         if (rpcHook) { const hooked = await rpcHook(name, args); if (hooked) { res.statusCode = hooked.status || 500; return res.end(JSON.stringify(hooked.body || {})); } }
         const answer = name === 'online_confirm_pass' ? model.confirm(args.p_jti, args.account)
-          : name === 'online_check_pass' ? model.check(args.p_jti, args.account)
-            : name === 'online_list_room_leftovers' ? model.leftovers(args.p_lesson) : undefined;
+          : name === 'online_check_pass' ? model.check(args.p_jti, args.account) : undefined;
         res.setHeader('content-type', 'application/json');
         if (!answer) { res.statusCode = 403; return res.end(JSON.stringify({ reason: 'forbidden' })); }
         return res.end(JSON.stringify(answer));

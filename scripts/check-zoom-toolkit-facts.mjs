@@ -4,7 +4,8 @@
 // (@zoom/videosdk-ui-toolkit, which carries the SDK inside it) or in the typings of
 // @zoom/videosdk. The list stays owned by the online classroom tools plan; the
 // reliability PR adds `userKey` (the token's user_key, B1), the deprecation of
-// `userIdentity`, `removeUser` and the three `ClosedReason` values.
+// `userIdentity`, `removeUser` (behind the toolkit's « Retirer »; the platform never calls
+// it, D15) and the three `ClosedReason` values.
 //
 //   node scripts/check-zoom-toolkit-facts.mjs                 the installed packages (npm test)
 //   node scripts/check-zoom-toolkit-facts.mjs 2.6.10-1        a packed tarball of that toolkit
@@ -49,18 +50,18 @@ export const FACTS = [
   // The pin itself (installed run only).
   ['toolkit version is the pinned 2.5.0-1', 'package.json', () => toolkitVersion ? true : toolkitPkg.version === '2.5.0-1'],
   // Lifecycle (zoom-room-session.mjs).
-  ['the toolkit exposes the SDK client as window.zmClient', 'zoom-room-session.mjs, zoom-hands.mjs, zoom-whiteboard.mjs, zoom-room-leftovers.mjs', () => bundle.includes('window.zmClient = ')],
+  ['the toolkit exposes the SDK client as window.zmClient', 'zoom-room-session.mjs, zoom-hands.mjs, zoom-whiteboard.mjs', () => bundle.includes('window.zmClient = ')],
   ['connection states Connected, Reconnecting, Closed, Fail', 'zoom-room-session.mjs', () => /e\.Connected = "Connected", e\.Reconnecting = "Reconnecting", e\.Closed = "Closed", e\.Fail = "Fail"/.test(bundle)],
   ['the join rejects with « Timed out waiting for session to join »', 'zoom-room-session.mjs', () => bundle.includes('"Timed out waiting for session to join"')],
   ['the SDK leaves on page unload only when leaveOnPageUnload is set', 'ZoomRoom.jsx', () => bundle.includes('leaveOnPageUnload')],
-  ['participant events user-added, user-removed, user-updated', 'zoom-room-session.mjs, zoom-hands.mjs, zoom-room-leftovers.mjs', () => ['"user-added"', '"user-removed"', '"user-updated"'].every(event => bundle.includes(event))],
+  ['participant events user-added, user-removed, user-updated', 'zoom-room-session.mjs, zoom-hands.mjs', () => ['"user-added"', '"user-removed"', '"user-updated"'].every(event => bundle.includes(event))],
   ['getAllUser entries carry userId, isHost and isManager', 'zoom-hands.mjs, zoom-room-session.mjs', () => /userId: number;/.test(common) && /isHost: boolean;/.test(common) && /isManager: boolean;/.test(common)],
-  ['getCurrentUserInfo exists', 'zoom-hands.mjs, zoom-room-leftovers.mjs', () => /function getCurrentUserInfo\(\)/.test(client)],
+  ['getCurrentUserInfo exists', 'zoom-hands.mjs', () => /function getCurrentUserInfo\(\)/.test(client)],
   // Reliability PR (section 1, point 7; B1).
-  ['the server field userIdentity reaches the participant as userKey', 'zoom-room-leftovers.mjs', () => count(bundle, '{ from: "userIdentity", to: "userKey" }') >= 1],
-  ['userKey is the token\'s user_key', 'zoom-room-leftovers.mjs', () => /The `user_key` from the JWT payload\.\s*\*\/\s*userKey\?: string;/.test(common)],
-  ['userIdentity is deprecated in favour of userKey (never read)', 'zoom-room-leftovers.mjs', () => /@deprecated use `userKey` instead\s*\*\/\s*userIdentity\?: string;/.test(common)],
-  ['removeUser(userId) exists, host or manager only', 'zoom-room-leftovers.mjs', () => /Only the \*\*host\*\* or \*\*manager\*\* can remove others\.[\s\S]{0,80}function removeUser\(userId: number\): ExecutedResult;/.test(client) && bundle.includes('removeUser(')],
+  ['the server field userIdentity reaches the participant as userKey', 'test-online-zoom-reliability.mjs (T-R1), zoom-video.mjs (user_key = pass id)', () => count(bundle, '{ from: "userIdentity", to: "userKey" }') >= 1],
+  ['userKey is the token\'s user_key', 'test-online-zoom-reliability.mjs (T-R1), zoom-video.mjs (user_key = pass id)', () => /The `user_key` from the JWT payload\.\s*\*\/\s*userKey\?: string;/.test(common)],
+  ['userIdentity is deprecated in favour of userKey (never read)', 'test-online-zoom-reliability.mjs (T-R1)', () => /@deprecated use `userKey` instead\s*\*\/\s*userIdentity\?: string;/.test(common)],
+  ['removeUser(userId) exists, host or manager only (« Retirer »; the platform never calls it, D15)', 'teacher-portal/online « Guide de la salle », test-online-zoom-reliability.mjs (T-R7)', () => /Only the \*\*host\*\* or \*\*manager\*\* can remove others\.[\s\S]{0,80}function removeUser\(userId: number\): ExecutedResult;/.test(client) && bundle.includes('removeUser(')],
   ['ClosedReason is exactly kicked by host | ended by host | expeled by host', 'zoom-room-session.mjs (closedKind)', () => /type ClosedReason = 'kicked by host' \| 'ended by host' \| 'expeled by host';/.test(events)],
   ['the bundle sends the three closed reasons', 'zoom-room-session.mjs (closedKind)', () => ['"kicked by host"', '"ended by host"', '"expeled by host"'].every(reason => bundle.includes(reason))],
   // Command channel (whiteboard markers, raise hand, the newer-device marker).

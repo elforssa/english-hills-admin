@@ -22,8 +22,7 @@
 // host). Who may lower another's hand is decided from Zoom's list, not from this role.
 // Reliability (plan online-room-reliability.md, reliability PR): `onJoined` when Zoom has
 // let the participant in (the page then confirms its pass), `onNewer` when a newer
-// device's marker arrives, `listLeftovers` for the teacher's page only (the sweep of
-// leftover connections), and `link.current.announceNewer()` for the page to send the
+// device's marker arrives, and `link.current.announceNewer()` for the page to send the
 // marker after a confirmation that superseded an older connection. `onLeft` receives
 // `{ closed }`: 'removed', 'ended' or null.
 import { useEffect, useRef, useState } from 'react';
@@ -93,14 +92,14 @@ const ROOM_STYLE = `[data-testid="zoom-room"] .uikit-mobile-header h1 { visibili
 
 const loadToolkit = () => import('@zoom/videosdk-ui-toolkit');
 
-export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, listLeftovers, link }) {
+export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, link }) {
   const container = useRef(null);
-  const callbacks = useRef({ onLeft, onError, onJoined, onNewer, listLeftovers, link });
+  const callbacks = useRef({ onLeft, onError, onJoined, onNewer, link });
   const [closing, setClosing] = useState(false);
   const [boardReadOnly, setBoardReadOnly] = useState(false);
   const [hands, setHands] = useState(null);
   const room = useRef(null);
-  useEffect(() => { callbacks.current = { onLeft, onError, onJoined, onNewer, listLeftovers, link }; });
+  useEffect(() => { callbacks.current = { onLeft, onError, onJoined, onNewer, link }; });
   const { token, sessionName, displayName, role } = embed;
   useEffect(() => {
     setClosing(false);
@@ -118,8 +117,6 @@ export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, li
       onLeft: detail => callbacks.current.onLeft?.(detail),
       onJoined: () => callbacks.current.onJoined?.(),
       onNewer: () => callbacks.current.onNewer?.(),
-      // The sweep runs on the host's page only; the page decides whether it asks.
-      listLeftovers: role === 'host' ? async () => (callbacks.current.listLeftovers ? callbacks.current.listLeftovers() : []) : undefined,
       onError: detail => callbacks.current.onError?.(detail),
       // Take the toolkit's own (English) error dialog off the screen while the room closes.
       onClosing: () => setClosing(true),

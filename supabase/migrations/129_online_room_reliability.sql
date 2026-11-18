@@ -1,7 +1,8 @@
 -- 129: Online room reliability — newest connection wins once it is inside Zoom (plan
 -- docs/architecture/plans/online-room-reliability.md, ORR-r2, « reliability PR »,
 -- approved by the owner on 2026-11-17 at fc4d44f with the binding corrections recorded
--- in 13df351; decisions D2, D3, D4, D10). The number is the next free number on main when
+-- in 13df351; decisions D2, D10 and D15 of 2026-11-18: the platform never removes a
+-- participant, so no leftover list). The number is the next free number on main when
 -- this file was written; the plan takes it again at merge. Forward-only and
 -- transactional. No row changes: existing passes keep superseded_at and provider empty
 -- (an empty provider reads as the course's).
@@ -27,10 +28,6 @@
 -- 5. public.online_check_pass(p_jti) (new, authenticated): own pass only; the join
 --    evaluation for the pass's lesson and learner, plus superseded and revoked. It names
 --    no provider field (N5).
--- 6. public.online_list_room_leftovers(p_lesson) (new, authenticated): only for the
---    lesson's effective teacher holding a current host pass of that lesson; the ids
---    (jti, the Zoom user_key) of the lesson's superseded and revoked passes, never a
---    reason or a name (D4).
 -- online_check_join is kept unchanged: the room page still uses it before entry.
 begin;
 
@@ -138,30 +135,10 @@ begin
   return v || jsonb_build_object('took_over_other_account', v_other, 'superseded_others', v_count);
 end $$;
 
-create function public.online_list_room_leftovers(p_lesson uuid) returns jsonb
-language plpgsql stable security definer set search_path = pg_catalog, pg_temp as $$
-declare v_teacher uuid;
-begin
-  perform online_security.require_role(array['teacher']);
-  v_teacher := online_security.caller_teacher_id();
-  if v_teacher is null
-     or not exists (select 1 from public.online_lessons l where l.id = p_lesson and l.teacher_id = v_teacher)
-     or not exists (select 1 from public.online_join_tokens t where t.lesson_id = p_lesson and t.participant_kind = 'host'
-       and t.teacher_id = v_teacher and t.profile_id = auth.uid() and t.revoked_at is null and t.superseded_at is null
-       and t.expires_at > now()) then
-    perform online_security.fail('forbidden', '42501', 'Action non autorisée.');
-  end if;
-  -- Ids only: never the reason a pass ended, never a name.
-  return jsonb_build_object('ids', coalesce((select jsonb_agg(x.jti order by x.jti) from (
-    select t.jti from public.online_join_tokens t
-    where t.lesson_id = p_lesson and (t.superseded_at is not null or t.revoked_at is not null)
-    order by t.issued_at desc, t.id desc limit 500) x), '[]'::jsonb));
-end $$;
-
 revoke all on function online_security.own_pass_state(uuid) from public, anon, authenticated, service_role;
-revoke all on function public.online_check_pass(uuid), public.online_confirm_pass(uuid), public.online_list_room_leftovers(uuid)
+revoke all on function public.online_check_pass(uuid), public.online_confirm_pass(uuid)
   from public, anon, authenticated, service_role;
-grant execute on function public.online_check_pass(uuid), public.online_confirm_pass(uuid), public.online_list_room_leftovers(uuid)
+grant execute on function public.online_check_pass(uuid), public.online_confirm_pass(uuid)
   to authenticated;
 
 commit;

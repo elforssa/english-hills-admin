@@ -33,7 +33,7 @@
 //     at once on the marker, with no automatic retry, and « Utiliser cet appareil » takes
 //     the room back; a device that never reaches the room takes nothing; a failed
 //     confirmation is retried and changes nothing meanwhile; the parent's notice; the
-//     removed and ended texts; the teacher's page removes a leftover by userKey; the
+//     removed and ended texts; the teacher's page never removes anybody (D15); the
 //     token-log wrapper is gone once the room has ended.
 // Run by CI (browser suites) and locally: node scripts/test-online-room-lifecycle-browser.mjs
 import assert from 'node:assert/strict';
@@ -559,22 +559,21 @@ try {
   await phase(second.tab, 'superseded');
   ok('[Reliability PR] two devices: the newer one in the room wins on the marker, no automatic retry, « Utiliser cet appareil » takes it back; a device that never entered takes nothing');
 
-  // The teacher's page removes the leftover by userKey, never by userIdentity, never itself.
+  // D15: the teacher's page never removes anybody, not even the connection of a superseded
+  // pass still in Zoom's list (Zoom would refuse that browser for the session, code 3009).
   const leftover = model.passes.find(p => p.lesson === 'r1' && p.superseded).jti;
   const teacher = await device({ lesson: 'r1', person: 't1', role: 'host', passMs: '60000' });
-  await teacher.tab.evaluate(([key, other]) => {
+  await teacher.tab.evaluate(key => {
     window.__zoom.users = [{ userId: 1, self: true, isHost: true, displayName: 'Sara L.' }, { userId: 30, displayName: 'Amal B.', userKey: key },
-      { userId: 31, displayName: 'Nour K.', userIdentity: key, userKey: other }, { userId: 32, displayName: 'Rim T.' }];
-  }, [leftover, '99999999-9999-4999-8999-999999999999']);
+      { userId: 32, displayName: 'Rim T.' }];
+  }, leftover);
   await inside(teacher.tab);
-  await teacher.tab.waitForFunction(() => window.__zoom.removed.length > 0, null, { timeout: 5000 });
-  await teacher.tab.waitForTimeout(300);
-  assert.deepEqual(await teacher.tab.evaluate(() => window.__zoom.removed), [30]);
-  assert.ok(teacher.lines.some(line => /leftover removed label=Amal B\. state=ok/.test(line)));
-  assert.ok(!teacher.lines.some(line => line.includes(leftover)), 'the trace never prints a pass id');
-  // A learner's page never sweeps.
-  assert.equal(await second.tab.evaluate(() => window.__zoom.removed.length), 0);
-  ok('[Reliability PR] the teacher\'s page removes a leftover by userKey only; learners never sweep');
+  await teacher.tab.evaluate(() => window.__zoom.emit?.('user-added', [{ userId: 33, displayName: 'Nour K.' }]));
+  await teacher.tab.waitForTimeout(2500);
+  assert.deepEqual(await teacher.tab.evaluate(() => window.__zoom.removed), [], 'the teacher\'s page removes nobody');
+  assert.equal(await second.tab.evaluate(() => window.__zoom.removed.length), 0, 'a learner\'s page removes nobody');
+  assert.ok(!teacher.lines.some(line => /leftover/.test(line)), 'no sweep trace');
+  ok('[Reliability PR] D15: no page removes a participant, not even a superseded connection still in Zoom\'s list');
 
   // A failed confirmation (network, then 503) keeps the room and supersedes nothing; the
   // next rounds retry and act on the answer.
@@ -611,9 +610,9 @@ try {
     await learner.tab.evaluate(r => window.__zoom.closeWith(r), reason);
     await phase(learner.tab, 'removed');
     assert.equal((await learner.tab.getByTestId('room-removed').locator('p').innerText()).trim(), 'L’enseignant vous a retiré du cours.');
-    await learner.tab.getByRole('button', { name: 'Rejoindre' }).click();
-    await phase(learner.tab, 'in_room');
-    await joined(learner.tab, 2);
+    // D15: Zoom refuses that browser for the session (3009), so no « Rejoindre », « Quitter » only.
+    assert.equal(await learner.tab.getByTestId('room-removed').getByRole('button').count(), 0, 'no « Rejoindre » or « Réessayer »');
+    assert.equal(await learner.tab.getByTestId('room-removed').getByRole('link', { name: 'Quitter' }).count(), 1);
     await learner.ctx.close();
   }
   // A removal that follows a newer device's confirmation is that device's card.
@@ -646,7 +645,7 @@ try {
   assert.equal(ended.lines.filter(line => line.startsWith('[JWT] participant decoded payload:')).length, 1, 'dropped in the room, through after it');
   assert.ok(ended.lines.some(line => line === '[JWT] participant decoded payload: after'));
   assert.equal(await ended.tab.evaluate(() => /native code/.test(Function.prototype.toString.call(console.log))), true, 'the original console.log is back');
-  ok('[Reliability PR] « Retirer » (both reasons) shows the removed text with « Rejoindre »; after a newer device it is the card; « Terminer pour tous » shows the ended text with « Quitter » only; the token-log wrapper is gone after the room');
+  ok('[Reliability PR] « Retirer » (both reasons) shows the removed text with « Quitter » only; after a newer device it is the card; « Terminer pour tous » shows the ended text with « Quitter » only; the token-log wrapper is gone after the room');
   for (const d of [first, second, teacher, retry, child, parent, replaced, replacing, ended]) await d.ctx.close();
   }
 
