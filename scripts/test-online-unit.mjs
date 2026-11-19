@@ -5,11 +5,11 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { baseLabel, courseLabels, providerDisplayName } from '../src/lib/online/label.mjs';
-import { onlineGate, onlineCredentialShape } from '../src/lib/online/gate.mjs';
+import { onlineGate, onlineCredentialShape, onlineWebhookGate, onlineWebhookSecretShape } from '../src/lib/online/gate.mjs';
 import { hasPasteMistake, credentialPairShape } from '../src/lib/online/provider/credential-shape.mjs';
 import { getProvider, ADAPTER_METHODS } from '../src/lib/online/provider/index.mjs';
 import { onlineReason, onlineErrorText, ONLINE_REASON_TEXT } from '../src/lib/online/reasons.mjs';
-import { handleJoin, handleCourseAction, handleLessonAction, handleWebhook, handleStatus } from '../src/lib/online/handlers.mjs';
+import { handleJoin, handleCourseAction, handleLessonAction, handleWebhook, handleStatus, readBoundedBody, webhookDeployment, WEBHOOK_BODY_LIMIT } from '../src/lib/online/handlers.mjs';
 import { createZoomVideoProvider, zoomSessionName, ZOOM_SESSION_NAME } from '../src/lib/online/provider/zoom-video.mjs';
 
 // Labels: the same cases as the SQL suite (online_security.base_label).
@@ -218,8 +218,10 @@ for (const env of [{}, { ...LIVE, ONLINE_LEARNING_LIVE_ENABLED: 'false' }, { ...
   for (const role of ['director', 'admin']) for (const [env, keys] of cases) {
     const user = userClient({ role });
     const result = await handleStatus({ env, getUserClient: async () => user.client, getProvider });
-    assert.deepEqual(result, { status: 200, body: { keys } }, `${role}: ${keys}`);
-    assert.equal(user.calls.length, 0, 'the status reads no RPC');
+    assert.equal(result.status, 200); assert.equal(result.body.keys, keys, `${role}: ${keys}`);
+    // [Webhook PR] the database rows are read as the caller; a refused read leaves them null.
+    assert.deepEqual(user.calls.map(([name]) => name), ['online_room_status'], 'the status reads only the room status');
+    assert.equal(result.body.last_event_at, null); assert.equal(result.body.refused, null);
     const text = JSON.stringify(result);
     for (const fragment of [KEY, SEC, KEY.slice(0, 6), SEC.slice(-6), 'line', 'quote', 'length']) assert.ok(!text.includes(fragment), `no ${fragment} in the status`);
   }
@@ -300,23 +302,226 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   assert.equal((await handleLessonAction({ action: 'delete', body: {}, env: LIVE })).status, 404);
 }
 
-// Webhook: 404 unless gate on, same provider and webhook support; bad signature writes nothing.
+// [Webhook PR] A webhook request: Content-Length from the bytes unless given; the body
+// opens only through getReader and counts what it hands out, so a test can prove that a
+// refused request was never read, or read only up to the limit.
+function webhookRequest(body, headers = new Headers(), { length, omitLength = false } = {}) {
+  const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body;
+  const h = new Headers(headers);
+  if (!omitLength) h.set('content-length', String(length ?? bytes.byteLength));
+  const state = { opened: false, bytes: 0 };
+  let offset = 0;
+  const stream = new ReadableStream({ pull(controller) {
+    if (offset >= bytes.byteLength) { controller.close(); return; }
+    const chunk = bytes.slice(offset, offset + 16384);
+    offset += chunk.byteLength; state.bytes += chunk.byteLength;
+    controller.enqueue(chunk);
+  } }, { highWaterMark: 0 });
+  return { headers: h, body: { getReader: () => { state.opened = true; return stream.getReader(); } }, state };
+}
+// A service client with the evidence tables' unique keys, a once-only failure per key and
+// the refusal counter (D16), to prove that a retry writes nothing twice.
+function evidenceDatabase({ failOnce = [], hint = null, hang = false } = {}) {
+  const rows = new Set(), calls = [], notes = [], failing = new Set(failOnce);
+  const client = { rpc: (name, args) => {
+    calls.push([name, args]);
+    if (name === 'online_note_webhook_refusal') { notes.push(args); return Promise.resolve({ data: { noted: true }, error: null }); }
+    if (hang) return new Promise(() => {});
+    const key = name === 'online_record_join_event' ? `${args.p_jti}|${args.p_kind}|${args.p_at}` : `${args.p_lesson}|${args.p_kind}|${args.p_at}`;
+    if (failing.has(key)) { failing.delete(key); return Promise.resolve({ data: null, error: { code: hint ? '53400' : '57014', hint } }); }
+    if (rows.has(key)) return Promise.resolve({ data: { recorded: false }, error: null });
+    rows.add(key);
+    return Promise.resolve({ data: { recorded: true }, error: null });
+  } };
+  return { rows, calls, notes, client };
+}
+
+// [Webhook PR] The webhook gate (plan ORR-r2, section 3, D5, B3): open with every
+// condition true and the live switch off; closed by each condition alone; onlineGate
+// unchanged for every /api/online/* route.
+{
+  const KEY = 'qKv7Wm-pZ0041x', SEC = 'rT8nB2-yH6xJ9w-0002', HOOKS = 'hook-secret-test-0003';
+  const ZW = { ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: KEY, ONLINE_VIDEO_PROVIDER_API_SECRET: SEC,
+    ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS, VERCEL_ENV: 'production' };
+  const open = onlineWebhookGate(ZW, 'zoom-video');
+  assert.equal(open.open, true); assert.equal(open.provider, 'zoom-video'); assert.equal(open.adapter.id, 'zoom-video');
+  assert.equal(onlineGate(ZW).open, false, 'the live switch is off, the webhook gate is open');
+  for (const live of ['false', 'true', 'TRUE', '']) assert.equal(onlineWebhookGate({ ...ZW, ONLINE_LEARNING_LIVE_ENABLED: live }, 'zoom-video').open, true, `live switch ${live}`);
+  const FW = { ONLINE_VIDEO_PROVIDER: 'fake', ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS };
+  assert.equal(onlineWebhookGate(FW, 'fake').open, true, 'the fake provider outside Production');
+  assert.equal(onlineWebhookGate({ ...FW, VERCEL_ENV: 'preview' }, 'fake').open, true);
+  const { ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: _removed, ...withoutSecret } = ZW;
+  const closedBy = {
+    'provider not in the list': [{ ...ZW, ONLINE_VIDEO_PROVIDER: 'zoom' }, 'zoom'],
+    'path provider is not the configured one': [ZW, 'fake'],
+    'unknown path provider': [ZW, 'daily'],
+    'no configured provider': [{ ...ZW, ONLINE_VIDEO_PROVIDER: '' }, 'zoom-video'],
+    'fake with VERCEL_ENV=production': [{ ...FW, VERCEL_ENV: 'production' }, 'fake'],
+    'adapter without webhooks': [ZW, 'zoom-video', name => ({ ...getProvider(name), supportsWebhooks: false })],
+    'no adapter': [{ ...ZW, ONLINE_VIDEO_PROVIDER: 'whereby' }, 'whereby'],
+    'credential missing': [{ ...ZW, ONLINE_VIDEO_PROVIDER_API_SECRET: '' }, 'zoom-video'],
+    'credential with a paste mistake': [{ ...ZW, ONLINE_VIDEO_PROVIDER_API_KEY: KEY + ' ' }, 'zoom-video'],
+    'key equal to secret': [{ ...ZW, ONLINE_VIDEO_PROVIDER_API_SECRET: KEY }, 'zoom-video'],
+    'no webhook secret (kill switch)': [{ ...ZW, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' }, 'zoom-video'],
+    'webhook secret variable removed': [withoutSecret, 'zoom-video'],
+    'webhook secret with a line break': [{ ...ZW, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS + '\n' }, 'zoom-video'],
+    'webhook secret with a quote': [{ ...ZW, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: `"${HOOKS}"` }, 'zoom-video'],
+    'webhook secret too short': [{ ...ZW, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: 'short' }, 'zoom-video'],
+  };
+  for (const [name, [env, provider, adapters = getProvider]] of Object.entries(closedBy)) {
+    assert.deepEqual(onlineWebhookGate(env, provider, adapters), { open: false, reason: 'not_found' }, name);
+  }
+  assert.equal(onlineWebhookSecretShape(ZW), 'present'); assert.equal(onlineWebhookSecretShape({}), 'absent');
+  assert.equal(onlineWebhookSecretShape({ ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: ' ' + HOOKS }), 'incorrect');
+  // onlineGate is unchanged for the /api/online/* routes: the webhook secret plays no part.
+  const LIVEZ = { ...ZW, VERCEL_ENV: 'preview', ONLINE_LEARNING_LIVE_ENABLED: 'true' };
+  assert.deepEqual(onlineGate(LIVEZ), { open: true, provider: 'zoom-video' });
+  assert.deepEqual(onlineGate({ ...LIVEZ, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' }), { open: true, provider: 'zoom-video' }, 'joins do not use the webhook secret');
+  assert.deepEqual(onlineGate({ ...LIVEZ, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: 'bad secret' }), { open: true, provider: 'zoom-video' });
+  assert.deepEqual(onlineGate({ ...LIVEZ, ONLINE_LEARNING_LIVE_ENABLED: '' }), { open: false, reason: 'gate_closed' });
+  const offJoin = await handleJoin({ body: { lesson: LESSON }, env: { ...LIVE, ONLINE_LEARNING_LIVE_ENABLED: '' }, getUserClient: async () => { throw new Error('not reached'); }, getServiceClient: () => null, getProvider });
+  assert.deepEqual(offJoin, { status: 503, body: { reason: 'gate_closed' } }, 'the join route keeps the live switch, webhook secret or not');
+  assert.equal(webhookDeployment({}), 'local'); assert.equal(webhookDeployment({ VERCEL_GIT_COMMIT_SHA: 'abc123' }), 'abc123');
+  assert.equal(webhookDeployment({ VERCEL_DEPLOYMENT_ID: 'dpl_X1', VERCEL_GIT_COMMIT_SHA: 'abc123' }), 'dpl_X1'); assert.equal(webhookDeployment({ VERCEL_DEPLOYMENT_ID: 'a b' }), 'unknown');
+}
+
+// [Webhook PR] The webhook route: gate, then 413 before the body, then 401 before any
+// database call; the four events; a failed write is 503 (429 at the ceiling), never 200,
+// and is counted; a retry writes nothing twice.
 {
   const body = JSON.stringify({ events: [{ participant_ref: JTI, kind: 'joined', at: '2026-10-20T18:02:00Z' }] });
-  const signed = new Headers({ 'x-online-signature': createHmac('sha256', 'hook-secret').update(body).digest('hex') });
-  const run = (provider, env, headers = signed, service = serviceClient({ online_record_join_event: () => ({ data: { recorded: true }, error: null }) })) =>
-    handleWebhook({ provider, rawBody: body, headers, env, getServiceClient: () => service.client, getProvider }).then(r => ({ r, service }));
-  for (const [provider, env] of [['fake', {}], ['fake', { ...LIVE, VERCEL_ENV: 'production' }], ['daily', LIVE], ['whereby', { ...LIVE, ONLINE_VIDEO_PROVIDER: 'whereby' }]]) {
-    const { r, service } = await run(provider, env);
-    assert.equal(r.status, 404, `${provider} ${JSON.stringify(env)}`); assert.equal(service.calls.length, 0);
+  const signFake = (text, secret = 'hook-secret') => new Headers({ 'x-online-signature': createHmac('sha256', secret).update(text).digest('hex') });
+  const OFF = { ...LIVE, ONLINE_LEARNING_LIVE_ENABLED: '', VERCEL_DEPLOYMENT_ID: 'dpl_unit1' };
+  const NOWW = Date.parse('2026-10-20T19:00:00Z');
+  const run = (provider, env, request = webhookRequest(body, signFake(body)), db = evidenceDatabase(), extra = {}) =>
+    handleWebhook({ provider, request, env, getServiceClient: () => db.client, getProvider, clock: () => NOWW, ...extra }).then(r => ({ r, db, request }));
+  const outputs = [];
+  // Gate closed: 404, the body never opened, nothing written.
+  for (const [provider, env] of [['fake', {}], ['fake', { ...LIVE, VERCEL_ENV: 'production' }], ['daily', LIVE], ['whereby', { ...LIVE, ONLINE_VIDEO_PROVIDER: 'whereby' }],
+    ['fake', { ...LIVE, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' }], ['fake', { ...LIVE, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: 'hook secret' }]]) {
+    const { r, db, request } = await run(provider, env);
+    assert.deepEqual(r, { status: 404, body: { reason: 'not_found' } }, `${provider} ${JSON.stringify(env)}`);
+    assert.equal(db.calls.length, 0); assert.equal(request.state.opened, false, 'behind a closed gate the body is not read');
   }
-  const bad = await run('fake', LIVE, new Headers({ 'x-online-signature': 'f'.repeat(64) }));
-  assert.equal(bad.r.status, 401); assert.equal(bad.service.calls.length, 0, 'bad signature writes nothing');
-  const unsigned = await run('fake', { ...LIVE, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' });
-  assert.equal(unsigned.r.status, 401); assert.equal(unsigned.service.calls.length, 0, 'no secret, no write');
-  const good = await run('fake', LIVE);
+  // 413 before the body: no Content-Length, a malformed or negative one, one above 64 KiB.
+  for (const [label, options] of [['missing', { omitLength: true }], ['malformed', { length: '12abc' }], ['negative', { length: '-1' }],
+      ['above 64 KiB', { length: WEBHOOK_BODY_LIMIT + 1 }], ['absurd', { length: '99999999999' }]]) {
+    const request = webhookRequest(body, signFake(body), options);
+    const { r, db } = await run('fake', OFF, request);
+    assert.deepEqual(r, { status: 413, body: { reason: 'too_large' } }, label);
+    assert.equal(request.state.opened, false, `${label}: the body is not read`); assert.equal(db.calls.length, 0);
+    outputs.push(r);
+  }
+  // A lying header: the stream stops at the declared length (or the limit) and answers 413.
+  const big = 'x'.repeat(WEBHOOK_BODY_LIMIT + 50000);
+  for (const [label, request] of [['body longer than its header', webhookRequest(body, signFake(body), { length: body.length - 5 })],
+      ['body over 64 KiB under a 64 KiB header', webhookRequest(big, signFake(big), { length: WEBHOOK_BODY_LIMIT })]]) {
+    const { r, db } = await run('fake', OFF, request);
+    assert.deepEqual(r, { status: 413, body: { reason: 'too_large' } }, label); assert.equal(db.calls.length, 0);
+    assert.ok(request.state.bytes <= WEBHOOK_BODY_LIMIT + 16384, `${label}: reading stopped at the limit`);
+  }
+  // Exactly 64 KiB is read (then refused by the signature); readBoundedBody returns the text.
+  const exact = 'y'.repeat(WEBHOOK_BODY_LIMIT);
+  assert.deepEqual(await readBoundedBody(webhookRequest(exact)), { text: exact });
+  assert.deepEqual((await run('fake', OFF, webhookRequest(exact, signFake(exact, 'other-secret')))).r, { status: 401, body: { reason: 'forbidden' } });
+  // 401 before any database call: forged, missing, and bytes that are not UTF-8.
+  for (const [label, request] of [['forged', webhookRequest(body, new Headers({ 'x-online-signature': 'f'.repeat(64) }))], ['unsigned', webhookRequest(body)],
+      ['not UTF-8', webhookRequest(new Uint8Array([0x7b, 0xff, 0xfe, 0x7d]), signFake('{��}'))]]) {
+    const { r, db } = await run('fake', OFF, request);
+    assert.deepEqual(r, { status: 401, body: { reason: 'forbidden' } }, label); assert.equal(db.calls.length, 0, `${label}: nothing written`);
+  }
+  // Gate open with the live switch off: the event is written.
+  const good = await run('fake', OFF);
   assert.deepEqual(good.r, { status: 200, body: { recorded: 1 } });
-  assert.deepEqual(good.service.calls, [['online_record_join_event', { p_jti: JTI, p_kind: 'joined', p_at: '2026-10-20T18:02:00.000Z', p_ref: null }]]);
+  assert.deepEqual(good.db.calls, [['online_record_join_event', { p_jti: JTI, p_kind: 'joined', p_at: '2026-10-20T18:02:00.000Z', p_ref: null }]]);
+  // The four events through the fake adapter; an unknown kind, a bad pass id and an event
+  // more than five minutes ahead are acknowledged and dropped without a call.
+  const SNAME = `fake-room-0301.${LESSON}`;
+  const four = JSON.stringify({ events: [
+    { kind: 'started', lesson_ref: LESSON, session_name: SNAME, at: '2026-10-20T17:59:00Z', provider_session_ref: 'sid-9' },
+    { participant_ref: JTI, kind: 'joined', at: '2026-10-20T18:02:00Z', provider_participant_ref: 'p-1' },
+    { participant_ref: JTI, kind: 'left', at: '2026-10-20T18:50:00Z' },
+    { kind: 'ended', lesson_ref: LESSON, session_name: SNAME, at: '2026-10-20T18:55:00Z' },
+    { participant_ref: JTI, kind: 'waved', at: '2026-10-20T18:51:00Z' },
+    { participant_ref: 'not-a-pass', kind: 'joined', at: '2026-10-20T18:51:00Z' },
+    { kind: 'ended', lesson_ref: 'not-a-lesson', session_name: SNAME, at: '2026-10-20T18:55:00Z' },
+    { participant_ref: JTI, kind: 'left', at: '2026-10-20T19:06:00Z' }] });
+  const all = await run('fake', OFF, webhookRequest(four, signFake(four)));
+  assert.deepEqual(all.r, { status: 200, body: { recorded: 4 } });
+  assert.deepEqual(all.db.calls, [
+    ['online_record_session_event', { p_lesson: LESSON, p_provider: 'fake', p_kind: 'started', p_at: '2026-10-20T17:59:00.000Z', p_session_name: SNAME, p_ref: 'sid-9' }],
+    ['online_record_join_event', { p_jti: JTI, p_kind: 'joined', p_at: '2026-10-20T18:02:00.000Z', p_ref: 'p-1' }],
+    ['online_record_join_event', { p_jti: JTI, p_kind: 'left', p_at: '2026-10-20T18:50:00.000Z', p_ref: null }],
+    ['online_record_session_event', { p_lesson: LESSON, p_provider: 'fake', p_kind: 'ended', p_at: '2026-10-20T18:55:00.000Z', p_session_name: SNAME, p_ref: null }]]);
+  // A session name that does not match is the database's call: recorded false, still 200.
+  const mismatch = evidenceDatabase();
+  mismatch.client.rpc = async (name, args) => { mismatch.calls.push([name, args]); return { data: { recorded: false }, error: null }; };
+  assert.deepEqual((await run('fake', OFF, webhookRequest(four, signFake(four)), mismatch)).r, { status: 200, body: { recorded: 0 } });
+  // A failed write answers 503, never 200, and is counted for this deployment; the retry
+  // delivers the rest and writes nothing twice.
+  const db = evidenceDatabase({ failOnce: [`${LESSON}|ended|2026-10-20T18:55:00.000Z`] });
+  const first = await run('fake', OFF, webhookRequest(four, signFake(four)), db);
+  assert.deepEqual(first.r, { status: 503, body: { reason: 'unavailable' } }, 'a failed write is 503');
+  assert.equal(db.rows.size, 3, 'the events written before the failure stay');
+  assert.deepEqual(db.notes, [{ p_deployment: 'dpl_unit1', p_reason: 'unavailable' }], 'the refusal is counted for this deployment');
+  const retry = await run('fake', OFF, webhookRequest(four, signFake(four)), db);
+  assert.deepEqual(retry.r, { status: 200, body: { recorded: 1 } }, 'the retry writes only what was missing');
+  assert.equal(db.rows.size, 4);
+  assert.deepEqual((await run('fake', OFF, webhookRequest(four, signFake(four)), db)).r, { status: 200, body: { recorded: 0 } }, 'a replay writes nothing');
+  assert.equal(db.rows.size, 4, 'nothing written twice');
+  // The write ceiling answers 429 and is counted as such.
+  const ceiling = evidenceDatabase({ failOnce: [`${JTI}|joined|2026-10-20T18:02:00.000Z`], hint: 'online.rate_limited' });
+  assert.deepEqual((await run('fake', OFF, undefined, ceiling)).r, { status: 429, body: { reason: 'rate_limited' } });
+  assert.deepEqual(ceiling.notes, [{ p_deployment: 'dpl_unit1', p_reason: 'rate_limited' }]);
+  // A thrown call and a call that never answers are 503; a refusal that cannot be counted is still 503.
+  const thrown = evidenceDatabase();
+  thrown.client.rpc = async name => { thrown.calls.push([name]); throw new Error('network down'); };
+  assert.deepEqual((await run('fake', OFF, undefined, thrown)).r, { status: 503, body: { reason: 'unavailable' } });
+  assert.deepEqual(thrown.calls.map(([name]) => name), ['online_record_join_event', 'online_note_webhook_refusal']);
+  const hung = evidenceDatabase({ hang: true });
+  assert.deepEqual((await run('fake', OFF, undefined, hung, { timeoutMs: 20 })).r, { status: 503, body: { reason: 'unavailable' } }, 'a timeout is 503');
+  assert.deepEqual(hung.notes, [{ p_deployment: 'dpl_unit1', p_reason: 'unavailable' }]);
+  outputs.push(first.r, retry.r, all.r, good.r);
+  const text = JSON.stringify(outputs);
+  assert.ok(!text.includes('hook-secret') && !text.includes(SECRET) && !text.includes(SERVICE), 'no secret in any webhook answer');
+}
+
+// [Webhook PR] GET /api/online/status with the webhook rows: the secret « présent »,
+// « absent » or « incorrect » (never the value), the route « ouvert » or « fermé » by its
+// own gate whatever the live switch says, the last event time and this deployment's
+// refusals, to director and admin only.
+{
+  const KEY = 'qKv7Wm-pZ0041x', SEC = 'rT8nB2-yH6xJ9w-0002', HOOKS = 'hook-secret-test-0003';
+  const Z = { ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: KEY, ONLINE_VIDEO_PROVIDER_API_SECRET: SEC,
+    ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS, VERCEL_DEPLOYMENT_ID: 'dpl_status1', VERCEL_ENV: 'production' };
+  const statusRpc = { online_room_status: () => ({ data: { last_event_at: '2026-11-19T10:00:00+00:00', refused_rate_limited: 2, refused_unavailable: 1 }, error: null }) };
+  const cases = [
+    [Z, 'correctes', 'présent', 'ouvert'],
+    [{ ...Z, ONLINE_LEARNING_LIVE_ENABLED: 'true' }, 'correctes', 'présent', 'ouvert'],
+    [{ ...Z, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' }, 'correctes', 'absent', 'fermé'],
+    [{ ...Z, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS + ' ' }, 'correctes', 'incorrect', 'fermé'],
+    [{ ...Z, ONLINE_VIDEO_PROVIDER_API_SECRET: SEC + '\n' }, 'incorrectes', 'présent', 'fermé'],
+    [{ ...Z, ONLINE_VIDEO_PROVIDER_API_KEY: '' }, 'absentes', 'présent', 'fermé'],
+    [{ ...Z, ONLINE_VIDEO_PROVIDER: 'nope' }, 'absentes', 'présent', 'fermé'],
+    [{ ONLINE_VIDEO_PROVIDER: 'fake', ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOKS, VERCEL_ENV: 'production', VERCEL_DEPLOYMENT_ID: 'dpl_status1' }, 'correctes', 'présent', 'fermé'],
+  ];
+  for (const role of ['director', 'admin']) for (const [env, keys, secret, hook] of cases) {
+    const user = userClient({ role, rpc: statusRpc });
+    const result = await handleStatus({ env, getUserClient: async () => user.client, getProvider });
+    assert.deepEqual(result, { status: 200, body: { keys, webhook_secret: secret, webhook: hook, last_event_at: '2026-11-19T10:00:00+00:00',
+      refused: { rate_limited: 2, unavailable: 1 } } }, `${role}: ${keys} ${secret} ${hook}`);
+    assert.deepEqual(user.calls, [['online_room_status', { p_deployment: 'dpl_status1' }]]);
+    const text = JSON.stringify(result);
+    for (const fragment of [KEY, SEC, HOOKS, HOOKS.slice(0, 8), HOOKS.slice(-6), 'line', 'quote', 'length']) assert.ok(!text.includes(fragment), `no ${fragment} in the status`);
+  }
+  const thrown = userClient({ role: 'director', rpc: { online_room_status: () => { throw new Error('down'); } } });
+  assert.deepEqual((await handleStatus({ env: Z, getUserClient: async () => thrown.client, getProvider })).body,
+    { keys: 'correctes', webhook_secret: 'présent', webhook: 'ouvert', last_event_at: null, refused: null }, 'a failed read leaves the words');
+  for (const role of ['receptionist', 'teacher', 'parent', 'student', 'pending', null]) {
+    const user = userClient({ role, rpc: statusRpc });
+    assert.deepEqual(await handleStatus({ env: Z, getUserClient: async () => user.client, getProvider }), { status: 403, body: { reason: 'forbidden' } }, `${role} refused`);
+    assert.equal(user.calls.length, 0, `${role}: nothing read`);
+  }
 }
 // Zoom Video SDK adapter (OL-r6 A1, A2, A3, A4, A7): session JWT, session name, webhook.
 {
@@ -381,20 +586,50 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   const left = JSON.stringify({ event: 'session.user_left', payload: { object: { user: { user_key: JTI, leave_time: '2026-10-22T19:00:00Z', leave_reason: 'Removed by host.' } } } });
   assert.deepEqual((await zoom.verifyWebhook({ rawBody: left, headers: sign(left), secret: HOOK })).events, [{ participantRef: JTI, kind: 'left', at: '2026-10-22T19:00:00Z', providerParticipantRef: null }]);
   const started = JSON.stringify({ event: 'session.started', payload: { object: { id: 's1' } } });
-  assert.deepEqual(await zoom.verifyWebhook({ rawBody: started, headers: sign(started), secret: HOOK }), { ok: true, events: [] });
+  assert.deepEqual(await zoom.verifyWebhook({ rawBody: started, headers: sign(started), secret: HOOK }), { ok: true, events: [] }, 'a session event without a session name carries nothing');
   // The webhook handler answers the challenge after verification, without any write, and 404s off-gate.
   const ZLIVE = { ONLINE_LEARNING_LIVE_ENABLED: 'true', ONLINE_VIDEO_PROVIDER: 'zoom-video', ONLINE_VIDEO_PROVIDER_API_KEY: ZK, ONLINE_VIDEO_PROVIDER_API_SECRET: ZS, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: HOOK };
   const zoomProvider = name => name === 'zoom-video' ? zoom : null;
   const serviceCalls = [];
   const svc = { rpc: async (name, args) => { serviceCalls.push([name, args]); return { data: { recorded: true }, error: null }; } };
-  const answered = await handleWebhook({ provider: 'zoom-video', rawBody: challenge, headers: sign(challenge), env: ZLIVE, getServiceClient: () => svc, getProvider: zoomProvider });
+  const zhook = (body, headers) => handleWebhook({ provider: 'zoom-video', request: webhookRequest(body, headers), env: ZLIVE, getServiceClient: () => svc,
+    getProvider: zoomProvider, clock: () => NOW + 2 * 3600 * 1000 });
+  const answered = await zhook(challenge, sign(challenge));
   assert.deepEqual(answered, { status: 200, body: good.challenge }); assert.equal(serviceCalls.length, 0, 'the challenge writes nothing');
-  assert.equal((await handleWebhook({ provider: 'zoom-video', rawBody: challenge, headers: new Headers(), env: ZLIVE, getServiceClient: () => svc, getProvider: zoomProvider })).status, 401);
-  assert.equal((await handleWebhook({ provider: 'zoom-video', rawBody: challenge, headers: sign(challenge), env: { ...ZLIVE, ONLINE_LEARNING_LIVE_ENABLED: '' }, getServiceClient: () => svc, getProvider: zoomProvider })).status, 404, 'gate off: 404, no validation');
-  assert.equal((await handleWebhook({ provider: 'fake', rawBody: challenge, headers: sign(challenge), env: ZLIVE, getServiceClient: () => svc, getProvider })).status, 404, 'other provider path: 404');
-  const recorded = await handleWebhook({ provider: 'zoom-video', rawBody: joined, headers: sign(joined), env: ZLIVE, getServiceClient: () => svc, getProvider: zoomProvider });
+  assert.equal((await zhook(challenge, new Headers())).status, 401);
+  // [Webhook PR] The webhook gate is independent of the live switch (D5): the challenge is
+  // answered with the switch off, and refused (404) without the webhook secret.
+  assert.deepEqual(await handleWebhook({ provider: 'zoom-video', request: webhookRequest(challenge, sign(challenge)), env: { ...ZLIVE, ONLINE_LEARNING_LIVE_ENABLED: '' },
+    getServiceClient: () => svc, getProvider: zoomProvider }), { status: 200, body: good.challenge }, 'live switch off: the webhook still answers');
+  assert.equal((await handleWebhook({ provider: 'zoom-video', request: webhookRequest(challenge, sign(challenge)), env: { ...ZLIVE, ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET: '' },
+    getServiceClient: () => svc, getProvider: zoomProvider })).status, 404, 'kill switch: no webhook secret, 404');
+  assert.equal((await handleWebhook({ provider: 'fake', request: webhookRequest(challenge, sign(challenge)), env: ZLIVE, getServiceClient: () => svc, getProvider })).status, 404, 'other provider path: 404');
+  const recorded = await zhook(joined, sign(joined));
   assert.deepEqual(recorded, { status: 200, body: { recorded: 1 } });
   assert.deepEqual(serviceCalls, [['online_record_join_event', { p_jti: JTI, p_kind: 'joined', p_at: '2026-10-22T18:02:00.000Z', p_ref: 'p-uuid-1' }]]);
+  // [Webhook PR] The four Zoom events: started and ended map to the lesson in the session name.
+  serviceCalls.length = 0;
+  const sessionName = claims.tpc;
+  const startedEvent = JSON.stringify({ event: 'session.started', payload: { object: { id: 'sid-1', session_id: 'sid-1', session_name: sessionName, start_time: '2026-10-22T17:59:00Z' } } });
+  const endedEvent = JSON.stringify({ event: 'session.ended', payload: { object: { id: 'sid-1', session_name: sessionName.toUpperCase(), start_time: '2026-10-22T17:59:00Z', end_time: '2026-10-22T19:05:00Z' } } });
+  assert.deepEqual((await zhook(startedEvent, sign(startedEvent))).body, { recorded: 1 });
+  assert.deepEqual((await zhook(endedEvent, sign(endedEvent))).body, { recorded: 1 });
+  assert.deepEqual((await zhook(left, sign(left))).body, { recorded: 1 });
+  assert.deepEqual(serviceCalls, [
+    ['online_record_session_event', { p_lesson: LESSON, p_provider: 'zoom-video', p_kind: 'started', p_at: '2026-10-22T17:59:00.000Z', p_session_name: sessionName, p_ref: 'sid-1' }],
+    ['online_record_session_event', { p_lesson: LESSON, p_provider: 'zoom-video', p_kind: 'ended', p_at: '2026-10-22T19:05:00.000Z', p_session_name: sessionName, p_ref: 'sid-1' }],
+    ['online_record_join_event', { p_jti: JTI, p_kind: 'left', p_at: '2026-10-22T19:00:00.000Z', p_ref: null }]]);
+  // A session event without a usable name (Zoom sometimes omits it on session.ended), with
+  // a malformed lesson suffix, and an unknown event: acknowledged and dropped, no call.
+  serviceCalls.length = 0;
+  for (const object of [{ id: 'sid-1', end_time: '2026-10-22T19:05:00Z' }, { session_name: 'eh-abc.not-a-lesson', end_time: '2026-10-22T19:05:00Z' },
+    { session_name: `eh-a.b.${LESSON}`, end_time: '2026-10-22T19:05:00Z' }, { session_name: 'Bad Name!', end_time: '2026-10-22T19:05:00Z' }]) {
+    const body = JSON.stringify({ event: 'session.ended', payload: { object } });
+    assert.deepEqual(await zhook(body, sign(body)), { status: 200, body: { recorded: 0 } });
+  }
+  const recording = JSON.stringify({ event: 'session.recording_started', payload: { object: { session_name: sessionName } } });
+  assert.deepEqual(await zhook(recording, sign(recording)), { status: 200, body: { recorded: 0 } }, 'unknown event acknowledged and dropped');
+  assert.equal(serviceCalls.length, 0, 'nothing written for a dropped event');
   assert.ok(!JSON.stringify([answered, recorded]).includes(HOOK) && !JSON.stringify([answered, recorded]).includes(ZS));
   // Join through the handler with the Zoom adapter: the lesson id becomes the session suffix; the room reference never leaves.
   const user = userClient({ rpc: { online_issue_join: () => ({ data: { jti: JTI, provider_role: 'participant' }, error: null }) } });
@@ -405,4 +640,4 @@ for (const env of [{}, { ...LIVE, VERCEL_ENV: 'production' }]) {
   assert.ok(!JSON.stringify(joinResult).includes(ZS) && !JSON.stringify(joinResult).includes('"room_ref"'), 'no secret, no room reference field in the join response');
 }
 
-console.log('PASS online unit regressions: labels, gate, paste-mistake rule, status route, per-pass adapter, mint fails keeps the old pass, fake and Zoom adapters, session names, webhook challenge, join/activation/close/lesson/webhook handlers, no secret, room reference or address in any response');
+console.log('PASS online unit regressions: labels, gate, paste-mistake rule, status route, per-pass adapter, mint fails keeps the old pass, fake and Zoom adapters, session names, webhook challenge, join/activation/close/lesson/webhook handlers, webhook gate, 413/401/503/429 and retry, four events, status webhook rows, no secret, room reference or address in any response');

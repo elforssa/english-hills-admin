@@ -12,10 +12,11 @@
 //      changed (the two new columns are empty on the old pass);
 //   4. proves that the old pass still resolves (an empty provider reads as the course's)
 //      and the old application calls keep their signatures, then runs the rollback-only
-//      SQL acceptance on the upgraded state.
+//      SQL acceptance on the upgraded state. The acceptance suite is the current one, so
+//      any later migration file (130 onward) is applied first, after the 129 proofs.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 const port = process.env.OL_UPGRADE_PORT || '54322';
 const psql = (args, input) => execFileSync('psql', ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', ...args],
@@ -132,6 +133,10 @@ assert.equal(resolved.provider, 'fake', 'an old pass without provider reads as t
 assert.equal(resolved.room_ref, 'fake-room-orr129');
 assert.ok(['online_check_join(uuid,uuid)', 'online_issue_join(uuid,uuid)', 'online_resolve_join(uuid)', 'online_record_join_event(uuid,text,timestamp with time zone,text)'].every(f => f in after.functions),
   'the calls of the code already deployed exist with the same signatures');
+// The current acceptance suite needs every later migration: apply them after the proofs.
+for (const file of readdirSync('supabase/migrations').filter(name => /^\d{3}_.*\.sql$/.test(name) && Number(name.slice(0, 3)) > 129).sort()) {
+  sql(readFileSync(`supabase/migrations/${file}`, 'utf8'));
+}
 const acceptance = psql(['-q', '-f', 'scripts/test-online-learning.sql']);
 assert.match(acceptance, /PASS online learning SQL acceptance/);
 assert.deepEqual(data(), beforeData, 'the acceptance left no row');

@@ -37,7 +37,9 @@ export const fakeProvider = Object.freeze({
   },
 
   // Signature: hex HMAC-SHA256 of the raw body under the webhook secret, header
-  // x-online-signature. Body: { events: [{ participant_ref, kind, at, provider_participant_ref? }] }.
+  // x-online-signature. Body: { events: [{ participant_ref, kind, at, provider_participant_ref? }] }
+  // for joined/left, and { kind: started|ended, lesson_ref, session_name, at,
+  // provider_session_ref? } for a session event (webhook PR).
   async verifyWebhook({ rawBody, headers, secret }) {
     if (!secret || typeof rawBody !== 'string') return { ok: false, events: [] };
     const given = String(headers?.get?.('x-online-signature') || '');
@@ -50,10 +52,9 @@ export const fakeProvider = Object.freeze({
     const events = Array.isArray(body?.events) ? body.events.slice(0, 50) : [];
     return {
       ok: true,
-      events: events.map(e => ({
-        participantRef: e?.participant_ref, kind: e?.kind, at: e?.at,
-        providerParticipantRef: e?.provider_participant_ref ?? null,
-      })),
+      events: events.map(e => (['started', 'ended'].includes(e?.kind)
+        ? { kind: e.kind, lessonRef: e.lesson_ref, sessionName: e.session_name, at: e.at, providerSessionRef: e.provider_session_ref ?? null }
+        : { participantRef: e?.participant_ref, kind: e?.kind, at: e?.at, providerParticipantRef: e?.provider_participant_ref ?? null })),
     };
   },
 });

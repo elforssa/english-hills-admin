@@ -364,6 +364,12 @@ jobs:
           supabase db reset --local --version 128 --no-seed
           node scripts/test-online-room-reliability-upgrade.mjs
           supabase db reset --local --no-seed
+      - name: Online session evidence 129 to 130 upgrade (ORR-r2 webhook PR)
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 129 --no-seed
+          node scripts/test-online-session-evidence-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Rollback-only migration regression

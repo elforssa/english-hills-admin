@@ -157,6 +157,7 @@ Not chosen: superseding at issue (ORR-r1; a failed mint or Zoom join put the wor
   2. **`joined` with no later `left`** (lost event, or still connected) → the interval ends at the earliest of: the pass's next `joined`, **the first `ended` session event of the lesson after the join**, the pass's expiry, the time of the read. Counted and marked **estimated**.
   3. **`left` with no earlier open `joined`** (lost join) → the interval starts at the latest of: the pass's issue time, **the last `started` session event of the lesson before the leave**. Counted and marked **estimated**.
   4. A second `joined` while one is open closes the first at the second's time (rule 2); a second `left` with nothing open is ignored.
+     *Known limit (webhook PR review, finding 3):* for `joined` → `left` → (a `joined` Zoom never delivered) → `left`, the second `left` finds nothing open and is ignored, so the time between the lost join and that leave is not counted and **not marked « estimée »**: the figure is short and nothing on the director's table shows it. Rule 3 cannot tell this case from a duplicate leave. Stop condition S10 (Zoom's usage report shows more minutes than the figure explains) catches it at W-P7 and at each monthly comparison.
   5. Intervals are clipped to the month in UTC (whether Zoom's usage report uses UTC is **UNVERIFIED**, compared at W-P7).
   The read returns per course: minutes, passes, and the number and minutes of estimated intervals, so the director sees how much of the figure is estimated.
 - **Settled at the first validation, UNVERIFIED until then:** that Video SDK webhooks use the same headers; that `user.user_key` equals the pass id; whether a group move sends leave and join events; how Zoom meters a group; Zoom's retry behaviour.
@@ -552,6 +553,172 @@ The reviewer's ten notes, all non-blocking. N2, N3, N4 and N6 change the room pa
 | N10 | The status line reports the keys only | Unchanged, by design; written in [WORKFLOWS](../../ai/WORKFLOWS.md) so the reading is not mistaken for « the room is open » |
 
 **Evidence of the closeout pull request** is in its description (head SHA, unit and browser suites, the lifecycle and reliability real-Zoom scripts on that head).
+
+## Implementation record — webhook PR
+
+**Implemented on branch `feat/online-room-webhook` from `main` `4a6bada` (2026-11-19), Tier 3, on the owner's implementation task of 2026-11-19 (« #200 released; migration 129 in Production »). On a pull request, not merged; migration 130 applied only to a private local stack; no Production step taken, no secret, Zoom setting or Vercel variable read or changed.** The plan places the webhook PR after R-P5; the reliability PR's R-P5 closeout was still an open pull request (#201) on the day of this task; it merged later that day as `d1915c2`, and this branch was rebased onto it (documents only overlapped). The owner's task asked for the implementation now: the two branches touch no common code file, only common documents, so whichever merges second is rebased.
+
+### What it changes
+
+- **Migration `130_online_session_evidence.sql`** (the next free number on `main` today; re-checked at merge, S6). As listed in [Migrations](#migrations-listed-not-written), plus the refusal table of D16:
+  - `online_session_events` (new): lesson, provider, kind (`started`, `ended`), time, Zoom's opaque session reference (≤ 200), `received_at`; unique (`lesson_id`, `kind`, `at`); index on `received_at`; row security on, no API grant to any role.
+  - `online_join_events`: index on `received_at`.
+  - `online_webhook_refusals` (new, **D16**): one counter row per (deployment, reason), reason `rate_limited` or `unavailable`, with first and last time; row security on, no API grant.
+  - `online_security.evidence_ceiling_reached()` (private, no API grant): true when **600 or more** rows of the two event tables were received in the last 60 seconds.
+  - `online_record_join_event` re-created from its 117 body (129 did not re-create it; S6 checked) with exactly four added lines: the ceiling, refused with `online.rate_limited` (SQLSTATE `53400`).
+  - `online_record_session_event(p_lesson, p_provider, p_kind, p_at, p_session_name, p_ref)` (new, service role only): the same ceiling; `invalid_input` for a malformed call or a time more than 5 minutes ahead; `{ recorded: false }` (nothing written) when the lesson does not exist, its course's provider is not `p_provider`, or `lower(p_session_name)` is not the course's room reference, a dot and the lesson id; otherwise an `on conflict do nothing` insert answering `{ recorded: true | false }`.
+  - `online_note_webhook_refusal(p_deployment, p_reason)` (new, service role only): adds one to that row.
+  - `online_get_course` re-created from its 117 body with exactly three changed lines: each learner's `left_at` (the last leave Zoom reported; evidence only).
+  - `online_usage_month(p_month)` (new, director and admin): the [pairing rule](#3-zoom-webhook-webhook-pr) per pass, intervals clipped to the month in UTC; per course `minutes`, `passes`, `intervals`, `estimated_intervals`, `estimated_minutes`, and the totals. A join still open at the read is closed at the read and counted as estimated.
+  - `online_room_status(p_deployment)` (new, director and admin): `last_event_at` (the latest `received_at` of both tables) and that deployment's two refusal counts.
+  - `online_purge_session_evidence()` (new, no API grant, not `security definer`): deletes join and session events whose time, and refusal rows whose last time, is more than 12 months before the run (UTC); returns the cutoff and three counts. Scheduled by `pg_cron` as `online-evidence-purge`, `17 3 1 * *` (03:17 UTC on the 1st of each month), the pattern of 095 and 100.
+- **Server:**
+  - `onlineWebhookGate(env, provider)` in [gate.mjs](../../../src/lib/online/gate.mjs): the five conditions of section 3, independent of the live switch; `onlineGate` is unchanged.
+  - `handleWebhook` in [handlers.mjs](../../../src/lib/online/handlers.mjs), in this order:
+    1. closed gate: 404 `not_found` (only the headers are read);
+    2. `Content-Length` missing, malformed or above 64 KiB: 413 `too_large` before reading; the body is then read as a stream that stops at the declared length or 64 KiB, and more bytes than declared also give 413;
+    3. bytes that are not UTF-8, a bad signature or a timestamp outside 300 s: 401 `forbidden`, before any database call;
+    4. the challenge: 200 with the two tokens, nothing written;
+    5. each event, one call each, with a 2.5-second timeout. An error, a throw or a timeout answers 503 `unavailable`, and `rate_limited` answers 429. The refusal is first counted, best effort (D16). The answer is never 200.
+    6. otherwise 200 `{ recorded: n }`. An event whose time is invalid or more than 5 minutes ahead, an unknown event, or a session name that is not « room reference + lesson id » is dropped without a write.
+  - The Zoom adapter reads `session.started` and `session.ended` (session name, session id, start or end time) next to the two user events. The fake adapter does the same for tests.
+  - The status route adds `webhook_secret` (« présent / absent / incorrect », never the value), `webhook` (« ouvert / fermé »), `last_event_at` and `refused` (this deployment's counts). The deployment is `VERCEL_DEPLOYMENT_ID`, else `VERCEL_GIT_COMMIT_SHA`, else `local`.
+- **Pages (director and admin):**
+  - « Cours en ligne » gains a second status line: « Événements Zoom : ouverts / fermés · secret du webhook : … · dernier événement reçu : … · écritures refusées depuis le dernier déploiement : n ».
+  - The same page gains a « Minutes connectées (Zoom) » table with a month picker and the columns Cours, Minutes, Dont estimées, Connexions, plus a total. Its note says the month is UTC, that an « estimée » duration replaces a missing event, and that the figures are never used for attendance.
+  - The course page adds « Parti à HH:MM » after a learner's join time.
+  - Attendance, the teacher roster and the attendance snapshot are unchanged (D7; asserted in SQL).
+- **D16 (owner, 2026-11-19), the refused-writes count.** The plan's object list had nowhere to keep « the count of refused writes since the last deploy ». The owner chose a small refusal table: one counter row per (deployment, reason), best effort, purged with the evidence. A 503 caused by the database being unreachable cannot be counted. The status line then shows the count it has, and the Vercel logs hold the rest.
+- **Author's choices, for review:**
+  - The ceiling refuses a write once 600 rows were received in the last 60 s, so at most 600 are stored; the plan's « more than 600 » would allow 601.
+  - SQLSTATE `53400` for `rate_limited`. The review (finding 5) noted the project's `PT429` as an alternative; **accepted as is**: the route maps the hint `online.rate_limited`, never the SQLSTATE, and the SQLSTATE catalog test lists `53400`.
+  - `online_room_status` takes the deployment as an argument; the plan lists it without one.
+  - The « Événements Zoom : ouverts / fermés » word is an addition, so the director can see W-P5 take effect.
+  - A time more than 5 minutes ahead is refused, in both the route and the database. **Clock skew (review, finding 6):** the route drops such an event against the server's clock and the database refuses it against its own; an event that passes the route but is more than 5 minutes ahead of the database clock gets `invalid_input`, which the route answers 503, so Zoom retries (UNVERIFIED how often) and the retry is written once the database clock has caught up. Not an error in the figures, only a delay; seen as `unavailable` refusals on the status line.
+  - Non-UTF-8 bytes are refused with 401.
+  - The total row sums the passes.
+  - The purge job is created active.
+  - The 128→129 rehearsal now applies the migrations after 129 before its acceptance step, because the acceptance suite of this branch needs 130.
+  - Upgrade ceilings moved 129 → 130 in six rehearsals.
+  - A new GitHub Verify step runs the 129→130 rehearsal in the `upgrades-from-112-to-116` shard.
+
+### Release order, Production steps and rollback (for the owner)
+
+**Migration before deploy.**
+
+1. **The old code runs unchanged on 130.**
+   - `online_record_join_event` keeps its signature and answers; it only adds the ceiling, which no current traffic approaches. The webhook route on `main` today opens with the live switch: while the switch is off (the normal state) it answers 404, and while the owner turns it on for a supervised test lesson it answers 401, because no webhook secret is set in Production (corrected after the review, finding 6). Nothing is written either way.
+   - `online_get_course` gains a key the old page ignores.
+   - The new functions and tables are unused by the old code.
+   - The job deletes only rows more than 12 months old.
+2. **The new code is incomplete on 129.**
+   - The status route's webhook rows would read « état indisponible », because `online_room_status` would be missing.
+   - The minutes table would show an error.
+   - Once the secret is set, every session event would get 503.
+
+Applying first leaves no gap. The webhook stays closed until W-P5 in either order, because the Production secret is absent.
+
+| Step | What | Who / approval | Rollback |
+| --- | --- | --- | --- |
+| W-P0 | Read-only checks: ledger ceiling 129; `online_record_join_event` and `online_get_course` equal to their 117 bodies; none of the new names exists; `pg_cron` present; the row count of `online_join_events` (expected 0) | operator, owner's approval | — |
+| W-P1 | Apply `130_online_session_evidence.sql`, after a dry run in a rolled-back transaction. Then read-only proofs: the two tables with row security on and no API grant; the five functions with their grants (two `service_role`, two `authenticated`, the purge none); the private helper; the job `online-evidence-purge` active at `17 3 1 * *`; row counts unchanged | operator, owner's approval | Forward-only; the old code runs on it. If a rollback is wanted: `select cron.unschedule('online-evidence-purge')`, then a reviewed forward migration (re-create the two functions from their 117 bodies; drop the new functions and tables) |
+| W-P2 | Merge and deploy; the live switch stays as it is | owner | Revert the pull request: the old code runs on 130 |
+| W-P3 | The director opens « Cours en ligne » and reads: keys « correctes », « Événements Zoom : fermés », secret « absent », « dernier événement reçu : aucun », refused 0. **Deployment id (review, finding 2):** the owner checks in Vercel (project → Settings → Environment Variables) that the system environment variables are exposed to the deployment, and records it; this settles the UNVERIFIED `VERCEL_DEPLOYMENT_ID` item. If the setting cannot be seen, W-P8 settles it instead | director; owner for Vercel | Revert |
+| W-P4 | **Zoom billing (owner, D12)**: as in the plan (pay-as-you-go, 30 USD alert if offered, 40 USD same-day reading); price and free allowance read in the account on the day and written into the release record | owner | the owner's to undo |
+| W-P5 | **Webhook secret (owner, no value ever shown to an agent).** In the Zoom App Marketplace, open the **Video SDK app** of the account whose SDK key is in Production, then its **Event Subscriptions** (Features) section, and copy its **Secret Token**. In Vercel: project → **Settings → Environment Variables → Add**. Key `ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET`, value pasted, environment **Production only**, **Sensitive** on, Save. Then **Deployments → the current Production deployment → ⋯ → Redeploy**. The director's line then reads « Événements Zoom : ouverts · secret du webhook : présent ». « incorrect » means a paste mistake: re-paste the value. | owner | **Kill switch:** delete the variable in Vercel and redeploy; the line reads « fermés · absent » and the route answers 404 |
+| W-P6 | **Event subscription (owner, in Zoom).** In the same app: **Event Subscriptions → Add Event Subscription**. Name it « English Hills evidence ». Endpoint `https://<Production host>/api/webhooks/online/zoom-video`, then **Validate** (expected: validated). **Add Events → Session**: *Session started*, *Session ended*, *Session user joined*, *Session user left*, nothing else; Save. Record: the validation result; on the first test lesson, whether the minutes and « Parti à » move (they prove the headers and `user_key` = pass id; **they do not prove the session fields**, which only W-P7's count does: review, finding 1); any 413, 401 or 503 in the Vercel logs for the path (status code only); Zoom's retry behaviour if a 503 occurs. The menu names are Zoom's as documented and **were not seen in this account** (no Zoom page was opened for this PR). | owner | Delete the subscription, then the kill switch |
+| W-P7 | Supervised test lesson on the test course (it can be part of the full Production test if the owner says so): the course page shows « Rejoint » and « Parti à »; the status line's last event moves; the month's minutes appear with their estimated part; Zoom's usage report for the day is compared (UTC or not, recorded). **Session fields (review, finding 1):** after the lesson, with the owner's approval, the operator runs read-only `select kind, count(*) from online_session_events group by kind`. No row at all: record that Zoom does not deliver a usable `session_name` (session events are dropped and every unmatched interval stays estimated); `started` without `ended`: record that `session.ended` carries no `session_name`. Either is a recorded limit, not a stop | owner; operator for the read | Kill switch |
+| W-P8 | Documentation closeout (CURRENT_STATE, SECURITY_RULES, WORKFLOWS: the monthly check reads the purge job's last run, ADR-008, plans index, release record). If W-P3 could not settle the deployment id: after the first refusal (or at the next one), with the owner's approval, read-only `select deployment, reason, refused from online_webhook_refusals`, and record whether `deployment` is a Vercel deployment id (`dpl_…`), a commit SHA or `local` (`local` never resets: the status line's « depuis le dernier déploiement » is then wrong and a follow-up is opened) | author of the closeout; operator for the read | — |
+
+**Rollback summary:**
+- Kill switch: remove the secret in Vercel and redeploy. The route then answers 404 to everything, and joins are unaffected.
+- Delete the subscription in Zoom.
+- Revert the pull request: the old code runs on 130.
+- The database is forward-only; the rows are evidence only, never attendance, and are purged at 12 months.
+
+### Evidence (webhook PR)
+
+**Code head `999086220fe15db17ebd64ce080f0239f2ecc544` (2026-11-19); the commit after it adds this record and the status documents only.** Private local Supabase stack on its own ports. No other stack and no Production project was touched.
+
+- **App checks:**
+  - `npm test`: green.
+  - Lint: 0 errors, plus the one existing warning (`Sidebar.jsx` `<img>`).
+  - `npm run build`: green.
+  - `test_verify.py`: OK; the SQLSTATE guard and its test: OK.
+- **SQL:**
+  - The SQLSTATE catalog (`scripts/test-sqlstate-catalog.sql`) is green on 130.
+  - The online learning SQL acceptance is green on 130.
+    - Session events: verified against the room reference, idempotent, a foreign provider or name records nothing.
+    - The ceiling: the 600th row received in 60 s is written and the 601st is refused, for both writers; rows that leave the window free it.
+    - The refusal counter, `online_room_status` for director and admin, and `left_at` on the course.
+    - The pairing fixtures (below), the attendance snapshot unchanged, and a purge that deletes exactly the rows older than 12 months and is denied to `authenticated` and `service_role`.
+    - The cross-role denials extended to every new function and table, the catalog posture and the job.
+  - Pairing fixture (January 2026; sessions started 18:00, ended 18:10, started 18:20, ended 19:30, started 19:40, ended 19:50; eight passes):
+    - A join without a leave (18:30) is closed at the **first** `ended` after it: 19:30, not the earlier 18:10 and not the later 19:50 (the third session was added after the review, finding 4, so that « first » and « last » give different answers: 60 against 80 minutes).
+    - A leave without a join opens at the **last** `started` before it: 18:20, not 18:00 or 19:40.
+    - Also covered: the next join, the expiry, a second leave ignored, and a pass across midnight into February.
+    - Totals: 215 minutes, 130 of them estimated, 9 intervals of which 5 are estimated. February holds 20 minutes.
+  - Changing an expected value or a session time makes the case fail, which shows the assertions bite.
+- **Stateful upgrade rehearsal 129→130** ([scripts/test-online-session-evidence-upgrade.mjs](../../../scripts/test-online-session-evidence-upgrade.mjs)): green.
+  - The two re-created bodies differ by their intended lines only (+4, +3).
+  - Five public functions were added with their exact grants, plus the private helper, two tables, five index entries and the job.
+  - 79 table hashes are unchanged; an event written before the migration replays as a duplicate.
+  - The acceptance suite passes afterwards.
+- **Other rehearsals:** the 128→129 rehearsal is green with the later-migration step.
+- **Real HTTP against the built app** (`next start`, Supabase of the private stack, synthetic key, secret and webhook secret generated for the run and never printed; live switch off): 23 of 23.
+  - The instance without the webhook secret answers 404 to a signed event (kill switch).
+  - 70 000 bytes and a chunked body without `Content-Length` get 413.
+  - Unsigned, forged and 400-second-old requests get 401.
+  - The challenge answers 200 with a matching `encryptedToken`.
+  - The four events answer `recorded 1`, and their replays `recorded 0`: two rows in each table.
+  - A foreign room prefix and an unknown event record nothing.
+  - A write made to fail (the writer's grant removed for the run) answers 503. Zoom's retry then writes once, and a second retry writes nothing.
+  - At the ceiling the route answers 429; after the window, 200.
+  - Both refusals are counted under the run's deployment id.
+  - The server logs contain no secret, pass id or Zoom reference.
+- **Browser** (the built app, signed in as a seeded director):
+  - `GET /api/online/status` answers `keys correctes, webhook_secret présent, webhook ouvert`, the last event time and `refused 1 / 1`; signed out, 401.
+  - « Cours en ligne » shows the webhook line and « Minutes connectées (Zoom) » with 15 exact minutes and 1 connection. The two later leaves with nothing open are ignored (rule 4).
+- **Unit** ([scripts/test-online-unit.mjs](../../../scripts/test-online-unit.mjs), cases labelled **[Webhook PR]**):
+  - The gate opens with the live switch off, and each of 15 conditions closes it alone, including no webhook secret and `fake` with `VERCEL_ENV=production`. `onlineGate` is unaffected by the webhook secret.
+  - 404 without opening the body.
+  - 413 for a missing, malformed, negative, oversized or absurd length, without reading, and for a body that overruns a lying header. Exactly 64 KiB is read.
+  - 401 before any database call.
+  - 503, 429, a throw and a timeout each answer non-200, and a retry writes nothing twice.
+  - The four Zoom events, and dropped session events with a wrong name, a missing lesson or a time ahead.
+  - The status route's webhook rows for each gate state.
+  - No secret appears in any response.
+
+### Independent review of `eb690bc` and the follow-ups (2026-11-19)
+
+The independent review of PR #202 at `eb690bc` returned **READY FOR FINAL REVIEW** with six non-blocking findings. The branch was then rebased onto `main` `d1915c2` (the #201 closeout, documents only in common); 130 is still the next free migration number and `online_record_join_event` and `online_get_course` are still defined last by 117 (S6). **Migration 130 is unchanged.**
+
+| Finding | What the review said | Done |
+| --- | --- | --- |
+| 1 | The minutes and « Parti à » at W-P6/W-P7 prove the join events, not the session fields | W-P6 says so; W-P7 adds the operator's read-only count per `kind` of `online_session_events` (owner's approval), and what to record when it is empty or has no `ended` |
+| 2 | The deployment-id UNVERIFIED item is tied to no step | W-P3: the owner checks that Vercel exposes the system variables; else W-P8 reads one `online_webhook_refusals` row after a refusal |
+| 3 | `joined` → `left` → (lost `joined`) → `left` drops the second leave and under-counts without « estimée » | Recorded as a known limit under rule 4 and in Not covered; S10 (usage-report comparison) catches it. No code change |
+| 4 | The fixture cannot tell « first `ended` after the join » from « last » | A third session (19:40–19:50) in the SQL acceptance. With `online_usage_month` mutated to take the last `ended`, the old fixture passed and the new one fails on the pairing assertion (local, not committed) |
+| 5 | SQLSTATE `53400` rather than the project's `PT429` | Accepted as is, noted under the author's choices |
+| 6 | « answers 404 in Production today » is inexact; clock skew | Corrected (404 with the live switch off, 401 with it on, nothing written either way); the skew case (database `invalid_input` → 503, Zoom retries) noted under the author's choices |
+
+From the #201 review (finding 4), the [classroom Production test](online-classroom-tools.md#production-test-script-for-the-owner) now tells the owner to leave the room, sign out and sign in again each time the spare browser changes between learner 1 (R-a, R-f) and the parent (R-d).
+
+Checks on the new head (private local stack on its own ports): `npm test`, lint, the online learning SQL acceptance and the SQLSTATE catalog on 130, the 128→129 and 129→130 rehearsals, and the docs checks; GitHub Verify on the pushed head is the reference for the remaining shards.
+
+### Not covered (UNVERIFIED)
+
+- **Zoom delivering to the route.** A webhook cannot reach a local machine, and no tunnel was opened; the development app was not subscribed. Proven only at W-P6 and W-P7 in Production:
+  - that the Video SDK webhooks use these headers;
+  - that `user.user_key` in an event equals the pass id (T-R1 proved it in the toolkit, not in a webhook);
+  - the session fields (`session_name`, `session_id`, `start_time`, `end_time`), and whether `session.ended` carries `session_name`. If it does not, the end is dropped (`recorded 0`) and the estimated part grows; this is visible on the director's table. The minutes and « Parti à » do not prove these fields; W-P7's read-only count per kind does.
+  - that deliveries carry `Content-Length` and stay under 64 KiB;
+  - Zoom's retry behaviour after a 503 or 429.
+- **Zoom's usage report:** whether it counts in UTC, and how a group move is metered (W-P7).
+- **A lost join between two leaves** (rule 4, known limit): under-counted without « estimée »; only the usage-report comparison (S10) shows it.
+- **The Production purge job:** its first run is 03:17 UTC on the 1st of the month after W-P1. It is read at the monthly check.
+- **The deployment id in Vercel.** `VERCEL_DEPLOYMENT_ID` is a Vercel system variable, but it was not read in this project. If it is absent, the counts fall back to the commit SHA, and then to `local`, which never resets. Settled at W-P3 (the Vercel setting), else at W-P8 (one refusal row read).
+- **The Zoom and Vercel menu names** in W-P5 and W-P6 were not seen in the owner's accounts.
 
 ## Revision record
 
