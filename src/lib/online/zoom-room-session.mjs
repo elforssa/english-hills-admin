@@ -40,11 +40,34 @@
 // hands, a learner's page the button; both ride on the command channel with fixed
 // markers (zoom-hands.mjs). The room passes it the connection states, the participants
 // added and removed, and the markers with the `eh-hand:` prefix; nothing else.
+// Reliability (plan online-room-reliability.md, ORR-r2, section 1, reliability PR):
+//   - `onJoined` tells the page the participant is inside the session (each `Connected`),
+//     so the page confirms its pass (room-pass.mjs) only once Zoom has let it in;
+//   - after a confirmation that superseded an older connection, the page calls
+//     `announceNewer()`: one fixed marker, `eh-room:newer`, on the command channel (again
+//     once when the channel connects, at most once per `boardAnswerMs`); a page that
+//     receives it calls `onNewer` and the page checks its pass at once. The marker carries
+//     nothing and decides nothing;
+//   - the platform never removes a participant (owner decision D15, 2026-11-18): Zoom
+//     refuses a removed connection's browser for the rest of the session (code 3009), so a
+//     dead device's connection is left for Zoom to drop (about 3 minutes, 181 s measured);
+//   - `connection-change` `Closed` with Zoom's reason: 'kicked by host' and 'expeled by
+//     host' are reported to the page as `closed: 'removed'`, 'ended by host' as `closed:
+//     'ended'`; any other reason or none as before (`onLeft({ closed: null })`);
+//   - the token-log wrapper is restored at teardown (zoom-toolkit-messages.mjs).
 
 import { whiteboardCapability, cspBlockedDetail, WHITEBOARD_SIGNAL } from './zoom-whiteboard.mjs';
 import { correctGroupTimer } from './zoom-groups.mjs';
-import { dropToolkitJwtLog, watchDeviceMessages } from './zoom-toolkit-messages.mjs';
+import { dropToolkitJwtLog, restoreToolkitJwtLog, watchDeviceMessages } from './zoom-toolkit-messages.mjs';
 import { createHands, HAND_PREFIX } from './zoom-hands.mjs';
+
+export const ROOM_NEWER = 'eh-room:newer';
+// Zoom's ClosedReason values (@zoom/videosdk event-callback.d.ts) as the page's words.
+export function closedKind(reason) {
+  if (reason === 'kicked by host' || reason === 'expeled by host') return 'removed';
+  if (reason === 'ended by host') return 'ended';
+  return null;
+}
 
 let chain = Promise.resolve();
 
@@ -65,11 +88,13 @@ export function roomLog(event, detail) {
 }
 
 export function startZoomRoom({ loadToolkit, preloadMedia, container, config, language, resources, joinLabel, joinTimeoutMs = 60000,
-  boardAnswerMs = 2000, hands: handRole, onHands, onLeft, onError, onClosing, onWhiteboard, log = roomLog, win = globalThis.window }) {
+  boardAnswerMs = 2000, hands: handRole, onHands, onLeft, onError, onClosing, onWhiteboard, onJoined, onNewer,
+  log = roomLog, win = globalThis.window }) {
   const s = { stopped: false, silent: false, ended: false, joined: false, attempting: false, toolkit: null, watchdog: null,
     teardown: null, settle: null, people: new Map(), groupsTraced: false, stopCameraWatch: null,
     board: { own: false, peer: false, told: null, waiting: new Set(), presenting: false, open: false, readOnly: false, traced: false, answered: -Infinity, answer: null },
-    blocked: new Set(), hands: null };
+    blocked: new Set(), hands: null, closed: null, jwt: false,
+    newer: { afterChannel: false, sent: -Infinity, timer: null } };
   // Raise hand: 'teacher' for the host's page, 'learner' for everybody else; off without a role.
   if (handRole === 'teacher' || handRole === 'learner')
     s.hands = createHands({ teacher: handRole === 'teacher', win, log, onChange: state => { if (!s.silent && !s.stopped) onHands?.(state); } });
@@ -103,13 +128,19 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       if (!s.groupsTraced) { s.groupsTraced = true; log('groups timer', { correction: corrected ? 'on' : 'off' }); }
       askBoard();
       s.hands?.connected();
+      if (!s.silent && !s.stopped) { try { onJoined?.(); } catch { /* the page's own business */ } }
     }
     // A reconnection: a move into a group or back, or the network. Whatever the reason
     // says, the participant list starts again (Zoom rebuilds it with new ids), and what
     // the presenter's page said may be stale: forget it, and ask again once connected.
     else if (state === 'Reconnecting') { s.people.clear(); log('room move', { reason: payload?.reason }); s.board.waiting.clear(); board({ told: null }); s.hands?.reconnecting(); }
     else if (state === 'Fail') { settled(); fail({ code: payload?.errorCode, reason: payload?.reason }); }
-    else if (state === 'Closed') { settled(); s.board.waiting.clear(); stopAnswer(); board({ own: false, peer: false, told: null, presenting: false }); s.hands?.closed(); }
+    else if (state === 'Closed') {
+      settled(); s.board.waiting.clear(); stopAnswer(); board({ own: false, peer: false, told: null, presenting: false }); s.hands?.closed();
+      // Closed by the host: the page shows its own text instead of the toolkit's dialog.
+      s.closed = closedKind(payload?.reason);
+      if (s.closed) left();
+    }
   };
   // A whiteboard is open when this participant presents one, when Zoom says somebody
   // else does (devices with the canvas), or when the presenter's page said so (devices
@@ -143,7 +174,32 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     const wait = s.board.answered + boardAnswerMs - Date.now();
     if (wait <= 0) sendAnswer(); else s.board.answer = setTimeout(sendAnswer, wait);
   };
-  const onCommandStatus = status => { if (status === 'Connected') { askBoard(); s.hands?.commandReady(); } };
+  // The newer-device marker: at most once per `boardAnswerMs`, and once more when the
+  // command channel connects after it was asked for (a marker sent before is lost).
+  const stopNewer = () => { if (s.newer.timer) { clearTimeout(s.newer.timer); s.newer.timer = null; } };
+  const sendNewer = () => {
+    s.newer.timer = null;
+    if (s.stopped) return;
+    s.newer.sent = Date.now();
+    log('newer connection', { marker: 'sent' });
+    tellBoard(ROOM_NEWER);
+  };
+  const queueNewer = () => {
+    if (s.newer.timer) return;
+    const wait = s.newer.sent + boardAnswerMs - Date.now();
+    if (wait <= 0) sendNewer(); else s.newer.timer = setTimeout(sendNewer, wait);
+  };
+  const announceNewer = () => {
+    if (s.stopped) return false;
+    s.newer.afterChannel = true;
+    queueNewer();
+    return true;
+  };
+  const onCommandStatus = status => {
+    if (status !== 'Connected') return;
+    askBoard(); s.hands?.commandReady();
+    if (s.newer.afterChannel) { s.newer.afterChannel = false; queueNewer(); }
+  };
   // Zoom raises the status change for a viewer too, after `peer … Start`: only the
   // participant whose own whiteboard opened without a peer presenting is the presenter.
   const onBoardStatus = status => {
@@ -167,6 +223,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
   };
   const onCommand = payload => {
     if (typeof payload?.text === 'string' && payload.text.startsWith(HAND_PREFIX)) { s.hands?.message(payload); return; }
+    if (payload?.text === ROOM_NEWER) { log('newer connection', { marker: 'received' }); if (!s.silent && !s.stopped) { try { onNewer?.(); } catch { /* the page's own business */ } } return; }
     const text = payload?.text, from = String(payload?.senderId);
     if (text === WHITEBOARD_SIGNAL.ask) { answerBoard(); return; }
     if (text !== WHITEBOARD_SIGNAL.open && text !== WHITEBOARD_SIGNAL.closed) return;
@@ -210,6 +267,8 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     s.hands?.added(list);
   };
   const onRemoved = list => { people('removed', list); s.hands?.removed(list); };
+  // A participant made co-host (or no longer) changes what the raise-hand button offers.
+  const onUpdated = list => { s.hands?.updated(list); };
   const onVisibility = () => log('page visibility', { state: win.document?.visibilityState });
   // Leaving on visibilitychange would drop a learner who only switches tab or app, and the
   // event cannot tell that from closing the page; pagehide is the exit signal.
@@ -224,6 +283,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     if (s.teardown) return s.teardown;
     s.stopped = true;
     stopAnswer();
+    stopNewer();
     s.hands?.stop();
     stopCameraWatch();
     container?.removeEventListener?.('click', onClick, true);
@@ -241,9 +301,12 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       try { await capped(toolkit.leaveSession(), 8000); } catch { /* not in a session */ }
       try { toolkit.off?.('connection-change', onConnection); toolkit.off?.('user-added', onAdded); toolkit.off?.('user-removed', onRemoved);
         toolkit.off?.('whiteboard-status-change', onBoardStatus); toolkit.off?.('peer-whiteboard-state-change', onBoardPeer);
-        toolkit.off?.('command-channel-message', onCommand); toolkit.off?.('command-channel-status', onCommandStatus); } catch { /* client gone */ }
+        toolkit.off?.('command-channel-message', onCommand); toolkit.off?.('command-channel-status', onCommandStatus);
+        toolkit.off?.('user-updated', onUpdated); } catch { /* client gone */ }
       try { await capped(toolkit.destroy(), 25000); } catch { /* already destroyed */ }
       s.toolkit = null;
+      // The token-log wrapper goes with the room (section 4 of the reliability plan).
+      if (s.jwt) { s.jwt = false; restoreToolkitJwtLog(win); }
       log('room closed');
     });
     return s.teardown;
@@ -261,7 +324,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     s.ended = true;
     log('room left');
     // The session is already closed; do not keep the participant waiting on the cleanup.
-    capped(teardown(), 3000).then(() => { if (!s.silent) onLeft?.(); });
+    capped(teardown(), 3000).then(() => { if (!s.silent) onLeft?.({ closed: s.closed }); });
   }
 
   win?.document?.addEventListener?.('securitypolicyviolation', onCspBlocked);
@@ -281,7 +344,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     // leave cap or the 25 s destroy cap ran out first, the handlers below can attach to the
     // instance that is still being destroyed; that room ends as the error card with
     // « Réessayer ».
-    dropToolkitJwtLog(win);
+    s.jwt = dropToolkitJwtLog(win);
     s.stopCameraWatch = watchDeviceMessages(win, resources, (message, reason) => log(`${message} message`, { reason }));
     const joining = toolkit.joinSession(container, { ...config, language });
     if (resources && language) {
@@ -300,6 +363,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
     toolkit.on('peer-whiteboard-state-change', onBoardPeer);
     toolkit.on('command-channel-message', onCommand);
     toolkit.on('command-channel-status', onCommandStatus);
+    toolkit.on('user-updated', onUpdated);
     container?.addEventListener?.('click', onClick, true);
     win?.addEventListener?.('pagehide', onPageHide);
     win?.addEventListener?.('pageshow', onPageShow);
@@ -325,5 +389,7 @@ export function startZoomRoom({ loadToolkit, preloadMedia, container, config, la
       lowerOf: id => s.hands?.lowerOf(id) || false,
       lowerAll: () => s.hands?.lowerAll() || false,
     },
+    // The page confirmed a pass that superseded an older connection.
+    announceNewer,
   };
 }

@@ -5,6 +5,9 @@
 //   token expired or invalid → the pass_invalid text, with « Réessayer »
 //   session full             → the capacity text
 //   network or timeout       → « Connexion instable. … », with « Réessayer »
+//   removed by the host      → « L’enseignant vous a retiré du cours. », no retry: Zoom
+//                              refuses that browser for the rest of the session (3009,
+//                              owner decision D15 of 2026-11-18)
 //   anything else            → the provider_error text, with « Réessayer »
 // The codes are the ones the pinned toolkit bundle (@zoom/videosdk-ui-toolkit 2.5.0-1) can
 // put in a `connection-change` event with state "Fail", plus two of our own: `join_timeout`
@@ -21,12 +24,14 @@
 // "Connexion instable"; only the codes Zoom reserves for a refused account show the
 // account text.
 import { ONLINE_REASON_TEXT } from './reasons.mjs';
+import { ROOM_PASS_TEXT } from './room-pass.mjs';
 
 export const ROOM_ERRORS = Object.freeze({
   account: { text: 'La salle de cours n’est pas disponible pour le moment. Prévenez l’accueil.', retry: false },
   pass: { text: ONLINE_REASON_TEXT.pass_invalid, retry: true },
   full: { text: ONLINE_REASON_TEXT.capacity, retry: false },
   network: { text: 'Connexion instable. Vérifiez votre réseau, puis réessayez.', retry: true },
+  removed: { text: ROOM_PASS_TEXT.removed, retry: false },
   other: { text: ONLINE_REASON_TEXT.provider_error, retry: true },
 });
 
@@ -41,8 +46,9 @@ const BY_CODE = Object.freeze({
   4011: 'account', 4012: 'account', 4013: 'account', 4014: 'account', 4015: 'account', 4017: 'account', 4018: 'account',
   5013: 'account', // CLIENT_INVALID_JOIN_PARAMETER
   4016: 'pass', // "recording token expired" in the bundle: the only expired-token code Zoom has
+  3009: 'removed', // "user has been removed": this browser is refused until the session ends
   // Everything else, e.g. 3000 and 4008 (already in the session), 3008 and 3625 (not
-  // started), 3009 (removed by the host), 4004 (ended), 4006 (locked), `toolkit`: other.
+  // started), 4004 (ended), 4006 (locked), `toolkit`: other.
 });
 
 export function roomErrorKey(code, passExpired = false) {

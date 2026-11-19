@@ -29,25 +29,41 @@
 export const TOOLKIT_JWT_LOG = '[JWT] participant decoded payload:';
 const JWT_FILTER = Symbol.for('eh.online.toolkit.jwt-log-filter');
 
-// Idempotent, and never removed: it stays installed for the life of the document, so two
-// rooms that overlap during a teardown cannot leave a half-restored console. That includes
-// an in-app navigation away from the room (the room's own ways out are full document
-// navigations, but a link of the surrounding layout may not be): the wrapper then stays
-// on other pages of the same document. Accepted (review note of #197): it drops only
-// console.log calls whose first argument starts with TOOLKIT_JWT_LOG, which only the
-// toolkit writes, and passes every other call through unchanged.
+// Idempotent. Restored at the room's teardown (reliability PR, plan online-room-reliability
+// section 4, #197 review note): each room that installs it calls restoreToolkitJwtLog once
+// when it ends (leave, error, superseded card, unmount); the original console.log comes
+// back when the last room using it has ended, and only if the console still holds this
+// wrapper (if something else replaced console.log since, it is left alone). Two rooms that
+// overlap during a teardown therefore never leave a half-restored console. The wrapper
+// drops only console.log calls whose first argument starts with TOOLKIT_JWT_LOG, which only
+// the toolkit writes, and passes every other call through unchanged.
+const JWT_ORIGINAL = Symbol.for('eh.online.toolkit.jwt-log-original');
+const JWT_USERS = Symbol.for('eh.online.toolkit.jwt-log-users');
 export function dropToolkitJwtLog(win) {
   const out = win?.console;
   if (!out || typeof out.log !== 'function') return false;
-  if (out.log[JWT_FILTER]) return true;
+  if (out.log[JWT_FILTER]) { out.log[JWT_USERS] += 1; return true; }
   const original = out.log;
   const filtered = function log(...args) {
     if (typeof args[0] === 'string' && args[0].startsWith(TOOLKIT_JWT_LOG)) return undefined;
     return original.apply(this, args);
   };
   filtered[JWT_FILTER] = true;
+  filtered[JWT_ORIGINAL] = original;
+  filtered[JWT_USERS] = 1;
   try { out.log = filtered; } catch { return false; }
   return out.log === filtered;
+}
+
+// Undo one dropToolkitJwtLog. Returns true when the original console.log is back.
+export function restoreToolkitJwtLog(win) {
+  const out = win?.console;
+  const current = out?.log;
+  if (typeof current !== 'function' || !current[JWT_FILTER]) return false;
+  current[JWT_USERS] = Math.max(0, (current[JWT_USERS] || 1) - 1);
+  if (current[JWT_USERS] > 0) return false;
+  try { out.log = current[JWT_ORIGINAL]; } catch { return false; }
+  return out.log === current[JWT_ORIGINAL];
 }
 
 export const CAMERA_REASON = Object.freeze({

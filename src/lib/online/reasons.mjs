@@ -33,6 +33,7 @@ export const ONLINE_REASON_TEXT = {
   not_on_roster: 'Cet apprenant ne participe pas à ce cours.',
   room_ref_invalid: 'La salle du fournisseur est invalide.',
   pass_invalid: 'Votre accès a expiré. Rouvrez la salle depuis votre espace.',
+  superseded: 'Ce cours est ouvert sur un autre appareil ou dans un autre onglet.',
   teacher_on_course: 'Un groupe en ligne n’a pas d’enseignant de groupe ; choisissez-le sur la fiche du cours.',
   course_type_locked: 'Le programme d’un cours en ligne ne peut pas redevenir présentiel.',
   group_not_online: 'Ce groupe n’a pas un programme en ligne.',

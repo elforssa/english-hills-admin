@@ -20,6 +20,11 @@
 // Raise hand (PR D, « Lever la main »): RoomHands.jsx above the room, outside the
 // toolkit: the button for a learner, « Mains levées (n) » for the teacher (the pass's
 // host). Who may lower another's hand is decided from Zoom's list, not from this role.
+// Reliability (plan online-room-reliability.md, reliability PR): `onJoined` when Zoom has
+// let the participant in (the page then confirms its pass), `onNewer` when a newer
+// device's marker arrives, and `link.current.announceNewer()` for the page to send the
+// marker after a confirmation that superseded an older connection. `onLeft` receives
+// `{ closed }`: 'removed', 'ended' or null.
 import { useEffect, useRef, useState } from 'react';
 import '@zoom/videosdk-ui-toolkit/dist/videosdk-ui-toolkit.css';
 import { startZoomRoom } from '@/lib/online/zoom-room-session.mjs';
@@ -87,14 +92,14 @@ const ROOM_STYLE = `[data-testid="zoom-room"] .uikit-mobile-header h1 { visibili
 
 const loadToolkit = () => import('@zoom/videosdk-ui-toolkit');
 
-export default function ZoomRoom({ embed, onLeft, onError }) {
+export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, link }) {
   const container = useRef(null);
-  const callbacks = useRef({ onLeft, onError });
+  const callbacks = useRef({ onLeft, onError, onJoined, onNewer, link });
   const [closing, setClosing] = useState(false);
   const [boardReadOnly, setBoardReadOnly] = useState(false);
   const [hands, setHands] = useState(null);
   const room = useRef(null);
-  useEffect(() => { callbacks.current = { onLeft, onError }; });
+  useEffect(() => { callbacks.current = { onLeft, onError, onJoined, onNewer, link }; });
   const { token, sessionName, displayName, role } = embed;
   useEffect(() => {
     setClosing(false);
@@ -109,7 +114,9 @@ export default function ZoomRoom({ embed, onLeft, onError }) {
       language: ROOM_LANGUAGE,
       resources: frFR,
       joinLabel: frFR['preview.join_button'],
-      onLeft: () => callbacks.current.onLeft?.(),
+      onLeft: detail => callbacks.current.onLeft?.(detail),
+      onJoined: () => callbacks.current.onJoined?.(),
+      onNewer: () => callbacks.current.onNewer?.(),
       onError: detail => callbacks.current.onError?.(detail),
       // Take the toolkit's own (English) error dialog off the screen while the room closes.
       onClosing: () => setClosing(true),
@@ -118,7 +125,14 @@ export default function ZoomRoom({ embed, onLeft, onError }) {
       onHands: setHands,
     });
     room.current = started;
-    return () => { if (room.current === started) room.current = null; started.stop(); };
+    const link = callbacks.current.link;
+    const handle = { announceNewer: () => started.announceNewer() };
+    if (link) link.current = handle;
+    return () => {
+      if (room.current === started) room.current = null;
+      if (link && link.current === handle) link.current = null;
+      started.stop();
+    };
   }, [token, sessionName, displayName, role]);
   return (
     <>

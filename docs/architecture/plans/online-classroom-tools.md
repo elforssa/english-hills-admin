@@ -417,7 +417,7 @@ All answered by the owner (Maroine) on 2026-11-15 with the OCT-r2 revision task,
 
 ### Scope
 
-Step P1, then PR A, then PR B, exactly as in [the PR split](#7-risk-tier-and-pr-split), in that order, each on its own branch from current `main`; PR B is not merged before PR A. PR C and PR D only after the Production test passes and the owner says so. Nothing else.
+Step P1, then PR A, then PR B, exactly as in [the PR split](#7-risk-tier-and-pr-split), in that order, each on its own branch from current `main`; PR B is not merged before PR A. PR C and PR D only after the Production test passes and the owner says so. Nothing else. *Replaced on 2026-11-17 by the owner's decision ([OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md#online-classroom-tools--approved-2026-11-15)): all classroom features are built first, then one full Production test runs in the week of 23/11; each merge and the test still need the owner's own approval.*
 
 ### Prerequisites
 
@@ -573,7 +573,7 @@ This is the « own short design note first » that [the PR split](#7-risk-tier-a
 **Contradictions with the approved text, flagged (not silently resolved):**
 
 1. **Order.** The [implementation contract](#scope) says « PR C and PR D only after the Production test passes and the owner says so ». The Production test of A and B is not recorded ([CURRENT_STATE](../../ai/CURRENT_STATE.md)); the owner asked for PR D on 2026-11-17 all the same. PR D is built on that instruction. It changes nothing the Production test checks except row 11, which it replaces; its own merge remains the owner's decision.
-2. **« Fixed messages only. »** Six of the seven markers are fixed texts. The seventh, the answer to a question, carries one whole number: the seconds since that learner's hand went up (0–10800). Without it a teacher whose page asks again (a reload, or the return from a visit to a group, when Zoom drops every message the teacher missed) would rebuild the list in the order the answers happen to arrive, not in the order the hands went up. It is not free text and says nothing about a person; the receiver reads only `^\d{1,5}$` and ignores anything else. If the owner prefers strictly fixed texts, the cost is that order after a teacher's reload or group visit.
+2. **« Fixed messages only. »** Five of the six markers are fixed texts. The sixth, the answer to a question, carries one whole number: the seconds since that learner's hand went up (0–10800). Without it a teacher whose page asks again (a reload, or the return from a visit to a group, when Zoom drops every message the teacher missed) would rebuild the list in the order the answers happen to arrive, not in the order the hands went up. It is not free text and says nothing about a person; the receiver reads only `^\d{1,5}$` and ignores anything else. If the owner prefers strictly fixed texts, the cost is that order after a teacher's reload or group visit. **Accepted by the owner (review note N4 of #199, recorded with the reliability PR, 2026-11-17):** the number stays, and it is used for the order of the list only.
 
 ### What the owner decided (2026-11-17)
 
@@ -586,11 +586,11 @@ This is the « own short design note first » that [the PR split](#7-risk-tier-a
 
 1. **A message sent to one participant** (`getCommandClient().send(text, userId)`) reaches only that participant, but **the receiver's payload has no `receiverId`**: it cannot tell a message sent to it from one sent to everybody. Each received payload has `senderId` as a string set by Zoom.
 2. **Zoom also raises a copy of some messages without `senderId`** (seen for `eh-whiteboard:ask` just after a join). Such a payload is never believed.
-3. **A learner who moves into a group** reaches the teacher's page in the main room as `user-removed` (old id), then a `user-added` with the new id and a `subsessionId`, and is absent from `getAllUser()`. When the **teacher** visits a group and returns, the teacher gets a new id, the main-room learners keep theirs, and the teacher's page has missed every message sent in the main room meanwhile. A reload is `user-removed` plus `user-added` with a new id. The learner's own subsession state is `getSubsessionClient().getUserStatus()`: `'in room'` inside a group; anything else (`initial`, `invited`, `main session`) is the main room.
+3. **A learner who moves into a group** reaches the teacher's page in the main room as `user-removed` (old id), then a `user-added` with the new id and a `subsessionId`, and is absent from `getAllUser()`. When the **teacher** visits a group and returns, the teacher gets a new id, the main-room learners keep theirs, and the teacher's page has missed every message sent in the main room meanwhile. A reload is `user-removed` plus `user-added` with a new id. The learner's own subsession state is `getSubsessionClient().getUserStatus()`: `'in room'` inside a group, and `'joining'` (on the way in) counts as inside a group too; anything else (`initial`, `invited`, `main session`, and `'leaving'` on the way back) is the main room. *(Corrected with the reliability PR, review note N6 of #199: the code has always counted `'joining'` as in a group.)*
 
 ### Design
 
-Seven markers, all with the prefix `eh-hand:`, matched exactly; anything else with that prefix is ignored. A payload without a numeric `senderId` is ignored.
+Six markers, all with the prefix `eh-hand:`, matched exactly *(« seven » before review note N1 of #199; the table has always had six)*; anything else with that prefix is ignored. A payload without a numeric `senderId` is ignored.
 
 | Marker | Sent by | To | Believed when |
 | --- | --- | --- | --- |
@@ -602,10 +602,10 @@ Seven markers, all with the prefix `eh-hand:`, matched exactly; anything else wi
 | `eh-hand:lower-all` | the host or a manager | everybody | only from the host or a manager |
 
 - **The teacher's page** keeps the list: one entry per sender id, in the order the hands went up, at most 100 entries; a marker whose sender is not yet in its participant list waits for that sender (at most 64 waiting, like the whiteboard). An entry goes when the learner lowers it, when the teacher lowers it, on `user-removed` (leave, reload, move into a group), on `lower-all`, and on the teacher's own reconnection; after that reconnection the page asks again and rebuilds the list from the answers. The page does not show a teacher's or manager's own « hand ».
-- **The learner's page** shows the button only while it is connected and not inside a group. A reconnection of any kind (a move into a group or back, a network drop) lowers the hand locally; the teacher's page has already dropped the old id. A send that fails puts the button back. When the teacher lowers the hand, the learner sees « Votre main a été baissée par l’enseignant. » for a few seconds.
+- **The learner's page** shows the button only while it is connected and not inside a group. A reconnection of any kind (a move into a group or back, a network drop) lowers the hand locally; the teacher's page has already dropped the old id. A send that fails puts the button back. *Reliability PR, review notes of #199:* a hand that was up when the connection dropped, and a « lower-self » that Zoom refused, are owed: the page sends « lower-self » again once it is back in the main room, until Zoom takes it, because a drop that recovers without a reload can keep the same id on the teacher's page (N3). A learner page whose participant Zoom lists as the host or a manager (an observer or a learner made co-host, read again on `user-updated`) shows no button, and a hand that was up goes down (N2). When the teacher lowers the hand, the learner sees « Votre main a été baissée par l’enseignant. » for a few seconds.
 - **Who is trusted** is read from Zoom's own participant list (`isHost` or `isManager` for the sender's id), as for the whiteboard. A learner who sends `lower` or `lower-all` by hand changes nothing; a learner can raise and lower only the hand Zoom attributes to their own id.
 - **Trace:** the teacher's page writes `hands total=<n>` when the count changes; a learner's page writes `hand state=up|down by=self|teacher|move|leave|failed` (`failed`: Zoom refused the send and the button went back). No name, no id.
-- **Cue:** the panel's badge turns amber with a ring for 3 s when the count rises (at most once per 3 s), and a hidden polite live region says « <label> lève la main ». No sound.
+- **Cue:** the panel's badge turns amber with a ring for 3 s when the count rises (at most once per 3 s), and a hidden polite live region says « <label> lève la main ». No sound. *Reliability PR, review note N5 of #199:* a hand rebuilt from an answer (after a reload of the teacher's page or a return from a group) joins the list without the cue or the announcement; only a new « raise » gives them.
 - **Modules:** `src/lib/online/zoom-hands.mjs` (the markers and both sides, without React, unit-tested with a fake client), wired in `zoom-room-session.mjs`; `src/components/online/RoomHands.jsx` (button and panel) mounted by `ZoomRoom.jsx` above the room; a « Mains levées » paragraph in the « Guide de la salle ».
 
 ### Tests
@@ -630,8 +630,12 @@ Row 11 becomes the rows below; run them after row 5 and before the groups rows. 
 ### Also in this PR (notes of the #197 review, not blocking)
 
 - The pre-join « start devices » message (`preview.error_start_devices` + error) gets the same French-reason treatment as the camera message (it could still show « [object Object] »).
-- The comment of the console wrapper in `zoom-toolkit-messages.mjs` says what is true: it stays installed for the life of the document, also after an in-app navigation away from the room, which is accepted (it drops one line, nothing else).
+- The comment of the console wrapper in `zoom-toolkit-messages.mjs` says what is true: it stays installed for the life of the document, also after an in-app navigation away from the room, which is accepted (it drops one line, nothing else). *Superseded by the reliability PR ([plan section 4](online-room-reliability.md#4-the-toolkit-facts-as-a-recurring-check-reliability-pr)): the wrapper is now restored at the room's teardown.*
 - The toolkit's English share label « …'s content » is accepted as known and revisited with the toolkit upgrade (PR C); recorded in OWNER_DECISIONS.
+
+### Not covered by PR D's evidence (UNVERIFIED)
+
+Recorded with the reliability PR (review notes N1/N6 of #199): real phones and iPhone Safari (the phone is a phone-shaped Chrome window), including the button on a real Android and iPhone and the order of hands raised from three real devices (rows H-a to H-f); the Production key and account; a real screen reader reading « <label> lève la main »; a network drop that recovers without a reload (N3 is proven with a fake toolkit and unit tests, not against Zoom); a learner made co-host during a lesson (N2, fake toolkit and unit tests only); more than three learners raising at once; toolkit 2.6.10-1.
 
 ## Revision record
 

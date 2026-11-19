@@ -6,7 +6,9 @@
 //   mintJoinToken({ roomRef, displayName, role, expiresAt, participantRef, lessonRef }) → { token, embed }
 //   verifyWebhook({ rawBody, headers, secret }) → { ok, events, challenge? }
 //   revokeParticipant(roomRef, participantRef)                 (when supportsRevoke)
-// and declares supportsWebhooks / supportsRevoke. The fake adapter serves tests, local
+// and declares supportsWebhooks / supportsRevoke, plus credentialShape(env) →
+// 'correct' | 'incorrect' | 'absent': its own paste-mistake rule for its credentials
+// (plan ORR-r2, section 2), never the value. The fake adapter serves tests, local
 // development and CI; zoom-video is the provider the owner chose on 2026-10-22 (Q12).
 import { fakeProvider } from './fake.mjs';
 import { zoomVideoProvider } from './zoom-video.mjs';
