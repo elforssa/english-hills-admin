@@ -6,7 +6,11 @@
 // Director and admin also see the status line (plan online-room-reliability.md, section 2,
 // reliability PR): whether the room provider's keys are correct, show a paste mistake or
 // are missing, from GET /api/online/status — words only, never a value.
-import { centreMonth } from '@/lib/centreClock.mjs';
+// Webhook PR (section 3, D7, D9): the status line adds the webhook rows (route open or
+// closed, secret present or not — never its value —, last event received, refused writes
+// since the deploy), and « Minutes connectées » shows the month's minutes per course
+// (online_usage_month) to compare with Zoom's usage report. Never attendance.
+import { centreMonth, formatCentre } from '@/lib/centreClock.mjs';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -14,7 +18,7 @@ import { Video, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { hasCapability } from '@/lib/roleAccess.mjs';
-import { useOnlineRead, civilDate } from '@/lib/online/queries';
+import { useOnlineRead, civilDate, casablancaTime } from '@/lib/online/queries';
 import { onlineErrorText } from '@/lib/online/reasons.mjs';
 import { ONLINE_COURSE_STATUS_COLORS } from '@/lib/statusColors';
 
@@ -25,6 +29,12 @@ function casablancaMonth() {
 }
 
 const STATUS_KEYS_TEXT = { correctes: 'correctes', incorrectes: 'incorrectes', absentes: 'absentes' };
+const STATUS_SECRET_TEXT = { présent: 'présent', absent: 'absent', incorrect: 'incorrect' };
+
+// The usage month is UTC, like the figure it is compared with (plan section 3, rule 5).
+function utcMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
 
 function StatusLine() {
   const status = useQuery({
@@ -39,10 +49,56 @@ function StatusLine() {
     retry: false,
   });
   const keys = STATUS_KEYS_TEXT[status.data?.keys];
+  const data = status.data || {};
+  const secret = STATUS_SECRET_TEXT[data.webhook_secret];
+  const refused = data.refused ? data.refused.rate_limited + data.refused.unavailable : null;
   return (
-    <p className={`mb-4 rounded-lg border p-3 text-sm ${keys === 'correctes' ? 'bg-card' : keys ? 'border-red-200 bg-red-50 text-red-800' : 'bg-card text-muted-foreground'}`} data-testid="online-status-line">
-      Salle de cours en ligne — clés : {keys || (status.isPending ? '…' : 'état indisponible')}
-    </p>
+    <div className={`mb-4 rounded-lg border p-3 text-sm ${keys === 'correctes' ? 'bg-card' : keys ? 'border-red-200 bg-red-50 text-red-800' : 'bg-card text-muted-foreground'}`} data-testid="online-status-line">
+      <p>Salle de cours en ligne — clés : {keys || (status.isPending ? '…' : 'état indisponible')}</p>
+      {keys && (
+        <p className="mt-1 text-xs text-muted-foreground" data-testid="online-webhook-status">
+          Événements Zoom : {data.webhook === 'ouvert' ? 'ouverts' : 'fermés'} · secret du webhook : {secret || 'état indisponible'}
+          {' · '}dernier événement reçu : {data.last_event_at ? `${formatCentre(data.last_event_at, 'fr-FR', { day: '2-digit', month: '2-digit' })} à ${casablancaTime(data.last_event_at)}` : 'aucun'}
+          {' · '}écritures refusées depuis le dernier déploiement : {refused === null ? 'état indisponible' : refused}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function UsageMinutes() {
+  const [month, setMonth] = useState(utcMonth);
+  const usage = useOnlineRead('online_usage_month', { p_month: `${month}-01` }, { roles: ['director', 'admin'] });
+  const courses = usage.data?.courses || [];
+  return (
+    <section className="mt-10">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-semibold">Minutes connectées (Zoom)</h2>
+        <input type="month" aria-label="Mois des minutes" className="rounded-md border px-2 py-1 text-sm" value={month} onChange={e => setMonth(e.target.value || utcMonth())} />
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Somme par connexion, comme Zoom la facture, mois en temps universel (UTC), à comparer avec le rapport d’utilisation de Zoom.
+        Une durée « estimée » remplace un événement manquant. Ces chiffres ne servent jamais aux présences.
+      </p>
+      {usage.isError && <p className="text-sm text-red-800">{onlineErrorText(usage.error)}</p>}
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <table className="w-full text-sm" data-testid="online-usage-minutes">
+          <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground"><tr><th className="p-3">Cours</th><th className="p-3">Minutes</th><th className="p-3">Dont estimées</th><th className="p-3">Connexions</th></tr></thead>
+          <tbody>
+            {courses.map(row => (
+              <tr key={row.group_id} className="border-t">
+                <td className="p-3">{row.name}</td><td className="p-3">{row.minutes}</td>
+                <td className="p-3">{row.estimated_minutes}{row.estimated_intervals ? ` (${row.estimated_intervals})` : ''}</td><td className="p-3">{row.passes}</td>
+              </tr>
+            ))}
+            {usage.data && courses.length === 0 && <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">Aucune minute reçue de Zoom ce mois-ci.</td></tr>}
+            {courses.length > 0 && (
+              <tr className="border-t font-medium"><td className="p-3">Total</td><td className="p-3">{usage.data.totals.minutes}</td><td className="p-3">{usage.data.totals.estimated_minutes}</td><td className="p-3">{courses.reduce((sum, row) => sum + (row.passes ?? 0), 0)}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -107,6 +163,7 @@ export default function OnlineCourses() {
         ))}
       </div>
       {management && <TeacherCounts />}
+      {management && <UsageMinutes />}
     </div>
   );
 }

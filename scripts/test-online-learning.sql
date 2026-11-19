@@ -1,4 +1,4 @@
--- Online learning pilot (migrations 117, 118 and 129, plans OL-r4 / OL-r6 / ORR-r2): synthetic local fixtures, fully
+-- Online learning pilot (migrations 117, 118, 129 and 130, plans OL-r4 / OL-r6 / ORR-r2): synthetic local fixtures, fully
 -- rolled back. Covers the vocabulary, the three triggers, course/pattern/lesson
 -- commands, capacity on every assignment path, consent, the join matrix (role x
 -- window x status), passes and revocation, the teacher boundary, the staff role
@@ -627,6 +627,219 @@ reset role;
 rollback to savepoint orr;
 
 -- ---------------------------------------------------------------------------
+-- Session evidence (migration 130, plan ORR-r2 section 3, webhook PR): session events
+-- verified against the room reference and idempotent; the 60-second write ceiling;
+-- the refusal counter (D16); the status read; the pairing rule of the monthly minutes;
+-- the last leave on the staff course read; the 12-month purge. Never attendance.
+-- ---------------------------------------------------------------------------
+savepoint owe;
+create function pg_temp.ts(t text) returns timestamptz language sql immutable as $$ select (t || '+00')::timestamptz $$;
+create function pg_temp.room_name(lesson integer, grp integer) returns text language sql as $$
+  select 'fake-room-' || right(pg_temp.id(grp)::text, 4) || '.' || pg_temp.id(lesson)::text $$;
+create function pg_temp.attendance_snapshot() returns text language sql security definer as $$
+  select count(*) || ':' || coalesce(md5(string_agg(to_jsonb(a)::text, '' order by a.id)), '') from public.online_attendance a $$;
+select pg_temp.attendance_snapshot() as owe_attendance \gset
+
+-- Session events: service role only; verified against the course's room reference plus
+-- the lesson id and the course's provider; idempotent; unknown lessons dropped.
+set local role service_role;
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:00'), pg_temp.room_name(501, 301), 'sess-1'))->>'recorded' = 'true',
+  'a started event for the lesson''s own session name is recorded');
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:00'), pg_temp.room_name(501, 301), 'sess-1'))->>'recorded' = 'false',
+  'a replay of the same event writes nothing (unique lesson, kind, time)');
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'ended', pg_temp.ts('2026-01-10 18:10'), upper(pg_temp.room_name(501, 301)), null))->>'recorded' = 'true',
+  'the session name is compared without case (Zoom lowercases it)');
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:20'), pg_temp.room_name(502, 301), null))->>'recorded' = 'false',
+  'another lesson''s session name is dropped');
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:20'), pg_temp.room_name(501, 302), null))->>'recorded' = 'false',
+  'another course''s room reference is dropped');
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'zoom-video', 'started', pg_temp.ts('2026-01-10 18:20'), pg_temp.room_name(501, 301), null))->>'recorded' = 'false',
+  'a provider other than the course''s is dropped');
+select pg_temp.ok((public.online_record_session_event(gen_random_uuid(), 'fake', 'started', pg_temp.ts('2026-01-10 18:20'), pg_temp.room_name(501, 301), null))->>'recorded' = 'false',
+  'an unknown lesson is dropped');
+select pg_temp.fails(format($f$select public.online_record_session_event(%L, 'fake', 'paused', now(), 'x')$f$, pg_temp.id(501)), '22023', 'online.invalid_input');
+select pg_temp.fails(format($f$select public.online_record_session_event(%L, 'fake', 'started', now() + interval '6 minutes', 'x')$f$, pg_temp.id(501)), '22023', 'online.invalid_input');
+select pg_temp.fails(format($f$select public.online_record_session_event(%L, 'fake', 'started', now(), %L)$f$, pg_temp.id(501), repeat('a', 201)), '22023', 'online.invalid_input');
+select pg_temp.fails(format($f$select public.online_record_session_event(%L, 'Fake!', 'started', now(), 'x')$f$, pg_temp.id(501)), '22023', 'online.invalid_input');
+reset role;
+select pg_temp.ok((select count(*) from public.online_session_events) = 2
+  and (select provider from public.online_session_events where kind = 'started') = 'fake'
+  and (select provider_session_ref from public.online_session_events where kind = 'started') = 'sess-1', 'exactly the two verified events are stored, with fixed fields');
+
+-- The write ceiling: at most 600 evidence rows received in any 60 seconds, both tables.
+savepoint owe_ceiling;
+insert into public.online_session_events(lesson_id, provider, kind, at)
+select pg_temp.id(502), 'fake', 'started', pg_temp.ts('2025-06-01 00:00') + make_interval(secs => i)
+from generate_series(1, 599 - (select (select count(*) from public.online_join_events where received_at > now() - interval '60 seconds')
+  + (select count(*) from public.online_session_events where received_at > now() - interval '60 seconds'))::integer) i;
+select jti as owe_ceiling_jti from public.online_join_tokens limit 1 \gset
+set local role service_role;
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:20'), pg_temp.room_name(501, 301), null))->>'recorded' = 'true',
+  'the 600th row in 60 seconds is written');
+select pg_temp.fails(format($f$select public.online_record_session_event(%L, 'fake', 'ended', %L, %L)$f$, pg_temp.id(501), pg_temp.ts('2026-01-10 19:30'), pg_temp.room_name(501, 301)),
+  '53400', 'online.rate_limited');
+select pg_temp.fails(format($f$select public.online_record_join_event(%L, 'joined', %L)$f$, :'owe_ceiling_jti', pg_temp.ts('2026-01-10 18:21')), '53400', 'online.rate_limited');
+reset role;
+-- Rows received more than 60 seconds ago do not count.
+update public.online_session_events set received_at = now() - interval '61 seconds' where lesson_id = pg_temp.id(502);
+set local role service_role;
+select pg_temp.ok((public.online_record_session_event(pg_temp.id(501), 'fake', 'ended', pg_temp.ts('2026-01-10 19:30'), pg_temp.room_name(501, 301), null))->>'recorded' = 'true',
+  'older rows leave the 60-second window');
+reset role;
+rollback to savepoint owe_ceiling;
+
+-- Refusal counter (D16): one row per deployment and reason, service role only.
+set local role service_role;
+select public.online_note_webhook_refusal('dpl_test1', 'unavailable');
+select public.online_note_webhook_refusal('dpl_test1', 'unavailable');
+select public.online_note_webhook_refusal('dpl_test1', 'rate_limited');
+select public.online_note_webhook_refusal('dpl_older', 'unavailable');
+select pg_temp.fails($f$select public.online_note_webhook_refusal('dpl test', 'unavailable')$f$, '22023', 'online.invalid_input');
+select pg_temp.fails($f$select public.online_note_webhook_refusal('dpl_test1', 'forbidden')$f$, '22023', 'online.invalid_input');
+reset role;
+select pg_temp.ok((select count(*) from public.online_webhook_refusals) = 3
+  and (select refused from public.online_webhook_refusals where deployment = 'dpl_test1' and reason = 'unavailable') = 2, 'refusals are counted, one row per deployment and reason');
+
+-- Status read: director and admin only; times and counts for the given deployment.
+select pg_temp.act(1);
+select pg_temp.ok((public.online_room_status('dpl_test1'))->>'refused_unavailable' = '2' and (public.online_room_status('dpl_test1'))->>'refused_rate_limited' = '1'
+  and (public.online_room_status('dpl_test1'))->>'last_event_at' is not null, 'director: refusals of this deployment and the last event time');
+select pg_temp.act(2);
+select pg_temp.ok((public.online_room_status('dpl_new'))->>'refused_unavailable' = '0' and (public.online_room_status(null))->>'refused_rate_limited' = '0',
+  'admin: a new deployment starts at zero');
+select pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(public.online_room_status('dpl_test1')) k)
+  = array['last_event_at', 'refused_rate_limited', 'refused_unavailable'], 'the status read carries a time and two counts only');
+select pg_temp.owner();
+
+-- Pairing rule (section 3, B4, binding correction 5). Lesson 501 of course 301, January 2026 (UTC).
+-- Sessions: 18:00–18:10 (an earlier session), 18:20–19:30, and one started at 19:40 with no end.
+insert into public.online_session_events(lesson_id, provider, kind, at) values
+  (pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:20')),
+  (pg_temp.id(501), 'fake', 'ended', pg_temp.ts('2026-01-10 19:30')),
+  (pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 19:40'));
+insert into public.online_join_tokens(id, jti, lesson_id, participant_kind, profile_id, display_label, issued_at, expires_at) values
+  (pg_temp.id(901), pg_temp.id(911), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass A', pg_temp.ts('2026-01-10 17:50'), pg_temp.ts('2026-01-10 20:00')),
+  (pg_temp.id(902), pg_temp.id(912), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass B', pg_temp.ts('2026-01-10 17:55'), pg_temp.ts('2026-01-10 20:00')),
+  (pg_temp.id(903), pg_temp.id(913), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass C', pg_temp.ts('2026-01-10 18:00'), pg_temp.ts('2026-01-10 19:00')),
+  (pg_temp.id(904), pg_temp.id(914), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass D', pg_temp.ts('2026-01-10 18:00'), pg_temp.ts('2026-01-10 20:00')),
+  (pg_temp.id(905), pg_temp.id(915), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass E', pg_temp.ts('2026-01-10 18:05'), pg_temp.ts('2026-01-10 20:00')),
+  (pg_temp.id(906), pg_temp.id(916), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass F', pg_temp.ts('2026-01-10 18:00'), pg_temp.ts('2026-01-10 20:00')),
+  (pg_temp.id(907), pg_temp.id(917), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass G', pg_temp.ts('2026-01-31 23:30'), pg_temp.ts('2026-02-01 01:00')),
+  (pg_temp.id(908), pg_temp.id(918), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass H', pg_temp.ts('2026-01-10 18:30'), pg_temp.ts('2026-01-10 20:00'));
+insert into public.online_join_events(token_id, kind, at) values
+  -- A: joined then left → 40 exact.
+  (pg_temp.id(901), 'joined', pg_temp.ts('2026-01-10 18:21')), (pg_temp.id(901), 'left', pg_temp.ts('2026-01-10 19:01')),
+  -- B: joined, no leave → ends at the first ended AFTER the join (19:30, not the earlier 18:10) → 60 estimated.
+  (pg_temp.id(902), 'joined', pg_temp.ts('2026-01-10 18:30')),
+  -- C: joined, no leave, the pass expires first (19:00) → 20 estimated.
+  (pg_temp.id(903), 'joined', pg_temp.ts('2026-01-10 18:40')),
+  -- D: a second join closes the first (10 estimated), then joined → left (15 exact).
+  (pg_temp.id(904), 'joined', pg_temp.ts('2026-01-10 18:25')), (pg_temp.id(904), 'joined', pg_temp.ts('2026-01-10 18:35')),
+  (pg_temp.id(904), 'left', pg_temp.ts('2026-01-10 18:50')),
+  -- E: leave without join → starts at the later of the issue (18:05) and the last started BEFORE the leave (18:20; not 19:40) → 25 estimated.
+  (pg_temp.id(905), 'left', pg_temp.ts('2026-01-10 18:45')),
+  -- F: joined → left (10 exact), then a second left with nothing open is ignored.
+  (pg_temp.id(906), 'joined', pg_temp.ts('2026-01-10 18:22')), (pg_temp.id(906), 'left', pg_temp.ts('2026-01-10 18:32')),
+  (pg_temp.id(906), 'left', pg_temp.ts('2026-01-10 18:42')),
+  -- G: across the month end → 20 exact in January, 20 in February.
+  (pg_temp.id(907), 'joined', pg_temp.ts('2026-01-31 23:40')), (pg_temp.id(907), 'left', pg_temp.ts('2026-02-01 00:20')),
+  -- H: leave without join, issued after the last started → starts at the issue (18:30) → 15 estimated.
+  (pg_temp.id(908), 'left', pg_temp.ts('2026-01-10 18:45'));
+select pg_temp.act(1);
+select public.online_usage_month('2026-01-17') as owe_jan \gset
+select public.online_usage_month('2026-02-01') as owe_feb \gset
+select pg_temp.owner();
+select pg_temp.ok((:'owe_jan'::jsonb)->>'month' = '2026-01' and (:'owe_jan'::jsonb)->>'time_zone' = 'UTC'
+  and jsonb_array_length((:'owe_jan'::jsonb)->'courses') = 1 and (:'owe_jan'::jsonb)->'courses'->0->>'group_id' = pg_temp.id(301)::text,
+  'January: one course, month and time zone stated');
+select pg_temp.ok(((:'owe_jan'::jsonb)->'courses'->0->>'minutes')::numeric = 215 and ((:'owe_jan'::jsonb)->'courses'->0->>'estimated_minutes')::numeric = 130
+  and ((:'owe_jan'::jsonb)->'courses'->0->>'passes')::integer = 8 and ((:'owe_jan'::jsonb)->'courses'->0->>'intervals')::integer = 9
+  and ((:'owe_jan'::jsonb)->'courses'->0->>'estimated_intervals')::integer = 5,
+  'pairing rule: exact 40 + 15 + 10 + 20 = 85, estimated 60 + 20 + 10 + 25 + 15 = 130, nine intervals, five estimated, eight passes');
+select pg_temp.ok(((:'owe_jan'::jsonb)->'totals'->>'minutes')::numeric = 215 and ((:'owe_jan'::jsonb)->'totals'->>'estimated_minutes')::numeric = 130,
+  'January totals');
+select pg_temp.ok(((:'owe_feb'::jsonb)->'courses'->0->>'minutes')::numeric = 20 and ((:'owe_feb'::jsonb)->'courses'->0->>'estimated_minutes')::numeric = 0
+  and ((:'owe_feb'::jsonb)->'courses'->0->>'passes')::integer = 1, 'February: only the clipped part of G');
+select pg_temp.ok((:'owe_jan'::jsonb)::text not like '%Pass %' and (:'owe_jan'::jsonb)::text not like '%fake-room-%'
+  and not ((:'owe_jan'::jsonb)->'courses'->0 ? 'student_id'), 'the minutes carry no pass label, learner or room reference');
+-- The read time closes a join still open: a pass connected now in the current month.
+insert into public.online_join_tokens(id, jti, lesson_id, participant_kind, profile_id, display_label, issued_at, expires_at) values
+  (pg_temp.id(909), pg_temp.id(919), pg_temp.id(502), 'observer', pg_temp.id(1), 'Pass now', now() - interval '7 minutes', now() + interval '1 hour');
+insert into public.online_join_events(token_id, kind, at) values (pg_temp.id(909), 'joined', now() - interval '6 minutes');
+select pg_temp.act(2);
+select pg_temp.ok((select (c->>'minutes')::numeric = round(extract(epoch from now() - greatest(now() - interval '6 minutes',
+    date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')) / 60.0, 1) and (c->>'estimated_intervals')::integer = 1
+  from jsonb_array_elements((public.online_usage_month((now() at time zone 'UTC')::date))->'courses') c where c->>'group_id' = pg_temp.id(301)::text),
+  'a join still open ends at the time of the read, estimated');
+select pg_temp.fails('select public.online_usage_month(null)', '22023', 'online.invalid_input');
+select pg_temp.owner();
+
+-- Staff course read: first join and last leave per learner; evidence never writes attendance.
+insert into public.online_join_tokens(id, jti, lesson_id, participant_kind, student_id, profile_id, display_label, issued_at, expires_at) values
+  (pg_temp.id(921), pg_temp.id(931), pg_temp.id(507), 'learner', pg_temp.id(201), pg_temp.id(8), 'Amal B.', now() - interval '35 minutes', now() + interval '40 minutes');
+set local role service_role;
+select public.online_record_join_event(pg_temp.id(931), 'joined', now() - interval '28 minutes');
+select public.online_record_join_event(pg_temp.id(931), 'left', now() - interval '20 minutes');
+select public.online_record_join_event(pg_temp.id(931), 'joined', now() - interval '18 minutes');
+select public.online_record_join_event(pg_temp.id(931), 'left', now() - interval '2 minutes');
+select pg_temp.ok((public.online_record_join_event(pg_temp.id(931), 'left', now() - interval '2 minutes'))->>'recorded' = 'false', 'a join-event replay writes nothing');
+reset role;
+select pg_temp.act(3);
+select pg_temp.ok((select (r->>'joined_at')::timestamptz = now() - interval '28 minutes' and (r->>'left_at')::timestamptz = now() - interval '2 minutes'
+  from jsonb_array_elements((public.online_get_course(pg_temp.id(301), pg_temp.id(507)))->'lesson'->'attendance') r where r->>'student_id' = pg_temp.id(201)::text),
+  'the staff course read shows the first join and the last leave');
+select pg_temp.ok((select bool_and(r ? 'left_at') from jsonb_array_elements((public.online_get_course(pg_temp.id(301), pg_temp.id(507)))->'lesson'->'attendance') r),
+  'every learner row carries left_at');
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.attendance_snapshot() = :'owe_attendance', 'no evidence written here touched attendance (D7, invariant 1)');
+
+-- Retention (D13): exactly the rows older than 12 months are deleted, owner only.
+insert into public.online_session_events(lesson_id, provider, kind, at) values
+  (pg_temp.id(502), 'fake', 'started', now() - interval '13 months'), (pg_temp.id(502), 'fake', 'ended', now() - interval '11 months');
+insert into public.online_join_events(token_id, kind, at) values
+  (pg_temp.id(909), 'joined', now() - interval '13 months'), (pg_temp.id(909), 'left', now() - interval '12 months' + interval '1 day');
+insert into public.online_webhook_refusals(deployment, reason, first_at, last_at) values ('dpl_ancient', 'unavailable', now() - interval '14 months', now() - interval '13 months');
+select (select count(*) from public.online_join_events where at < now() - interval '12 months') as owe_old_j,
+  (select count(*) from public.online_session_events where at < now() - interval '12 months') as owe_old_s,
+  (select count(*) from public.online_join_events) as owe_all_j, (select count(*) from public.online_session_events) as owe_all_s,
+  (select count(*) from public.online_webhook_refusals) as owe_all_r \gset
+select pg_temp.act(1);
+select pg_temp.fails('select public.online_purge_session_evidence()', '42501');
+set local role service_role;
+select pg_temp.fails('select public.online_purge_session_evidence()', '42501');
+reset role;
+select pg_temp.owner();
+select public.online_purge_session_evidence() as owe_purge \gset
+select pg_temp.ok((:'owe_purge'::jsonb)->>'join_events' = :'owe_old_j' and (:'owe_purge'::jsonb)->>'session_events' = :'owe_old_s'
+  and (:'owe_purge'::jsonb)->>'refusals' = '1' and :'owe_old_j'::integer >= 1 and :'owe_old_s'::integer >= 1, 'the purge returns its counts');
+select pg_temp.ok((select count(*) from public.online_join_events) = :'owe_all_j'::integer - :'owe_old_j'::integer
+  and (select count(*) from public.online_session_events) = :'owe_all_s'::integer - :'owe_old_s'::integer
+  and not exists (select 1 from public.online_join_events where at < now() - interval '12 months')
+  and not exists (select 1 from public.online_session_events where at < now() - interval '12 months')
+  and exists (select 1 from public.online_session_events where at = now() - interval '11 months')
+  and exists (select 1 from public.online_join_events where at = now() - interval '12 months' + interval '1 day')
+  and (select count(*) from public.online_webhook_refusals) = :'owe_all_r'::integer - 1,
+  'the purge deletes exactly the rows older than 12 months');
+select pg_temp.ok(pg_temp.attendance_snapshot() = :'owe_attendance' and (select count(*) from public.online_join_tokens where id = pg_temp.id(909)) = 1,
+  'the purge touches neither passes nor attendance');
+
+-- Catalog: the two tables have row security and no API grant; the writers are service
+-- role only, the reads authenticated only, the purge and the helper no API role; the job.
+select pg_temp.ok((select bool_and(c.relrowsecurity and (c.relacl is null or c.relacl::text = '{postgres=arwdDxtm/postgres}')) from pg_class c
+  where c.oid in ('public.online_session_events'::regclass, 'public.online_webhook_refusals'::regclass)), 'new tables: row security on, no API grant');
+select pg_temp.ok((select bool_and(p.prosecdef and p.proacl::text = '{postgres=X/postgres,service_role=X/postgres}') from pg_proc p
+  where p.oid in ('public.online_record_session_event(uuid,text,text,timestamptz,text,text)'::regprocedure, 'public.online_note_webhook_refusal(text,text)'::regprocedure)),
+  'evidence writers: security definer, service role only');
+select pg_temp.ok((select bool_and(p.prosecdef and p.proacl::text = '{postgres=X/postgres,authenticated=X/postgres}') from pg_proc p
+  where p.oid in ('public.online_usage_month(date)'::regprocedure, 'public.online_room_status(text)'::regprocedure)), 'director reads: security definer, authenticated only');
+select pg_temp.ok((select proacl::text from pg_proc where oid = 'public.online_purge_session_evidence()'::regprocedure) = '{postgres=X/postgres}'
+  and (select proacl::text from pg_proc where oid = 'online_security.evidence_ceiling_reached()'::regprocedure) = '{postgres=X/postgres}',
+  'the purge and the ceiling helper: no API role');
+select pg_temp.ok(to_regnamespace('cron') is null or exists (select 1 from cron.job where jobname = 'online-evidence-purge'
+  and schedule = '17 3 1 * *' and command = 'select public.online_purge_session_evidence()' and active), 'the monthly purge job is scheduled');
+rollback to savepoint owe;
+
+-- ---------------------------------------------------------------------------
 -- Staff role matrix (OL-r4): receptionist denials write nothing; operations succeed.
 -- ---------------------------------------------------------------------------
 create temp table ol_snapshot as select
@@ -645,6 +858,8 @@ select pg_temp.fails(format($$select public.online_activate_course(%L, %s, 'fake
 select pg_temp.fails(format('select public.online_revoke_consent(%L)', pg_temp.id(206)), '42501', 'online.forbidden');
 select pg_temp.fails(format($$select public.online_close_course(%L, %s)$$, pg_temp.id(301), pg_temp.course_version(pg_temp.id(301))), '42501', 'online.forbidden');
 select pg_temp.fails('select public.online_teacher_lesson_counts(current_date)', '42501', 'online.forbidden');
+select pg_temp.fails('select public.online_usage_month(current_date)', '42501', 'online.forbidden');
+select pg_temp.fails($f$select public.online_room_status('dpl_x')$f$, '42501', 'online.forbidden');
 select pg_temp.owner();
 select pg_temp.ok((select patterns from ol_snapshot) is not distinct from (select md5(string_agg(to_jsonb(p)::text, '' order by p.id)) from public.online_lesson_patterns p)
   and (select lessons from ol_snapshot) = (select md5(string_agg(to_jsonb(l)::text, '' order by l.id)) from public.online_lessons l)
@@ -1005,7 +1220,9 @@ do $$ declare who integer; call_text text; staff text[] := array[
     format($f$public.online_close_course(%L, 1)$f$, pg_temp.id(306)),
     'public.online_list_courses()',
     format($f$public.online_get_course(%L)$f$, pg_temp.id(301)),
-    'public.online_teacher_lesson_counts(current_date)'];
+    'public.online_teacher_lesson_counts(current_date)',
+    'public.online_usage_month(current_date)',
+    $f$public.online_room_status('dpl_x')$f$];
 begin
   foreach who in array array[4, 7, 8] loop
     perform pg_temp.act(who);
@@ -1024,6 +1241,9 @@ begin
     perform pg_temp.fails(format('select public.online_resolve_join(%L)', gen_random_uuid()), '42501');
     perform pg_temp.fails(format($f$select public.online_record_join_event(%L, 'joined', now())$f$, gen_random_uuid()), '42501');
     perform pg_temp.fails(format('select public.online_resolve_room(%L)', pg_temp.id(301)), '42501');
+    perform pg_temp.fails(format($f$select public.online_record_session_event(%L, 'fake', 'started', now(), 'x')$f$, pg_temp.id(501)), '42501');
+    perform pg_temp.fails($f$select public.online_note_webhook_refusal('dpl_x', 'unavailable')$f$, '42501');
+    perform pg_temp.fails('select public.online_purge_session_evidence()', '42501');
     -- Direct table writes through the API role are refused.
     perform pg_temp.fails(format($f$insert into public.online_lesson_guests(lesson_id, student_id, kind, added_by) values (%L, %L, 'trial', %L)$f$,
       pg_temp.id(503), pg_temp.id(205), pg_temp.id(who)), '42501');
@@ -1047,6 +1267,8 @@ select pg_temp.ok((select count(*) from public.students) = 0 and (select count(*
   'online-only teacher reads no learner, enrolment, notice, message, guest or consent row');
 select pg_temp.fails('select count(*) from public.online_join_tokens', '42501');
 select pg_temp.fails('select count(*) from public.online_join_events', '42501');
+select pg_temp.fails('select count(*) from public.online_session_events', '42501');
+select pg_temp.fails('select count(*) from public.online_webhook_refusals', '42501');
 select pg_temp.ok(public.teacher_can_see_student(pg_temp.id(201)) is not true and public.teacher_can_see_student(pg_temp.id(202)) is not true
   and public.teacher_can_see_student(pg_temp.id(206)) is not true, '071 helper grants the online teacher no learner');
 select pg_temp.fails($$select public.can_message_recipient('ol-user-8@example.test')$$, '42501');
@@ -1083,16 +1305,21 @@ do $$ declare f record; begin
 end $$;
 select pg_temp.fails('select count(*) from public.online_courses', '42501');
 select pg_temp.fails('select count(*) from public.online_join_events', '42501');
+select pg_temp.fails('select count(*) from public.online_session_events', '42501');
+select pg_temp.fails('select count(*) from public.online_webhook_refusals', '42501');
 select pg_temp.act(8);
 select pg_temp.fails('insert into public.online_attendance(lesson_id, student_id, status, marked_by) values (gen_random_uuid(), gen_random_uuid(), ''Présent'', gen_random_uuid())', '42501');
 select pg_temp.fails('update public.online_lessons set report = ''x''', '42501');
 set local role service_role;
 select pg_temp.fails('select count(*) from public.online_join_tokens', '42501');
+select pg_temp.fails('select count(*) from public.online_session_events', '42501');
+select pg_temp.fails('select count(*) from public.online_webhook_refusals', '42501');
 select pg_temp.owner();
 select pg_temp.ok(not exists (select 1 from pg_proc p where p.pronamespace = 'online_security'::regnamespace
   and (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee <> p.proowner))), 'no API role executes a private helper');
 select pg_temp.ok((select count(*) from pg_proc p, aclexplode(p.proacl) a where p.pronamespace = 'public'::regnamespace
-  and p.proname like 'online\_%' and a.grantee = 'service_role'::regrole) = 3, 'three service-role-only functions (resolve_join, record_join_event, resolve_room)');
+  and p.proname like 'online\_%' and a.grantee = 'service_role'::regrole) = 5,
+  'five service-role-only functions (resolve_join, record_join_event, resolve_room; 130: record_session_event, note_webhook_refusal)');
 select pg_temp.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where (n.nspname = 'online_security' or (n.nspname = 'public' and p.proname like 'online\_%'))
     and (p.prosrc ilike '%prem' || 'ium%' or not p.proconfig @> array['search_path=pg_catalog, pg_temp'])),

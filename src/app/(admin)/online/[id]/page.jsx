@@ -203,6 +203,7 @@ function LessonDetail({ groupId, lessonId, run, busy }) {
               {a.status && <span className={`ml-2 rounded px-2 py-0.5 text-xs ${ATTENDANCE_STATUS_COLORS[a.status]}`}>{a.status}</span>}
               <p className="text-xs text-muted-foreground">
                 {a.joined_at ? `A rejoint à ${casablancaTime(a.joined_at)}` : a.first_pass_at ? `Accès ouvert à ${casablancaTime(a.first_pass_at)}` : 'Pas encore connecté'}
+                {a.left_at ? ` · Parti à ${casablancaTime(a.left_at)}` : ''}
                 {a.note ? ` · ${a.note}` : ''}
               </p>
             </div>

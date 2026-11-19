@@ -12,7 +12,11 @@
 // minutes after issue, whichever is later (A1). The webhook follows Zoom's platform
 // scheme (x-zm-signature = v0=HMAC-SHA256("v0:{timestamp}:{raw body}", secret token),
 // timestamp within five minutes) and answers the endpoint.url_validation challenge only
-// after the same checks (A3). No telemetry_tracking_id is ever set (A7). Zoom cannot
+// after the same checks (A3). Webhook PR (plan ORR-r2, section 3): session.started and
+// session.ended map to the lesson read from the session name (room reference '.' lesson
+// id); the database checks that name against the course. Field names of the session
+// events (session_name, session_id or id, start_time, end_time) are UNVERIFIED until the
+// first validation (W-P6). No telemetry_tracking_id is ever set (A7). Zoom cannot
 // revoke an issued token, so supportsRevoke is false (D6 "where it does not").
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { credentialPairShape } from './credential-shape.mjs';
@@ -24,6 +28,20 @@ const MIN_LIFETIME_S = 1800;
 const MAX_LIFETIME_S = 48 * 3600;
 const TIMESTAMP_WINDOW_S = 300;
 const EVENT_KINDS = { 'session.user_joined': 'joined', 'session.user_left': 'left' };
+const SESSION_KINDS = { 'session.started': 'started', 'session.ended': 'ended' };
+const LESSON_REF = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// A session event: the lesson id is the part after the room reference (which has no dot).
+function sessionEvent(kind, object) {
+  if (!object || typeof object !== 'object') return [];
+  const name = typeof object.session_name === 'string' ? object.session_name.toLowerCase() : '';
+  if (!ZOOM_SESSION_NAME.test(name)) return [];
+  const parts = name.split('.');
+  if (parts.length !== 2 || !LESSON_REF.test(parts[1])) return [];
+  const ref = typeof object.session_id === 'string' ? object.session_id : typeof object.id === 'string' ? object.id : null;
+  return [{ kind, lessonRef: parts[1], sessionName: name, at: kind === 'started' ? object.start_time : object.end_time,
+    providerSessionRef: ref ? ref.slice(0, 200) : null }];
+}
 
 const b64url = value => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url');
 const hmacHex = (secret, message) => createHmac('sha256', secret).update(message).digest('hex');
@@ -112,6 +130,7 @@ export function createZoomVideoProvider(env = process.env, clock = () => Date.no
         if (typeof plainToken !== 'string' || !PLAIN_TOKEN.test(plainToken)) return refused;
         return { ok: true, events: [], challenge: { plainToken, encryptedToken: hmacHex(secret, plainToken) } };
       }
+      if (SESSION_KINDS[body.event]) return { ok: true, events: sessionEvent(SESSION_KINDS[body.event], body.payload?.object) };
       const kind = EVENT_KINDS[body.event];
       if (!kind) return { ok: true, events: [] };
       const user = body.payload?.object?.user;

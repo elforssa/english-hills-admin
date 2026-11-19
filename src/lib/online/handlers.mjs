@@ -8,7 +8,13 @@
 // exactly ONLINE_VIDEO_PROVIDER, and answers the pass id so that the page can confirm
 // it from inside the room (online_confirm_pass) and check it (online_check_pass). The
 // status route answers director and admin whatever the live switch and the gate say.
-import { onlineGate, onlineCredentialShape } from './gate.mjs';
+// Webhook PR (plan ORR-r2, section 3): the webhook route has its own gate
+// (onlineWebhookGate, independent of the live switch), refuses an oversized request with
+// 413 before reading its body, verifies the signature before any database call, stores
+// the four events, and never answers 200 to a failed write (503, or 429 for the write
+// ceiling), so that the provider's retry can deliver it; the unique keys make a retry
+// write nothing twice. Refused writes are counted per deployment (D16).
+import { onlineGate, onlineCredentialShape, onlineWebhookGate, onlineWebhookSecretShape } from './gate.mjs';
 import { onlineReason } from './reasons.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 import { providerDisplayName } from './label.mjs';
@@ -19,7 +25,7 @@ const STATUS = {
   forbidden: 403, not_eligible: 403, consent_missing: 403, window_closed: 403, lesson_cancelled: 403,
   course_inactive: 403, student_required: 403, pass_invalid: 403,
   capacity: 409, stale: 409, course_not_draft: 409, course_closed: 409, lesson_past: 409, lesson_overlap: 409,
-  lesson_in_use: 409, superseded: 409,
+  lesson_in_use: 409, superseded: 409, too_large: 413, rate_limited: 429, unavailable: 503,
 };
 const refuse = reason => ({ status: STATUS[reason] || 400, body: { reason } });
 const isUuid = value => typeof value === 'string' && UUID.test(value);
@@ -86,11 +92,41 @@ export function enabledProviders(gate) {
 // GET /api/online/status — director and admin only. Not behind the live gate: it says
 // what the gate sees (binding note 1). Words only: never a value, a length, a class of
 // mistake or a fragment of a credential.
+// Webhook PR rows (section 3, D7 c, D9, D16): whether the webhook secret is « présent »,
+// « absent » or « incorrect » (never its value), whether the webhook route is « ouvert »
+// or « fermé » (its own gate), the time of the last event received and the refused writes
+// counted for this deployment. The database rows come from online_room_status, read as
+// the caller; if that read fails, they are null and the words still answer.
 const KEY_WORDS = { correct: 'correctes', incorrect: 'incorrectes', absent: 'absentes' };
+const SECRET_WORDS = { present: 'présent', incorrect: 'incorrect', absent: 'absent' };
 export async function handleStatus({ env, getUserClient, getProvider }) {
   const who = await caller(getUserClient, ['director', 'admin']);
   if (who.failure) return who.failure;
-  return { status: 200, body: { keys: KEY_WORDS[onlineCredentialShape(env, getProvider)] || KEY_WORDS.absent } };
+  const provider = env.ONLINE_VIDEO_PROVIDER || '';
+  const body = {
+    keys: KEY_WORDS[onlineCredentialShape(env, getProvider)] || KEY_WORDS.absent,
+    webhook_secret: SECRET_WORDS[onlineWebhookSecretShape(env)],
+    webhook: onlineWebhookGate(env, provider, getProvider).open ? 'ouvert' : 'fermé',
+    last_event_at: null,
+    refused: null,
+  };
+  try {
+    const { data, error } = await who.client.rpc('online_room_status', { p_deployment: webhookDeployment(env) });
+    if (!error && data && typeof data === 'object') {
+      body.last_event_at = typeof data.last_event_at === 'string' ? data.last_event_at : null;
+      const count = value => (Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0);
+      body.refused = { rate_limited: count(data.refused_rate_limited), unavailable: count(data.refused_unavailable) };
+    }
+  } catch { /* the words above still answer */ }
+  return { status: 200, body };
+}
+
+// The deployment a refusal is counted against (D16): Vercel's deployment id, else the
+// commit, else « local ». Neither is a secret; anything outside the stored pattern is
+// « unknown ».
+export function webhookDeployment(env = process.env) {
+  const value = env.VERCEL_DEPLOYMENT_ID || env.VERCEL_GIT_COMMIT_SHA || 'local';
+  return typeof value === 'string' && /^[A-Za-z0-9_.-]{1,100}$/.test(value) ? value : 'unknown';
 }
 
 // POST /api/online/courses/activate|close { group, version } — management only.
@@ -165,28 +201,106 @@ export async function handleLessonAction({ action, body, env, getUserClient, get
     version: data.version, notified: ids.length, emailed, failed } };
 }
 
-// POST /api/webhooks/online/<provider> — signature verified before any write; 404 when
-// the gate is off, for another provider name, for an adapter without webhooks, and for
-// the fake provider in Production (through the gate).
-export async function handleWebhook({ provider, rawBody, headers, env, getServiceClient, getProvider }) {
-  const gate = onlineGate(env, getProvider);
-  if (!gate.open || provider !== gate.provider) return { status: 404, body: { reason: 'not_found' } };
-  const adapter = getProvider(provider);
-  if (!adapter?.supportsWebhooks) return { status: 404, body: { reason: 'not_found' } };
+// The body of a webhook request, read only after its size is known (plan ORR-r2, N8):
+// 413 when Content-Length is missing, malformed or above the limit, without reading the
+// body; the body is then read as a stream that stops at the limit, and a body longer than
+// its header or the limit is 413 too. The signature is computed over the bytes read,
+// decoded as strict UTF-8 (bytes that are not UTF-8 cannot carry a valid signature).
+export const WEBHOOK_BODY_LIMIT = 65536;
+export async function readBoundedBody(request, limit = WEBHOOK_BODY_LIMIT) {
+  const header = request?.headers?.get?.('content-length');
+  if (typeof header !== 'string' || !/^\d{1,10}$/.test(header)) return { tooLarge: true };
+  const declared = Number(header);
+  if (declared > limit) return { tooLarge: true };
+  const bound = Math.min(declared, limit);
+  const reader = request.body?.getReader?.();
+  const chunks = [];
+  let total = 0;
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > bound) {
+        await reader.cancel().catch(() => {});
+        return { tooLarge: true };
+      }
+      chunks.push(value);
+    }
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes) }; }
+  catch { return { invalid: true }; }
+}
+
+const WEBHOOK_RPC_TIMEOUT_MS = 2500;
+const FUTURE_SLACK_MS = 5 * 60 * 1000;
+const isTime = value => typeof value === 'string' && value.length <= 40 && !Number.isNaN(Date.parse(value));
+const shortRef = value => (typeof value === 'string' ? value.slice(0, 200) : null);
+
+// One evidence event as an RPC call, or null for an event that is acknowledged and dropped
+// (malformed, unknown kind, not ours). The database writes only for an existing pass or
+// lesson and re-checks every bound.
+function evidenceCall(provider, event, now) {
+  if (!event || typeof event !== 'object' || !isTime(event.at) || Date.parse(event.at) > now + FUTURE_SLACK_MS) return null;
+  const at = new Date(event.at).toISOString();
+  if (['joined', 'left'].includes(event.kind)) {
+    if (!isUuid(event.participantRef)) return null;
+    return ['online_record_join_event', { p_jti: event.participantRef, p_kind: event.kind, p_at: at, p_ref: shortRef(event.providerParticipantRef) }];
+  }
+  if (['started', 'ended'].includes(event.kind)) {
+    if (!isUuid(event.lessonRef) || typeof event.sessionName !== 'string' || !event.sessionName || event.sessionName.length > 200) return null;
+    return ['online_record_session_event', { p_lesson: event.lessonRef, p_provider: provider, p_kind: event.kind, p_at: at,
+      p_session_name: event.sessionName, p_ref: shortRef(event.providerSessionRef) }];
+  }
+  return null;
+}
+
+async function withTimeout(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); })]);
+  } finally { clearTimeout(timer); }
+}
+
+// POST /api/webhooks/online/<provider> — in this order: the webhook gate (404, headers
+// only), the size limit (413, before the body), the signature and timestamp (401, before
+// any database call), the validation challenge (200, writes nothing), then the events.
+// A failed write (error, timeout) answers 503 { reason: 'unavailable' }, the write
+// ceiling 429 { reason: 'rate_limited' }: never 200. Events already written stay, and a
+// retry writes nothing twice (unique keys). Evidence never writes attendance.
+export async function handleWebhook({ provider, request, env, getServiceClient, getProvider, clock = () => Date.now(),
+  timeoutMs = WEBHOOK_RPC_TIMEOUT_MS }) {
+  const gate = onlineWebhookGate(env, provider, getProvider);
+  if (!gate.open) return { status: 404, body: { reason: 'not_found' } };
+  const read = await readBoundedBody(request);
+  if (read.tooLarge) return refuse('too_large');
+  if (read.invalid) return { status: 401, body: { reason: 'forbidden' } };
   let verified;
-  try { verified = await adapter.verifyWebhook({ rawBody, headers, secret: env.ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET }); }
+  try { verified = await gate.adapter.verifyWebhook({ rawBody: read.text, headers: request.headers, secret: env.ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET }); }
   catch { verified = { ok: false }; }
   if (!verified?.ok) return { status: 401, body: { reason: 'forbidden' } };
   // Zoom's endpoint validation challenge (OL-r6 A3): answered only after the signature
   // and timestamp checks above, and it writes nothing.
   if (verified.challenge) return { status: 200, body: { plainToken: verified.challenge.plainToken, encryptedToken: verified.challenge.encryptedToken } };
+  const calls = (Array.isArray(verified.events) ? verified.events : []).map(event => evidenceCall(provider, event, clock())).filter(Boolean);
+  if (!calls.length) return { status: 200, body: { recorded: 0 } };
   const service = getServiceClient();
   let recorded = 0;
-  for (const event of verified.events || []) {
-    if (!isUuid(event.participantRef) || !['joined', 'left'].includes(event.kind) || Number.isNaN(Date.parse(event.at))) continue;
-    const { data } = await service.rpc('online_record_join_event', { p_jti: event.participantRef, p_kind: event.kind,
-      p_at: new Date(event.at).toISOString(), p_ref: typeof event.providerParticipantRef === 'string' ? event.providerParticipantRef.slice(0, 200) : null });
-    if (data?.recorded) recorded += 1;
+  for (const [name, args] of calls) {
+    let outcome;
+    try { outcome = await withTimeout(service.rpc(name, args), timeoutMs); }
+    catch { outcome = { error: { hint: null } }; }
+    if (outcome?.error) {
+      const reason = onlineReason(outcome.error.hint) === 'rate_limited' ? 'rate_limited' : 'unavailable';
+      // Best effort (D16): a refusal the database cannot record (an outage) goes uncounted.
+      try { await withTimeout(service.rpc('online_note_webhook_refusal', { p_deployment: webhookDeployment(env), p_reason: reason }), timeoutMs); }
+      catch { /* uncounted */ }
+      return refuse(reason);
+    }
+    if (outcome?.data?.recorded) recorded += 1;
   }
   return { status: 200, body: { recorded } };
 }
