@@ -56,7 +56,8 @@ export default function TeacherOnlineLessons() {
           the forgotten assignment and the phone's English leave window are what the real-Zoom runs
           of 2026-11-16 showed about the toolkit; « Zoom Canvas » is the owner's decision of that day; phones in groups is D12 (2026-11-17).
           Renaming groups and retyping the minutes: notes N8 and N6 of the #195 review (classroom polish).
-          Raised hands: PR D, owner decisions of 2026-11-17. */}
+          Raised hands: PR D, owner decisions of 2026-11-17. A removed learner's way back (another device
+          or browser) and « Reprendre le rôle d’animateur » after a drop: notes N3 and N1 of the #200 review. */}
       <details className="mt-6 rounded-xl border bg-card p-4 text-sm" data-testid="room-guide">
         <summary className="cursor-pointer font-semibold">Guide de la salle</summary>
         <div className="mt-3 space-y-2 text-muted-foreground">
@@ -71,7 +72,8 @@ export default function TeacherOnlineLessons() {
           <p>Le tableau blanc n’existe pas dans les groupes : exportez-le avant de les ouvrir. Après une coupure, « Réessayer » ramène un apprenant dans la salle principale : répartissez-le de nouveau dans son groupe.</p>
           <p data-testid="room-guide-hands"><span className="font-medium text-foreground">Mains levées.</span> Les apprenants ont un bouton « Lever la main » au-dessus de la salle, sur ordinateur comme sur téléphone. Vous voyez « Mains levées (…) » au-dessus de la salle, avec les noms dans l’ordre où les mains se sont levées ; le cadre devient orange un instant quand une main se lève, sans aucun son. « Baisser » baisse une main, « Baisser toutes les mains » les baisse toutes.</p>
           <p>Une main se baisse toute seule quand l’apprenant quitte le cours, part dans un groupe ou se reconnecte. Dans un groupe, le bouton n’existe pas : les mains servent dans la salle principale. Si vous rechargez la page ou revenez d’un groupe, la liste revient en quelques secondes, dans le même ordre.</p>
-          <p><span className="font-medium text-foreground">À savoir aussi.</span> Pour faire écouter un document sonore, partagez un onglet de Chrome et cochez la case du son de l’onglet. Ne nommez jamais un apprenant animateur ou co-animateur. Si un apprenant apparaît deux fois, ne le retirez pas : l’ancienne connexion disparaît seule en 3 minutes maximum. « Retirer » bloque cet appareil jusqu’à la fin du cours. « Quitter le cours », en haut de la page, demande toujours une confirmation.</p>
+          <p><span className="font-medium text-foreground">À savoir aussi.</span> Pour faire écouter un document sonore, partagez un onglet de Chrome et cochez la case du son de l’onglet. Ne nommez jamais un apprenant animateur ou co-animateur. Si un apprenant apparaît deux fois, ne le retirez pas : l’ancienne connexion disparaît seule en 3 minutes maximum. « Retirer » bloque cet appareil jusqu’à la fin du cours. Un apprenant retiré ne peut revenir que depuis un autre appareil ou un autre navigateur. « Quitter le cours », en haut de la page, demande toujours une confirmation.</p>
+          <p data-testid="room-guide-reclaim">Après une coupure de votre appareil, pour terminer le cours pour tous, choisissez d’abord « Reprendre le rôle d’animateur ».</p>
         </div>
       </details>
       <p className="mt-6 text-xs text-muted-foreground">Pour annuler ou déplacer un cours, ou pour inviter un apprenant, contactez l’accueil.</p>

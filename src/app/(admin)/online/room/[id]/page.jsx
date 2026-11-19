@@ -16,8 +16,10 @@
 // reports the participant inside, the page confirms its pass, which supersedes the same
 // person's older passes for the lesson; the older page leaves at its next check (every
 // 10 s, or at once on the newer device's marker) and shows « Utiliser cet appareil »,
-// with no automatic retry. A parent who takes a child's place is told once. A removal
-// by the teacher and the end of the lesson for all have their own texts.
+// with no automatic retry. A parent who takes a child's place is told once (a parent
+// only: #200 review N2). A removal by the teacher and the end of the lesson for all have
+// their own texts, with « Quitter » (also when Zoom refuses a removed browser, 3009: N3).
+// The pass watcher writes the room's trace (`[online room]` lines, states only: N6).
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -28,8 +30,8 @@ import { useAuth } from '@/context/AuthContext';
 import { onlinePost, onlineRpc, casablancaTime } from '@/lib/online/queries';
 import { ONLINE_REASON_TEXT, onlineErrorText } from '@/lib/online/reasons.mjs';
 import { roomErrorFor, passExpired } from '@/lib/online/zoom-room-errors.mjs';
-import { roomSettled } from '@/lib/online/zoom-room-session.mjs';
-import { createPassWatcher, closedOutcome, ROOM_PASS_TEXT } from '@/lib/online/room-pass.mjs';
+import { roomSettled, roomLog } from '@/lib/online/zoom-room-session.mjs';
+import { createPassWatcher, closedOutcome, tookOverNotice, ROOM_PASS_TEXT } from '@/lib/online/room-pass.mjs';
 import { createTabGuard, roomGuardKey } from '@/lib/online/room-tab-guard.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -63,6 +65,9 @@ function Room() {
   const watcher = useRef(null);
   const roomLink = useRef(null);
   const passRef = useRef(null);
+  // Read when the notice is due, so a role that loads late never restarts the watcher.
+  const roleRef = useRef(role);
+  roleRef.current = role;
   // Set when another tab takes the room over; a join in flight must then stop.
   const displaced = useRef(false);
   const valid = UUID.test(id || '') && (!student || UUID.test(student));
@@ -123,9 +128,9 @@ function Room() {
   useEffect(() => {
     if (!pass) return undefined;
     const watch = createPassWatcher({
-      pass, rpc: onlineRpc,
+      pass, rpc: onlineRpc, log: roomLog,
       onOutcome: outcome => setState(outcome.kind === 'superseded' ? { phase: 'superseded' } : { phase: 'left', reason: outcome.reason }),
-      onTookOver: () => setTookOver(label || ''),
+      onTookOver: () => setTookOver(tookOverNotice(roleRef.current, label)),
       onSupersededOthers: () => roomLink.current?.announceNewer(),
     });
     watcher.current = watch;
@@ -196,8 +201,8 @@ function Room() {
           <Button onClick={() => leaveRoom(back)} size="lg" className="min-h-11">{ROOM_PASS_TEXT.quit}</Button>
         </div>
       )}
-      {state.phase === 'in_room' && tookOver !== null && (
-        <p className="rounded-lg border bg-card p-3 text-sm" role="status" data-testid="room-took-over">{ROOM_PASS_TEXT.tookOver(tookOver)}</p>
+      {state.phase === 'in_room' && tookOver && (
+        <p className="rounded-lg border bg-card p-3 text-sm" role="status" data-testid="room-took-over">{tookOver}</p>
       )}
       {state.phase === 'in_room' && state.provider === 'zoom-video' && (
         <p className="rounded-lg border bg-card p-3 text-sm sm:hidden" data-testid="room-audio-hint">Touchez l’icône casque pour activer le son, puis le micro et la caméra.</p>
@@ -208,6 +213,7 @@ function Room() {
           <p className="text-sm">{state.phase === 'left' ? 'Vous avez quitté la salle. ' : ''}{message}</p>
           {state.reason === 'window_closed' && state.opensAt && <p className="text-sm text-muted-foreground">La salle ouvre à {casablancaTime(state.opensAt)} (heure de Casablanca).</p>}
           {canRetry && <Button onClick={join} size="lg" className="min-h-11"><RefreshCw /> Réessayer</Button>}
+          {state.room?.quit && <Button onClick={() => leaveRoom(back)} size="lg" className="min-h-11" data-testid="room-refused-quit">{ROOM_PASS_TEXT.quit}</Button>}
         </div>
       )}
     </div>

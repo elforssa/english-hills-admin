@@ -7,7 +7,8 @@
 //   network or timeout       → « Connexion instable. … », with « Réessayer »
 //   removed by the host      → « L’enseignant vous a retiré du cours. », no retry: Zoom
 //                              refuses that browser for the rest of the session (3009,
-//                              owner decision D15 of 2026-11-18)
+//                              owner decision D15 of 2026-11-18); « Quitter » instead, as
+//                              on the live removed card (#200 review N3)
 //   anything else            → the provider_error text, with « Réessayer »
 // The codes are the ones the pinned toolkit bundle (@zoom/videosdk-ui-toolkit 2.5.0-1) can
 // put in a `connection-change` event with state "Fail", plus two of our own: `join_timeout`
@@ -31,7 +32,7 @@ export const ROOM_ERRORS = Object.freeze({
   pass: { text: ONLINE_REASON_TEXT.pass_invalid, retry: true },
   full: { text: ONLINE_REASON_TEXT.capacity, retry: false },
   network: { text: 'Connexion instable. Vérifiez votre réseau, puis réessayez.', retry: true },
-  removed: { text: ROOM_PASS_TEXT.removed, retry: false },
+  removed: { text: ROOM_PASS_TEXT.removed, retry: false, quit: true },
   other: { text: ONLINE_REASON_TEXT.provider_error, retry: true },
 });
 

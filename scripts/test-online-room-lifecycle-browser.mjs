@@ -594,13 +594,34 @@ try {
   const child = await device({ lesson: 'r2', person: 'kid1', account: 'kid1', passMs: '60000' });
   await inside(child.tab);
   await child.tab.waitForTimeout(150);
-  const parent = await device({ lesson: 'r2', person: 'kid1', account: 'parent1', passMs: '60000' });
+  const parent = await device({ lesson: 'r2', person: 'kid1', account: 'parent1', who: 'parent', passMs: '60000' });
   await inside(parent.tab);
   await parent.tab.getByTestId('room-took-over').waitFor();
   assert.equal((await parent.tab.getByTestId('room-took-over').innerText()).trim(), 'Vous avez pris la place de Amal B. dans ce cours : son autre connexion a été fermée.');
   await marker(child.tab);
   await phase(child.tab, 'superseded');
   ok('[Reliability PR] a parent who takes the child\'s place is told once; the child\'s page shows the card');
+
+  // #200 review N2: the other way round, a child who replaces the parent's connection is
+  // not told « Vous avez pris la place de » its own name; the parent's page shows the card.
+  const parentFirst = await device({ lesson: 'r2b', person: 'kid2', account: 'parent2', who: 'parent', passMs: '60000' });
+  await inside(parentFirst.tab);
+  await parentFirst.tab.waitForTimeout(150);
+  const childSecond = await device({ lesson: 'r2b', person: 'kid2', account: 'kid2', who: 'student', passMs: '60000' });
+  await inside(childSecond.tab);
+  await childSecond.tab.waitForFunction(() => window.__zoom.sent.includes('eh-room:newer'), null, { timeout: 5000 });
+  assert.equal(model.passes.find(p => p.lesson === 'r2b' && p.account === 'parent2').superseded, true, 'the parent\'s pass is superseded (another account)');
+  await childSecond.tab.waitForTimeout(300);
+  assert.equal(await childSecond.tab.getByTestId('room-took-over').count(), 0, 'a child is never told it took its own place');
+  await marker(parentFirst.tab);
+  await phase(parentFirst.tab, 'superseded');
+  // #200 review N6: the watcher writes the room's trace, states only (no pass id).
+  const passLines = childSecond.lines.filter(line => /^\[online room\] \S+ pass/.test(line));
+  assert.ok(passLines.some(line => / pass confirm state=ok others=1$/.test(line)), `the confirmation is traced: ${passLines.join(' | ')}`);
+  assert.ok(parentFirst.lines.some(line => / pass state=superseded$/.test(line)), 'the superseded outcome is traced');
+  const ids = model.passes.map(p => p.jti);
+  for (const d of [childSecond, parentFirst]) assert.ok(!d.lines.some(line => line.startsWith('[online room] ') && ids.some(id => line.includes(id))), 'no pass id in the trace');
+  ok('[Reliability PR] #200 N2: a child who replaces the parent\'s connection is not told; N6: the pass watcher traces states only');
 
   // Closed by the host: removed (both reasons) and ended for all.
   for (const reason of ['kicked by host', 'expeled by host']) {
@@ -615,6 +636,17 @@ try {
     assert.equal(await learner.tab.getByTestId('room-removed').getByRole('link', { name: 'Quitter' }).count(), 1);
     await learner.ctx.close();
   }
+  // #200 review N3: the same browser tries again and Zoom refuses it (3009): the removed
+  // text, no « Réessayer », and « Quitter » as on the live removed card.
+  const banned = await device({ lesson: 'r3', person: 'x-banned', passMs: '60000' });
+  await inside(banned.tab);
+  await banned.tab.evaluate(() => window.__zoom.emit('connection-change', { state: 'Fail', errorCode: 3009, reason: 'user has been removed' }));
+  await phase(banned.tab, 'refused');
+  assert.equal(await banned.tab.getByTestId('room-refused').getAttribute('data-code'), '3009');
+  assert.equal((await banned.tab.getByTestId('room-refused').locator('p').innerText()).trim(), 'L’enseignant vous a retiré du cours.');
+  assert.equal(await banned.tab.getByTestId('room-refused').getByRole('button').count(), 0, 'no « Réessayer »');
+  assert.equal(await banned.tab.getByTestId('room-refused').getByRole('link', { name: 'Quitter' }).count(), 1, '« Quitter »');
+  await banned.ctx.close();
   // A removal that follows a newer device's confirmation is that device's card.
   const replaced = await device({ lesson: 'r3', person: 'x-replaced', passMs: '60000' });
   await inside(replaced.tab);
@@ -645,8 +677,8 @@ try {
   assert.equal(ended.lines.filter(line => line.startsWith('[JWT] participant decoded payload:')).length, 1, 'dropped in the room, through after it');
   assert.ok(ended.lines.some(line => line === '[JWT] participant decoded payload: after'));
   assert.equal(await ended.tab.evaluate(() => /native code/.test(Function.prototype.toString.call(console.log))), true, 'the original console.log is back');
-  ok('[Reliability PR] « Retirer » (both reasons) shows the removed text with « Quitter » only; after a newer device it is the card; « Terminer pour tous » shows the ended text with « Quitter » only; the token-log wrapper is gone after the room');
-  for (const d of [first, second, teacher, retry, child, parent, replaced, replacing, ended]) await d.ctx.close();
+  ok('[Reliability PR] « Retirer » (both reasons) shows the removed text with « Quitter » only; Zoom\'s 3009 refusal shows it with « Quitter » (#200 N3); after a newer device it is the card; « Terminer pour tous » shows the ended text with « Quitter » only; the token-log wrapper is gone after the room');
+  for (const d of [first, second, teacher, retry, child, parent, parentFirst, childSecond, replaced, replacing, ended]) await d.ctx.close();
   }
 
   assert.deepEqual(errors, [], 'no page error');
