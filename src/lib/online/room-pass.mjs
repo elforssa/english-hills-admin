@@ -17,7 +17,9 @@
 //     retry, so two devices cannot take the room from each other in a loop); a revoked
 //     pass or a lesson the person no longer qualifies for → `left` with its reason, as
 //     the 30-second check did.
-// Nothing here logs a pass id, a name or a token: the trace says states only.
+// Nothing here logs a pass id, a name or a token: the trace says states only. The room page
+// passes the room's trace (`[online room] …` console lines), so these lines are written in
+// Production too (#200 review N6).
 import { ONLINE_REASON_TEXT } from './reasons.mjs';
 
 export const PASS_INTERVAL_MS = 10000;
@@ -31,6 +33,14 @@ export const ROOM_PASS_TEXT = Object.freeze({
   ended: 'L’enseignant a terminé le cours pour tous.',
   quit: 'Quitter',
 });
+
+// The notice after a confirmation that replaced another account's connection is for a
+// parent only (#200 review N2): the label is the learner's, so a child who replaces the
+// parent's connection would read « Vous avez pris la place de » their own name. Returns the
+// text, or null when the reader is not a parent.
+export function tookOverNotice(role, label) {
+  return role === 'parent' ? ROOM_PASS_TEXT.tookOver(label || '') : null;
+}
 
 // What an answer of online_check_pass / online_confirm_pass means for the page:
 // { kind: 'stay' } | { kind: 'superseded' } | { kind: 'left', reason }.
@@ -93,7 +103,7 @@ export function createPassWatcher({ pass, rpc, onOutcome = () => {}, onTookOver 
       s.lastCheck = now();
       let answer;
       try { answer = await rpc('online_check_pass', { p_jti: pass }); }
-      catch { return; }
+      catch { log('pass check', { state: 'failed' }); return; }
       finish(passOutcome(answer));
     } finally {
       s.busy = false;

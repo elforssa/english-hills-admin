@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { startZoomRoom, roomSettled, closedKind, ROOM_NEWER } from '../src/lib/online/zoom-room-session.mjs';
-import { createPassWatcher, passOutcome, closedOutcome, ROOM_PASS_TEXT } from '../src/lib/online/room-pass.mjs';
+import { createPassWatcher, passOutcome, closedOutcome, tookOverNotice, ROOM_PASS_TEXT } from '../src/lib/online/room-pass.mjs';
 import { createTabGuard, roomGuardKey } from '../src/lib/online/room-tab-guard.mjs';
 import { roomErrorFor, roomErrorKey, passExpired, ROOM_ERRORS } from '../src/lib/online/zoom-room-errors.mjs';
 import { preloadZoomMediaChunks, ZOOM_MEDIA_LIB, ZOOM_MEDIA_CHUNKS } from '../src/lib/online/zoom-media-chunks.mjs';
@@ -841,6 +841,11 @@ function fakeChannels() {
   }
   assert.equal(roomErrorFor(undefined).key, 'other');
   assert.deepEqual(Object.keys(ROOM_ERRORS), ['account', 'pass', 'full', 'network', 'removed', 'other']);
+  // #200 review N3: the 3009 card offers « Quitter » (as the live removed card), and only it.
+  assert.deepEqual(Object.entries(ROOM_ERRORS).filter(([, row]) => row.quit === true).map(([key]) => key), ['removed']);
+  assert.deepEqual(roomErrorFor({ code: 3009 }), { key: 'removed', text: 'L’enseignant vous a retiré du cours.', retry: false, quit: true });
+  const roomPage = read('src/app/(admin)/online/room/[id]/page.jsx');
+  assert.ok(/state\.room\?\.quit && <Button onClick=\{\(\) => leaveRoom\(back\)\}[^>]*>\{ROOM_PASS_TEXT\.quit\}<\/Button>/.test(roomPage), 'the room page shows « Quitter » on a quit row');
   assert.equal(roomErrorKey(200), 'network');
   // The pass expiry comes from the embed, on the participant's clock.
   const at = Date.parse('2026-11-14T10:00:00Z');
@@ -1382,14 +1387,15 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
   C = '33333333-3333-4333-8333-333333333333', D = '44444444-4444-4444-8444-444444444444';
 {
   // D15 (2026-11-18): the platform never removes a participant. Zoom refuses a removed
-  // connection's browser for the rest of the session (code 3009), so no module of the room
-  // calls removeUser, and no page asks for a leftover list.
-  const files = ['src/lib/online', 'src/components/online', 'src/app/(admin)/online'].flatMap(dir => readdirSync(dir, { recursive: true })
-    .filter(name => /\.(m?js|jsx)$/.test(name)).map(name => `${dir}/${name}`));
-  assert.ok(files.length > 10, 'the room modules were found');
+  // connection's browser for the rest of the session (code 3009), so no module of the
+  // application names removeUser, and no page asks for a leftover list. #200 review N4:
+  // every source file under src, and the bare word (a call through a variable or a
+  // bracket counts too); only comments are skipped.
+  const files = readdirSync('src', { recursive: true }).filter(name => /\.(m?js|cjs|jsx|tsx?)$/.test(name)).map(name => `src/${name}`);
+  assert.ok(files.length > 200 && files.includes('src/lib/online/zoom-room-session.mjs') && files.includes('src/app/(admin)/online/room/[id]/page.jsx'), 'all of src was read');
   for (const file of files) {
-    const code = read(file).replace(/^\s*\/\/.*$/gm, '');
-    assert.ok(!/removeUser\s*\(/.test(code), `${file} never calls removeUser`);
+    const code = read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    assert.ok(!/removeUser/.test(code), `${file} never names removeUser`);
     assert.ok(!code.includes('online_list_room_leftovers') && !/listLeftovers/.test(code), `${file} asks for no leftover list`);
   }
 }
@@ -1424,6 +1430,9 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
   assert.equal(ROOM_PASS_TEXT.ended, 'L’enseignant a terminé le cours pour tous.');
   assert.equal(ROOM_PASS_TEXT.superseded, 'Ce cours est ouvert sur un autre appareil ou dans un autre onglet.');
   assert.equal(ROOM_PASS_TEXT.tookOver('Sara B.'), 'Vous avez pris la place de Sara B. dans ce cours : son autre connexion a été fermée.');
+  // #200 review N2: the notice is for a parent only.
+  assert.equal(tookOverNotice('parent', 'Sara B.'), ROOM_PASS_TEXT.tookOver('Sara B.'));
+  for (const role of ['student', 'teacher', 'admin', 'director', 'receptionist', undefined, null]) assert.equal(tookOverNotice(role, 'Sara B.'), null, `no notice for ${role}`);
 }
 {
   // The newer-device marker: sent on request, at most once per boardAnswerMs, again once
@@ -1541,10 +1550,15 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
   assert.deepEqual(passOutcome({ ok: true, superseded: false, revoked: false }), { kind: 'stay' });
   assert.deepEqual(passOutcome(null), { kind: 'stay' });
   const t3 = manualTimers(); const kept = [];
-  const w3 = createPassWatcher({ pass: C, rpc: async () => { throw new Error('offline'); }, timers: t3, onOutcome: o => kept.push(o) });
+  const traced = [];
+  const w3 = createPassWatcher({ pass: C, rpc: async () => { throw new Error('offline'); }, timers: t3, onOutcome: o => kept.push(o), log: (event, detail) => traced.push([event, detail]) });
   await t3.round(); await t3.round();
   assert.deepEqual(kept, [], 'a failed check keeps the room');
+  assert.deepEqual(traced, [['pass check', { state: 'failed' }], ['pass check', { state: 'failed' }]], 'a failed check is traced, state only');
   w3.stop();
+  // #200 review N6: the room page gives the watcher the room's trace, which never names a pass.
+  assert.ok(/createPassWatcher\(\{\s*pass, rpc: onlineRpc, log: roomLog,/.test(read('src/app/(admin)/online/room/[id]/page.jsx')), 'the room page passes roomLog');
+  assert.ok(events.every(e => !e.includes(A)), 'no pass id in the trace');
   // Provider-neutral: no Zoom word in the watcher.
   const code = read('src/lib/online/room-pass.mjs').replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/zoom|userKey|zmClient/i.test(code));
@@ -1631,6 +1645,10 @@ const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-2
   const guide = read('src/app/(admin)/teacher-portal/online/page.jsx');
   const text = guide.slice(guide.indexOf('data-testid="room-guide"'), guide.indexOf('</details>')).replace(/<[^>]+>/g, '');
   assert.ok(text.includes('Si un apprenant apparaît deux fois, ne le retirez pas : l’ancienne connexion disparaît seule en 3 minutes maximum. « Retirer » bloque cet appareil jusqu’à la fin du cours.'));
+  // #200 review N3 (the way back after « Retirer ») and N1 (the owner's sentence after a drop).
+  assert.ok(text.includes('« Retirer » bloque cet appareil jusqu’à la fin du cours. Un apprenant retiré ne peut revenir que depuis un autre appareil ou un autre navigateur.'));
+  assert.ok(text.includes('Après une coupure de votre appareil, pour terminer le cours pour tous, choisissez d’abord « Reprendre le rôle d’animateur ».'));
+  assert.equal(JSON.parse(read('src/lib/online/zoom-fr-FR.json'))['leave.button_reclaim_host'], 'Reprendre le rôle d’animateur', 'the guide names the room\'s own label');
   assert.ok(!/n’est pas une exclusion|peut revenir avec « Rejoindre »/.test(text), 'the « not a ban » sentence is gone');
 }
 

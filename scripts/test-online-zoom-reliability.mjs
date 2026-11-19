@@ -13,7 +13,8 @@
 //   T-R1  the host reads userKey of the other participants: it equals each pass id;
 //         userIdentity is recorded (presence and equality only, never read by the room);
 //   T-R2  the same learner in two separate browsers: the first leaves within 15 s of the
-//         second entering Zoom, one participant remains, the card is shown;
+//         second entering Zoom, one participant remains, the card is shown; the pass
+//         watcher's trace says states only (#200 review N6);
 //   T-R2b a third browser of that learner whose network is cut before its join completes:
 //         the working browser stays in the room and is never shown the card;
 //   T-R3  the same browser drops (network cut) and comes back with a reload: it enters,
@@ -26,7 +27,8 @@
 //         manager rights within 60 s while the old one lingers (S2 is « neither »), host
 //         once Zoom drops the old one;
 //   T-R7  « Retirer » on a learner: the removed text with « Quitter » only; the same
-//         browser is refused (3009) and shows the removed text without « Réessayer »; a
+//         browser is refused (3009) and shows the removed text without « Réessayer »,
+//         with « Quitter » (#200 review N3); a
 //         new browser of that learner enters; then « Terminer pour tous »: the ended text
 //         on every page; the reasons Zoom sends are recorded.
 //   T-R6  (groups) is not run by this script: recorded as not covered.
@@ -168,6 +170,11 @@ try {
   report.timing = { r2Entered: new Date(entered).toISOString() };
   await r1.page.waitForTimeout(2000);
   pass('T-R2 no automatic retry on the superseded page', (await phaseOf(r1.page)) === 'superseded', { phase: await phaseOf(r1.page) });
+  // #200 review N6: the pass watcher writes the room's trace, states only (no pass id).
+  pass('T-R2 the pass watcher traces states only: confirmation on the newer page, the superseded outcome on the older one',
+    traceHas('r2', /^\S+ pass confirm state=ok others=1$/) && traceHas('r1', /^\S+ pass state=superseded$/)
+      && ![...report.traces.r1, ...report.traces.r2].some(l => / pass/.test(l) && /[0-9a-f]{8}-[0-9a-f]{4}-/.test(l)),
+    { r2: report.traces.r2.filter(l => / pass/.test(l)).map(l => l.replace(/^\S+ /, '')), r1: report.traces.r1.filter(l => / pass/.test(l)).map(l => l.replace(/^\S+ /, '')) });
   await close(r1);
 
   // ---- T-R2b: a third browser cut from the network before its join completes ----
@@ -295,8 +302,9 @@ try {
   const again = await enterOnce(victim.page).catch(() => false);
   const refusedCard = again ? null : await victim.page.getByTestId('room-refused').innerText().catch(() => null);
   const againFail = report.traces.victim.filter(l => /room failed/.test(l)).at(-1)?.replace(/^\S+ /, '') || null;
-  pass('T-R7 « Retirer » blocks that browser (Zoom 3009): the page shows the removed text, without « Réessayer »',
-    !again && /code=3009/.test(againFail || '') && /L’enseignant vous a retiré du cours\./.test(refusedCard || '') && (await victim.page.getByTestId('room-refused').getByRole('button').count()) === 0,
+  pass('T-R7 « Retirer » blocks that browser (Zoom 3009): the page shows the removed text, without « Réessayer », with « Quitter » (#200 N3)',
+    !again && /code=3009/.test(againFail || '') && /L’enseignant vous a retiré du cours\./.test(refusedCard || '') && (await victim.page.getByTestId('room-refused').getByRole('button').count()) === 0
+      && (await victim.page.getByTestId('room-refused').getByRole('link', { name: 'Quitter' }).count()) === 1,
     { entered: again, fail: againFail, text: refusedCard });
   await close(victim);
   // Another browser of the same learner enters.

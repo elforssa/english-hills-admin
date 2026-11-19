@@ -12,7 +12,9 @@
 // answered at POST /rpc/<name> by an in-memory pass model that follows the SQL rules of
 // migration 129 (supersede at confirmation only, earlier issued passes of the same
 // lesson, person and kind), the
-// cards « Utiliser cet appareil », the removed and ended texts, and the parent's notice.
+// cards « Utiliser cet appareil », the removed and ended texts, and the parent's notice
+// (shown to a parent only, `who=parent`: #200 review N2); « Quitter » on the 3009 card
+// (N3); the watcher writes the room's trace (N6).
 // `embed(query, { pass })` may use the pass id as the token's user_key.
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -27,13 +29,15 @@ import { createRoot } from 'react-dom/client';
 import ZoomRoom from './src/components/online/ZoomRoom.jsx';
 import RoomLeaveLink from './src/components/online/RoomLeaveLink.jsx';
 import { createTabGuard, roomGuardKey } from './src/lib/online/room-tab-guard.mjs';
-import { roomSettled } from './src/lib/online/zoom-room-session.mjs';
+import { roomSettled, roomLog } from './src/lib/online/zoom-room-session.mjs';
 import { roomErrorFor, passExpired } from './src/lib/online/zoom-room-errors.mjs';
-import { createPassWatcher, closedOutcome, ROOM_PASS_TEXT } from './src/lib/online/room-pass.mjs';
+import { createPassWatcher, closedOutcome, tookOverNotice, ROOM_PASS_TEXT } from './src/lib/online/room-pass.mjs';
 
 const query = new URLSearchParams(location.search);
 const lesson = query.get('lesson') || 'lesson', person = query.get('person') || 'person', role = query.get('role') || 'participant';
 const account = query.get('account') || person;
+// The platform role of the signed-in account (the page's useAuth role), not Zoom's.
+const who = query.get('who') || 'student';
 window.__renders = 0;
 const rpc = async (name, args) => {
   const response = await fetch('/rpc/' + name, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...args, account }) });
@@ -85,9 +89,9 @@ function App() {
   const label = state.phase === 'in_room' ? state.display_label : null;
   useEffect(() => {
     if (!pass) return undefined;
-    const watch = createPassWatcher({ pass, rpc, intervalMs: Number(query.get('passMs')) || undefined,
+    const watch = createPassWatcher({ pass, rpc, log: roomLog, intervalMs: Number(query.get('passMs')) || undefined,
       onOutcome: outcome => setState(outcome.kind === 'superseded' ? { phase: 'superseded' } : { phase: 'left', reason: outcome.reason }),
-      onTookOver: () => setTookOver(label || ''),
+      onTookOver: () => setTookOver(tookOverNotice(who, label)),
       onSupersededOthers: () => roomLink.current?.announceNewer() });
     watcher.current = watch;
     return () => { if (watcher.current === watch) watcher.current = null; watch.stop(); };
@@ -113,9 +117,9 @@ function App() {
       {state.phase === 'removed' && <div data-testid="room-removed"><p>{ROOM_PASS_TEXT.removed}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'ended' && <div data-testid="room-ended"><p>{ROOM_PASS_TEXT.ended}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'left' && state.reason && <p data-testid="room-left-reason">{state.reason}</p>}
-      {state.phase === 'in_room' && tookOver !== null && <p role="status" data-testid="room-took-over">{ROOM_PASS_TEXT.tookOver(tookOver)}</p>}
+      {state.phase === 'in_room' && tookOver && <p role="status" data-testid="room-took-over">{tookOver}</p>}
       {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} onJoined={onJoined} onNewer={onNewer} link={roomLink} />}
-      {state.phase === 'refused' && <div data-testid="room-refused" data-code={String(state.code)}><p>{state.room.text}</p>{state.room.retry && <button onClick={join}>Réessayer</button>}</div>}
+      {state.phase === 'refused' && <div data-testid="room-refused" data-code={String(state.code)}><p>{state.room.text}</p>{state.room.retry && <button onClick={join}>Réessayer</button>}{state.room.quit && <a href="/portal">{ROOM_PASS_TEXT.quit}</a>}</div>}
     </div>
   );
 }
