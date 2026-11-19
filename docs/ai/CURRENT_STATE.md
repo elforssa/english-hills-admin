@@ -474,6 +474,7 @@ Open items:
   - The webhook route behind its own gate (`onlineWebhookGate`, independent of the live switch; kill switch: remove `ONLINE_VIDEO_PROVIDER_WEBHOOK_SECRET` and redeploy). It answers 413, 401, 503 or 429 before or instead of 200, and stores the four Zoom events idempotently.
   - The director's status line gains webhook rows, a « Minutes connectées (Zoom) » table and « Parti à » on the course page. Attendance is untouched. Security rules in [SECURITY_RULES](SECURITY_RULES.md#online-webhook--evidence-only-own-gate-webhook-pr-implemented-on-a-pull-request-migration-130-not-applied-not-merged-as-of-2026-11-19).
 - **Not verified:** Zoom delivering to the route (a local machine has no public address; proven only at W-P6 and W-P7), the session event fields, Zoom's retries and usage report, the Production purge run, and Vercel's deployment id.
+- **Independent review (2026-11-19, at `eb690bc`):** READY FOR FINAL REVIEW, six non-blocking findings; follow-ups in the [plan](../architecture/plans/online-room-reliability.md#independent-review-of-eb690bc-and-the-follow-ups-2026-11-19) (W-P7 session-event count, the deployment id tied to W-P3/W-P8, a known under-count limit, one more pairing fixture case). Migration 130 unchanged.
 
 ## Online room reliability, « reliability PR » (ORR-r2) — released 2026-11-19 (migration 129, R-P0–R-P3)
 

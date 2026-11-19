@@ -712,11 +712,14 @@ select pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(public.
 select pg_temp.owner();
 
 -- Pairing rule (section 3, B4, binding correction 5). Lesson 501 of course 301, January 2026 (UTC).
--- Sessions: 18:00–18:10 (an earlier session), 18:20–19:30, and one started at 19:40 with no end.
+-- Sessions: 18:00–18:10 (an earlier session), 18:20–19:30, and a third 19:40–19:50 (review
+-- finding 4: a later end inside pass B's validity, so « first ended after the join » differs from
+-- « last ended »).
 insert into public.online_session_events(lesson_id, provider, kind, at) values
   (pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 18:20')),
   (pg_temp.id(501), 'fake', 'ended', pg_temp.ts('2026-01-10 19:30')),
-  (pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 19:40'));
+  (pg_temp.id(501), 'fake', 'started', pg_temp.ts('2026-01-10 19:40')),
+  (pg_temp.id(501), 'fake', 'ended', pg_temp.ts('2026-01-10 19:50'));
 insert into public.online_join_tokens(id, jti, lesson_id, participant_kind, profile_id, display_label, issued_at, expires_at) values
   (pg_temp.id(901), pg_temp.id(911), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass A', pg_temp.ts('2026-01-10 17:50'), pg_temp.ts('2026-01-10 20:00')),
   (pg_temp.id(902), pg_temp.id(912), pg_temp.id(501), 'observer', pg_temp.id(1), 'Pass B', pg_temp.ts('2026-01-10 17:55'), pg_temp.ts('2026-01-10 20:00')),
@@ -729,7 +732,8 @@ insert into public.online_join_tokens(id, jti, lesson_id, participant_kind, prof
 insert into public.online_join_events(token_id, kind, at) values
   -- A: joined then left → 40 exact.
   (pg_temp.id(901), 'joined', pg_temp.ts('2026-01-10 18:21')), (pg_temp.id(901), 'left', pg_temp.ts('2026-01-10 19:01')),
-  -- B: joined, no leave → ends at the first ended AFTER the join (19:30, not the earlier 18:10) → 60 estimated.
+  -- B: joined, no leave → ends at the first ended AFTER the join (19:30; not the earlier 18:10, not the
+  -- later 19:50 before the pass expires at 20:00) → 60 estimated (80 if the last ended were taken).
   (pg_temp.id(902), 'joined', pg_temp.ts('2026-01-10 18:30')),
   -- C: joined, no leave, the pass expires first (19:00) → 20 estimated.
   (pg_temp.id(903), 'joined', pg_temp.ts('2026-01-10 18:40')),
