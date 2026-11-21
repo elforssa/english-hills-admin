@@ -1,6 +1,6 @@
-# Receptionist permissions — one capability list, revision RPW-r1
+# Receptionist permissions — one capability list, revision RPW-r2
 
-**Status: PROPOSED, plan only, waiting for the owner's approval.** No code, migration, policy or data was changed. Tier 3 (roles, RLS, a security-definer command set, the e-mail route). Delivery is **one pass**: one plan, one implementation branch, one independent review, one release, built in five stages with a commit and passing tests after each.
+**Status: APPROVED FOR IMPLEMENTATION** (Maroine, 2026-11-21, RPW-r1 at head `08881a1` with N1 = B and N2 = A, recorded here as RPW-r2; see the [approval record](#approval-record-2026-11-21)). Merge and release are **not** authorized: they wait for the online-classes Production test (week of 23/11) and the owner's separate « merge » and release approvals. Tier 3 (roles, RLS, a security-definer command set, the e-mail route). Delivery is **one pass**: one plan, one implementation branch, one independent review, one release, built in five stages with a commit and passing tests after each.
 
 Baseline: `origin/main` `53c486b` (PR #202, migrations to 130). Evidence: the [role permissions audit](../evidence/role-permissions-audit-2026-11-14.md) (read-only, Production read 2026-11-14 at `9f0c911`), re-checked against `53c486b` for this revision by reading the repository only (no database, no Production). Decision record: [ADR-018](../decisions/ADR-018-one-capability-list.md) (proposed).
 
@@ -10,6 +10,7 @@ Baseline: `origin/main` `53c486b` (PR #202, migrations to 130). Evidence: the [r
 | --- | --- | --- |
 | RPW-r0 | 2026-11-14 | Unfinished draft: approach (b) recommended, table A partial, seven owner questions. The authoring session stopped at its usage limit. |
 | RPW-r1 | 2026-11-20 | Rebased on `53c486b`; every file reference re-checked (section "Verified current state"). Rows 18, 19, 24, 25 and leave requests traced and added. The owner's answers of 2026-11-20 applied (item 2, leave requests, recipients, office messages, « charge enseignants », items 3 + 7, certificates, item 8 dropped, item 13 in the groups stage). Items 20–22 moved out of this pass (online-classes Production test, week of 23/11). Owner summary, locked list per layer, test plan, release and recovery, ADR-018 and the implementation contract written. Two new owner questions. |
+| RPW-r2 | 2026-11-21 | Owner approval recorded: N1 = B (no separate test database exists; the full suites run on the local build of the exact reviewed commit, the preview only for checks that change nothing), N2 = A. The two screen-only limits accepted for now. Her first real family invitation waits for the e-mail-links R4 test (a). Follow-ups F5 and F6 added. |
 
 ---
 
@@ -70,7 +71,7 @@ Five stages, one release, after the online-classes Production test (week of 23/1
 - **Screen-only limits that are already data-readable today** (unchanged by this plan): she can already read every charge and receipt row (so "no centre totals" is a screen rule), and group rows carry `teacher_id` (so « charge enseignants » is a screen lock). Making those data boundaries would be a separate, larger change.
 - **A teacher she creates has no contract type or pay**; an admin completes them. How payroll treats an empty contract type was not verified (stage 3 checks it).
 - **Her e-mail change on the receipt form stays refused** (a finance function is not touched); she corrects the e-mail on the dossier, and the receipt form says so in French.
-- **Preview database** (question N1): the pre-Production suites must not run against Production data.
+- **Preview database** (N1 = B): no separate test database exists; a preview would run against Production without 131–135. The full suites run on the local build of the exact reviewed commit; the preview is used only for checks that change nothing.
 - **Portal invitations:** the e-mail-links fix (PR #190, plan PR #188) is released, but its Production proof R4 was postponed by owner decision; CURRENT_STATE says the owner runs R4 test (a) before the first real family invitation. That still applies to her first invitation.
 
 ---
@@ -199,7 +200,7 @@ Columns: **Stage**, the action, today, after, then the change per layer (UI / ro
 | 17 | 3 | Portfolios and learning profiles, no delete | closed | create (no edit page exists for anyone) | routes + menu (`Sidebar.jsx:70-75`); trash buttons by `canDeleteAcademicRecords` | new `canManageLearningRecords` (ops) | `storage_security.can_write` (123:1438) and `resolve_storage_asset` (123:1392): add purpose `portfolio` to her branch | `portfolios`, `learning_assessments`: `receptionist_deny` → read + insert, restrictive update/delete deny | `portfolios/page.jsx:82,171,198`, `learning-assessments/page.jsx:55,154,180` |
 | 17c | 3 | Certificates: view only | closed | view and print | route + menu; « Nouveau certificat » (`:194-196`) and both trash buttons (`:213,237`, ungated today) hidden for her | new `canViewCertificates` (ops), `canIssueCertificates` (mgmt) | none (issuing is a direct insert + `Core.SendEmail`) | `certificates`: `receptionist_deny` → read, restrictive insert/update/delete deny | `certificates/page.jsx` |
 | 18 | 3 | Add a teacher (record only, no login) | closed | allowed | route `/teachers/new`, menu, add button (`teachers/page.jsx:48`); admin `TeacherForm` with contract, salary/rate and IBAN hidden (`:102-113`) | new `canAddTeacher` (ops); `canViewTeacherCompensation` stays mgmt | `save_receptionist_teacher_operations` (119:1892): a null id creates; allowlist name, phone, e-mail, certifications, levels, notes, photo; never pay fields | `teachers` unchanged (deny stays; definer command) | `teachers/new/page.jsx`, `TeacherForm.jsx:30-34,64,70,94-97` |
-| 19 | 3 | Teacher e-mail and notes | read only | allowed (see question N2) | admin form for her, pay fields hidden; `ReceptionistTeacherForm` retired | `canEditTeacherOperationalFields` (has it) | same command: keys + `email`, `notes`; `get_teacher_operations` (096:114) returns `notes` (drop, re-create, re-grant) | none | `teachers/[id]/edit`, `teachers/[id]/page.jsx:48-49` |
+| 19 | 3 | Teacher e-mail and notes | read only | allowed; e-mail only while no login is linked and no invitation is pending (N2 = A) | admin form for her, pay fields hidden; `ReceptionistTeacherForm` retired | `canEditTeacherOperationalFields` (has it) | same command: keys + `email`, `notes`; `get_teacher_operations` (096:114) returns `notes` (drop, re-create, re-grant) | none | `teachers/[id]/edit`, `teachers/[id]/page.jsx:48-49` |
 | 18p | 3 | Teacher photo | refused by storage | allowed (not pay) | photo upload in the form | `canAddTeacher` | `can_write` (123:1446-1448): purpose `teacher_photo` for her | none | `TeacherForm.jsx:94-97` |
 | L | 3 | Leave requests: view | closed | view only | route `/leave-requests`, menu (`Sidebar.jsx:65`); approve, refuse, delete, « Nouvelle demande » and edit dialog hidden; teachers loaded with `getTeacherOperations()` for her | new `canViewLeaveRequests` (ops), `canDecideLeaveRequests` (mgmt) | none | `leave_requests`: `receptionist_deny` → read, restrictive insert/update/delete deny | `leave-requests/page.jsx:81-84,113-125,148,199-230` |
 | 15 | 4 | E-mail the placement result | refused | allowed (fixed template) | `role !== 'receptionist'` removed | new `canEmailFamilies` (ops) | `can_message_recipient` (123:1357, gate at :1366) → capability `email_families`; e-mail route `:84,:88` by capability; per-recipient check `:127` unchanged | none | `PlacementTestModal.jsx:113`, `api/email/send/route.js` |
@@ -287,11 +288,11 @@ Each stage ends with a commit whose message names the stage, and with these pass
 | Step | Gate | Action |
 | --- | --- | --- |
 | R0 | Owner authorizes read-only reads | Ledger ends at the expected migration; re-check the next free number (renumber 131–135 before merge if taken); export the bodies and policies 131–135 replace to the owner's private folder with `SHA256SUMS`; record receptionist and staff account counts. |
-| R1 | Reviewed head, READY FOR FINAL REVIEW | **Preview:** a Vercel preview deployment of the exact reviewed head, bound to the database chosen in question N1 with 131–135 applied and synthetic data; the full receptionist, online (two suites) and teacher-portal suites, plus the new suites, pass against it. Never against Production data. |
+| R1 | Reviewed head, READY FOR FINAL REVIEW | **Suites on the exact reviewed commit (N1 = B):** the full receptionist, online (`test-online-learning-browser.mjs`, `test-online-room-lifecycle-browser.mjs`) and teacher-portal (`test-portal-readiness-browser.mjs`) browser suites, plus the new suites, pass on the local production build of that commit against a local database with 131–135 and synthetic data, as CI does. The Vercel preview of that commit is used only for checks that change nothing (anonymous redirects, `/login` renders); it runs against Production without 131–135, so no signed-in suite runs there. |
 | R2 | Release approval; outside reception hours | Apply 131–135 in order through the guarded wrapper (dry run, then apply). Read-only checks: catalog diff equals the manifest, ACLs, policy manifest, `has_capability` answers, online function bodies byte-identical to 130. |
 | R3 | Same approval, right after R2 | Merge the reviewed head; Vercel Production READY on that commit; anonymous probes. |
 | R4 | Same approval | Rolled-back probes as receptionist: three locked functions → `42501`; `online_issue_join` → `not_eligible`; `online_save_course` → `42501`; one new right per stage succeeds inside a rolled-back transaction. Admin spot check. Postgres and API logs for 30 minutes. |
-| R5 | Owner / receptionist | One real action per stage on real work, recorded. First real family invitation only after the e-mail-links R4 test (a). `/helpdesk` checked. |
+| R5 | Owner / receptionist | One real action per stage on real work, recorded. **Her first real family invitation waits for the e-mail-links R4 test (a)**, like any first family invitation (CURRENT_STATE); until the owner records that test, the « Inviter » button is not used on a real dossier. `/helpdesk` checked. |
 | R6 | Closeout | CURRENT_STATE, SECURITY_RULES, OWNER_DECISIONS, ADR-018 status, FEATURE_INDEX; plan to completed. |
 
 **Old application, new database (R2 → R3, or an application-only rollback):** safe. The new database only widens her rights and adds logs; the old commands she uses (`save_receptionist_enrollment`, `assign_receptionist_student_group`, the old student and teacher forms' commands) keep working; `messages.channel` is set by the insert trigger.
@@ -321,28 +322,23 @@ Each stage ends with a commit whose message names the stage, and with these pass
 
 # Owner decisions required
 
-**N1 — Which database does the pre-Production preview use? (blocks R1 only; build and review can proceed)**
+None open. N1 and N2 were answered on 2026-11-21:
 
-The browser suites create synthetic learners, groups, accounts and messages. They must not run against Production data, and the repository does not record which Supabase project a Vercel preview uses.
+- **N1 — preview database: B.** The Supabase account has only the Production admin project and the website project, with no branches, so a preview would run against Production without migrations 131–135. The full receptionist, online and teacher-portal browser suites run on the local build of the exact reviewed commit, as CI does; the preview is used only for checks that change nothing (R1). Follow-up F5.
+- **N2 — teacher e-mail with a linked login or a pending invitation: A.** She may change a teacher's e-mail only while no login is linked and no invitation is pending; otherwise the field is read-only for her with « Le changement passe par la direction ». The admin is unchanged. Follow-up F6.
 
-- **A (recommended):** a separate non-Production database for the preview (a Supabase branch or a staging project), with 131–135 applied and synthetic data; the preview's Supabase variables point at it. Cost: a branch or project for the release window.
-- **B:** run the full suites against the exact reviewed head in the CI-equivalent local build (what Verify already does), and use the preview only for read-only anonymous checks.
+## Approval record (2026-11-21)
 
-**N2 — Teacher e-mail change when the teacher already has a login or a pending invitation (item 19; blocks stage 3 only)**
-
-A teacher's portal notifications and messages are delivered by matching the login's e-mail; re-inviting or re-linking also matches by e-mail (123:866-882, 123:1062-1070). Changing the e-mail of a linked teacher silently stops their portal messages, and linking is a locked action.
-
-- **A (recommended):** she may change a teacher's e-mail only while no login is linked and no invitation is pending; otherwise the field is read-only for her with « Le changement passe par la direction ». The admin is unchanged.
-- **B:** she may always change it, like the admin.
-
----
+Maroine approved RPW-r1 (PR #203, head `08881a1`) for implementation with N1 = B, N2 = A; accepted the two screen-only limits (every charge row, every group's teacher) for now, with the real data limits kept as follow-up F4; and placed her first real family invitation after the e-mail-links R4 test (a). Build: all five stages in one pass on one branch and one PR, stages as commits, not approval points. Merge and release wait for the online-classes Production test and the owner's « merge » instruction.
 
 # Follow-ups (not in this pass)
 
 - **F1 — Online lessons items 20–22** (move "this lesson and the following ones", course set-up without closing, video-consent withdrawal), after the online-classes Production test. Needs the online constraint lifted.
 - **F2 — Portal previews (item 8):** they show nothing even for the admin; a separate fix.
 - **F3 — Revoke the retired receptionist commands** (`save_receptionist_enrollment`, `assign_receptionist_student_group`) one week after the release, once no open tab can call them.
-- **F4 — Data boundaries for screen-only limits** (centre totals from charge rows, teacher workload from group rows), only if the owner wants them.
+- **F4 — Data boundaries for screen-only limits** (centre totals from charge rows, teacher workload from group rows). Accepted as screen-only for now (2026-11-21); the real data limits stay here.
+- **F5 — A separate test database for previews** (a Supabase branch or staging project), so signed-in suites can run on a preview deployment.
+- **F6 — The admin has the same teacher e-mail trap:** changing a linked teacher's e-mail cuts off their portal messages (notifications and messages match the login's e-mail). A guard or a re-link step for every role is separate work.
 
 ---
 
@@ -350,11 +346,11 @@ A teacher's portal notifications and messages are delivered by matching the logi
 
 ### Scope
 
-Stages 1–5 and table A rows 1–7, 9–19, 17c, 18p, L, 23–26, the bugs table, the four list tests, the restore script and the docs, with the owner's answers of 2026-11-14 and 2026-11-20 and the answers to N1 and N2 once given. Nothing else. No change to any online or teacher-portal file, function, policy, route or capability listed in "Scope and non-goals". No admin or director outcome changes except the pick-up adults editor, the e-mail-change log and the capacity log.
+Stages 1–5 and table A rows 1–7, 9–19, 17c, 18p, L, 23–26, the bugs table, the four list tests, the restore script and the docs, with the owner's answers of 2026-11-14, 2026-11-20 and 2026-11-21 (N1 = B, N2 = A). Nothing else. No change to any online or teacher-portal file, function, policy, route or capability listed in "Scope and non-goals". No admin or director outcome changes except the pick-up adults editor, the e-mail-change log and the capacity log.
 
 ### Prerequisites
 
-1. Owner approval of RPW-r1 at an exact head, recorded in this plan and in OWNER_DECISIONS. N2 answered before stage 3; N1 before R1.
+1. Owner approval of RPW-r1 at head `08881a1` with N1 = B and N2 = A (2026-11-21), recorded in this plan (RPW-r2) and in OWNER_DECISIONS.
 2. Fresh `origin/main`; next free migration number re-verified (131 provisional); online and teacher-portal suites green on main.
 3. Latest definitions re-read with `pg_get_functiondef` / `pg_policies` on a local database and compared with the citations: `has_capability` / `require_capability` (096), `save_receptionist_student`, `assign_receptionist_student_group`, `guard_student_membership`, `end_learner` (120), `save_receptionist_teacher_operations` (119), `place` / `place_learner_in_group`, `save_enrollment_changes`, `reopen_enrollment`, `save_receptionist_enrollment` (127), `save_receptionist_group`, `enforce_group_capacity` (128), `can_message_recipient`, `account_sees`, `recipient_for`, `set_recipient`, `storage_security.can_write`, `resolve_storage_asset`, the three family-invitation functions, `queue_role_invitation` (123), `enforce_dismissal_integrity` (125), `get_teacher_operations` (096), every `online_*` body (117–130), and the policies named in table A (124). A difference is a stop condition.
 4. Local Supabase, synthetic data only, external e-mail off; branch `feat/receptionist-permissions` in `.claude/worktrees/`.
@@ -392,9 +388,9 @@ Stop and report if:
 - opening an item needs a right on the locked list, a finance function change, or a change to `role_security.assert_transition`;
 - an admin or director outcome changes beyond the three named additions;
 - the restore cannot return the catalog to 130;
-- the owner changes a decision, or N1 / N2 is unanswered when its stage or step is reached;
+- the owner changes a decision;
 - Production access, credentials or data would be needed.
 
 ### Docs / status reporting
 
-Report per [AGENTS](../../../AGENTS.md#implementation-handoff): branch, head SHA, PR, Tier 3 rationale, checks per stage tied to the SHA, self-check, plan revision RPW-r1, migration filenames, unresolved decisions. Independent review is mandatory and checks stage by stage against table A.
+Report per [AGENTS](../../../AGENTS.md#implementation-handoff): branch, head SHA, PR, Tier 3 rationale, checks per stage tied to the SHA, self-check, plan revision RPW-r2, migration filenames, unresolved decisions. Independent review is mandatory and checks stage by stage against table A.
