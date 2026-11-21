@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r3 (r1 and r2 were each reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
+**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r4 (r1, r2 and r3 were each reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
 
 **Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, depending on the owner's answers, two product rules: operational tasks kept beside a new follow-up (OD-18) and the five-failure stop (OD-17). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
 

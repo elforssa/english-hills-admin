@@ -776,4 +776,4 @@ Added in RWR-r2 so a reviewer can check coverage without the owner's brief, whic
 | 4.4 cross-view consistency | plan §7 invariant 9 |
 | 4.4 Playwright receptionist days with click counts | plan §8 « Day scripts » |
 | 4.5 implementation plan | plan §8, §10, IMPLEMENTATION CONTRACT |
-| Section 5 owner decisions | plan « Owner decisions required » (OD-1–OD-19) |
+| Section 5 owner decisions | plan « Owner decisions required » (OD-1–OD-20; OD-20 answered) |
