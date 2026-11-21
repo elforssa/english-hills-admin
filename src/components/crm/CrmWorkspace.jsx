@@ -118,7 +118,8 @@ export default function CrmWorkspace({
   {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<div className="flex flex-wrap gap-2">
     {/* RPW-r2 item 24: the learners with a balance due, per learner, no totals. */}
     <Button asChild variant="outline"><Link href="/students?payment=due"><CircleDollarSign size={16} />À relancer</Link></Button>
-    <Button onClick={openManual}><Plus size={16} />Ajouter un prospect</Button></div>} />
+    {/* One line at 320 px: the first task stays where it was before item 24. */}
+    <Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></div>} />
     : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
   {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
     <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />
