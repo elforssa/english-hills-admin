@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
 import { BAND_QUERIES, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
@@ -18,7 +19,7 @@ const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='rcc-b1-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
-let browser,actor,page,phase='setup',context;const pageErrors=[],consoleErrors=[],writes=[],external=[],transportErrors=[],cancelled=[],documents=[];
+let browser,actor,page,phase='setup',context;const pageErrors=[],consoleErrors=[],writes=[],external=[],fetchChecks=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const timeline=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select public.crm_get_timeline(p_lead=>'${id}',p_limit=>20);commit;`));
@@ -44,13 +45,9 @@ async function newContext(engine,options={}){
  // E5 stand-in: a document-capture consumer registered before every app listener.
  await context.addInitScript(()=>{window.__b1Consume=false;document.addEventListener('keydown',event=>{if(event.key==='Escape'&&window.__b1Consume){window.__b1Consume=false;event.preventDefault();}},true);});
  page=await context.newPage();page.setDefaultTimeout(45000);
- // WebKit raises a fetch that a navigation cancelled as « Fetch API cannot load … due to access control checks »
- // (as in test-ui-foundation-browser.mjs). Such an error passes only when the same request failed as cancelled,
- // or when a new document replaced the page right then (cross-origin reads cancelled before their preflight get
- // no request event in WebKit). A real access-control failure has neither and still fails the run.
- page.on('requestfailed',r=>{if(/cancel|abort/i.test(r.failure()?.errorText||'')){const u=new URL(r.url());cancelled.push(u.host+u.pathname+u.search);}});
- page.on('domcontentloaded',()=>documents.push(Date.now()));
- page.on('pageerror',e=>{if(e.name==='Fetch API cannot load http'&&e.message.endsWith(' due to access control checks.'))transportErrors.push({at:Date.now(),text:`${engine.name()} ${phase}: ${e.message}`});else pageErrors.push(`${engine.name()} ${phase}: ${e.message}`);});
+ // WebKit's cancelled-fetch reports are judged by the shared rule, one record per page.
+ const fetches=cancelledFetches(page);fetchChecks.push(fetches);
+ page.on('pageerror',e=>{if(!fetches.take(e,`${engine.name()} ${phase}: ${e.message}`))pageErrors.push(`${engine.name()} ${phase}: ${e.message}`);});
  page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource|access control checks/.test(m.text()))consoleErrors.push(`${engine.name()} ${phase}: ${m.text().slice(0,400)}`);});
  page.on('request',r=>{const m=r.url().match(/\/rest\/v1\/rpc\/(crm_[a-z_]+)/);if(m&&isWrite(m[1]))writes.push({name:m[1],phase});});
  await login(users[1]);
@@ -564,10 +561,10 @@ try {
   }
   await browser.close();browser=null;
  }
- assert.deepEqual(external,[],'no external requests');assert.deepEqual(pageErrors,[],'no browser errors');const uncancelled=transportErrors.filter(error=>!cancelled.some(path=>error.text.includes(path))&&!documents.some(at=>at>=error.at-500&&at<=error.at+3000)).map(error=>error.text);assert.deepEqual(uncancelled,[],'every access-control fetch error is a request the navigation cancelled');if(transportErrors.length)console.log(`cancelled fetches reported by WebKit: ${transportErrors.length}`);
+ assert.deepEqual(external,[],'no external requests');assert.deepEqual(pageErrors,[],'no browser errors');const uncancelled=fetchChecks.flatMap(f=>f.uncancelled()),reportedFetches=fetchChecks.reduce((n,f)=>n+f.count,0);assert.deepEqual(uncancelled,[],'every access-control fetch error is a request the navigation cancelled');if(reportedFetches)console.log(`cancelled fetches reported by WebKit: ${reportedFetches}`);
  console.log(PHASES||process.env.B1_ENGINES?`PARTIAL local iteration only (engines ${process.env.B1_ENGINES||'all'}, phases ${PHASES||'all'})`:'PASS RCC-B1 responsive Opportunities acceptance in Chromium and WebKit');
 } catch(error){
- console.error(phase,error.message);if(pageErrors.length)console.error('page errors',pageErrors);if(transportErrors.length)console.error('transport errors',transportErrors,'cancelled',cancelled.slice(-20),'documents',documents.slice(-20));if(consoleErrors.length)console.error('console errors',consoleErrors.slice(-6));
+ console.error(phase,error.message);if(pageErrors.length)console.error('page errors',pageErrors);{const left=fetchChecks.flatMap(f=>f.uncancelled());if(left.length)console.error('unexplained WebKit fetch errors',left);}if(consoleErrors.length)console.error('console errors',consoleErrors.slice(-6));
  if(page&&!page.isClosed()){await page.screenshot({path:join(tmpdir(),'b1-failure.png'),fullPage:true}).catch(()=>{});console.error('screenshot',join(tmpdir(),'b1-failure.png'));}
  throw error;
 } finally {

@@ -2,30 +2,48 @@
 // due to access control checks » (Playwright names it 'Fetch API cannot load http'). A receptionist
 // menu with more links leaves more Next.js prefetches in flight when a test replaces the page.
 //
-// Such an error is excused only when the same request failed as cancelled, or when a new document
-// loaded from 0.5 s before to 3 s after it. WebKit emits no request event for cross-origin reads
-// cancelled before their preflight. Any other access-control error stays an error: a real CORS
-// failure has neither, and test-crm-rcc-b1-browser.mjs uses the same rule.
-export function cancelledFetches(page) {
+// One rule for every browser suite (independent review of PR #204, B1). Such an error is excused only:
+// - by a cancellation of the exact same URL (host, path and query) reported within 1 s of it; each
+//   cancellation excuses one error; or
+// - for a Next.js prefetch (`_rsc=` in the query) or a Supabase REST read (`/rest/v1/`), when a new
+//   document loaded in the 3 s after it. WebKit emits no request event for cross-origin reads
+//   cancelled before their preflight, so only the page replacement explains those.
+// Anything else stays an error: a real CORS failure of another URL, or outside those windows, fails
+// the run. scripts/test-webkit-cancelled-fetch.mjs proves it with synthetic events.
+export const CANCEL_WINDOW_MS = 1000;
+export const DOCUMENT_WINDOW_MS = 3000;
+const SUFFIX = ' due to access control checks.';
+
+// WebKit's message holds the URL after the scheme: '//127.0.0.1:54321/rest/v1/x?y due to …'.
+export function reportedUrl(message) {
+  if (!message.endsWith(SUFFIX)) return null;
+  return message.slice(0, -SUFFIX.length).replace(/^:?\/*/, '');
+}
+
+const keyOf = url => { const u = new URL(url); return u.host + u.pathname + u.search; };
+const preloadKind = key => /[?&]_rsc=/.test(key) || /^[^/]+\/rest\/v1\//.test(key);
+
+export function cancelledFetches(page, { now = Date.now } = {}) {
   const cancelled = [], documents = [], reported = [];
   page.on('requestfailed', request => {
-    if (/cancel|abort/i.test(request.failure()?.errorText || '')) {
-      const url = new URL(request.url());
-      cancelled.push(url.host + url.pathname + url.search);
-    }
+    if (/cancel|abort/i.test(request.failure()?.errorText || '')) cancelled.push({ at: now(), key: keyOf(request.url()), used: false });
   });
-  page.on('domcontentloaded', () => documents.push(Date.now()));
+  page.on('domcontentloaded', () => documents.push(now()));
   return {
     // True when the page error is WebKit's fetch report; it is then judged by uncancelled().
     take(error, label = error.message) {
-      if (error.name !== 'Fetch API cannot load http' || !error.message.endsWith(' due to access control checks.')) return false;
-      reported.push({ at: Date.now(), message: error.message, label });
+      if (error.name !== 'Fetch API cannot load http' || !error.message.endsWith(SUFFIX)) return false;
+      reported.push({ at: now(), key: reportedUrl(error.message), label });
       return true;
     },
-    // The reported fetch errors that no cancellation or document replacement explains.
+    // The reported fetch errors that neither rule explains.
     uncancelled() {
-      return reported.filter(error => !cancelled.some(path => error.message.includes(path))
-        && !documents.some(at => at >= error.at - 500 && at <= error.at + 3000)).map(error => error.label);
+      for (const item of cancelled) item.used = false;
+      return reported.filter(error => {
+        const match = cancelled.find(item => !item.used && item.key === error.key && Math.abs(item.at - error.at) <= CANCEL_WINDOW_MS);
+        if (match) { match.used = true; return false; }
+        return !(preloadKind(error.key) && documents.some(at => at >= error.at && at <= error.at + DOCUMENT_WINDOW_MS));
+      }).map(error => error.label);
     },
     get count() { return reported.length; },
   };
