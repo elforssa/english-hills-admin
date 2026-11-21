@@ -695,7 +695,8 @@ select pg_temp.owner();
 -- ===========================================================================
 -- ACA-3 / ACA-2: the leaver sticks; I7; attendance after a leaver.
 -- ===========================================================================
-select pg_temp.act(3);
+-- RPW-r2 item 6: reception ends learners now (end_learner capability); a teacher stays refused.
+select pg_temp.act(4);
 select pg_temp.fails(format('select public.end_learner(%L, %L, %L, %L)', pg_temp.id(205), pg_temp.su(pg_temp.id(205)), 'Alumni', 'x'), '42501');
 select pg_temp.act(2);
 select pg_temp.fails(format('select public.end_learner(%L, %L, %L, %L)', pg_temp.id(205), '2000-01-01T00:00:00Z', 'Alumni', 'x'), 'PT409', 'egc.stale');
@@ -780,7 +781,8 @@ select pg_temp.ok(pg_temp.file(pg_temp.id(219))->>'status' = 'Alumni' and pg_tem
 -- Reopen: Ended → Confirmed without group; refused while another live enrollment exists.
 create temp table egc_ended as select (pg_temp.enr(pg_temp.id(219), 'Summer Camp')).id id;
 select pg_temp.open_to_api('egc_ended');
-select pg_temp.act(3);
+-- RPW-r2 item 14: reception reopens now (reopen_enrollment capability); a teacher stays refused.
+select pg_temp.act(4);
 select pg_temp.fails(format('select public.reopen_enrollment(%L, %L)', (select id from egc_ended), pg_temp.eu((select id from egc_ended))), '42501');
 select pg_temp.act(2);
 select pg_temp.fails(format('select public.reopen_enrollment(%L, %L)', (select id from egc_ended), '2000-01-01T00:00:00Z'), 'PT409', 'egc.stale');

@@ -1,10 +1,8 @@
 'use client';
 
 import StudentForm from '@/components/students/StudentForm';
-import ReceptionistStudentForm from '@/components/students/ReceptionistStudentForm';
-import { useAuth } from '@/context/AuthContext';
 
+// RPW-r2 item 1: one learner form for every staff role (it picks its save path by capability).
 export default function EditStudentPage() {
-  const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistStudentForm /> : <StudentForm />;
+  return <StudentForm />;
 }

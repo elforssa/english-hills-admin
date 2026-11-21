@@ -370,8 +370,8 @@
     "receptionist": "locked"
   },
   "end_learner(p_student uuid, p_student_updated_at timestamp with time zone, p_final_status text, p_reason text, p_enrollments uuid[])": {
-    "gate": "roles:admin,director",
-    "receptionist": "locked"
+    "gate": "capability:end_learner",
+    "receptionist": "open"
   },
   "family_group_ids()": {
     "gate": "manual",
@@ -655,8 +655,8 @@
     "receptionist": "locked"
   },
   "reopen_enrollment(p_enrollment uuid, p_expected_updated_at timestamp with time zone)": {
-    "gate": "roles:admin,director",
-    "receptionist": "locked"
+    "gate": "capability:reopen_enrollment",
+    "receptionist": "open"
   },
   "report_attendance_daily(p_days integer)": {
     "gate": "invoker",
@@ -685,7 +685,7 @@
   "resolve_storage_asset(p_asset_id uuid)": {
     "gate": "manual",
     "receptionist": "open",
-    "md5": "60501093af69a8704dae1c5190e7b75e"
+    "md5": "7896f75dbf579293b2a8478896cc99e9"
   },
   "restore_student(p_student uuid)": {
     "gate": "roles:director",

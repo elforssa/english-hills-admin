@@ -42,10 +42,15 @@ const nextYearGroup = randomUUID();
 // level, a one-seat group taken by an occupant.
 const reasonStudent = randomUUID(), levelStudent = randomUUID(), levelEnrollment = randomUUID();
 const fullGroup = randomUUID(), occupantStudent = randomUUID();
+// RPW-r2 stage 3: a placed young learner (pick-up adults, « Sortie des jeunes », a grade), a
+// leaver, a certificate and a leave request to view, a learner placed at creation, a new teacher.
+const youngStudent = randomUUID(), leaverStudent = randomUUID(), leaverEnrollment = randomUUID();
+const certificate = randomUUID(), leaveRequest = randomUUID();
 const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const confirmedName = run + ' confirmed', multipleName = run + ' multiple';
 const reasonName = run + ' reason', levelName = run + ' level', occupantName = run + ' occupant';
+const youngName = run + ' young', leaverName = run + ' leaver', createdName = run + ' created', newTeacherName = run + ' new teacher';
 // EAP (migration 127): learners created in this run through the learner form and the walk-in desk.
 const fileName = run + ' file', walkInName = run + ' walk-in', walkInGroupedName = run + ' walk-in grouped', walkInReplayName = run + ' walk-in replay';
 let user, browser, pdfStudent;
@@ -55,7 +60,7 @@ try {
     headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + env.SUPABASE_SERVICE_ROLE_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { role: 'director' } }) });
   assert.equal(response.status, 200); user = (await response.json()).id;
-  sql(`update public.profiles set role='receptionist' where id='${user}';
+  sql(`update public.profiles set role='receptionist', full_name='${run} reception' where id='${user}';
     insert into public.groups(id,name,session_type,niveau,annee,date_debut,date_fin) values
       ('${group}','${run}','Yearly','Child 1','2026-2027',null,null),
       ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027','2026-09-01','2027-06-30'),
@@ -78,16 +83,27 @@ try {
       ('${occupantStudent}','${occupantName}','Enrolled','Yearly','Child 1','${fullGroup}');
     insert into public.students(id,full_name,status,session_type,niveau_cefr) values
       ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
-      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null);
+      ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null),
+      ('${leaverStudent}','${leaverName}','Enrolled','Yearly','Child 1');
+    insert into public.students(id,full_name,status,session_type,niveau_cefr,groupe_id,age_category) values
+      ('${youngStudent}','${youngName}','Enrolled','Yearly','Child 1','${group}','Young Learners (6-12)');
+    -- A real member of the group (Validated), so the grade dialog's roster offers it.
+    insert into public.enrollments(student_id,status,session_type,level,school_year,group_id) values
+      ('${youngStudent}','Validated','Yearly','Child 1','2026/2027','${group}');
     set session_replication_role=origin;
     insert into public.enrollments(id,student_id,status,session_type,level,school_year) values
       ('${confirmedEnrollment}','${confirmedStudent}','Confirmed','Yearly','Child 1','2026/2027'),
       ('${multipleCurrent}','${multipleStudent}','Confirmed','Yearly','Child 1','2026/2027'),
       ('${multipleNext}','${multipleStudent}','Confirmed','Yearly','Child 1','2027/2028'),
-      ('${levelEnrollment}','${levelStudent}','Confirmed','Yearly',null,'2026/2027');
+      ('${levelEnrollment}','${levelStudent}','Confirmed','Yearly',null,'2026/2027'),
+      ('${leaverEnrollment}','${leaverStudent}','Confirmed','Yearly','Child 1','2026/2027');
     insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
       values('${teacher}','${teacherName}','${run}-teacher@example.invalid','0600000000',
-        'Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');`);
+        'Freelance',900,10000,'PRIVATE-BANK','Operational note');
+    insert into public.certificates(id,student_id,student_name,niveau_complete,date_emission)
+      values('${certificate}','${youngStudent}','${youngName}','Child 1',current_date);
+    insert into public.leave_requests(id,teacher_id,teacher_name,date_debut,date_fin,type_conge)
+      values('${leaveRequest}','${teacher}','${teacherName}',current_date,current_date+1,'Maladie');`);
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.route('**/*', route => {
@@ -143,9 +159,11 @@ try {
   assert.deepEqual(await profileResponse.json(), [{ id: user, role: 'receptionist' }]);
   for (const button of await page.locator('nav button').all()) { if (await button.getAttribute('aria-expanded') !== 'true') await button.click(); }
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
-  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/assessments','/placement-tests','/placement-tests?view=calendar','/receipts','/receipts/new','/teachers','/settings']) assert(links.includes(path), `Missing navigation: ${path}`);
+  for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/assessments','/placement-tests','/placement-tests?view=calendar','/receipts','/receipts/new','/teachers','/settings',
+    // RPW-r2 stage 3.
+    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests']) assert(links.includes(path), `Missing navigation: ${path}`);
   // EAP: the pre-registration page is retired.
-  for (const path of ['/finance','/reports','/payroll','/teachers/new','/integrations','/settings/users','/enrollments']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
+  for (const path of ['/finance','/reports','/payroll','/integrations','/settings/users','/enrollments']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS stored receptionist role, real login, forged metadata ignored and permitted sidebar');
 
   // O3-r2 changes the default home, while saved Today links remain usable.
@@ -189,7 +207,7 @@ try {
   assert.equal(await page.getByRole('link', { name: /Corriger/ }).count(), 0);
   // EAP (D3, D6): the learner file enrols at the payment; no pre-enrollment, no status select.
   assert.equal(await page.getByRole('button', { name: 'Nouvelle pré-inscription' }).count(), 0);
-  await page.getByText('La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif. Les fins d’inscription passent par la direction.', { exact: true }).waitFor();
+  await page.getByText('La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif.', { exact: true }).waitFor();
   assert.equal(await page.locator('#enrollment-status').count(), 0);
 
   // « Inscrire et encaisser » at the desk (receipt form): any payment confirms the
@@ -313,8 +331,9 @@ try {
   await page.getByLabel('Rechercher un apprenant').fill(readyName);
   const readyRow = page.getByRole('row').filter({ has: page.getByRole('link', { name: readyName, exact: true }) });
   await readyRow.getByText('Aucun engagement').waitFor();
-  assert.equal(await readyRow.getByRole('combobox', { name: `Session de ${readyName}` }).count(), 0);
-  assert.equal(await readyRow.getByRole('combobox', { name: `Niveau de ${readyName}` }).count(), 0);
+  // RPW-r2 item 2: in no group, she edits programme and level as the admin does.
+  assert.equal(await readyRow.getByRole('combobox', { name: `Session de ${readyName}` }).count(), 1);
+  assert.equal(await readyRow.getByRole('combobox', { name: `Niveau de ${readyName}` }).count(), 1);
   const categorySave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_student'));
   const listRefresh = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/search_students_page'));
   await readyRow.getByRole('combobox', { name: `Catégorie de ${readyName}` }).selectOption('Teens (13-17)');
@@ -397,11 +416,12 @@ try {
   await assignEnrollmentFromList(confirmedName, confirmedEnrollment);
   assert.equal(sql(`select groupe_id||':'||status from public.students where id='${confirmedStudent}'`), `${group}:Enrolled`);
 
-  // The learner form no longer places at creation: reception creates the file, enrols
-  // and collects from it, then places the paid enrollment from « Groupe à affecter ».
+  // Reception creates the file without a group, enrols and collects from it, then places
+  // the paid enrollment from « Groupe à affecter ». RPW-r2 item 1: the shared form offers a
+  // group at creation too (checked below with its reason).
   await page.goto(app + '/students/new');
   await page.getByRole('heading', { name: 'Ajouter un apprenant' }).waitFor();
-  assert.equal(await page.locator('#groupe_id').count(), 0, 'no group at creation for reception');
+  assert.equal(await page.locator('#groupe_id').count(), 1, 'the shared form offers a group at creation');
   await page.getByRole('textbox', { name: 'Nom complet *' }).fill(fileName);
   await page.getByRole('combobox', { name: 'Session' }).selectOption('Yearly');
   await page.getByRole('combobox', { name: 'Niveau' }).selectOption('Child 1');
@@ -535,7 +555,8 @@ try {
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
   await page.goto(app + `/students/${readyStudent}/edit`);
   await page.getByRole('heading', { name: 'Modifier l’apprenant' }).waitFor();
-  assert.equal(await page.getByRole('textbox', { name: 'Email apprenant' }).getAttribute('readonly'), '');
+  // RPW-r2 item 3: the e-mails are editable (refused by the command while a family link holds them).
+  assert.equal(await page.getByRole('textbox', { name: 'Email (apprenant)' }).getAttribute('readonly'), null);
   assert.equal(await page.getByRole('combobox', { name: 'Groupe assigné' }).count(), 0);
   // ADR-009: an edit made stale by a second session answers at once with the French
   // conflict text (never the raw "Student unavailable or stale") and reloads the record.
@@ -553,6 +574,14 @@ try {
   assert.equal(await page.getByRole('textbox', { name: 'Téléphone' }).inputValue(), '0600000222', 'record reloaded');
   assert(page.url().endsWith(`/students/${readyStudent}/edit`));
   console.log('PASS stale receptionist edit: HTTP 409 PT409 at once, French conflict text, latest record reloaded');
+  // Items 2 and 3: source and e-mail of an unplaced learner, saved and the e-mail change logged.
+  await page.getByRole('textbox', { name: 'Email (apprenant)' }).fill(`${run}-ready@example.invalid`);
+  await page.getByRole('combobox', { name: 'Comment avez-vous connu le centre ?' }).selectOption('Recherche Google');
+  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await page.waitForURL(app + `/students/${readyStudent}`);
+  assert.equal(sql(`select email||':'||referral_source from public.students where id='${readyStudent}'`), `${run}-ready@example.invalid:Recherche Google`);
+  assert.equal(sql(`select count(*) from public.activity_log where target_id='${readyStudent}' and after->>'kind'='student_email_change'
+    and after->>'author_role'='receptionist' and actor_id='${user}'`), '1');
   await page.goto(app + '/students/new');
   await page.getByRole('heading', { name: 'Ajouter un apprenant' }).waitFor();
   await page.getByRole('combobox', { name: 'Session' }).waitFor();
@@ -562,19 +591,126 @@ try {
   await page.goto(app + '/teachers');
   const teacherList = await teacherListResponse;
   assert.equal(teacherList.status(), 200);
-  const allowedTeacherKeys = ['id','full_name','email','telephone','certifications','niveaux_autorises','photo_url','updated_at'].sort();
+  // RPW-r2 item 19: the operations read carries notes; never a pay field.
+  const allowedTeacherKeys = ['id','full_name','email','telephone','certifications','niveaux_autorises','photo_url','notes','updated_at'].sort();
   const teacherRows = await teacherList.json();
   assert(teacherRows.some(row => row.id === teacher));
   for (const row of teacherRows) assert.deepEqual(Object.keys(row).sort(), allowedTeacherKeys);
   await page.goto(app + `/teachers/${teacher}`);
   await page.getByRole('heading', { name: teacherName }).waitFor();
   await page.goto(app + `/teachers/${teacher}/edit`);
-  await page.getByRole('textbox', { name: 'Nom complet' }).waitFor();
-  assert.equal(await page.getByRole('textbox', { name: 'Nom complet' }).inputValue(), teacherName);
+  await page.waitForFunction(name => document.querySelector('#teacher_full_name')?.value === name, teacherName);
+  for (const label of ['Type de contrat', 'IBAN (virement salaire)', 'Taux horaire (MAD)', 'Salaire mensuel (MAD)']) {
+    assert.equal(await page.getByText(label, { exact: true }).count(), 0, `pay field hidden: ${label}`);
+  }
   const rawTeacher = await page.request.get(`${base}/rest/v1/teachers?select=id,iban,salaire_mensuel,taux_horaire,notes&id=eq.${teacher}`, { headers: authHeaders });
   assert([200, 401, 403].includes(rawTeacher.status()));
   if (rawTeacher.status() === 200) assert.deepEqual(await rawTeacher.json(), []);
   console.log('PASS authenticated teacher response projection and base-table HR isolation');
+
+  // ── RPW-r2 stage 3 (items 1, 4-6, 14, 16, 17, 17c, 18, 19, L) ─────────────
+  page.on('dialog', dialog => dialog.accept());
+  // Item 1: a group at creation, with the reason for a placement without payment.
+  await page.goto(app + '/students/new');
+  await page.getByRole('heading', { name: 'Ajouter un apprenant' }).waitFor();
+  await page.getByRole('textbox', { name: 'Nom complet *' }).fill(createdName);
+  await page.getByRole('combobox', { name: 'Session' }).selectOption('Yearly');
+  await page.getByRole('combobox', { name: 'Niveau' }).selectOption('Child 1');
+  await page.locator('#groupe_id').selectOption(group);
+  await page.getByLabel('Motif de l’affectation sans inscription payée *').fill('RPW créé et affecté');
+  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await page.waitForURL(/\/students\/[0-9a-f-]{36}$/);
+  const createdStudent = new URL(page.url()).pathname.split('/').at(-1);
+  assert.equal(sql(`select groupe_id from public.students where id='${createdStudent}'`), group, 'item 1: placed at creation');
+  // Item 4: pick-up adults on the dossier.
+  await page.goto(app + `/students/${youngStudent}`);
+  await page.getByRole('heading', { name: youngName, exact: true }).waitFor();
+  for (const [name, phone] of [['RPW Adulte un', '0600000401'], ['RPW Adulte deux', '0600000402']]) {
+    await page.getByRole('button', { name: 'Ajouter un adulte' }).click();
+    const form = page.getByRole('form', { name: 'Nouvel adulte autorisé' });
+    await form.getByLabel('Nom complet').fill(name);
+    await form.getByLabel('Téléphone').fill(phone);
+    await form.getByLabel('Relation').selectOption('Parent');
+    await form.getByRole('button', { name: 'Ajouter', exact: true }).click();
+    await page.getByText(name, { exact: true }).waitFor();
+  }
+  await page.getByRole('button', { name: 'Modifier RPW Adulte un' }).click();
+  await page.getByRole('form', { name: 'Modifier RPW Adulte un' }).getByLabel('Téléphone').fill('0611111401');
+  await page.getByRole('form', { name: 'Modifier RPW Adulte un' }).getByRole('button', { name: 'Enregistrer' }).click();
+  await page.getByText('Parent · 0611111401').waitFor();
+  await page.getByRole('button', { name: 'Retirer RPW Adulte deux' }).click();
+  await page.getByText('RPW Adulte deux', { exact: true }).waitFor({ state: 'detached' });
+  assert.equal(sql(`select string_agg(full_name||':'||telephone, ',') from public.authorized_adults where student_id='${youngStudent}'`), 'RPW Adulte un:0611111401');
+  // Item 5: « Sortie des jeunes », recorded under her name; no edit or delete control.
+  await page.goto(app + '/dismissal');
+  await page.getByRole('heading', { name: 'Sortie des jeunes apprenants' }).waitFor();
+  await page.getByRole('button', { name: 'Enregistrer une sortie' }).click();
+  await page.locator('#dismissal-student').selectOption(youngStudent);
+  await page.locator('#dismissal-adult').selectOption({ label: 'RPW Adulte un (Parent)' });
+  await page.getByRole('button', { name: 'Confirmer la sortie' }).click();
+  await page.getByText(/^Sortie enregistrée/).waitFor();
+  assert.equal(sql(`select adult_name||':'||staff_name from public.dismissal_logs where student_id='${youngStudent}'`), `RPW Adulte un:${run} reception`);
+  // Item 16: grades — add and correct; no delete, no CSV export.
+  await page.goto(app + '/assessments');
+  await page.getByRole('heading', { name: 'Notes & évaluations' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Export CSV' }).count(), 0, 'item 16: no CSV export');
+  await page.getByRole('button', { name: 'Nouvelle note' }).click();
+  const gradeDialog = page.getByRole('dialog');
+  await gradeDialog.locator('select').nth(1).selectOption(group);
+  await gradeDialog.locator('select').nth(0).selectOption(youngStudent);
+  await gradeDialog.locator('input[type=number]').first().fill('15');
+  await gradeDialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await gradeDialog.waitFor({ state: 'hidden' });
+  assert.equal(sql(`select note_oral::int from public.assessments where student_id='${youngStudent}'`), '15');
+  assert.equal(await page.getByRole('button', { name: 'Supprimer la note' }).count(), 0, 'item 16: no delete');
+  // Items 17 and 17c, L: create-only learning records, view-only certificates and leave requests.
+  for (const path of ['/portfolios', '/learning-assessments']) {
+    await page.goto(app + path);
+    await page.waitForLoadState('networkidle');
+    assert.equal(await page.getByRole('button', { name: /^Supprimer/ }).count(), 0, `${path}: no delete`);
+  }
+  await page.goto(app + '/certificates');
+  await page.getByRole('heading', { name: 'Certificats de réussite' }).waitFor();
+  await page.getByText(youngName).locator('visible=true').first().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Nouveau certificat' }).count(), 0, 'item 17c: no issue');
+  assert.equal(await page.getByRole('button', { name: 'Supprimer le certificat' }).count(), 0, 'item 17c: no delete');
+  await page.goto(app + '/leave-requests');
+  await page.getByText(teacherName).locator('visible=true').first().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Nouvelle demande' }).count(), 0, 'L: no new request');
+  assert.equal(await page.getByRole('button', { name: 'Supprimer la demande' }).count(), 0, 'L: no delete');
+  assert.equal(await page.getByRole('button', { name: /^Demande du/ }).count(), 0, 'L: no edit dialog');
+  // Items 6 and 14: « Ancien apprenant » with its reason, then reopen.
+  await page.goto(app + `/students/${leaverStudent}`);
+  await page.getByRole('heading', { name: leaverName, exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Archiver' }).count(), 0, 'item 6: « Archiver » stays hidden');
+  await page.getByRole('button', { name: 'Ancien apprenant' }).click();
+  await page.getByLabel('Motif *').fill('RPW programme terminé');
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirmer' }).click();
+  await page.getByRole('button', { name: 'Rouvrir l’inscription' }).click();
+  await page.waitForFunction(() => !document.body.innerText.includes('Rouvrir l’inscription'));
+  assert.equal(sql(`select status from public.enrollments where id='${leaverEnrollment}'`), 'Confirmed', 'item 14: reopened');
+  assert.equal(sql(`select count(*) from public.activity_log where target_id='${leaverEnrollment}' and actor_id='${user}'`) !== '0', true);
+  // Items 18 and 19: a teacher record without pay; e-mail and notes of an unlinked teacher.
+  await page.goto(app + '/teachers');
+  await page.getByRole('link', { name: 'Ajouter', exact: true }).click();
+  await page.waitForURL(app + '/teachers/new');
+  assert.equal(await page.getByText('Type de contrat', { exact: true }).count(), 0, 'item 18: no contract field');
+  await page.getByRole('textbox', { name: 'Nom complet' }).fill(newTeacherName);
+  await page.getByRole('textbox', { name: 'Email' }).fill(`${run}-new-teacher@example.invalid`);
+  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await page.waitForURL(/\/teachers\/[0-9a-f-]{36}$/);
+  const newTeacher = new URL(page.url()).pathname.split('/').at(-1);
+  assert.equal(sql(`select email||':'||coalesce(contract_type,'none')||':'||coalesce(taux_horaire::text,'none') from public.teachers where id='${newTeacher}'`),
+    `${run}-new-teacher@example.invalid:none:none`);
+  await page.goto(app + `/teachers/${teacher}/edit`);
+  await page.waitForFunction(() => document.querySelector('#teacher_notes')?.value === 'Operational note');
+  await page.getByRole('textbox', { name: 'Notes' }).fill('RPW note réception');
+  await page.getByRole('textbox', { name: 'Email' }).fill(`${run}-teacher2@example.invalid`);
+  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await page.waitForURL(app + `/teachers/${teacher}`);
+  assert.equal(sql(`select email||':'||notes||':'||iban||':'||taux_horaire::int from public.teachers where id='${teacher}'`),
+    `${run}-teacher2@example.invalid:RPW note réception:PRIVATE-BANK:900`, 'item 19: e-mail and notes saved, pay untouched');
+  console.log('PASS stage 3: group at creation, programme/source/e-mail (logged), pick-up adults, « Sortie des jeunes », grades, learning records, certificates and leave requests (view), « Ancien apprenant » and reopen, teacher record without pay, teacher e-mail and notes');
 
   await page.goto(app + '/receipts');
   await page.getByRole('heading', { name: 'Reçus de paiement' }).waitFor();
@@ -603,12 +739,13 @@ try {
   assert.equal(sql(`select full_name from public.profiles where id='${user}'`), 'Phase 1 self-service');
   for (const path of ['/students/new',`/students/${student}/edit`,'/groups',`/groups/${group}`,
     '/timetable','/attendance','/assessments','/receipts','/receipts/new',
-    `/receipts/${student}/print`,'/teachers',`/teachers/${student}`,`/teachers/${student}/edit`]) {
+    `/receipts/${student}/print`,'/teachers',`/teachers/${student}`,`/teachers/${student}/edit`,
+    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests']) {
     const allowed = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(allowed.status(), 200, `Server access for ${path}`);
   }
   for (const path of ['/finance','/crm/analytics','/dashboard','/reports','/activity-log',
-    '/receipts/deletions','/payroll','/teachers/new','/students/import','/settings/users','/integrations']) {
+    '/receipts/deletions','/payroll','/students/import','/settings/users','/integrations']) {
     const requestsBeforeRedirect = pageRequests.length;
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
@@ -760,7 +897,7 @@ try {
   if (user) sql(`begin;
     set local english_hills.receipt_test_cleanup = 'on';
     create temporary table eap_cleanup_students on commit drop as
-      select id from public.students where id='${student}' or full_name in ('${fileName}','${walkInName}','${walkInGroupedName}','${walkInReplayName}');
+      select id from public.students where id='${student}' or full_name in ('${fileName}','${walkInName}','${walkInGroupedName}','${walkInReplayName}','${createdName}');
     create temporary table eap_cleanup_ids on commit drop as
       select id from public.receipts where student_id in (select id from eap_cleanup_students)
       union select id from public.charges where student_id in (select id from eap_cleanup_students)
@@ -778,7 +915,9 @@ try {
       select id from public.placement_tests where student_name='${run}'
       union select id from public.enrollments where student_id in ('${student}',
         '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}',
-        '${reasonStudent}','${levelStudent}','${occupantStudent}')
+        '${reasonStudent}','${levelStudent}','${occupantStudent}','${youngStudent}','${leaverStudent}')
+      union select id from public.teachers where full_name='${newTeacherName}'
+      union select unnest(array['${youngStudent}'::uuid,'${leaverStudent}'::uuid,'${certificate}'::uuid,'${leaveRequest}'::uuid])
       union select unnest(array['${user}'::uuid,'${student}'::uuid,
         '${reasonStudent}'::uuid,'${levelStudent}'::uuid,'${occupantStudent}'::uuid,'${fullGroup}'::uuid,
         '${readyStudent}'::uuid,'${unsetStudent}'::uuid,
@@ -788,11 +927,21 @@ try {
     delete from public.placement_tests where student_name='${run}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}',
       '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}',
-      '${reasonStudent}','${levelStudent}','${occupantStudent}');
+      '${reasonStudent}','${levelStudent}','${occupantStudent}','${youngStudent}','${leaverStudent}');
+    -- The dismissal history refuses every delete (its trigger); this local clean-up bypasses it.
+    set local session_replication_role = replica;
+    delete from public.dismissal_logs where student_id='${youngStudent}';
+    set local session_replication_role = origin;
+    delete from public.authorized_adults where student_id='${youngStudent}';
+    delete from public.assessments where student_id='${youngStudent}';
+    delete from public.certificates where id='${certificate}';
+    delete from public.leave_requests where id='${leaveRequest}';
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
-      '${confirmedStudent}','${multipleStudent}','${reasonStudent}','${levelStudent}','${occupantStudent}');
+      '${confirmedStudent}','${multipleStudent}','${reasonStudent}','${levelStudent}','${occupantStudent}',
+      '${youngStudent}','${leaverStudent}');
     delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}','${nextYearGroup}','${fullGroup}');
-    delete from public.teachers where id='${teacher}';
+    delete from public.leave_requests where teacher_id='${teacher}';
+    delete from public.teachers where id='${teacher}' or full_name='${newTeacherName}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);
     delete from public.rate_limits where user_id='${user}'; commit;`);

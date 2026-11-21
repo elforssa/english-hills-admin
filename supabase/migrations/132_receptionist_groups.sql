@@ -259,4 +259,6 @@ revoke all on function academic_security.log_group_capacity() from public, anon,
 create trigger groups_capacity_log after update of capacite_max on public.groups
   for each row execute function academic_security.log_group_capacity();
 
+notify pgrst, 'reload schema';
+
 commit;

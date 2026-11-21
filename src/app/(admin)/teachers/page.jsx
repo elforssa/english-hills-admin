@@ -9,6 +9,7 @@ import StorageImage from '@/components/StorageImage';
 import { recordHref } from '@/lib/navigation.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { getTeacherOperations } from '@/lib/teacher-directory';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 export default function Teachers() {
   const { role } = useAuth();
@@ -16,6 +17,8 @@ export default function Teachers() {
 }
 
 function TeachersForRole({ role }) {
+  // Without the pay view (reception) the list reads the operations projection.
+  const seesPay = hasCapability(role, 'canViewTeacherCompensation');
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -31,10 +34,10 @@ function TeachersForRole({ role }) {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const load = role === 'receptionist' ? getTeacherOperations() : entities.Teacher.listAll('-created_date');
+    const load = seesPay ? entities.Teacher.listAll('-created_date') : getTeacherOperations();
     load.then(d => { if (active) setTeachers(d); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [role]);
+  }, [seesPay]);
 
   const filtered = teachers.filter(t => !search || t.full_name?.toLowerCase().includes(search.toLowerCase()));
 
@@ -45,7 +48,7 @@ function TeachersForRole({ role }) {
           <h1 className="text-2xl font-bold">Enseignants</h1>
           <p className="text-muted-foreground text-sm mt-1">{teachers.length} enseignants</p>
         </div>
-        {role !== 'receptionist' && <Button asChild className="self-start sm:self-auto">
+        {hasCapability(role, 'canAddTeacher') && <Button asChild className="self-start sm:self-auto">
           <Link href="/teachers/new">
             <Plus size={15} /> Ajouter
           </Link>
@@ -71,7 +74,7 @@ function TeachersForRole({ role }) {
                   </div>
                   <div className="min-w-0">
                     <Link href={recordHref(`/teachers/${t.id}`, listUrl)} className="block font-semibold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded truncate py-1">{t.full_name}</Link>
-                    {role !== 'receptionist' && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>{t.contract_type || 'Freelance'}</span>}
+                    {seesPay && <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.contract_type === 'Employé' ? 'bg-blue-100 text-blue-700' : t.contract_type ? 'bg-orange-100 text-orange-700' : 'bg-amber-100 text-amber-800'}`}>{t.contract_type || 'Contrat à compléter'}</span>}
                   </div>
                 </div>
               </div>

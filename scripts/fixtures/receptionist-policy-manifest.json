@@ -27,6 +27,13 @@
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
+  "public.assessments.receptionist_assessment_insert": {
+    "cmd": "INSERT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
   "public.assessments.receptionist_assessment_read": {
     "cmd": "SELECT",
     "permissive": "PERMISSIVE",
@@ -34,26 +41,19 @@
     "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
     "with_check": ""
   },
+  "public.assessments.receptionist_assessment_update": {
+    "cmd": "UPDATE",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
   "public.assessments.receptionist_delete_deny": {
     "cmd": "DELETE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": ""
-  },
-  "public.assessments.receptionist_insert_deny": {
-    "cmd": "INSERT",
-    "permissive": "RESTRICTIVE",
-    "roles": "authenticated",
-    "qual": "",
-    "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
-  },
-  "public.assessments.receptionist_update_deny": {
-    "cmd": "UPDATE",
-    "permissive": "RESTRICTIVE",
-    "roles": "authenticated",
-    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
-    "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
   "public.attendance.receptionist_attendance_delete_deny": {
     "cmd": "DELETE",
@@ -90,29 +90,36 @@
     "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
     "with_check": ""
   },
-  "public.authorized_adults.receptionist_delete_deny": {
+  "public.authorized_adults.receptionist_authorized_adult_write": {
+    "cmd": "ALL",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
+  "public.certificates.receptionist_certificate_read": {
+    "cmd": "SELECT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": ""
+  },
+  "public.certificates.receptionist_delete_deny": {
     "cmd": "DELETE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": ""
   },
-  "public.authorized_adults.receptionist_insert_deny": {
+  "public.certificates.receptionist_insert_deny": {
     "cmd": "INSERT",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "",
     "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
-  "public.authorized_adults.receptionist_update_deny": {
+  "public.certificates.receptionist_update_deny": {
     "cmd": "UPDATE",
-    "permissive": "RESTRICTIVE",
-    "roles": "authenticated",
-    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
-    "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
-  },
-  "public.certificates.receptionist_deny": {
-    "cmd": "ALL",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
@@ -153,8 +160,29 @@
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
-  "public.dismissal_logs.receptionist_deny": {
-    "cmd": "ALL",
+  "public.dismissal_logs.receptionist_delete_deny": {
+    "cmd": "DELETE",
+    "permissive": "RESTRICTIVE",
+    "roles": "authenticated",
+    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
+    "with_check": ""
+  },
+  "public.dismissal_logs.receptionist_dismissal_insert": {
+    "cmd": "INSERT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
+  "public.dismissal_logs.receptionist_dismissal_read": {
+    "cmd": "SELECT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": ""
+  },
+  "public.dismissal_logs.receptionist_update_deny": {
+    "cmd": "UPDATE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
@@ -181,15 +209,57 @@
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
-  "public.learning_assessments.receptionist_deny": {
-    "cmd": "ALL",
+  "public.learning_assessments.receptionist_delete_deny": {
+    "cmd": "DELETE",
+    "permissive": "RESTRICTIVE",
+    "roles": "authenticated",
+    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
+    "with_check": ""
+  },
+  "public.learning_assessments.receptionist_learning_assessment_insert": {
+    "cmd": "INSERT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
+  "public.learning_assessments.receptionist_learning_assessment_read": {
+    "cmd": "SELECT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": ""
+  },
+  "public.learning_assessments.receptionist_update_deny": {
+    "cmd": "UPDATE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
     "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
   },
-  "public.leave_requests.receptionist_deny": {
-    "cmd": "ALL",
+  "public.leave_requests.receptionist_delete_deny": {
+    "cmd": "DELETE",
+    "permissive": "RESTRICTIVE",
+    "roles": "authenticated",
+    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
+    "with_check": ""
+  },
+  "public.leave_requests.receptionist_insert_deny": {
+    "cmd": "INSERT",
+    "permissive": "RESTRICTIVE",
+    "roles": "authenticated",
+    "qual": "",
+    "with_check": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)"
+  },
+  "public.leave_requests.receptionist_leave_request_read": {
+    "cmd": "SELECT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "(( SELECT get_my_role() AS get_my_role) = 'receptionist'::text)",
+    "with_check": ""
+  },
+  "public.leave_requests.receptionist_update_deny": {
+    "cmd": "UPDATE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
@@ -293,8 +363,29 @@
     "qual": "(( SELECT get_my_role() AS get_my_role) = 'receptionist'::text)",
     "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((student_id IS NULL) OR (EXISTS ( SELECT 1 FROM students s WHERE ((s.id = placement_tests.student_id) AND (s.deleted_at IS NULL))))))"
   },
-  "public.portfolios.receptionist_deny": {
-    "cmd": "ALL",
+  "public.portfolios.receptionist_delete_deny": {
+    "cmd": "DELETE",
+    "permissive": "RESTRICTIVE",
+    "roles": "authenticated",
+    "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",
+    "with_check": ""
+  },
+  "public.portfolios.receptionist_portfolio_insert": {
+    "cmd": "INSERT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))"
+  },
+  "public.portfolios.receptionist_portfolio_read": {
+    "cmd": "SELECT",
+    "permissive": "PERMISSIVE",
+    "roles": "authenticated",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (student_id IN ( SELECT s.id FROM students s WHERE (s.deleted_at IS NULL))))",
+    "with_check": ""
+  },
+  "public.portfolios.receptionist_update_deny": {
+    "cmd": "UPDATE",
     "permissive": "RESTRICTIVE",
     "roles": "authenticated",
     "qual": "(( SELECT get_my_role() AS get_my_role) IS DISTINCT FROM 'receptionist'::text)",

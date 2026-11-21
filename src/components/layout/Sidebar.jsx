@@ -36,7 +36,7 @@ const NAV = [
       { href: '/students-directory', label: 'Annuaire', roles: OPERATIONS },
       { href: '/students', label: 'Liste des apprenants', roles: OPERATIONS },
       { href: '/students/new', label: 'Ajouter un apprenant', roles: OPERATIONS },
-      { href: '/dismissal', label: 'Sortie des jeunes', roles: ADMIN },
+      { href: '/dismissal', label: 'Sortie des jeunes', roles: OPERATIONS },
     ],
   },
   {
@@ -61,17 +61,17 @@ const NAV = [
     label: 'Enseignants & RH', icon: GraduationCap, roles: OPERATIONS,
     children: [
       { href: '/teachers', label: 'Liste des enseignants', roles: OPERATIONS },
-      { href: '/teachers/new', label: 'Ajouter un enseignant', roles: ADMIN },
-      { href: '/leave-requests', label: 'Congés & absences', roles: ADMIN },
+      { href: '/teachers/new', label: 'Ajouter un enseignant', roles: OPERATIONS },
+      { href: '/leave-requests', label: 'Congés & absences', roles: OPERATIONS },
       { href: '/payroll', label: 'Paie & RH', roles: ADMIN },
     ],
   },
   {
-    label: 'Portfolios & Certifs', icon: FolderOpen, roles: [...ADMIN, 'teacher'],
+    label: 'Portfolios & Certifs', icon: FolderOpen, roles: [...OPERATIONS, 'teacher'],
     children: [
-      { href: '/portfolios', label: 'Portfolios numériques', roles: [...ADMIN, 'teacher'] },
-      { href: '/certificates', label: 'Certificats', roles: ADMIN },
-      { href: '/learning-assessments', label: "Profils d'apprentissage", roles: [...ADMIN, 'teacher'] },
+      { href: '/portfolios', label: 'Portfolios numériques', roles: [...OPERATIONS, 'teacher'] },
+      { href: '/certificates', label: 'Certificats', roles: OPERATIONS },
+      { href: '/learning-assessments', label: "Profils d'apprentissage", roles: [...OPERATIONS, 'teacher'] },
     ],
   },
   {

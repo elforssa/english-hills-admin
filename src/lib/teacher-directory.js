@@ -28,7 +28,7 @@ export async function getMyTeacher() {
   return teacher || null;
 }
 
-// Fixed eight-field operational projection; never cache or spread an HR row.
+// Fixed nine-field operational projection (RPW-r2 item 19 adds notes); never cache or spread an HR row.
 export async function getTeacherOperations({ id = null } = {}) {
   const rows = [];
   const limit = 100;

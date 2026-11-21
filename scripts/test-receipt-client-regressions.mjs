@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { createStableIdempotencyKey } from '../src/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '../src/lib/receiptInitialCharge.mjs';
-import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
+import { buildServiceDescription, receiptSchoolYear, receiptServiceSummary, paymentErrorMessage, PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE, PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE, PAYMENT_BUSY_MESSAGE, SCHOOL_YEAR_OPTIONS, DEFAULT_SCHOOL_YEAR } from '../src/lib/receiptPresentation.js';
 import { groupMatchesEnrollment } from '../src/lib/academicPrograms.js';
 import { deliverReceiptEmail } from '../supabase/functions/sendReceiptEmail/deliveryWorkflow.mjs';
 import { receiptEmailDecision, receiptEmailRetryDecision } from '../supabase/functions/sendReceiptEmail/receiptState.mjs';
@@ -39,6 +39,8 @@ for (const message of ['Idempotency key conflict: request contents changed.', 'I
 }
 assert.equal(paymentErrorMessage({ message: 'Payment exceeds the remaining balance of 10.00 MAD.' }), 'Payment exceeds the remaining balance of 10.00 MAD.');
 assert.equal(paymentErrorMessage({}), 'Impossible d’enregistrer le paiement.');
+// RPW-r2 item 3: the receipt's e-mail refusal sends her to the dossier.
+assert.equal(paymentErrorMessage({ code: '42501', message: 'Contact identity cannot be changed' }), PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE);
 // Record conflicts (ADR-009): the known busy text stays as is under both codes; any other
 // conflict gets the French busy guidance, never the raw server text.
 const busy = 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.';
