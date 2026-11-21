@@ -477,6 +477,16 @@ Plan: [e-mail links that work](../architecture/plans/email-links-that-work.md), 
 - **Open:** R4 (owner); R5 test-account clean-up, not started, gated on the PR B room test (keep-list unchanged).
 - **Out of scope by owner instruction:** room and Zoom changes (PR B/C), the shared-address message (PR D), Supabase plan changes.
 
+## Receptionist permissions — APPROVED FOR IMPLEMENTATION (2026-11-21)
+
+Plan: [receptionist permissions](../architecture/plans/receptionist-permissions.md), revision RPW-r2 (Tier 3): RPW-r1 (PR #203, head `08881a1`) approved by Maroine on 2026-11-21; [ADR-018](../architecture/decisions/ADR-018-one-capability-list.md) accepted for implementation.
+
+- **Rule (2026-11-14):** the receptionist can do everything the admin can, except destructive actions and finance; when in doubt, give it to her.
+- **Answers (2026-11-20):** item 2 uses the admin rule (blocked only while the learner is in a group); leave requests viewed, not decided; she writes to families, teachers and staff from the app, never to a typed outside address; she reads only the office's messages; « charge enseignants » is locked; items 3 + 7 accepted, every dossier e-mail change logged; certificates viewed, not issued; item 8 dropped (follow-up); item 13 in the groups stage; items 20–22 out of this pass (online-classes Production test).
+- **Answers (2026-11-21):** N1 = B (no separate test database; full suites on the local build of the exact reviewed commit; preview only for checks that change nothing); N2 = A (teacher e-mail changeable by her only while no login is linked and no invitation is pending). The two screen-only limits (every charge row, every group's teacher) accepted for now. Her first real family invitation waits for the e-mail-links R4 test (a).
+- **Delivery:** five stages in one pass, one branch, one PR, one independent review checked stage by stage against table A.
+- **Holds:** no merge or release before the online-classes Production test (week of 23/11) and the owner's « merge » instruction; release steps need their own approval.
+
 ## Online classroom tools — APPROVED (2026-11-15)
 
 Plan: [online classroom tools](../architecture/plans/online-classroom-tools.md), revision OCT-r3 (Tier 3; **plan approved 2026-11-15; PR A implemented on a pull request, not merged**; OCT-r1 at head `61451e92c570b85468a9a456242cfc48cb082174`, findings B1–B5 and N1–N8, and OCT-r2 at head `0f0d83954cb6d4c6518bae922ff8523775ca087e`, finding B6 and four notes, were each independently reviewed CHANGES REQUIRED on 2026-11-15 and revised the same day). Child of the online-learning pilot ([ADR-008](../architecture/decisions/ADR-008-online-learning-pilot.md)): whiteboard, breakout rooms (« Groupes »), later the toolkit upgrade and a raise-hand button.
