@@ -1,6 +1,6 @@
 # Receptionist workflow audit — 2026-11-21
 
-Evidence for the [receptionist workflow plan](../plans/receptionist-workflow.md) (revision RWR-r1). Architecture task, read-only.
+Evidence for the [receptionist workflow plan](../plans/receptionist-workflow.md) (revision RWR-r1, corrected for RWR-r2 after the independent review of 2026-11-21: NF-2, the two task writers added to section 1 and the entry-point matrix, the R0 query outputs, Q29–Q30 and the [brief coverage index](#8-brief-coverage-index)). Architecture task, read-only.
 
 - **Baseline:** `origin/main` at `53c486b` (PR #202 merged), migration ceiling `130_online_session_evidence.sql`.
 - **Open work that overlaps:** PR #203 (plan RPW-r2, approved 2026-11-21) and PR #204 (branch `feat/receptionist-permissions`, migrations 131–135, not merged; merge waits for the online-classes Production test of the week of 23/11).
@@ -21,6 +21,7 @@ Status legend: **C** confirmed in code · **P** partly confirmed (the mechanism 
 5. [Prospect state machine (current)](#5-prospect-state-machine-current)
 6. [Replaying the reported states](#6-replaying-the-reported-states)
 7. [Read-only Production queries](#7-read-only-production-queries)
+8. [Brief coverage index](#8-brief-coverage-index)
 
 ## 1. Root cause: several open next actions per prospect
 
@@ -39,8 +40,10 @@ Status legend: **C** confirmed in code · **P** partly confirmed (the mechanism 
 | Call « Pas de réponse », « Occupé »… | `record_call_outcome` (`125:835-871`) | the current slot and the other cadence slots | the next cadence slot (until 5) |
 | « Mauvais numéro » | `record_call_outcome` (`125:872-876`) + forced `next_task` | the selected call task | one task |
 | « Rouvrir » | `reopen_lead` (`125:944-951`) | — (the lead had none) | one task |
-| « Réserver un test » | `crm_book_placement_test` (`119:708-747`) | open `confirm_placement_test` tasks only | a `placement_tests` row; **no task, and the lead version is not bumped** |
+| « Réserver un test » | `crm_book_placement_test` (`119:708-747`) | open `confirm_placement_test` tasks only | a `placement_tests` row; no task. The lead version **is** bumped, by trigger `placement_milestones` (`083:101`) |
 | Visit | a `center_visit` task created by any of the above | — | — |
+| « Inscrire et encaisser » (CRM), before the payment | `public.crm_start_enrollment` (`127:403`, `:548`), called by `crm_enroll_and_collect` (`127:641`) | other open `enrollment_followup` tasks only | « Finaliser l'inscription » (`enrollment_followup`), next to the current action |
+| Test result saved, by any writer (CRM command, Admissions table update, teacher) | trigger `crm_security.placement_milestones` (`083:74`, `:95-97`) | — | `post_test_followup` for an active lead, next to the current action |
 | Meta / website intake, new lead | `crm_security.accept_external_submission` (`125:1217-1265`) | — | `first_contact` |
 | Manual lead | `create_manual_lead` (`125:767-799`) | — | `first_contact` |
 | Conversion | `crm_security.evaluate_conversion` (`120:1319`) | every open task | — |
@@ -107,7 +110,7 @@ The only server rule is "an active lead needs **at least one** open task" (`need
 | 16d | Result and « Passé » before the test date | **C** | No date check in the client (`PlacementTestModal.jsx:164-170`) or in SQL (`crm_security.placement_integrity` checks the date only while `Planifié`, `125:1144-1146`; non-CRM rows skip it, `125:1136`). The milestone trigger then creates the post-test task (`083:87-99`). | RC-2 |
 | 16e | 37 mixed level options | **C** | `ALL_LEVELS`, 36 values (`programCatalog.mjs:4-16,65-69`), when no learner is selected or for any CRM test. | RC-6 |
 | 16f | Level not pre-filled in the wizard | **P** | It **is** pre-filled when `recommended_level` belongs to the lead's programme (`CrmEnrollmentDialog.jsx:58`; `112:170-171`). With a free-text programme the default is Yearly, so an Adults result or « A1 » doesn't match and the field stays empty. Changing the programme clears it (`:198`). | RC-6 |
-| 17a | No single source of hours shown in forms | **C** | Only `crm_followup_policies.weekly_hours` (`078:65-80`), published through `create_followup_policy`. No migration seeds a policy (`scripts/test-crm-phase2.sql:44`) and no screen shows the hours (`GuideContent.jsx:537`). | RC-9 |
+| 17a | No single source of hours shown in forms | **C** | Only `crm_followup_policies.weekly_hours` (`078:65-80`), published through `public.crm_create_followup_policy` (`080:442`). No migration seeds a policy (`scripts/test-crm-phase2.sql:44`) and no screen shows the hours (`GuideContent.jsx:537`). | RC-9 |
 | 17b | Visits and tests accept Sunday 22:00–23:30 | **C** | `new_task` fits only call types to the windows (`111:59-66`); a visit only needs a future time (`111:57`). Tests only need a future time (`125:1144-1146`). | RC-9 |
 | 17c | Callback at 11:00 refused while reminders land at 10:00 | **P** | Agreed callbacks are refused (never moved) outside the windows (`111:61-63`, `125:898-901`). Reminder presets land on a window opening (section 1). Whether 11:00 is outside a window depends on the live policy: [Q01](#q01--live-follow-up-policies). | RC-9 |
 | 18a | 3-hour rule not shown before the form | **C** | Server check `125:845-846`; message mapped at `presentation.mjs:213`; no pre-check. | RC-10 |
@@ -162,7 +165,7 @@ Each one is a new audit item (`NF-n`), linked to the root-cause map in the plan.
 | # | Finding | Evidence | RC |
 | --- | --- | --- | --- |
 | NF-1 | **A stale tab succeeds on the second click.** On `PT409` the dialog shows « Ce prospect a changé… », then adopts the new versions and keeps the form, so the next click submits the old intent over the other tab's change. That is the « silently overwrote » report: optimistic locking exists (`expected_version`, `125:804`) but the client defeats it. | `CrmActionDialog.jsx:261-270` | RC-10 |
-| NF-2 | **Test booking and test edits don't bump the lead version.** Other tabs therefore aren't refused after a test is booked or changed. Test edits lock on `placement_tests.updated_at` only. | `119:708-747`, `119:1626-1655` | RC-10 |
+| NF-2 | **Test edits don't check the prospect's version** (corrected in r2). RWR-r1 said booking and edits don't bump the lead version; that was wrong: trigger `placement_milestones` bumps it after every CRM test insert or update (`083:101`), and booking checks `expected_version` (`119:729`). The real gap: `crm_update_placement_test` checks only the test's `updated_at`, so a test edit made from a stale prospect view still succeeds. | `119:1626-1655`, `083:101` | RC-10 |
 | NF-3 | **A closed prospect keeps its planned test in the calendar and « Aujourd'hui ».** Closing cancels tasks but not tests, and the calendar's placement branch has no lead-status filter. Reopening then hits « Placement already scheduled » when booking again. | `125:942`, `125:661-667`, `119:722` | RC-1 |
 | NF-4 | **Commitment on « Encaisser » + wizard = two charges for one seat.** | finding 8 | RC-7 |
 | NF-5 | **The pop-up shows the wrong action** (earliest, not the one just created), so a receptionist who « reschedules » sees the old date and believes the change was ignored. | `CrmActionDialog.jsx:80-81` | RC-2 |
@@ -192,11 +195,13 @@ Every place that creates (C) or changes (U) each entity. **Bold** rows are entit
 | | Every command (`crm_security.command`) | U | status, owner, outreach fields; `expected_version` checked |
 | | Conversion (`evaluate_conversion` via payment) | U | status CONVERTED, closes tasks |
 | | « Inscrire et encaisser » (`crm_start_enrollment`) | U | sets `student_id`, `enrollment_id`; **not** `session_type` |
-| **Next action (`crm_tasks`)** | manual create · intake · schedule · reschedule · complete · cancel · qualify · conversation decision · call outcome · wrong number · reopen · reassign · test booking (closes confirm tasks) · conversion (closes all) · close (closes all) | C/U | **14 paths, 4 different closing rules** (section 1); hours applied to call types only |
-| **Placement test (`placement_tests`)** | CRM « Réserver un test » → `crm_book_placement_test` | C | QUALIFIED lead; future; one `Planifié` per lead; lead version not bumped |
+| **Next action (`crm_tasks`)** | manual create · intake · schedule · reschedule · complete · cancel · qualify · conversation decision · call outcome · wrong number · reopen · reassign · test booking (closes confirm tasks) · CRM enrolment start (adds « Finaliser l'inscription ») · test result trigger (adds `post_test_followup`) · conversion (closes all) · close (closes all) | C/U | **16 paths, 4 different closing rules** (section 1; the last two added in r2); hours applied to call types only |
+| **Placement test (`placement_tests`)** | CRM « Réserver un test » → `crm_book_placement_test` | C | QUALIFIED lead; `expected_version` checked; future; one `Planifié` per lead; lead version bumped by trigger (`083:101`) |
 | | CRM « Voir / Reprogrammer » → `crm_update_placement_test` | U | `updated_at` lock; result allowed any time |
 | | Admissions « Planifier un test » → `entities.PlacementTest.create` (table write under RLS) | C | **no rules**: students only or a free name; A1 pre-filled; any status, any date |
 | | Calendar legacy editor → `entities.PlacementTest.update` | U | **no version** |
+| | Teacher (portal) → table insert/update under RLS « placement teacher insert / update » (`123:284-289`) | C/U | teacher must reach the student's group; no business rule |
+| | Every CRM test insert or update, any writer → trigger `crm_security.placement_milestones` (`083:74`) | U (lead, tasks) | milestone events; result creates `post_test_followup`; lead version bumped |
 | | Placement page delete (admin/director) | D | non-CRM only |
 | **Visit** | any task path with `task_type='center_visit'` | C/U | future only, no hours, completable before its time |
 | **Student (`students`)** | StudentForm (admin/director) → table insert/update | C/U | **no phone, birth-date or duplicate rule** |
@@ -259,27 +264,34 @@ The exact histories of the 20 prospects need the event history: run [Q23](#q23--
 **Not run.** Each query needs the owner's approval as step R0 of the plan, and none writes. Rules for running them:
 
 - **Transport:** `supabase db query --linked --project-ref <ref> -f <file>`, as in [WORKFLOWS](../../ai/WORKFLOWS.md). It returns only the last statement's rows.
-- **File layout:** one query per file, each starting with `set transaction read only;` and a `select current_setting('transaction_read_only')` proof.
+- **File layout:** one query per file, starting with `set transaction read only;`. The transport returns only the last statement's rows, so the read-only proof is a column of the final select: each query is wrapped as `with q as (…) select current_setting('transaction_read_only') as read_only, q.* from q`, and every returned row must show `read_only = on`. The wrapper doesn't guarantee row order; the outputs are counts and samples, so order doesn't matter.
 - **Validate locally first:** the implementer runs every query against a clean local build at the same migration ceiling (task T-R0). This catches column mistakes without touching Production data.
-- **Outputs:** samples return **ids only**, never names or phones, so the outputs can be pasted into a release record without personal data.
+- **Checked for RWR-r2 (2026-11-21):** all 30 queries ran without error on a local stack at migration 135 (130 plus PR #204's 131–135, which change no table or function these queries read), each in its own transaction, rolled back; every returned row showed `read_only = on`. The local data is synthetic and almost empty, so this proves syntax, columns and the read-only proof, not the counts.
+- **Outputs:** counts, codes, short hashes and **ids only**, never names, phones, phone fragments or free text ([WORKFLOWS](../../ai/WORKFLOWS.md): « never personal data »), so the outputs can be pasted into a release record. The one exception is the D4 private export described under Q25, which never enters the repository.
 
 #### Q01 — live follow-up policies
 
 ```sql
 set transaction read only;
+with q as (
 select version, weekly_hours, date_exceptions, attempt_offsets, minimum_attempt_gap_minutes,
        first_contact_sla_minutes, post_test_sla_minutes, effective_from, retired_at
-from public.crm_followup_policies order by version;
+from public.crm_followup_policies order by version
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q02 — open actions overview
 
 ```sql
 set transaction read only;
+with q as (
 select l.status, count(distinct l.id) leads, count(t.id) open_tasks,
        count(t.id) filter (where t.due_at < now()) overdue
 from public.crm_leads l left join public.crm_tasks t on t.lead_id=l.id and t.status='open'
-where l.merged_into_lead_id is null group by l.status order by l.status;
+where l.merged_into_lead_id is null group by l.status order by l.status
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q03 — overdue tasks by what created them
@@ -288,12 +300,15 @@ Separates agreed times from forced or system dates.
 
 ```sql
 set transaction read only;
+with q as (
 select t.task_type, coalesce(t.schedule_kind,'(none)') schedule_kind, t.source_kind,
        (t.due_at = crm_security.next_window(l.followup_policy_id, date_trunc('day', t.due_at))) at_window_opening,
        count(*) n
 from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
 where t.status='open' and t.due_at<now() and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
-group by 1,2,3,4 order by n desc;
+group by 1,2,3,4 order by n desc
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 `at_window_opening = true` with `schedule_kind` `reminder` or NULL is a preset or system date. `appointment` is an agreed time.
@@ -302,18 +317,24 @@ group by 1,2,3,4 order by n desc;
 
 ```sql
 set transaction read only;
+with q as (
 with m as (select lead_id, count(*) n from public.crm_tasks where status='open' group by lead_id having count(*)>1)
-select count(*) leads, sum(n) tasks, (select array_agg(lead_id) from (select lead_id from m order by n desc, lead_id limit 5) s) sample from m;
+select count(*) leads, sum(n) tasks, (select array_agg(lead_id) from (select lead_id from m order by n desc, lead_id limit 5) s) sample from m
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q05 — invariant 1: distribution and active-lead check
 
 ```sql
 set transaction read only;
+with q as (
 select coalesce(n,0) open_actions, count(*) leads
 from public.crm_leads l left join (select lead_id, count(*) n from public.crm_tasks where status='open' group by lead_id) t on t.lead_id=l.id
 where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
-group by 1 order by 1;
+group by 1 order by 1
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 `open_actions = 0` for an active lead is a gap of its own: the target says « exactly one ».
@@ -322,20 +343,26 @@ group by 1 order by 1;
 
 ```sql
 set transaction read only;
+with q as (
 with d as (select lead_id, task_type, due_at, count(*) n from public.crm_tasks where status='open' group by 1,2,3 having count(*)>1)
 select count(distinct lead_id) leads, count(*) groups,
        count(*) filter (where (due_at at time zone public.centre_utc_offset())::time in (select distinct (w->>0)::time from public.crm_followup_policies p, jsonb_each(p.weekly_hours) d2, jsonb_array_elements(d2.value) w)) at_window_opening,
-       (select array_agg(lead_id) from (select distinct lead_id from d order by lead_id limit 5) s) sample from d;
+       (select array_agg(lead_id) from (select distinct lead_id from d order by lead_id limit 5) s) sample from d
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q07 — invariant 2: closed prospects with open actions or planned tests
 
 ```sql
 set transaction read only;
+with q as (
 select l.status, count(distinct l.id) filter (where exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')) with_open_action,
        count(distinct l.id) filter (where exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')) with_planned_test,
        (array_agg(l.id order by l.id) filter (where exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')))[1:5] sample
-from public.crm_leads l where l.status in ('LOST','NOT_QUALIFIED','CONVERTED') group by l.status;
+from public.crm_leads l where l.status in ('LOST','NOT_QUALIFIED','CONVERTED') group by l.status
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q08 — invariant 3: overlapping appointments or tests per person
@@ -344,6 +371,7 @@ A visit is taken as 60 minutes and a test as 45 minutes: assumptions to confirm 
 
 ```sql
 set transaction read only;
+with q as (
 with ev as (
  select t.lead_id, l.student_id, t.id, t.due_at s, coalesce(t.scheduled_end_at, t.due_at+interval '60 min') e
  from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.status='open' and t.task_type='center_visit'
@@ -353,13 +381,16 @@ with ev as (
  from public.placement_tests p where p.status='Planifié' and p.heure ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$')
 select count(*) overlapping_pairs, (array_agg(a.id))[1:5] sample
 from ev a join ev b on a.id<b.id and ((a.lead_id is not null and a.lead_id=b.lead_id) or (a.student_id is not null and a.student_id=b.student_id))
- and a.s<b.e and b.s<a.e;
+ and a.s<b.e and b.s<a.e
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q09 — invariant 4: open items outside hours
 
 ```sql
 set transaction read only;
+with q as (
 select t.task_type, count(*) n, (array_agg(t.id))[1:5] sample
 from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
 where t.status='open' and t.due_at>now() and crm_security.next_window(l.followup_policy_id,t.due_at)<>t.due_at
@@ -369,7 +400,9 @@ select 'placement_test', count(*), (array_agg(p.id))[1:5]
 from public.placement_tests p join public.crm_leads l on l.id=p.crm_lead_id
 where p.status='Planifié' and p.heure ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
  and crm_security.next_window(l.followup_policy_id,(p.date_test+p.heure::time) at time zone public.centre_utc_offset())
-     <> (p.date_test+p.heure::time) at time zone public.centre_utc_offset();
+     <> (p.date_test+p.heure::time) at time zone public.centre_utc_offset()
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 This measures against **calling** windows, the only hours that exist today. Opening hours for visits and tests are a decision (OD-3).
@@ -378,6 +411,7 @@ This measures against **calling** windows, the only hours that exist today. Open
 
 ```sql
 set transaction read only;
+with q as (
 select 'test_result_future' k, count(*) n, (array_agg(id))[1:5] s from public.placement_tests
  where status in ('Passé','Résultat saisi','Affecté') and date_test>public.business_date()
 union all select 'task_done_before_due', count(*), (array_agg(id))[1:5] from public.crm_tasks
@@ -385,13 +419,16 @@ union all select 'task_done_before_due', count(*), (array_agg(id))[1:5] from pub
 union all select 'attendance_future', count(*), (array_agg(id))[1:5] from public.attendance
  where session_date>public.business_date()
 union all select 'test_planned_with_level', count(*), (array_agg(id))[1:5] from public.placement_tests
- where status='Planifié' and niveau_recommande is not null;
+ where status='Planifié' and niveau_recommande is not null
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q11 — phone quality (students, contacts)
 
 ```sql
 set transaction read only;
+with q as (
 select 'students' src,
  count(*) filter (where telephone is null or btrim(telephone)='') empty,
  count(*) filter (where telephone ~ '^\+212[5-7][0-9]{8}$') e164,
@@ -403,121 +440,155 @@ from public.students where deleted_at is null
 union all
 select 'crm_contacts', count(*) filter (where phone_raw is null), count(*) filter (where phone_e164 is not null),
  null, null, count(*) filter (where phone_e164 ~ '^\+212[5-7]0{8}$'), count(*) filter (where phone_raw is not null and phone_e164 is null)
-from public.crm_contacts where merged_into_contact_id is null;
+from public.crm_contacts where merged_into_contact_id is null
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q12 — invariant 7: shared normalised phone between active people
 
-The digits key is the last 9 digits.
+The key (last 9 digits) is computed and compared inside the database and never returned: the output is counts and lead or student ids.
 
 ```sql
 set transaction read only;
+with q as (
 with p as (
- select 'lead' k, l.id, l.contact_id, right(regexp_replace(c.phone_e164,'[^0-9]','','g'),9) key
+ select l.id, l.contact_id, right(regexp_replace(c.phone_e164,'[^0-9]','','g'),9) key
  from public.crm_leads l join public.crm_contacts c on c.id=l.contact_id
  where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null and c.phone_e164 is not null
  union all
- select 'student', s.id, null, right(regexp_replace(s.telephone,'[^0-9]','','g'),9)
- from public.students s where s.deleted_at is null and s.status in ('Enrolled','Prospect') and length(regexp_replace(coalesce(s.telephone,''),'[^0-9]','','g'))>=9)
-select count(*) keys_shared, sum(n) people, (array_agg(key))[1:5] sample_keys
-from (select key, count(*) n, count(distinct coalesce(contact_id::text, id::text)) d from p group by key having count(distinct coalesce(contact_id::text, id::text))>1) x;
+ select s.id, null, right(regexp_replace(s.telephone,'[^0-9]','','g'),9)
+ from public.students s where s.deleted_at is null and s.status in ('Enrolled','Prospect') and length(regexp_replace(coalesce(s.telephone,''),'[^0-9]','','g'))>=9),
+g as (select array_agg(distinct id order by id) ids from p group by key
+      having count(distinct coalesce(contact_id::text, id::text))>1)
+select count(*) keys_shared, sum(cardinality(ids)) people, (array_agg(ids[1] order by ids[1]))[1:5] sample_ids from g
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
-
-The sample keys are 9-digit fragments: treat them as personal data and keep them out of committed records.
 
 #### Q13 — invariant 8: the same note text twice within a minute
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) pairs, (array_agg(a.lead_id))[1:5] sample
 from public.crm_activities a join public.crm_activities b on a.lead_id=b.lead_id and a.id<b.id
- and a.body=b.body and length(btrim(a.body))>0 and abs(extract(epoch from b.occurred_at-a.occurred_at))<=60;
+ and a.body=b.body and length(btrim(a.body))>0 and abs(extract(epoch from b.occurred_at-a.occurred_at))<=60
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q14 — invariant 10: unowned work
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) filter (where t.assigned_to is null) unassigned_open_tasks,
        count(distinct l.id) filter (where l.owner_id is null) unowned_active_leads,
        count(*) open_tasks
 from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
-where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED');
+where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q15 — invariant 11: converted leads' programme vs enrollment
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) filter (where l.session_type is null) no_session_type,
        count(*) filter (where l.session_type is distinct from e.session_type) mismatch,
        (array_agg(l.id) filter (where l.session_type is distinct from e.session_type))[1:5] sample
-from public.crm_leads l join public.enrollments e on e.id=l.enrollment_id where l.status='CONVERTED';
+from public.crm_leads l join public.enrollments e on e.id=l.enrollment_id where l.status='CONVERTED'
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q16 — invariant 12: learners with an unlinked commitment and a linked charge for the same programme and year
 
 ```sql
 set transaction read only;
+with q as (
 select count(distinct a.student_id) learners, (array_agg(distinct a.student_id))[1:5] sample
 from public.charge_balances a join public.charge_balances b on a.student_id=b.student_id and a.id<>b.id
  and a.session_type=b.session_type and a.school_year is not distinct from b.school_year
-where a.voided_at is null and b.voided_at is null and a.enrollment_id is null and b.enrollment_id is not null and not a.legacy;
+where a.voided_at is null and b.voided_at is null and a.enrollment_id is null and b.enrollment_id is not null and not a.legacy
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q17 — invariant 13 and anomaly: same learner, same amount, same day
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) groups, sum(n) receipts, (array_agg(student_id))[1:5] sample from (
  select student_id, date, montant_paye, count(*) n from public.receipts
  where voided_at is null and deleted_at is null and student_id is not null
- group by 1,2,3 having count(*)>1) x;
+ group by 1,2,3 having count(*)>1) x
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q18 — prospects rescheduled or replaced 3+ times
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) leads, (array_agg(lead_id))[1:5] sample from (
  select lead_id from public.crm_activities where event_type in ('task_rescheduled','task_cancelled','task_created')
- group by lead_id having count(*) filter (where event_type='task_rescheduled')+count(*) filter (where event_type='task_cancelled')>=3) x;
+ group by lead_id having count(*) filter (where event_type='task_rescheduled')+count(*) filter (where event_type='task_cancelled')>=3) x
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q19 — actions done before their due time
 
 ```sql
 set transaction read only;
+with q as (
 select task_type, count(*) n, avg(due_at-completed_at) avg_early
-from public.crm_tasks where status='completed' and completed_at<due_at group by 1 order by n desc;
+from public.crm_tasks where status='completed' and completed_at<due_at group by 1 order by n desc
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q20 — prospects stuck in a stage over 14 days
 
 ```sql
 set transaction read only;
+with q as (
 select l.status, count(*) n, (array_agg(l.id))[1:5] sample from public.crm_leads l
 where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
  and coalesce((select max(a.occurred_at) from public.crm_activities a where a.lead_id=l.id and a.to_status is not null), l.created_at) < now()-interval '14 days'
-group by 1;
+group by 1
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q21 — students with no CRM prospect; tests linked to nobody
 
 ```sql
 set transaction read only;
+with q as (
 select 'enrolled_without_lead' k, count(*) n from public.students s
  where s.deleted_at is null and s.status='Enrolled' and not exists(select 1 from public.crm_leads l where l.student_id=s.id)
 union all select 'tests_without_lead_or_student', count(*) from public.placement_tests where crm_lead_id is null and student_id is null
-union all select 'tests_student_only', count(*) from public.placement_tests where crm_lead_id is null and student_id is not null;
+union all select 'tests_student_only', count(*) from public.placement_tests where crm_lead_id is null and student_id is not null
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q22 — groups without a teacher
 
 ```sql
 set transaction read only;
+with q as (
 select session_type, count(*) n, (array_agg(id))[1:5] sample from public.groups
-where teacher_id is null and closed_at is null group by 1;
+where teacher_id is null and closed_at is null group by 1
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q23 — replay one prospect's history
@@ -526,11 +597,14 @@ Takes one lead id as a parameter. Replace `:'lead_id'` with the quoted id (the M
 
 ```sql
 set transaction read only;
+with q as (
 select a.occurred_at, a.event_type, a.channel, a.outcome, a.from_status, a.to_status, a.task_id,
        split_part(a.source_key,':',3) command, left(md5(coalesce(a.body,'')),8) body_hash,
        t.task_type, t.due_at, t.status task_status, t.schedule_kind
 from public.crm_activities a left join public.crm_tasks t on t.id=a.task_id
-where a.lead_id = :'lead_id' order by a.occurred_at, a.id;
+where a.lead_id = :'lead_id' order by a.occurred_at, a.id
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q24 — test data inventory
@@ -539,49 +613,163 @@ The patterns come from the owner's list; ids only.
 
 ```sql
 set transaction read only;
+with q as (
 select 'student' k, id::text from public.students where full_name ilike 'TEST Claude%'
 union all select 'contact', id::text from public.crm_contacts where display_name ilike 'TEST Claude%'
 union all select 'lead', id::text from public.crm_leads where learner_name ilike 'TEST Claude%'
 union all select 'group', id::text from public.groups where name ilike 'TEST R4%'
 union all select 'receipt', receipt_number||' voided='||(voided_at is not null) from public.receipts
- where receipt_number in ('EH-2026-00459','EH-2026-00460','EH-2026-00461');
+ where receipt_number in ('EH-2026-00459','EH-2026-00460','EH-2026-00461')
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 The test student whose name ends in « test » is added by id, which the owner supplies, because a name pattern could match a real learner.
 
 #### Q25 — free-text programmes and sources
 
+Codes and counts only. Each free-text answer is returned as an 8-character hash of its trimmed lower-case text, never as text. For the D4 mapping, the operator runs the same query with the text column added as a **private export** under the same R0 approval; that output stays outside the repository (plan §10, D4).
+
 ```sql
 set transaction read only;
-select 'program' k, coalesce(session_type,'∅')||' | '||coalesce(program_interest_text,'∅') v, count(*) n from public.crm_leads group by 2
-union all select 'source', s.channel||' | '||s.source_label, count(*) from public.crm_leads l join public.crm_submissions s on s.id=l.first_submission_id group by 2
-order by k, n desc;
+with q as (
+select 'program' k, coalesce(session_type,'∅') code, left(md5(lower(btrim(coalesce(program_interest_text,'')))),8) text_hash, count(*) n
+ from public.crm_leads group by 1,2,3
+union all
+select 'source', s.channel, left(md5(lower(btrim(coalesce(s.source_label,'')))),8), count(*)
+ from public.crm_leads l join public.crm_submissions s on s.id=l.first_submission_id group by 1,2,3
+union all
+select 'student_referral', coalesce(referral_source,'∅'), null, count(*)
+ from public.students where deleted_at is null group by 1,2,3
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q26 — appointments and visits per prospect (calendar duplicates)
 
 ```sql
 set transaction read only;
+with q as (
 select count(*) leads, (array_agg(lead_id))[1:5] sample from (
- select lead_id from public.crm_tasks where status='open' and task_type='center_visit' group by 1 having count(*)>1) x;
+ select lead_id from public.crm_tasks where status='open' and task_type='center_visit' group by 1 having count(*)>1) x
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q27 — staff accounts without a name
 
 ```sql
 set transaction read only;
+with q as (
 select role, count(*) filter (where coalesce(btrim(full_name),'')='') unnamed, count(*) total
-from public.profiles where role in ('director','admin','receptionist') group by role;
+from public.profiles where role in ('director','admin','receptionist') group by role
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 #### Q28 — student duplicates
 
 ```sql
 set transaction read only;
+with q as (
 with k as (select id, array_to_string(array(select w from unnest(regexp_split_to_array(lower(btrim(full_name)),'\s+')) w order by w),' ') nm,
  right(regexp_replace(coalesce(telephone,''),'[^0-9]','','g'),9) ph from public.students where deleted_at is null)
 select count(*) groups, (array_agg(ids[1]))[1:5] sample from (
- select nm, array_agg(id) ids from k group by nm having count(*)>1) x;
+ select nm, array_agg(id) ids from k group by nm having count(*)>1) x
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
 ```
 
 This matches names regardless of word order, which catches pairs like « Prénom Nom » / « nom prénom ». A second pass on `ph` with the same name tokens raises confidence.
+
+#### Q29 — planned tests of active prospects without their appointment (D1 rule b, M-A2 precondition)
+
+Before A1 every planned CRM test of an active prospect counts here (none has an appointment yet); after D1 the count must be 0.
+
+```sql
+set transaction read only;
+with q as (
+select count(*) tests, (array_agg(p.crm_lead_id order by p.crm_lead_id))[1:5] sample
+from public.placement_tests p join public.crm_leads l on l.id=p.crm_lead_id
+where p.status='Planifié' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
+ and not exists (select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open'
+                 and t.task_type='center_visit' and t.placement_test_id=p.id)
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
+```
+
+#### Q30 — active prospects with no open action, by D1 rule (D1 rule c, M-A2 precondition)
+
+```sql
+set transaction read only;
+with q as (
+select case
+         when exists (select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié') then 'planned_test'
+         when (select count(*) from public.crm_activities a where a.lead_id=l.id and a.event_type='contact_attempted'
+               and a.outcome in ('no_answer','busy','declined','unreachable') and a.outreach_cycle=l.outreach_cycle) >= 5 then 'five_failures'
+         else 'other' end d1_rule,
+       count(*) leads, (array_agg(l.id order by l.id))[1:5] sample
+from public.crm_leads l
+where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
+  and not exists (select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')
+group by 1
+)
+select current_setting('transaction_read_only') as read_only, q.* from q;
+```
+
+## 8. Brief coverage index
+
+Added in RWR-r2 so a reviewer can check coverage without the owner's brief, which isn't in the repository. It lists the brief's items by number only, with no personal data. Statuses are those of [section 2](#2-findings-p0p2-verified); « Plan » refers to sections of the [plan](../plans/receptionist-workflow.md).
+
+**P0 and P1 findings (71 sub-items: 58 C, 10 P, 3 N):**
+
+| Brief item | Status per sub-item | Root cause | Plan |
+| --- | --- | --- | --- |
+| P0 · 1 | 1a C, 1b C, 1c C | RC-4 | §4.6 |
+| P0 · 2 | 2 C | RC-1, RC-2 | §4 |
+| P0 · 3 | 3 C | RC-5 | §5.1–5.3 |
+| P0 · 4 | 4a C, 4b C, 4c P | RC-5 | §5.1–5.3 |
+| P0 · 5 | 5a C, 5b C, 5c P, 5d C | RC-5 | §5.1–5.3 |
+| P0 · 6 | 6 C | RC-3, RC-5 | §4.9; §5.1–5.3 |
+| P0 · 7 | 7a C, 7b P, 7c P | RC-7 | §6.1 |
+| P0 · 8 | 8 C | RC-7 | §6.1 |
+| P0 · 9 | 9 C | RC-7 | §6.1 |
+| P1 · 10 | 10 C | RC-3 | §4.9 |
+| P1 · 11 | 11 C | RC-3 | §4.9 |
+| P1 · 12 | 12a C, 12b C, 12c C | RC-5, RC-1, RC-3 | §5.1–5.3; §4; §4.9 |
+| P1 · 13 | 13 C | RC-6 | §5.4 |
+| P1 · 14 | 14 C | RC-6 | §5.4 |
+| P1 · 15 | 15a C, 15b C, 15c P | RC-8 | §4.7 |
+| P1 · 16 | 16a C, 16b C, 16c C, 16d C, 16e C, 16f P | RC-2, RC-6 | §4; §5.4 |
+| P1 · 17 | 17a C, 17b C, 17c P | RC-9 | §4.5 |
+| P1 · 18 | 18a C, 18b C, 18c C | RC-10 | §4.9; §9 |
+| P1 · 19 | 19a C, 19b C | RC-6 | §5.4 |
+| P1 · 20 | 20a C, 20b C, 20c C, 20d P | RC-7, RC-6 | §6.1; §5.4 |
+| P1 · 21 | 21a C, 21b C, 21c C, 21d C, 21e C, 21f C, 21g N, 21h C | RC-11 | §6.2–6.4; 21g: data: groups to complete (Q22, owner action) |
+| P1 · 22 | 22a C, 22b C, 22c C | RC-11 | §6.2–6.4 |
+| P1 · 23 | 23a N, 23b C, 23c C, 23d C | RC-11, RC-6 | 23a: void flow exists, director only (OD-7); §6.2–6.4; §5.4 |
+| P1 · 24 | 24a C, 24b C, 24c C | RC-12 | §6.5 |
+| P1 · 25 | 25a C, 25b P, 25c C, 25d C, 25e P, 25f C, 25g N | RC-10, RC-6 | §4.9; §9; §5.4; 25g: mobile acceptance in PR C2 (`test-mobile-reception-browser.mjs`) |
+
+**P2 clean-up (5 items):** duplicate actions → D1; phones → D3; programmes → D4; duplicate students → D5; test data → D6 (plan §10, OD-13).
+
+**Other parts of the brief:**
+
+| Brief part | Where it is answered |
+| --- | --- |
+| Section 0 constraints (read-only queries, dry run then approval, French UI and « prospect », no receipt renumbering or financial deletion, tests for every change) | audit §7; plan §10, §2a, §4.9 (wording), Owner summary « What remains restricted », §7 |
+| Owner requirements for the root cause (one action in the DB and one service; « Remplace : … »; « Changer la prochaine action »; « Rendez-vous au centre » with optional test; booking closes the reminder; qualifying reuses the appointment; « En attente » never overdue; date only when agreed or ours; a note never needs a date; four outcome buttons, none before the time; closing cancels everything; « Ce prospect a été modifié, rechargez ») | plan §4.1–4.4, §4.8, §4.9; ADR-019 |
+| Section 3, invariants 1–15 | plan §7 (test, SQL check, enforcement for each) |
+| 4.1 verify each finding | audit §2 |
+| 4.2 root causes | plan §2 |
+| 4.3 design the fix | plan §4–6 |
+| 4.4 entry-point matrix | audit §4 |
+| 4.4 production anomaly queries | audit §7 (Q01–Q30) |
+| 4.4 replay real histories (the named prospect and the 20 multi-action prospects) | audit §6; Q23 per id; plan §9 « Replays » |
+| 4.4 state machine and property-based tests (2–6 random actions, all invariants) | audit §5 (current); plan §4.8 (target), §9 |
+| 4.4 time travel | plan §9 |
+| 4.4 concurrency, locking, idempotency | plan §9, invariant 13, ADR-019 decision 7 |
+| 4.4 cross-view consistency | plan §7 invariant 9 |
+| 4.4 Playwright receptionist days with click counts | plan §8 « Day scripts » |
+| 4.5 implementation plan | plan §8, §10, IMPLEMENTATION CONTRACT |
+| Section 5 owner decisions | plan « Owner decisions required » (OD-1–OD-19) |

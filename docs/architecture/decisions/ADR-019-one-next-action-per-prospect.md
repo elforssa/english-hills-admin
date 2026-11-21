@@ -2,7 +2,9 @@
 
 ## Status
 
-**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r1. Not approved, not implemented.
+**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r2 (r1 was reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
+
+**Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, depending on the owner's answers, two product rules: operational tasks kept beside a new follow-up (OD-18) and the five-failure stop (OD-17). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
 
 The number is provisional: ADR-018 belongs to the receptionist permissions plan (RPW-r2, PR #203). If that ADR lands under another number, this one keeps 019 unless the owner asks otherwise.
 
@@ -12,7 +14,7 @@ The number is provisional: ADR-018 belongs to the receptionist permissions plan 
 
 ## Context
 
-[ADR-001](ADR-001-crm-lifecycle.md) separated status, tasks and activity. It required at least one open task for an active prospect but never limited them to one. Since then, fourteen code paths have opened `crm_tasks` rows, each with its own closing rule:
+[ADR-001](ADR-001-crm-lifecycle.md) separated status, tasks and activity. It required at least one open task for an active prospect but never limited them to one. Since then, sixteen code paths have opened `crm_tasks` rows, each with its own closing rule:
 
 - call results;
 - conversations and decisions;
@@ -20,6 +22,8 @@ The number is provisional: ADR-018 belongs to the receptionist permissions plan 
 - manual scheduling;
 - completion, cancellation and reopening;
 - test booking;
+- CRM enrolment start (« Finaliser l'inscription »);
+- the test-result trigger (« Rappeler au sujet du résultat »);
 - intake;
 - conversion.
 
@@ -33,7 +37,7 @@ The owner's three test rounds (November 2026) found prospects with up to four op
    - A unique partial index on `crm_tasks(lead_id) where status = 'open'` enforces the first part.
    - Deferred constraint triggers enforce presence and absence at commit.
    - A closed prospect may keep no planned level test.
-2. **One server function writes next actions.** `crm_security.set_next_action` is the only code that opens or closes an open task: it replaces any current action, links it with `supersedes_task_id` and derives the assignee from the prospect's owner. Every public command, the intake and the conversion call it. The browser never writes the table.
+2. **One server function writes next actions.** `crm_security.set_next_action` is the only code that opens or closes an open task: it closes the current action before inserting the new one, links them with `supersedes_task_id` and derives the assignee from the prospect's owner. Every public command, the intake, CRM enrolment, the test-result trigger and the conversion call it. The browser never writes the table. A test scans every function's latest definition and fails if any other function writes `crm_tasks`.
 3. **One read defines the next action.** Every view reads it from `crm_security.next_action(lead)`.
 4. **« En attente du prospect » is a next action, not a status.** It has an optional « relancer le » date, and it is never overdue.
 5. **An appointment at the centre is one next action.** The level test is an option of that appointment, not a parallel task. Outcomes are four fixed codes, recorded only after the appointment's start.
@@ -43,7 +47,7 @@ The owner's three test rounds (November 2026) found prospects with up to four op
 
 ## Consequences
 
-- **Data step D1** (dry run, then owner approval) must reduce existing duplicates to one action per prospect before the index can be created; the migration is split into M-A1 (services) and M-A2 (enforcement).
+- **Data step D1** (dry run, then owner approval) must bring every existing prospect into the model before enforcement: duplicates reduced to one, an action created for active prospects with none, an appointment created for each planned test, nothing left on closed, converted or merged prospects. The migration is split into M-A1 (services) and M-A2 (enforcement), and M-A2 aborts unless all of D1's checks are 0.
 - **The old command wrappers** route through the new core until M-A2 revokes them.
 - **Meta lifecycle event types and first-touch immutability are unchanged.** If OD-11 = A, qualification becomes implied by booking an appointment or choosing « Inscrire maintenant », which changes the « Qualifié » counts.
 - **The help guide, PRODUCT_RULES and WORKFLOWS** change with each release.

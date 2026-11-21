@@ -1,15 +1,16 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: PROPOSED (architecture only), revision RWR-r1, 2026-11-21.** Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Nothing is implemented, applied, merged or released. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: PROPOSED (architecture only), revision RWR-r2, 2026-11-21.** Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Nothing is implemented, applied, merged or released. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
-- **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q28.
+- **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (proposed)](../decisions/ADR-019-one-next-action-per-prospect.md).
 - **Baseline:** `origin/main` `53c486b`, migration ceiling 130.
 - **Overlapping open work:** plan RPW-r2 (PR #203, approved 2026-11-21) and its implementation PR #204 (migrations 131–135, not merged).
 
 | Revision | Date | Change |
 | --- | --- | --- |
-| RWR-r1 | 2026-11-21 | First architecture from the owner's three test rounds (P0–P2, sections 1–5 of the brief). |
+| RWR-r1 | 2026-11-21 | First architecture from the owner's three test rounds (P0–P2, sections 1–5 of the brief). Independent review at `6a43e75`: CHANGES REQUIRED (B1, B2, I1–I7, test gaps). |
+| RWR-r2 | 2026-11-21 | Review fixes, all in this PR. **B1:** the two missing next-action writers (`crm_start_enrollment`, `crm_security.placement_milestones`) join the single-writer rewrite, and a writer inventory becomes an acceptance test (§4.2). **B2:** D1 now brings every existing prospect into the model (one action each; appointments for planned tests) and M-A2 checks it (§10). **I1** phone check only on insert or change (§5.1). **I2** student merge never moves enrollments (§5.3, OD-8). **I3** approved rules this plan amends are listed (§2a) with OD-17 and OD-18. **I4** R0 queries return no personal data and prove read-only in their last row. **I5** hours always come from the current published version (§4.5). **I6** merge order with #204 (OD-19, contract). **I7** the call-result undo is specified (§4.9). Test gaps closed (§7–§10). NF-2 corrected in the audit: test booking already bumps the prospect's version. |
 
 # Owner summary
 
@@ -25,6 +26,7 @@
 - **A date is asked only when something was agreed** (a callback time, an appointment) **or when the next step is ours** (send the price, confirm a group).
 - **Closing a prospect** cancels its next action and its planned test or appointment.
 - **A screen with stale data is refused** (« Ce prospect a été modifié, rechargez ») and never overwrites silently.
+- **Every existing prospect gets exactly one next action** before the rule is switched on (data step D1, with your approval): duplicates are merged, prospects with none get « En attente » or the appointment of their planned test.
 - **Every new prospect and task has an owner.** « Tâches » opens on « Moi + non attribué ».
 - **One phone format (+212…) on every write.** Any format of a stored number finds it in every search box.
 - **One search covers prospects and students.** Duplicates are flagged **before** creating, there are merge tools for the direction, and contacts and learners can be edited. « C'est la même personne » and « Ajouter un enfant » are added.
@@ -84,7 +86,7 @@ Data steps D1 and D3–D7 each have a dry run (counts and sample ids) followed b
 ## Important security decisions
 
 - **One server writer for next actions.** `crm_security.set_next_action` is the only code that opens or closes a next action; every public command, the intake and conversion go through it. The browser never writes CRM tables, and the existing RPC-only grants stay.
-- **The prospect's version is the concurrency token** for every next-action, appointment and test change. Test booking now bumps it (NF-2).
+- **The prospect's version is the concurrency token** for every next-action, appointment and test change. Booking already checks and bumps it; test edits will check it too (NF-2, corrected in r2).
 - **Merges and phone corrections are journalled.** Merges are direction-only.
 - **No test clock in Production code.** Time-travel tests age fixture data on the local stack instead (section 9).
 
@@ -96,7 +98,8 @@ Data steps D1 and D3–D7 each have a dry run (counts and sample ids) followed b
    - item 24 vs RPW-r2 (OD-9).
 3. **Qualification becomes implied** by booking an appointment or choosing « Inscrire maintenant » (OD-11). This changes how many prospects reach « Qualifié », and with it the dormant Meta « Qualified » event.
 4. **D1 picks which duplicate action survives** (an agreed future appointment first, otherwise the most recent intent). You approve the counts and samples before it runs.
-5. **Release B starts after PR #204** is merged, because both change the student write paths.
+5. **Release B starts after PR #204** is merged, because both change the student write paths. **Release A also merges after #204** unless you choose otherwise (OD-19), so migration numbers stay in order.
+6. **Approved rules this plan changes** are listed in §2a: ADR-001's « at least one open task » becomes « exactly one », the rule that a callback never replaces a visit, test or enrolment action (OD-18), and what happens after five failed calls (OD-17). Conversion itself is unchanged (ADR-015 decision 4).
 
 ---
 
@@ -117,26 +120,42 @@ Data steps D1 and D3–D7 each have a dry run (counts and sample ids) followed b
   - NF-4: a commitment made on « Encaisser » plus a wizard enrolment creates two charges.
   - NF-5: the pop-up shows the wrong action, so a reschedule looks ignored.
   - NF-11: an appointment can be marked done before it happens.
-- **Not verified:** no Production read was made. Your counts of 21/11 are quoted as owner-supplied, and R0 re-counts them with Q01–Q28.
+- **Corrected in r2:** NF-2 said test booking doesn't bump the prospect's version. It does: trigger `crm_security.placement_milestones` (`083:101`) bumps it after every CRM test change, and booking checks `expected_version` (`119:729`). The remaining gap is that test **edits** check only the test's `updated_at`.
+- **Not verified:** no Production read was made. Your counts of 21/11 are quoted as owner-supplied, and R0 re-counts them with Q01–Q30.
 
 ## 2. Root-cause map
 
 | # | Design flaw | Symptoms (brief item · audit) |
 | --- | --- | --- |
-| **RC-1** | **No single-next-action rule.** 14 code paths open tasks with 4 different closing rules. « At least one open task » is the only server rule; D6 (consolidation) was deferred in October. | 2, 12b, the « Toutes les prochaines actions (2) » count, duplicate visits, the growing overdue list, NF-3 |
+| **RC-1** | **No single-next-action rule.** 16 code paths open tasks with 4 different closing rules (r2: CRM enrolment start and the test-result trigger were missing from r1's count). « At least one open task » is the only server rule; D6 (consolidation) was deferred in October. | 2, 12b, the « Toutes les prochaines actions (2) » count, duplicate visits, the growing overdue list, NF-3 |
 | **RC-2** | **« Next action » and « schedule » are computed in five places,** and tests live apart from appointments. Card and drawer take the earliest task; Tâches, Today and the calendar list every task; the pop-up re-reads the earliest. There are no time rules on outcomes. | 2, 16a–d, « rescheduling ignored », NF-5, NF-6, NF-11, NF-12, NF-14 |
 | **RC-3** | **The UI is organised around commands, not around what happened.** Four dialogs log the same exchange, a date is forced after almost every action, there are success pop-ups, and the walk-in path is hidden. | 6, 10, 11, 12b, « will come later » prospects going overdue |
 | **RC-4** | **Ownership is optional and copied, not derived.** New prospects have no owner, a task copies the owner once when created, and « Tâches » filters on the task assignee. | 1a–c, invariant 10 |
 | **RC-5** | **No shared identity layer.** Phone normalisation exists only in the CRM and returns NULL instead of refusing. Students, receipts and adults store free text. Every search box has its own rule, duplicate checks come after creation (or never), and there is no edit, no merge, no sibling link and no CRM ↔ student lookup. | 3, 4, 5, 6, 12a, 12c, NF-8, NF-9, NF-10 |
-| **RC-6** | **No shared vocabularies.** Programme (3 vocabularies + free text), origin (free text vs 5 values), close reasons (two lists), levels (36 options), English codes shown raw. | 13, 14, 16e, 19, 20b, 23c, 23d, 25e, 25f, NF-15 |
+| **RC-6** | **No shared vocabularies.** Programme (3 vocabularies + free text), origin (free text vs 5 values), close reasons (two lists), levels (36 options), English codes shown raw. | 13, 14, 16e, 16f, 19, 20b, 23c, 23d, 25e, 25f, NF-15 |
 | **RC-7** | **Two payment paths with different rules and different balance reads.** | 7, 8, 9, 20a, 20c, 20d, NF-4 |
 | **RC-8** | **History records system events, not user actions.** One action writes up to seven rows, the note is copied onto several of them, and the actor fallback hides missing names. | 15a–c, invariant 8 |
 | **RC-9** | **No single source of hours.** Only calling windows exist; visits and tests are unchecked; presets land on window openings while agreed times are refused. | 17a–c, invariant 4 |
-| **RC-10** | **The client defeats or hides server guards.** It adopts the new version after a conflict, does no pre-check, leaves stale errors, has no dirty-form guard, uses native validation, and creates a fresh key per click in two places. | 18, 25a–d, NF-1, NF-7, NF-13, invariant 15 |
+| **RC-10** | **The client defeats or hides server guards.** It adopts the new version after a conflict, does no pre-check, leaves stale errors, has no dirty-form guard, uses native validation, and creates a fresh key per click in two places. | 18, 25a–d, NF-1, NF-2 (test edits only), NF-7, NF-13, invariant 15 |
 | **RC-11** | **Students, groups and attendance are written by table writes or thin commands without business rules.** | 21, 22, 23b, NF-17 |
 | **RC-12** | **Role surface doesn't match the command surface.** The receptionist group command accepts « Online ». | 24a, NF-16 |
 
 The design below fixes each root cause once. Patching symptoms one at a time is a non-goal.
+
+## 2a. Approved rules this plan amends or must keep
+
+Approving this plan approves the amendments marked « amended »; the ones marked « OD » wait for your answer.
+
+| Approved rule | Where | What this plan does |
+| --- | --- | --- |
+| « At least one open task » for an active prospect; several allowed | [ADR-001](../decisions/ADR-001-crm-lifecycle.md), §1 of the audit | **Amended** by ADR-019: exactly one (OD-1 = A) or at most one (OD-1 = B). |
+| An explicit conversation decision replaces only callback and WhatsApp follow-ups; visits, tests, enrolment and other operational tasks are **kept** (RCC-A1) | [PRODUCT_RULES](../../ai/PRODUCT_RULES.md#commercial-lifecycle-and-follow-up), « explicit conversation decision » | **OD-18.** With one action, keeping both is impossible: either a new action may replace an appointment after the form shows « Remplace : Rendez-vous … » (A), or an appointment and an enrolment action can only be rescheduled, cancelled or given an outcome, never replaced by a call or message (B). |
+| D6, the deferred consolidation, covered ordinary communication follow-ups only | [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md) D6 | **Amended:** this plan consolidates every next action, operational ones included. |
+| « Five failures stop automatic sequence scheduling; never automatically Lost » | [PRODUCT_RULES](../../ai/PRODUCT_RULES.md#commercial-lifecycle-and-follow-up) | **OD-17.** Kept as is under A: after five failures the next action is « En attente » with **no** relance date, so nothing is scheduled automatically. B adds a relance date. |
+| Conversion comes only from `evaluate_conversion` on a linked Confirmed or Validated enrollment (EAP decision 4, ADR-015) | [enrollment-at-payment plan](enrollment-at-payment.md), [ADR-015](../decisions/ADR-015-enrollment-at-payment.md) | **Kept.** Only its task-closing statement changes, from a direct update to `set_next_action(null)`, with the same effect (every open action cancelled, « Inscription confirmée »). It gains no other step. A test compares conversion results before and after. |
+| Meta lifecycle event types; first-touch immutability; the lifecycle barrier | [ADR-004](../decisions/ADR-004-meta-lifecycle-feedback.md), [PRODUCT_RULES](../../ai/PRODUCT_RULES.md) | **Kept**, copied verbatim (§4.2); a stop condition if any lifecycle test needs a new expectation. |
+| An enrollment's student never changes (`check_enrollment_student_sync`, `120:308`); financial rows are append-only | [ADR-010](../decisions/ADR-010-group-membership-from-enrollments.md), [ADR-012](../decisions/ADR-012-gap-free-receipt-numbering.md) | **Kept.** Student merge moves no enrollment, charge or receipt (§5.3). |
+| Receptionist permissions as approved in RPW-r2 | [receptionist permissions plan, PR #203](https://github.com/elforssa/english-hills-admin/pull/203) (not merged yet) | **Kept** unless OD-9 = B. |
 
 ## 3. Scope and non-goals
 
@@ -169,13 +188,19 @@ The design below fixes each root cause once. Patching symptoms one at a time is 
 | `crm_leads.owner_id` gets defaults through the service (no column change); new setting row `crm_reception_default_owner` in an existing settings table or a new `crm_settings` row (implementer chooses the existing table if one fits) | ownership (§4.6) |
 | `crm_data_step_journal(step text, entity text, entity_id uuid, before jsonb, after jsonb, run_at timestamptz, run_by uuid)` | journal of D1 and later steps, readable by the director |
 
-M-A2, after data step D1 reaches 0:
+M-A2, only after data step D1's post-checks are all 0 (§10: Q04, Q05 zero-action count, Q07, Q29):
 
-- `create unique index crm_tasks_one_open_per_lead on crm_tasks(lead_id) where status='open'`
-- deferred constraint triggers `crm_next_action_presence` on `crm_leads` and `crm_tasks`:
-  - an active lead (NEW…QUALIFIED, not merged) has **exactly one** open action at commit (OD-1);
-  - LOST or NOT_QUALIFIED has none;
-- a deferred trigger on `placement_tests`: a `Planifié` test of a LOST or NOT_QUALIFIED lead is refused at commit.
+- `create unique index crm_tasks_one_open_per_lead on crm_tasks(lead_id) where status='open'`. A unique index can't be deferred, so `set_next_action` always closes the current action **before** inserting the new one, in the same transaction.
+- Deferred constraint triggers `crm_next_action_presence` (`after insert or update on crm_leads`, `after insert or update or delete on crm_tasks`, `initially deferred`), checking the touched lead at commit:
+
+  | Lead state | Open actions allowed at commit |
+  | --- | --- |
+  | NEW, CONTACTING, ENGAGED, QUALIFIED, not merged | exactly 1 (OD-1 = A) or at most 1 (OD-1 = B) |
+  | LOST, NOT_QUALIFIED | 0 |
+  | CONVERTED | 0 (conversion closes them, as today) |
+  | merged (`merged_into_lead_id` set), any status | 0 (the merge closes them) |
+
+- A deferred trigger on `placement_tests`: at commit, a `Planifié` test of a LOST, NOT_QUALIFIED or merged lead is refused, and a `Planifié` CRM test of an active lead must be the `placement_test_id` of that lead's open appointment.
 
 ### 4.2 The single writer
 
@@ -197,19 +222,33 @@ Every path uses it:
 | Path | Before | After |
 | --- | --- | --- |
 | manual create, intake (`create_manual_lead`, `accept_external_submission`) | insert `first_contact` | `set_next_action(first_contact)`; for walk-in and inbound call, the exchange's own next action (§4.8) |
-| call results (`record_call_outcome`) | finish + cancel slots + insert next slot | `set_next_action(next slot)` or, after 5, `awaiting_prospect` (OD-5) |
+| call results (`record_call_outcome`) | finish + cancel slots + insert next slot | `set_next_action(next slot)`; after 5 failures, « En attente » without relance date (OD-17) |
 | conversation, decision, qualify, schedule, reschedule, complete, cancel, reopen | §1 of the audit | `set_next_action(spec)` |
 | test booking and edits | insert test, close confirm tasks | through the appointment (§4.3) |
 | close | `cancel_tasks` | `set_next_action(null)` + cancel planned tests |
-| conversion (`evaluate_conversion`) | cancels all | `set_next_action(null)`; completes the appointment as `came_enrolled` when it was today |
+| CRM enrolment start (`public.crm_start_enrollment`, `127:403`; also called by `crm_enroll_and_collect`, `127:641`, before the payment) | inserts « Finaliser l'inscription » next to the current action; keeps an existing one | `set_next_action(enrollment_followup)` replaces the current action; an open enrolment follow-up is kept, as today. When `crm_enroll_and_collect` takes a payment, conversion in the same transaction then leaves no action. |
+| test result entered (trigger `crm_security.placement_milestones`, `083:74`; fires on **every** insert or update of a CRM test, whether from the CRM, Admissions or a teacher) | inserts `post_test_followup` next to the current action | If the current action is the appointment linked to this test, or a system reminder: `set_next_action(« Proposer l'inscription », our step, post-test SLA)`; the appointment is finished as completed with no outcome code. If it is « En attente », an agreed callback or appointment still to come, or an enrolment action: unchanged. The trigger keeps its lead lock, its milestone events and its version bump. |
+| conversion (`crm_security.evaluate_conversion`, `120:1319`) | cancels all | `set_next_action(null)` in place of the direct update, with the same effect (§2a); nothing else changes |
 
-The cumulative bodies are rewritten from their **latest** definitions:
-- `crm_security.command` (125)
-- `crm_record_conversation_decision` (119)
-- `crm_book_placement_test` and `crm_update_placement_test` (119)
-- `crm_security.accept_external_submission` (125)
-- `crm_security.evaluate_conversion` (120)
-- `crm_security.new_task` (111): kept only as the insert primitive inside `set_next_action`.
+**Writer inventory (complete at the baseline).** Every function whose latest definition opens or closes a `crm_tasks` row, found by scanning the latest definition of every function in `supabase/migrations` for `insert into public.crm_tasks`, a status update of `crm_tasks`, and calls to `new_task`, `finish_task` and `cancel_tasks`. No browser code writes the table.
+
+| Function (latest definition) | Today | After A1 |
+| --- | --- | --- |
+| `crm_security.command` (`125:694`) | `new_task`, `finish_task`, `cancel_tasks` | calls `set_next_action` |
+| `crm_security.accept_external_submission` (`125:1217`) | direct insert | calls `set_next_action` |
+| `public.crm_record_conversation_decision` (`119:1203`) | `finish_task` | calls `set_next_action` |
+| `public.crm_book_placement_test` (`119:708`) | `finish_task` | routed through the appointment |
+| `public.crm_start_enrollment` (`127:403`) | `new_task`, `finish_task` | calls `set_next_action` |
+| `crm_security.placement_milestones` (`083:74`, trigger) | `new_task` | calls `set_next_action` |
+| `crm_security.evaluate_conversion` (`120:1319`) | status update | calls `set_next_action(null)` |
+| `crm_security.new_task` (`111:39`) | insert primitive | called only by `set_next_action` |
+| `crm_security.finish_task` (`119:372`), `crm_security.cancel_tasks` (`080:135`) | close primitives | called only by `set_next_action` |
+
+`public.crm_update_placement_test` (`119:1626`) writes no task itself; its updates reach the trigger above, and it gains the prospect `expected_version` check (NF-2).
+
+**Acceptance test of the inventory:** `scripts/test-crm-task-writers.sql` re-runs the same scan against `pg_proc` on the local stack after A1 and fails if any function other than `set_next_action` (and the three primitives it calls) inserts, closes or reopens a `crm_tasks` row, or if a primitive has another caller. A function added later that writes tasks fails CI until it goes through the single writer.
+
+Each body is rebuilt from the latest definition named in the table, never from an earlier migration.
 
 The lifecycle barrier, pre-identity keys and pending-stop handoff are copied verbatim (as migration 103 re-created them; build on that live body, not on 094). Event types read by the Meta lifecycle (`lead_created`, `lead_engaged`, `lead_qualified`, `lead_lost`, `lead_not_qualified`, `lead_reopened`, conversion) are unchanged.
 
@@ -250,7 +289,15 @@ One versioned source in `crm_followup_policies`:
 - `opening_hours` = desk hours for appointments and tests (OD-3)
 - `date_exceptions` = closed dates.
 
-`crm_security.assert_in_hours(policy, kind, ts)` is used by every writer, including test booking, attendance (class days) and the Admissions form. The director publishes a new version from a new « Horaires du centre » card on `/settings`, through the existing `create_followup_policy` command extended with `opening_hours` and `date_exceptions`. Forms show the hours next to the picker, and the picker offers only valid slots. No hour value is invented by this plan: the owner supplies them (OD-3) and R0 reads the live policy (Q01).
+**Which version applies.** Today every prospect stays tied to the version it was created with (`crm_leads.followup_policy_id`, set once and never updated), and versions are immutable, so a newly published version would never reach existing prospects. The plan splits the two uses:
+
+- **Hours** (`weekly_hours`, `opening_hours`, `date_exceptions`) always come from the **current published version**: `crm_security.current_policy_id()`, the version with the latest `effective_from` not after now and not retired. Forms, the time picker, `crm_get_centre_hours`, `crm_check_action` and every server check read this same version, so they can't disagree.
+- **Cadence** (attempt offsets, SLAs, minimum gap) stays with the prospect's pinned version, as today, so a running call sequence keeps its rhythm.
+- `crm_security.next_window`, `attempt_due` and `placement_followup_due` take the hours version as an explicit argument. Every rewritten caller passes `current_policy_id()` for hours and the pinned version for cadence.
+
+`crm_security.assert_in_hours(kind, ts)` checks against the current version and is used by every writer, including test booking, attendance (class days) and the Admissions form. The director publishes a new version from a new « Horaires du centre » card on `/settings`, through the existing `public.crm_create_followup_policy` command (`080:442`) extended with `opening_hours` and `date_exceptions`. Forms show the hours next to the picker, and the picker offers only valid slots. Agreed times booked before a change of hours are kept and listed for the receptionist (« Hors des nouveaux horaires »), never moved. No hour value is invented by this plan: the owner supplies them (OD-3) and R0 reads the live versions (Q01).
+
+**Tests:** `test-crm-next-action.sql` T4b publishes a new version and asserts that an existing prospect's next system time, its validation and `crm_get_centre_hours` all use the new hours while its cadence offsets don't change; the time-travel suite repeats it across a closed date.
 
 ### 4.6 Ownership
 
@@ -278,12 +325,13 @@ Statuses are unchanged. Every transition sets **exactly one** next action for an
 | --- | --- | --- | --- | --- |
 | — | create, origin phone or web (`crm_create_prospect`, intake) | NEW | « Premier contact » (cadence 1) | — |
 | — | create, origin walk-in or inbound call, with exchange | ENGAGED, or QUALIFIED if an appointment or « Inscrire » | the exchange's next action | if test option ticked |
-| NEW, CONTACTING | `no_answer`, `busy`, `declined`, `unreachable` | CONTACTING | next cadence slot; after 5: « En attente » (OD-5) | — |
+| NEW, CONTACTING | `no_answer`, `busy`, `declined`, `unreachable` | CONTACTING | next cadence slot; after 5: « En attente », no relance date (OD-17) | — |
+| active, not converted | « Inscrire maintenant » / enrolment start | QUALIFIED (step `enrollment`) | « Finaliser l'inscription » (an open one is kept); none once the payment converts | kept |
 | active | `wrong_number` + corrected phone | same | cadence restarts (slot 1 of a new cycle) | — |
 | active | `wrong_number` + close | NOT_QUALIFIED (`wrong_number`) | none | cancelled |
 | NEW, CONTACTING, ENGAGED | `spoke` + callback, our step, waiting | ENGAGED | that action | — |
 | active | `spoke` + appointment or « Inscrire » | QUALIFIED (step derived) | appointment (existing one reused) / « Finaliser l'inscription » (today) | test if ticked |
-| active | `crm_change_next_action` | same | the new one (old one cancelled, « Remplacée ») | moved or cancelled with the appointment |
+| active | `crm_change_next_action` | same | the new one (old one cancelled, « Remplacée »); replacing an appointment or enrolment action by a call or message follows OD-18 | moved or cancelled with the appointment |
 | QUALIFIED | appointment outcome `came_will_return` | QUALIFIED | « En attente », relance J+7 | test result can be entered |
 | QUALIFIED | `came_not_interested` | LOST (reason required) | none | — |
 | QUALIFIED | `no_show` | QUALIFIED | « Rappel » (reminder, tomorrow) or close | `Absent` |
@@ -296,7 +344,13 @@ No transition creates without closing, and none closes without either creating o
 
 ### 4.9 UI flow changes (release A)
 
-- **Drawer:** one « Prochaine action » panel showing the action, its owner, « En retard » when overdue, and two buttons, « Noter un échange » and « Changer ». « Toutes les prochaines actions » disappears; after M-A2 it can't hold more than one. Call results are one-tap buttons (« Pas de réponse », « Occupé », « Refusé », « Injoignable », « Mauvais numéro », « On a parlé »). « Pas de réponse » saves immediately and shows a toast with « Annuler ». The undo is a compensating command, allowed for 10 s and only while the lead version is unchanged.
+- **Drawer:** one « Prochaine action » panel showing the action, its owner, « En retard » when overdue, and two buttons, « Noter un échange » and « Changer ». « Toutes les prochaines actions » disappears; after M-A2 it can't hold more than one. Call results are one-tap buttons (« Pas de réponse », « Occupé », « Refusé », « Injoignable », « Mauvais numéro », « On a parlé »). « Pas de réponse » saves immediately and shows a toast with « Annuler » for 10 s.
+  - **Undo** (`crm_undo_call_result`, `expected_version` = the version the save returned) is allowed only within 10 s and only while the prospect's version is unchanged; otherwise it is refused like any stale action.
+  - It deletes nothing: the attempt history is append-only. It writes a `contact_attempt_voided` activity pointing at the attempt and a primary entry « Résultat annulé ».
+  - **Counting:** the failed-call count, the « Injoignable needs 5 failed calls » closure rule and the 3-hour gap read attempts **without** a voiding activity. `last_attempt_at` returns to the previous non-voided attempt (or NULL).
+  - **Ordinals:** an attempt number is never reused. The next real attempt takes the next free number, so numbers can skip; nothing reads the number as a count.
+  - **Next action:** the action the save replaced is restored through `set_next_action` with its type and due time (the next calling window if that time has passed).
+  - **Tests:** `test-crm-next-action.sql` T7 covers undo within and after 10 s, after another tab's change, at the 5th failure (the count drops back to 4 and « En attente » returns to the call slot) and the 3-hour gap.
 - **« Noter un échange »:** channel tabs (Téléphone, WhatsApp, Au centre, Autre); the result; when « On a parlé »: what was agreed (Rendez-vous au centre [☐ avec test], Rappel convenu, À faire par nous, En attente, Inscrire maintenant, Pas intéressé → why, Pas pour nous → why); note optional. The current action and « Remplace : … » are shown.
 - **« Changer la prochaine action »:** the same picker, with « Remplace : Rappel 24/11 10:00 » and « Garder l'action actuelle » as the escape.
 - **Appointment outcomes:** four buttons on the drawer, the Tâches row and the calendar event, enabled from the appointment's start time.
@@ -323,7 +377,9 @@ No transition creates without closing, and none closes without either creating o
   - JS mirror `src/lib/phone.mjs` (`toE164`, `phoneKey`, `isPlaceholder`, `formatPhoneFr` « 06 12 34 56 78 »).
   - Both are tested against one fixture file `scripts/fixtures/phone-cases.json`.
 - **Fixes:** `212…` without « + » (NF-10) and placeholders (NF-9: treated as no phone).
-- **Storage:** E.164 in `crm_contacts.phone_e164` and `whatsapp_e164` (raw kept), `students.telephone`, `authorized_adults.telephone`. A `before insert or update` trigger on students and authorized adults normalises the value and refuses an invalid or placeholder one (« Numéro invalide » / « Numéro fictif : laissez vide »). Teachers and profiles are out of scope.
+- **Storage:** E.164 in `crm_contacts.phone_e164` and `whatsapp_e164` (raw kept), `students.telephone`, `authorized_adults.telephone`. A `before insert or update of telephone` trigger on students and authorized adults normalises and checks the value **only on insert or when the phone itself changes** (`tg_op = 'INSERT' or new.telephone is distinct from old.telephone`). It refuses an invalid or placeholder value (« Numéro invalide » / « Numéro fictif : laissez vide »). Teachers and profiles are out of scope.
+  - **Why only on change:** the system updates student rows constantly without touching the phone (a payment sets `session_type`, `127:165`; the group copy is kept by trigger, `121:104`; archiving). A student whose stored number is bad must stay writable for all of these, before and after D3, including the numbers D3 can't fix.
+  - **Test:** `scripts/test-phone.sql` P-SYS seeds students with an invalid, a placeholder and an unparseable phone, then runs a payment, a group placement, a group removal, an archive and a status change through the real commands: all succeed and the stored phone is unchanged. Editing the phone itself is refused until it is valid or empty.
 - **Receipts are never rewritten:** search uses an expression index `(public.phone_key(telephone))`.
 - **Write paths covered:** CRM create and edit, intake (an invalid phone becomes « absent » plus a review flag, never a refusal of the lead), StudentForm, CSV import (row error), « Nouvel apprenant » on the receipt, CRM enrolment (copies E.164 only), authorized adults.
 - **Search:** every box (CRM, students list via `search_students_page` rewritten from 124, Annuaire, Nouveau reçu picker via a new RPC, Admissions picker, global search) matches `phone_key(stored)` containing `phone_key(query)` once the query has 6 or more digits (leading 0, +212 and 00212 stripped).
@@ -353,10 +409,14 @@ No transition creates without closing, and none closes without either creating o
   - sets `merged_into_lead_id`;
   - refuses if both are CONVERTED with different enrollments.
   Contacts merge the same way (`merged_into_contact_id`).
-- **`merge_students(source, target)`** (director, admin; OD-8 = A):
-  - moves enrollments with no conflict (one live enrollment per programme and year: ADR-010), attendance, tests, family links, CRM links and portfolio rows, all journalled;
-  - archives the source with `merged_into_student_id`.
-  Receipts and charges stay on the source id; the student's finance view reads `student_id in (target, sources merged into it)`. No financial row is updated.
+- **`merge_students(source, target)`** (director, admin; OD-8 = A, « link, don't move »):
+  - **Moves nothing that carries history.** An enrollment's student can never change (`check_enrollment_student_sync`, `120:308`), and charges, receipts, attendance and tests follow their enrollment, so all of them stay on the source id. No enrollment, charge, receipt, attendance or test row is updated.
+  - **Re-points only links:** CRM prospects (`crm_leads.student_id`), family and guardian links, and authorized adults. Each change is journalled.
+  - **Archives the source** with `merged_into_student_id` (new column) and excludes it from lists and search; opening it redirects to the target.
+  - **Reads:** the target's file, finance, attendance, tests and groups read `student_id = any(public.student_merge_set(target))`, the target plus every source merged into it. The one-live-enrollment rule (ADR-010) is checked across that set.
+  - **Refused** while both students have a live enrollment in the same programme and year (end one first through the existing leaver path), or when both have a portal account ([ADR-011](../decisions/ADR-011-portal-access-model.md)); the dialog says which.
+  - **Undo:** `unmerge_student(source)` restores the journalled links and clears `merged_into_student_id`; nothing else needs restoring.
+  - **Test:** `scripts/test-people-merge.sql` merges pairs with enrollments, charges, receipts and attendance on both sides; asserts that no row of `enrollments`, `charges`, `receipts`, `attendance` or `placement_tests` changed (row hashes before and after), that the target's balance equals the sum of both, and that unmerge restores the links.
 
 ### 5.4 Catalogues
 
@@ -399,7 +459,8 @@ No transition creates without closing, and none closes without either creating o
 
 ### 6.2 Level tests
 
-- **One booking path for prospects:** « Rendez-vous au centre » with the test option. Admissions « Planifier un test » uses `find_people`. A prospect is routed to the appointment command; an existing student uses `book_student_placement_test`, a new definer command with the same date, hours and overlap rules. Direct table writes from the browser are removed: RLS insert and update for staff are replaced by commands.
+- **One booking path for prospects:** « Rendez-vous au centre » with the test option. Admissions « Planifier un test » uses `find_people`. A prospect is routed to the appointment command; an existing student uses `book_student_placement_test`, a new definer command with the same date, hours and overlap rules. Direct table writes from the browser are removed for staff: their RLS insert and update policies are replaced by commands.
+- **Teachers keep their current access.** The teacher insert and update policies on `placement_tests` (`123:284-289`) are a teacher-role surface owned by the portal and permissions work, so this plan leaves them. Their writes are still covered by the database rules: the result-time trigger (no result before the test) and `placement_milestones` (which routes any follow-up through `set_next_action`) fire on every row, whoever writes it. Invariant 14's grant check lists them as the one known exception.
 - **Rules:**
   - no level pre-filled;
   - « Annuler » (reason) and « Absent »;
@@ -439,12 +500,12 @@ The Q numbers refer to the [audit queries](../evidence/receptionist-workflow-aud
 
 | # | Invariant | Automated test (file, written by the implementer) | SQL check | Enforcement point |
 | --- | --- | --- | --- | --- |
-| 1 | A prospect has at most one open next action (exactly one when active, OD-1) | `scripts/test-crm-next-action.sql` T1 (every command); `scripts/test-crm-sequences.mjs` (property, after every step) | Q04, Q05 | DB: unique index + deferred presence trigger (M-A2); service: `set_next_action` |
-| 2 | A closed prospect has no open action, appointment or planned test | T2 in the same suite; property test | Q07 | DB: deferred triggers (M-A2); service: close path |
+| 1 | A prospect has at most one open next action (exactly one when active, OD-1) | `scripts/test-crm-next-action.sql` T1 (every command); `scripts/test-crm-next-action-enforced.sql` (every writer of the §4.2 inventory with the M-A2 index and triggers in place); `scripts/test-crm-next-action-upgrade.sql` (fixture → M-A1 → D1 → M-A2); `scripts/test-crm-task-writers.sql` (inventory); `scripts/test-crm-sequences.mjs` (property, after every step) | Q04, Q05, Q29, Q30 | DB: unique index + deferred presence trigger (M-A2); service: `set_next_action` |
+| 2 | A closed prospect has no open action, appointment or planned test | T2 in the same suite; property test; `test-crm-next-action-enforced.sql` (a test booked then the prospect closed, a test left on a merged prospect) | Q07, Q29 | DB: deferred triggers (M-A2); service: close path |
 | 3 | No two appointments or tests for one person overlap | T3; property test with sibling and student cases | Q08 | service: `set_next_action` and test commands under lead and student locks |
 | 4 | Every scheduled item is within hours; the system never creates what it would refuse | T4: every system-generated time passes `assert_in_hours`; fuzz of presets × policies | Q09 | service: `assert_in_hours` in every writer; UI: slot picker |
 | 5 | No result, « Passé » or « done » in the future | T5; `scripts/test-placement-rules.sql`; `scripts/test-attendance-rules.sql` | Q10 | DB: placement trigger, attendance check; service: outcome before start refused |
-| 6 | Phones stored in E.164; any format finds them in every box | `scripts/test-phone.mjs` + `scripts/test-phone.sql` (one fixture); `scripts/test-people-search-browser.mjs` (every search box × 6 formats) | Q11 | DB: normalising triggers and `require_phone`; search: `phone_key` everywhere |
+| 6 | Phones stored in E.164; any format finds them in every box | `scripts/test-phone.mjs` + `scripts/test-phone.sql` (one fixture, with P-SYS: system updates of students with bad phones still succeed); `scripts/test-people-search-browser.mjs` (every search box × 6 formats) | Q11 | DB: normalising triggers and `require_phone`; search: `phone_key` everywhere |
 | 7 | No two active people share a normalised phone without a confirmed link | `scripts/test-people-duplicates.sql` | Q12 (excluding decided pairs and same contact) | service: create gate + `person_match_decisions` |
 | 8 | One user action = one history entry; note text once | T8: per `command_key` exactly one primary row and the note in one row | Q13 | service: primary activity; read: timeline grouping |
 | 9 | Card, drawer, list, Tâches, calendar show the same next action | `scripts/test-crm-next-action-views.sql` (compares the five read functions for 50 generated leads) + browser assertion in day scripts | Q04 (by construction after M-A2) | read: every reader calls `crm_security.next_action(lead)` |
@@ -452,7 +513,7 @@ The Q numbers refer to the [audit queries](../evidence/receptionist-workflow-aud
 | 11 | An enrolled prospect's programme is a catalogue code matching its enrollment | T11 in `scripts/test-crm-enrollment-programme.sql` | Q15 | DB: FK to `programmes`; service: conversion sets it |
 | 12 | Open balance = price − discount − payments; both screens agree | `scripts/test-payment-panel.mjs` (unit) + `scripts/test-payment-screens-browser.mjs` (same learner in both screens) | Q16 | read: `get_open_balances` over `charge_balances`; service: no second charge |
 | 13 | No receipt created twice by double submit or retry | `scripts/test-receipt-idempotency-local.mjs` (double click, retry, two tabs) | Q17 | DB: `financial_requests` idempotency (exists); UI: stable key per form opening, locked buttons |
-| 14 | Each entity has one write service | `scripts/test-single-writer.mjs` (static scan: no browser `insert`/`update` on the listed tables) + `scripts/test-single-writer.sql` (grants: `authenticated` has no table write on them; old wrappers revoked after M-A2) | — | grants and RLS; the [entry-point matrix](../evidence/receptionist-workflow-audit-2026-11-21.md#4-entry-point-matrix) is re-generated in the release record |
+| 14 | Each entity has one write service | `scripts/test-single-writer.mjs` (static scan: no browser `insert`/`update` on the listed tables) + `scripts/test-single-writer.sql` (grants: `authenticated` has no table write on them except the teacher insert and update policies on `placement_tests`, `123:284-289`, listed as the known exception; old wrappers revoked after M-A2) + `scripts/test-crm-task-writers.sql` | — | grants and RLS; the [entry-point matrix](../evidence/receptionist-workflow-audit-2026-11-21.md#4-entry-point-matrix) is re-generated in the release record |
 | 15 | A refused action is refused before the form, or the form keeps the input | `scripts/test-reception-forms-browser.mjs` (3-hour gap, hours, stale version, network error) | — | UI: `crm_check_action` on open; drafts kept on error |
 
 Write services per entity (invariant 14):
@@ -469,15 +530,22 @@ Write services per entity (invariant 14):
 
 ## 8. Implementation plan
 
-Order: R0 → A → B → C. A doesn't depend on #204. B and C start from `main` after #204 merges. One branch and one PR per row unless noted; each PR is Tier 3 with full CI and a fresh independent exact-SHA review.
+Order: R0 → A → B → C.
+
+- **Design:** release A doesn't depend on #204: migrations 131–135 redefine none of the CRM functions A rewrites.
+- **Merge order (OD-19 = A, recommended):** #204 merges first. A1 may be built earlier on its branch, but it merges only after #204, rebased on `main`, with its migrations numbered after #204's and a fresh CI run and exact-SHA review of the rebased head.
+- **Shared files with #204:** `CrmWorkspace.jsx`, `GuideContent.jsx`, the RCC-B1 and work-calendar browser suites, and the upgrade-lane ceiling files. The later PR resolves them on rebase; its review checks that #204's behaviour on those files is unchanged.
+- **B and C** start from `main` after #204 merges.
+
+One branch and one PR per row unless noted; each PR is Tier 3 with full CI and a fresh independent exact-SHA review. One branch and one PR per row unless noted; each PR is Tier 3 with full CI and a fresh independent exact-SHA review.
 
 | Task / PR | Scope | Main files | Acceptance | Tests | Depends on | Risk |
 | --- | --- | --- | --- | --- | --- | --- |
-| **T-R0** (part of PR A1, first commit) | Validate Q01–Q28 against a clean local build at the ceiling; then the owner runs them on Production (R0) | `docs/…/evidence` (results, ids only) | every query runs locally; R0 results recorded | — | — | low |
-| **PR A1 — next-action core** | §4 in full: M-A1 schema, `set_next_action`, `next_action`, `assert_in_hours`, four commands + two reads, rewritten bodies (§4.2), intake ownership, version bump on tests, history grouping, readers rewritten (`opportunity_card`, `operational_card`, `crm_get_work_queue` per lead, `crm_get_today`, `crm_get_admissions_calendar` filtered), the hours card in Settings, the D1 function (not run), UI §4.9 | `supabase/migrations/NNN_crm_one_next_action.sql`; `src/components/crm/{ExchangeDialog,NextActionDialog,NextActionPanel,AppointmentOutcome}.jsx` (new); `LeadDetailSheet.jsx`, `WorkQueue.jsx`, `OpportunityCard.jsx`, `OpportunitiesList.jsx`, `AdmissionsCalendar.jsx`, `CrmWorkspace.jsx`; `CrmActionDialog.jsx` (reduced to close and reopen, or retired); `src/lib/crm/{presentation,queries}.mjs`; `src/lib/ui/pluralFr.mjs`; `src/app/(admin)/settings` | invariants 1–5, 8–10, 15 hold on the local stack for new data; old wrappers obey the single-action rule; day scripts 1, 3, 6, 7, 8, 10, 11 meet targets | new: `test-crm-next-action.sql`, `test-crm-next-action-local.mjs`, `test-crm-next-action-views.sql`, `test-crm-sequences.mjs` (fast-check; new devDependency under the audit policy), `test-crm-time-travel-local.mjs`, `test-crm-concurrency-local.mjs`, `test-reception-day-scripts-browser.mjs` (A scripts), `test-reception-forms-browser.mjs`; updated: `test:crm-opportunities*`, `test:crm-work-calendar*`, `test-crm-rcc-a1/a2/b1`, CRM phase suites, lifecycle suites (event types unchanged), upgrade-lane ceiling | R0 | **high** (core commands; Meta lifecycle bodies copied verbatim; a stop condition if any lifecycle test changes) |
-| **D1** (operator) | Merge duplicate open actions; cancel tests of closed prospects | wrapper SQL in the release record | dry run = approved counts; post-check Q04 = 0, Q07 = 0 | wrapper rehearsed on a local copy at the ceiling with synthetic duplicates | A1 applied | medium |
-| **PR A2** | M-A2: unique index, presence triggers, revoke old wrappers | `NNN_crm_one_next_action_enforce.sql` | index valid; revoked functions refused for `authenticated`; nothing else changed | `test-single-writer.sql`, upgrade lane | D1 = 0 | medium |
-| **PR B1 — people** | §5.1–5.3: phones, `find_people`, header search, create gate, sibling and same-person, prospect edit, wrong-number correction (completes A's « Mauvais numéro » with a corrected phone), merges, `person_match_decisions`, D3 and D5 functions (not run) | `NNN_people_identity.sql`; `src/lib/phone.mjs`; `scripts/fixtures/phone-cases.json`; `src/components/people/{PeopleSearch,DuplicateGate,MergeDialog}.jsx`; `StudentForm.jsx` (RPW-r2 version), `ReceiptForm.jsx`, students list and directory pages, `CrmEnrollmentDialog.jsx`, import page | invariants 6, 7 for new data; day scripts 4, 5 | `test-phone.mjs/.sql`, `test-people-duplicates.sql`, `test-people-search-browser.mjs`, `test-people-merge.sql`, day scripts B | #204 merged; A released | high (merges) |
+| **T-R0** (part of PR A1, first commit) | Validate Q01–Q30 against a clean local build at the ceiling; then the owner runs them on Production (R0) | `docs/…/evidence` (results, ids only) | every query runs locally; R0 results recorded | — | — | low |
+| **PR A1 — next-action core** | §4 in full: M-A1 schema, `set_next_action`, `next_action`, `assert_in_hours`, four commands + two reads, every function of the §4.2 writer inventory rewritten (including `crm_start_enrollment` and the `placement_milestones` trigger), the hours version split (§4.5), intake ownership, the prospect version check on test edits, the call-result undo, history grouping, readers rewritten (`opportunity_card`, `operational_card`, `crm_get_work_queue` per lead, `crm_get_today`, `crm_get_admissions_calendar` filtered), the hours card in Settings, the D1 function (not run), UI §4.9 | `supabase/migrations/NNN_crm_one_next_action.sql`; `src/components/crm/{ExchangeDialog,NextActionDialog,NextActionPanel,AppointmentOutcome}.jsx` (new); `LeadDetailSheet.jsx`, `WorkQueue.jsx`, `OpportunityCard.jsx`, `OpportunitiesList.jsx`, `AdmissionsCalendar.jsx`, `CrmWorkspace.jsx`; `CrmActionDialog.jsx` (reduced to close and reopen, or retired); `src/lib/crm/{presentation,queries}.mjs`; `src/lib/ui/pluralFr.mjs`; `src/app/(admin)/settings` | invariants 1–5, 8–10, 15 hold on the local stack for new data; old wrappers obey the single-action rule; day scripts 1, 3, 6, 7, 8, 10, 11 meet targets | new: `test-crm-next-action.sql`, `test-crm-task-writers.sql`, `test-crm-next-action-enforced.sql` (runs with M-A2 applied on top of A1 on the local stack), `test-crm-next-action-upgrade.sql`, `test-crm-next-action-local.mjs`, `test-crm-next-action-views.sql`, `test-crm-sequences.mjs` (fast-check; new devDependency under the audit policy), `test-crm-time-travel-local.mjs`, `test-crm-concurrency-local.mjs`, `test-reception-day-scripts-browser.mjs` (A scripts), `test-reception-forms-browser.mjs`; updated: `test:crm-opportunities*`, `test:crm-work-calendar*`, `test-crm-rcc-a1/a2/b1`, CRM phase suites, enrolment-at-payment suites (conversion results unchanged), placement suites, lifecycle suites (event types unchanged), upgrade-lane ceiling | R0; merges after #204 (OD-19) | **high** (core commands; Meta lifecycle bodies copied verbatim; a stop condition if any lifecycle test changes) |
+| **D1** (operator) | Bring every existing prospect into the model (§10): one action each, appointments for planned tests, nothing left on closed prospects | wrapper SQL in the release record | dry run = approved counts; post-checks Q04, Q05 (zero-action active), Q07, Q29 all 0 | `test-crm-next-action-upgrade.sql`, then the wrapper rehearsed on a local copy at the ceiling | A1 applied | medium |
+| **PR A2** | M-A2: unique index, presence triggers, revoke old wrappers | `NNN_crm_one_next_action_enforce.sql` | index valid; revoked functions refused for `authenticated`; nothing else changed; intake resubmission, reassignment, enrolment start and test result succeed on D1-processed prospects | `test-single-writer.sql`, `test-crm-next-action-enforced.sql`, `test-crm-next-action-upgrade.sql`, upgrade lane | D1 post-checks all 0 | medium |
+| **PR B1 — people** | §5.1–5.3: phones, `find_people`, header search, create gate, sibling and same-person, prospect edit, wrong-number correction (completes A's « Mauvais numéro » with a corrected phone), merges, `person_match_decisions`, D3 and D5 functions (not run) | `NNN_people_identity.sql`; `src/lib/phone.mjs`; `scripts/fixtures/phone-cases.json`; `src/components/people/{PeopleSearch,DuplicateGate,MergeDialog}.jsx`; `StudentForm.jsx` (RPW-r2 version), `ReceiptForm.jsx`, students list and directory pages, `CrmEnrollmentDialog.jsx`, import page | invariants 6, 7 for new data; day scripts 4, 5 | `test-phone.mjs/.sql` (with P-SYS), `test-people-duplicates.sql`, `test-people-search-browser.mjs`, `test-people-merge.sql` (no history row changes), day scripts B | #204 merged; A released | high (merges) |
 | **PR B2 — catalogues** | §5.4: programmes, levels, prices, origins, close reasons, French labels; conversion writes programme and origin; D4 function (not run) | `NNN_catalogues.sql`; `src/lib/programCatalog.mjs`, `src/lib/ui/presentation.mjs`, `src/lib/crm/presentation.mjs`, receipt presentation and PDF, finance breakdown | invariant 11; no raw English code on staff screens (scan test) | `test-catalogues.sql`, `test-catalogue-labels.mjs` (JS = seed), `test-french-labels-browser.mjs` | B1 | medium |
 | **D3 / D4 / D5** (operator) | phones; programme and origin mapping; approved student merges | release record | per §10 | rehearsed locally | B1 / B2 | medium |
 | **PR C1 — payments** | §6.1 | `src/components/finance/PaymentPanel.jsx`; `CrmEnrollmentDialog.jsx`, `ReceiptForm.jsx`, receipts pages; `NNN_desk_payments.sql` (`get_open_balances`, the no-second-charge guard, the OD-2 option) | invariants 12, 13; day scripts 2, 9 | `test-payment-panel.mjs`, `test-payment-screens-browser.mjs`, `test-receipt-idempotency-local.mjs`, finance regression suites | A; OD-2 | **high** (finance) |
@@ -517,6 +585,8 @@ Each script counts clicks and typed fields through a helper and fails above the 
   - agreed times are never moved.
   No clock override exists in application code.
 - **Concurrency** (`scripts/test-crm-concurrency-local.mjs`): two sessions on one lead (A saves, B saves stale → `PT409`, no row changed); parallel distinct keys (one wins); the same key twice (one row, replayed result); a network retry after commit (replayed result); a double click in the browser (one request). It covers every write in the [entry-point matrix](../evidence/receptionist-workflow-audit-2026-11-21.md#4-entry-point-matrix), finance included.
+- **Enforced writers** (`scripts/test-crm-next-action-enforced.sql`): with M-A2's index and triggers applied on top of A1, run every function of the §4.2 inventory on a prospect that already holds its one action: enrolment start, « Inscrire et encaisser » with and without payment, a test result saved through the CRM command, through an Admissions table update as staff and as a teacher, intake resubmission (Meta and website), reassignment, reopen and conversion. Each must succeed and leave exactly one action (or none when closed or converted).
+- **Upgrade** (`scripts/test-crm-next-action-upgrade.sql`): build a fixture at the baseline ceiling holding every shape D1 handles (duplicates, exact duplicates, a prospect after its 5th failed call, a prospect whose test was booked with no action left, a planned test next to another action, a closed prospect with a planned test, converted and merged prospects with open tasks), apply M-A1, run `d1_plan` (asserting its counts), `d1_apply`, then M-A2. Then run the enforced-writer cases on those prospects.
 - **Replays of real histories:** for each lead from Q04 and Q06 (ids only), the Q23 output is compared with the [reconstructed sequences](../evidence/receptionist-workflow-audit-2026-11-21.md#6-replaying-the-reported-states). Every distinct sequence becomes a named regression case in `test-crm-next-action.sql` (« R-n: replay of lead #n of R0 », with no personal data) asserting the new design yields one action.
 
 ## 10. Migration and data plan
@@ -525,14 +595,14 @@ Every migration is forward-only, rehearsed on a private local stack at the ceili
 
 | Step | What | Dry run (read-only) | Expected (from R0) | Apply | Rollback | Approval |
 | --- | --- | --- | --- | --- | --- | --- |
-| R0 | Q01–Q28 | — | — | — | — | « approve R0 read-only » |
+| R0 | Q01–Q30 | — | — | — | — | « approve R0 read-only » |
 | M-A1 | schema, services, readers (§4) | function md5 guards | — | wrapper | restore the prior function bodies from the journal of the wrapper (the old bodies are kept in the migration's rollback file); new columns are additive | « approve M-A1 » |
-| D1 | one action per lead; close leftovers | `select crm_security.d1_plan()` returns counts per rule and 5 sample lead ids: keep = the earliest future agreed appointment (`schedule_kind='appointment'`, `due_at > now()`), else the most recently created; cancel the others with « Doublon de prochaine action (fusion D1) »; planned tests of LOST and NOT_QUALIFIED leads → `Annulé` « Prospect clôturé (D1) » | Q04 / Q06 / Q07 counts (owner's brief: 20 leads, 9 with exact duplicates) | `select crm_security.d1_apply(expected_tasks, expected_leads, expected_tests)`, which raises if any count differs | `crm_security.d1_revert()` re-opens journalled rows only for leads whose version hasn't changed since; **only before M-A2** | « approve D1: N tasks / L leads / T tests » |
-| M-A2 | index, triggers, revokes | Q04 = 0 and Q07 = 0 just before | 0 | wrapper | drop the index and triggers; re-grant the wrappers | « approve M-A2 » |
+| D1 | bring every existing prospect into the model | `select crm_security.d1_plan()` returns a count and 5 sample lead ids **per rule**: (a) **several open actions:** keep the earliest future agreed appointment (`schedule_kind='appointment'`, `due_at > now()`), else the most recently created; cancel the others « Doublon de prochaine action (fusion D1) ». (b) **planned CRM test of an active prospect without its appointment:** create the « Rendez-vous au centre » linked to the test at the test's time (even if past, so its outcome gets recorded); any other open action is replaced « Remplacée par le rendez-vous du test (D1) » and listed in the sample. (c) **active prospect with no open action:** after 5 failed calls, « En attente » with no relance date (OD-17); otherwise « En attente » with no relance date and a « À revoir (D1) » flag the receptionist sees in « En attente ». (d) **closed, converted or merged prospect** with open actions: cancelled « Prospect clôturé (D1) »; its planned tests → `Annulé`. | Q04, Q05, Q06, Q07, Q29, Q30 (owner's brief: 20 leads with 2+ actions, 9 with exact duplicates) | `select crm_security.d1_apply(expected_counts jsonb)`, which raises if any rule's count differs from the approved dry run | `crm_security.d1_revert()`, **only before M-A2**: re-opens cancelled actions and removes created ones, only for leads whose version hasn't changed since; a test cancelled by D1 returns to `Planifié` only if its date hasn't passed, otherwise it stays `Annulé` and is listed (it belonged to a closed prospect) | « approve D1 » with the per-rule counts |
+| M-A2 | index, triggers, revokes | just before: Q04 = 0, Q05 active prospects with 0 actions = 0, Q07 = 0, Q29 = 0 (the wrapper re-checks them in the same transaction and aborts otherwise) | all 0 | wrapper | drop the index and triggers; re-grant the wrappers | « approve M-A2 » |
 | M-B1 | identity (§5.1–5.3) | md5 guards | — | wrapper | prior bodies; additive columns and tables | « approve M-B1 » |
 | D3 | phones: students, authorized adults, contacts (`212…` without « + »); placeholders → NULL | `d3_plan()`: counts per category (E.164 already, no « + », no leading 0, separators, placeholder, unnormalisable) and 5 sample ids | Q11 (owner's brief: 181 students, 83 standard, 34 without « + », 29 without leading 0, 28 malformed) | `d3_apply(counts…)`; unnormalisable rows untouched and listed for manual correction | journal holds raw values: `d3_revert()` | « approve D3 with counts » |
-| M-B2 | catalogues | — | — | wrapper | additive; the FK on `session_type` is dropped on rollback | « approve M-B2 » |
-| D4 | programme and origin mapping | `d4_plan()` lists every distinct `program_interest_text` / `source_label` / `referral_source` with the proposed code (a mapping table filled by the implementer from Q25, reviewed by the owner) and counts | Q25 | `d4_apply(mapping_version, counts)`; unmapped values stay with `session_type` / `origin_code` NULL and are flagged | journal | « approve D4 mapping vN » |
+| M-B2 | catalogues | — | — | wrapper | additive. The FK on `crm_leads.session_type` is dropped; the old 8-value check is restored **only after `d4_revert()`** (D4 may have written codes outside it), or else restored `not valid` so existing rows aren't rejected. The rollback file states both orders. | « approve M-B2 » |
+| D4 | programme and origin mapping | Production free text never enters the repository. Q25 returns only an 8-character hash and a count per distinct value. The operator exports the distinct values to a **private** file outside the repository (as with release dumps); you and the operator fill the code for each value there. `d4_plan(mapping jsonb)` takes that mapping as `{hash: code}` and returns counts per code plus the hashes left unmapped | Q25 | `d4_apply(mapping jsonb, counts)`; unmapped values stay with `session_type` / `origin_code` NULL and are flagged. The release record keeps the mapping's hash and the counts, never the text | journal (`d4_revert()`) | « approve D4 » with the counts and the mapping hash |
 | D5 | student merges | `d5_plan(pairs)`: for each owner-listed pair, what moves and any conflicts | Q28 list, reviewed by the owner | `merge_students` per pair, in one journalled transaction | `unmerge_student(source)` while nothing has changed since | « approve D5 pairs … » |
 | M-C1 | desk payments and academics | md5 guards | — | wrapper | prior bodies | « approve M-C1 » |
 | D6 | test data | `d6_plan()`: the Q24 ids + owner-supplied ids, classified: (a) no financial, CRM or attendance history → delete; (b) CRM rows → close NOT_QUALIFIED `invalid_spam` with a note and exclude from reports (append-only CRM history); (c) students with receipts → archive (`deleted_at`) and exclude; voided receipts 00459–00461 **stay** (gap-free numbering); test group: delete if empty, otherwise close | Q24 | `d6_apply(ids, counts)` | journal; deletions only for class (a) after a private export | « approve D6 » (OD-13) |
@@ -544,14 +614,14 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 
 | # | Question | Options and consequences | Recommendation | Blocking |
 | --- | --- | --- | --- | --- |
-| OD-1 | One next action: « at most one », or « exactly one » for active prospects? | **A — exactly one** (« En attente » counts as one): every active card shows something, and the « no action » leak (Q05 = 0) is closed. **B — at most one:** prospects may have none and then fall into « attention » again. | A | A1 |
+| OD-1 | One next action: « at most one », or « exactly one » for active prospects? | **A — exactly one** (« En attente » counts as one): every active card shows something, and the « no action » leak (Q05 = 0) is closed. **B — at most one:** prospects may have none and then fall into « attention » again. Both amend ADR-001's « at least one, several allowed » (§2a). | A | A1 |
 | OD-2 | Hold a seat with a due date | **A:** « Réserver sans paiement » = charge with a due date linked to the prospect, no enrollment, no seat, no conversion (keeps ADR-015). **B:** a new seat-holding status that counts capacity (reverses ADR-015's « an enrollment exists only once it is paid »; new finance and conversion design). | A | C1 |
 | OD-3 | Hours | Give calling hours and desk opening hours per weekday, plus closed dates. **A:** two sets (calling ≠ desk). **B:** one set for both. | A, with your values | A1 (values needed for R2) |
 | OD-4 | Appointment length for the overlap rule | Visit 60 min and test 45 min, or your values | 60 / 45 | A1 |
-| OD-5 | « Relancer » defaults | 7 days for « En attente » (your brief); after 5 failed calls: « En attente » + relance 7 days, or « clôturer proposé » | 7 days; « En attente » after 5 calls | A1 |
+| OD-5 | Default « relancer le » when a receptionist chooses « En attente » | 7 days (your brief), or another value | 7 days | A1 |
 | OD-6 | Owner of intake prospects, and the backfill | **A:** a « responsable par défaut » chosen by the direction; backfill existing unowned prospects to that person. **B:** unowned, visible to every receptionist (« Moi + non attribué »). | A | A1 (backfill in D1) |
 | OD-7 | Who may void receipts | **A:** director only (today). **B:** director and admin. | A | — |
-| OD-8 | Student merge and finance | **A:** receipts and charges stay on the duplicate's id and are shown on the survivor (no financial row changes). **B:** re-point `student_id` on receipts and charges (financial rows updated). | A | B1 |
+| OD-8 | Student merge and history | **A — link, don't move:** enrollments, charges, receipts, attendance and tests stay on the duplicate's id; the survivor's screens show both; only CRM, family and authorized-adult links move (§5.3). No history row changes, and the database rule « an enrollment's student never changes » (`120:308`) stays. Refused while both have a live enrollment in the same programme and year. **B — move:** re-point enrollments together with their charges, receipts and attendance under a journalled exemption of that rule (financial and enrollment rows updated; needs its own finance architecture and an amendment of ADR-010 and ADR-012's spirit). | A | B1 |
 | OD-9 | Item 24 vs RPW-r2 | **A:** keep RPW-r2; close only NF-16 (no online groups through the reception command; button hidden). **B:** hide « Cours en ligne », « Enseignants » and group creation (reverses RPW-r2 items approved today; decide before #204 merges). | A | C2; #204 |
 | OD-10 | Editing origin | **A:** origin editable for manual prospects only; « recommandé par » editable for all; Meta and website first touch stays immutable (product rule). **B:** editable for all (needs an exception to the first-touch rule). | A | B2 |
 | OD-11 | Qualification implied by booking an appointment or choosing « Inscrire maintenant » | **A:** implied (fewer clicks; « Qualifié » rises; the dormant Meta Qualified event would follow once activated). **B:** keep an explicit « Qualifier » step. | A | A1 |
@@ -560,15 +630,18 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 | OD-14 | 3-hour rule | **A:** keep the server minimum; « Tentative réelle (hors délai) » records the attempt, counts it in the 5, and doesn't move the cadence earlier. **B:** no override. | A | A1 |
 | OD-15 | Receipt and PDF branding text (« Language Center », « Learn Today, Lead Tomorrow ») | Keep (brand) or translate | Keep (brand), translate everything else | C1 |
 | OD-16 | Programme prices | Provide the 2026/2027 price per programme for the catalogue (director-editable afterwards) | — | B2 (defaults only) |
+| OD-17 | After five failed calls (PRODUCT_RULES: « five failures stop automatic sequence scheduling; never automatically Lost ») | **A:** the next action becomes « En attente » **with no relance date**: nothing is scheduled automatically, the prospect is never overdue, and it appears in « En attente » for a decision (call again, close). Keeps the rule. **B:** « En attente » with a relance date (OD-5): an automatic reminder, which amends the rule. | A | A1 (and D1 rule c) |
+| OD-18 | Can a call or message replace an appointment or an enrolment action? (PRODUCT_RULES and RCC-A1 keep operational tasks when a follow-up is created; with one action both can't be kept) | **A:** yes, after the form shows « Remplace : Rendez-vous 26/11 15:00 (avec test) » and the user confirms; the appointment and its test are cancelled. Amends the rule. **B:** no: an appointment or enrolment action can only be rescheduled, cancelled or given an outcome; « Changer » for a call or message is offered only after that. Keeps the spirit of the rule, one more step for the receptionist. | B for enrolment actions, A for appointments | A1 |
+| OD-19 | Merge order with PR #204 | **A:** #204 merges first; A1 rebases after it, numbers its migrations after 135 and gets a fresh CI run and review of the rebased head. **B:** A1 may merge first; #204 then renumbers its migrations above A1's and needs a fresh exact-SHA review. | A | A1 merge |
 
 ## IMPLEMENTATION CONTRACT
 
-**Scope:** sections 4–10 of this plan at revision RWR-r1, as amended by the owner's answers to OD-1–OD-16, recorded in an approval record added to this file before implementation starts.
+**Scope:** sections 2a and 4–10 of this plan at revision RWR-r2, as amended by the owner's answers to OD-1–OD-19, recorded in an approval record added to this file before implementation starts.
 
 **Prerequisites:**
 - **Owner approval of the plan.**
 - **A clean merged base.**
-- **For A1:** R0 done; OD-1, 3, 4, 5, 6, 11 and 14 answered.
+- **For A1:** R0 done; OD-1, 3, 4, 5, 6, 11, 14, 17 and 18 answered. **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
 - **For B1 and C2:** PR #204 merged.
 - **For C1:** OD-2 answered.
 
@@ -579,7 +652,11 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 - **ADR:** [ADR-019](../decisions/ADR-019-one-next-action-per-prospect.md).
 
 **Rules for implementers:**
-- Build every rewritten function from its **latest** live definition (§4.2 lists them). Never rebuild from 078 or 080.
+- Build every rewritten function from its **latest** live definition (the §4.2 writer inventory names each one with its migration and line). Never rebuild from 078 or 080.
+- Every `crm_tasks` writer goes through `set_next_action`; `scripts/test-crm-task-writers.sql` proves it on each PR.
+- Keep conversion exactly as ADR-015 decision 4 defines it; only `evaluate_conversion`'s task-closing statement changes.
+- Student phone checks run only on insert or a phone change; student merge never updates an enrollment, charge, receipt, attendance or test row.
+- Production free text and phone fragments never enter the repository (R0 outputs, D4 mapping).
 - Keep the lifecycle barrier, the event types and the first-touch immutability.
 - No browser writes to CRM, placement, attendance or student tables outside the services.
 - No clock override in application code.
@@ -595,6 +672,8 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 **Stop conditions:**
 - Any Meta lifecycle or intake test needs a change of expectation.
 - A cumulative function on `main` differs from the body this plan names (re-read and re-plan the diff).
+- The writer inventory scan finds a function the §4.2 table doesn't list.
+- Any D1 post-check (Q04, Q05 zero-action active, Q07, Q29) isn't 0 before M-A2.
 - R0 reveals counts or shapes this plan doesn't handle (for example, actions on merged leads).
 - D1 or another dry run differs from the approved counts.
 - A finance regression suite fails.
