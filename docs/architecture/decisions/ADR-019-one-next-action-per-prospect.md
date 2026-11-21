@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r2 (r1 was reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
+**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r3 (r1 and r2 were each reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
 
 **Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, depending on the owner's answers, two product rules: operational tasks kept beside a new follow-up (OD-18) and the five-failure stop (OD-17). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
 
@@ -29,7 +29,7 @@ The number is provisional: ADR-018 belongs to the receptionist permissions plan 
 
 The card, drawer, list, « Tâches », « Aujourd'hui » and the calendar each compute « the next action » in their own way: the earliest task, every task, or a second read.
 
-The owner's three test rounds (November 2026) found prospects with up to four open actions, exact duplicates, reschedules that seemed to be ignored, closed prospects keeping planned tests, and an overdue list that grows with prospects who simply said « je reviendrai ». The [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md) traces each symptom to this design. The October D6 « universal follow-up consolidation » item was deferred and is the same problem.
+The owner's three test rounds (November 2026) found prospects with up to four open actions, exact duplicates, reschedules that seemed to be ignored, closed prospects keeping planned tests, and an overdue list that grows with prospects who simply said « je reviendrai ». The [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md) traces each symptom to this design. The October D6 item, deferred, covered a narrower part of it: consolidating ordinary communication follow-ups (callbacks and WhatsApp). This decision covers every next action, operational ones included (plan §2a).
 
 ## Decision
 
@@ -37,7 +37,7 @@ The owner's three test rounds (November 2026) found prospects with up to four op
    - A unique partial index on `crm_tasks(lead_id) where status = 'open'` enforces the first part.
    - Deferred constraint triggers enforce presence and absence at commit.
    - A closed prospect may keep no planned level test.
-2. **One server function writes next actions.** `crm_security.set_next_action` is the only code that opens or closes an open task: it closes the current action before inserting the new one, links them with `supersedes_task_id` and derives the assignee from the prospect's owner. Every public command, the intake, CRM enrolment, the test-result trigger and the conversion call it. The browser never writes the table. A test scans every function's latest definition and fails if any other function writes `crm_tasks`.
+2. **One server function writes next actions.** `crm_security.set_next_action` is the only code that opens or closes an open task: it closes the current action before inserting the new one, links them with `supersedes_task_id` and derives the assignee from the prospect's owner. Every public command, the intake, CRM enrolment, the test-result trigger, the conversion and the one-time data step D1 call it. An action the system derives from a call result never replaces an appointment, an enrolment action or our own step; only an explicit user choice can (OD-18). The browser never writes the table. A test scans every function's latest definition and fails if any other function writes `crm_tasks`.
 3. **One read defines the next action.** Every view reads it from `crm_security.next_action(lead)`.
 4. **« En attente du prospect » is a next action, not a status.** It has an optional « relancer le » date, and it is never overdue.
 5. **An appointment at the centre is one next action.** The level test is an option of that appointment, not a parallel task. Outcomes are four fixed codes, recorded only after the appointment's start.

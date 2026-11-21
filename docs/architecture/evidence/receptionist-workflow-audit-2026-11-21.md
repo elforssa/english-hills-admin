@@ -1,6 +1,6 @@
 # Receptionist workflow audit — 2026-11-21
 
-Evidence for the [receptionist workflow plan](../plans/receptionist-workflow.md) (revision RWR-r1, corrected for RWR-r2 after the independent review of 2026-11-21: NF-2, the two task writers added to section 1 and the entry-point matrix, the R0 query outputs, Q29–Q30 and the [brief coverage index](#8-brief-coverage-index)). Architecture task, read-only.
+Evidence for the [receptionist workflow plan](../plans/receptionist-workflow.md) (revision RWR-r1, corrected for RWR-r2 and RWR-r3 after the independent reviews of 2026-11-21 — r3: one-row read-only proof, merged prospects in Q07; NF-2, the two task writers added to section 1 and the entry-point matrix, the R0 query outputs, Q29–Q30 and the [brief coverage index](#8-brief-coverage-index)). Architecture task, read-only.
 
 - **Baseline:** `origin/main` at `53c486b` (PR #202 merged), migration ceiling `130_online_session_evidence.sql`.
 - **Open work that overlaps:** PR #203 (plan RPW-r2, approved 2026-11-21) and PR #204 (branch `feat/receptionist-permissions`, migrations 131–135, not merged; merge waits for the online-classes Production test of the week of 23/11).
@@ -264,9 +264,10 @@ The exact histories of the 20 prospects need the event history: run [Q23](#q23--
 **Not run.** Each query needs the owner's approval as step R0 of the plan, and none writes. Rules for running them:
 
 - **Transport:** `supabase db query --linked --project-ref <ref> -f <file>`, as in [WORKFLOWS](../../ai/WORKFLOWS.md). It returns only the last statement's rows.
-- **File layout:** one query per file, starting with `set transaction read only;`. The transport returns only the last statement's rows, so the read-only proof is a column of the final select: each query is wrapped as `with q as (…) select current_setting('transaction_read_only') as read_only, q.* from q`, and every returned row must show `read_only = on`. The wrapper doesn't guarantee row order; the outputs are counts and samples, so order doesn't matter.
+- **File layout:** one query per file, starting with `set transaction read only;`. The transport returns only the last statement's rows, so the read-only proof is a column of the final select: each query is wrapped as `with q as (…) select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true`, so even a query with no result returns one row carrying the proof (r3), and every returned row must show `read_only = on`. A single row with `read_only = on` and empty columns means « nothing found ». The wrapper doesn't guarantee row order; the outputs are counts and samples, so order doesn't matter.
 - **Validate locally first:** the implementer runs every query against a clean local build at the same migration ceiling (task T-R0). This catches column mistakes without touching Production data.
-- **Checked for RWR-r2 (2026-11-21):** all 30 queries ran without error on a local stack at migration 135 (130 plus PR #204's 131–135, which change no table or function these queries read), each in its own transaction, rolled back; every returned row showed `read_only = on`. The local data is synthetic and almost empty, so this proves syntax, columns and the read-only proof, not the counts.
+- **Re-run on R0 day:** the operator re-runs T-R0 on a local build at **Production's latest applied migration** that day (read from the Production ledger under the same R0 approval), because migrations may land between this check and R0.
+- **Checked for RWR-r2 and r3 (2026-11-21):** all 30 queries ran without error on a local stack at migration 135 (130 plus PR #204's 131–135, which change no table or function these queries read), each in its own transaction, rolled back; every returned row showed `read_only = on`. The local data is synthetic and almost empty, so this proves syntax, columns and the read-only proof, not the counts.
 - **Outputs:** counts, codes, short hashes and **ids only**, never names, phones, phone fragments or free text ([WORKFLOWS](../../ai/WORKFLOWS.md): « never personal data »), so the outputs can be pasted into a release record. The one exception is the D4 private export described under Q25, which never enters the repository.
 
 #### Q01 — live follow-up policies
@@ -278,7 +279,7 @@ select version, weekly_hours, date_exceptions, attempt_offsets, minimum_attempt_
        first_contact_sla_minutes, post_test_sla_minutes, effective_from, retired_at
 from public.crm_followup_policies order by version
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q02 — open actions overview
@@ -291,7 +292,7 @@ select l.status, count(distinct l.id) leads, count(t.id) open_tasks,
 from public.crm_leads l left join public.crm_tasks t on t.lead_id=l.id and t.status='open'
 where l.merged_into_lead_id is null group by l.status order by l.status
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q03 — overdue tasks by what created them
@@ -308,7 +309,7 @@ from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
 where t.status='open' and t.due_at<now() and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
 group by 1,2,3,4 order by n desc
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 `at_window_opening = true` with `schedule_kind` `reminder` or NULL is a preset or system date. `appointment` is an agreed time.
@@ -321,7 +322,7 @@ with q as (
 with m as (select lead_id, count(*) n from public.crm_tasks where status='open' group by lead_id having count(*)>1)
 select count(*) leads, sum(n) tasks, (select array_agg(lead_id) from (select lead_id from m order by n desc, lead_id limit 5) s) sample from m
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q05 — invariant 1: distribution and active-lead check
@@ -334,7 +335,7 @@ from public.crm_leads l left join (select lead_id, count(*) n from public.crm_ta
 where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
 group by 1 order by 1
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 `open_actions = 0` for an active lead is a gap of its own: the target says « exactly one ».
@@ -349,20 +350,23 @@ select count(distinct lead_id) leads, count(*) groups,
        count(*) filter (where (due_at at time zone public.centre_utc_offset())::time in (select distinct (w->>0)::time from public.crm_followup_policies p, jsonb_each(p.weekly_hours) d2, jsonb_array_elements(d2.value) w)) at_window_opening,
        (select array_agg(lead_id) from (select distinct lead_id from d order by lead_id limit 5) s) sample from d
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
-#### Q07 — invariant 2: closed prospects with open actions or planned tests
+#### Q07 — invariant 2: closed, converted or merged prospects with open actions or planned tests
 
 ```sql
 set transaction read only;
 with q as (
-select l.status, count(distinct l.id) filter (where exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')) with_open_action,
+select case when l.merged_into_lead_id is not null then 'MERGED' else l.status end state,
+       count(distinct l.id) filter (where exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')) with_open_action,
        count(distinct l.id) filter (where exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')) with_planned_test,
-       (array_agg(l.id order by l.id) filter (where exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')))[1:5] sample
-from public.crm_leads l where l.status in ('LOST','NOT_QUALIFIED','CONVERTED') group by l.status
+       (array_agg(l.id order by l.id) filter (where exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')
+          or exists(select 1 from public.placement_tests p where p.crm_lead_id=l.id and p.status='Planifié')))[1:5] sample
+from public.crm_leads l where l.status in ('LOST','NOT_QUALIFIED','CONVERTED') or l.merged_into_lead_id is not null
+group by 1
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q08 — invariant 3: overlapping appointments or tests per person
@@ -383,7 +387,7 @@ select count(*) overlapping_pairs, (array_agg(a.id))[1:5] sample
 from ev a join ev b on a.id<b.id and ((a.lead_id is not null and a.lead_id=b.lead_id) or (a.student_id is not null and a.student_id=b.student_id))
  and a.s<b.e and b.s<a.e
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q09 — invariant 4: open items outside hours
@@ -402,7 +406,7 @@ where p.status='Planifié' and p.heure ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
  and crm_security.next_window(l.followup_policy_id,(p.date_test+p.heure::time) at time zone public.centre_utc_offset())
      <> (p.date_test+p.heure::time) at time zone public.centre_utc_offset()
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 This measures against **calling** windows, the only hours that exist today. Opening hours for visits and tests are a decision (OD-3).
@@ -421,7 +425,7 @@ union all select 'attendance_future', count(*), (array_agg(id))[1:5] from public
 union all select 'test_planned_with_level', count(*), (array_agg(id))[1:5] from public.placement_tests
  where status='Planifié' and niveau_recommande is not null
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q11 — phone quality (students, contacts)
@@ -442,7 +446,7 @@ select 'crm_contacts', count(*) filter (where phone_raw is null), count(*) filte
  null, null, count(*) filter (where phone_e164 ~ '^\+212[5-7]0{8}$'), count(*) filter (where phone_raw is not null and phone_e164 is null)
 from public.crm_contacts where merged_into_contact_id is null
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q12 — invariant 7: shared normalised phone between active people
@@ -463,7 +467,7 @@ g as (select array_agg(distinct id order by id) ids from p group by key
       having count(distinct coalesce(contact_id::text, id::text))>1)
 select count(*) keys_shared, sum(cardinality(ids)) people, (array_agg(ids[1] order by ids[1]))[1:5] sample_ids from g
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q13 — invariant 8: the same note text twice within a minute
@@ -475,7 +479,7 @@ select count(*) pairs, (array_agg(a.lead_id))[1:5] sample
 from public.crm_activities a join public.crm_activities b on a.lead_id=b.lead_id and a.id<b.id
  and a.body=b.body and length(btrim(a.body))>0 and abs(extract(epoch from b.occurred_at-a.occurred_at))<=60
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q14 — invariant 10: unowned work
@@ -489,7 +493,7 @@ select count(*) filter (where t.assigned_to is null) unassigned_open_tasks,
 from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
 where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q15 — invariant 11: converted leads' programme vs enrollment
@@ -502,7 +506,7 @@ select count(*) filter (where l.session_type is null) no_session_type,
        (array_agg(l.id) filter (where l.session_type is distinct from e.session_type))[1:5] sample
 from public.crm_leads l join public.enrollments e on e.id=l.enrollment_id where l.status='CONVERTED'
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q16 — invariant 12: learners with an unlinked commitment and a linked charge for the same programme and year
@@ -515,7 +519,7 @@ from public.charge_balances a join public.charge_balances b on a.student_id=b.st
  and a.session_type=b.session_type and a.school_year is not distinct from b.school_year
 where a.voided_at is null and b.voided_at is null and a.enrollment_id is null and b.enrollment_id is not null and not a.legacy
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q17 — invariant 13 and anomaly: same learner, same amount, same day
@@ -528,7 +532,7 @@ select count(*) groups, sum(n) receipts, (array_agg(student_id))[1:5] sample fro
  where voided_at is null and deleted_at is null and student_id is not null
  group by 1,2,3 having count(*)>1) x
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q18 — prospects rescheduled or replaced 3+ times
@@ -540,7 +544,7 @@ select count(*) leads, (array_agg(lead_id))[1:5] sample from (
  select lead_id from public.crm_activities where event_type in ('task_rescheduled','task_cancelled','task_created')
  group by lead_id having count(*) filter (where event_type='task_rescheduled')+count(*) filter (where event_type='task_cancelled')>=3) x
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q19 — actions done before their due time
@@ -551,7 +555,7 @@ with q as (
 select task_type, count(*) n, avg(due_at-completed_at) avg_early
 from public.crm_tasks where status='completed' and completed_at<due_at group by 1 order by n desc
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q20 — prospects stuck in a stage over 14 days
@@ -564,7 +568,7 @@ where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_l
  and coalesce((select max(a.occurred_at) from public.crm_activities a where a.lead_id=l.id and a.to_status is not null), l.created_at) < now()-interval '14 days'
 group by 1
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q21 — students with no CRM prospect; tests linked to nobody
@@ -577,7 +581,7 @@ select 'enrolled_without_lead' k, count(*) n from public.students s
 union all select 'tests_without_lead_or_student', count(*) from public.placement_tests where crm_lead_id is null and student_id is null
 union all select 'tests_student_only', count(*) from public.placement_tests where crm_lead_id is null and student_id is not null
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q22 — groups without a teacher
@@ -588,7 +592,7 @@ with q as (
 select session_type, count(*) n, (array_agg(id))[1:5] sample from public.groups
 where teacher_id is null and closed_at is null group by 1
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q23 — replay one prospect's history
@@ -604,7 +608,7 @@ select a.occurred_at, a.event_type, a.channel, a.outcome, a.from_status, a.to_st
 from public.crm_activities a left join public.crm_tasks t on t.id=a.task_id
 where a.lead_id = :'lead_id' order by a.occurred_at, a.id
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q24 — test data inventory
@@ -621,7 +625,7 @@ union all select 'group', id::text from public.groups where name ilike 'TEST R4%
 union all select 'receipt', receipt_number||' voided='||(voided_at is not null) from public.receipts
  where receipt_number in ('EH-2026-00459','EH-2026-00460','EH-2026-00461')
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 The test student whose name ends in « test » is added by id, which the owner supplies, because a name pattern could match a real learner.
@@ -642,7 +646,7 @@ union all
 select 'student_referral', coalesce(referral_source,'∅'), null, count(*)
  from public.students where deleted_at is null group by 1,2,3
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q26 — appointments and visits per prospect (calendar duplicates)
@@ -653,7 +657,7 @@ with q as (
 select count(*) leads, (array_agg(lead_id))[1:5] sample from (
  select lead_id from public.crm_tasks where status='open' and task_type='center_visit' group by 1 having count(*)>1) x
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q27 — staff accounts without a name
@@ -664,7 +668,7 @@ with q as (
 select role, count(*) filter (where coalesce(btrim(full_name),'')='') unnamed, count(*) total
 from public.profiles where role in ('director','admin','receptionist') group by role
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q28 — student duplicates
@@ -677,7 +681,7 @@ with k as (select id, array_to_string(array(select w from unnest(regexp_split_to
 select count(*) groups, (array_agg(ids[1]))[1:5] sample from (
  select nm, array_agg(id) ids from k group by nm having count(*)>1) x
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 This matches names regardless of word order, which catches pairs like « Prénom Nom » / « nom prénom ». A second pass on `ph` with the same name tokens raises confidence.
@@ -695,7 +699,7 @@ where p.status='Planifié' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIF
  and not exists (select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open'
                  and t.task_type='center_visit' and t.placement_test_id=p.id)
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 #### Q30 — active prospects with no open action, by D1 rule (D1 rule c, M-A2 precondition)
@@ -714,7 +718,7 @@ where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_l
   and not exists (select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open')
 group by 1
 )
-select current_setting('transaction_read_only') as read_only, q.* from q;
+select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
 
 ## 8. Brief coverage index
