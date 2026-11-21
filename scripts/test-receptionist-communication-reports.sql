@@ -1,6 +1,7 @@
 -- Receptionist permissions, stage 4 (migration 134, plan RPW-r2, table A items 15 and 23):
 -- synthetic local fixtures, fully rolled back. messages.channel (office / portal) is set at insert
--- and never changed; she reads the office's messages only (never family <-> teacher), writes at a
+-- and never changed; she reads office <-> family messages and her own (never staff <-> staff,
+-- management <-> teacher or family <-> teacher), writes at a
 -- known address only, marks read and nothing else, deletes nothing; a family's reply to her
 -- message is delivered to her; notifications and announcements read and insert, no edit, no
 -- delete; the staff recipient list; director and admin keep their answers; a teacher is unchanged.
@@ -60,20 +61,92 @@ insert into public.enrollments(student_id, status, session_type, level, school_y
 set local session_replication_role = origin;
 insert into public.family_links(student_id, relation, profile_id, invite_email, status, activated_at) values
   (pg_temp.id(300), 'parent', pg_temp.id(5), 'rpw-c-5@example.test', 'active', now());
+insert into public.teachers(id, full_name, email) values (pg_temp.id(201), 'RPW C teacher no login', 'rpw-c-7-teacher@example.test');
+set local session_replication_role = replica;
+insert into public.students(id, full_name, status, session_type, niveau_cefr, parent_email, email, age_category) values
+  (pg_temp.id(301), 'RPW C prospect', 'Prospect', 'Yearly', 'Child 1', 'rpw-c-6-parent@example.test', 'rpw-c-7-teacher@example.test', 'Teens (13-17)');
+set local session_replication_role = origin;
 
 -- ── Channel rule (the backfill and the insert trigger share it) ─────────────
+-- Owner decision 2026-11-21: « office » = an office account (director, admin, receptionist) and a
+-- family (parent or student account, else an address a learner's file carries); nothing else.
 select pg_temp.ok(portal_security.message_channel(pg_temp.id(4), pg_temp.id(5), 'rpw-c-4@example.test', 'rpw-c-5@example.test') = 'portal',
   'channel: teacher -> family is portal');
 select pg_temp.ok(portal_security.message_channel(pg_temp.id(5), pg_temp.id(4), null, null) = 'portal',
   'channel: family -> teacher is portal');
-select pg_temp.ok(portal_security.message_channel(pg_temp.id(2), null, 'rpw-c-2@example.test', 'free@example.test') = 'office',
-  'channel: admin -> address only is office');
-select pg_temp.ok(portal_security.message_channel(null, null, 'rpw-c-1@example.test', 'free@example.test') = 'office',
-  'channel: old row from the director address is office');
-select pg_temp.ok(portal_security.message_channel(null, null, 'old@example.test', 'older@example.test') = 'portal',
-  'channel: an old row with no staff account is portal');
 select pg_temp.ok(portal_security.message_channel(pg_temp.id(5), pg_temp.id(3), null, null) = 'office',
   'channel: family -> reception is office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(1), pg_temp.id(5), null, null) = 'office',
+  'channel: director -> family is office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(2), null, 'rpw-c-2@example.test', 'rpw-c-6-parent@example.test') = 'office',
+  'channel: admin -> a dossier family address without account is office');
+select pg_temp.ok(portal_security.message_channel(null, null, 'rpw-c-6-parent@example.test', 'rpw-c-1@example.test') = 'office',
+  'channel: old row from a dossier family address to the director is office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(1), pg_temp.id(2), null, null) = 'portal',
+  'channel: director -> admin is not office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(2), pg_temp.id(1), null, null) = 'portal',
+  'channel: admin -> director is not office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(1), pg_temp.id(4), null, null) = 'portal',
+  'channel: director -> teacher is not office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(4), pg_temp.id(2), null, null) = 'portal',
+  'channel: teacher -> admin is not office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(3), pg_temp.id(1), null, null) = 'portal',
+  'channel: reception -> director is not office (hers by the own-message rule)');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(2), null, 'rpw-c-2@example.test', 'free@example.test') = 'portal',
+  'channel: admin -> an unknown address is not office');
+select pg_temp.ok(portal_security.message_channel(null, null, 'rpw-c-1@example.test', 'rpw-c-4@example.test') = 'portal',
+  'channel: old row director -> teacher address is not office');
+select pg_temp.ok(portal_security.message_channel(pg_temp.id(1), null, 'rpw-c-1@example.test', 'rpw-c-7-teacher@example.test') = 'portal',
+  'channel: a teacher record address on a dossier is never a family');
+select pg_temp.ok(portal_security.message_channel(null, null, 'old@example.test', 'older@example.test') = 'portal',
+  'channel: an old row with no known party is portal');
+
+-- ── Visibility: she reads office rows and her own, never another pair ─────────────
+create function pg_temp.put(f uuid, t uuid, fe text, te text, subj text) returns uuid language sql as $$
+  insert into public.messages(sender_profile_id, recipient_profile_id, from_user_email, to_user_email, subject, body, type)
+  values (f, t, fe, te, subj, 'RPW C', 'message') returning id $$;
+create temporary table v_ids(name text primary key, id uuid, visible boolean) on commit drop;
+grant all on v_ids to authenticated;
+insert into v_ids values
+  ('director -> admin', pg_temp.put(pg_temp.id(1), pg_temp.id(2), 'rpw-c-1@example.test', 'rpw-c-2@example.test', 'V1'), false),
+  ('admin -> director', pg_temp.put(pg_temp.id(2), pg_temp.id(1), 'rpw-c-2@example.test', 'rpw-c-1@example.test', 'V2'), false),
+  ('director -> teacher', pg_temp.put(pg_temp.id(1), pg_temp.id(4), 'rpw-c-1@example.test', 'rpw-c-4@example.test', 'V3'), false),
+  ('teacher -> director', pg_temp.put(pg_temp.id(4), pg_temp.id(1), 'rpw-c-4@example.test', 'rpw-c-1@example.test', 'V4'), false),
+  ('admin -> teacher', pg_temp.put(pg_temp.id(2), pg_temp.id(4), 'rpw-c-2@example.test', 'rpw-c-4@example.test', 'V5'), false),
+  ('teacher -> admin', pg_temp.put(pg_temp.id(4), pg_temp.id(2), 'rpw-c-4@example.test', 'rpw-c-2@example.test', 'V6'), false),
+  ('family -> teacher', pg_temp.put(pg_temp.id(5), pg_temp.id(4), 'rpw-c-5@example.test', 'rpw-c-4@example.test', 'V7'), false),
+  ('teacher -> family', pg_temp.put(pg_temp.id(4), pg_temp.id(5), 'rpw-c-4@example.test', 'rpw-c-5@example.test', 'V8'), false),
+  ('director -> family', pg_temp.put(pg_temp.id(1), pg_temp.id(5), 'rpw-c-1@example.test', 'rpw-c-5@example.test', 'V9'), true),
+  ('family -> admin', pg_temp.put(pg_temp.id(5), pg_temp.id(2), 'rpw-c-5@example.test', 'rpw-c-2@example.test', 'V10'), true),
+  ('admin -> dossier address', pg_temp.put(pg_temp.id(2), null, 'rpw-c-2@example.test', 'rpw-c-6-parent@example.test', 'V11'), true),
+  ('director -> reception', pg_temp.put(pg_temp.id(1), pg_temp.id(3), 'rpw-c-1@example.test', 'rpw-c-3@example.test', 'V12'), true),
+  ('teacher -> reception', pg_temp.put(pg_temp.id(4), pg_temp.id(3), 'rpw-c-4@example.test', 'rpw-c-3@example.test', 'V13'), true);
+select pg_temp.act(3);
+-- Her own message to the director: accepted, kept « portal », visible to her.
+insert into public.messages(from_user_email, to_user_email, subject, body, type)
+  values ('rpw-c-3@example.test', 'rpw-c-1@example.test', 'V14', 'RPW C', 'message');
+select pg_temp.owner();
+insert into v_ids select 'reception -> director', id, true from public.messages where subject = 'V14';
+select pg_temp.ok((select channel from public.messages where subject = 'V14') = 'portal', 'her message to the director is not office');
+select pg_temp.act(3);
+do $$ declare r record; seen boolean; begin
+  for r in select * from v_ids loop
+    seen := exists (select 1 from public.messages where id = r.id);
+    if seen is distinct from r.visible then
+      raise exception 'FAIL: reception % % (expected %)', case when seen then 'reads' else 'misses' end, r.name, r.visible;
+    end if;
+  end loop;
+end $$;
+-- Her read flag follows the same rows: an excluded pair is never updated.
+select pg_temp.ok(pg_temp.touched($q$update public.messages set read = true where id in (select id from v_ids where not visible)$q$) = 0,
+  'reception: no read flag on an excluded pair');
+select pg_temp.ok(pg_temp.touched($q$update public.messages set read = true where id = (select id from v_ids where name = 'director -> reception')$q$) = 1,
+  'reception: read flag on a message she received');
+select pg_temp.owner();
+-- Management unchanged: the director reads every pair.
+select pg_temp.act(1);
+select pg_temp.ok((select count(*) from public.messages where id in (select id from v_ids)) = 14, 'director: reads every pair');
+select pg_temp.owner();
 
 -- ── Recipients ────────────────────────────────────────────────────────────
 select pg_temp.act(3);
@@ -158,5 +231,5 @@ select pg_temp.act(2);
 select pg_temp.ok(pg_temp.touched($q$delete from public.announcements where title = 'RPW C annonce'$q$) = 1, 'admin: announcement delete unchanged');
 select pg_temp.owner();
 
-\echo 'PASS receptionist communication (stage 4): office channel, known recipients, read flag only, no delete, family reply delivered'
+\echo 'PASS receptionist communication (stage 4): office channel = office <-> family, own messages, every excluded pair hidden, known recipients, read flag only, no delete, family reply delivered'
 rollback;

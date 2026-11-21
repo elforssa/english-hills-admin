@@ -268,7 +268,7 @@ export default function GuideContent() {
 </table>
 </div>
 <h3 id="invisible">Ce que vous ne verrez pas</h3>
-<p>Votre espace est limité aux opérations du quotidien. Ces éléments existent dans la plateforme mais ne sont pas pour vous&nbsp;: le tableau de bord, les rapports, l’analyse marketing, le suivi Meta, le tableau de bord financier, la paie, les congés, les salaires des enseignants, les messages et annonces, la gestion des utilisateurs et les paramètres du centre.</p>
+<p>Votre espace est limité aux opérations du quotidien. Ces éléments existent dans la plateforme mais ne sont pas pour vous&nbsp;: l’analyse marketing, le suivi Meta, le tableau de bord financier et les chiffres d’encaissement, la paie et les salaires des enseignants, la décision sur les congés, les conversations entre la direction et les enseignants ou entre les familles et les enseignants, la gestion des utilisateurs et les paramètres du centre. Dans «&nbsp;Messages &amp; Annonces&nbsp;», vous voyez les messages entre le bureau et les familles, et ceux que vous avez envoyés ou reçus.</p>
 <div className="callout info">
 <strong>Une page vous ramène à «&nbsp;Pipeline admissions&nbsp;» sans rien dire&nbsp;?</strong><p>C’est normal. Quand vous ouvrez une adresse qui ne fait pas partie de votre espace (un ancien lien, une page de la direction), la plateforme vous renvoie à votre page d’accueil sans message d’erreur.</p>
 </div>

@@ -298,21 +298,21 @@
     "permissive": "PERMISSIVE",
     "roles": "authenticated",
     "qual": "",
-    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (channel = 'office'::text) AND (from_user_email = lower(btrim(( SELECT get_my_email() AS get_my_email)))) AND can_message_recipient(to_user_email))"
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (from_user_email = lower(btrim(( SELECT get_my_email() AS get_my_email)))) AND can_message_recipient(to_user_email))"
   },
   "public.messages.receptionist_office_message_read": {
     "cmd": "SELECT",
     "permissive": "PERMISSIVE",
     "roles": "authenticated",
-    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (channel = 'office'::text))",
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((channel = 'office'::text) OR ((( SELECT auth.uid() AS uid) = sender_profile_id) OR (( SELECT auth.uid() AS uid) = recipient_profile_id)) OR ((lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(from_user_email))) OR (lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(to_user_email))))))",
     "with_check": ""
   },
   "public.messages.receptionist_office_message_update": {
     "cmd": "UPDATE",
     "permissive": "PERMISSIVE",
     "roles": "authenticated",
-    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (channel = 'office'::text))",
-    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND (channel = 'office'::text))"
+    "qual": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((channel = 'office'::text) OR ((( SELECT auth.uid() AS uid) = sender_profile_id) OR (( SELECT auth.uid() AS uid) = recipient_profile_id)) OR ((lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(from_user_email))) OR (lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(to_user_email))))))",
+    "with_check": "((( SELECT get_my_role() AS get_my_role) = 'receptionist'::text) AND ((channel = 'office'::text) OR ((( SELECT auth.uid() AS uid) = sender_profile_id) OR (( SELECT auth.uid() AS uid) = recipient_profile_id)) OR ((lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(from_user_email))) OR (lower(btrim(( SELECT get_my_email() AS get_my_email))) = lower(btrim(to_user_email))))))"
   },
   "public.notifications.receptionist_delete_deny": {
     "cmd": "DELETE",

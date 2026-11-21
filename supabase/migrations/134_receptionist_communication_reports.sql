@@ -1,6 +1,8 @@
 -- Receptionist permissions, stage 4 (plan RPW-r2, table A items 15, 23, 24, 25, 26).
 -- Communication: she e-mails and messages families, teachers and staff at known addresses (never a
--- free address), reads the office's messages (never family <-> teacher conversations), reads and
+-- free address), reads the office's messages (front desk <-> families: an office account and a family,
+-- owner decision 2026-11-21) and the messages she sent or received; never staff <-> staff,
+-- management <-> teacher or family <-> teacher conversations she is not part of. She reads and
 -- writes notifications and announcements, deletes nothing. A family's reply to a message she sent
 -- now reaches her. Money views and reports: capability names only (no table or function change);
 -- the pages skip every finance and pay read for her. messages gains a `channel` column (office or
@@ -121,17 +123,39 @@ AS $function$
     or (p.role = 'teacher' and portal_security.teacher_member(p.linked_teacher_id, p_student))))
 $function$;
 
--- Item 23: the office's messages. A message is « office » when a director, admin or receptionist
--- account is its sender or its recipient (by account, else by address); otherwise « portal »
--- (family <-> teacher, and old rows no staff account can be matched to).
+-- Item 23 (owner decision 2026-11-21): the office's messages are front desk <-> families. A party
+-- is « office » (a director, admin or receptionist account), « family » (a parent or student
+-- account, else an address a learner's file carries) or « other » (a teacher, an unknown address).
+-- The account is found by id, else by address; a teacher record's address is never a family.
+create function portal_security.message_party(p_profile uuid, p_email text)
+returns text language sql stable security definer set search_path = pg_catalog, pg_temp as $$
+  select coalesce(
+    (select case when p.role in ('director', 'admin', 'receptionist') then 'office'
+                 when p.role in ('parent', 'student') then 'family' else 'other' end
+       from public.profiles p where p.id = p_profile),
+    (select case when p.role in ('director', 'admin', 'receptionist') then 'office'
+                 when p.role in ('parent', 'student') then 'family' else 'other' end
+       from public.profiles p
+       where p_profile is null and portal_security.norm_email(p_email) is not null
+         and portal_security.norm_email(p.email) = portal_security.norm_email(p_email)
+       order by p.created_at, p.id limit 1),
+    case when p_profile is null and portal_security.norm_email(p_email) is not null then
+      case when exists (select 1 from public.teachers t where portal_security.norm_email(t.email) = portal_security.norm_email(p_email)) then 'other'
+           when exists (select 1 from public.students s where portal_security.norm_email(s.email) = portal_security.norm_email(p_email)
+             or portal_security.norm_email(s.parent_email) = portal_security.norm_email(p_email)) then 'family'
+      end
+    end,
+    'other')
+$$;
+revoke all on function portal_security.message_party(uuid, text) from public, anon, authenticated, service_role;
+
+-- « office » when one party is office and the other a family; otherwise « portal » (family <->
+-- teacher, staff <-> staff, management <-> teacher, unknown addresses). She also reads the rows
+-- she sent or received herself (policies below).
 create function portal_security.message_channel(p_sender uuid, p_recipient uuid, p_from text, p_to text)
 returns text language sql stable security definer set search_path = pg_catalog, pg_temp as $$
-  select case when exists (select 1 from public.profiles p
-    where p.role in ('director', 'admin', 'receptionist')
-      and (p.id = p_sender or p.id = p_recipient
-        or (portal_security.norm_email(p_from) is not null and portal_security.norm_email(p.email) = portal_security.norm_email(p_from))
-        or (portal_security.norm_email(p_to) is not null and portal_security.norm_email(p.email) = portal_security.norm_email(p_to))))
-    then 'office' else 'portal' end
+  select case when array[portal_security.message_party(p_sender, p_from), portal_security.message_party(p_recipient, p_to)]
+    in (array['office', 'family'], array['family', 'office']) then 'office' else 'portal' end
 $$;
 revoke all on function portal_security.message_channel(uuid, uuid, text, text) from public, anon, authenticated, service_role;
 
@@ -189,16 +213,23 @@ end $$;
 revoke all on function public.list_staff_recipients() from public, anon;
 grant execute on function public.list_staff_recipients() to authenticated;
 
--- Item 23: policies. messages: the office's rows only; insert at a known address; read flag only; no delete.
+-- Item 23: policies. messages: the office's rows and her own; insert from her address to a known
+-- address; read flag only; no delete.
 drop policy receptionist_deny on public.messages;
 create policy receptionist_office_message_read on public.messages for select to authenticated
-  using ((select public.get_my_role()) = 'receptionist' and channel = 'office');
+  using ((select public.get_my_role()) = 'receptionist'
+    and (channel = 'office' or (select auth.uid()) in (sender_profile_id, recipient_profile_id)
+      or lower(btrim((select public.get_my_email()))) in (lower(btrim(from_user_email)), lower(btrim(to_user_email)))));
 create policy receptionist_office_message_insert on public.messages for insert to authenticated
-  with check ((select public.get_my_role()) = 'receptionist' and channel = 'office'
+  with check ((select public.get_my_role()) = 'receptionist'
     and from_user_email = lower(btrim((select public.get_my_email()))) and public.can_message_recipient(to_user_email));
 create policy receptionist_office_message_update on public.messages for update to authenticated
-  using ((select public.get_my_role()) = 'receptionist' and channel = 'office')
-  with check ((select public.get_my_role()) = 'receptionist' and channel = 'office');
+  using ((select public.get_my_role()) = 'receptionist'
+    and (channel = 'office' or (select auth.uid()) in (sender_profile_id, recipient_profile_id)
+      or lower(btrim((select public.get_my_email()))) in (lower(btrim(from_user_email)), lower(btrim(to_user_email)))))
+  with check ((select public.get_my_role()) = 'receptionist'
+    and (channel = 'office' or (select auth.uid()) in (sender_profile_id, recipient_profile_id)
+      or lower(btrim((select public.get_my_email()))) in (lower(btrim(from_user_email)), lower(btrim(to_user_email)))));
 create policy receptionist_delete_deny on public.messages as restrictive for delete to authenticated
   using ((select public.get_my_role()) is distinct from 'receptionist');
 
