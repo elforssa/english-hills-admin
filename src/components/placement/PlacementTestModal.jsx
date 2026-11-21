@@ -11,6 +11,7 @@ import { retryKey, commandError } from '@/lib/crm/presentation.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
 import { localBusinessDate } from '@/lib/receiptFinance';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
 
@@ -110,7 +111,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
       // Fire notification email if the result/affectation was just published.
       let notified = false;
       try {
-        notified = role !== 'receptionist' && await notifyPlacementResult({
+        notified = hasCapability(role, 'canEmailFamilies') && await notifyPlacementResult({
           before: test || null,
           after: saved,
           students: selectedStudent ? [selectedStudent] : students,

@@ -42,6 +42,17 @@ export const CAPABILITIES = Object.freeze({
   canViewCertificates: { sql: 'view_certificates', roles: operations },
   canAddTeacher: { sql: 'add_teacher', roles: operations },
   canViewLeaveRequests: { sql: 'view_leave_requests', roles: operations },
+  // Stage 4: communication, payment notes, dashboard and reports without finance.
+  canEmailFamilies: { sql: 'email_families', roles: operations },
+  canMessageOffice: { sql: 'message_office', roles: operations },
+  canViewPaymentNotes: { sql: 'view_payment_notes', roles: operations },
+  canViewDashboard: { sql: 'view_dashboard', roles: operations },
+  canViewReports: { sql: 'view_reports', roles: operations },
+  canMessageAnyAddress: { sql: 'message_any_address', roles: management },
+  canViewPortalConversations: { sql: 'view_portal_conversations', roles: management },
+  canDeleteCommunications: { sql: 'delete_communications', roles: management },
+  canViewFinanceCorrections: { sql: 'view_finance_corrections', roles: management },
+  canViewTeacherWorkload: { sql: 'view_teacher_workload', roles: management },
   canIssueCertificates: { sql: 'issue_certificates', roles: management },
   canDecideLeaveRequests: { sql: 'decide_leave_requests', roles: management },
   // Direct writes to the learner table (row policies). Without it, the shared learner form
@@ -87,6 +98,9 @@ const exact = new Map([
   ['/dismissal', 'canRecordDismissal'], ['/portfolios', 'canManageLearningRecords'],
   ['/learning-assessments', 'canManageLearningRecords'], ['/certificates', 'canViewCertificates'],
   ['/teachers/new', 'canAddTeacher'], ['/leave-requests', 'canViewLeaveRequests'],
+  // Stage 4.
+  ['/communications', 'canMessageOffice'], ['/notifications', 'canMessageOffice'],
+  ['/dashboard', 'canViewDashboard'], ['/reports', 'canViewReports'],
 ]);
 const detail = [
   [new RegExp(`^/students/${UUID}(?:/edit)?$`, 'i'), 'canManageStudents'],

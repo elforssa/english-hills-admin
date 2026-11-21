@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import PageFrame from '@/components/operational/PageFrame';
 import PageHeader from '@/components/operational/PageHeader';
 import CursorPager from '@/components/operational/CursorPager';
-import { Columns3, List, Plus } from 'lucide-react';
+import { CircleDollarSign, Columns3, List, Plus } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
 import { STATUS, UUID, resolvePresentation, stageChips } from '@/lib/crm/presentation.mjs';
@@ -114,7 +115,10 @@ export default function CrmWorkspace({
   // The count line replaces the former count row and board notice.
   const countLine = <p><span className="tabular-nums">{matchedCount ?? '—'}</span> prospects correspondants{filters.view === 'closed' ? ' · Les clôtures sont affichées en Liste.' : <> · <a className="font-medium text-blue-800 underline underline-offset-4" href={closedHref()} onClick={event => { event.preventDefault(); setFilter('view','closed'); }}><span className="tabular-nums">{closedCount}</span> clôturés</a> (Liste)</>}</p>;
   return <PageFrame width="wide" data-band={band || undefined} data-presentation={mode === 'leads' ? presentation : undefined}>
-  {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<Button onClick={openManual}><Plus size={16} />Ajouter un prospect</Button>} />
+  {mode === 'today' ? <PageHeader headingRef={headingRef} title="Tâches · Mon travail" description="Vos prochaines actions, une tâche à la fois." actions={<div className="flex flex-wrap gap-2">
+    {/* RPW-r2 item 24: the learners with a balance due, per learner, no totals. */}
+    <Button asChild variant="outline"><Link href="/students?payment=due"><CircleDollarSign size={16} />À relancer</Link></Button>
+    <Button onClick={openManual}><Plus size={16} />Ajouter un prospect</Button></div>} />
     : <PageHeader compact headingRef={headingRef} title="Pipeline admissions" description={countLine} actions={<>{band === 'desktop' && toggle}<Button onClick={openManual}><Plus size={16} /><span>Ajouter<span className="max-sm:sr-only"> un prospect</span></span></Button></>} />}
   {mode === 'today' ? <WorkQueue params={params} setFilter={setFilter} onReset={resetFilters} onOpen={openLead} onAction={routeAction} /> : <section className="min-w-0 space-y-2">
     <OpportunityFilters filters={filters} setFilter={setFilter} layout={layout} contact={contact} band={band} toggle={band && band !== 'desktop' ? toggle : null} onReset={resetFilters} />

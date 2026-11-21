@@ -23,8 +23,8 @@
   },
   "can_message_recipient(p_email text)": {
     "gate": "manual",
-    "receptionist": "locked",
-    "md5": "7ed04baac4fe1f31e47ed17933b3e066"
+    "receptionist": "open",
+    "md5": "0c249394517684153e41d89a1b78643a"
   },
   "centre_school_year(p_date date)": {
     "gate": "invoker",
@@ -466,6 +466,10 @@
   },
   "list_family_links(p_student_id uuid)": {
     "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "list_staff_recipients()": {
+    "gate": "capability:message_office",
     "receptionist": "open"
   },
   "mark_message_read(p_message_id uuid)": {

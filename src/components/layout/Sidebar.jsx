@@ -28,8 +28,8 @@ const NAV = [
   ] },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
-  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
-  { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...OPERATIONS, 'teacher'] },
+  { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: OPERATIONS },
   {
     label: 'Apprenants', icon: Users, roles: OPERATIONS,
     children: [
@@ -75,10 +75,10 @@ const NAV = [
     ],
   },
   {
-    label: 'Communication', icon: MessageSquare, roles: ADMIN,
+    label: 'Communication', icon: MessageSquare, roles: OPERATIONS,
     children: [
-      { href: '/notifications', label: 'Notifications', roles: ADMIN },
-      { href: '/communications', label: 'Messages & Annonces', roles: ADMIN },
+      { href: '/notifications', label: 'Notifications', roles: OPERATIONS },
+      { href: '/communications', label: 'Messages & Annonces', roles: OPERATIONS },
       { href: '/activity-log', label: "Journal d'activité", roles: ADMIN },
     ],
   },
