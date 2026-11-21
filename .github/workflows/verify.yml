@@ -372,6 +372,12 @@ jobs:
           supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
+      - name: Receptionist capability list parity, function classification, policy manifest and online pin (RPW-r2)
+        if: matrix.shard == 'sql-and-concurrency'
+        run: |
+          node scripts/test-capability-parity.mjs
+          node scripts/test-receptionist-online-pinned.mjs
+          node scripts/test-receptionist-function-classification.mjs
       - name: Rollback-only migration regression
         if: matrix.shard == 'sql-and-concurrency'
         run: |
