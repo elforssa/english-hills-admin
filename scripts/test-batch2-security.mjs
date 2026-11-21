@@ -73,6 +73,11 @@ async function makeUser(label,role='pending') {
 function can(c,t,r) {
   return r!=='pending' && (c==='director' || c==='admin' && ['pending','parent','student','teacher'].includes(t) && ['parent','student','teacher'].includes(r));
 }
+// RPW-r2 item 7: reception also invites families (parent or student, to a new or family
+// account); role changes stay as can() says (role_security.assert_transition is not widened).
+function canInvite(c,t,r) {
+  return can(c,t,r) || (c==='receptionist' && ['parent','student'].includes(r) && ['pending','parent','student'].includes(t));
+}
 function queue(target,role,issuer,extra='') {
   emails.add(target.email);
   sql(`delete from public.pending_roles where email='${target.email}';
@@ -139,7 +144,7 @@ try {
     setRole(target.id,current); prepareFixtures(desired);
     const before=snapshot(target.id);
     const result=await invite(actor,desired);
-    if(!can(actor.role,current,desired)) { deny(result); assert.equal(snapshot(target.id),before); }
+    if(!canInvite(actor.role,current,desired)) { deny(result); assert.equal(snapshot(target.id),before); }
     else if(['parent','student'].includes(desired) && ['teacher','admin','director','receptionist'].includes(current)) {
       // A staff or teacher account's address never opens a family account (PRF-r2 D3).
       deny(result); assert.equal(result.data.hint,'portal.staff_address'); assert.equal(snapshot(target.id),before);

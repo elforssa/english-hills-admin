@@ -403,13 +403,16 @@ select pg_temp.ok((public.preview_family_invitation('pr-family-a@example.test', 
   'T-19 the preview lists both matches and flags the mixed phones');
 select pg_temp.ok(public.preview_family_invitation('pr-family-a@example.test', 'parent')::text not like '%@%',
   'T-19 the preview echoes no address');
--- T-20: the receptionist cannot invite, preview, link or revoke (Q4 = A).
+-- T-20: the receptionist links no account (Q4 = A). RPW-r2 item 7 (owner decision, replaces the
+-- rest of Q4 = A): she previews, invites and revokes family links, refused only by the address
+-- and link rules, never by role.
 select pg_temp.act(3);
 select pg_temp.fails(format('select public.prepare_family_invitation(%L, %L, %L)', 'pr-new-family@example.test', 'parent', array[pg_temp.id(213)]),
-  '42501', 'portal.forbidden');
-select pg_temp.fails($$select public.preview_family_invitation('pr-family-a@example.test', 'parent')$$, '42501', 'portal.forbidden');
+  '22023', 'portal.no_match');
+select pg_temp.ok(jsonb_array_length(public.preview_family_invitation('pr-family-a@example.test', 'parent')->'matches') = 2,
+  'T-20 the receptionist previews a family invitation');
 select pg_temp.fails(format('select public.link_family_student(%L, %L)', pg_temp.id(8), pg_temp.id(201)), '42501', 'portal.forbidden');
-select pg_temp.fails(format('select public.revoke_family_link(%L, %L)', pg_temp.id(601), 'x'), '42501', 'portal.forbidden');
+select pg_temp.fails(format('select public.revoke_family_link(%L, %L)', gen_random_uuid(), 'x'), 'PT409', 'portal.link_not_active');
 select pg_temp.ok((select count(*) from public.list_family_links(pg_temp.id(201))) = 1, 'T-20 the receptionist reads the learner''s links');
 select pg_temp.act(7);
 select pg_temp.fails(format('select * from public.list_family_links(%L)', pg_temp.id(201)), '42501', 'portal.forbidden');
