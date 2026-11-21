@@ -1,6 +1,6 @@
 # Receptionist permissions — one capability list, revision RPW-r2
 
-**Status: APPROVED FOR IMPLEMENTATION** (Maroine, 2026-11-21, RPW-r1 at head `08881a1` with N1 = B and N2 = A, recorded here as RPW-r2; see the [approval record](#approval-record-2026-11-21)). Merge and release are **not** authorized: they wait for the online-classes Production test (week of 23/11) and the owner's separate « merge » and release approvals. Tier 3 (roles, RLS, a security-definer command set, the e-mail route). Delivery is **one pass**: one plan, one implementation branch, one independent review, one release, built in five stages with a commit and passing tests after each.
+**Status: APPROVED FOR IMPLEMENTATION** (Maroine, 2026-11-21, RPW-r1 at head `08881a1` with N1 = B and N2 = A, recorded here as RPW-r2; see the [approval record](#approval-record-2026-11-21)). Merge and release are **not** authorized: they follow the owner's release order of 2026-11-21 (the Next.js 15.5.29 PR first, #204 merged and released on a later day, then the online-classes Production test; [release and recovery](#release-and-recovery)) and wait for the owner's separate « merge » and release approvals. Tier 3 (roles, RLS, a security-definer command set, the e-mail route). Delivery is **one pass**: one plan, one implementation branch, one independent review, one release, built in five stages with a commit and passing tests after each.
 
 Baseline: `origin/main` `53c486b` (PR #202, migrations to 130). Evidence: the [role permissions audit](../evidence/role-permissions-audit-2026-11-14.md) (read-only, Production read 2026-11-14 at `9f0c911`), re-checked against `53c486b` for this revision by reading the repository only (no database, no Production). Decision record: [ADR-018](../decisions/ADR-018-one-capability-list.md) (proposed).
 
@@ -20,7 +20,7 @@ Baseline: `origin/main` `53c486b` (PR #202, migrations to 130). Evidence: the [r
 
 The receptionist moves to the admin's pages and commands for daily work. What she may and may not do is written in **one list** (`src/lib/roleAccess.mjs` for pages, `operational_security.has_capability` for the database), kept identical by a test. Her separate forms and receptionist-only page branches go away where her access becomes the admin's.
 
-Five stages, one release, after the online-classes Production test (week of 23/11):
+Five stages, one release, before the online-classes Production test (owner decision of 2026-11-21; the test was first planned for the week of 23/11):
 
 1. **The shared list.** No behaviour change for anyone. Her online and teacher-portal access is copied into the list exactly as it is today and pinned by a test.
 2. **Groups:** move a child to another level, change the level of an unplaced paid enrollment, full group and no-paid-enrollment placements with a logged reason, enrollment date and notes; « Complet » in the pickers, French errors, a clear message when there is no other group; every capacity change logged.
@@ -139,7 +139,7 @@ All citations were re-read. Every one not listed here is unchanged.
 | Item 8 (portal previews) | Dropped from this work: the previews show nothing even for the admin. Follow-up F2. |
 | Item 13 | In the groups stage. |
 | Items 20–22 | Out of this pass because of the online-classes Production test. Follow-up F1. Her online access stays exactly as today. |
-| Delivery | One plan, one branch, one independent review (stage by stage against table A), one release after the online test. Migrations from 131. |
+| Delivery | One plan, one branch, one independent review (stage by stage against table A), one release, before the online test (owner, 2026-11-21; first planned after it). Migrations from 131. |
 
 ---
 
@@ -283,7 +283,14 @@ Each stage ends with a commit whose message names the stage, and with these pass
 
 # Release and recovery
 
-**Not before the online-classes Production test (week of 23/11) is recorded as finished.** Plan approval, implementation, CI and independent review may proceed now. Every Production step needs the owner's release approval.
+~~**Not before the online-classes Production test (week of 23/11) is recorded as finished.**~~ **Release order (owner, 2026-11-21), replacing that hold:**
+
+1. The Next.js 15.5.29 PR (#207; production `npm audit` advisories, no exception allowed): CI, independent review, « merge #207 ».
+2. #204 rebased on that `main`: CI fully green (both audit gates), a quick independent check of the new range.
+3. R0–R4 **on a later day than the #207 merge** (« merge #204 on a different day from the Next.js merge » is kept), outside reception hours, in a window proposed by the release task and confirmed by the owner.
+4. Then the online-classes Production test, on the released version.
+
+Every Production step needs the owner's release approval.
 
 | Step | Gate | Action |
 | --- | --- | --- |
