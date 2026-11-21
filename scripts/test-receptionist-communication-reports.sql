@@ -64,7 +64,8 @@ insert into public.family_links(student_id, relation, profile_id, invite_email, 
 insert into public.teachers(id, full_name, email) values (pg_temp.id(201), 'RPW C teacher no login', 'rpw-c-7-teacher@example.test');
 set local session_replication_role = replica;
 insert into public.students(id, full_name, status, session_type, niveau_cefr, parent_email, email, age_category) values
-  (pg_temp.id(301), 'RPW C prospect', 'Prospect', 'Yearly', 'Child 1', 'rpw-c-6-parent@example.test', 'rpw-c-7-teacher@example.test', 'Teens (13-17)');
+  (pg_temp.id(301), 'RPW C prospect', 'Prospect', 'Yearly', 'Child 1', 'rpw-c-6-parent@example.test', 'rpw-c-7-teacher@example.test', 'Teens (13-17)'),
+  (pg_temp.id(302), 'RPW C staff addresses', 'Prospect', 'Yearly', 'Child 1', 'rpw-c-2@example.test', 'rpw-c-4@example.test', 'Teens (13-17)');
 set local session_replication_role = origin;
 
 -- ── Channel rule (the backfill and the insert trigger share it) ─────────────
@@ -101,6 +102,14 @@ select pg_temp.ok(portal_security.message_channel(pg_temp.id(1), null, 'rpw-c-1@
 select pg_temp.ok(portal_security.message_channel(null, null, 'old@example.test', 'older@example.test') = 'portal',
   'channel: an old row with no known party is portal');
 
+-- Re-review test gap: a staff or teacher account's address on a learner's file is still that account.
+select pg_temp.ok(portal_security.message_party(null, 'rpw-c-2@example.test') = 'office', 'party: the admin address on a dossier is office');
+select pg_temp.ok(portal_security.message_party(null, 'rpw-c-4@example.test') = 'other', 'party: a teacher account address on a dossier is not a family');
+select pg_temp.ok(portal_security.message_channel(null, null, 'rpw-c-1@example.test', 'rpw-c-2@example.test') = 'portal',
+  'channel: director -> the admin address on a dossier is not office');
+select pg_temp.ok(portal_security.message_channel(null, null, 'rpw-c-2@example.test', 'rpw-c-4@example.test') = 'portal',
+  'channel: admin -> a teacher account address on a dossier is not office');
+
 -- ── Visibility: she reads office rows and her own, never another pair ─────────────
 create function pg_temp.put(f uuid, t uuid, fe text, te text, subj text) returns uuid language sql as $$
   insert into public.messages(sender_profile_id, recipient_profile_id, from_user_email, to_user_email, subject, body, type)
@@ -121,6 +130,16 @@ insert into v_ids values
   ('admin -> dossier address', pg_temp.put(pg_temp.id(2), null, 'rpw-c-2@example.test', 'rpw-c-6-parent@example.test', 'V11'), true),
   ('director -> reception', pg_temp.put(pg_temp.id(1), pg_temp.id(3), 'rpw-c-1@example.test', 'rpw-c-3@example.test', 'V12'), true),
   ('teacher -> reception', pg_temp.put(pg_temp.id(4), pg_temp.id(3), 'rpw-c-4@example.test', 'rpw-c-3@example.test', 'V13'), true);
+-- Real inserts by address only, with the dossier that carries the staff addresses as student_id.
+insert into public.messages(from_user_email, to_user_email, subject, body, type, student_id)
+  values ('rpw-c-1@example.test', 'rpw-c-2@example.test', 'V15', 'RPW C', 'message', pg_temp.id(302)),
+         ('rpw-c-2@example.test', 'rpw-c-4@example.test', 'V16', 'RPW C', 'message', pg_temp.id(302));
+insert into v_ids select 'director -> admin address (dossier)', id, false from public.messages where subject = 'V15';
+insert into v_ids select 'admin -> teacher address (dossier)', id, false from public.messages where subject = 'V16';
+select pg_temp.ok((select string_agg(channel, ',' order by subject) from public.messages where subject in ('V15', 'V16')) = 'portal,portal',
+  'dossier-address inserts: both portal');
+select pg_temp.ok((select recipient_profile_id from public.messages where subject = 'V15') = pg_temp.id(2),
+  'director -> admin address: recipient resolved to the admin account, not the dossier');
 select pg_temp.act(3);
 -- Her own message to the director: accepted, kept « portal », visible to her.
 insert into public.messages(from_user_email, to_user_email, subject, body, type)
@@ -145,7 +164,7 @@ select pg_temp.ok(pg_temp.touched($q$update public.messages set read = true wher
 select pg_temp.owner();
 -- Management unchanged: the director reads every pair.
 select pg_temp.act(1);
-select pg_temp.ok((select count(*) from public.messages where id in (select id from v_ids)) = 14, 'director: reads every pair');
+select pg_temp.ok((select count(*) from public.messages where id in (select id from v_ids)) = 16, 'director: reads every pair');
 select pg_temp.owner();
 
 -- ── Recipients ────────────────────────────────────────────────────────────
@@ -231,5 +250,5 @@ select pg_temp.act(2);
 select pg_temp.ok(pg_temp.touched($q$delete from public.announcements where title = 'RPW C annonce'$q$) = 1, 'admin: announcement delete unchanged');
 select pg_temp.owner();
 
-\echo 'PASS receptionist communication (stage 4): office channel = office <-> family, own messages, every excluded pair hidden, known recipients, read flag only, no delete, family reply delivered'
+\echo 'PASS receptionist communication (stage 4): office channel = office <-> family, own messages, every excluded pair hidden (staff and teacher addresses on a dossier too), known recipients, read flag only, no delete, family reply delivered'
 rollback;

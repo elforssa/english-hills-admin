@@ -338,6 +338,8 @@ Maroine approved RPW-r1 (PR #203, head `08881a1`) for implementation with N1 = B
 - **N2:** inviting a confirmed account that is still pending sends her the same sign-in link as the admin. Resending a pending invitation from the dossier is follow-up F8; the dossier says who resends it.
 - **N3:** accepted as is. **N4:** follow-up F7; ADR-018 corrected. **N5:** capacity text accepted; the learner form shows a French error when its record cannot be loaded.
 
+Re-review of `5a5c13d` (2026-11-21): **B2** the staff guide matches what she can now do (no refusal left for an item of table A; `test-helpdesk-content.mjs` guards the old phrases); **I2** the WebKit test rule never excuses an error that says the origin is not allowed; **I1 test gap** closed (a staff or teacher account's address on a learner's file stays that account); **N6** accepted as is (a pending family account falls outside « office »: she sees less, never more).
+
 # Follow-ups (not in this pass)
 
 - **F1 — Online lessons items 20–22** (move "this lesson and the following ones", course set-up without closing, video-consent withdrawal), after the online-classes Production test. Needs the online constraint lifted.
