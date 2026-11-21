@@ -235,8 +235,9 @@ insert into public.enrollments(student_id, status, session_type, school_year, le
   // ── Reception ────────────────────────────────────────────────────────────────
   {
     const { page, context } = await signIn('reception', '**/crm/leads');
-    await page.goto(APP + '/dashboard');
-    await page.waitForURL('**/crm/leads');
+    // RPW-r2 item 26: reception now opens the dashboard (without finance); the card stays director-only.
+    await open(page, '/dashboard');
+    await page.getByRole('heading', { name: 'Tableau de bord' }).waitFor();
     await expect(card(page, 'Cours terminés à clôturer')).toHaveCount(0);
     await open(page, '/groups');
     assert.deepEqual(await optionTexts(page.getByRole('combobox', { name: 'Vue des groupes' })), ['En cours', 'Clôturés']);

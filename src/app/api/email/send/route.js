@@ -25,6 +25,7 @@ import { sendEmail } from '@/lib/email';
 import { readBoundedJson } from '@/lib/boundedJson.mjs';
 import { portalNoticeEmail, senderAddress, staffEmailOptions } from '@/lib/emailSender.mjs';
 import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 // Cap on recipients per request — defends against a compromised account
 // fanning a single call out to the whole address book.
@@ -81,11 +82,13 @@ export async function POST(request) {
     .select('full_name, role, email')
     .eq('id', user.id)
     .maybeSingle();
-  if (profileError || !callerProfile || !['director', 'admin', 'teacher', 'parent', 'student'].includes(callerProfile.role)) {
+  // RPW-r2 item 15: operations staff (canEmailFamilies) send staff e-mails; every recipient is
+  // still checked by can_message_recipient below.
+  const staff = Boolean(callerProfile) && hasCapability(callerProfile.role, 'canEmailFamilies');
+  if (profileError || !callerProfile || !(staff || ['teacher', 'parent', 'student'].includes(callerProfile.role))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const staff = ['director', 'admin'].includes(callerProfile.role);
   // Gate: per-user rate limit (atomic, DB-backed). A portal notice consumed it once
   // already when portal_send_message saved the message, and is sent once per message.
   if (staff) for (const limit of RATE_LIMITS) {
@@ -131,7 +134,9 @@ export async function POST(request) {
     effectiveSubject = subject;
     effectiveBody = body;
     // Replies reach the office mailbox, never a personal address.
-    options = staffEmailOptions({ profileName: callerProfile.full_name, sender, office: await officeAddress(supabase), html });
+    // The centre's public address (app_config), read after the checks above: the reception role
+    // has no app_config read, and its replies must reach the office too (RPW-r2 item 15).
+    options = staffEmailOptions({ profileName: callerProfile.full_name, sender, office: await officeAddress(getServiceRoleClient()), html });
   } else {
     const parsed = PortalNoticeSchema.safeParse(raw.data);
     if (!parsed.success) {

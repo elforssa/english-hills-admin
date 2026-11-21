@@ -50,7 +50,17 @@ for (const path of ['/dismissal', '/portfolios', '/learning-assessments', '/cert
   assert.equal(receptionistCanAccess(path), true, path);
   assert.equal(loginDestination('receptionist', path), path);
 }
-for (const path of ['/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
+// RPW-r2 stage 4: communication, dashboard and reports (without finance).
+for (const path of ['/communications', '/notifications', '/dashboard', '/reports']) {
+  assert.equal(receptionistCanAccess(path), true, path);
+  assert.equal(loginDestination('receptionist', path), path);
+}
+for (const capability of ['canMessageAnyAddress', 'canViewPortalConversations', 'canDeleteCommunications',
+  'canViewFinanceCorrections', 'canViewTeacherWorkload', 'canViewFinanceAnalytics']) {
+  assert.equal(hasCapability('receptionist', capability), false, capability);
+  for (const role of ['director', 'admin']) assert.equal(hasCapability(role, capability), true, capability);
+}
+for (const path of ['/activity-log', '/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
   '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
   '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',

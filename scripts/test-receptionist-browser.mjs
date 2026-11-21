@@ -161,9 +161,11 @@ try {
   const links = await page.locator('nav a').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
   for (const path of ['/crm/today','/crm/leads','/students','/students/new','/groups','/attendance','/timetable','/assessments','/placement-tests','/placement-tests?view=calendar','/receipts','/receipts/new','/teachers','/settings',
     // RPW-r2 stage 3.
-    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests']) assert(links.includes(path), `Missing navigation: ${path}`);
+    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests',
+    // RPW-r2 stage 4.
+    '/dashboard','/reports','/notifications','/communications']) assert(links.includes(path), `Missing navigation: ${path}`);
   // EAP: the pre-registration page is retired.
-  for (const path of ['/finance','/reports','/payroll','/integrations','/settings/users','/enrollments']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
+  for (const path of ['/finance','/payroll','/integrations','/settings/users','/enrollments','/activity-log']) assert(!links.includes(path), `Forbidden navigation: ${path}`);
   console.log('PASS stored receptionist role, real login, forged metadata ignored and permitted sidebar');
 
   // O3-r2 changes the default home, while saved Today links remain usable.
@@ -712,6 +714,70 @@ try {
     `${run}-teacher2@example.invalid:RPW note réception:PRIVATE-BANK:900`, 'item 19: e-mail and notes saved, pay untouched');
   console.log('PASS stage 3: group at creation, programme/source/e-mail (logged), pick-up adults, « Sortie des jeunes », grades, learning records, certificates and leave requests (view), « Ancien apprenant » and reopen, teacher record without pay, teacher e-mail and notes');
 
+  // RPW-r2 stage 4, item 23: messages to a family, a teacher and the staff list; no free address,
+  // no delete. Her rows are « office ».
+  await page.goto(app + '/communications');
+  await page.getByRole('heading', { name: 'Communications' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: /^Supprimer/ }).count(), 0, 'item 23: no delete');
+  const sendMessage = async (pick, subject) => {
+    await page.getByRole('button', { name: 'Message', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    assert.equal(await dialog.locator('#message-address').count(), 0, 'item 23: no free address');
+    await pick(dialog);
+    await dialog.getByRole('textbox').nth(0).waitFor();
+    await dialog.locator('input:not([type])').last().fill(subject);
+    await dialog.locator('textarea').fill('RPW message body');
+    const mailed = page.waitForResponse(response => response.url().endsWith('/api/email/send'));
+    await dialog.getByRole('button', { name: 'Envoyer' }).click();
+    assert.equal((await mailed).status(), 200, `${subject}: e-mail route`);
+    await dialog.waitFor({ state: 'hidden' });
+  };
+  await sendMessage(async dialog => {
+    await dialog.locator('#message-student').selectOption(readyStudent);
+    await dialog.getByText(`${run}-ready@example.invalid`).waitFor();
+  }, 'RPW famille');
+  await page.getByRole('button', { name: 'Message', exact: true }).click();
+  assert.equal(await page.getByRole('dialog').locator(`#message-person option[value="staff:${user}"]`).count(), 1, 'item 23: staff picker');
+  await page.getByRole('dialog').getByRole('button', { name: 'Annuler' }).click();
+  await sendMessage(async dialog => {
+    await dialog.locator('#message-person').selectOption(`teacher:${teacher}`);
+  }, 'RPW enseignant');
+  assert.equal(sql(`select string_agg(to_user_email||':'||channel, ',' order by subject) from public.messages
+    where from_user_email='${email}' and subject in ('RPW famille','RPW enseignant')`),
+    `${run}-teacher2@example.invalid:office,${run}-ready@example.invalid:office`);
+  await page.goto(app + '/notifications');
+  await page.getByRole('button', { name: 'Envoyer une notification' }).click();
+  assert.equal(await page.getByRole('dialog').getByText('Email destinataire *').count(), 0, 'item 23: notification without a free address');
+  await page.getByRole('dialog').getByRole('button', { name: 'Annuler' }).click();
+  // Item 24: the unpaid list shortcut on the CRM home.
+  await page.goto(app + '/crm/today');
+  assert.equal(await page.getByRole('link', { name: 'À relancer' }).getAttribute('href'), '/students?payment=due');
+  // Item 25: the payment note, never the cancellation reason.
+  const noteReceipt = sql(`select id from public.receipts where student_id='${student}' order by created_at limit 1`);
+  assert(noteReceipt, 'a receipt of the learner file');
+  sql(`begin; set local session_replication_role = replica;
+    update public.receipts set payment_note='RPW note de paiement', void_reason='RPW motif annulation', voided_at=now(), voided_by='${user}' where id='${noteReceipt}'; commit;`);
+  await page.goto(app + `/receipts/${noteReceipt}/print`);
+  await page.getByText('RPW note de paiement').waitFor();
+  assert.equal(await page.getByText('RPW motif annulation').count(), 0, 'item 25: no cancellation reason');
+  sql(`begin; set local session_replication_role = replica;
+    update public.receipts set payment_note=null, void_reason=null, voided_at=null, voided_by=null where id='${noteReceipt}'; commit;`);
+  // Item 26: Dashboard and Reports with no finance or pay call and no « Charge des enseignants ».
+  const financeCalls = /\/rpc\/(?:get_finance_charge_summary|get_monthly_finance_summary|get_finance_year_months|report_payroll_by_teacher)$|\/rest\/v1\/(?:receipts|teachers|payroll)$/;
+  const before26 = pageRequests.length;
+  await page.goto(app + '/dashboard');
+  await page.getByRole('heading', { name: 'Tableau de bord' }).waitFor();
+  await page.waitForLoadState('networkidle');
+  await page.goto(app + '/reports');
+  await page.getByRole('heading', { name: 'Rapports', exact: true }).waitFor();
+  await page.getByText('Enseignants actifs').waitFor();
+  await page.waitForLoadState('networkidle');
+  assert.equal(await page.getByText('Charge des enseignants').count(), 0, 'item 26: no teacher workload');
+  assert.equal(await page.getByText('Paie YTD').count(), 0, 'item 26: no payroll panel');
+  const finance26 = pageRequests.slice(before26).filter(path => financeCalls.test(path));
+  assert.deepEqual(finance26, [], 'item 26: finance or pay call from Dashboard/Reports');
+  console.log('PASS stage 4: office messages to a family and a teacher (no free address, no delete), staff picker, notifications, « À relancer », payment note only, Dashboard and Reports without finance');
+
   await page.goto(app + '/receipts');
   await page.getByRole('heading', { name: 'Reçus de paiement' }).waitFor();
   await Promise.all(payloadChecks);
@@ -740,11 +806,12 @@ try {
   for (const path of ['/students/new',`/students/${student}/edit`,'/groups',`/groups/${group}`,
     '/timetable','/attendance','/assessments','/receipts','/receipts/new',
     `/receipts/${student}/print`,'/teachers',`/teachers/${student}`,`/teachers/${student}/edit`,
-    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests']) {
+    '/teachers/new','/dismissal','/portfolios','/learning-assessments','/certificates','/leave-requests',
+    '/dashboard','/reports','/notifications','/communications']) {
     const allowed = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(allowed.status(), 200, `Server access for ${path}`);
   }
-  for (const path of ['/finance','/crm/analytics','/dashboard','/reports','/activity-log',
+  for (const path of ['/finance','/crm/analytics','/activity-log',
     '/receipts/deletions','/payroll','/students/import','/settings/users','/integrations']) {
     const requestsBeforeRedirect = pageRequests.length;
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
@@ -755,10 +822,17 @@ try {
     assert(!pageRequests.slice(requestsBeforeRedirect).some(requestPath => forbiddenPageData.test(requestPath)),
       `Restricted data preloaded before redirect from ${path}`);
   }
-  for (const path of ['/api/admin/invite','/api/admin/update-role','/api/admin/payroll','/api/email/send']) {
+  for (const path of ['/api/admin/invite','/api/admin/update-role','/api/admin/payroll']) {
     const result = await page.request.post(app + path, { data: { role: 'director', userId: user, email } });
     assert.equal(result.status(), 403, path);
   }
+  // RPW-r2 item 15: she sends staff e-mails, to known addresses only.
+  const sameOrigin = { Origin: new URL(app).origin, 'Content-Type': 'application/json' };
+  const malformedEmail = await page.request.post(app + '/api/email/send', { headers: sameOrigin, data: { role: 'director', userId: user, email } });
+  assert.equal(malformedEmail.status(), 400, '/api/email/send malformed payload');
+  const unknownRecipient = await page.request.post(app + '/api/email/send', { headers: sameOrigin, data: { to: 'nobody@example.invalid', subject: 'RPW', body: 'RPW' } });
+  assert.equal(unknownRecipient.status(), 403, '/api/email/send unknown recipient');
+  assert.equal((await unknownRecipient.json()).error, 'Recipient forbidden');
   assert.deepEqual(serverErrors, [], 'Local 5xx response during receptionist navigation');
   console.log('PASS own-account update, route redirects without sensitive preload and independent API denial');
 
@@ -936,6 +1010,7 @@ try {
     delete from public.assessments where student_id='${youngStudent}';
     delete from public.certificates where id='${certificate}';
     delete from public.leave_requests where id='${leaveRequest}';
+    delete from public.messages where from_user_email='${email}' or to_user_email='${email}';
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
       '${confirmedStudent}','${multipleStudent}','${reasonStudent}','${levelStudent}','${occupantStudent}',
       '${youngStudent}','${leaverStudent}');

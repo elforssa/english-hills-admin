@@ -9,6 +9,7 @@ import { RECEIPT_PDF_ERROR, downloadReceiptPDF, printReceiptPDF, showReceiptPdfE
 import { money, receiptAmounts, receiptNumberLabel, receiptStatus } from '@/lib/receiptFinance';
 import { receiptSchoolYear } from '@/lib/receiptPresentation';
 import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 import { toast } from 'sonner';
 import { ArrowLeft, Download, Edit, Mail, Printer, Trash2 } from 'lucide-react';
 import { safeReturnTo } from '@/lib/navigation.mjs';
@@ -57,6 +58,8 @@ export default function ReceiptPrint() {
   if (!receipt) return <div className="p-8 text-sm text-muted-foreground">Chargement du reçu…</div>;
   const amounts = receiptAmounts(receipt);
   const status = receiptStatus(receipt);
+  const showNote = hasCapability(role, 'canViewPaymentNotes') && Boolean(receipt.payment_note || receipt.observation);
+  const showVoidReason = hasCapability(role, 'canViewFinanceCorrections') && Boolean(receipt.void_reason);
   const schoolYear = receiptSchoolYear(receipt);
   const lastEmailAttempt = receipt.email_last_attempted_at ? new Date(receipt.email_last_attempted_at).getTime() : 0;
   const emailRetryable = receipt.email_delivery_status === 'failed'
@@ -77,10 +80,11 @@ export default function ReceiptPrint() {
     </div>
 
     {discountReason && <p className="mx-auto mb-4 max-w-[148mm] rounded-xl border bg-white p-3 text-sm text-slate-600 print:hidden"><b>Motif de la remise (non imprimé) :</b> {discountReason}</p>}
-    {['admin', 'director'].includes(role) && (receipt.payment_note || receipt.observation || receipt.void_reason) && <aside className="mx-auto mb-4 max-w-[148mm] rounded-xl border bg-white p-4 text-sm text-slate-600 print:hidden">
+    {/* RPW-r2 item 25: the payment note for operations staff; the cancellation reason stays management. */}
+    {(showNote || showVoidReason) && <aside className="mx-auto mb-4 max-w-[148mm] rounded-xl border bg-white p-4 text-sm text-slate-600 print:hidden">
       <h2 className="mb-2 font-bold text-slate-800">Informations internes — non imprimées</h2>
-      {(receipt.payment_note || receipt.observation) && <p className="whitespace-pre-wrap break-words"><b>Note :</b> {receipt.payment_note || receipt.observation}</p>}
-      {receipt.void_reason && <p className="mt-2 whitespace-pre-wrap break-words"><b>Motif d’annulation :</b> {receipt.void_reason}</p>}
+      {showNote && <p className="whitespace-pre-wrap break-words"><b>Note :</b> {receipt.payment_note || receipt.observation}</p>}
+      {showVoidReason && <p className="mt-2 whitespace-pre-wrap break-words"><b>Motif d’annulation :</b> {receipt.void_reason}</p>}
     </aside>}
     <article className="receipt-sheet relative mx-auto flex min-h-[210mm] w-full max-w-[148mm] flex-col overflow-hidden bg-white text-slate-800 shadow-2xl print:shadow-none">
       <div className="flex h-2 shrink-0"><div className="w-[72%] bg-[#1E4D8B]" /><div className="flex-1 bg-[#B91C2E]" /></div>
