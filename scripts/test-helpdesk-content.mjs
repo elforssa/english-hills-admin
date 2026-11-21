@@ -45,6 +45,13 @@ for (const [name, source] of [['GuideContent.jsx', guide], ['HelpdeskNav.jsx', n
   assert(!/https?:\/\//.test(source), `${name}: external URL`);
 }
 assert(!/example\.invalid|service_role|password\s*[:=]/i.test(guide), 'guide must not contain demo credentials or accounts');
+// RPW-r2 (re-review B2): the guide never sends her to the management for what table A opened to her.
+for (const stale of ['Pas de saisie, pas de bulletin', 'en lecture seule pour vous', 'pas d’ajout d’enseignant', 'Emails&nbsp;: direction',
+  'Nouvel enseignant&nbsp;: direction', '<span className="ui">Email</span>&nbsp;: en lecture seule', 'saisir des notes, imprimer des bulletins',
+  'modifier le programme depuis la liste, changer les emails', 'ajout ou archivage d’un enseignant', 'La note interne n’est pas lisible',
+  'Ajouter ou archiver un enseignant', 'ne peut pas être choisi («&nbsp;Un apprenant grisé']) {
+  assert(!guide.includes(stale), `guide still refuses an opened item: ${stale}`);
+}
 assert(!/@import|fonts\.googleapis/.test(read('helpdesk.css')), 'platform CSP only allows its own fonts');
 // Every rule of the guide stylesheet stays under .hd (or its scroll wrapper .hd-scroll) so it cannot restyle other pages.
 const { default: postcss } = await import('postcss');
