@@ -7,41 +7,49 @@ export const ROLE_HOME = {
 
 const management = ['director', 'admin'];
 const operations = [...management, 'receptionist'];
-const capabilityRoles = Object.freeze({
-  canManageCRM: operations,
-  canManagePlacement: operations,
-  canManageStudents: operations,
-  canManageGroups: operations,
-  canManageAcademics: operations,
-  canManageFinanceOperations: operations,
-  canManageTeacherOperations: operations,
-  canAssignGroup: operations,
-  canRecordAttendance: operations,
-  canEditTeacherOperationalFields: operations,
-  canManageStudentDocuments: operations,
-  canViewHelp: operations,
+const director = ['director'];
+const signedIn = Object.keys(ROLE_HOME);
+
+// The one capability list (plan RPW-r2, ADR-018). Each entry names its database twin in
+// operational_security.role_has_capability (migration 131 and later); the parity test
+// (scripts/test-capability-parity.mjs) fails when a name or a role list differs.
+// Pages and shared commands ask for a capability, never for a role. Online entries are
+// pinned to their 53c486b values (scripts/test-receptionist-online-pinned.mjs).
+export const CAPABILITIES = Object.freeze({
+  canManageCRM: { sql: 'manage_crm', roles: operations },
+  canManagePlacement: { sql: 'manage_placement', roles: operations },
+  canManageStudents: { sql: 'manage_students', roles: operations },
+  canManageGroups: { sql: 'manage_groups', roles: operations },
+  canManageAcademics: { sql: 'manage_academics', roles: operations },
+  canManageFinanceOperations: { sql: 'manage_finance_operations', roles: operations },
+  canManageTeacherOperations: { sql: 'manage_teacher_operations', roles: operations },
+  canAssignGroup: { sql: 'assign_group', roles: operations },
+  canRecordAttendance: { sql: 'record_attendance', roles: operations },
+  canEditTeacherOperationalFields: { sql: 'edit_teacher_operations', roles: operations },
+  canManageStudentDocuments: { sql: 'manage_student_documents', roles: operations },
+  canViewHelp: { sql: 'view_help', roles: operations },
   // Online learning (plan OL-r4 D13): operations run lessons; management sets up courses.
-  canManageOnlineLessons: operations,
-  canManageOnlineCourses: management,
-  canViewFinanceAnalytics: management,
-  canManageUsers: management,
-  canManageSystemSettings: management,
-  canViewTeacherCompensation: management,
-  canManagePayroll: management,
-  canManageIntegrations: ['director'],
-  canViewMarketingAnalytics: ['director'],
-  canCorrectFinance: ['director'],
-  canArchiveStudents: management,
-  canImportStudents: management,
-  canExportStudents: management,
-  canEditStudentProgramme: management,
-  canManageTeacherHR: management,
-  canDeleteAcademicRecords: management,
-  canManageOwnAccount: Object.keys(ROLE_HOME),
+  canManageOnlineLessons: { sql: 'manage_online_lessons', roles: operations },
+  canManageOnlineCourses: { sql: 'manage_online_courses', roles: management },
+  canViewFinanceAnalytics: { sql: 'view_finance_analytics', roles: management },
+  canManageUsers: { sql: 'manage_users', roles: management },
+  canManageSystemSettings: { sql: 'manage_system_settings', roles: management },
+  canViewTeacherCompensation: { sql: 'view_teacher_compensation', roles: management },
+  canManagePayroll: { sql: 'manage_payroll', roles: management },
+  canManageIntegrations: { sql: 'manage_integrations', roles: director },
+  canViewMarketingAnalytics: { sql: 'view_marketing_analytics', roles: director },
+  canCorrectFinance: { sql: 'correct_finance', roles: director },
+  canArchiveStudents: { sql: 'archive_students', roles: management },
+  canImportStudents: { sql: 'import_students', roles: management },
+  canExportStudents: { sql: 'export_students', roles: management },
+  canEditStudentProgramme: { sql: 'edit_student_programme', roles: management },
+  canManageTeacherHR: { sql: 'manage_teacher_hr', roles: management },
+  canDeleteAcademicRecords: { sql: 'delete_academic_records', roles: management },
+  canManageOwnAccount: { sql: 'manage_own_account', roles: signedIn },
 });
 
 export function hasCapability(role, capability) {
-  return capabilityRoles[capability]?.includes(role) === true;
+  return Object.hasOwn(CAPABILITIES, capability) && CAPABILITIES[capability].roles.includes(role);
 }
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
