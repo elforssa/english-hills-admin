@@ -134,9 +134,12 @@ export async function POST(request) {
   }
   if (!data.needsDelivery) {
     // The decision uses only needsDelivery, userId and the stored role, read with the
-    // caller's own client. An active account gets no e-mail, as before.
+    // caller's own client. An active account gets no e-mail, as before. Reception cannot
+    // read a pending profile, so for her the role is read server-side, after the database
+    // authorized her family invitation; it is never returned (RPW-r2 review N2).
     if (data.userId) {
-      const { data: target, error: targetError } = await supabase
+      const reader = familyInviterOnly ? getServiceRoleClient() : supabase;
+      const { data: target, error: targetError } = await reader
         .from('profiles')
         .select('role')
         .eq('id', data.userId)

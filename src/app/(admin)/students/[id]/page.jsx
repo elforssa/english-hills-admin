@@ -285,7 +285,7 @@ function StudentDetail() {
       </Section>
 
       <Section title="Comptes famille">
-        <FamilyLinksPanel studentId={id} student={student} canRevoke={hasCapability(role, 'canInviteFamily')} canInvite={hasCapability(role, 'canInviteFamily')} />
+        <FamilyLinksPanel studentId={id} student={student} canRevoke={hasCapability(role, 'canInviteFamily')} canInvite={hasCapability(role, 'canInviteFamily')} canResend={hasCapability(role, 'canManageUsers')} />
       </Section>
 
       <Section title="Inscriptions et groupes">

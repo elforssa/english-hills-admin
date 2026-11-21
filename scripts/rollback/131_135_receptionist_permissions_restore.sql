@@ -830,6 +830,7 @@ drop function operational_security.family_link_holds(p_student uuid, p_relation 
 drop function operational_security.receptionist_message_read_only();
 drop function operational_security.role_has_capability(p_role text, p_capability text);
 drop function portal_security.message_channel(p_sender uuid, p_recipient uuid, p_from text, p_to text);
+drop function portal_security.message_party(p_profile uuid, p_email text);
 drop function portal_security.require_family_inviter();
 drop function portal_security.set_message_channel();
 drop function public.list_staff_recipients();

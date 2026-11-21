@@ -105,6 +105,13 @@ begin
   end if;
   select p.* into target from public.profiles p join auth.users u on u.id=p.id
     where lower(btrim(u.email)) = normalized_email for update of p;
+  -- Review N1: her family invitation never replaces a pending staff or teacher invitation.
+  if actor_role = 'receptionist' and exists (
+    select 1 from public.pending_roles where lower(btrim(email))=normalized_email and role not in ('parent', 'student')
+  ) then
+    perform portal_security.fail('staff_invitation_pending', 'PT409',
+      'Une invitation du personnel est déjà en attente à cette adresse. Seule la direction ou l’administration peut la remplacer.');
+  end if;
   if actor_role is distinct from 'director' and exists (
     select 1 from public.pending_roles where lower(btrim(email))=normalized_email and role='receptionist'
   ) then raise exception 'Director required for receptionist invitation' using errcode='42501'; end if;

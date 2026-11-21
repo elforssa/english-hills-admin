@@ -4,6 +4,8 @@
 // student accounts linked to this learner. RPW-r2 item 7: every role holding
 // canInviteFamily (director, admin, reception) invites the parent or the learner at the
 // dossier's address and revokes a link. A dossier e-mail edit never changes these links.
+// Resending a pending invitation stays with canManageUsers (Paramètres); reception sees who
+// resends it (RPW-r2 review N2, follow-up).
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -20,7 +22,7 @@ const STATUS_COLORS = {
   revoked: 'bg-slate-100 text-slate-600',
 };
 
-export default function FamilyLinksPanel({ studentId, canRevoke, canInvite = false, student = null }) {
+export default function FamilyLinksPanel({ studentId, canRevoke, canInvite = false, canResend = false, student = null }) {
   const [links, setLinks] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [inviting, setInviting] = useState(false);
@@ -88,6 +90,9 @@ export default function FamilyLinksPanel({ studentId, canRevoke, canInvite = fal
           <div className="min-w-0">
             <p className="text-sm font-medium">{link.account_name || link.account_email}</p>
             <p className="text-xs text-muted-foreground">{RELATION_LABELS[link.relation] || link.relation} · {link.account_email}</p>
+            {canInvite && !canResend && link.status === 'pending' && (
+              <p className="text-xs text-muted-foreground mt-1">Lien d’invitation perdu ou expiré ? La direction ou l’administration le renvoie (Paramètres → Inviter un utilisateur).</p>
+            )}
             {link.address_differs && (
               <p className="text-xs text-amber-700 mt-1">L’adresse du dossier ne correspond plus à ce compte. L’accès n’a pas changé.</p>
             )}

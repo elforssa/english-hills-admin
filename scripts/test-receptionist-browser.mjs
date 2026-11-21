@@ -553,6 +553,10 @@ try {
   }
   console.log('PASS stage 2: cross-level move, « complet » with a logged reason, no-other-group message, French conflict, level, date and notes (items 9-13, C1-1 to C1-3)');
 
+  // Review N5: a record that cannot be loaded says so in French; « Enregistrer » stays disabled.
+  await page.goto(app + `/students/${randomUUID()}/edit`);
+  await page.getByRole('alert').filter({ hasText: 'Fiche introuvable ou inaccessible. Revenez à la liste des apprenants.' }).waitFor();
+  assert(await page.getByRole('button', { name: 'Enregistrer' }).isDisabled(), 'N5: no save without a record');
   await page.goto(app + `/students/${readyStudent}`);
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
   await page.goto(app + `/students/${readyStudent}/edit`);
@@ -747,7 +751,11 @@ try {
   }, 'RPW enseignant');
   assert.equal(sql(`select string_agg(to_user_email||':'||channel, ',' order by subject) from public.messages
     where from_user_email='${email}' and subject in ('RPW famille','RPW enseignant')`),
-    `${run}-teacher2@example.invalid:office,${run}-ready@example.invalid:office`);
+    `${run}-teacher2@example.invalid:portal,${run}-ready@example.invalid:office`);
+  // Owner decision 2026-11-21: « office » is office <-> family; her message to a teacher stays
+  // « portal » and she still reads it as her own (RLS read as her, not as the owner).
+  const own = await page.request.get(`${base}/rest/v1/messages?select=subject&from_user_email=eq.${encodeURIComponent(email)}&subject=in.(%22RPW%20famille%22,%22RPW%20enseignant%22)&order=subject`, { headers: authHeaders });
+  assert.deepEqual((await own.json()).map(row => row.subject), ['RPW enseignant', 'RPW famille'], 'item 23: she reads her own messages');
   await page.goto(app + '/notifications');
   await page.getByRole('button', { name: 'Envoyer une notification' }).click();
   assert.equal(await page.getByRole('dialog').getByText('Email destinataire *').count(), 0, 'item 23: notification without a free address');
@@ -791,6 +799,7 @@ try {
   await page.getByRole('button', { name: `Inviter l’apprenant · ${run}-ready@example.invalid` }).click();
   assert.equal((await invited).status(), 200, 'item 7: learner invitation');
   await page.getByText('Invitation en attente').waitFor();
+  await page.getByText('Lien d’invitation perdu ou expiré ? La direction ou l’administration le renvoie', { exact: false }).waitFor();
   assert.equal(await page.getByRole('button', { name: /^Inviter l’apprenant/ }).count(), 0, 'item 7: no second learner invitation');
   assert.equal(sql(`select role from public.pending_roles where lower(email)='${run}-ready@example.invalid'`), 'student');
   assert.equal(sql(`select relation||':'||status from public.family_links where student_id='${readyStudent}'`), 'self:pending');
@@ -802,7 +811,20 @@ try {
     data: { email: `${run}-other@example.invalid`, role: 'parent', studentIds: [readyStudent] } });
   assert.notEqual(elsewhere.status(), 200, 'item 7: an address no dossier carries');
   assert.equal(sql(`select count(*) from public.pending_roles where lower(email)='${run}-other@example.invalid'`), '0');
-  console.log('PASS stage 5: family invitation from the dossier at its address only; staff and teacher invitations refused (route and database)');
+  // Review N1: a pending staff invitation at the dossier's address is never replaced by hers.
+  sql(`delete from public.rate_limits where user_id='${user}';
+    update public.students set parent_email='${run}-staff@example.invalid' where id='${readyStudent}';
+    insert into public.pending_roles(email, role, invited_by, expires_at)
+      values ('${run}-staff@example.invalid', 'admin', (select id from public.profiles where role = 'director' limit 1), now() + interval '7 days')`);
+  const staffPending = await page.request.post(app + '/api/admin/invite', { headers: sameOrigin,
+    data: { email: `${run}-staff@example.invalid`, role: 'parent', studentIds: [readyStudent] } });
+  assert.equal(staffPending.status(), 409, 'N1: pending staff invitation');
+  assert.equal((await staffPending.json()).error,
+    'Une invitation du personnel est déjà en attente à cette adresse. Seule la direction ou l’administration peut la remplacer.');
+  assert.equal(sql(`select role from public.pending_roles where lower(email)='${run}-staff@example.invalid'`), 'admin');
+  sql(`delete from public.pending_roles where lower(email)='${run}-staff@example.invalid';
+    update public.students set parent_email='${run}-ready-parent@example.invalid' where id='${readyStudent}'`);
+  console.log('PASS stage 5: family invitation from the dossier at its address only; staff and teacher invitations refused (route and database); a pending staff invitation is kept (N1); resend note shown');
 
   await page.goto(app + '/receipts');
   await page.getByRole('heading', { name: 'Reçus de paiement' }).waitFor();

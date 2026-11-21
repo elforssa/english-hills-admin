@@ -68,6 +68,8 @@ export default function StudentForm() {
   const [loadedVersion, setLoadedVersion] = useState(null);
   // Edit saves only once the record is loaded: an earlier click would send no version.
   const [loaded, setLoaded] = useState(!id);
+  // A failed or empty load says so in French instead of leaving « Enregistrer » silently disabled (review N5).
+  const [loadError, setLoadError] = useState(null);
   const [withoutEnrollmentReason, setWithoutEnrollmentReason] = useState('');
   // REL-4: one learner id from the first send to a confirmed success, so a retry
   // after a lost answer replays the create instead of inserting a second learner.
@@ -112,11 +114,15 @@ export default function StudentForm() {
             }));
             setPlaced(Boolean(row.groupe_id));
             setLoaded(true);
+            setLoadError(null);
+          } else {
+            setLoadError('Fiche introuvable ou inaccessible. Revenez à la liste des apprenants.');
           }
         })
         .catch((err) => {
           // eslint-disable-next-line no-console
           console.error('[StudentForm] load failed:', err);
+          setLoadError('Impossible de charger la fiche de l’apprenant. Rechargez la page.');
         });
 
   useEffect(() => {
@@ -447,6 +453,7 @@ export default function StudentForm() {
             {fieldErr('notes') && <p className="text-xs text-red-600 mt-1">{fieldErr('notes')}</p>}
           </div>
         </div>
+        {loadError && <p role="alert" className="text-sm text-red-600">{loadError}</p>}
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={saving || uploading || !loaded} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
