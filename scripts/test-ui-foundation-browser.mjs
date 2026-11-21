@@ -88,11 +88,12 @@ const studentPills=async role=>{
  const pill=row('UIF grouped learner').locator('span.rounded-full').filter({hasText:/^Mise à niveau$/});
  const shape=await pill.evaluate(el=>({nowrap:getComputedStyle(el).whiteSpace,lines:el.getClientRects().length,link:el.closest('a')?.getAttribute('href')||null,title:el.closest('[title]')?.getAttribute('title')||null}));
  assert.equal(shape.nowrap,'nowrap',phase+' programme pill wraps');assert.equal(shape.lines,1,phase+' programme pill on one line');
- if(role==='director'){
+ // RPW-r2 item 2 (owner decision): reception edits the programme under the admin rule, as the director.
+ if(role==='director'||role==='receptionist'){
   assert.match(shape.link||'',/^\/students\//,phase+' pill links to the learner');assert.equal(shape.title,'Le programme suit le groupe : modifiez l’inscription');
   const select=row(longName).getByRole('combobox',{name:`Session de ${longName}`});
   const classes=await select.getAttribute('class');for(const c of ['rounded-full','whitespace-nowrap','text-xs'])assert(classes.split(/\s+/).includes(c),phase+' select lacks '+c);
- } else assert.equal(shape.link,null,phase+' reception sees the programme read-only');
+ } else assert.equal(shape.link,null,phase+' the programme is read-only');
  for(const name of ['UIF former learner','UIF prospect file']){
   await row(name).getByLabel('Aucun groupe',{exact:true}).waitFor();assert.equal(await row(name).getByText('Groupe à affecter',{exact:false}).count(),0,phase+' '+name);
  }
