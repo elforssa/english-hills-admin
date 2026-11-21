@@ -153,6 +153,8 @@ function InlineSelect({ value, options, onChange, empty, label, className = '', 
 export default function StudentsPage() {
   const { role, user } = useAuth();
   const canEditProgramme = hasCapability(role, 'canEditStudentProgramme');
+  // RPW-r2 (item 2): without direct learner writes, the reception command saves.
+  const viaCommand = !hasCapability(role, 'canWriteStudentRecords');
   const canImport = hasCapability(role, 'canImportStudents');
   const canExport = hasCapability(role, 'canExportStudents');
   const update = useEntityUpdate('Student');
@@ -165,7 +167,7 @@ export default function StudentsPage() {
   // Keep the current server value visible until persistence succeeds.
   const patchStudentFields = async (student, data) => {
     try {
-      if (role === 'receptionist') {
+      if (viaCommand) {
         const { error } = await getBrowserClient().rpc('save_receptionist_student', {
           p_student: student.id, p_expected_updated_at: student.updated_at, p_changes: data,
         });
@@ -173,7 +175,7 @@ export default function StudentsPage() {
       } else await update.mutateAsync({ id: student.id, data });
       await invalidateAfterLearnerSave(queryClient);
     } catch (error) {
-      if (role !== 'receptionist') return;
+      if (!viaCommand) return;
       // Changed in the meantime (ADR-009): reload the list for review.
       if (isRecordConflict(error)) { toast.error(recordConflictMessage()); await invalidateAfterLearnerSave(queryClient); }
       else toast.error(membershipErrorMessage(error));

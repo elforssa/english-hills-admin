@@ -155,7 +155,8 @@ do $$ declare row_json jsonb; begin
  if exists(select 1 from public.teachers where id='96000000-0000-0000-0000-000000000010') then
    raise exception 'Teacher base table leaked'; end if;
  select to_jsonb(t) into row_json from public.get_teacher_operations('96000000-0000-0000-0000-000000000010') t;
- if row_json is null or row_json ?| array['contract_type','taux_horaire','salaire_mensuel','iban','notes'] or
+ -- RPW-r2 item 19: the operations read carries notes; pay fields never.
+ if row_json is null or row_json ?| array['contract_type','taux_horaire','salaire_mensuel','iban'] or not row_json ? 'notes' or
    row_json->>'full_name' <> 'Batch teacher' then raise exception 'Unsafe teacher projection'; end if;
  if (select count(*) from public.get_teacher_directory('96000000-0000-0000-0000-000000000010'))<>1 then
    raise exception 'Teacher directory unavailable'; end if;
@@ -177,12 +178,14 @@ end $$;
 select pg_temp.denied($q$select public.get_referral_breakdown()$q$);
 select pg_temp.denied($q$select public.get_finance_charge_summary()$q$);
 select pg_temp.denied($q$select public.create_charge_payment_financial('{}'::jsonb)$q$);
-select pg_temp.denied($q$select public.reserve_storage_asset('teacher_photo',null,'96000000-0000-0000-0000-000000000010',null)$q$);
+-- RPW-r2 item 18p: a teacher photo is hers now; a premium homework file stays refused.
+select pg_temp.denied($q$select public.reserve_storage_asset('premium_homework','96000000-0000-0000-0000-000000000020',null,null)$q$);
 select pg_temp.denied($q$select public.soft_delete_student('96000000-0000-0000-0000-000000000020')$q$);
 select pg_temp.denied($q$select public.void_financial_receipt(gen_random_uuid(),'Correction',gen_random_uuid())$q$);
 select pg_temp.denied($q$select public.void_financial_charge(gen_random_uuid(),'Correction',gen_random_uuid())$q$);
 select pg_temp.invalid($q$select public.save_receptionist_teacher_operations('96000000-0000-0000-0000-000000000010',now(),'{"iban":"changed"}')$q$);
-select pg_temp.invalid($q$select public.save_receptionist_student('96000000-0000-0000-0000-000000000020',now(),'{"email":"changed@example.test"}')$q$);
+-- RPW-r2 item 3: e-mails are hers now (family-link rule); the file status stays outside the command.
+select pg_temp.invalid($q$select public.save_receptionist_student('96000000-0000-0000-0000-000000000020',now(),'{"status":"Enrolled"}')$q$);
 select pg_temp.invalid($q$select public.save_receptionist_group('96000000-0000-0000-0000-000000000030',now(),'{"deleted_at":"2026-01-01"}')$q$);
 do $$ begin
  update public.students set full_name='forged' where id='96000000-0000-0000-0000-000000000020';
@@ -379,8 +382,10 @@ do $$ declare v_charge uuid; v_receipt uuid; begin
  select id into v_receipt from public.receipts where email='newpayer@example.test' limit 1;
  perform pg_temp.no_direct_write('receipts',v_receipt);
  perform pg_temp.no_direct_write('charges',v_charge);
- perform pg_temp.no_direct_write('assessments','96000000-0000-0000-0000-000000000060');
- perform pg_temp.no_direct_write('authorized_adults','96000000-0000-0000-0000-000000000061');
+ -- RPW-r2 items 4 and 16: pick-up adults and grades are hers to write now (rules in
+ -- test-receptionist-dossier-teaching.sql); a grade still cannot be deleted.
+ delete from public.assessments where id='96000000-0000-0000-0000-000000000060';
+ if found then raise exception 'Direct assessment DELETE allowed'; end if;
  perform pg_temp.no_direct_write('premium_groups','96000000-0000-0000-0000-000000000050');
  perform pg_temp.no_direct_write('premium_group_memberships','96000000-0000-0000-0000-000000000051');
  perform pg_temp.no_direct_write('premium_sessions','96000000-0000-0000-0000-000000000052');

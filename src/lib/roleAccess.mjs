@@ -31,6 +31,22 @@ export const CAPABILITIES = Object.freeze({
   canEditEnrollment: { sql: 'edit_enrollment', roles: operations },
   canOverrideCapacity: { sql: 'override_capacity', roles: operations },
   canPlaceWithoutPaidEnrollment: { sql: 'place_without_paid_enrollment', roles: operations },
+  // Stage 3 (items 1-6, 14, 16, 17, 17c, 18, 18p, 19, L): the dossier and teaching.
+  canEditStudentEmail: { sql: 'edit_student_email', roles: operations },
+  canManageAuthorizedAdults: { sql: 'manage_authorized_adults', roles: operations },
+  canRecordDismissal: { sql: 'record_dismissal', roles: operations },
+  canEndLearner: { sql: 'end_learner', roles: operations },
+  canReopenEnrollment: { sql: 'reopen_enrollment', roles: operations },
+  canManageGrades: { sql: 'manage_grades', roles: operations },
+  canManageLearningRecords: { sql: 'manage_learning_records', roles: operations },
+  canViewCertificates: { sql: 'view_certificates', roles: operations },
+  canAddTeacher: { sql: 'add_teacher', roles: operations },
+  canViewLeaveRequests: { sql: 'view_leave_requests', roles: operations },
+  canIssueCertificates: { sql: 'issue_certificates', roles: management },
+  canDecideLeaveRequests: { sql: 'decide_leave_requests', roles: management },
+  // Direct writes to the learner table (row policies). Without it, the shared learner form
+  // saves through save_receptionist_student.
+  canWriteStudentRecords: { sql: 'write_student_records', roles: management },
   canViewHelp: { sql: 'view_help', roles: operations },
   // Online learning (plan OL-r4 D13): operations run lessons; management sets up courses.
   canManageOnlineLessons: { sql: 'manage_online_lessons', roles: operations },
@@ -46,7 +62,7 @@ export const CAPABILITIES = Object.freeze({
   canArchiveStudents: { sql: 'archive_students', roles: management },
   canImportStudents: { sql: 'import_students', roles: management },
   canExportStudents: { sql: 'export_students', roles: management },
-  canEditStudentProgramme: { sql: 'edit_student_programme', roles: management },
+  canEditStudentProgramme: { sql: 'edit_student_programme', roles: operations },
   canManageTeacherHR: { sql: 'manage_teacher_hr', roles: management },
   canDeleteAcademicRecords: { sql: 'delete_academic_records', roles: management },
   canManageOwnAccount: { sql: 'manage_own_account', roles: signedIn },
@@ -67,6 +83,10 @@ const exact = new Map([
   ['/receipts', 'canManageFinanceOperations'], ['/receipts/new', 'canManageFinanceOperations'],
   ['/teachers', 'canManageTeacherOperations'], ['/settings', 'canManageOwnAccount'],
   ['/helpdesk', 'canViewHelp'], ['/online', 'canManageOnlineLessons'],
+  // Stage 3.
+  ['/dismissal', 'canRecordDismissal'], ['/portfolios', 'canManageLearningRecords'],
+  ['/learning-assessments', 'canManageLearningRecords'], ['/certificates', 'canViewCertificates'],
+  ['/teachers/new', 'canAddTeacher'], ['/leave-requests', 'canViewLeaveRequests'],
 ]);
 const detail = [
   [new RegExp(`^/students/${UUID}(?:/edit)?$`, 'i'), 'canManageStudents'],

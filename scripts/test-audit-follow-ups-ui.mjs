@@ -107,7 +107,8 @@ assert.match(groupPage, /Motif de l’affectation sans inscription payée \*/);
 assert.match(groupPage, /Motif du dépassement \*/);
 assert.match(groupPage, /withoutEnrollmentReason: given\.withoutEnrollmentReason \|\| null/);
 const studentForm = read('src/components/students/StudentForm.jsx');
-assert.match(studentForm, /const canPlaceAtCreation = !isEdit && \(role === 'director' \|\| role === 'admin'\);/);
+// RPW-r2 item 1: placement at creation follows the capability (reception included).
+assert.match(studentForm, /const canPlaceAtCreation = !isEdit && hasCapability\(role, 'canPlaceWithoutPaidEnrollment'\);/);
 assert.match(studentForm, /withoutEnrollmentReason: withoutEnrollmentReason\.trim\(\)/);
 assert.match(read('src/app/(admin)/settings/page.jsx'), /desc: 'Tests de niveau, apprenants, inscriptions et encaissements'/);
 // Dashboard: the paid learners awaiting a group, nothing linking to the retired page.

@@ -9,6 +9,12 @@ import { ArrowLeft, Upload } from 'lucide-react';
 import StorageImage from '@/components/StorageImage';
 import { ADULT_LEVELS, LEGACY_LEVELS, YEARLY_LEVELS } from '@/lib/academicPrograms';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
+import { getBrowserClient } from '@/lib/supabase';
+import { getTeacherOperations } from '@/lib/teacher-directory';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
+import { createLearnerIdentity } from '@/lib/studentCreate.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { useAuth } from '@/context/AuthContext';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -25,6 +31,13 @@ export default function TeacherForm() {
   const router = useRouter();
   const qc = useQueryClient();
   const isEdit = Boolean(id);
+  // RPW-r2 items 18, 18p, 19: one form for every staff role. A role without the pay view
+  // (reception) saves through its command: no contract, salary, rate or IBAN, ever.
+  const { role } = useAuth();
+  const viaCommand = !hasCapability(role, 'canViewTeacherCompensation');
+  const [version, setVersion] = useState(null);
+  // REL-4: one teacher id from the first send to a confirmed success.
+  const [newTeacherId] = useState(() => createLearnerIdentity());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({
@@ -33,9 +46,17 @@ export default function TeacherForm() {
     iban: '', photo_url: '', notes: '',
   });
 
+  const show = (row) => {
+    if (!row) return;
+    setVersion(row.updated_at ?? null);
+    setForm(f => ({ ...f, ...row, certifications: row.certifications || [], niveaux_autorises: row.niveaux_autorises || [] }));
+  };
+  const loadTeacher = () => (viaCommand ? getTeacherOperations({ id }) : entities.Teacher.filter({ id }))
+    .then(d => show(d[0])).catch(err => toast.error(err?.message || 'Enseignant indisponible.'));
   useEffect(() => {
-    if (isEdit) entities.Teacher.filter({ id }).then(d => { if (d[0]) setForm({ ...d[0], certifications: d[0].certifications || [], niveaux_autorises: d[0].niveaux_autorises || [] }); });
-  }, [id, isEdit]);
+    if (isEdit) loadTeacher();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isEdit, viaCommand]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleArr = (k, v) => setForm(f => ({ ...f, [k]: f[k].includes(v) ? f[k].filter(x => x !== v) : [...f[k], v] }));
@@ -58,9 +79,47 @@ export default function TeacherForm() {
     }
   };
 
+  const saveViaCommand = async () => {
+    const changes = {
+      full_name: form.full_name, telephone: form.telephone || '', email: form.email || '',
+      certifications: form.certifications, niveaux_autorises: form.niveaux_autorises,
+      notes: form.notes || '', photo_url: form.photo_url || '',
+    };
+    const teacherId = id || newTeacherId.current();
+    const { error } = await getBrowserClient().rpc('save_receptionist_teacher_operations', {
+      p_teacher: teacherId, p_expected_updated_at: isEdit ? version : null, p_changes: changes,
+    });
+    setSaving(false);
+    if (error && isEdit && isRecordConflict(error)) {
+      // Changed in the meantime (ADR-009): reload the latest record for review.
+      toast.error(recordConflictMessage());
+      invalidateAfterLearnerSave(qc);
+      await loadTeacher();
+      return;
+    }
+    if (error && !isEdit && /identity conflict/i.test(error.message || '')) {
+      newTeacherId.settle('already_created');
+      toast.error('Cet enseignant a déjà été créé lors d’un envoi précédent. Ouvrez sa fiche pour le modifier.');
+      router.push('/teachers');
+      return;
+    }
+    if (error) {
+      const message = String(error.hint || '').startsWith('rpw.') ? error.message
+        : error.code === '23505' ? 'Un enseignant utilise déjà cet e-mail.'
+        : 'Enregistrement impossible. Réessayez.';
+      toast.error(message);
+      return;
+    }
+    if (!isEdit) newTeacherId.settle('created');
+    invalidateAfterLearnerSave(qc);
+    toast.success(isEdit ? 'Enseignant mis à jour' : 'Enseignant créé');
+    router.push(`/teachers/${teacherId}`);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    if (viaCommand) { await saveViaCommand(); return; }
     const data = { ...form, taux_horaire: parseFloat(form.taux_horaire) || null, salaire_mensuel: parseFloat(form.salaire_mensuel) || null };
     try {
       if (isEdit) {
@@ -96,10 +155,11 @@ export default function TeacherForm() {
               <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handlePhoto} disabled={uploading} />
             </label>
           </div>
-          <div className="col-span-2"><label className={labelClass}>Nom complet *</label><input className={inputClass} value={form.full_name} onChange={e => set('full_name', e.target.value)} required /></div>
-          <div><label className={labelClass}>Téléphone</label><input className={inputClass} value={form.telephone || ''} onChange={e => set('telephone', e.target.value)} /></div>
-          <div><label className={labelClass}>Email</label><input type="email" className={inputClass} value={form.email || ''} onChange={e => set('email', e.target.value)} /></div>
-          <div>
+          <div className="col-span-2"><label htmlFor="teacher_full_name" className={labelClass}>Nom complet *</label><input id="teacher_full_name" className={inputClass} value={form.full_name} onChange={e => set('full_name', e.target.value)} required /></div>
+          <div><label htmlFor="teacher_telephone" className={labelClass}>Téléphone</label><input id="teacher_telephone" className={inputClass} value={form.telephone || ''} onChange={e => set('telephone', e.target.value)} /></div>
+          <div><label htmlFor="teacher_email" className={labelClass}>Email{viaCommand ? ' *' : ''}</label><input id="teacher_email" type="email" required={viaCommand} className={inputClass} value={form.email || ''} onChange={e => set('email', e.target.value)} /></div>
+          {viaCommand && <p className="col-span-2 text-xs text-muted-foreground">Le contrat et la rémunération sont complétés par la direction.</p>}
+          {!viaCommand && <><div>
             <label className={labelClass}>Type de contrat</label>
             <select className={inputClass} value={form.contract_type} onChange={e => set('contract_type', e.target.value)}>
               <option>Employé</option><option>Freelance</option>
@@ -110,7 +170,7 @@ export default function TeacherForm() {
           ) : (
             <div><label className={labelClass}>Taux horaire (MAD)</label><input type="number" className={inputClass} value={form.taux_horaire || ''} onChange={e => set('taux_horaire', e.target.value)} /></div>
           )}
-          <div className="col-span-2"><label className={labelClass}>IBAN (virement salaire)</label><input className={inputClass} value={form.iban || ''} onChange={e => set('iban', e.target.value)} placeholder="MA64 ..." /></div>
+          <div className="col-span-2"><label className={labelClass}>IBAN (virement salaire)</label><input className={inputClass} value={form.iban || ''} onChange={e => set('iban', e.target.value)} placeholder="MA64 ..." /></div></>}
           <div className="col-span-2">
             <label className={labelClass}>Niveaux autorisés</label>
             <div className="space-y-3 mt-2">
@@ -141,7 +201,7 @@ export default function TeacherForm() {
               ))}
             </div>
           </div>
-          <div className="col-span-2"><label className={labelClass}>Notes</label><textarea className={`${inputClass} h-20 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
+          <div className="col-span-2"><label htmlFor="teacher_notes" className={labelClass}>Notes</label><textarea id="teacher_notes" className={`${inputClass} h-20 resize-none`} value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
         </div>
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={saving || uploading} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">

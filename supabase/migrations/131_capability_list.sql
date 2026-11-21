@@ -64,4 +64,6 @@ revoke all on function operational_security.capability_roles() from public, anon
 revoke all on function operational_security.role_has_capability(text, text) from public, anon, authenticated, service_role;
 revoke all on function operational_security.has_capability(text) from public, anon, authenticated, service_role;
 
+notify pgrst, 'reload schema';
+
 commit;

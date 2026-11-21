@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import { localBusinessDate } from '@/lib/receiptFinance';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -158,6 +160,9 @@ function CertificatePrintView({ cert }) {
 }
 
 export default function Certificates() {
+  // RPW-r2 item 17c: reception views and prints; issuing and deleting stay management.
+  const { role } = useAuth();
+  const canIssue = hasCapability(role, 'canIssueCertificates');
   const [certs, setCerts] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -191,9 +196,9 @@ export default function Certificates() {
           <h1 className="text-2xl font-bold">Certificats de réussite</h1>
           <p className="text-muted-foreground text-sm mt-1">{certs.length} certificats émis</p>
         </div>
-        <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
+        {canIssue && <Button onClick={() => setModal(true)} className="self-start sm:self-auto">
           <Plus size={15} /> Nouveau certificat
-        </Button>
+        </Button>}
       </div>
 
       {loading ? (
@@ -210,7 +215,7 @@ export default function Certificates() {
                   <p className="text-xs text-muted-foreground">Émis le {c.date_emission}</p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                  {canIssue && <button aria-label="Supprimer le certificat" onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                 </div>
               </div>
             ))}
@@ -234,7 +239,7 @@ export default function Certificates() {
                     <td className="px-4 py-3 text-muted-foreground">{c.date_emission}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => handleDelete(c.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                        {canIssue && <button aria-label="Supprimer le certificat" onClick={() => handleDelete(c.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                       </div>
                     </td>
                   </tr>
@@ -245,7 +250,7 @@ export default function Certificates() {
           {certs.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucun certificat émis.</div>}
         </div>
       )}
-      {modal && <CertificateModal students={students} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
+      {canIssue && modal && <CertificateModal students={students} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
     </div>
   );
 }

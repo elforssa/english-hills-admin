@@ -36,6 +36,8 @@ function calcIR(brut) {
   return Math.round(tax);
 }
 
+const PAYROLL_CONTRACT_MISSING_MESSAGE = 'Type de contrat non renseigné : complétez la fiche de l’enseignant (contrat et rémunération) avant la paie.';
+
 function calcPayroll(teacher, heures) {
   const isEmployee = teacher.contract_type === 'Employé';
   const taux = teacher.taux_horaire || 0;
@@ -95,6 +97,11 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Enseignant introuvable' }, { status: 404 });
   }
 
+  // RPW-r2 item 18: reception adds teachers without a contract or pay; such a record
+  // would compute a 0 MAD payslip, so management completes the record first.
+  if (!['Employé', 'Freelance'].includes(teacher.contract_type)) {
+    return NextResponse.json({ error: PAYROLL_CONTRACT_MISSING_MESSAGE }, { status: 409 });
+  }
   const calc = calcPayroll(teacher, heures);
 
   const { data: payroll, error: insertErr } = await admin.from('payroll').insert({

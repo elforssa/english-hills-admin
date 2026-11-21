@@ -1,7 +1,7 @@
 // Batch C browser contract (plan NRC-r2, ADR-009, REL-4): record conflicts,
 // worker mapping, new-learner identity and the CSV import rows. No database.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { CONFLICT_CODE, isRecordConflict, recordConflictMessage } from '../src/lib/conflictErrors.mjs';
 import { metaRpcError } from '../src/lib/crm/meta/protocol.mjs';
 import { commandError } from '../src/lib/crm/presentation.mjs';
@@ -149,13 +149,15 @@ const identityConflict = { code: '23505', message: 'Student create identity conf
   assert.notEqual(after[1], after[0], 'admin form: "already created" rotates the id');
 }
 // Each form holds its id this way: minted once by a lazy initialiser, settled only through it.
-for (const path of ['src/components/students/StudentForm.jsx', 'src/components/students/ReceptionistStudentForm.jsx']) {
+for (const path of ['src/components/students/StudentForm.jsx']) {
   const source = readFileSync(path, 'utf8');
   assert.match(source, /const \[newStudentId\] = useState\(\(\) => createLearnerIdentity\(\)\);/, `${path}: lazy, once-only id`);
   assert(!/crypto\.randomUUID\(\)|useRef\(createStableIdempotencyKey\(\)\)|newStudentId\.current =/.test(source), `${path}: no other id source`);
 }
 assert.match(readFileSync('src/components/students/StudentForm.jsx', 'utf8'), /newStudentId\.settle\(created\.status\)/);
-assert.match(readFileSync('src/components/students/ReceptionistStudentForm.jsx', 'utf8'), /newStudentId\.settle\(conflict\.status\)[\s\S]*if \(!isEdit\) newStudentId\.settle\('created'\)/);
+// RPW-r2 item 1: the shared form's reception path settles the same id the same way.
+assert.match(readFileSync('src/components/students/StudentForm.jsx', 'utf8'), /newStudentId\.settle\(conflict\.status\)[\s\S]*newStudentId\.settle\('created'\)/);
+assert(!existsSync('src/components/students/ReceptionistStudentForm.jsx'), 'the separate reception learner form is retired');
 console.log('PASS one learner id per form: kept across uncertain failures, rotated only after success or "already created"');
 
 // CSV import ids: same file text and line → same id; any edit → new ids.

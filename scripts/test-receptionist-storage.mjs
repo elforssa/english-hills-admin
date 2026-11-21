@@ -7,7 +7,8 @@ import { createServerClient } from '@supabase/ssr';
 const status = JSON.parse(execFileSync('supabase', ['status', '-o', 'json'], { encoding: 'utf8' }));
 assert.equal(status.API_URL, 'http://127.0.0.1:54321');
 const base = status.API_URL, appBase = 'http://127.0.0.1:3101';
-const student = randomUUID(), enrollment = randomUUID();
+const student = randomUUID(), enrollment = randomUUID(), teacher = randomUUID();
+let portfolioId = null;
 const email = `reception-storage-${randomUUID()}@example.invalid`;
 const password = randomBytes(24).toString('base64url');
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=', 'base64');
@@ -82,26 +83,53 @@ try {
     assert.equal(signed.status, 200, JSON.stringify(signed));
     assert.equal(typeof signed.data.url, 'string');
   }
-  const denied = await request('/rest/v1/rpc/reserve_storage_asset', 'POST', {
-    p_purpose: 'teacher_photo', p_student_id: null, p_teacher_id: randomUUID(), p_enrollment_id: null,
-  }, token);
-  assert.equal(denied.ok, false);
+  // RPW-r2 item 17: a portfolio file of a learner, bound by her portfolio row.
+  const upload = async (purpose, ids) => {
+    const asset = ok(await request('/rest/v1/rpc/reserve_storage_asset', 'POST', {
+      p_purpose: purpose, p_student_id: ids.student ?? null, p_teacher_id: ids.teacher ?? null, p_enrollment_id: null,
+    }, token));
+    assets.push(asset);
+    ok(await request(`/storage/v1/object/${asset.bucket}/${asset.path}`, 'POST', png, token,
+      { 'Content-Type': 'image/png', 'x-upsert': 'false' }));
+    const finalized = await app('finalize', asset.id, session);
+    assert.equal(finalized.status, 200, JSON.stringify(finalized));
+    return { asset, ref: finalized.data.ref };
+  };
+  const portfolioFile = await upload('portfolio', { student });
+  portfolioId = ok(await request('/rest/v1/portfolios', 'POST', { student_id: student, student_name: 'Synthetic storage learner',
+    title: 'Synthetic portfolio', project_type: 'Other', file_url: portfolioFile.ref }, token, { Prefer: 'return=representation' }))[0].id;
+  assert.equal((await app('sign', portfolioFile.asset.id, session)).status, 200, 'her portfolio file signs');
+  // Item 18p: a teacher photo on a teacher record she creates (never a pay field).
+  const teacherPhoto = await upload('teacher_photo', {});
+  ok(await request('/rest/v1/rpc/save_receptionist_teacher_operations', 'POST', { p_teacher: teacher, p_expected_updated_at: null,
+    p_changes: { full_name: 'Synthetic storage teacher', email: `storage-teacher-${teacher}@example.invalid`, photo_url: teacherPhoto.ref } }, token));
+  assert.equal((await app('sign', teacherPhoto.asset.id, session)).status, 200, 'her teacher photo signs');
+  // Still refused: another teacher's photo slot, a premium homework file, a portfolio without a learner.
+  for (const [purpose, ids] of [['teacher_photo', { teacher: randomUUID() }], ['premium_homework', { student }], ['portfolio', {}]]) {
+    const denied = await request('/rest/v1/rpc/reserve_storage_asset', 'POST', {
+      p_purpose: purpose, p_student_id: ids.student ?? null, p_teacher_id: ids.teacher ?? null, p_enrollment_id: null,
+    }, token);
+    assert.equal(denied.ok, false, `${purpose} refused`);
+  }
   assert.equal((await app('sign', randomUUID(), session)).status, 403);
   const direct = await request(`/storage/v1/object/authenticated/${assets[0].bucket}/${assets[0].path}`, 'GET', undefined, token);
   assert.equal(direct.ok, false);
-  assert.equal(sql(`select count(*) from public.storage_asset_bindings where asset_id in (${assets.map(a => q(a.id)).join(',')})`), '2');
-  console.log('PASS receptionist photo/document reserve, upload, finalize, bind, sign and forbidden purposes/direct read');
+  assert.equal(sql(`select count(*) from public.storage_asset_bindings where asset_id in (${assets.map(a => q(a.id)).join(',')})`), '4');
+  console.log('PASS receptionist photo/document/portfolio/teacher photo reserve, upload, finalize, bind, sign and forbidden purposes/direct read');
 } finally {
   for (const asset of assets) await request(`/storage/v1/object/${asset.bucket}`, 'DELETE', { prefixes: [asset.path] });
   if (actor) sql(`begin;
     update public.students set photo_url=null where id=${q(student)};
+    update public.teachers set photo_url=null where id=${q(teacher)};
     update public.enrollments set documents_urls='{}'::text[] where id=${q(enrollment)};
     delete from public.storage_asset_bindings where asset_id in (${assets.length ? assets.map(a => q(a.id)).join(',') : "'00000000-0000-0000-0000-000000000000'"});
+    ${portfolioId ? `delete from public.portfolios where id=${q(portfolioId)};` : ''}
     delete from public.storage_assets where id in (${assets.length ? assets.map(a => q(a.id)).join(',') : "'00000000-0000-0000-0000-000000000000'"});
     set local eh.enrollment_command = on; delete from public.enrollments where id=${q(enrollment)};
     delete from public.students where id=${q(student)};
+    delete from public.teachers where id=${q(teacher)};
     delete from auth.users where id=${q(actor)};
-    delete from public.activity_log where actor_id=${q(actor)} or target_id in (${q(student)},${q(enrollment)});
+    delete from public.activity_log where actor_id=${q(actor)} or target_id in (${q(student)},${q(enrollment)},${q(teacher)});
     commit;`);
   if (localStorageIndex) sql('drop index storage.local_test_storage_upsert_compat', 'supabase_storage_admin');
 }
