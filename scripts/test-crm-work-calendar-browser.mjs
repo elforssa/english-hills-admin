@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -76,7 +77,7 @@ try {
    Intl.DateTimeFormat.prototype=Original.prototype;Intl.DateTimeFormat.supportedLocalesOf=Original.supportedLocalesOf.bind(Original);
   });
   await ctx.route(url=>!['localhost','127.0.0.1'].includes(url.hostname),route=>{external.push(new URL(route.request().url()).hostname);return route.abort();});
-  page=await ctx.newPage();page.setDefaultTimeout(60000);page.on('pageerror',e=>{errors.push(e.message);console.error('BROWSER_ERROR',phase,e.message);});
+  page=await ctx.newPage();page.setDefaultTimeout(60000);const fetches=cancelledFetches(page);page.on('pageerror',e=>{if(fetches.take(e,`${phase}: ${e.message}`))return;errors.push(e.message);console.error('BROWSER_ERROR',phase,e.message);});
   page.on('request',r=>{if(r.url().includes('/rest/v1/'))requests.push({path:new URL(r.url()).pathname,url:r.url(),args:r.postDataJSON()});});
   const payloadReads=new Set();
   page.on('response',r=>{
@@ -173,7 +174,7 @@ try {
   await page.clock.fastForward(61000);await minuteRead;
   const focusRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
   await page.clock.fastForward(16000);await page.evaluate(()=>window.dispatchEvent(new Event('visibilitychange')));await focusRead;
-  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
+  await page.waitForLoadState('networkidle');await Promise.allSettled([...payloadReads]);assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} task types/pages/AND filters/exact-task stale guards/Calendar/legacy/Back/responsive/reduced motion`);
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));

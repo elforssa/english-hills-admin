@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -78,7 +79,7 @@ try {
  }
  for(const engine of (process.argv.includes('--webkit-only')?[webkit]:[chromium,webkit])) {
   browser=await engine.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
-  const errors=[],transportErrors=[],cancelled=[],external=[],requests=[];let crmMode='ready',studentMode='ready',detailMode='ready',placementMode='ready',financeMode='ready',monthlyMode='ready',rejectDashboard=false;hold=null;
+  const errors=[],external=[],requests=[];let fetches;let crmMode='ready',studentMode='ready',detailMode='ready',placementMode='ready',financeMode='ready',monthlyMode='ready',rejectDashboard=false;hold=null;
 // Batch H (H2, H4): single-line programme pills, the editable programme select drawn as a
 // pill, and « — » in the Groupe column for files that do not await a group.
 const studentPills=async role=>{
@@ -159,7 +160,7 @@ const studentPills=async role=>{
    if(name==='receipts')return json(url.searchParams.has('student_id')?[{id:randomUUID(),receipt_number:'SYNTHETIC-UIF',date:'2026-10-01',net_amount_snapshot:1000,montant_paye:300,balance_after_snapshot:700,statut_paiement:'Acompte versé'}]:[]);
    return json([]);
   });
-  page=await ctx.newPage();page.setDefaultTimeout(15000);page.on('requestfailed',r=>{const failure=r.failure()?.errorText||'';if(/cancel|abort/i.test(failure))cancelled.push(new URL(r.url()).pathname);});page.on('pageerror',e=>{if(rejectDashboard && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(e.name==='Fetch API cannot load http' && e.message.includes('access control checks'))transportErrors.push({message:e.message,phase});else errors.push(e.message);});await page.clock.install();await login(users[0]);
+  page=await ctx.newPage();page.setDefaultTimeout(15000);fetches=cancelledFetches(page);page.on('pageerror',e=>{if(rejectDashboard && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(!fetches.take(e,`${phase}: ${e.message}`))errors.push(e.message);});await page.clock.install();await login(users[0]);
   if(process.argv.includes('--students-touch-only')) {
    for(const width of [768,720,390,375,320]) {
     phase=engine.name()+' '+width+' Students touch targets';await page.setViewportSize({width,height:1024});await navigate(app+'/students');
@@ -255,7 +256,7 @@ const studentPills=async role=>{
   financeMode='ready';monthlyMode='ready';rejectDashboard=true;await navigate(app+'/dashboard');await page.getByText('Impossible de charger le tableau de bord.',{exact:true}).waitFor();assert.equal(await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).count(),0);rejectDashboard=false;
   financeMode='error';await navigate(app+'/dashboard');await page.getByText('Impossible de charger les totaux financiers.',{exact:true}).waitFor();await page.getByText('Aucun reçu enregistré ce mois.',{exact:true}).waitFor();financeMode='ready';monthlyMode='error';await page.getByRole('button',{name:'Réessayer',exact:true}).first().click();await page.getByRole('alert').filter({hasText:'Actualisation impossible'}).waitFor();assert((await page.getByRole('link',{name:/Total encaissé/}).innerText()).includes('0 MAD'),'independent successful total remains valid zero');
   assert(requests.filter(r=>r.name==='get_finance_charge_summary').every(r=>!r.args||Object.keys(r.args).length===0));assert(requests.filter(r=>r.name==='get_monthly_finance_summary').every(r=>Object.keys(r.args).join(',')==='p_month_start'));
-  await page.waitForLoadState('networkidle');assert.deepEqual(errors,[]);assert(transportErrors.every(error=>cancelled.some(path=>error.message.includes(path))),JSON.stringify({transportErrors,cancelled}));assert.deepEqual(external,[]);
+  await page.waitForLoadState('networkidle');assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');assert.deepEqual(external,[]);
   await ctx.close();await browser.close();browser=null;console.log(`PASS ${engine.name()} UIF ${process.argv.includes('--responsive-only') ? 'focused responsive/zoom/contrast/keyboard/44×44 touch targets plus Dashboard/Placement read truth' : 'CRM/Students/Dashboard/Placement read states, answers/destinations, reset, responsive widths, focus, touch, return context'}`);
  }
 } catch(error) {
