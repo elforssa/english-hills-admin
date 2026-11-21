@@ -28,7 +28,7 @@ import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
 import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
-import { isOpenEnrollment, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { isOpenEnrollment } from '@/lib/enrollmentWorkflow.mjs';
 import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
@@ -288,7 +288,7 @@ function StudentDetail() {
       </Section>
 
       <Section title="Inscriptions et groupes">
-        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.</p>}
+        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif. Les fins d’inscription passent par la direction.</p>}
         {/* EAP: an enrollment is born at the payment; the receipt form confirms it and places the learner. */}
         {(role === 'receptionist' || isManagement) && <Link data-touch-target href={`/receipts/new?student_id=${student.id}`} className="mb-3 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"><CircleDollarSign size={14} />Inscrire et encaisser</Link>}
         {/* The main group is the database's copy of one membership; each enrollment shows its own group. */}
@@ -304,7 +304,7 @@ function StudentDetail() {
               </div>
               <div className="flex items-center gap-3">
                 {isManagement && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}
-                <button disabled={!canManage || (role === 'receptionist' && !LIVE_ENROLLMENT_STATUSES.includes(enrollment.status))} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+                <button disabled={!canManage || !hasCapability(role, 'canEditEnrollment')} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
               </div>
               {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
                 {(enrollment.documents_urls || []).map((ref, index) => <button key={ref} type="button"

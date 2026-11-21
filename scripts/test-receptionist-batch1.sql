@@ -70,13 +70,14 @@ declare v_hint text; begin
  end;
  raise exception 'Expected retired-status refusal: %',statement;
 end $$;
--- EAP (127): a reception placement without a paid enrollment is refused.
+-- EAP (127): a reception placement without a paid enrollment is refused. RPW-r2 (132): the
+-- retired command passes no reason, so the refusal asks for one (eap.placement_reason_required).
 create function pg_temp.unpaid(statement text) returns void language plpgsql as $$
 declare v_hint text; begin
  begin execute statement; exception when check_violation then
    get stacked diagnostics v_hint=pg_exception_hint;
-   if v_hint='eap.paid_enrollment_required' then return; end if;
-   raise exception 'Expected eap.paid_enrollment_required, got %: %',v_hint,statement;
+   if v_hint='eap.placement_reason_required' then return; end if;
+   raise exception 'Expected eap.placement_reason_required, got %: %',v_hint,statement;
  end;
  raise exception 'Expected paid-enrollment refusal: %',statement;
 end $$;

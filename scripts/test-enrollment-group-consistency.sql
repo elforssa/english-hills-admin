@@ -276,8 +276,9 @@ select pg_temp.ok(pg_temp.file(pg_temp.id(201)) = jsonb_build_object('status', '
 select public.place_learner_in_group(pg_temp.id(201), pg_temp.id(302), pg_temp.su(pg_temp.id(201)), p_without_enrollment_reason => 'EGC fixture');
 select pg_temp.act(3);
 -- EAP (127): reception places only a paid enrollment; it collects first, then places.
+-- RPW-r2 (132): the retired command passes no reason, so it is asked for one.
 select pg_temp.fails(format('select public.assign_receptionist_student_group(%L, null, %L, %L, null)', pg_temp.id(202), pg_temp.id(302),
-  pg_temp.su(pg_temp.id(202))), '23514', 'eap.paid_enrollment_required');
+  pg_temp.su(pg_temp.id(202))), '23514', 'eap.placement_reason_required');
 select public.create_charge_payment(jsonb_build_object('student_id', pg_temp.id(202), 'session_type', 'Mise à niveau',
   'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 100, 'payment_method', 'Espèces', 'idempotency_key', pg_temp.id(1202)));
 select public.assign_receptionist_student_group(pg_temp.id(202), null, pg_temp.id(302), pg_temp.su(pg_temp.id(202)), null);
@@ -573,8 +574,14 @@ select pg_temp.fails(format($$insert into public.enrollments(student_id, group_i
 select pg_temp.act(3);
 select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L)', pg_temp.id(214), pg_temp.id(304), pg_temp.su(pg_temp.id(214))),
   '23514', 'egc.capacity');
-select pg_temp.fails(format('select public.place_learner_in_group(%L, %L, %L, p_capacity_override_reason => %L)', pg_temp.id(214), pg_temp.id(304),
-  pg_temp.su(pg_temp.id(214)), 'Accord direction'), '42501', 'egc.capacity_override_forbidden');
+-- RPW-r2 (132, item 11): reception overrides with a reason; checked here, then undone.
+do $$ begin
+  perform public.place_learner_in_group(pg_temp.id(214), pg_temp.id(304), pg_temp.su(pg_temp.id(214)),
+    p_capacity_override_reason => 'Accord direction');
+  raise exception 'rpw-undo';
+exception when raise_exception then
+  if sqlerrm <> 'rpw-undo' then raise; end if;
+end $$;
 select pg_temp.fails(format($$select public.save_receptionist_enrollment(%L, %L, %L, 'Confirmed', 'Beginning 1', current_date, null, 'Adults', '2026/2027')$$,
   pg_temp.id(214), (select id from egc_e214), pg_temp.id(304)), '23514', 'egc.capacity');
 select pg_temp.fails(format('select public.assign_receptionist_student_group(%L, null, %L, %L, null)', pg_temp.id(214), pg_temp.id(304),
@@ -676,8 +683,12 @@ select public.save_enrollment_changes((select id from egc_e217), pg_temp.eu((sel
 select pg_temp.ok((select status = 'Confirmed' and level = 'Beginning 1' from public.enrollments where id = (select id from egc_e217)), 'changed fields only');
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (pg_temp.enr(pg_temp.id(209), 'Adults')).id,
   (pg_temp.enr(pg_temp.id(209), 'Adults')).updated_at, '{"status":"Submitted"}'), '23514', 'egc.status_not_permitted');
+-- RPW-r2 (132, items 10, 13): reception edits level, date and notes like management.
 select pg_temp.act(3);
+select public.save_enrollment_changes((select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"notes":"x"}');
+select pg_temp.act(4);
 select pg_temp.fails(format('select public.save_enrollment_changes(%L, %L, %L)', (select id from egc_e217), pg_temp.eu((select id from egc_e217)), '{"notes":"x"}'), '42501');
+select pg_temp.act(3);
 select pg_temp.fails(format('select public.create_enrollment(%L, %L)', pg_temp.id(217), '{"session_type":"Yearly","school_year":"2026/2027"}'), '42501');
 select pg_temp.owner();
 

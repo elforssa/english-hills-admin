@@ -23,7 +23,9 @@ if (write) {
     // A manual outcome is a reviewed decision: keep it while the body is unchanged.
     if (entry.gate === 'manual' && previous[signature]?.md5 === entry.md5) entry.receptionist = previous[signature].receptionist;
   }
-  writeFileSync(FUNCTIONS, JSON.stringify(live, null, 2) + '\n');
+  // Sorted by signature so a regenerated fixture diffs only where a function changed.
+  const sorted = Object.fromEntries(Object.keys(live).sort().map(signature => [signature, live[signature]]));
+  writeFileSync(FUNCTIONS, JSON.stringify(sorted, null, 2) + '\n');
   writeFileSync(POLICIES, JSON.stringify(policies, null, 2) + '\n');
   console.log(`wrote ${Object.keys(live).length} functions and ${Object.keys(policies).length} policies`);
   process.exit(0);

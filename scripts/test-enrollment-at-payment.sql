@@ -369,17 +369,17 @@ select pg_temp.owner();
 select pg_temp.ok((select status = 'Confirmed' and group_id is null from public.enrollments where id = (pg_temp.get('p620')->>'enrollment_id')::uuid),
   'full group: still Confirmed without a group');
 insert into public.students(id, full_name, status, session_type) values (pg_temp.id(640), 'EAP T unplaced', 'Prospect', 'Yearly');
+-- RPW-r2 (132, item 12): reception places without a paid enrollment like management, with
+-- a reason (scripts/test-receptionist-groups.sql); without one it is asked for it.
 select pg_temp.act(3);
 select pg_temp.refused(format('select public.place_learner_in_group(p_student => %L, p_group => %L, p_student_updated_at => %L)',
-  pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640))), '23514', 'eap.paid_enrollment_required', 'reception place without enrollment');
-select pg_temp.refused(format('select public.place_learner_in_group(p_student => %L, p_group => %L, p_student_updated_at => %L, p_without_enrollment_reason => %L)',
-  pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640)), 'Raison'), '23514', 'eap.paid_enrollment_required', 'reception reason does not help');
+  pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640))), '23514', 'eap.placement_reason_required', 'reception place without enrollment');
 select pg_temp.refused(format('select public.assign_receptionist_student_group(%L, null, %L, %L)',
-  pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640))), '23514', 'eap.paid_enrollment_required', 'reception assign without enrollment');
+  pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640))), '23514', 'eap.placement_reason_required', 'reception assign without enrollment');
 -- A retired-status row is not a paid enrollment either.
 select pg_temp.refused(format('select public.place_learner_in_group(p_student => %L, p_group => %L, p_student_updated_at => %L, p_enrollment => %L, p_enrollment_updated_at => %L)',
   pg_temp.id(600), pg_temp.id(500), pg_temp.upd(pg_temp.id(600)), pg_temp.id(601), pg_temp.eupd(pg_temp.id(601))),
-  '23514', 'eap.paid_enrollment_required', 'reception place a Submitted row');
+  '23514', 'eap.placement_reason_required', 'reception place a Submitted row');
 select pg_temp.act(2);
 select pg_temp.refused(format('select public.place_learner_in_group(p_student => %L, p_group => %L, p_student_updated_at => %L)',
   pg_temp.id(640), pg_temp.id(500), pg_temp.upd(pg_temp.id(640))), '23514', 'eap.placement_reason_required', 'admin without reason');
