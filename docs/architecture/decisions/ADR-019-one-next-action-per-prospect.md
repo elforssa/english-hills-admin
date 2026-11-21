@@ -2,9 +2,9 @@
 
 ## Status
 
-**Proposed** (2026-11-21) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r5 (r1–r4 were each reviewed CHANGES REQUIRED the same day). Not approved, not implemented.
+**Accepted** (2026-11-21, architecture only) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r5, which the owner approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2` after an independent re-review verdict of READY FOR FINAL REVIEW (r1–r4 were each reviewed CHANGES REQUIRED the same day). OD-1–OD-20 are answered in the plan's [approval record](../plans/receptionist-workflow.md#approval-record). Not implemented: implementation, migrations, data steps, merge and release each need the owner's separate approval.
 
-**Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, depending on the owner's answers, two product rules: operational tasks kept beside a new follow-up (OD-18) and the five-failure stop (OD-17). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
+**Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, with OD-18 answered, the product rule that keeps operational tasks beside a new follow-up: after the user confirms « Remplace : … », a call or message may replace an appointment (A), while an enrolment action can only be rescheduled, cancelled or given an outcome (B). The five-failure stop is kept (OD-17 = A). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
 
 The number is provisional: ADR-018 belongs to the receptionist permissions plan (RPW-r2, PR #203). If that ADR lands under another number, this one keeps 019 unless the owner asks otherwise.
 
@@ -33,7 +33,7 @@ The owner's three test rounds (November 2026) found prospects with up to four op
 
 ## Decision
 
-1. **A prospect has exactly one open next action while active, and none once closed** (« at most one » if the owner chooses OD-1 = B).
+1. **A prospect has exactly one open next action while active, and none once closed** (OD-1 = A).
    - A unique partial index on `crm_tasks(lead_id) where status = 'open'` enforces the first part.
    - Deferred constraint triggers enforce presence and absence at commit.
    - A closed prospect may keep no planned level test.
@@ -49,7 +49,7 @@ The owner's three test rounds (November 2026) found prospects with up to four op
 
 - **Data step D1** (dry run, then owner approval) must bring every existing prospect into the model before enforcement: duplicates reduced to one, an action created for active prospects with none, an appointment created for each planned test, nothing left on closed, converted or merged prospects. The migration is split into M-A1 (services) and M-A2 (enforcement), and M-A2 aborts unless all of D1's checks are 0.
 - **The old command wrappers** route through the new core until M-A2 revokes them.
-- **Meta lifecycle event types and first-touch immutability are unchanged.** If OD-11 = A, qualification becomes implied by booking an appointment or choosing « Inscrire maintenant », which changes the « Qualifié » counts.
+- **Meta lifecycle event types and first-touch immutability are unchanged.** With OD-11 = A, qualification becomes implied by booking an appointment or choosing « Inscrire maintenant », which changes the « Qualifié » counts.
 - **The help guide, PRODUCT_RULES and WORKFLOWS** change with each release.
 
 ## Alternatives considered

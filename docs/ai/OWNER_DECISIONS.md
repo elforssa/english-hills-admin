@@ -553,6 +553,32 @@ Plan: [online room reliability](../architecture/plans/online-room-reliability.md
 - **D16 — refused webhook writes (Maroine, 2026-11-19, during the webhook PR): « Small refusal table ».** The status line's count of refused writes since the last deploy is kept in `online_webhook_refusals`, one counter row per deployment and reason (`rate_limited`, `unavailable`), written best effort when the webhook route answers 429 or 503, never readable through the API, purged with the evidence after 12 months. A 503 caused by the database being unreachable cannot be counted; the Vercel logs hold those. Recorded in the plan's [webhook PR record](../architecture/plans/online-room-reliability.md#implementation-record--webhook-pr). It authorizes no migration, merge or Production step.
 - **Not authorized:** implementation of either pull request before its own task, any migration or migration number, merge of either implementation PR, the webhook secret, any Zoom setting or subscription, the billing change and every Production step; each needs the owner's separate approval.
 
+## Receptionist workflow — RWR-r5 APPROVED, architecture only (2026-11-21)
+
+Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), revision **RWR-r5 approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`** (Tier 3; PR #205; [ADR-019](../architecture/decisions/ADR-019-one-next-action-per-prospect.md) accepted, architecture only; evidence: [audit of 2026-11-21](../architecture/evidence/receptionist-workflow-audit-2026-11-21.md)). RWR-r1 to RWR-r4 were each independently reviewed CHANGES REQUIRED on 2026-11-21; the owner records the re-review of RWR-r5 as READY FOR FINAL REVIEW with four non-blocking notes.
+
+- **Answers:** OD-1 A (exactly one next action per active prospect); OD-2 A (« Réserver sans paiement » holds no seat; ADR-015 kept); **OD-3 B (one set of hours for calling and the desk)**; OD-4 visit 60 minutes, level test 45 minutes; **OD-5 5 days** (default « relancer le »; the brief said 7); OD-6 A (a default owner chosen by the direction); OD-7 A (director only voids receipts); OD-8 A (student merge links, never moves history); OD-9 A (keep RPW-r2); OD-10 A; OD-11 A (qualification implied); OD-12 « Sans inscription »; OD-13 A; OD-14 A; OD-15 keep the brand text, translate everything else; OD-17 A (« En attente » with no relance date after five failed calls); OD-18 B for enrolment actions, A for appointments; OD-19 A (#204 merges first); OD-20 B (« Pas de réponse » saves immediately, no « Annuler »).
+- **Owner inputs still to come (gates):** the weekday hours and closed dates before A1 starts (A1 must not start without them); the default owner's account before D1 (D1 must not run without it); the 2026/2027 programme prices before B2 (OD-16).
+- **Reviewer's notes:** the four non-blocking notes of the re-review of `824252a` are follow-ups for the A1 implementation and do not change the approved design; the A1 implementation record copies them from that review.
+- **Plan approval (owner's words, verbatim):**
+
+  > Owner approval (Maroine, 2026-11-21): I APPROVE plan revision RWR-r5 of docs/architecture/plans/receptionist-workflow.md at exact head 824252a359f99ad5d8077754c3504b2aa4eb07f2, following the independent re-review verdict READY FOR FINAL REVIEW on that head.
+  >
+  > Answers:
+  > - OD-1 A; OD-2 A; OD-7 A; OD-8 A; OD-9 A; OD-10 A; OD-11 A; OD-12 « Sans inscription »; OD-13 A; OD-14 A; OD-15 keep the brand text, translate everything else; OD-17 A; OD-18 as recommended (B for enrolment actions, A for appointments); OD-19 A.
+  > - OD-3 B: one set of hours for calling and the desk. I will give the weekday hours and closed dates before release A implementation starts; A1 must not start without them.
+  > - OD-4: visit 60 minutes, level test 45 minutes.
+  > - OD-5: 5 days (not 7).
+  > - OD-6 A: a default owner chosen by the direction. I will name the account before data step D1; D1 must not run without it.
+  > - OD-16: I will give the 2026/2027 programme prices before release B2.
+  > - OD-20 B, as I gave it earlier today: « Pas de réponse » saves immediately, no « Annuler », a mistake is corrected as a new exchange.
+  >
+  > The reviewer's four non-blocking notes on 824252a are recorded as follow-ups for the A1 implementation; they do not change the approved design.
+  >
+  > Record this verbatim in the plan's approval record and in docs/ai/OWNER_DECISIONS.md, update OD-5's value in the plan, and set ADR-019 to accepted. This approves the architecture only. It does not authorize implementation, migration numbers, the R0 Production queries, any data step, merge or release; each needs my separate approval. Docs-only commit to the same branch: commit, push, confirm CI is scheduled, hand off with the new head SHA. Do not merge.
+
+- **Not authorized:** implementation, migration numbers, the R0 Production queries, any data step (D1, D3–D7), merge or release; each needs the owner's separate approval.
+
 ## Deferred backlog after RCC-r1
 
 Preserved, none approved or scheduled. Each needs its own architecture and owner approval.

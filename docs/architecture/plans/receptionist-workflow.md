@@ -1,9 +1,9 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: PROPOSED (architecture only), revision RWR-r5, 2026-11-21.** Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Nothing is implemented, applied, merged or released. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: APPROVED (architecture only), revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21** ([approval record](#approval-record)). Implementation is not authorized. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Nothing is implemented, applied, merged or released. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
-- **Decision record:** [ADR-019 (proposed)](../decisions/ADR-019-one-next-action-per-prospect.md).
+- **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
 - **Baseline:** `origin/main` `53c486b`, migration ceiling 130.
 - **Overlapping open work:** plan RPW-r2 (PR #203, approved 2026-11-21) and its implementation PR #204 (migrations 131–135, not merged).
 
@@ -25,7 +25,7 @@
   - **« Changer la prochaine action »** replaces « Planifier », « Replanifier », « Annuler l'action », « Terminer » and « Qualifier ».
   - A note never touches the next action.
 - **« Rendez-vous au centre »** replaces separate visits and level tests; the test is an option of the appointment. Booking it replaces the pending reminder. After the appointment time, four outcome buttons appear: « Venu – inscrit sur place », « Venu – reviendra », « Venu – pas intéressé », « Pas venu ».
-- **« En attente du prospect »** is a next action with an optional « relancer le… » date (7 days by default). These prospects appear under « En attente », never under « En retard ».
+- **« En attente du prospect »** is a next action with an optional « relancer le… » date (5 days by default, OD-5). These prospects appear under « En attente », never under « En retard ».
 - **A date is asked only when something was agreed** (a callback time, an appointment) **or when the next step is ours** (send the price, confirm a group).
 - **Closing a prospect** cancels its next action and its planned test or appointment.
 - **A screen with stale data is refused** (« Ce prospect a été modifié, rechargez ») and never overwrites silently.
@@ -293,7 +293,7 @@ Qualification is implied (OD-11). An exchange with `result=spoke` whose next act
 | « Rappel convenu » | `callback` / appointment | **required** | **required** | calling, **refused** outside |
 | « À faire par nous » (envoyer le prix, confirmer un groupe…) | `enrollment_followup` or `whatsapp_followup` / reminder | **required** (presets allowed) | server | calling, moved |
 | « Rendez-vous au centre » (+ option test) | `center_visit` / appointment | **required** | **required** | opening, **refused** outside |
-| « En attente du prospect » | `awaiting_prospect` | optional « relancer le » (default today + 7 days, OD-5) | none | — |
+| « En attente du prospect » | `awaiting_prospect` | optional « relancer le » (default today + 5 days, OD-5) | none | — |
 | Note | — | — | — | does not touch the next action |
 
 Agreed times are never moved; system times always come from `next_window` over the same hours. So the system never creates a time it would refuse from a user (invariant 4).
@@ -629,13 +629,15 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 
 ## Owner decisions required
 
+All twenty were answered by the owner on 2026-11-21; the answers and their effect are in the [approval record](#approval-record) below the table.
+
 | # | Question | Options and consequences | Recommendation | Blocking |
 | --- | --- | --- | --- | --- |
 | OD-1 | One next action: « at most one », or « exactly one » for active prospects? | **A — exactly one** (« En attente » counts as one): every active card shows something, and the « no action » leak (Q05 = 0) is closed. **B — at most one:** prospects may have none and then fall into « attention » again. Both amend ADR-001's « at least one, several allowed » (§2a). | A | A1 |
 | OD-2 | Hold a seat with a due date | **A:** « Réserver sans paiement » = charge with a due date linked to the prospect, no enrollment, no seat, no conversion (keeps ADR-015). **B:** a new seat-holding status that counts capacity (reverses ADR-015's « an enrollment exists only once it is paid »; new finance and conversion design). | A | C1 |
 | OD-3 | Hours | Give calling hours and desk opening hours per weekday, plus closed dates. **A:** two sets (calling ≠ desk). **B:** one set for both. | A, with your values | A1 (values needed for R2) |
 | OD-4 | Appointment length for the overlap rule | Visit 60 min and test 45 min, or your values | 60 / 45 | A1 |
-| OD-5 | Default « relancer le » when a receptionist chooses « En attente » | 7 days (your brief), or another value | 7 days | A1 |
+| OD-5 | Default « relancer le » when a receptionist chooses « En attente » | 7 days (your brief), or another value | 7 days | A1. **Answered by the owner on 2026-11-21: 5 days.** |
 | OD-6 | Owner of intake prospects, and the backfill | **A:** a « responsable par défaut » chosen by the direction; backfill existing unowned prospects to that person. **B:** unowned, visible to every receptionist (« Moi + non attribué »). | A | A1 (backfill in D1) |
 | OD-7 | Who may void receipts | **A:** director only (today). **B:** director and admin. | A | — |
 | OD-8 | Student merge and history | **A — link, don't move:** enrollments, charges, receipts, attendance, tests and converted prospects stay on the duplicate's id; the survivor's screens show both; only family, authorized-adult and unconverted CRM links move (§5.3). No history row changes, and the database rules « an enrollment's student never changes » (`120:308`) and « a CRM enrollment link never changes » (`127:1150`) stay. The survivor is always the one with live enrollments (status not `Rejected` or `Ended`, the index set of `120:52-53`, so `Trial` and `Submitted` included); refused when both have some. **B — move:** re-point enrollments together with their charges, receipts and attendance under a journalled exemption of that rule (financial and enrollment rows updated; needs its own finance architecture and an amendment of ADR-010 and ADR-012's spirit). | A | B1 |
@@ -650,18 +652,57 @@ A fresh manual backup precedes every data step. Earlier release records note tha
 | OD-17 | After five failed calls (PRODUCT_RULES: « five failures stop automatic sequence scheduling; never automatically Lost ») | **A:** the next action becomes « En attente » **with no relance date**: nothing is scheduled automatically, the prospect is never overdue, and it appears in « En attente » for a decision (call again, close). Keeps the rule. **B:** « En attente » with a relance date (OD-5): an automatic reminder, which amends the rule. | A | A1 (and D1 rule c) |
 | OD-18 | Can a call or message replace an appointment or an enrolment action? (PRODUCT_RULES and RCC-A1 keep operational tasks when a follow-up is created; with one action both can't be kept) | **A:** yes, after the form shows « Remplace : Rendez-vous 26/11 15:00 (avec test) » and the user confirms; the appointment and its test are cancelled. Amends the rule. **B:** no: an appointment or enrolment action can only be rescheduled, cancelled or given an outcome; « Changer » for a call or message is offered only after that. Keeps the spirit of the rule, one more step for the receptionist. | B for enrolment actions, A for appointments | A1 |
 | OD-19 | Merge order with PR #204 | **A:** #204 merges first; A1 rebases after it, numbers its migrations after 135 and gets a fresh CI run and review of the rebased head. **B:** A1 may merge first; #204 then renumbers its migrations above A1's and needs a fresh exact-SHA review. | A | A1 merge |
-| OD-20 | Undo of « Pas de réponse » | **A:** a short hold with « Annuler » before the result is sent. **B:** save immediately, no « Annuler »; a mistake is corrected as a new exchange; request keys stay stable as today. | — | **Answered by the owner on 2026-11-21: B.** The owner gave it in a message to the architecture session on 2026-11-21; it is to be restated verbatim in the owner's approval record. Applied in RWR-r4 (§4.9). |
+| OD-20 | Undo of « Pas de réponse » | **A:** a short hold with « Annuler » before the result is sent. **B:** save immediately, no « Annuler »; a mistake is corrected as a new exchange; request keys stay stable as today. | — | **Answered by the owner on 2026-11-21: B.** The owner gave it in a message to the architecture session on 2026-11-21; it is restated in the owner's approval of 2026-11-21 ([approval record](#approval-record)). Applied in RWR-r4 (§4.9). |
+
+### Approval record
+
+RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`) were each independently reviewed CHANGES REQUIRED on 2026-11-21 and revised the same day in this PR. The owner records that the independent re-review of RWR-r5 at `824252a` returned READY FOR FINAL REVIEW, with four non-blocking notes.
+
+**Owner approval (verbatim):**
+
+> Owner approval (Maroine, 2026-11-21): I APPROVE plan revision RWR-r5 of docs/architecture/plans/receptionist-workflow.md at exact head 824252a359f99ad5d8077754c3504b2aa4eb07f2, following the independent re-review verdict READY FOR FINAL REVIEW on that head.
+>
+> Answers:
+> - OD-1 A; OD-2 A; OD-7 A; OD-8 A; OD-9 A; OD-10 A; OD-11 A; OD-12 « Sans inscription »; OD-13 A; OD-14 A; OD-15 keep the brand text, translate everything else; OD-17 A; OD-18 as recommended (B for enrolment actions, A for appointments); OD-19 A.
+> - OD-3 B: one set of hours for calling and the desk. I will give the weekday hours and closed dates before release A implementation starts; A1 must not start without them.
+> - OD-4: visit 60 minutes, level test 45 minutes.
+> - OD-5: 5 days (not 7).
+> - OD-6 A: a default owner chosen by the direction. I will name the account before data step D1; D1 must not run without it.
+> - OD-16: I will give the 2026/2027 programme prices before release B2.
+> - OD-20 B, as I gave it earlier today: « Pas de réponse » saves immediately, no « Annuler », a mistake is corrected as a new exchange.
+>
+> The reviewer's four non-blocking notes on 824252a are recorded as follow-ups for the A1 implementation; they do not change the approved design.
+>
+> Record this verbatim in the plan's approval record and in docs/ai/OWNER_DECISIONS.md, update OD-5's value in the plan, and set ADR-019 to accepted. This approves the architecture only. It does not authorize implementation, migration numbers, the R0 Production queries, any data step, merge or release; each needs my separate approval. Docs-only commit to the same branch: commit, push, confirm CI is scheduled, hand off with the new head SHA. Do not merge.
+
+**Approved answers:** OD-1 A, OD-2 A, OD-3 B, OD-4 60 / 45 minutes, OD-5 5 days, OD-6 A, OD-7 A, OD-8 A, OD-9 A, OD-10 A, OD-11 A, OD-12 « Sans inscription », OD-13 A, OD-14 A, OD-15 keep the brand text and translate everything else, OD-16 prices to come, OD-17 A, OD-18 B for enrolment actions and A for appointments, OD-19 A, OD-20 B.
+
+**Effect on the plan, read with the sections above:**
+- **OD-3 = B:** one set of hours for calling and the desk. `opening_hours` stays NULL, which §4.1 already defines as « the same as `weekly_hours` »; the « Horaires du centre » card edits one set. No other design change.
+- **OD-5 = 5 days:** written into the summary and §4.4 (the default « relancer le » is today + 5 days).
+- **OD-17 = A** keeps the five-failure rule; **OD-18** amends the operational-task rule for appointments only (§2a).
+- **OD-2 = A** and **OD-9 = A**: the stop condition « OD-2 = B or OD-9 = B » does not apply.
+
+**Owner inputs still to come (each is a gate):**
+- the weekday hours and closed dates (OD-3): **A1 must not start without them**;
+- the default owner's account (OD-6): **D1 must not run without it**;
+- the 2026/2027 programme prices (OD-16): before release B2.
+
+**Reviewer's notes:** the four non-blocking notes of the re-review of `824252a` are follow-ups for the A1 implementation and do not change the approved design. Their text is in that review, not in this repository; the A1 implementation record copies them.
+
+**Not authorized by this approval:** implementation, migration numbers, the R0 Production queries, any data step, merge or release. Each needs the owner's separate approval.
 
 ## IMPLEMENTATION CONTRACT
 
-**Scope:** sections 2a and 4–10 of this plan at revision RWR-r5, as amended by the owner's answers to OD-1–OD-20 (OD-20 already answered), recorded in an approval record added to this file before implementation starts.
+**Scope:** sections 2a and 4–10 of this plan at revision RWR-r5, as amended by the owner's answers to OD-1–OD-20, recorded in the [approval record](#approval-record) (owner approval of 2026-11-21 at `824252a`, architecture only).
 
 **Prerequisites:**
-- **Owner approval of the plan.**
+- **Owner approval of the plan:** given on 2026-11-21 at `824252a` (architecture only); implementation still needs its own approval.
 - **A clean merged base.**
-- **For A1:** R0 done; OD-1, 3, 4, 5, 6, 11, 14, 17 and 18 answered. **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
+- **For A1:** R0 done (its own approval); the owner's weekday hours and closed dates (OD-3) given before A1 starts. **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
 - **For B1 and C2:** PR #204 merged.
-- **For C1:** OD-2 answered.
+- **For D1:** the default owner's account named (OD-6).
+- **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**
 - **Migrations:** `NNN_crm_one_next_action.sql`, `NNN_crm_one_next_action_enforce.sql`, `NNN_people_identity.sql`, `NNN_catalogues.sql`, `NNN_desk_payments.sql`, `NNN_desk_academics.sql` (C1 and C2 may share one).
