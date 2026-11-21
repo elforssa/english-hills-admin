@@ -302,7 +302,7 @@ Each stage ends with a commit whose message names the stage, and with these pass
 **Recovery (one step per layer):**
 
 1. **Application:** redeploy the previous build.
-2. **Database** (separate approval): `scripts/rollback/131_135_receptionist_permissions_restore.sql`, one transaction. It re-creates every function and policy 131–135 changed from the R0 export (bodies at 130), drops the new functions and the two log triggers, restores `receptionist_deny` where it was. It keeps `messages.channel` and the `activity_log` rows (inert). Rehearsed locally against a 135 database at stage 5, with the catalog compared to a clean 130 build.
+2. **Database** (separate approval): `scripts/rollback/131_135_receptionist_permissions_restore.sql`, one transaction. It re-creates every function and policy 131–135 changed from the R0 export (bodies at 130), drops the new functions and the two log triggers, restores `receptionist_deny` where it was. It drops `messages.channel` (owner decision on PR #204, 2026-11-21: re-applying 134 rebuilds it from the profiles) and keeps the `activity_log` rows (inert). Rehearsed locally against a 135 database at stage 5, with the catalog compared to a clean 130 build.
 3. **Data:** none to reverse. Rows she created (grades, adults, dismissal entries, messages, teachers) stay valid under the old rules.
 
 ---
