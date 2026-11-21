@@ -289,6 +289,56 @@ AS $function$
   order by p.created_at, p.id limit 1
 $function$;
 revoke all on function portal_security.recipient_for(p_email text, p_student uuid) from public, anon, authenticated, service_role;
+CREATE OR REPLACE FUNCTION public.apply_pending_role()
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$ declare target public.profiles%rowtype; queued public.pending_roles%rowtype;
+  issuer_role text; verified_email text; pending public.family_links%rowtype;
+begin
+  if auth.uid() is null then raise exception 'Authentication required' using errcode = '42501'; end if;
+  update role_security.director_guard set director_count = director_count where singleton;
+  select * into target from public.profiles where id=auth.uid() for update;
+  select email into verified_email from auth.users where id=auth.uid() and email_confirmed_at is not null;
+  if target.id is null or verified_email is null
+    or lower(btrim(target.email)) is distinct from lower(btrim(verified_email)) then return null; end if;
+  select * into queued from public.pending_roles where lower(btrim(email))=lower(btrim(verified_email)) for update;
+  if queued.id is null then return null; end if;
+  select role into issuer_role from public.profiles where id=queued.invited_by;
+  -- One-shot, pending-only, identity-bound and reauthorized at consumption.
+  if target.role <> 'pending' or queued.invited_by is null or queued.expires_at is null
+    or queued.expires_at <= now() or (queued.target_user_id is not null and queued.target_user_id <> target.id)
+    or (issuer_role='director' or (issuer_role='admin' and queued.role in ('student','parent','teacher'))) is not true then
+    delete from public.pending_roles where id=queued.id;
+    return null;
+  end if;
+  perform role_security.assert_transition(issuer_role,target.role,queued.role);
+  update public.profiles set role=queued.role where id=target.id;
+  -- Portal links: activate this queue row's pending links of the matching
+  -- relation, detached from the queue row before it is deleted. A link that no
+  -- longer passes its checks stays pending and goes with the queue row.
+  if queued.role in ('parent','student') then
+    for pending in select * from public.family_links where pending_role_id = queued.id and status = 'pending'
+        and relation = case queued.role when 'parent' then 'parent' else 'self' end order by created_at, id loop
+      begin
+        perform portal_security.activate_link(target.id, pending.student_id, pending.relation, pending.invite_email, pending.id);
+      exception when sqlstate 'PT409' or sqlstate '42501' or sqlstate '22023' then null;
+      end;
+    end loop;
+  elsif queued.role = 'teacher' and queued.teacher_id is not null
+    and exists (select 1 from public.teachers t where t.id = queued.teacher_id and t.deleted_at is null)
+    and not exists (select 1 from public.profiles p where p.linked_teacher_id = queued.teacher_id and p.id <> target.id) then
+    update public.profiles set linked_teacher_id = queued.teacher_id where id = target.id;
+  end if;
+  delete from public.pending_roles where id=queued.id;
+  insert into public.activity_log(actor_id,action,target_table,target_id,changed_columns,after)
+    values(auth.uid(),'DELETE','pending_roles',queued.id,array['role'],
+      jsonb_build_object('activated_role',queued.role,'authorized_by',queued.invited_by));
+  return queued.role;
+end $function$;
+revoke all on function public.apply_pending_role() from public, anon, authenticated, service_role;
+grant execute on function public.apply_pending_role() to authenticated;
 CREATE OR REPLACE FUNCTION public.can_message_recipient(p_email text)
  RETURNS boolean
  LANGUAGE plpgsql

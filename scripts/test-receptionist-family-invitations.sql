@@ -91,6 +91,30 @@ select pg_temp.owner();
 select pg_temp.ok(pg_temp.links(pg_temp.id(302), 'revoked') = 1, 'reception: link revoked');
 select pg_temp.ok(pg_temp.role_of(pg_temp.id(5)) = 'parent', 'revoking a link never changes the role');
 
+-- ── Her invitations activate at the invitee's first sign-in (apply_pending_role) ──
+insert into auth.users(id, email, aud, role, email_confirmed_at, created_at, updated_at) values
+  (pg_temp.id(6), 'parent.300@example.test', 'authenticated', 'authenticated', now(), now(), now()),
+  (pg_temp.id(7), 'teen.301@example.test', 'authenticated', 'authenticated', now(), now(), now()),
+  (pg_temp.id(8), 'forged.reception@example.test', 'authenticated', 'authenticated', now(), now(), now());
+select pg_temp.ok(pg_temp.role_of(pg_temp.id(6)) = 'pending' and pg_temp.role_of(pg_temp.id(7)) = 'pending', 'invitees start pending');
+select pg_temp.act(6);
+select pg_temp.ok(public.apply_pending_role() = 'parent', 'reception parent invitation activates');
+select pg_temp.ok(public.apply_pending_role() is null, 'reception parent invitation: no replay');
+select pg_temp.act(7);
+select pg_temp.ok(public.apply_pending_role() = 'student', 'reception student invitation activates');
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.role_of(pg_temp.id(6)) = 'parent' and pg_temp.role_of(pg_temp.id(7)) = 'student', 'invitee roles applied');
+select pg_temp.ok(pg_temp.links(pg_temp.id(300), 'active') = 1 and pg_temp.links(pg_temp.id(301), 'active') = 1
+  and pg_temp.links(pg_temp.id(300), 'pending') = 0, 'reception invitation links activated');
+-- A queue row in her name for anything but a family role is dropped at sign-in (never applied).
+insert into public.pending_roles(email, role, invited_by, expires_at)
+  values ('forged.reception@example.test', 'admin', pg_temp.id(3), now() + interval '1 day');
+select pg_temp.act(8);
+select pg_temp.ok(public.apply_pending_role() is null, 'reception queue row for a staff role is refused at sign-in');
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.role_of(pg_temp.id(8)) = 'pending' and pg_temp.queued('forged.reception@example.test') is null,
+  'the refused row is consumed and the account stays pending');
+
 -- ── A teacher stays refused; admin unchanged ──────────────────────────────
 select pg_temp.act(4);
 select pg_temp.refused($q$select public.preview_family_invitation('parent.301@example.test', 'parent')$q$, '42501', 'teacher: no preview');
@@ -102,5 +126,5 @@ select pg_temp.owner();
 select pg_temp.ok(pg_temp.queued('parent.301@example.test') = 'parent', 'admin: family invitation unchanged');
 select pg_temp.ok(pg_temp.queued('teacher.200@example.test') = 'teacher', 'admin: teacher invitation unchanged');
 
-\echo 'PASS receptionist family invitations (stage 5): dossier address only, family roles only, revoke, assert_transition unchanged'
+\echo 'PASS receptionist family invitations (stage 5): dossier address only, family roles only, activation at sign-in, revoke, assert_transition unchanged'
 rollback;

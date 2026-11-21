@@ -6,7 +6,7 @@
   "apply_pending_role()": {
     "gate": "manual",
     "receptionist": "not_staff",
-    "md5": "2fb1cccb52584063f8f4de014d48783f"
+    "md5": "59c41496005d887bcf50cd5e129c8f78"
   },
   "assign_receptionist_student_group(p_student uuid, p_enrollment uuid, p_group uuid, p_student_updated_at timestamp with time zone, p_enrollment_updated_at timestamp with time zone)": {
     "gate": "receptionist_only",
