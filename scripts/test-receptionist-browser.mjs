@@ -557,6 +557,9 @@ try {
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
   await page.goto(app + `/students/${readyStudent}/edit`);
   await page.getByRole('heading', { name: 'Modifier l’apprenant' }).waitFor();
+  // The shared form (item 1) draws before its record: wait for the loaded file and an enabled save.
+  await page.waitForFunction(name => document.querySelector('#full_name')?.value === name, readyName);
+  await page.getByRole('button', { name: 'Enregistrer' }).and(page.locator(':enabled')).waitFor();
   // RPW-r2 item 3: the e-mails are editable (refused by the command while a family link holds them).
   assert.equal(await page.getByRole('textbox', { name: 'Email (apprenant)' }).getAttribute('readonly'), null);
   assert.equal(await page.getByRole('combobox', { name: 'Groupe assigné' }).count(), 0);
