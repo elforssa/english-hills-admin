@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
-import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
+import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.mjs';
 import { BAND_QUERIES, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
@@ -48,7 +48,7 @@ async function newContext(engine,options={}){
  // WebKit's cancelled-fetch reports are judged by the shared rule, one record per page.
  const fetches=cancelledFetches(page);fetchChecks.push(fetches);
  page.on('pageerror',e=>{if(!fetches.take(e,`${engine.name()} ${phase}: ${e.message}`))pageErrors.push(`${engine.name()} ${phase}: ${e.message}`);});
- page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource|access control checks/.test(m.text()))consoleErrors.push(`${engine.name()} ${phase}: ${m.text().slice(0,400)}`);});
+ page.on('console',m=>{if(m.type()==='error'&&(ORIGIN_REFUSED.test(m.text())||!/Failed to load resource|access control checks/.test(m.text())))consoleErrors.push(`${engine.name()} ${phase}: ${m.text().slice(0,400)}`);});
  page.on('request',r=>{const m=r.url().match(/\/rest\/v1\/rpc\/(crm_[a-z_]+)/);if(m&&isWrite(m[1]))writes.push({name:m[1],phase});});
  await login(users[1]);
 }
@@ -561,7 +561,7 @@ try {
   }
   await browser.close();browser=null;
  }
- assert.deepEqual(external,[],'no external requests');assert.deepEqual(pageErrors,[],'no browser errors');const uncancelled=fetchChecks.flatMap(f=>f.uncancelled()),reportedFetches=fetchChecks.reduce((n,f)=>n+f.count,0);assert.deepEqual(uncancelled,[],'every access-control fetch error is a request the navigation cancelled');if(reportedFetches)console.log(`cancelled fetches reported by WebKit: ${reportedFetches}`);
+ assert.deepEqual(external,[],'no external requests');assert.deepEqual(pageErrors,[],'no browser errors');assert.deepEqual(consoleErrors.filter(text=>ORIGIN_REFUSED.test(text)),[],'no origin refused by CORS (console)');const uncancelled=fetchChecks.flatMap(f=>f.uncancelled()),reportedFetches=fetchChecks.reduce((n,f)=>n+f.count,0);assert.deepEqual(uncancelled,[],'every access-control fetch error is a request the navigation cancelled');if(reportedFetches)console.log(`cancelled fetches reported by WebKit: ${reportedFetches}`);
  console.log(PHASES||process.env.B1_ENGINES?`PARTIAL local iteration only (engines ${process.env.B1_ENGINES||'all'}, phases ${PHASES||'all'})`:'PASS RCC-B1 responsive Opportunities acceptance in Chromium and WebKit');
 } catch(error){
  console.error(phase,error.message);if(pageErrors.length)console.error('page errors',pageErrors);{const left=fetchChecks.flatMap(f=>f.uncancelled());if(left.length)console.error('unexplained WebKit fetch errors',left);}if(consoleErrors.length)console.error('console errors',consoleErrors.slice(-6));

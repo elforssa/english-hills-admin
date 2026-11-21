@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
-import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
+import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -160,7 +160,7 @@ const studentPills=async role=>{
    if(name==='receipts')return json(url.searchParams.has('student_id')?[{id:randomUUID(),receipt_number:'SYNTHETIC-UIF',date:'2026-10-01',net_amount_snapshot:1000,montant_paye:300,balance_after_snapshot:700,statut_paiement:'Acompte versé'}]:[]);
    return json([]);
   });
-  page=await ctx.newPage();page.setDefaultTimeout(15000);fetches=cancelledFetches(page);page.on('pageerror',e=>{if(rejectDashboard && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(!fetches.take(e,`${phase}: ${e.message}`))errors.push(e.message);});await page.clock.install();await login(users[0]);
+  page=await ctx.newPage();page.setDefaultTimeout(15000);fetches=cancelledFetches(page);page.on('pageerror',e=>{if(rejectDashboard && !ORIGIN_REFUSED.test(e.message) && e.message.includes('/rest/v1/groups') && e.message.includes('access control checks'))return;if(!fetches.take(e,`${phase}: ${e.message}`))errors.push(e.message);});await page.clock.install();await login(users[0]);
   if(process.argv.includes('--students-touch-only')) {
    for(const width of [768,720,390,375,320]) {
     phase=engine.name()+' '+width+' Students touch targets';await page.setViewportSize({width,height:1024});await navigate(app+'/students');

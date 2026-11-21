@@ -18,11 +18,13 @@ function harness() {
     at: ms => { t = 1_000_000 + ms; },
     cancel: url => emit('requestfailed', { url: () => url, failure: () => ({ errorText: 'cancelled' }) }),
     fail: url => emit('requestfailed', { url: () => url, failure: () => ({ errorText: 'net::ERR_FAILED' }) }),
+    failWith: (url, errorText) => emit('requestfailed', { url: () => url, failure: () => ({ errorText }) }),
     load: () => emit('domcontentloaded'),
     // Playwright splits WebKit's text at the scheme: name '… http', message '://host/path … checks.'
     error: (url, label) => fetches.take({ name: 'Fetch API cannot load http', message: url.replace(/^http/, '').replace(/^:/, '') + ' due to access control checks.' }, label),
   };
 }
+const emitFailed = (h, url, errorText) => h.failWith(url, errorText);
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log(`  ok ${name}`); };
 
@@ -105,6 +107,22 @@ check('a page load before the error, or more than 3 s after it, excuses nothing'
   assert.deepEqual(h.fetches.uncancelled(), ['after load', 'too early']);
 });
 
+check('an origin refused by CORS is never excused (re-review I2)', () => {
+  const h = harness();
+  // A real CORS failure: WebKit's failed request says the origin is not allowed, then a page load.
+  h.at(0); h.error(`${API}/rest/v1/groups?select=id`, 'cors then load');
+  emitFailed(h, `${API}/rest/v1/groups?select=id`, 'Origin http://127.0.0.1:3101 is not allowed by Access-Control-Allow-Origin. Status code: 200');
+  h.at(300); h.load();
+  // A failed preflight, even next to a cancellation of the same URL.
+  h.at(5000); h.cancel(`${API}/rest/v1/rpc/x`); h.error(`${API}/rest/v1/rpc/x`, 'preflight 403');
+  emitFailed(h, `${API}/rest/v1/rpc/x`, 'Preflight response is not successful. Status code: 403');
+  // The refusal written in the page error itself.
+  h.at(9000); h.cancel(`${APP}/students?_rsc=z`);
+  h.fetches.take({ name: 'Fetch API cannot load http', message: '//127.0.0.1:3101/students?_rsc=z Origin x is not allowed by Access-Control-Allow-Origin. due to access control checks.' }, 'refusal in message');
+  h.at(9500); h.load();
+  assert.deepEqual(h.fetches.uncancelled(), ['cors then load', 'preflight 403', 'refusal in message']);
+});
+
 check('each page has its own record', () => {
   const a = harness(), b = harness();
   a.at(0); a.cancel(`${API}/rest/v1/groups?select=id`);
@@ -112,4 +130,4 @@ check('each page has its own record', () => {
   assert.deepEqual(b.fetches.uncancelled(), ['other page']);
 });
 
-console.log(`PASS WebKit cancelled-fetch rule (${checks} checks): exact URL in a 1 s window, prefetch/REST reads only in the 3 s before a new document, real CORS failures fail the run`);
+console.log(`PASS WebKit cancelled-fetch rule (${checks} checks): exact URL in a 1 s window, prefetch/REST reads only in the 3 s before a new document, real CORS failures and refused origins fail the run`);
