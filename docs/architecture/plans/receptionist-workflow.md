@@ -684,7 +684,7 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 - **OD-2 = A** and **OD-9 = A**: the stop condition « OD-2 = B or OD-9 = B » does not apply.
 
 **Owner inputs still to come (each is a gate):**
-- the weekday hours and closed dates (OD-3): **A1 must not start without them**;
+- the weekday hours and closed dates (OD-3): **given 2026-11-21** — « same time as before, no need for holidays »: the current published `weekly_hours` unchanged, `opening_hours` NULL, `date_exceptions` `[]`; values read by R0 Q01 (recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md));
 - the default owner's account (OD-6): **D1 must not run without it**;
 - the 2026/2027 programme prices (OD-16): before release B2.
 
@@ -703,7 +703,7 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 **Prerequisites:**
 - **Owner approval of the plan:** given on 2026-11-21 at `824252a` (architecture only); implementation still needs its own approval.
 - **A clean merged base.**
-- **For A1:** R0 done (its own approval); the owner's weekday hours and closed dates (OD-3) given before A1 starts. **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
+- **For A1:** R0 done (its own approval); the owner's weekday hours and closed dates (OD-3) given before A1 starts — given 2026-11-21: current published `weekly_hours` unchanged, no closed dates (values from Q01). **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
 - **For B1 and C2:** PR #204 merged.
 - **For D1:** the default owner's account named (OD-6).
 - **For B2:** the 2026/2027 programme prices (OD-16).
