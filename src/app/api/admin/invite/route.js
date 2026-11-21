@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getServerClient } from '@/lib/supabase';
 import { getServiceRoleClient } from '@/lib/supabase-admin';
 import { rejectCrossOrigin } from '@/lib/http/requestOrigin.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 const ALLOWED_ROLES = ['student', 'parent', 'teacher', 'admin', 'director', 'receptionist'];
 const PRIVILEGED_ROLES = ['admin', 'director'];
@@ -66,13 +67,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  // ── Gate 2: caller must be admin or director ───────────────────────────
+  // ── Gate 2: caller must be admin or director; reception (canInviteFamily) only
+  //    for a parent or student invitation, checked after parsing (RPW-r2 item 7) ──
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .maybeSingle();
-  if (profileError || !profile || !PRIVILEGED_ROLES.includes(profile.role)) {
+  const familyInviterOnly = Boolean(profile) && !PRIVILEGED_ROLES.includes(profile.role)
+    && hasCapability(profile.role, 'canInviteFamily');
+  if (profileError || !profile || !(PRIVILEGED_ROLES.includes(profile.role) || familyInviterOnly)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -107,6 +111,9 @@ export async function POST(request) {
     );
   }
   const { email, role, studentIds, teacherId } = parsed.data;
+  if (familyInviterOnly && !['parent', 'student'].includes(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   // Authorize and persist via the caller's JWT, before any Auth email is
   // sent. Existing active accounts cannot change role through re-invitation.

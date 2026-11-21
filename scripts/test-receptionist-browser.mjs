@@ -778,6 +778,29 @@ try {
   assert.deepEqual(finance26, [], 'item 26: finance or pay call from Dashboard/Reports');
   console.log('PASS stage 4: office messages to a family and a teacher (no free address, no delete), staff picker, notifications, « À relancer », payment note only, Dashboard and Reports without finance');
 
+  const sameOrigin = { Origin: new URL(app).origin, 'Content-Type': 'application/json' };
+  // RPW-r2 stage 5, item 7: from the dossier she invites the learner (or the parent) at the
+  // dossier's address; the invitation route refuses her any other role.
+  sql(`update public.students set parent_email='${run}-ready-parent@example.invalid' where id='${readyStudent}'`);
+  await page.goto(app + `/students/${readyStudent}`);
+  await page.getByRole('button', { name: `Inviter le parent · ${run}-ready-parent@example.invalid` }).waitFor();
+  const invited = page.waitForResponse(response => response.url().endsWith('/api/admin/invite'));
+  await page.getByRole('button', { name: `Inviter l’apprenant · ${run}-ready@example.invalid` }).click();
+  assert.equal((await invited).status(), 200, 'item 7: learner invitation');
+  await page.getByText('Invitation en attente').waitFor();
+  assert.equal(await page.getByRole('button', { name: /^Inviter l’apprenant/ }).count(), 0, 'item 7: no second learner invitation');
+  assert.equal(sql(`select role from public.pending_roles where lower(email)='${run}-ready@example.invalid'`), 'student');
+  assert.equal(sql(`select relation||':'||status from public.family_links where student_id='${readyStudent}'`), 'self:pending');
+  for (const role of ['teacher', 'admin', 'receptionist']) {
+    const other = await page.request.post(app + '/api/admin/invite', { headers: sameOrigin, data: { email: `${run}-other@example.invalid`, role } });
+    assert.equal(other.status(), 403, `item 7: /api/admin/invite ${role}`);
+  }
+  const elsewhere = await page.request.post(app + '/api/admin/invite', { headers: sameOrigin,
+    data: { email: `${run}-other@example.invalid`, role: 'parent', studentIds: [readyStudent] } });
+  assert.notEqual(elsewhere.status(), 200, 'item 7: an address no dossier carries');
+  assert.equal(sql(`select count(*) from public.pending_roles where lower(email)='${run}-other@example.invalid'`), '0');
+  console.log('PASS stage 5: family invitation from the dossier at its address only; staff and teacher invitations refused (route and database)');
+
   await page.goto(app + '/receipts');
   await page.getByRole('heading', { name: 'Reçus de paiement' }).waitFor();
   await Promise.all(payloadChecks);
@@ -811,8 +834,12 @@ try {
     const allowed = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(allowed.status(), 200, `Server access for ${path}`);
   }
+  // RPW-r2 locked list (plan « Routes »): every typed URL returns to /crm/leads.
   for (const path of ['/finance','/crm/analytics','/activity-log',
-    '/receipts/deletions','/payroll','/students/import','/settings/users','/integrations']) {
+    '/receipts/deletions','/payroll','/students/import','/settings/users','/integrations',
+    `/finance/charges/${student}/edit`,`/receipts/${student}/edit`,`/receipts/${student}/delete`,'/crm/integrations/lifecycle',
+    '/teacher-portal','/teacher-portal/online',`/teacher-portal/online/${student}`,'/parent-portal','/parent-portal/online',
+    '/student-portal','/student-portal/online','/settings?section=centre']) {
     const requestsBeforeRedirect = pageRequests.length;
     const blocked = await page.request.get(app + path, { maxRedirects: 0 });
     assert.equal(blocked.status(), 307, 'Server denial for ' + path);
@@ -827,7 +854,6 @@ try {
     assert.equal(result.status(), 403, path);
   }
   // RPW-r2 item 15: she sends staff e-mails, to known addresses only.
-  const sameOrigin = { Origin: new URL(app).origin, 'Content-Type': 'application/json' };
   const malformedEmail = await page.request.post(app + '/api/email/send', { headers: sameOrigin, data: { role: 'director', userId: user, email } });
   assert.equal(malformedEmail.status(), 400, '/api/email/send malformed payload');
   const unknownRecipient = await page.request.post(app + '/api/email/send', { headers: sameOrigin, data: { to: 'nobody@example.invalid', subject: 'RPW', body: 'RPW' } });
@@ -1011,6 +1037,9 @@ try {
     delete from public.certificates where id='${certificate}';
     delete from public.leave_requests where id='${leaveRequest}';
     delete from public.messages where from_user_email='${email}' or to_user_email='${email}';
+    delete from public.family_links where student_id='${readyStudent}';
+    delete from public.pending_roles where lower(email) like '${run}-%';
+    delete from auth.users where lower(email) like '${run}-%@example.invalid';
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
       '${confirmedStudent}','${multipleStudent}','${reasonStudent}','${levelStudent}','${occupantStudent}',
       '${youngStudent}','${leaverStudent}');

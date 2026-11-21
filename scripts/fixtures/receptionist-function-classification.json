@@ -622,8 +622,8 @@
     "receptionist": "locked"
   },
   "prepare_family_invitation(p_email text, p_role text, p_student_ids uuid[])": {
-    "gate": "portal_manager",
-    "receptionist": "locked"
+    "gate": "capability:invite_family",
+    "receptionist": "open"
   },
   "prepare_role_invitation(p_email text, p_role text)": {
     "gate": "portal_manager",
@@ -634,8 +634,8 @@
     "receptionist": "locked"
   },
   "preview_family_invitation(p_email text, p_role text)": {
-    "gate": "portal_manager",
-    "receptionist": "locked"
+    "gate": "capability:invite_family",
+    "receptionist": "open"
   },
   "receipt_enrollment_candidates(p_student uuid)": {
     "gate": "capability:manage_finance_operations",
@@ -700,8 +700,8 @@
     "receptionist": "open"
   },
   "revoke_family_link(p_link_id uuid, p_reason text)": {
-    "gate": "portal_manager",
-    "receptionist": "locked"
+    "gate": "capability:invite_family",
+    "receptionist": "open"
   },
   "save_attendance(p_student uuid, p_group uuid, p_date date, p_status text)": {
     "gate": "invoker",

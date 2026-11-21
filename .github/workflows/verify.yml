@@ -392,6 +392,8 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-groups.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-dossier-teaching.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-communication-reports.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-receptionist-family-invitations.sql
+          docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 -v fixture="$(cat scripts/fixtures/receptionist-function-classification.json)" < scripts/test-receptionist-locked-items.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-phase8.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-phase9.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-phase10.sql

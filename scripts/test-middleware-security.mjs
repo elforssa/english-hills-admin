@@ -198,6 +198,8 @@ const stub = createServer(async (req, res) => {
   }
   if (url.pathname === '/rest/v1/rpc/apply_pending_role') return send(200, null);
   if (url.pathname === '/rest/v1/rpc/check_rate_limit') return send(200, true);
+  // RPW-r2 item 7: reception passes the invite route's role gate (family invitations only).
+  if (url.pathname === '/rest/v1/rpc/consume_rate_limit' && role === 'receptionist') return send(200, true);
   unexpected.push(req.method + ' ' + url.pathname); return send(500, { message: 'Unexpected test request' });
 });
 let server;
@@ -294,7 +296,9 @@ try {
     }
     if (!['admin', 'director'].includes(role)) for (const path of ['/api/admin/invite', '/api/admin/update-role', '/api/admin/payroll']) {
       // Same-origin browser request (the routes refuse any other Origin, PRF-r2 D10).
-      const r = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json', Origin: app }, body: '{}' });
+      // RPW-r2 item 7: reception reaches the invite route for a family role only; any other role is 403.
+      const payload = role === 'receptionist' && path === '/api/admin/invite' ? JSON.stringify({ email: 'rpw-teacher@example.invalid', role: 'teacher' }) : '{}';
+      const r = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json', Origin: app }, body: payload });
       assert.equal(r.status, role === 'anonymous' ? 401 : 403, path + ' ' + role); checks++;
       // A cross-origin request is refused before authentication, for every role.
       const foreign = await fetch(app + path, { method: 'POST', headers: { Cookie, 'Content-Type': 'application/json', Origin: 'https://english-hills.com' }, body: '{}' });

@@ -251,7 +251,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Ajouter un nouvel enseignant</td>
-<td>Pas dans votre espace&nbsp;: à demander à la direction</td>
+<td><span className="menu">Enseignants</span> › <span className="ui">Ajouter</span></td>
 <td><a href="#q12">Scénario Q12</a></td>
 </tr>
 <tr>
@@ -756,7 +756,7 @@ export default function GuideContent() {
 <Image src="/helpdesk/q02-modifier-apprenant.jpg" width={1700} height={1075} alt="Formulaire Modifier l’apprenant avec la photo, le nom complet, les emails en lecture seule et le bouton Enregistrer" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Photo</span>&nbsp;: JPEG ou PNG.</li>
 <li><span className="ui">Nom complet</span>&nbsp;: le seul champ obligatoire.</li>
-<li><span className="ui">Email apprenant</span> et <span className="ui">Email parent</span>&nbsp;: en <b>lecture seule</b> quand vous modifiez un dossier. Ces adresses servent à la connexion des familles&nbsp;: demandez à la direction pour les changer.</li>
+<li><span className="ui">Email apprenant</span> et <span className="ui">Email parent</span>&nbsp;: modifiables tant qu’aucun compte famille (actif ou invitation en attente) n’utilise l’ancienne adresse&nbsp;; sinon la plateforme refuse et la direction s’en charge. Chaque changement d’adresse est noté dans l’historique.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
@@ -1062,8 +1062,8 @@ export default function GuideContent() {
 </div>
 <div className="callout info">
 <strong>Bon à savoir</strong><ul className="tight">
-<li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant se demande à la direction (<a href="#q12">Q12</a>).</li>
-<li>La capacité est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant. Seule la direction peut en ajouter un quand même, avec un motif.</li>
+<li>L’enseignant doit exister dans la plateforme. Un nouvel enseignant&nbsp;: <span className="menu">Enseignants</span> › <span className="ui">Ajouter</span> (<a href="#q12">Q12</a>).</li>
+<li>La capacité est une limite&nbsp;: pour ajouter un apprenant à un groupe «&nbsp;complet&nbsp;», la plateforme demande un motif, noté dans l’historique.</li>
 <li>Vous ne pouvez pas supprimer un groupe&nbsp;: demandez à la direction.</li>
 <li>Un cours terminé est <b>clôturé par la direction</b>. Un cours clôturé n’accepte plus d’apprenant et quitte les listes de choix, les présences et l’emploi du temps. Ses dates, son année, son programme, son niveau et sa capacité ne changent plus («&nbsp;Ce cours est clôturé. Rouvrez le cours pour le modifier.&nbsp;»)&nbsp;; son nom, son enseignant, sa salle et son horaire restent modifiables. Seule la direction peut le rouvrir.</li>
 <li>Après avoir créé ou changé les jours, vérifiez le résultat dans l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>).</li>
@@ -1117,7 +1117,7 @@ export default function GuideContent() {
 <li>Un cours clôturé n’est jamais proposé. Si l’affectation est tentée autrement, la plateforme répond «&nbsp;Ce cours est clôturé.&nbsp;»&nbsp;: choisissez un autre cours, ou demandez à la direction s’il a été clôturé par erreur.</li>
 <li>Un cours terminé mais pas encore clôturé reste proposé avec «&nbsp;· terminé le …&nbsp;»&nbsp;: c’est pour placer un apprenant oublié avant la clôture. Pour un nouveau départ, choisissez le cours suivant.</li>
 <li>«&nbsp;Renseignez les dates du cours avant d’y affecter un apprenant.&nbsp;»&nbsp;: complétez d’abord les dates du groupe (<a href="#q8">Q8</a>).</li>
-<li>La capacité d’un groupe est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» refuse un nouvel apprenant (seule la direction peut dépasser, avec un motif). Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
+<li>La capacité d’un groupe est une limite&nbsp;: un groupe «&nbsp;complet&nbsp;» n’accepte un nouvel apprenant qu’avec un motif, noté dans l’historique. Pour créer le groupe qui manque&nbsp;: <a href="#q8">Q8</a>.</li>
 </ul>
 </div>
 </article>
@@ -1233,7 +1233,7 @@ export default function GuideContent() {
 </ol>
 </figure>
 <div className="callout warn">
-<strong>Ajouter un enseignant&nbsp;: à demander à la direction</strong><p>Il n’y a pas de bouton <span className="ui">Ajouter</span> dans votre espace, ni d’accès aux contrats, salaires et congés. Quand un nouvel enseignant arrive, demandez à la direction de le créer&nbsp;; il apparaît ensuite dans la liste <span className="ui">Enseignant</span> d’un groupe, et vous pouvez le <b>lier à un groupe</b> comme dans <a href="#q8">Q8</a>.</p>
+<strong>Ajouter un enseignant</strong><p><span className="menu">Enseignants</span> › <span className="ui">Ajouter</span>&nbsp;: nom, téléphone, e-mail (obligatoire), niveaux, certifications et notes. Le contrat et la rémunération sont complétés par la direction&nbsp;; la liste affiche «&nbsp;Contrat à compléter&nbsp;» en attendant. L’enseignant apparaît ensuite dans la liste <span className="ui">Enseignant</span> d’un groupe, et vous pouvez le <b>lier à un groupe</b> comme dans <a href="#q8">Q8</a>. Son e-mail se modifie tant qu’aucun compte enseignant ni invitation ne l’utilise. Les congés sont visibles dans <span className="menu">Congés &amp; absences</span>, en lecture seule.</p>
 </div>
 <p>Pour voir les groupes d’un enseignant, ouvrez l’<span className="menu">Emploi du temps</span> (<a href="#q13">Q13</a>)&nbsp;: chaque groupe porte le nom de son enseignant.</p>
 </article>
@@ -1260,7 +1260,7 @@ export default function GuideContent() {
 <div className="callout info">
 <strong>En lecture seule</strong><p>L’emploi du temps ne se modifie pas ici. Un groupe apparaît les jours écrits dans son champ <span className="ui">Jours</span>&nbsp;; pour changer un horaire, modifiez le groupe (<a href="#q8">Q8</a>). Un groupe sans jours n’apparaît pas dans la grille.</p>
 </div>
-<p><span className="menu">Notes &amp; bulletins</span> est aussi en lecture seule&nbsp;: un tableau des évaluations (apprenant, terme, oral, écrit, finale). Vous ne saisissez pas de note et n’imprimez pas de bulletin&nbsp;: c’est réservé à la direction.</p>
+<p><span className="menu">Notes &amp; bulletins</span>&nbsp;: vous saisissez et corrigez les notes (apprenant, terme, oral, écrit, finale). La suppression d’une note et l’export CSV restent à la direction. Portfolios et profils d’apprentissage&nbsp;: vous les créez, sans les supprimer. Les certificats sont en lecture seule.</p>
 </article>
 <article className="scn" id="q14">
 <header className="scn-head">
@@ -1272,7 +1272,7 @@ export default function GuideContent() {
 <div className="card">
 <h4>À la rentrée</h4>
 <ol className="steps">
-<li><p><b>Enseignants</b>&nbsp;: chacun est dans la liste, avec ses niveaux et ses certifications à jour (<a href="#q12">Q12</a>). Un nouvel enseignant se demande à la direction.</p>
+<li><p><b>Enseignants</b>&nbsp;: chacun est dans la liste, avec ses niveaux et ses certifications à jour (<a href="#q12">Q12</a>). Un nouvel enseignant s’ajoute depuis <span className="menu">Enseignants</span> › <span className="ui">Ajouter</span>.</p>
 </li>
 <li><p><b>Groupes</b>&nbsp;: créez les groupes de la rentrée, avec enseignant, jours, horaire, salle, capacité, terme, la nouvelle <b>année scolaire</b> et les <b>dates du cours</b> (obligatoires pour les programmes courts) (<a href="#q8">Q8</a>). Un groupe de l’an dernier ne reçoit pas les inscriptions de la nouvelle année.</p>
 </li>
@@ -1478,7 +1478,7 @@ export default function GuideContent() {
 <p>Niveau, taux de présence, solde actuel, situation des paiements, informations, inscriptions et groupes (avec <span className="ui">Ajouter un document</span>, 10 Mo, JPEG, PNG ou PDF), adultes autorisés au retrait, paiements historiques, notes.</p>
 <ul className="tight">
 <li>Les emails de l’apprenant et du parent sont en lecture seule pour vous.</li>
-<li>Pas de bouton Archiver ni «&nbsp;Ancien apprenant&nbsp;»&nbsp;: c’est la direction qui termine un parcours.</li>
+<li>Pas de bouton Archiver. «&nbsp;Ancien apprenant&nbsp;» termine un parcours avec un motif&nbsp;; «&nbsp;Rouvrir l’inscription&nbsp;» annule une fin par erreur.</li>
 <li>Une inscription <b>Terminée</b> affiche son motif, sa date et son ancien groupe. Elle ne se modifie plus&nbsp;: pour un retour, <span className="ui">Inscrire et encaisser</span>.</li>
 </ul>
 </div>
@@ -1606,7 +1606,7 @@ export default function GuideContent() {
 </ol>
 <p>Une inscription n’existe qu’une fois payée&nbsp;: tout paiement supérieur à zéro la confirme, une remise de 100&nbsp;% avec un motif aussi (inscription gratuite). Le reste à payer est suivi comme avant («&nbsp;Acompte versé&nbsp;», «&nbsp;En retard&nbsp;»).</p>
 <p>Anciens statuts retirés, encore visibles sur d’anciennes fiches&nbsp;: «&nbsp;Soumise&nbsp;», «&nbsp;En cours d’examen&nbsp;», «&nbsp;Essai&nbsp;» et «&nbsp;Refusée&nbsp;». Ils restent dans l’historique&nbsp;; plus personne ne peut en créer.</p>
-<p><b>Terminée</b>&nbsp;: une inscription finie (fin de parcours, départ, clôture de l’année, d’un cours terminé ou d’un cours en ligne). Elle garde son motif, sa date de fin et le groupe qu’elle a quitté, et reste dans l’historique de la fiche. L’apprenant sort du groupe&nbsp;; ses présences d’avant la date de fin restent. Vous ne pouvez ni la modifier ni la rouvrir&nbsp;: la direction peut la rouvrir. Si la personne revient&nbsp;: sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</p>
+<p><b>Terminée</b>&nbsp;: une inscription finie (fin de parcours, départ, clôture de l’année, d’un cours terminé ou d’un cours en ligne). Elle garde son motif, sa date de fin et le groupe qu’elle a quitté, et reste dans l’historique de la fiche. L’apprenant sort du groupe&nbsp;; ses présences d’avant la date de fin restent. Vous ne la modifiez pas&nbsp;; <span className="ui">Rouvrir l’inscription</span> la rouvre si elle a été terminée par erreur. Si la personne revient&nbsp;: sa fiche › <span className="ui">Inscrire et encaisser</span> (<a href="#q7">Q7</a>).</p>
 <h3>Le statut du dossier d’un apprenant</h3>
 <p>Il est calculé par la plateforme à partir des inscriptions&nbsp;: vous ne le choisissez pas.</p>
 <div className="scroll">
@@ -1628,11 +1628,11 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><b>Ancien apprenant</b></td>
-<td>A terminé son programme&nbsp;: la direction a terminé ses inscriptions avec «&nbsp;Ancien apprenant&nbsp;». Il n’est plus dans aucun groupe. Son solde éventuel reste dû, ses reçus et présences ne changent pas.</td>
+<td>A terminé son programme&nbsp;: ses inscriptions ont été terminées avec «&nbsp;Ancien apprenant&nbsp;». Il n’est plus dans aucun groupe. Son solde éventuel reste dû, ses reçus et présences ne changent pas.</td>
 </tr>
 <tr>
 <td><b>Inactif</b></td>
-<td>A arrêté en cours de route (même commande de la direction).</td>
+<td>A arrêté en cours de route (même commande).</td>
 </tr>
 </tbody>
 </table>

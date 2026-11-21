@@ -48,6 +48,8 @@ export const CAPABILITIES = Object.freeze({
   canViewPaymentNotes: { sql: 'view_payment_notes', roles: operations },
   canViewDashboard: { sql: 'view_dashboard', roles: operations },
   canViewReports: { sql: 'view_reports', roles: operations },
+  // Stage 5: family invitations from the dossier (parent or learner at the dossier address).
+  canInviteFamily: { sql: 'invite_family', roles: operations },
   canMessageAnyAddress: { sql: 'message_any_address', roles: management },
   canViewPortalConversations: { sql: 'view_portal_conversations', roles: management },
   canDeleteCommunications: { sql: 'delete_communications', roles: management },

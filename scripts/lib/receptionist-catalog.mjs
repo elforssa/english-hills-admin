@@ -36,6 +36,10 @@ export function classify({ src, definer }) {
   if (/crm_security\.require_reader\(true\)/.test(text)) return { gate: 'crm_director', receptionist: 'locked' };
   if (/crm_security\.(?:require_reader\((?:false)?\)|command\()/.test(text)) return { gate: 'crm_reader', receptionist: 'open' };
   if (/portal_security\.require_manager\(\)/.test(text)) return { gate: 'portal_manager', receptionist: 'locked' };
+  // RPW-r2 item 7 (135): the family-invitation gate reads capability invite_family.
+  if (/portal_security\.require_family_inviter\(\)/.test(text)) {
+    return { gate: 'capability:invite_family', receptionist: SQL_ROLES.invite_family?.includes('receptionist') ? 'open' : 'locked' };
+  }
   if (/require_finance_staff\(\)/.test(text)) return { gate: 'finance_staff', receptionist: 'locked' };
   if ((m = text.match(/get_my_role\(\)(?:, '?'?\))?\s*(?:is distinct from|<>)\s*'([a-z_]+)'/))) {
     return { gate: `roles:${m[1]}`, receptionist: m[1] === 'receptionist' ? 'open' : 'locked' };
