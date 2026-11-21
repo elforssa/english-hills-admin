@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposed** (2026-11-20) with the [receptionist permissions plan](../plans/receptionist-permissions.md), revision RPW-r1. Not accepted, not implemented. Acceptance is the owner's approval of that plan revision.
+**Accepted for implementation** (Maroine, 2026-11-21) with the [receptionist permissions plan](../plans/receptionist-permissions.md), revision RPW-r2 (RPW-r1 at `08881a1`, N1 = B, N2 = A). Not implemented, merged or released.
 
 ## Date
 
