@@ -11,6 +11,7 @@ import { groupMatchesEnrollment } from '@/lib/academicPrograms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { entities } from '@/lib/entities';
 import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 import { toast } from 'sonner';
 import { ArrowLeft, Users, UserSearch, UserPlus, X, Check, Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -50,7 +51,8 @@ export default function GroupDetail() {
   const id = params?.id;
   const router = useRouter();
   const { role } = useAuth();
-  const canManage = role === 'admin' || role === 'director' || role === 'receptionist';
+  // RPW-r2 (items 9-12): one page for every staff role; the capabilities decide.
+  const canManage = hasCapability(role, 'canAssignGroup');
 
   const queryClient = useQueryClient();
   const [enrollments, setEnrollments] = useState([]);
@@ -66,7 +68,8 @@ export default function GroupDetail() {
   // Management reasons for one placement (EAP Q3 = B and D4-A), each asked separately:
   // { student, capacity, withoutEnrollment, overrideReason, withoutEnrollmentReason }.
   const [reasons, setReasons] = useState(null);
-  const canOverride = role === 'admin' || role === 'director';
+  const canOverride = hasCapability(role, 'canOverrideCapacity');
+  const canPlaceWithout = hasCapability(role, 'canPlaceWithoutPaidEnrollment');
   const director = role === 'director';
   // CDC (D8): the close dialog, the reopen in progress and the course's past learners.
   const [closeOpen, setCloseOpen] = useState(false);
@@ -144,12 +147,12 @@ export default function GroupDetail() {
   const inOtherGroupOfProgramme = (student) => pickerEnrollments.some(e => e.student_id === student.id && isMembership(e)
     && e.group_id !== id && e.session_type === (group.session_type || 'Yearly') && (!e.school_year || e.school_year === groupSchoolYear));
   const intendedMatch = (s) => (s.session_type || 'Yearly') === (group.session_type || 'Yearly')
-    && (role === 'receptionist' ? s.niveau_cefr === group.niveau : (!s.niveau_cefr || s.niveau_cefr === group.niveau));
+    && (!s.niveau_cefr || s.niveau_cefr === group.niveau);
   // N4: the label follows the learner's membership in another programme's group.
   const memberOfOtherProgramme = (student) => pickerEnrollments.some(e => e.student_id === student.id && isMembership(e)
     && e.session_type !== (group.session_type || 'Yearly'));
   // A member of another programme's group is offered to management too (DAT-1).
-  const otherProgrammeMember = (s) => role !== 'receptionist' && s.groupe_id && s.groupe_id !== id && !intendedMatch(s);
+  const otherProgrammeMember = (s) => s.groupe_id && s.groupe_id !== id && !intendedMatch(s);
   const available = (picker.data?.students ?? []).filter(s => !students.some(member => member.id === s.id) && !inOtherGroupOfProgramme(s)
     && (matchingPending(s).length > 0 || intendedMatch(s) || otherProgrammeMember(s)));
   const refreshMemberships = () => {
@@ -173,41 +176,39 @@ export default function GroupDetail() {
   };
 
   // Every placement uses an enrollment (DAT-2). EAP (Q3 = B): a placement follows a
-  // paid (Confirmed) enrollment; reception keeps its command and is refused without
-  // one (eap.paid_enrollment_required). Director and admin use place_learner_in_group
-  // and give a reason to place a learner without a paid enrollment, and a separate
-  // capacity override reason when the group is full (D4-A).
+  // paid (Confirmed) enrollment. Every staff role uses place_learner_in_group and gives
+  // a reason to place a learner without a paid enrollment, and a separate capacity
+  // override reason when the group is full (D4-A; RPW-r2 items 11, 12).
   const askReasons = (s, given, need) => setReasons({ student: s, capacity: false, withoutEnrollment: false,
     overrideReason: given.overrideReason || '', withoutEnrollmentReason: given.withoutEnrollmentReason || '', ...need });
   const addToGroup = async (s, given = {}) => {
     const pending = matchingPending(s);
     if (pending.length > 1) { toast.error('Choisissez l’inscription à affecter depuis la fiche apprenant.'); return; }
     if (full && !given.overrideReason && !canOverride) { toast.error('Ce groupe est complet.'); return; }
-    if (canOverride && ((full && !given.overrideReason) || (!pending.length && !given.withoutEnrollmentReason))) {
+    if (!pending.length && !given.withoutEnrollmentReason && !canPlaceWithout) {
+      toast.error('Inscrivez et encaissez d’abord : l’affectation suit une inscription payée.');
+      return;
+    }
+    if ((full && !given.overrideReason) || (!pending.length && !given.withoutEnrollmentReason)) {
       askReasons(s, given, { capacity: full, withoutEnrollment: !pending.length });
       return;
     }
     setBusyId(s.id);
     try {
       const selected = pending[0] || null;
-      const { error } = role === 'receptionist'
-        ? await getBrowserClient().rpc('assign_receptionist_student_group', {
-          p_student: s.id, p_enrollment: selected?.id || null, p_group: id,
-          p_student_updated_at: s.updated_at, p_enrollment_updated_at: selected?.updated_at || null,
-        })
-        : await placeLearnerInGroup(getBrowserClient(), { student: s, group: id, enrollment: selected,
-          schoolYear: selected ? null : groupSchoolYear, overrideReason: given.overrideReason || null,
-          withoutEnrollmentReason: given.withoutEnrollmentReason || null });
+      const { error } = await placeLearnerInGroup(getBrowserClient(), { student: s, group: id, enrollment: selected,
+        schoolYear: selected ? null : groupSchoolYear, overrideReason: given.overrideReason || null,
+        withoutEnrollmentReason: given.withoutEnrollmentReason || null });
       if (error) throw error;
       setReasons(null);
       refreshMemberships();
       toast.success(`${s.full_name} ajouté(e) au groupe`);
     } catch (error) {
       // The server counts every seat (pending enrollments with this group too) and
-      // knows a legacy unpaid row: its answer opens the reasons dialog for direction (S2).
-      const needCapacity = egcReason(error?.hint) === 'capacity' && !given.overrideReason;
-      const needWithoutEnrollment = eapReason(error?.hint) === 'placement_reason_required' && !given.withoutEnrollmentReason;
-      if (canOverride && (needCapacity || needWithoutEnrollment)) {
+      // knows a legacy unpaid row: its answer opens the reasons dialog (S2).
+      const needCapacity = canOverride && egcReason(error?.hint) === 'capacity' && !given.overrideReason;
+      const needWithoutEnrollment = canPlaceWithout && eapReason(error?.hint) === 'placement_reason_required' && !given.withoutEnrollmentReason;
+      if (needCapacity || needWithoutEnrollment) {
         askReasons(s, given, { capacity: needCapacity || Boolean(given.overrideReason), withoutEnrollment: needWithoutEnrollment || Boolean(given.withoutEnrollmentReason) });
         return;
       }
@@ -225,12 +226,7 @@ export default function GroupDetail() {
     try {
       const matching = enrollments.filter(e => e.student_id === s.id && e.group_id === id && isMembership(e));
       if (matching.length > 1) { toast.error('Sélectionnez une inscription depuis la fiche apprenant.'); return; }
-      const { error } = role === 'receptionist'
-        ? await getBrowserClient().rpc('assign_receptionist_student_group', {
-          p_student: s.id, p_enrollment: matching[0]?.id || null, p_group: null,
-          p_student_updated_at: s.updated_at, p_enrollment_updated_at: matching[0]?.updated_at || null,
-        })
-        : await removeLearnerFromGroup(getBrowserClient(), { student: s, group: id, enrollment: matching[0] || null });
+      const { error } = await removeLearnerFromGroup(getBrowserClient(), { student: s, group: id, enrollment: matching[0] || null });
       if (error) { toast.error(membershipErrorMessage(error)); if (isRecordConflict(error)) refreshMemberships(); return; }
       refreshMemberships();
       toast.success(`${s.full_name} retiré(e) du groupe`);
@@ -424,8 +420,8 @@ export default function GroupDetail() {
             <DialogHeader className="px-4 pt-4">
               <DialogTitle>Ajouter des apprenants à « {group.name} »</DialogTitle>
             </DialogHeader>
-            {role === 'receptionist' && (
-              <p className="px-4 text-xs text-muted-foreground">Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.</p>
+            {full && canOverride && (
+              <p role="status" className="px-4 text-xs font-medium text-amber-800">Groupe complet : chaque ajout demande un motif de dépassement, enregistré dans le journal.</p>
             )}
             <Command>
               <CommandInput placeholder="Rechercher un apprenant…" />
@@ -437,7 +433,7 @@ export default function GroupDetail() {
                       key={s.id}
                       value={`${s.full_name} ${s.telephone || ''}`}
                       onSelect={() => addToGroup(s)}
-                      disabled={busyId === s.id || (full && !canOverride) || (role === 'receptionist' && !matchingPending(s).length)}
+                      disabled={busyId === s.id || (full && !canOverride) || (!canPlaceWithout && !matchingPending(s).length)}
                     >
                       <UserPlus size={14} className="mr-2 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{s.full_name}</span>

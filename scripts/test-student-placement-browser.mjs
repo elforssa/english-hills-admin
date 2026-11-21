@@ -245,16 +245,15 @@ try {
   await reception.getByRole('button',{name:'Ajouter des apprenants',exact:true}).first().click();
   await reception.getByRole('option').filter({hasText:run+' reception paid two'}).click();
   await expect.poll(() => sql(`select status||':'||group_id from public.enrollments where student_id='${recPaid2Id}'`).trim()).toBe(`Validated:${groupId}`);
-  // An unpaid learner is listed greyed out with its reason and cannot be picked; the database
-  // refusal (eap.paid_enrollment_required) is covered by the SQL suites and the receptionist
-  // browser suite's direct request.
-  await reception.getByText('Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.',{exact:true}).waitFor();
+  // RPW-r2 (132, item 12): an unpaid learner is offered with its mark and placed only with a
+  // logged reason (scripts/test-receptionist-groups.sql and the receptionist browser suite);
+  // not picked here.
   const unpaidOption=reception.getByRole('option').filter({hasText:run+' reception unpaid'});
-  await expect(unpaidOption).toHaveAttribute('aria-disabled','true');
+  await expect(unpaidOption).not.toHaveAttribute('aria-disabled','true');
   await expect(unpaidOption).toContainText('sans inscription payée');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${recUnpaidId}'`).trim(),'0');
   assert.equal(sql(`select coalesce(groupe_id::text,'unset') from public.students where id='${recUnpaidId}'`).trim(),'unset');
-  console.log('PASS browser: Prospect creation and placement at creation with its reason, list placement, second programme (+1) with its reason, history editing, group page commands, capacity override plus the separate EAP reason, Ancien apprenant, CSV defaults; reception places paid learners and cannot pick an unpaid one');
+  console.log('PASS browser: Prospect creation and placement at creation with its reason, list placement, second programme (+1) with its reason, history editing, group page commands, capacity override plus the separate EAP reason, Ancien apprenant, CSV defaults; reception places paid learners and sees an unpaid one marked');
 } finally {
   if(browser) await browser.close();
   sql(`begin;

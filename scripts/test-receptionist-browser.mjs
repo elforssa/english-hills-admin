@@ -38,9 +38,14 @@ const confirmedEnrollment = randomUUID();
 const multipleCurrent = randomUUID(), multipleNext = randomUUID(), incompatibleGroup = randomUUID(), wrongLevelGroup = randomUUID();
 // The 2027/2028 enrollment is placed in a group of its own school year (Batch H, H5).
 const nextYearGroup = randomUUID();
+// RPW-r2 stage 2: a placement without payment (with a reason), a paid enrollment without
+// level, a one-seat group taken by an occupant.
+const reasonStudent = randomUUID(), levelStudent = randomUUID(), levelEnrollment = randomUUID();
+const fullGroup = randomUUID(), occupantStudent = randomUUID();
 const teacher = randomUUID(), teacherName = run + ' teacher';
 const readyName = run + ' ready', unsetName = run + ' unset';
 const confirmedName = run + ' confirmed', multipleName = run + ' multiple';
+const reasonName = run + ' reason', levelName = run + ' level', occupantName = run + ' occupant';
 // EAP (migration 127): learners created in this run through the learner form and the walk-in desk.
 const fileName = run + ' file', walkInName = run + ' walk-in', walkInGroupedName = run + ' walk-in grouped', walkInReplayName = run + ' walk-in replay';
 let user, browser, pdfStudent;
@@ -56,6 +61,8 @@ try {
       ('${incompatibleGroup}','${run} incompatible','Adults','Beginning 1','2026-2027','2026-09-01','2027-06-30'),
       ('${wrongLevelGroup}','${run} wrong level','Yearly','Child 2','2026-2027',null,null),
       ('${nextYearGroup}','${run} next year','Yearly','Child 1','2027-2028',null,null);
+    insert into public.groups(id,name,session_type,niveau,annee,capacite_max) values
+      ('${fullGroup}','${run} full','Yearly','Child 1','2026-2027',1);
     -- Status follows enrollments (EGC); the two Enrolled files without any enrollment
     -- (paid on a historical receipt) are seeded as Production holds them, with
     -- triggers bypassed. EAP: no pre-enrollment exists; the paid (Confirmed) rows
@@ -63,8 +70,12 @@ try {
     insert into public.students(id,full_name,status,session_type,niveau_cefr) values
       ('${student}','${run}','Prospect','Yearly',null),
       ('${confirmedStudent}','${confirmedName}','Prospect','Yearly','Child 1'),
-      ('${multipleStudent}','${multipleName}','Prospect','Yearly','Child 1');
+      ('${multipleStudent}','${multipleName}','Prospect','Yearly','Child 1'),
+      ('${reasonStudent}','${reasonName}','Prospect','Yearly','Child 1'),
+      ('${levelStudent}','${levelName}','Prospect','Yearly',null);
     set session_replication_role=replica;
+    insert into public.students(id,full_name,status,session_type,niveau_cefr,groupe_id) values
+      ('${occupantStudent}','${occupantName}','Enrolled','Yearly','Child 1','${fullGroup}');
     insert into public.students(id,full_name,status,session_type,niveau_cefr) values
       ('${readyStudent}','${readyName}','Enrolled','Yearly','Child 1'),
       ('${unsetStudent}','${unsetName}','Enrolled','Yearly',null);
@@ -72,7 +83,8 @@ try {
     insert into public.enrollments(id,student_id,status,session_type,level,school_year) values
       ('${confirmedEnrollment}','${confirmedStudent}','Confirmed','Yearly','Child 1','2026/2027'),
       ('${multipleCurrent}','${multipleStudent}','Confirmed','Yearly','Child 1','2026/2027'),
-      ('${multipleNext}','${multipleStudent}','Confirmed','Yearly','Child 1','2027/2028');
+      ('${multipleNext}','${multipleStudent}','Confirmed','Yearly','Child 1','2027/2028'),
+      ('${levelEnrollment}','${levelStudent}','Confirmed','Yearly',null,'2026/2027');
     insert into public.teachers(id,full_name,email,telephone,contract_type,taux_horaire,salaire_mensuel,iban,notes)
       values('${teacher}','${teacherName}','${run}-teacher@example.invalid','0600000000',
         'Freelance',900,10000,'PRIVATE-BANK','PRIVATE-HR');`);
@@ -177,7 +189,7 @@ try {
   assert.equal(await page.getByRole('link', { name: /Corriger/ }).count(), 0);
   // EAP (D3, D6): the learner file enrols at the payment; no pre-enrollment, no status select.
   assert.equal(await page.getByRole('button', { name: 'Nouvelle pré-inscription' }).count(), 0);
-  await page.getByText('La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.', { exact: true }).waitFor();
+  await page.getByText('La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif. Les fins d’inscription passent par la direction.', { exact: true }).waitFor();
   assert.equal(await page.locator('#enrollment-status').count(), 0);
 
   // « Inscrire et encaisser » at the desk (receipt form): any payment confirms the
@@ -267,23 +279,35 @@ try {
   assert.equal(sql(`select count(*) from public.students where full_name='${walkInReplayName}'`), '1');
   console.log('PASS « Inscrire et encaisser »: learner file with group, walk-ins without and with group, a replayed payment keeps its group, any amount confirms, no status select');
 
-  // Q3 = B: an unpaid learner is never placed by reception. The group picker lists the
-  // matching file greyed out with its reason; the database refusal itself is checked below
-  // with a direct request (eap.paid_enrollment_required).
+  // RPW-r2 (items 9, 12): the group page picker is the management one. An unpaid learner
+  // is offered and placed with a logged reason (place_learner_in_group); a dossier without
+  // level is offered, as for the direction.
   await page.goto(app + `/groups/${group}`);
   await page.getByRole('heading', { name: run, exact: true }).waitFor();
   await page.getByRole('button', { name: 'Ajouter des apprenants' }).click();
-  const picker = page.getByRole('dialog');
+  const picker = page.getByRole('dialog', { name: `Ajouter des apprenants à « ${run} »` });
   await picker.getByText(readyName, { exact: true }).waitFor();
-  assert.equal(await picker.getByText(unsetName, { exact: true }).count(), 0);
-  await picker.getByText('Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.', { exact: true }).waitFor();
+  await picker.getByText(unsetName, { exact: true }).waitFor();
+  assert.equal(await picker.getByText('Un apprenant grisé n’a pas d’inscription payée : inscrire et encaisser d’abord.', { exact: true }).count(), 0);
   const unpaidOption = picker.getByRole('option').filter({ hasText: readyName });
-  assert.equal(await unpaidOption.getAttribute('aria-disabled'), 'true', 'an unpaid learner cannot be picked');
+  assert.notEqual(await unpaidOption.getAttribute('aria-disabled'), 'true', 'an unpaid learner can be picked with a reason');
   assert.match(await unpaidOption.innerText(), /sans inscription payée/);
+  await picker.getByRole('option').filter({ hasText: reasonName }).click();
+  const reasonDialog = page.getByRole('dialog', { name: 'Affectation sans inscription payée' });
+  await reasonDialog.getByLabel('Motif de l’affectation sans inscription payée *').fill('Paiement promis lundi');
+  const reasonPlacement = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group'));
+  await reasonDialog.getByRole('button', { name: 'Affecter', exact: true }).click();
+  const reasonResponse = await reasonPlacement;
+  assert.equal(reasonResponse.status(), 200, await reasonResponse.text());
+  assert.equal(reasonResponse.request().postDataJSON().p_without_enrollment_reason, 'Paiement promis lundi');
+  await page.getByText(`${reasonName} ajouté(e) au groupe`).waitFor();
+  assert.equal(sql(`select status||':'||group_id from public.enrollments where student_id='${reasonStudent}'`), `Validated:${group}`);
+  assert.equal(sql(`select after->>'reason'||':'||(after->>'author_role') from public.activity_log
+    where actor_id='${user}' and after->>'kind'='placement_without_enrollment' and after->>'student_id'='${reasonStudent}'`), 'Paiement promis lundi:receptionist');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${readyStudent}'`), '0');
   assert.equal(sql(`select coalesce(groupe_id::text,'unset') from public.students where id='${readyStudent}'`), 'unset');
   await page.keyboard.press('Escape');
-  console.log('PASS group picker offers matching level, excludes unset-level dossier and greys out an unpaid learner');
+  console.log('PASS group picker: management rule (dossier without level offered), unpaid learner placed with a logged reason (item 12)');
 
   await page.goto(app + '/students');
   await page.getByLabel('Rechercher un apprenant').fill(readyName);
@@ -306,10 +330,11 @@ try {
     data: { p_student: readyStudent, p_enrollment: null, p_group: group, p_student_updated_at: readyVersion, p_enrollment_updated_at: null },
   });
   assert(unpaidPlacement.status() >= 400, 'a placement without a paid enrollment was accepted');
-  assert.equal((await unpaidPlacement.json()).hint, 'eap.paid_enrollment_required');
+  // RPW-r2: the retired command passes no reason; the refusal now asks for one.
+  assert.equal((await unpaidPlacement.json()).hint, 'eap.placement_reason_required');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${readyStudent}'`), '0');
   assert.equal(sql(`select coalesce(groupe_id::text,'unset') from public.students where id='${readyStudent}'`), 'unset');
-  console.log('PASS shared student filters, payment state, safe category edit; a placement without a paid enrollment is refused');
+  console.log('PASS shared student filters, payment state, safe category edit; a placement without a paid enrollment and without a reason is refused');
 
   const assignmentVersions = JSON.parse(sql(`select json_build_object(
     'student',s.updated_at,'enrollment',e.updated_at)::text
@@ -358,14 +383,14 @@ try {
     assert.equal(await dialog.locator(`#enrollment-group option[value="${incompatibleGroup}"]`).count(), 0);
     assert.equal(await dialog.locator(`#enrollment-group option[value="${wrongLevelGroup}"]`).count(), 0);
     await dialog.locator('#enrollment-group').selectOption(group);
-    const saved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
+    // RPW-r2: the management command (place_learner_in_group), as for the direction.
+    const saved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group'));
     await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
     const response = await saved;
     assert.equal(response.status(), 200, await response.text());
     const body = response.request().postDataJSON();
     assert.equal(body.p_enrollment, enrollmentId, `Wrong enrollment selected for ${name}`);
     assert.equal(body.p_group, group);
-    assert.equal(body.p_status, 'Validated');
     await dialog.waitFor({ state: 'hidden' });
     assert.equal(sql(`select status||':'||group_id from public.enrollments where id='${enrollmentId}'`), `Validated:${group}`);
   }
@@ -395,19 +420,19 @@ try {
   await page.goto(app + '/students?status=all_shown');
   await page.getByLabel('Rechercher un apprenant').fill(multipleName);
   const multipleRow = page.getByRole('row').filter({ has: page.getByRole('link', { name: multipleName, exact: true }) });
-  const assignmentWritesBefore = pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group)$/.test(path)).length;
+  const assignmentWritesBefore = pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group|place_learner_in_group|save_enrollment_changes)$/.test(path)).length;
   await multipleRow.getByRole('button', { name: /Choisir l’inscription à affecter \(2\)/ }).click();
   const chooser = page.getByRole('dialog');
   await chooser.getByRole('heading', { name: /Choisir une inscription/ }).waitFor();
   await chooser.getByRole('button', { name: new RegExp(multipleCurrent.slice(0, 8)) }).waitFor();
   await chooser.getByRole('button', { name: new RegExp(multipleNext.slice(0, 8)) }).waitFor();
-  assert.equal(pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group)$/.test(path)).length,
+  assert.equal(pageRequests.filter(path => /\/rpc\/(?:save_receptionist_enrollment|assign_receptionist_student_group|place_learner_in_group|save_enrollment_changes)$/.test(path)).length,
     assignmentWritesBefore, 'Multiple enrollments were assigned before explicit selection');
   assert.equal(sql(`select count(*) from public.enrollments where student_id='${multipleStudent}' and group_id is not null`), '0');
   await chooser.getByRole('button', { name: new RegExp(`2027/2028.*${multipleNext.slice(0, 8)}`) }).click();
   const chosenDialog = page.getByRole('dialog');
   await chosenDialog.locator('#enrollment-group').selectOption(nextYearGroup);
-  const chosenSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_receptionist_enrollment'));
+  const chosenSave = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group'));
   await chosenDialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   const chosenResponse = await chosenSave;
   assert.equal(chosenResponse.status(), 200, await chosenResponse.text());
@@ -416,6 +441,95 @@ try {
   assert.equal(sql(`select group_id from public.enrollments where id='${multipleNext}'`), nextYearGroup);
   assert.equal(sql(`select coalesce(group_id::text,'unset') from public.enrollments where id='${multipleCurrent}'`), 'unset');
   console.log('PASS paid-enrollment assignment: Confirmed rows only, learner form then payment then placement, explicit multiple choice and incompatible denials');
+
+  // ── RPW-r2 stage 2 (table A items 9-13, C1-1 to C1-3): the management enrollment dialog ──
+  // The innermost card of that school year (the section around the cards matches too).
+  const enrollmentCard = (year) => page.locator('div.rounded-lg.border').filter({ hasText: year })
+    .filter({ has: page.getByRole('button', { name: 'Modifier l’inscription' }) }).last();
+  const openEnrollment = async (studentId, name, year) => {
+    await page.goto(app + `/students/${studentId}`);
+    await page.getByRole('heading', { name, exact: true }).waitFor();
+    await enrollmentCard(year).getByRole('button', { name: 'Modifier l’inscription' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Modifier l’inscription' });
+    await dialog.locator('#enrollment-group').waitFor();
+    return dialog;
+  };
+  // C1-2: every toast she sees is French (no plain-ASCII server text).
+  const assertFrenchToast = async (text) => {
+    const toast = page.locator('[data-sonner-toast]').filter({ hasText: text }).first();
+    await toast.waitFor();
+    assert.doesNotMatch(await toast.innerText(), /^[\x00-\x7F]*$/, `plain-ASCII toast: ${await toast.innerText()}`);
+  };
+  // Item 9: a move to a group of another level; the enrollment takes the new group's level.
+  {
+    const dialog = await openEnrollment(confirmedStudent, confirmedName, '2026/2027');
+    await dialog.locator('#enrollment-level').selectOption('Child 2');
+    await dialog.locator('#enrollment-group').selectOption(wrongLevelGroup);
+    const moved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group'));
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    const response = await moved;
+    assert.equal(response.status(), 200, await response.text());
+    await assertFrenchToast('Mis à jour');
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(sql(`select group_id||':'||level from public.enrollments where id='${confirmedEnrollment}'`), `${wrongLevelGroup}:Child 2`);
+    assert.equal(sql(`select groupe_id from public.students where id='${confirmedStudent}'`), wrongLevelGroup);
+  }
+  // Item 11 and C1-1: a full group is marked « complet », its reason is asked at once and logged.
+  {
+    const dialog = await openEnrollment(multipleStudent, multipleName, '2026/2027');
+    const fullOption = dialog.locator(`#enrollment-group option[value="${fullGroup}"]`);
+    await dialog.locator(`#enrollment-group option[value="${fullGroup}"]`, { hasText: 'complet' }).waitFor({ state: 'attached' });
+    assert.match(await fullOption.innerText(), /· complet/);
+    assert.doesNotMatch(await dialog.locator(`#enrollment-group option[value="${group}"]`).innerText(), /complet/);
+    await dialog.locator('#enrollment-group').selectOption(fullGroup);
+    const reason = dialog.getByLabel('Motif du dépassement *');
+    await reason.waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).isDisabled(), true, 'a reason is required');
+    await reason.fill('Accord famille');
+    const placed = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/place_learner_in_group'));
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    const response = await placed;
+    assert.equal(response.status(), 200, await response.text());
+    assert.equal(response.request().postDataJSON().p_capacity_override_reason, 'Accord famille');
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(sql(`select group_id from public.enrollments where id='${multipleCurrent}'`), fullGroup);
+    assert.equal(sql(`select after->>'reason' from public.activity_log where actor_id='${user}'
+      and after->>'kind'='capacity_override' and after->>'student_id'='${multipleStudent}'`), 'Accord famille');
+  }
+  // C1-3: no other open group of the programme and year: said, and an unchanged save stays disabled.
+  {
+    const dialog = await openEnrollment(multipleStudent, multipleName, '2027/2028');
+    await dialog.getByText('Aucun autre groupe ouvert pour ce programme et cette année : créez-le depuis « Groupes ».').waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).isDisabled(), true, 'nothing to save');
+    await dialog.getByRole('button', { name: 'Annuler', exact: true }).click();
+    await dialog.waitFor({ state: 'hidden' });
+  }
+  // C1-2: a stale dialog answers in French and reloads.
+  {
+    const dialog = await openEnrollment(levelStudent, levelName, '2026/2027');
+    await dialog.getByLabel('Notes').fill('RPW stale');
+    sql(`update public.enrollments set notes='changed elsewhere' where id='${levelEnrollment}'`);
+    const stale = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_enrollment_changes'));
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    assert.equal((await stale).status(), 409);
+    await assertFrenchToast('Cette inscription a changé, rechargez.');
+    await dialog.waitFor({ state: 'hidden' });
+  }
+  // Items 10 and 13: the level, date and notes of a paid enrollment not yet placed.
+  {
+    const dialog = await openEnrollment(levelStudent, levelName, '2026/2027');
+    await dialog.locator('#enrollment-level').selectOption('Child 2');
+    await dialog.getByLabel('Date').fill('2026-09-15');
+    await dialog.getByLabel('Notes').fill('RPW note');
+    const saved = page.waitForResponse(response => response.url().includes('/rest/v1/rpc/save_enrollment_changes'));
+    await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+    const response = await saved;
+    assert.equal(response.status(), 200, await response.text());
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(sql(`select level||':'||date_inscription||':'||notes||':'||coalesce(group_id::text,'unset')
+      from public.enrollments where id='${levelEnrollment}'`), 'Child 2:2026-09-15:RPW note:unset');
+  }
+  console.log('PASS stage 2: cross-level move, « complet » with a logged reason, no-other-group message, French conflict, level, date and notes (items 9-13, C1-1 to C1-3)');
 
   await page.goto(app + `/students/${readyStudent}`);
   await page.getByRole('heading', { name: readyName, exact: true }).waitFor();
@@ -663,18 +777,21 @@ try {
     create temporary table phase1_cleanup_ids on commit drop as
       select id from public.placement_tests where student_name='${run}'
       union select id from public.enrollments where student_id in ('${student}',
-        '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}')
+        '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}',
+        '${reasonStudent}','${levelStudent}','${occupantStudent}')
       union select unnest(array['${user}'::uuid,'${student}'::uuid,
+        '${reasonStudent}'::uuid,'${levelStudent}'::uuid,'${occupantStudent}'::uuid,'${fullGroup}'::uuid,
         '${readyStudent}'::uuid,'${unsetStudent}'::uuid,
         '${confirmedStudent}'::uuid,'${multipleStudent}'::uuid,
         '${teacher}'::uuid,'${group}'::uuid,
         '${incompatibleGroup}'::uuid,'${wrongLevelGroup}'::uuid,'${nextYearGroup}'::uuid]);
     delete from public.placement_tests where student_name='${run}';
     set local eh.enrollment_command = on; delete from public.enrollments where student_id in ('${student}',
-      '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}');
+      '${confirmedStudent}','${multipleStudent}','${readyStudent}','${unsetStudent}',
+      '${reasonStudent}','${levelStudent}','${occupantStudent}');
     delete from public.students where id in ('${student}','${readyStudent}','${unsetStudent}',
-      '${confirmedStudent}','${multipleStudent}');
-    delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}','${nextYearGroup}');
+      '${confirmedStudent}','${multipleStudent}','${reasonStudent}','${levelStudent}','${occupantStudent}');
+    delete from public.groups where id in ('${group}','${incompatibleGroup}','${wrongLevelGroup}','${nextYearGroup}','${fullGroup}');
     delete from public.teachers where id='${teacher}';
     delete from auth.users where id='${user}';
     delete from public.activity_log where actor_id='${user}' or target_id in (select id from phase1_cleanup_ids);

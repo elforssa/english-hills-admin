@@ -51,7 +51,7 @@ export function classify({ src, definer }) {
 
 export function executableFunctions() {
   return sqlJson(`select coalesce(json_agg(json_build_object('signature', p.proname||'('||pg_get_function_identity_arguments(p.oid)||')',
-      'src', p.prosrc, 'definer', p.prosecdef, 'md5', md5(p.prosrc)) order by 1), '[]')
+      'src', p.prosrc, 'definer', p.prosecdef, 'md5', md5(p.prosrc)) order by p.proname, pg_get_function_identity_arguments(p.oid)), '[]')
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prokind = 'f' and p.prorettype <> 'trigger'::regtype
       and has_function_privilege('authenticated', p.oid, 'execute')`);

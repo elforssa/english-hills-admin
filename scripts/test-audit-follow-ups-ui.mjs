@@ -98,7 +98,8 @@ const learnerFile = read('src/app/(admin)/students/[id]/page.jsx');
 assert.doesNotMatch(learnerFile, /new Date\(\)\.toISOString\(\)\.slice\(0, ?10\)/, 'review N1: no browser-clock date');
 // EAP: « Inscrire et encaisser » on the learner file; the receptionist note.
 assert.match(learnerFile, /href=\{`\/receipts\/new\?student_id=\$\{student\.id\}`\}[^>]*>.*Inscrire et encaisser<\/Link>/);
-assert.ok(learnerFile.includes('La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.'));
+// RPW-r2 (stage 2): the note follows her new placement rights.
+assert.ok(learnerFile.includes('La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif.'));
 assert.doesNotMatch(learnerFile, /Nouvelle pré-inscription|status: 'Submitted'/);
 // Q3 = B on the group page and the management learner form: a separate reason, never the capacity one.
 const groupPage = read('src/app/(admin)/groups/[id]/page.jsx');

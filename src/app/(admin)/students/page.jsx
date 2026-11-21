@@ -249,7 +249,7 @@ export default function StudentsPage() {
     enabled: role === 'receptionist' && studentIds.length > 0,
     queryFn: async () => {
       const { data, error } = await getBrowserClient().from('enrollments')
-        .select('id,student_id,status,group_id,session_type,level,school_year,date_inscription,notes,created_at')
+        .select('id,student_id,status,group_id,session_type,level,school_year,date_inscription,notes,created_at,updated_at')
         .in('student_id', studentIds)
         .in('status', LIVE_ENROLLMENT_STATUSES)
         .order('created_at', { ascending: true }).order('id', { ascending: true });

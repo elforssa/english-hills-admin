@@ -27,6 +27,10 @@ export const CAPABILITIES = Object.freeze({
   canRecordAttendance: { sql: 'record_attendance', roles: operations },
   canEditTeacherOperationalFields: { sql: 'edit_teacher_operations', roles: operations },
   canManageStudentDocuments: { sql: 'manage_student_documents', roles: operations },
+  // Stage 2 (items 9-13): the management enrollment dialog and group page.
+  canEditEnrollment: { sql: 'edit_enrollment', roles: operations },
+  canOverrideCapacity: { sql: 'override_capacity', roles: operations },
+  canPlaceWithoutPaidEnrollment: { sql: 'place_without_paid_enrollment', roles: operations },
   canViewHelp: { sql: 'view_help', roles: operations },
   // Online learning (plan OL-r4 D13): operations run lessons; management sets up courses.
   canManageOnlineLessons: { sql: 'manage_online_lessons', roles: operations },

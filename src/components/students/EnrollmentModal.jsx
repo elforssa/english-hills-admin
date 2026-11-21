@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getBrowserClient } from '@/lib/supabase';
 import { Phone, Mail, User, BookOpen, Clock, Calendar, Building2, Users } from 'lucide-react';
@@ -17,6 +17,8 @@ import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { courseEndedSuffix, isClosedCourse } from '@/lib/academic/courseClose.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
 import { queryClientInstance } from '@/lib/query-client';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { countFreeSeats } from '@/lib/receiptGroupChoices.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -26,11 +28,12 @@ const labelClass = "block text-xs font-semibold text-muted-foreground uppercase 
 // placement and « Ancien apprenant »; it is never chosen here.
 export default function EnrollmentModal({ enrollment, students, groups, onSave, onClose, assignmentOnly = false }) {
   const { role } = useAuth();
-  const isReceptionist = role === 'receptionist';
-  const isManagement = role === 'director' || role === 'admin';
+  // RPW-r2 (items 9-13): one dialog for every staff role; the capabilities decide.
+  const canEdit = hasCapability(role, 'canEditEnrollment');
+  const canOverride = hasCapability(role, 'canOverrideCapacity');
+  const canPlaceWithout = hasCapability(role, 'canPlaceWithoutPaidEnrollment');
   const [form, setForm] = useState(() => ({ ...enrollment }));
-  // Reception only assigns the group of a paid enrollment (save_receptionist_enrollment).
-  const operationalAssignmentOnly = assignmentOnly || isReceptionist;
+  const operationalAssignmentOnly = assignmentOnly || !canEdit;
   const ended = enrollment.status === 'Ended';
   const paid = LIVE_ENROLLMENT_STATUSES.includes(enrollment.status);
   const [saving, setSaving] = useState(false);
@@ -60,8 +63,26 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
   const before = enrollment.group_id || null;
   const groupId = form.group_id || null;
   const placing = Boolean(groupId) && groupId !== before;
-  const needsWithoutEnrollmentReason = isManagement && placing && (!paid || askWithoutEnrollment);
-  const needsOverrideReason = isManagement && placing && askCapacity;
+  // C1-1: free seats as the server counts them (this learner left out); a full group is
+  // marked « complet » and choosing it asks for the override reason at once.
+  const [freeSeats, setFreeSeats] = useState(() => new Map());
+  const seatKey = availableGroups.map(g => `${g.id}:${g.capacite_max ?? ''}`).join(',');
+  useEffect(() => {
+    let live = true;
+    countFreeSeats(getBrowserClient(), availableGroups, { excludeStudent: form.student_id })
+      .then(free => { if (live) setFreeSeats(free); }).catch(() => { if (live) setFreeSeats(new Map()); });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seatKey, form.student_id]);
+  const isFull = id => freeSeats.get(id) === 0;
+  // C1-3: no other open group of this programme and year to move to, said in the dialog;
+  // a save that would change nothing stays disabled.
+  const otherOpenGroups = groups.filter(g => g.id !== before && (g.session_type || 'Yearly') === effectiveSession
+    && yearOk(g) && !isClosedCourse(g, closedOnline));
+  const noOtherGroup = !ended && Boolean(before) && otherOpenGroups.length === 0;
+  const unchanged = !progress.current && groupId === before && Object.keys(changedEnrollmentFields(enrollment, form)).length === 0;
+  const needsWithoutEnrollmentReason = canPlaceWithout && placing && (!paid || askWithoutEnrollment);
+  const needsOverrideReason = canOverride && placing && (askCapacity || isFull(groupId));
 
   // Versions: the first command sends the ones loaded with the dialog, so a stale
   // dialog is refused (S1); they are re-read only after this save changed the row.
@@ -74,7 +95,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     return { row, file };
   };
 
-  // Director/admin: every write goes through the enrollment commands. Level, date and
+  // Every staff role: every write goes through the enrollment commands. Level, date and
   // notes go through save_enrollment_changes with only what changed; a group change
   // is a placement (or a removal).
   const saveAsManagement = async (client) => {
@@ -88,7 +109,7 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
       }
       return;
     }
-    if (!assignmentOnly) {
+    if (!operationalAssignmentOnly) {
       const changes = changedEnrollmentFields(progress.current?.saved || enrollment, form);
       // SF2: a move between two groups takes the new group's level (owner decision
       // 4); an unplaced enrollment saves its level first, then is placed.
@@ -113,30 +134,18 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
     e.preventDefault();
     setSaving(true);
     try {
-      const client = getBrowserClient();
-      if (isReceptionist) {
-        // The group-assignment branch of the command; the pre-enrollment branch is retired.
-        const { error } = await client.rpc('save_receptionist_enrollment', {
-          p_student: form.student_id, p_enrollment: enrollment.id, p_group: groupId,
-          p_status: 'Validated', p_level: form.level || null,
-          p_date: form.date_inscription || null, p_notes: form.notes || null,
-          p_session: form.session_type || null, p_school_year: form.school_year || null,
-        });
-        if (error) throw error;
-      } else {
-        await saveAsManagement(client);
-      }
+      await saveAsManagement(getBrowserClient());
       toast.success('Mis à jour');
       invalidateAfterLearnerSave(queryClientInstance);
       onSave();
     } catch (error) {
-      // Management answers a reason request in this dialog and sends again.
-      if (isManagement && egcReason(error?.hint) === 'capacity' && !needsOverrideReason) {
+      // A reason request is answered in this dialog and sent again.
+      if (canOverride && egcReason(error?.hint) === 'capacity' && !needsOverrideReason) {
         setAskCapacity(true);
         toast.error('Ce groupe est complet : indiquez le motif du dépassement.');
         return;
       }
-      if (isManagement && eapReason(error?.hint) === 'placement_reason_required' && !needsWithoutEnrollmentReason) {
+      if (canPlaceWithout && eapReason(error?.hint) === 'placement_reason_required' && !needsWithoutEnrollmentReason) {
         setAskWithoutEnrollment(true);
         toast.error(membershipErrorMessage(error));
         return;
@@ -184,9 +193,10 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
               setForm(f => ({ ...f, group_id: e.target.value, level: group?.niveau || f.level || null }));
             }} required={operationalAssignmentOnly}>
               <option value="">— Choisir un groupe —</option>
-              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}{courseEndedSuffix(g)}</option>)}
+              {availableGroups.map(g => <option key={g.id} value={g.id}>{g.name} · {g.niveau}{g.horaire ? ` · ${g.horaire}` : ''}{g.jours ? ` (${g.jours})` : ''}{g.id !== before && isFull(g.id) ? ' · complet' : ''}{courseEndedSuffix(g)}</option>)}
             </select>
             {selectedStudent && <p className="text-xs text-muted-foreground mt-1">Groupes filtrés par session et niveau de cette inscription.</p>}
+            {noOtherGroup && <p role="status" className="mt-1 text-xs font-medium text-amber-800">Aucun autre groupe ouvert pour ce programme et cette année : créez-le depuis « Groupes ».</p>}
             {selectedGroup && (
               <div className="mt-2 p-2.5 bg-green-50 rounded-md text-xs text-green-800 space-y-1">
                 {selectedGroup.horaire && <div className="flex items-center gap-1.5"><Clock size={12} className="shrink-0" /> {selectedGroup.horaire}</div>}
@@ -217,7 +227,8 @@ export default function EnrollmentModal({ enrollment, students, groups, onSave, 
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={saving || (needsWithoutEnrollmentReason && !withoutEnrollmentReason.trim())
+            <Button type="submit" disabled={saving || unchanged
+              || (needsWithoutEnrollmentReason && !withoutEnrollmentReason.trim())
               || (needsOverrideReason && !overrideReason.trim())}>{saving ? '...' : 'Enregistrer'}</Button>
           </DialogFooter>
         </form>

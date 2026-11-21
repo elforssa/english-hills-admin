@@ -14,7 +14,7 @@ export const CLOSED_GROUP_HISTORY_MESSAGE = 'Ce cours clôturé garde l’histor
 
 export const EGC_REASON_TEXT = {
   capacity: 'Ce groupe est complet.',
-  capacity_override_forbidden: 'Seule la direction peut dépasser la capacité, avec un motif de 200 caractères au plus.',
+  capacity_override_forbidden: 'Le dépassement de capacité demande un motif de 200 caractères au plus.',
   group_level_locked: 'Réaffectez les apprenants avant de changer le programme ou le niveau du groupe.',
   group_from_enrollment: 'Affectez le groupe depuis l’inscription.',
   programme_follows_group: 'Le programme et le niveau suivent le groupe ; modifiez l’inscription.',
@@ -95,7 +95,10 @@ export function membershipErrorMessage(error) {
   if (/enrollments_confirmed_has_programme/.test(text)) return EGC_REASON_TEXT.programme_required;
   if (/enrollments_(group_id|ended_group_id)_fkey|groups_pkey|enrollments.*violates foreign key/.test(text)) return GROUP_HISTORY_MESSAGE;
   if (error.code === '42501') return 'Vous n’avez pas accès à cette action.';
-  return error.message || GENERIC;
+  // RPW-r2 (C1-2): a server text in plain ASCII is an English internal message
+  // ("Student unavailable or stale"); the generic French text replaces it.
+  const message = typeof error.message === 'string' ? error.message.trim() : '';
+  return message && !/^[\x00-\x7F]*$/.test(message) ? message : GENERIC;
 }
 
 // Deleting a group is refused while any enrollment (current or ended) refers to it;
