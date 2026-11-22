@@ -125,6 +125,14 @@ do $$ declare base jsonb:=(select plan from baseline); p jsonb:=crm_security.d1_
 end $$;
 \echo PASS d1_plan per-rule counts, samples and cancelled tests
 
+-- Before D1, prospects hold several open actions (L1 L2 L3 L7 L11): the set-based
+-- crm_security.next_actions() the list readers use picks what next_action_id picks.
+do $$ begin
+ perform pg_temp.ok(not exists(select 1 from crm_security.next_actions() n where n.task_id is distinct from crm_security.next_action_id(n.lead_id))
+  and (select count(*) from crm_security.next_actions() n join fx on fx.lead=n.lead_id)>=10,'next_actions() = next_action_id() on pre-D1 shapes');
+end $$;
+\echo PASS set-based next_actions() agrees with next_action_id on several open actions
+
 -- B3 (review of #208): a prospect D1 processes under two rules (a: two open actions;
 -- b: a planned test without its appointment) has two journal rows of one transaction
 -- (same run_at). d1_revert takes the highest journalled version, so it is reverted on

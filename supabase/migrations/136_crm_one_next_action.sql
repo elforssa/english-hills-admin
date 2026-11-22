@@ -422,6 +422,23 @@ declare r uuid; begin
  return r;
 end $function$;
 
+-- The same choice for every prospect at once, for list readers (work queue,
+-- Today): one pass over the open actions instead of one call per prospect
+-- (10k-lead fixture: the per-prospect call made each read take seconds).
+-- Its order is next_action_id's; test-crm-next-action.sql compares the two.
+create or replace function crm_security.next_actions()
+ returns table(lead_id uuid, task_id uuid) language sql stable set search_path to 'pg_catalog','pg_temp' as $function$
+ select distinct on (t.lead_id) t.lead_id,t.id from public.crm_tasks t
+ left join public.placement_tests p on p.id=t.placement_test_id and p.status='Planifié'
+ where t.status='open'
+ order by t.lead_id,
+  ((t.schedule_kind='appointment' or t.task_type='center_visit') and t.due_at>now()) desc nulls last,
+  case when (t.schedule_kind='appointment' or t.task_type='center_visit') and t.due_at>now() then t.due_at end nulls last,
+  ((t.schedule_kind='appointment' or t.task_type='center_visit') and p.id is not null) desc nulls last,
+  case when (t.schedule_kind='appointment' or t.task_type='center_visit') and p.id is not null then p.date_test+crm_security.calendar_time(p.heure) end nulls last,
+  t.created_at desc,t.id desc
+$function$;
+
 create or replace function crm_security.action_json(t public.crm_tasks)
  returns jsonb language sql stable set search_path to 'pg_catalog','pg_temp' as $function$
  select case when t.id is not null then jsonb_build_object('id',t.id,'task_type',t.task_type,'due_at',t.due_at,'version',t.version,
@@ -1893,9 +1910,10 @@ begin
  coalesce((select max(greatest(f.completed_at,f.cancelled_at)) from public.crm_tasks f where f.lead_id=l.id and f.status<>'open'),l.created_at) unattended_since,
  p.stale_contacting_minutes,t.id task_id,t.due_at,
  exists(select 1 from public.placement_tests x where x.crm_lead_id=l.id and x.status='Planifié' and (x.date_test+x.heure::time) at time zone public.centre_utc_offset()>=now()) scheduled_test,
- exists(select 1 from public.crm_tasks f where f.id=crm_security.next_action_id(l.id) and f.task_type='first_contact') first_contact
+ coalesce(t.task_type='first_contact',false) first_contact
  from public.crm_leads l join public.crm_followup_policies p on p.id=l.followup_policy_id
- left join lateral(select t.id,case when t.task_type='awaiting_prospect' then null else t.due_at end due_at from public.crm_tasks t where t.id=crm_security.next_action_id(l.id))t on true
+ left join crm_security.next_actions() n on n.lead_id=l.id
+ left join lateral(select t.id,t.task_type,case when t.task_type='awaiting_prospect' then null else t.due_at end due_at from public.crm_tasks t where t.id=n.task_id)t on true
  where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
  ), ranked as (
  select id,case when due_at<now() then 1 when status='NEW' and first_contact then 2 when due_at>=start_at and due_at<end_at then 3
@@ -1960,7 +1978,7 @@ begin
  with matching as materialized (
   select t.id,t.lead_id,coalesce(t.due_at,'9999-12-31 00:00:00+00'::timestamptz) due_at,
   case when t.task_type='awaiting_prospect' then 'awaiting' when t.due_at<stamp then 'overdue' when t.due_at<bounds.d1 then 'today' when t.due_at<bounds.d2 then 'tomorrow' else 'upcoming' end bucket
-  from public.crm_leads l join public.crm_tasks t on t.id=crm_security.next_action_id(l.id)
+  from public.crm_leads l join crm_security.next_actions() n on n.lead_id=l.id join public.crm_tasks t on t.id=n.task_id
   where l.merged_into_lead_id is null
   and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
   and (p_assignee_mode='all' or p_assignee_mode='me' and t.assigned_to=auth.uid()
@@ -2423,7 +2441,7 @@ revoke all on function crm_security.d1_plan(),crm_security.d1_apply(jsonb),crm_s
 revoke all on function crm_security.current_policy_id(),crm_security.closed_dates(uuid),crm_security.window_at(uuid,text,timestamptz),
  crm_security.assert_in_hours(text,timestamptz),crm_security.validate_hours_set(jsonb,jsonb),crm_security.action_label(public.crm_tasks),
  crm_security.primary_event(uuid,text,text,text,text,text,text,timestamptz,jsonb),crm_security.is_appointment(public.crm_tasks),
- crm_security.next_action_id(uuid),crm_security.action_json(public.crm_tasks),crm_security.next_action(uuid),crm_security.cancel_planned_test(uuid,text),
+ crm_security.next_action_id(uuid),crm_security.next_actions(),crm_security.action_json(public.crm_tasks),crm_security.next_action(uuid),crm_security.cancel_planned_test(uuid,text),
  crm_security.assert_no_overlap(public.crm_leads,timestamptz,integer,uuid,uuid),crm_security.user_spec(jsonb),crm_security.legacy_spec(jsonb),
  crm_security.result_label(text),
  crm_security.new_task(public.crm_leads,jsonb,text,text,smallint,text,uuid,uuid,uuid,boolean,text),

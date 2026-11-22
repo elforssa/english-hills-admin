@@ -70,7 +70,7 @@ do $$ begin perform pg_temp.actor(3); end $$;
 
 -- Schema and grants: the writer and its helpers are private; the new commands are RPCs.
 do $$ declare fn text; begin
- foreach fn in array array['crm_security.set_next_action(public.crm_leads,jsonb,text,text)','crm_security.next_action_id(uuid)',
+ foreach fn in array array['crm_security.set_next_action(public.crm_leads,jsonb,text,text)','crm_security.next_action_id(uuid)','crm_security.next_actions()',
   'crm_security.assert_in_hours(text,timestamptz)','crm_security.d1_apply(jsonb)','crm_security.d1_revert()','crm_security.d1_plan()'] loop
   perform pg_temp.ok(not has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute')
    and not has_function_privilege('service_role',fn,'execute'),'private '||fn);
@@ -518,4 +518,14 @@ do $$ declare v uuid; c uuid; kv public.crm_tasks; kc public.crm_tasks; q jsonb;
 end $$;
 \echo PASS T4c « Hors des nouveaux horaires » lists kept agreed times outside the current hours
 
+-- List readers (work queue, Today) use the set-based crm_security.next_actions():
+-- it picks the same action as next_action_id for every prospect this suite built,
+-- with appointments past and future, tests, enrolment actions and legacy duplicates.
+do $$ begin
+ perform pg_temp.ok((select count(*)>20 from crm_security.next_actions()),'fixture has many prospects with actions');
+ perform pg_temp.ok(not exists(select 1 from crm_security.next_actions() n where n.task_id is distinct from crm_security.next_action_id(n.lead_id))
+  and not exists(select 1 from public.crm_tasks t where t.status='open' and not exists(select 1 from crm_security.next_actions() n where n.lead_id=t.lead_id)),
+  'next_actions() = next_action_id() for every prospect');
+end $$;
+\echo PASS set-based next_actions() agrees with next_action_id
 rollback;
