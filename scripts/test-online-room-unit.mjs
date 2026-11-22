@@ -15,6 +15,7 @@ import { groupOpenOptions, groupTimerSeconds, correctGroupTimer, GROUP_TIMER_DEF
 import { dropToolkitJwtLog, restoreToolkitJwtLog, TOOLKIT_JWT_LOG, CAMERA_REASON, DEVICES_REASON, cameraReasonFromText, cameraReasonFromDevice, devicesReasonFromText, devicesReasonFromDevice, DEVICE_MESSAGES } from '../src/lib/online/zoom-toolkit-messages.mjs';
 import { createHands, parseHandMessage, HAND_SIGNAL, HAND_PREFIX, HAND_TEXT, MAX_HANDS, MAX_WAITING, MAX_AGE_SECONDS, ANSWER_WINDOW_MS } from '../src/lib/online/zoom-hands.mjs';
 import { toolkitEnglish, TOOLKIT_BUNDLE, reachable, UNREACHABLE_PREFIXES } from './lib/zoom-toolkit-resources.mjs';
+import { shellDrift, jsxOutline } from './lib/online-room-harness.mjs';
 
 const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
@@ -938,9 +939,39 @@ function fakeChannels() {
   assert.match(component, /data-testid="zoom-room" lang="fr" hidden=\{closing\}\n\s+className="min-h-72 w-full flex-1 overflow-hidden rounded-xl border bg-black" \/>/);
   assert.ok(!/min-h-\[70vh\]/.test(component), 'no minimum height alone');
   for (const rule of ['[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }', '[data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }',
-    '[data-testid="zoom-room"] .min-h-\\\\[100dvh\\\\] { min-height: 100%; }', '[data-testid="zoom-room"] .max-h-\\\\[100dvh\\\\] { max-height: 100%; }',
     '[data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }'])
     assert.ok(component.includes(rule), `room style rule: ${rule}`);
+  // Before joining (review of #210, N1 and N2): the device screen is the room's height,
+  // the card a column no taller, the camera preview the part that shrinks, the join
+  // button at the card's bottom edge if the card must scroll. The screen and the card
+  // are found by the title's id, and the toolkit still has what the rules name.
+  // (The style is a template built from a few constants; it is evaluated as written.)
+  const styleSource = component.slice(component.indexOf('const SCREEN = '), component.indexOf('const loadToolkit'));
+  const style = new Function(`${styleSource.replace('export const', 'const')}; return ROOM_STYLE;`)();
+  for (const rule of ['[data-testid="zoom-room"] div:has(> div > #uikit-preview-title) { height: 100% !important; min-height: 0 !important; max-height: 100% !important; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) { display: flex !important; flex-direction: column !important; min-height: 0 !important; max-height: 100% !important; container-type: inline-size; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) > * { flex: 0 0 auto !important; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) > div:has(video-player-container) { flex: 0 1 calc(100cqw * 9 / 16) !important; min-height: 6rem !important; align-items: stretch !important; margin-bottom: 1rem !important; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) > div:has(video-player-container):has(> div[style*="width: 190px"]) { flex-basis: 253px !important; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) > div:has(video-player-container) > div { width: auto !important; height: 100% !important; max-width: 100% !important; margin-bottom: 0 !important; }',
+    '[data-testid="zoom-room"] div:has(> #uikit-preview-title) > div:has(#uikit-preview-join-button) { position: sticky !important; bottom: 0 !important; z-index: 1 !important; background: inherit !important; }',
+    // The phone header (item 7 and N5): the technical name is out of the header, and a
+    // group's own name is replaced.
+    '[data-testid="zoom-room"] .uikit-mobile-header h1 { display: none !important; }',
+    '[data-testid="zoom-room"] .uikit-mobile-header div[title]:has(> span.truncate) > span { display: none !important; }',
+    '[data-testid="zoom-room"] .uikit-mobile-header div[title]:has(> span.truncate)::before { content: "Groupe"; font-size: 1.125rem; font-weight: 600; white-space: nowrap; }',
+    '[data-testid="zoom-room"] .uikit-mobile-header div[title="Subsession 1"]:has(> span.truncate)::before { content: "Groupe 1"; }',
+    '[data-testid="zoom-room"] .uikit-mobile-header div[title="Subsession 20"]:has(> span.truncate)::before { content: "Groupe 20"; }'])
+    assert.ok(style.includes(rule), `room style rule: ${rule}`);
+  assert.equal(style.split('\n').filter(line => /div\[title="Subsession \d+"\]/.test(line)).length, 20, 'one label per numbered group, 1 to 20');
+  // N1: every declaration of a rule scoped to the room is !important, except the text
+  // the room adds itself (a ::before the toolkit has no rule for) and the size container.
+  for (const line of style.split('\n').filter(line => !line.includes('::before')))
+    for (const declaration of line.slice(line.indexOf('{') + 1, line.lastIndexOf('}')).split(';').map(d => d.trim()).filter(Boolean))
+      assert.ok(/ !important$/.test(declaration) || declaration === 'container-type: inline-size', `!important: ${declaration} — ${line.slice(0, 60)}`);
+  // N6: no class name of the toolkit's window-sized boxes is written in the component,
+  // or Tailwind would emit it as a utility for the whole application.
+  assert.ok(!/(min|max)-h-\\*\[100dvh/.test(component), 'no 100dvh class name in the component');
   assert.match(component, /new ResizeObserver\(/);
   assert.match(component, /requestAnimationFrame\(\(\) => window\.dispatchEvent\(new Event\('resize'\)\)\)/);
   assert.match(component, /if \(first\) return;/, 'no resize event for the first measurement');
@@ -954,6 +985,22 @@ function fakeChannels() {
   const harnessSource = read('scripts/lib/online-room-harness.mjs');
   assert.match(harnessSource, /<AdminShell><RoomFrame inRoom=\{state\.phase === 'in_room'\}>/, 'the harness uses the page frame');
   assert.ok(!/height: 78vh|harness\.css/.test(harnessSource), 'the harness gives the room no size of its own');
+  // N3 of the #210 review: the harness copies the app's boxes around the room, and its
+  // build stops when the app's boxes are not the ones it copies: a class that changed,
+  // and a box that was added, removed or moved.
+  assert.deepEqual(shellDrift(), [], 'the harness copies the app\'s boxes as they are');
+  const layoutPath = 'src/app/(admin)/layout.jsx', sidebarPath = 'src/components/layout/Sidebar.jsx', pagePath = 'src/app/(admin)/online/room/[id]/page.jsx';
+  const changed = (path, from, to) => { const text = read(path); assert.ok(text.includes(from), `${path} has « ${from} »`); return shellDrift({ [path]: text.replace(from, to) }); };
+  assert.match(changed(layoutPath, '<Sidebar />', '<Sidebar />\n        <div className="h-10 w-full">Annonce</div>').join('\n'), /layout\.jsx has « div\.h-10 w-full », which the room harness does not copy/, 'a box added to the admin layout');
+  assert.match(changed(layoutPath, 'pt-14 lg:pt-0', 'pt-16 lg:pt-0').join('\n'), /layout\.jsx no longer has « div\.pt-14 lg:pt-0 »/, 'a class changed in the admin layout');
+  assert.match(changed(sidebarPath, '<>\n      <div className="lg:hidden fixed', '<>\n      <div className="h-8" />\n      <div className="lg:hidden fixed').join('\n'), /Sidebar\.jsx has « div\.h-8 »/, 'a box added beside the sidebar');
+  assert.match(changed(pagePath, '      {room}\n', '      <p className="rounded-lg border p-3">Nouveau</p>\n      {room}\n').join('\n'), /page\.jsx has « p\.rounded-lg border p-3 », which the room harness does not copy/, 'an element added above the room');
+  assert.match(changed(pagePath, "{state.phase === 'in_room' && state.provider === 'zoom-video' && (\n        <p className=\"rounded-lg border bg-card p-3 text-sm sm:hidden\" data-testid=\"room-audio-hint\">", "{state.phase === 'in_room' && state.provider === 'zoom-video' && (\n        <p className=\"rounded-lg border bg-card p-4 text-sm sm:hidden\" data-testid=\"room-audio-hint\">").join('\n'), /page\.jsx no longer has « \{state\.phase === 'in_room' && state\.provider === 'zoom-video'\} p\.rounded-lg border bg-card p-3 text-sm sm:hidden »/, 'the audio hint changed');
+  assert.match(changed(pagePath, '      {room}\n', '').join('\n'), /page\.jsx no longer has « \{room\} »/, 'the room removed');
+  assert.deepEqual(changed(pagePath, "{state.phase === 'displaced' && (", "{state.phase === 'displaced' && state.extra && ("), [], 'another phase\'s card is not the room\'s layout');
+  // The harness's own page is read the same way: the audio hint must be in it.
+  assert.match(shellDrift({ harness: harnessSource.replace(/\n[^\n]*data-testid="room-audio-hint"[^\n]*\n/, '\n') }).join('\n'), /the room harness page no longer has « \{state\.phase === 'in_room'\} p\.rounded-lg border bg-card p-3 text-sm sm:hidden »/, 'the hint missing from the harness');
+  assert.deepEqual(jsxOutline('<a className="x" onClick={() => go(a > b ? "}" : 1)}><b /><>{ok && (<i className="y">t</i>)}{/* note */}{label}</></a>', '<a', 3), ['a.x', '  b', '  <>', '    {ok} i.y', '    {label}'], 'the outline reader: arrows, quoted braces, fragments, comments');
   assert.ok(!/onLeft, onError\]/.test(component));
   assert.match(component, /callbacks\.current\.onLeft/);
   // French resources are inline: no language file is fetched from any host.

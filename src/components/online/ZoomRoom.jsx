@@ -76,7 +76,13 @@ export const LEARNER_WHITEBOARD = Object.freeze({ enable: true, enableExport: fa
 export const featuresFor = role => (role === 'host' ? FEATURES : Object.freeze({ ...FEATURES, whiteboard: LEARNER_WHITEBOARD }));
 
 // Scoped to the room container:
-//  - the toolkit's phone header prints the technical session name; it is not for learners;
+//  - the toolkit's phone header prints the technical session name; it is not for learners.
+//    It is taken out of the header (not only made invisible: its width, with the group's
+//    name beside it, pushed the toolkit's red leave button off the header inside a group;
+//    review of #210, item 7 and N5). Inside a group the header also prints Zoom's own
+//    name for the group, « (Subsession 1) »: the room prints « Groupe 1 » in its place
+//    (Zoom's numbered names up to GROUP_LABELS; a group the teacher renamed, or a later
+//    one, is « Groupe »);
 //  - with nobody else in the gallery the toolkit's pager prints « 1 / -1 »: hide the pager
 //    while the « Aucun autre participant » message is shown.
 // And one rule on the toolkit's own menu layer, which it draws outside the container:
@@ -88,22 +94,53 @@ export const featuresFor = role => (role === 'host' ? FEATURES : Object.freeze({
 //    once the toolkit has placed the menu, it stays visible until the toolkit removes it.
 // Size (the squeezed whiteboard, owner, Production, 2026-11-22). The page gives the room
 // a definite height (RoomFrame.jsx: the screen below the title and the hands); the
-// toolkit fills it from `h-full` on its app box. Three toolkit boxes size themselves
-// from the whole window instead, read in the bundle of 2.5.0-1; inside the room they
-// fill the room:
+// toolkit fills it from its app box. Three toolkit boxes size themselves from the whole
+// window instead, read in the bundle of 2.5.0-1; inside the room they fill the room:
 //  - the phone layout: `height: 100svh; width: 100vw` (its footer fell below the room,
 //    and the page was wider than the phone);
-//  - the pre-join device screen: `min-h-[100dvh] max-h-[100dvh]`, with the join button
-//    centred in it (it would have been cut off at the bottom of a shorter room);
+//  - the pre-join device screen: as tall as the window, never less, never more. See
+//    « Before joining » below;
 //  - the whiteboard: `height: 75%` of the video area, the rest for a strip of
 //    thumbnails above it that needs about 8.5rem; the whiteboard gets everything above
 //    that strip, never less than the toolkit's 75%.
+// Before joining (review of #210, N1 and N2). The toolkit's device screen is a card:
+// title, name, camera preview, the three device choices, « Rejoindre le cours ». The
+// preview is 16:9 across the card (423 px high in a computer's card; 190 × 253 px on a
+// phone), so on a 1280 × 720 or 1366 × 768 window, and on a phone under the audio hint,
+// the button was below the room's edge, reached only by a scroll inside the card that
+// macOS does not show. Now the screen is exactly the room's height, the card is a
+// column no taller than it, and the preview is the one part that gives way: it keeps
+// its shape and shrinks (never under PREVIEW_MIN) until the button fits. In a room too
+// short even for that, the card still scrolls and the button stays at its bottom edge.
+// Nothing is hidden: the locked name and the device choices keep their size.
+// The screen and the card are found by what they hold (the title's id), not by the
+// toolkit's class names, and every rule is `!important`: the toolkit's own rules have
+// the same weight, and the order of the two stylesheets is not the same in the app and
+// in the room harness (N1). (Written as class names here, those two would also make
+// Tailwind emit them as utilities for the whole app: N6.)
+const SCREEN = '[data-testid="zoom-room"] div:has(> div > #uikit-preview-title)';
+const CARD = '[data-testid="zoom-room"] div:has(> #uikit-preview-title)';
+const PREVIEW = `${CARD} > div:has(video-player-container)`;
+const PREVIEW_MIN = '6rem';
+const HEADER = '[data-testid="zoom-room"] .uikit-mobile-header';
+const GROUP_NAME = `${HEADER} div[title]:has(> span.truncate)`;
+export const GROUP_LABELS = 20;
 const ROOM_STYLE = `[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }
 [data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }
-[data-testid="zoom-room"] .min-h-\\[100dvh\\] { min-height: 100%; }
-[data-testid="zoom-room"] .max-h-\\[100dvh\\] { max-height: 100%; }
+${SCREEN} { height: 100% !important; min-height: 0 !important; max-height: 100% !important; }
+${CARD} { display: flex !important; flex-direction: column !important; min-height: 0 !important; max-height: 100% !important; container-type: inline-size; }
+${CARD} > * { flex: 0 0 auto !important; }
+${PREVIEW} { flex: 0 1 calc(100cqw * 9 / 16) !important; min-height: ${PREVIEW_MIN} !important; align-items: stretch !important; margin-bottom: 1rem !important; }
+${PREVIEW}:has(> div[style*="width: 190px"]) { flex-basis: 253px !important; }
+${PREVIEW} > div { width: auto !important; height: 100% !important; max-width: 100% !important; margin-bottom: 0 !important; }
+${PREVIEW} video-player { width: 100% !important; }
+${CARD} > div:has(#uikit-preview-join-button) { position: sticky !important; bottom: 0 !important; z-index: 1 !important; background: inherit !important; }
 [data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }
-[data-testid="zoom-room"] .uikit-mobile-header h1 { visibility: hidden; }
+${HEADER} h1 { display: none !important; }
+${GROUP_NAME} { max-width: none !important; font-size: 0 !important; }
+${GROUP_NAME} > span { display: none !important; }
+${GROUP_NAME}::before { content: "Groupe"; font-size: 1.125rem; font-weight: 600; white-space: nowrap; }
+${Array.from({ length: GROUP_LABELS }, (_, i) => `${HEADER} div[title="Subsession ${i + 1}"]:has(> span.truncate)::before { content: "Groupe ${i + 1}"; }`).join('\n')}
 [data-testid="zoom-room"] .flex-grow.items-center.justify-between:has(.text-2xl.font-semibold.m-2) > .flex.flex-col.items-center:has(> button.rounded-full) { visibility: hidden !important; }
 .zoom-ui-toolkit-root > div[style*="visibility: hidden"][style*="z-index: 1000"]:not([style*="top: 0px"]) { visibility: visible !important; }`;
 

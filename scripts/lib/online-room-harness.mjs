@@ -38,8 +38,9 @@ import { roomErrorFor, passExpired } from './src/lib/online/zoom-room-errors.mjs
 import { createPassWatcher, closedOutcome, tookOverNotice, ROOM_PASS_TEXT } from './src/lib/online/room-pass.mjs';
 
 // The boxes around the page in the app: src/app/(admin)/layout.jsx and the two boxes
-// Sidebar.jsx draws (the phone's fixed top bar, the computer's 240 px column). Their
-// classes are checked against those files when the harness is built (SHELL_CLASSES).
+// Sidebar.jsx draws (the phone's fixed top bar, the computer's 240 px column). The boxes
+// and their classes are checked against those files when the harness is built
+// (shellDrift, below), and so are the children of the room page's frame.
 function AdminShell({ children }) {
   return (
     <div className="flex min-h-screen bg-background">
@@ -136,7 +137,8 @@ function App() {
       {state.phase === 'removed' && <div data-testid="room-removed"><p>{ROOM_PASS_TEXT.removed}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'ended' && <div data-testid="room-ended"><p>{ROOM_PASS_TEXT.ended}</p><a href="/portal">{ROOM_PASS_TEXT.quit}</a></div>}
       {state.phase === 'left' && state.reason && <p data-testid="room-left-reason">{state.reason}</p>}
-      {state.phase === 'in_room' && tookOver && <p role="status" data-testid="room-took-over">{tookOver}</p>}
+      {state.phase === 'in_room' && tookOver && <p className="rounded-lg border bg-card p-3 text-sm" role="status" data-testid="room-took-over">{tookOver}</p>}
+      {state.phase === 'in_room' && <p className="rounded-lg border bg-card p-3 text-sm sm:hidden" data-testid="room-audio-hint">Touchez l’icône casque pour activer le son, puis le micro et la caméra.</p>}
       {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} onJoined={onJoined} onNewer={onNewer} link={roomLink} />}
       {state.phase === 'refused' && <div data-testid="room-refused" data-code={String(state.code)}><p>{state.room.text}</p>{state.room.retry && <button onClick={join}>Réessayer</button>}{state.room.quit && <a href="/portal">{ROOM_PASS_TEXT.quit}</a>}</div>}
     </RoomFrame></AdminShell>
@@ -195,14 +197,144 @@ z.close = () => { for (const fn of [...z.closed]) fn(); };
 export default toolkit;
 `;
 
-// AdminShell above copies these class lists; the build stops if the app's files changed them.
-const SHELL_CLASSES = [
-  ['src/app/(admin)/layout.jsx', 'flex min-h-screen bg-background'],
-  ['src/app/(admin)/layout.jsx', 'flex-1 overflow-auto min-w-0 lg:ml-0'],
-  ['src/app/(admin)/layout.jsx', 'pt-14 lg:pt-0'],
-  ['src/components/layout/Sidebar.jsx', 'lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4'],
-  ['src/components/layout/Sidebar.jsx', 'operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0'],
+// ---- Drift: the app's boxes around the room, against what the harness copies ----
+// AdminShell and App above copy boxes of the app (the admin layout, the two boxes the
+// sidebar draws, the children of the room page's frame). The build stops when the app
+// has changed them: a class list that changed, and also a box that was added, removed
+// or moved (review of #210, N3: the phone's audio hint was in the page and not here, so
+// the phone's room was taller here than in the app).
+// `jsxOutline` reads the JSX that starts at `from` (its first place in a source, or its
+// last) and returns one line per element or `{expression}` down to `depth` levels below
+// the first element: the tag with its class list, and for an expression child its
+// condition. It is a reader of this repository's own files, not a JSX parser: tags,
+// quoted attributes and balanced braces.
+function closingBrace(source, open) {
+  for (let i = open, depth = 0, quote = null; i < source.length; i++) {
+    const c = source[i];
+    if (quote) { if (c === quote && source[i - 1] !== '\\') quote = null; }
+    else if (c === '"' || c === '`' || (c === "'" && /[\s(,=:[{?&|+]/.test(source[i - 1]))) quote = c;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return i;
+  }
+  throw new Error('room harness: unbalanced braces in a JSX source');
+}
+// The tag that starts at `at` (a « < »): its name, class list, end and kind.
+function readTag(source, at) {
+  let i = at + 1;
+  const closing = source[i] === '/';
+  if (closing) i++;
+  const name = source.slice(i).match(/^[\w.]*/)[0];
+  i += name.length;
+  let className = null, quote = null;
+  for (; i < source.length; i++) {
+    const c = source[i];
+    if (quote) { if (c === quote) quote = null; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '{') i = closingBrace(source, i);
+    else if (c === '>') break;
+  }
+  const text = source.slice(at, i + 1);
+  const literal = text.match(/\sclassName="([^"]*)"/);
+  if (literal) className = literal[1]; else if (/\sclassName=\{/.test(text)) className = '{…}';
+  return { name: name || '<>', className, end: i + 1, closing, selfClosing: source[i - 1] === '/' };
+}
+const isTag = (source, i) => source[i] === '<' && /[A-Za-z/>]/.test(source[i + 1] || '');
+const label = tag => tag.name + (tag.className === null ? '' : `.${tag.className}`);
+export function jsxOutline(source, from, depth = 1, { last = false } = {}) {
+  const start = last ? source.lastIndexOf(from) : source.indexOf(from);
+  if (start < 0) throw new Error(`room harness: « ${from} » not found`);
+  const lines = [];
+  let level = 0, i = source.indexOf('<', start);
+  const first = readTag(source, i);
+  lines.push(label(first));
+  if (first.selfClosing) return lines;
+  level = 1; i = first.end;
+  while (i < source.length && level > 0) {
+    const c = source[i];
+    if (isTag(source, i)) {
+      const tag = readTag(source, i);
+      if (tag.closing) level--;
+      else { if (level <= depth) lines.push(`${'  '.repeat(level)}${label(tag)}`); if (!tag.selfClosing) level++; }
+      i = tag.end;
+    } else if (c === '{') {
+      const end = closingBrace(source, i), inner = source.slice(i + 1, end);
+      if (level <= depth && !/^\s*\/\*/.test(inner)) {
+        let at = 0;
+        while (at < inner.length && !isTag(inner, at)) at++;
+        const guard = inner.slice(0, at).replace(/\s+/g, ' ').replace(/[\s(]+$/, '').replace(/\s*&&$/, '');
+        lines.push(`${'  '.repeat(level)}{${guard}}${at < inner.length ? ` ${label(readTag(inner, at))}` : ''}`);
+      }
+      i = end + 1;
+    } else i++;
+  }
+  return lines;
+}
+// What the harness was written against. `inRoom` keeps the children of the page's frame
+// that can show while the room is on screen (no condition on another phase).
+const inRoom = lines => lines.filter(line => !/state\.phase === '(?!in_room')/.test(line));
+export const SHELL_OUTLINE = [
+  { path: 'src/app/(admin)/layout.jsx', from: '<ProtectedRoute>', depth: 9, lines: [
+    'ProtectedRoute',
+    '  div.flex min-h-screen bg-background',
+    '    Sidebar',
+    '    main.flex-1 overflow-auto min-w-0 lg:ml-0',
+    '      div.pt-14 lg:pt-0',
+    '        {children}',
+  ] },
+  // The sidebar component's own render: the last « return ( » of the file.
+  { path: 'src/components/layout/Sidebar.jsx', from: 'return (', last: true, depth: 1, lines: [
+    '<>',
+    '  div.lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4',
+    '  {mobileOpen} div.lg:hidden fixed inset-0 z-40 flex',
+    '  div.operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0',
+  ] },
+  { path: 'src/app/(admin)/online/room/[id]/page.jsx', from: "<RoomFrame inRoom={state.phase === 'in_room'}>", depth: 1, keep: inRoom, lines: [
+    'RoomFrame',
+    '  RoomHeader',
+    '  {!valid} p.rounded-lg border bg-card p-6 text-sm',
+    "  {state.phase === 'in_room' && tookOver} p.rounded-lg border bg-card p-3 text-sm",
+    "  {state.phase === 'in_room' && state.provider === 'zoom-video'} p.rounded-lg border bg-card p-3 text-sm sm:hidden",
+    '  {room}',
+  ] },
 ];
+// The harness's own copy: the same boxes, read in ENTRY.
+const HARNESS_OUTLINE = [
+  { from: '<div className="flex min-h-screen bg-background">', depth: 2, lines: [
+    'div.flex min-h-screen bg-background',
+    '  div.lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4',
+    '  div.operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0',
+    '  main.flex-1 overflow-auto min-w-0 lg:ml-0',
+    '    div.pt-14 lg:pt-0',
+  ] },
+  { from: "<RoomFrame inRoom={state.phase === 'in_room'}>", depth: 1, keep: inRoom, lines: [
+    'RoomFrame',
+    '  p.sr-only',
+    '  RoomHeader',
+    "  {state.phase === 'in_room' && tookOver} p.rounded-lg border bg-card p-3 text-sm",
+    "  {state.phase === 'in_room'} p.rounded-lg border bg-card p-3 text-sm sm:hidden",
+    "  {state.phase === 'in_room'} ZoomRoom",
+  ] },
+];
+// The differences, as sentences; empty when the harness still copies the app. `sources`
+// replaces a file's text (the unit checks hand in changed copies).
+export function shellDrift(sources = {}) {
+  const found = [];
+  const compare = (where, outline, text) => {
+    const now = (outline.keep || (lines => lines))(jsxOutline(text, outline.from, outline.depth, { last: outline.last }));
+    for (const line of now) if (!outline.lines.includes(line)) found.push(`${where} has « ${line.trim()} », which the room harness does not copy`);
+    for (const line of outline.lines) if (!now.includes(line)) found.push(`${where} no longer has « ${line.trim()} »`);
+    if (!found.length && now.join('\n') !== outline.lines.join('\n')) found.push(`${where}: the boxes changed order`);
+  };
+  for (const outline of SHELL_OUTLINE) {
+    let text;
+    try { text = sources[outline.path] ?? readFileSync(root + outline.path, 'utf8'); compare(outline.path, outline, text); }
+    catch (error) { found.push(`${outline.path}: ${error.message}`); }
+  }
+  for (const outline of HARNESS_OUTLINE) {
+    try { compare('the room harness page', outline, sources.harness ?? ENTRY); } catch (error) { found.push(`the room harness page: ${error.message}`); }
+  }
+  return found;
+}
 // Files whose Tailwind classes the harness page uses.
 const STYLED = ['src/components/online/ZoomRoom.jsx', 'src/components/online/RoomFrame.jsx', 'src/components/online/RoomHands.jsx',
   'src/components/online/RoomLeaveLink.jsx', 'src/components/ui/button.jsx', 'src/components/ui/alert-dialog.jsx'];
@@ -212,9 +344,8 @@ const STYLED = ['src/components/online/ZoomRoom.jsx', 'src/components/online/Roo
 // fixed height of its own, which hid that the app's room had none (the squeezed
 // whiteboard of 2026-11-22).
 async function appStyles() {
-  for (const [path, classes] of SHELL_CLASSES) {
-    if (!readFileSync(root + path, 'utf8').includes(classes)) throw new Error(`room harness: ${path} no longer has « ${classes} »; update AdminShell`);
-  }
+  const drift = shellDrift();
+  if (drift.length) throw new Error(`room harness: the app's boxes around the room changed; update AdminShell / App and the outlines in scripts/lib/online-room-harness.mjs:\n- ${drift.join('\n- ')}`);
   const require = createRequire(import.meta.url);
   const config = require(root + 'tailwind.config.js');
   const content = [{ raw: ENTRY, extension: 'jsx' }, ...STYLED.filter(path => existsSync(root + path)).map(path => ({ raw: readFileSync(root + path, 'utf8'), extension: 'jsx' }))];
