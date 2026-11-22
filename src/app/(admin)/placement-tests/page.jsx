@@ -13,13 +13,9 @@ import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
 import { isClosedCourse } from '@/lib/academic/courseClose.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
+import { PLACEMENT_STATUS_COLORS } from '@/lib/statusColors';
 
-const STATUS_COLORS = {
-  'Planifié': 'bg-blue-100 text-blue-700',
-  'Passé': 'bg-yellow-100 text-yellow-700',
-  'Résultat saisi': 'bg-purple-100 text-purple-700',
-  'Affecté': 'bg-green-100 text-green-700',
-};
+const STATUS_COLORS = PLACEMENT_STATUS_COLORS;
 
 function PlacementTestsList() {
   const { role, user } = useAuth();

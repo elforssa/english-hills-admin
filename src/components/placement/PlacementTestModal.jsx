@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { entities, integrations } from '@/lib/entities';
 import { toast } from 'sonner';
@@ -55,6 +55,15 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
   const refresh = useCrmRefresh();
   const [error, setError] = useState('');
   const [expected, setExpected] = useState({ lead: crmLead?.version, task: crmLead?.confirm_placement_task, updated: test?.updated_at });
+  // NF-2: an edit sends the prospect version seen when the form opened. Opened
+  // from the placement list there is no prospect in hand, so read it once.
+  const needsLeadVersion = linked && !booking && expected.lead == null;
+  useEffect(() => {
+    if (!needsLeadVersion || !test?.id) return undefined;
+    let live = true;
+    crmRpc('crm_get_placement', { p_test: test.id }).then(seen => { if (live && seen) setExpected(e => ({ ...e, lead: seen.lead_version, updated: e.updated ?? seen.updated_at })); else if (live) setError('Prospect lié indisponible. Rechargez la page.'); }).catch(() => { if (live) setError('Prospect lié indisponible. Rechargez la page.'); });
+    return () => { live = false; };
+  }, [needsLeadVersion, test?.id]);
   const [form, setForm] = useState({ student_id: '', student_name: '', date_test: localBusinessDate(), heure: '', examinateur: '', score: '', niveau_recommande: 'A1', status: 'Planifié', notes: '', ...(linked ? { niveau_recommande: '', student_name: crmLead?.learner_name || test?.student_name || '' } : {}), ...test });
   const [saving, setSaving] = useState(false);
   const [chosenStudent, setChosenStudent] = useState(null);
@@ -96,7 +105,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
           const payload = { date_test: form.date_test, heure: form.heure, examinateur: form.examinateur || null, notes: form.notes || null,
             ...(booking ? { lead_id: crmLead.id, expected_version: expected.lead,
               ...(expected.task ? { task_id: expected.task.id, expected_task_version: expected.task.version } : {}) }
-            : { placement_id: test.id, expected_updated_at: expected.updated, status: form.status, score: form.score === '' || form.score == null ? null : Number(form.score), niveau_recommande: form.niveau_recommande || null }) };
+            : { placement_id: test.id, expected_version: expected.lead, expected_updated_at: expected.updated, status: form.status, score: form.score === '' || form.score == null ? null : Number(form.score), niveau_recommande: form.niveau_recommande || null }) };
           request.current = { ...retryKey(null, command, payload), intent, command, payload };
         }
         const result = await crmRpc(request.current.command, { p_request_key: request.current.key, p_data: request.current.payload });
@@ -129,7 +138,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
         setError(commandError(err));
         if (isRecordConflict(err)) {
           const latest = await crmRpc(booking ? 'crm_get_workspace_detail' : 'crm_get_placement', booking ? { p_lead: crmLead.id } : { p_test: test.id }).catch(() => null);
-          if (latest) setExpected({ lead: latest.version, task: latest.confirm_placement_task, updated: latest.updated_at });
+          if (latest) setExpected({ lead: booking ? latest.version : latest.lead_version, task: latest.confirm_placement_task, updated: latest.updated_at });
           request.current = null;
           await refresh();
         } else if (['22023', '42501'].includes(err?.code)) request.current = null;
@@ -167,7 +176,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
             <div><label htmlFor="placement-examiner" className={labelClass}>Examinateur</label><input id="placement-examiner" maxLength={linked ? 200 : undefined} className={inputClass} value={form.examinateur || ''} onChange={e => set('examinateur', e.target.value)} /></div>
             <>{!booking && <><div><label htmlFor="placement-status" className={labelClass}>Statut</label>
               <select id="placement-status" className={inputClass} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value, ...(linked && e.target.value === 'Planifié' ? { niveau_recommande: '', score: '' } : {}) }))}>
-                {['Planifié','Passé','Résultat saisi','Affecté'].map(s => <option key={s}>{s}</option>)}
+                {[...new Set([...['Planifié','Passé','Résultat saisi','Affecté'], ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : [])])].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div><label htmlFor="placement-score" className={labelClass}>Score</label><input id="placement-score" type="number" className={inputClass} value={form.score || ''} onChange={e => set('score', e.target.value)} min="0" max="100" /></div>
@@ -193,7 +202,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
           {error && <p role="alert" className={`text-sm text-red-700 ${FOOTER_ALERT}`}>{error}</p>}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" disabled={saving} onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? '...' : 'Enregistrer'}</Button>
+            <Button type="submit" disabled={saving || needsLeadVersion}>{saving ? '...' : 'Enregistrer'}</Button>
           </DialogFooter>
           </DialogStickyFooter>
         </form>

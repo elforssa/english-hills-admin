@@ -69,7 +69,10 @@ commit;""")
         result = command('qualify_lead', str(uuid.uuid4()), {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'Placement agreed', 'qualification_step': 'placement_test', 'next_task': {'task_type': 'confirm_placement_test', 'due_at': due}})
         assert 'error' not in result, result
         task = result['open_tasks'][0]
-        return {'lead_id': lead, 'expected_version': result['lead']['version'], 'task_id': task['id'], 'expected_task_version': task['version'], 'date_test': sql("select (current_date+2)::text").stdout.strip(), 'heure': '10:30'}
+        return {'lead_id': lead, 'expected_version': result['lead']['version'], 'task_id': task['id'], 'expected_task_version': task['version'], 'date_test': slot_date, 'heure': slot_time}
+    # RWR-r5 §4.5: a test is an appointment, so it sits inside the current opening hours.
+    slot = sql("select to_char(s at time zone public.centre_utc_offset(),'YYYY-MM-DD HH24:MI') from (select crm_security.window_at(crm_security.current_policy_id(),'opening',(((now() at time zone public.centre_utc_offset())::date+2)::timestamp+time '10:30') at time zone public.centre_utc_offset()) s) x").stdout.strip().split()
+    slot_date, slot_time = slot[0], slot[1]
     for same_key in (True, False):
         payload = qualified();key = str(uuid.uuid4())
         results = race('book_placement_test', [(key,payload), (key if same_key else str(uuid.uuid4()),payload)])

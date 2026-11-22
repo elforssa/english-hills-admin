@@ -75,6 +75,6 @@ assert.equal(noteRequired({ action: 'qualify', outcomeLed: false, step: 'other' 
 assert.equal(noteRequired({ action: 'qualify', outcomeLed: false, step: 'center_visit' }), false);
 assert.match(commandError({ code: '22023', message: 'Agreed callback time is outside calling hours' }), /hors des horaires d’appel/);
 assert.equal(taskTitle({ task_type: 'callback', followup_reason: 'considering' }), 'Rappel · En réflexion');
-assert.equal(taskTitle({ task_type: 'center_visit' }), 'Visite au centre');
+assert.equal(taskTitle({ task_type: 'center_visit' }), 'Rendez-vous au centre'); // RWR-r5 §4.9 wording
 assert.equal(taskTitle(null), 'Action');
 console.log('PASS RCC-A1 labels, outcome-led routing, server-resolved presets and allowlisted payloads');

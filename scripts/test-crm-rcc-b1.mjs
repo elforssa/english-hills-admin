@@ -80,7 +80,7 @@ const sheet = readFileSync('src/components/crm/LeadDetailSheet.jsx', 'utf8');
 assert.equal((sheet.match(/<SheetContent\b/g) || []).length, 1, 'one SheetContent for every band');
 assert.doesNotMatch(sheet, /SheetClose|aria-label="Fermer"|>Fermer</, 'no second close control');
 assert.doesNotMatch(sheet, /Tooltip|title="Autres actions"/, 'no tooltip on Autres actions (R1)');
-assert.equal((sheet.match(/<DropdownMenu open=\{/g) || []).length, 2, 'both drawer menus are controlled');
+assert.equal((sheet.match(/<DropdownMenu open=\{/g) || []).length, 1, 'the drawer menu is controlled (RWR-r5: the per-task menu is replaced by « Prochaine action »)');
 assert.doesNotMatch(sheet, /<(Select|Popover|HoverCard|ContextMenu)\b/, 'B1 adds no Radix Select/Popover/HoverCard/ContextMenu');
 const tail = sheet.slice(sheet.lastIndexOf('</ReadState>'));
 for (const dialog of ['<CrmActionDialog', '<PlacementTestModal', '<CrmEnrollmentDialog']) assert.ok(tail.includes(dialog), `${dialog} stays a direct child of SheetContent, outside ReadState`);

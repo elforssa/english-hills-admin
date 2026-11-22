@@ -351,17 +351,27 @@ select 'PASS follow-up default, explicit window resolution, past/malformed/empty
 
 -- Owner and policy reasons, with no partial writes.
 -- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.
-do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; d jsonb; begin
+do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; d jsonb; seen boolean:=false; begin
  update public.crm_leads set owner_id=pg_temp.uid(4) where id=l;
  d:=pg_temp.legacy_pick(l);before:=pg_temp.counts();
  perform pg_temp.rejects(d,'22023','Assignee must be operational staff','owner_not_operational');
  perform pg_temp.ok(pg_temp.counts()=before and (select enrollment_id is null from public.crm_leads where id=l),'owner rejection leaves no partial writes');
  -- validate_policy prevents a policy without windows; only a direct synthetic row reaches it.
+ -- RWR §4.5: hours come from the current published version, so the synthetic
+ -- window-less version is made current (after the lead exists) to reach the
+ -- reason, inside a block rolled back so the rest of the suite keeps its hours.
+ l:=pg_temp.lead();
+ begin
  insert into public.crm_followup_policies select (jsonb_populate_record(null::public.crm_followup_policies,to_jsonb(x)||jsonb_build_object('id',gen_random_uuid(),
-  'version',(select max(version)+1 from public.crm_followup_policies),'effective_from',now()+interval '100 years','weekly_hours','{"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[]}'::jsonb))).*
+  'version',(select max(version)+1 from public.crm_followup_policies),'effective_from',now(),'weekly_hours','{"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[]}'::jsonb))).*
  from public.crm_followup_policies x where x.id=(select id from a2_policy) returning id into p;
- l:=pg_temp.lead();update public.crm_leads set followup_policy_id=p where id=l;
+ update public.crm_leads set followup_policy_id=p where id=l;
  perform pg_temp.rejects(pg_temp.legacy_pick(l),'22023','Policy has no available calling window','followup_policy_unavailable');
+ seen:=true;
+ raise exception 'rollback synthetic policy' using errcode='P0099';
+ exception when sqlstate 'P0099' then null;
+ end;
+ if seen then insert into a2_seen values('followup_policy_unavailable'); end if;
 end $$;
 select 'PASS owner_not_operational and followup_policy_unavailable without partial writes';
 

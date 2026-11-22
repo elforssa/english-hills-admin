@@ -5,7 +5,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { MoreHorizontal } from 'lucide-react';
 import { programmeLabel } from '@/lib/ui/presentation.mjs';
 import { LifecycleBadge } from './CrmShared';
-import { ACTIVE, BOARD_STAGES, STATUS, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, dateLabel, scheduledLabel, opportunityAction, taskTitle } from '@/lib/crm/presentation.mjs';
+import { ACTIVE, BOARD_STAGES, STATUS, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, dateLabel, scheduledLabel, opportunityAction } from '@/lib/crm/presentation.mjs';
+import { pluralFr } from '@/lib/ui/pluralFr.mjs';
 // Today's items, grouped: stage routes · closure/reopen · assignment. Every item opens a guarded dialog.
 export function OpportunityActions({ lead, onAction }) {
   const groups = [
@@ -18,18 +19,19 @@ export function OpportunityActions({ lead, onAction }) {
     {groups.map((group, index) => <Fragment key={index}>{index > 0 && <DropdownMenuSeparator />}{group}</Fragment>)}
   </DropdownMenuContent></DropdownMenu>;
 }
-function overdue(lead, asOf) {
-  return !!lead.next_task && !!asOf && Date.parse(lead.next_task.due_at) < Date.parse(asOf);
+// « En retard » comes from the server's next action (never « En attente »).
+function overdue(lead) {
+  return !!lead.next_action?.overdue;
 }
 // Board cards omit the stage (the column conveys it); list cards show it only under "Tous".
 export default function OpportunityCard({ lead, onOpen, onAction, asOf, showStage = false }) {
-  const active = ACTIVE.includes(lead.status), late = overdue(lead, asOf);
+  const active = ACTIVE.includes(lead.status), late = overdue(lead), next = lead.next_action;
   const qualifiers = [
-    lead.next_task?.schedule_kind === 'appointment' && SCHEDULE_KINDS.appointment,
+    next?.schedule_kind === 'appointment' && SCHEDULE_KINDS.appointment,
     // Attempt 1 is the "Premier contact" title itself; later attempts are qualified.
-    lead.next_task?.attempt_ordinal > 1 && `Tentative ${lead.next_task.attempt_ordinal} sur 5`,
-    lead.failed_attempts > 0 && `${lead.failed_attempts} appels infructueux${lead.failed_attempts >= 5 ? ' · Séquence automatique terminée' : ''}`,
-    lead.next_task && lead.next_placement && 'Test de niveau planifié'
+    next?.attempt_ordinal > 1 && `Tentative ${next.attempt_ordinal} sur 5`,
+    lead.failed_attempts > 0 && `${pluralFr(lead.failed_attempts, 'appel infructueux', 'appels infructueux')}${lead.failed_attempts >= 5 ? ' · Séquence automatique terminée' : ''}`,
+    next?.relance_due && 'À relancer'
   ].filter(Boolean);
   const meta = [lead.source_label || 'Origine à préciser', lead.program && programmeLabel(lead.program), lead.last_activity_at ? `Dernière activité ${dateLabel(lead.last_activity_at)}` : 'Aucune activité'].filter(Boolean);
   return <article data-testid="opportunity-card" data-lead-id={lead.id} data-stage={lead.status} draggable={active} onDragStart={e => { e.dataTransfer.setData('application/eh-opportunity', JSON.stringify({ id: lead.id, status: lead.status })); e.dataTransfer.effectAllowed = 'move'; }} className="min-w-0 rounded-lg border border-slate-200 bg-white px-1.5 py-1.5 text-sm">
@@ -40,7 +42,7 @@ export default function OpportunityCard({ lead, onOpen, onAction, asOf, showStag
       <OpportunityActions lead={lead} onAction={onAction} />
     </div>
     {showStage && <div className="mt-2"><LifecycleBadge status={lead.status}/></div>}
-    <p className={`mt-1.5 break-words text-xs ${late ? 'text-red-700' : 'text-slate-700'}`}>{late ? 'En retard · ' : ''}{lead.next_task ? `${taskTitle(lead.next_task)} · ${scheduledLabel(lead.next_task)}` : lead.next_placement ? `Test de niveau · ${scheduledLabel(lead.next_placement)}` : active ? 'Prochaine action à choisir' : 'Suivi clos'}{qualifiers.length > 0 && <span className="text-slate-600"> · {qualifiers.join(' · ')}</span>}</p>
+    <p className={`mt-1.5 break-words text-xs ${late ? 'text-red-700' : 'text-slate-700'}`}>{late ? 'En retard · ' : ''}{next ? next.label : lead.next_placement ? `Test de niveau · ${scheduledLabel(lead.next_placement)}` : active ? 'Prochaine action à choisir' : 'Suivi clos'}{qualifiers.length > 0 && <span className="text-slate-600"> · {qualifiers.join(' · ')}</span>}</p>
     {lead.closed_at && <p className="mt-1 text-xs">{LOST[lead.closure_reason] || NOT_QUALIFIED[lead.closure_reason]} · {dateLabel(lead.closed_at)}</p>}
     <p className="mt-1 break-words text-xs text-muted-foreground">{meta.join(' · ')}</p>
   </article>;

@@ -27,7 +27,7 @@ create function pg_temp.intake() returns uuid language plpgsql as $$ declare r j
  return (r->'lead'->>'id')::uuid;
 end $$;
 create function pg_temp.next_task(typ text default 'callback') returns jsonb language sql as $$
- select jsonb_build_object('task_type',typ,'due_at',now()+interval '1 day')
+ select jsonb_build_object('task_type',typ,'due_at',crm_security.window_at(crm_security.current_policy_id(),case when typ='center_visit' then 'opening' else 'calling' end,now()+interval '1 day'))
 $$;
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select ('80000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'phase3-'||i||'@example.invalid','authenticated','authenticated',now(),now() from generate_series(1,7)i;

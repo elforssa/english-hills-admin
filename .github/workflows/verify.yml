@@ -383,6 +383,11 @@ jobs:
           grep '^DIGEST ' /tmp/activation-current.log > /tmp/digest-current
           cat /tmp/digest-130 /tmp/digest-current
           diff /tmp/digest-130 /tmp/digest-current
+      - name: One next action 130 to 136 upgrade (RWR-r5 PR A1)
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 130 --no-seed
+          node scripts/test-crm-next-action-136-upgrade.mjs
           supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
@@ -417,6 +422,11 @@ jobs:
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-meta-funnel-r4.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a1.sql
           docker exec -i supabase_db_hills-admin-next psql -U postgres -d postgres -q -v ON_ERROR_STOP=1 < scripts/test-crm-rcc-a2.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-task-writers.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-views.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-upgrade.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-enforced.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql
@@ -475,6 +485,12 @@ jobs:
       - name: Portal readiness concurrent invitations of one address
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-portal-readiness-concurrency.py
+      - name: Next action concurrency, time travel and generated sequences (RWR-r5 §9)
+        if: matrix.shard == 'sql-and-concurrency'
+        run: |
+          node scripts/test-crm-concurrency-local.mjs
+          node scripts/test-crm-time-travel-local.mjs
+          node scripts/test-crm-sequences.mjs
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'

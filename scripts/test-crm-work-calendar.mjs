@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calendarDate, shiftCalendarDate } from '../src/lib/crm/calendar.mjs';
 import { TASKS, CALL_TASKS, scheduledLabel, staffLabel } from '../src/lib/crm/presentation.mjs';
-assert.equal(Object.keys(TASKS).length,8);
+assert.equal(Object.keys(TASKS).length,9); // RWR-r5 adds awaiting_prospect
 assert.deepEqual(CALL_TASKS,['first_contact','contact_attempt','callback']);
 assert.equal(calendarDate('2026-02-30'),null);
 assert.equal(calendarDate('2026-02-15'),'2026-02-15');

@@ -26,6 +26,17 @@ export const ATTENDANCE_STATUS_COLORS = {
   'Justifié': 'bg-blue-100   text-blue-700',
 };
 
+// Placement tests (RWR-r5 §4.2): « Annulé » when its appointment is cancelled or
+// the prospect closes, « Absent » when the learner did not come.
+export const PLACEMENT_STATUS_COLORS = {
+  'Planifié': 'bg-blue-100 text-blue-700',
+  'Passé': 'bg-yellow-100 text-yellow-700',
+  'Résultat saisi': 'bg-purple-100 text-purple-700',
+  'Affecté': 'bg-green-100 text-green-700',
+  'Annulé': 'bg-slate-100 text-slate-600',
+  'Absent': 'bg-red-100 text-red-700',
+};
+
 export const STUDENT_STATUS_COLORS = {
   Enrolled: 'bg-emerald-50 text-emerald-800',
   Trial: 'bg-blue-50 text-blue-800',
