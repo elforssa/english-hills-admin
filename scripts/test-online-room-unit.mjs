@@ -928,8 +928,32 @@ function fakeChannels() {
   assert.match(component, /\{boardReadOnly && !closing && <p [^\n]*data-testid="room-whiteboard-readonly">\{WHITEBOARD_READ_ONLY_TEXT\}<\/p>\}/);
   assert.ok(!/innerWidth|matchMedia|sm:hidden[^\n]*whiteboard/.test(component), 'the read-only line is not keyed on the window width');
   // The room effect depends on the embed only; the page's callbacks are read through a ref.
+  // The size observer (below) runs once, with no dependencies.
   const deps = [...component.matchAll(/\}, \[([^\]]*)\]\);/g)].map(m => m[1]);
-  assert.deepEqual(deps, ['token, sessionName, displayName, role'], 'one effect with dependencies, on the embed only');
+  assert.deepEqual(deps, ['token, sessionName, displayName, role', ''], 'one effect with dependencies, on the embed only, and the size observer');
+  // Room size (the squeezed whiteboard, owner, Production, 2026-11-22). The room box fills
+  // what the page frame leaves (a definite height for the toolkit's h-full), never a
+  // minimum height alone; the toolkit's window-sized boxes fill the room instead; the
+  // toolkit hears a window resize whenever the room box changes size.
+  assert.match(component, /data-testid="zoom-room" lang="fr" hidden=\{closing\}\n\s+className="min-h-72 w-full flex-1 overflow-hidden rounded-xl border bg-black" \/>/);
+  assert.ok(!/min-h-\[70vh\]/.test(component), 'no minimum height alone');
+  for (const rule of ['[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }', '[data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }',
+    '[data-testid="zoom-room"] .min-h-\\\\[100dvh\\\\] { min-height: 100%; }', '[data-testid="zoom-room"] .max-h-\\\\[100dvh\\\\] { max-height: 100%; }',
+    '[data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }'])
+    assert.ok(component.includes(rule), `room style rule: ${rule}`);
+  assert.match(component, /new ResizeObserver\(/);
+  assert.match(component, /requestAnimationFrame\(\(\) => window\.dispatchEvent\(new Event\('resize'\)\)\)/);
+  assert.match(component, /if \(first\) return;/, 'no resize event for the first measurement');
+  const frame = read('src/components/online/RoomFrame.jsx');
+  for (const piece of ['h-[max(32rem,calc(100vh-3.5rem))]', 'supports-[height:100dvh]:h-[max(32rem,calc(100dvh-3.5rem))]', 'lg:h-[max(32rem,100vh)]', 'lg:supports-[height:100dvh]:h-[max(32rem,100dvh)]', '[&>*]:shrink-0', 'max-w-standard'])
+    assert.ok(frame.includes(piece), `room frame in the room: ${piece}`);
+  assert.match(frame, /\$\{inRoom \? IN_ROOM : ELSEWHERE\}/);
+  const roomPage = read('src/app/(admin)/online/room/[id]/page.jsx');
+  assert.match(roomPage, /<RoomFrame inRoom=\{state\.phase === 'in_room'\}>/);
+  assert.match(roomPage, /<RoomHeader back=\{back\} inRoom=\{state\.phase === 'in_room'\} \/>/);
+  const harnessSource = read('scripts/lib/online-room-harness.mjs');
+  assert.match(harnessSource, /<AdminShell><RoomFrame inRoom=\{state\.phase === 'in_room'\}>/, 'the harness uses the page frame');
+  assert.ok(!/height: 78vh|harness\.css/.test(harnessSource), 'the harness gives the room no size of its own');
   assert.ok(!/onLeft, onError\]/.test(component));
   assert.match(component, /callbacks\.current\.onLeft/);
   // French resources are inline: no language file is fetched from any host.
@@ -955,7 +979,9 @@ function fakeChannels() {
   assert.ok(!/next\/link|useRouter/.test(page), 'the room page keeps full document navigation (A6)');
   // « Quitter le cours » (PR B): asks first whenever the participant is in the room, and
   // reads nothing from Zoom to decide; both ways out are plain anchors.
-  assert.match(page, /<RoomLeaveLink href=\{back\} inRoom=\{state\.phase === 'in_room'\} \/>/);
+  // The link sits in the page frame's header (RoomFrame.jsx, shared with the room harness).
+  assert.match(page, /<RoomHeader back=\{back\} inRoom=\{state\.phase === 'in_room'\} \/>/);
+  assert.match(read('src/components/online/RoomFrame.jsx'), /<RoomLeaveLink href=\{back\} inRoom=\{inRoom\} \/>/);
   const leave = read('src/components/online/RoomLeaveLink.jsx');
   assert.match(leave, /<a href=\{href\} data-testid="room-leave" onClick=\{event => \{ if \(inRoom\) \{ event\.preventDefault\(\); setAsking\(true\); \} \}\}><LogOut \/> Quitter le cours<\/a>/);
   assert.match(leave, /<AlertDialogTitle>Quitter le cours \?<\/AlertDialogTitle>/);

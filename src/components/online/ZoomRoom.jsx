@@ -86,7 +86,24 @@ export const featuresFor = role => (role === 'host' ? FEATURES : Object.freeze({
 //    every new render of its parent). While a group timer counts down that is every
 //    second, so the menu vanished under the pointer (observed with Zoom, 2026-11-16):
 //    once the toolkit has placed the menu, it stays visible until the toolkit removes it.
-const ROOM_STYLE = `[data-testid="zoom-room"] .uikit-mobile-header h1 { visibility: hidden; }
+// Size (the squeezed whiteboard, owner, Production, 2026-11-22). The page gives the room
+// a definite height (RoomFrame.jsx: the screen below the title and the hands); the
+// toolkit fills it from `h-full` on its app box. Three toolkit boxes size themselves
+// from the whole window instead, read in the bundle of 2.5.0-1; inside the room they
+// fill the room:
+//  - the phone layout: `height: 100svh; width: 100vw` (its footer fell below the room,
+//    and the page was wider than the phone);
+//  - the pre-join device screen: `min-h-[100dvh] max-h-[100dvh]`, with the join button
+//    centred in it (it would have been cut off at the bottom of a shorter room);
+//  - the whiteboard: `height: 75%` of the video area, the rest for a strip of
+//    thumbnails above it that needs about 8.5rem; the whiteboard gets everything above
+//    that strip, never less than the toolkit's 75%.
+const ROOM_STYLE = `[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }
+[data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }
+[data-testid="zoom-room"] .min-h-\\[100dvh\\] { min-height: 100%; }
+[data-testid="zoom-room"] .max-h-\\[100dvh\\] { max-height: 100%; }
+[data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }
+[data-testid="zoom-room"] .uikit-mobile-header h1 { visibility: hidden; }
 [data-testid="zoom-room"] .flex-grow.items-center.justify-between:has(.text-2xl.font-semibold.m-2) > .flex.flex-col.items-center:has(> button.rounded-full) { visibility: hidden !important; }
 .zoom-ui-toolkit-root > div[style*="visibility: hidden"][style*="z-index: 1000"]:not([style*="top: 0px"]) { visibility: visible !important; }`;
 
@@ -134,6 +151,27 @@ export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, li
       started.stop();
     };
   }, [token, sessionName, displayName, role]);
+  // The toolkit measures its video area (computer and phone layouts) when the window is
+  // resized, and at no other time (read in the bundle of 2.5.0-1). The room's box also
+  // changes height when the page changes around it: the hands list grows, the read-only
+  // line or a notice appears. Each time, the toolkit is told, as if the window had been
+  // resized, so its footer stays inside the room.
+  useEffect(() => {
+    const box = container.current;
+    if (!box || typeof ResizeObserver === 'undefined') return undefined;
+    let size = null, frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      const now = `${Math.round(entry.contentRect.width)}x${Math.round(entry.contentRect.height)}`;
+      const first = size === null;
+      if (now === size) return;
+      size = now;
+      if (first) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    });
+    observer.observe(box);
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
   return (
     <>
       <style href="online-zoom-room" precedence="default">{ROOM_STYLE}</style>
@@ -142,7 +180,7 @@ export default function ZoomRoom({ embed, onLeft, onError, onJoined, onNewer, li
         onLowerOf={id => room.current?.hands.lowerOf(id)} onLowerAll={() => room.current?.hands.lowerAll()} />}
       {closing && <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Fermeture de la salle…</p>}
       <div ref={container} data-testid="zoom-room" lang="fr" hidden={closing}
-        className="min-h-[70vh] w-full overflow-hidden rounded-xl border bg-black" />
+        className="min-h-72 w-full flex-1 overflow-hidden rounded-xl border bg-black" />
     </>
   );
 }

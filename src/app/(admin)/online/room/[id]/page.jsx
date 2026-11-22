@@ -25,7 +25,7 @@ import dynamic from 'next/dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Video, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import RoomLeaveLink from '@/components/online/RoomLeaveLink';
+import { RoomFrame, RoomHeader } from '@/components/online/RoomFrame';
 import { useAuth } from '@/context/AuthContext';
 import { onlinePost, onlineRpc, casablancaTime } from '@/lib/online/queries';
 import { ONLINE_REASON_TEXT, onlineErrorText } from '@/lib/online/reasons.mjs';
@@ -166,11 +166,8 @@ function Room() {
         onJoined={onJoined} onNewer={onNewer} link={roomLink} />
         : <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.provider_invalid}</p>);
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-4xl flex-col gap-4 p-3 sm:p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-bold sm:text-xl">Cours en ligne</h1>
-        <RoomLeaveLink href={back} inRoom={state.phase === 'in_room'} />
-      </div>
+    <RoomFrame inRoom={state.phase === 'in_room'}>
+      <RoomHeader back={back} inRoom={state.phase === 'in_room'} />
       {!valid && <p className="rounded-lg border bg-card p-6 text-sm">{ONLINE_REASON_TEXT.not_found}</p>}
       {valid && (state.phase === 'joining' || state.phase === 'checking') && <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Ouverture de la salle…</p>}
       {state.phase === 'other_tab' && (
@@ -216,7 +213,7 @@ function Room() {
           {state.room?.quit && <Button onClick={() => leaveRoom(back)} size="lg" className="min-h-11" data-testid="room-refused-quit">{ROOM_PASS_TEXT.quit}</Button>}
         </div>
       )}
-    </div>
+    </RoomFrame>
   );
 }
 
