@@ -98,8 +98,8 @@ export const featuresFor = role => (role === 'host' ? FEATURES : Object.freeze({
 //  - the whiteboard: `height: 75%` of the video area, the rest for a strip of
 //    thumbnails above it that needs about 8.5rem; the whiteboard gets everything above
 //    that strip, never less than the toolkit's 75%.
-const ROOM_STYLE = `[data-testid="zoom-room"] div[style*="100svh"] { height: 100% !important; }
-[data-testid="zoom-room"] div[style*="100vw"] { width: 100% !important; }
+const ROOM_STYLE = `[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }
+[data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }
 [data-testid="zoom-room"] .min-h-\\[100dvh\\] { min-height: 100%; }
 [data-testid="zoom-room"] .max-h-\\[100dvh\\] { max-height: 100%; }
 [data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }

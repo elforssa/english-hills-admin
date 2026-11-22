@@ -937,7 +937,7 @@ function fakeChannels() {
   // toolkit hears a window resize whenever the room box changes size.
   assert.match(component, /data-testid="zoom-room" lang="fr" hidden=\{closing\}\n\s+className="min-h-72 w-full flex-1 overflow-hidden rounded-xl border bg-black" \/>/);
   assert.ok(!/min-h-\[70vh\]/.test(component), 'no minimum height alone');
-  for (const rule of ['[data-testid="zoom-room"] div[style*="100svh"] { height: 100% !important; }', '[data-testid="zoom-room"] div[style*="100vw"] { width: 100% !important; }',
+  for (const rule of ['[data-testid="zoom-room"] div[style*="height: 100svh"] { height: 100% !important; }', '[data-testid="zoom-room"] div[style*="width: 100vw"] { width: 100% !important; }',
     '[data-testid="zoom-room"] .min-h-\\\\[100dvh\\\\] { min-height: 100%; }', '[data-testid="zoom-room"] .max-h-\\\\[100dvh\\\\] { max-height: 100%; }',
     '[data-testid="zoom-room"] #uikit-whiteboard-container[style*="height: 75%"] { height: max(75%, calc(100% - 8.5rem)) !important; }'])
     assert.ok(component.includes(rule), `room style rule: ${rule}`);
