@@ -100,6 +100,28 @@
 //       back in the main room, hand down); a hand in the main room stays;
 //   H7. a reconnection (reload) and H8. a leave take the hand away;
 //   H9. nobody leaves the room by accident; the trace carries totals and states only.
+// Room size (owner, Production, 2026-11-22: with the whiteboard open the board was a strip
+// of about 200 px between the thumbnails and the toolkit's footer). The teacher and the
+// learner use a 1440 × 900 window, the phones 390 × 844. The room harness sets the room
+// in the app's own page frame and stylesheet (RoomFrame.jsx, globals.css, the admin
+// layout's boxes), so the sizes are the app's. At each point below, for each participant
+// named, the page needs no scroll, the room is inside the screen, the toolkit's footer is
+// inside the room (on a phone after a tap, since Zoom hides the phone's controls after a
+// few seconds) and « Quitter le cours » is on the screen:
+//   L1. everybody after joining (gallery view);
+//   L2. after « Ouvrir le tableau blanc », for the teacher and the learner: the whiteboard
+//       canvas is at least LAYOUT.board (60 %) of the window's height and wholly on the
+//       screen inside the room; the phone (the whiteboard as a picture, the read-only line
+//       above the room) fits;
+//   L3. during the teacher's tab share: the learner's view of the share is at least
+//       LAYOUT.share (55 %) of the window's height and wholly on the screen inside the
+//       room. 55, not 60: the toolkit draws a share in a 16:9 box at most 80 % of the
+//       video area's width, so beside the 240 px menu of a 1440 px screen it cannot be
+//       taller than about 59 %; the phone fits;
+//   L4. the teacher with two raised hands listed above the room;
+//   L5. the learner and the phone inside a group, and the teacher meanwhile.
+// OL_CLASSROOM_LAYOUT_SHOTS=<directory> saves a screenshot at each of these points (the
+// whiteboard's document name, which carries the session name, is masked).
 // Over the whole run: no participant's console has the toolkit's decoded-token line, and
 // each participant's trace says once per join that the groups timer correction is on;
 // zero Content-Security-Policy refusals except the named whiteboard one (check 1).
@@ -295,6 +317,52 @@ async function stroke(page, who, yFraction) {
 }
 const changedWithin = async (page, ms = 20000) => { let changed = 0; for (const end = Date.now() + ms; Date.now() < end;) { changed = await changedPixels(page); if (changed > 150) break; await page.waitForTimeout(500); } return changed; };
 
+// ---- Room size (L1–L5) ----
+const LAPTOP = { width: 1440, height: 900 };
+const LAYOUT = { board: 0.6, share: 0.55 };
+report.layout = { window: LAPTOP, phone: PHONE.viewport, thresholds: LAYOUT, points: {} };
+// The page's boxes: the room, the toolkit's footer, the whiteboard canvas (its largest),
+// the learner's share view (the toolkit's 16:9 share box, when it is shown) and the leave link.
+const layoutOf = page => page.evaluate(() => {
+  const box = el => { if (!el) return null; const b = el.getBoundingClientRect(); return b.width && b.height ? { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) } : null; };
+  const shown = el => !!el && getComputedStyle(el).visibility === 'visible';
+  const room = document.querySelector('[data-testid="zoom-room"]');
+  const board = [...document.querySelectorAll('#uikit-whiteboard-container canvas')].map(box).filter(Boolean).sort((a, b) => b.width * b.height - a.width * a.height)[0] || null;
+  const share = [...(room?.querySelectorAll('div.group.bg-opacity-50') || [])].filter(el => shown(el) && shown(el.parentElement)).map(box).filter(Boolean)[0] || null;
+  return { viewport: { width: innerWidth, height: innerHeight }, scroll: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
+    room: box(room), footer: box(room?.querySelector('footer')), board, share, leave: box(document.querySelector('[data-testid="room-leave"]')) };
+});
+const inside = (inner, outer, slack = 1) => !!(inner && outer && inner.x >= outer.x - slack && inner.y >= outer.y - slack
+  && inner.x + inner.width <= outer.x + outer.width + slack && inner.y + inner.height <= outer.y + outer.height + slack);
+const screenOf = l => ({ x: 0, y: 0, width: l.viewport.width, height: l.viewport.height });
+const fits = l => l.scroll.height <= l.viewport.height + 1 && l.scroll.width <= l.viewport.width + 1 && inside(l.room, screenOf(l)) && inside(l.footer, l.room) && inside(l.leave, screenOf(l));
+// Zoom hides a phone's controls a few seconds after the last touch; a tap on the room shows them.
+async function layoutNow(page) {
+  let l = await layoutOf(page);
+  if (l.viewport.width < 768 && l.room && !inside(l.footer, l.room)) {
+    await page.mouse.click(l.room.x + l.room.width / 2, l.room.y + l.room.height * 0.35);
+    await page.waitForTimeout(800);
+    l = await layoutOf(page);
+  }
+  return l;
+}
+// `wanted[who]`: 'board' or 'share' when that view must be big; polled, since the whiteboard
+// and the share settle to their size a moment after they appear.
+async function layoutCheck(name, people, wanted = {}) {
+  const seen = {};
+  for (const [who, page] of Object.entries(people)) {
+    const need = wanted[who];
+    const good = l => fits(l) && (!need || (inside(l[need], screenOf(l)) && inside(l[need], l.room) && l[need].height >= LAYOUT[need] * l.viewport.height));
+    let l = await layoutNow(page);
+    for (const end = Date.now() + 15000; !good(l) && Date.now() < end;) { await page.waitForTimeout(500); l = await layoutNow(page); }
+    seen[who] = { ok: good(l), ...l, ...(need ? { [`${need}Share`]: l[need] ? Math.round(l[need].height / l.viewport.height * 1000) / 10 + ' %' : null } : {}) };
+    if (process.env.OL_CLASSROOM_LAYOUT_SHOTS) await page.screenshot({ path: `${process.env.OL_CLASSROOM_LAYOUT_SHOTS}/${name.split('.')[0]}-${who}.png`, mask: [page.getByText(/ehtest-/)] }).catch(() => {});
+  }
+  report.layout.points[name] = seen;
+  pass(`${name}: no page scroll, the room on the screen, the toolkit's footer inside the room, « Quitter le cours » on the screen${Object.keys(wanted).length ? `; ${Object.entries(wanted).map(([who, need]) => `${who}'s ${need === 'board' ? 'whiteboard canvas' : 'share view'} ≥ ${LAYOUT[need] * 100} % of the window's height, wholly on the screen`).join(', ')}` : ''}`,
+    Object.values(seen).every(entry => entry.ok), Object.fromEntries(Object.entries(seen).map(([who, entry]) => [who, { ok: entry.ok, viewport: entry.viewport, scroll: entry.scroll, room: entry.room, footer: entry.footer, ...(wanted[who] ? { [wanted[who]]: entry[wanted[who]], share: entry[`${wanted[who]}Share`] } : {}) }])));
+}
+
 async function whiteboardHalf(pages) {
   const { teacher, learner, phone } = pages;
   const before = { teacher: await boardState(teacher), learner: await boardState(learner), phone: await boardState(phone) };
@@ -308,6 +376,7 @@ async function whiteboardHalf(pages) {
   pass('the whiteboard program came from a source the shipped header lists', hosts.length > 0 && hosts.every(host => ZOOM_WHITEBOARD_SOURCES.includes(`https://${host}/web_client_whiteboard/`)), { hosts });
   await teacher.waitForTimeout(4000);
   await clearOverlays(teacher); await clearOverlays(learner);
+  await layoutCheck('L2. the whiteboard is open', { teacher, learner, phone }, { teacher: 'board', learner: 'board' });
 
   // 3. A real stroke by the teacher reaches the learner.
   await snapshot(learner);
@@ -425,9 +494,9 @@ const groupsWindow = async teacher => { if (!(await teacher.locator(POPPER).coun
 // The body text of a page, for what the toolkit shows (messages, dialogs).
 const textOf = page => page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
 const dialogOf = (page, id) => page.evaluate(selector => { const el = document.querySelector(selector); const box = el?.closest('div.fixed') || el?.parentElement?.parentElement; return box ? box.innerText.replace(/\s+/g, ' ').trim().slice(0, 200) : null; }, id);
-// The phone's leave control is the red button of the toolkit's phone header. The harness
-// has no page chrome above the room, so its phase line covers that header: the button is
-// clicked through the DOM, which is what a tap does on the real page.
+// The phone's leave control is the red button of the toolkit's phone header. Zoom hides
+// the phone's controls a few seconds after the last touch, so the button is clicked
+// through the DOM, which is what a tap does once they are shown.
 const phoneLeaveControl = page => page.locator('#uikit-mobile-header button.bg-red-500').evaluate(button => button.click());
 const phoneLeaveDialog = page => page.evaluate(() => {
   const root = [...document.querySelectorAll('body > .zoom-ui-toolkit-root')].find(el => /Leave|Quitter|principale|Main/i.test(el.innerText));
@@ -552,6 +621,7 @@ async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignF
   const inGroups = { learner: await where(learner), phone: await where(phone), phone2: await where(phone2) };
   pass(`${tag} G2a. each accepts the toolkit's invitation and arrives in its own group; the participant without a group stays in the main room`,
     arrived.learner && arrived.phone && inGroups.learner.group !== inGroups.phone.group && !inGroups.phone2.inGroup, { arrived, invitation: record.invitation, differentGroups: inGroups.learner.group !== inGroups.phone.group });
+  if (assignFirst) await layoutCheck('L5. the learner and the phone in their groups', { teacher, learner, phone });
   strays.push(...await everyoneStill('in groups'));
   const message = `Encore une minute ${name}`;
   await step(teacher, 'send a message to all groups', async () => {
@@ -770,7 +840,7 @@ async function groupsHalf(pages) {
 // ---- Media part (classroom polish, part B) ----
 const micState = page => page.evaluate(() => { const u = window.zmClient?.getCurrentUserInfo?.() || {}; return { audio: u.audio, muted: u.muted }; });
 const untilMic = async (page, test, ms = 15000) => { for (const end = Date.now() + ms; Date.now() < end;) { if (test(await micState(page))) return true; await page.waitForTimeout(400); } return false; };
-// The participant's own microphone button in the toolkit's footer (a tap: a DOM click on the phone, whose footer the harness does not cover).
+// The participant's own microphone button in the toolkit's footer (a tap: a DOM click, since Zoom hides a phone's footer a few seconds after the last touch).
 const tapOwnMic = page => page.locator('#uikit-footer-audio-button, #audio-unmuted-button button').first().evaluate(button => button.click());
 const PANEL = '#zoom-ui-toolkit-users-popper';
 async function participantsPanel(teacher) {
@@ -904,6 +974,7 @@ async function mediaPart(pages) {
   await step(teacher, 'share the tab with its sound', () => teacher.locator('#uikit-footer-share-screen-button').click({ timeout: 10000 }));
   const sharing = await teacher.waitForFunction(() => window.zmClient.getCurrentUserInfo()?.sharerOn === true, null, { timeout: 20000 }).then(() => true, () => false);
   await teacher.waitForTimeout(3000);
+  await layoutCheck('L3. the teacher shares a tab', { learner, phone }, { learner: 'share' });
   record.displayMedia = await teacher.evaluate(() => window.__displayMedia);
   const listed = Object.fromEntries(await Promise.all([['learner', learner], ['phone', phone]].map(async ([p, page]) => [p, await page.evaluate(name => { const u = (window.zmClient.getAllUser() || []).find(x => x.displayName === name); return { sharerOn: !!u?.sharerOn, bShareAudioOn: !!u?.bShareAudioOn }; }, LABEL.teacher)])));
   const during = { learner: await heard(learner), phone: await heard(phone) };
@@ -1000,6 +1071,7 @@ async function handsPart(pages) {
   const buttons = { learner: (await handsOf(learner)).button, phone: (await handsOf(phone)).button };
   pass('H1. a learner and a phone raise their hand with our button; the teacher sees « Mains levées (2) » with both names in the order raised, and a brief cue', cueSeen && both && buttons.learner === 'Baisser la main' && buttons.phone === 'Baisser la main',
     { cueSeen, teacher: await handsOf(teacher).then(h => ({ badge: h.badge, names: h.names })), buttons, tappedForReal: record.tappedForReal });
+  await layoutCheck('L4. two raised hands listed for the teacher', { teacher });
 
   // H2. A learner's page sends « lower » to the phone and « lower-all » to everybody, by
   // hand on Zoom's command channel: nothing changes anywhere.
@@ -1094,11 +1166,12 @@ async function handsPart(pages) {
 }
 
 try {
-  const teacher = await open('teacher', 'host', { viewport: { width: 1280, height: 900 } });
-  const learner = await open('learner', 'participant', { viewport: { width: 1280, height: 900 } });
+  const teacher = await open('teacher', 'host', { viewport: LAPTOP });
+  const learner = await open('learner', 'participant', { viewport: LAPTOP });
   const phone = await open('phone', 'participant', PHONE);
   const pages = { teacher, learner, phone };
   await teacher.waitForTimeout(3000);
+  await layoutCheck('L1. after joining, gallery view', { teacher, learner, phone });
   if (PART === 'all' || PART === 'whiteboard') await whiteboardHalf(pages);
   else if (PART === 'groups' || PART === 'hands') pages.phone2 = await open('phone2', 'participant', PHONE);
   if (PART === 'all' || PART === 'groups') await groupsHalf(pages);

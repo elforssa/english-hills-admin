@@ -19,7 +19,11 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { readFileSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -27,11 +31,26 @@ const ENTRY = `
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ZoomRoom from './src/components/online/ZoomRoom.jsx';
-import RoomLeaveLink from './src/components/online/RoomLeaveLink.jsx';
+import { RoomFrame, RoomHeader } from './src/components/online/RoomFrame.jsx';
 import { createTabGuard, roomGuardKey } from './src/lib/online/room-tab-guard.mjs';
 import { roomSettled, roomLog } from './src/lib/online/zoom-room-session.mjs';
 import { roomErrorFor, passExpired } from './src/lib/online/zoom-room-errors.mjs';
 import { createPassWatcher, closedOutcome, tookOverNotice, ROOM_PASS_TEXT } from './src/lib/online/room-pass.mjs';
+
+// The boxes around the page in the app: src/app/(admin)/layout.jsx and the two boxes
+// Sidebar.jsx draws (the phone's fixed top bar, the computer's 240 px column). Their
+// classes are checked against those files when the harness is built (SHELL_CLASSES).
+function AdminShell({ children }) {
+  return (
+    <div className="flex min-h-screen bg-background">
+      <div className="lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4" data-testid="harness-top-bar" />
+      <div className="operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0" style={{ backgroundColor: '#1d2b4f' }} data-testid="harness-sidebar" />
+      <main id="main-content" className="flex-1 overflow-auto min-w-0 lg:ml-0">
+        <div className="pt-14 lg:pt-0">{children}</div>
+      </main>
+    </div>
+  );
+}
 
 const query = new URLSearchParams(location.search);
 const lesson = query.get('lesson') || 'lesson', person = query.get('person') || 'person', role = query.get('role') || 'participant';
@@ -108,9 +127,9 @@ function App() {
   const onError = detail => setState(previous => ({ phase: 'refused', room: roomErrorFor({ ...detail, passExpired: passExpired(previous.embed) }), code: detail?.code }));
   window.__phase = state.phase;
   return (
-    <div>
-      <p data-testid="phase">{state.phase}</p>
-      <RoomLeaveLink href="/portal" inRoom={state.phase === 'in_room'} />
+    <AdminShell><RoomFrame inRoom={state.phase === 'in_room'}>
+      <p data-testid="phase" className="sr-only">{state.phase}</p>
+      <RoomHeader back="/portal" inRoom={state.phase === 'in_room'} />
       {state.phase === 'other_tab' && <div data-testid="room-other-tab"><p>Vous êtes déjà connecté à ce cours dans un autre onglet.</p><button onClick={takeThisTab}>Utiliser cet onglet</button></div>}
       {state.phase === 'displaced' && <p data-testid="room-displaced">Ce cours est maintenant ouvert dans un autre onglet.</p>}
       {state.phase === 'superseded' && <div data-testid="room-superseded"><p>{ROOM_PASS_TEXT.superseded}</p><button onClick={join}>{ROOM_PASS_TEXT.useThisDevice}</button></div>}
@@ -120,7 +139,7 @@ function App() {
       {state.phase === 'in_room' && tookOver && <p role="status" data-testid="room-took-over">{tookOver}</p>}
       {state.phase === 'in_room' && <ZoomRoom embed={state.embed} onLeft={onLeft} onError={onError} onJoined={onJoined} onNewer={onNewer} link={roomLink} />}
       {state.phase === 'refused' && <div data-testid="room-refused" data-code={String(state.code)}><p>{state.room.text}</p>{state.room.retry && <button onClick={join}>Réessayer</button>}{state.room.quit && <a href="/portal">{ROOM_PASS_TEXT.quit}</a>}</div>}
-    </div>
+    </RoomFrame></AdminShell>
   );
 }
 createRoot(document.getElementById('app')).render(<App />);
@@ -176,6 +195,34 @@ z.close = () => { for (const fn of [...z.closed]) fn(); };
 export default toolkit;
 `;
 
+// AdminShell above copies these class lists; the build stops if the app's files changed them.
+const SHELL_CLASSES = [
+  ['src/app/(admin)/layout.jsx', 'flex min-h-screen bg-background'],
+  ['src/app/(admin)/layout.jsx', 'flex-1 overflow-auto min-w-0 lg:ml-0'],
+  ['src/app/(admin)/layout.jsx', 'pt-14 lg:pt-0'],
+  ['src/components/layout/Sidebar.jsx', 'lg:hidden fixed inset-x-0 top-0 z-40 flex h-14 items-center border-b bg-background px-4'],
+  ['src/components/layout/Sidebar.jsx', 'operational operational-sidebar hidden lg:flex flex-col w-60 min-h-screen flex-shrink-0'],
+];
+// Files whose Tailwind classes the harness page uses.
+const STYLED = ['src/components/online/ZoomRoom.jsx', 'src/components/online/RoomFrame.jsx', 'src/components/online/RoomHands.jsx',
+  'src/components/online/RoomLeaveLink.jsx', 'src/components/ui/button.jsx', 'src/components/ui/alert-dialog.jsx'];
+
+// The app's own stylesheet (globals.css through the app's Tailwind configuration), so the
+// room sits in the boxes and sizes it has in the app. An earlier harness gave the room a
+// fixed height of its own, which hid that the app's room had none (the squeezed
+// whiteboard of 2026-11-22).
+async function appStyles() {
+  for (const [path, classes] of SHELL_CLASSES) {
+    if (!readFileSync(root + path, 'utf8').includes(classes)) throw new Error(`room harness: ${path} no longer has « ${classes} »; update AdminShell`);
+  }
+  const require = createRequire(import.meta.url);
+  const config = require(root + 'tailwind.config.js');
+  const content = [{ raw: ENTRY, extension: 'jsx' }, ...STYLED.filter(path => existsSync(root + path)).map(path => ({ raw: readFileSync(root + path, 'utf8'), extension: 'jsx' }))];
+  const from = root + 'src/app/globals.css';
+  const result = await postcss([tailwindcss({ ...config, content })]).process(readFileSync(from, 'utf8'), { from });
+  return result.css;
+}
+
 export async function buildRoomHarness({ fake }) {
   const plugins = [{ name: 'room-harness', setup(b) {
     if (fake) {
@@ -195,7 +242,7 @@ export async function buildRoomHarness({ fake }) {
     plugins,
   });
   const file = suffix => result.outputFiles.find(f => f.path.endsWith(suffix))?.text || '';
-  return { js: file('.js'), css: file('.css') };
+  return { js: file('.js'), css: file('.css'), app: await appStyles() };
 }
 
 // Serves the harness on 127.0.0.1 (a secure context: Web Locks, camera and microphone).
@@ -232,8 +279,8 @@ export function createPassModel() {
   };
 }
 
-export async function serveRoomHarness({ js, css, embed, headers = [], model = createPassModel(), rpcHook = null }) {
-  const html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>room harness</title><link rel="stylesheet" href="/room.css"><link rel="stylesheet" href="/harness.css"><body><div id="app"></div><script src="/room.js"></script></body></html>';
+export async function serveRoomHarness({ js, css, app = '', embed, headers = [], model = createPassModel(), rpcHook = null }) {
+  const html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>room harness</title><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/room.css"><body><div id="app"></div><script src="/room.js"></script></body></html>';
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     try {
@@ -244,8 +291,7 @@ export async function serveRoomHarness({ js, css, embed, headers = [], model = c
       }
       if (url.pathname === '/portal') { res.setHeader('content-type', 'text/html; charset=utf-8'); return res.end('<!doctype html><html lang="fr"><meta charset="utf-8"><title>portal</title><body><p data-testid="portal">portal</p></body></html>'); }
       if (url.pathname === '/room.js') { res.setHeader('content-type', 'text/javascript; charset=utf-8'); return res.end(js); }
-      // The harness has no Tailwind: give the room container the height its class gives it in the app.
-      if (url.pathname === '/harness.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end('[data-testid="zoom-room"] { height: 78vh; width: 100%; overflow: hidden; }'); }
+      if (url.pathname === '/app.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end(app); }
       if (url.pathname === '/room.css') { res.setHeader('content-type', 'text/css; charset=utf-8'); return res.end(css); }
       if (url.pathname === '/embed') {
         const query = Object.fromEntries(url.searchParams);

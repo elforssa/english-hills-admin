@@ -5,7 +5,8 @@
 // @zoom/videosdk. The list stays owned by the online classroom tools plan; the
 // reliability PR adds `userKey` (the token's user_key, B1), the deprecation of
 // `userIdentity`, `removeUser` (behind the toolkit's « Retirer »; the platform never calls
-// it, D15) and the three `ClosedReason` values.
+// it, D15) and the three `ClosedReason` values. The room-size fix (2026-11-22) adds how the
+// toolkit sizes itself: from its container's height, or from the window.
 //
 //   node scripts/check-zoom-toolkit-facts.mjs                 the installed packages (npm test)
 //   node scripts/check-zoom-toolkit-facts.mjs 2.6.10-1        a packed tarball of that toolkit
@@ -83,6 +84,16 @@ export const FACTS = [
   ['the « start devices » message is the key followed by the error', 'zoom-toolkit-messages.mjs', () => /\w+\(\w+\("preview\.error_start_devices"\) \+ [\w$]+, \{ variant: "error" \}\)/.test(bundle)],
   // Media chunks (blob: loader).
   ['the media library loads js_media.min.js from source.zoom.us', 'zoom-media-chunks.mjs', () => /"https:\/\/source\.zoom\.us\/videosdk\/"\.concat\(([\w$]+), "\/lib"\)/.test(bundle) && /const [\w$]+ = "js_media\.min\.js"/.test(bundle)],
+  // Room size (the squeezed whiteboard, owner, Production, 2026-11-22).
+  ['the app box fills its container with h-full, else falls back to min-h-[300px]', 'RoomFrame.jsx, ZoomRoom.jsx', () => /flex flex-col min-w-\[\$\{[\w$]+\}px\] min-h-\[300px\] h-full w-full/.test(bundle)],
+  ['the video area takes its height from the app box, measured on a window resize only', 'ZoomRoom.jsx (size observer)', () => /const ([\w$]+) = [\w$]+\.current\.clientHeight - [\w$]+, [\w$]+ = [\w$]+\.current\.clientWidth;\s*[\w$]+\(\1\), [\w$]+\.current\.style\.height = `\$\{\1\}px`[\s\S]{0,200}?return [\w$]+\(\), window\.addEventListener\("resize", [\w$]+\)/.test(bundle)
+    && /\$\([\w$]+\.current\.clientHeight\), [\w$]+\([\w$]+\.current\.clientWidth\)\);\s*\};\s*return [\w$]+\(\), window\.addEventListener\("resize", [\w$]+\)/.test(bundle)],
+  ['the whiteboard box is 75 % of the video area', 'ZoomRoom.jsx (ROOM_STYLE)', () => /id: [\w$]+,\s*className: "whiteboard-container [^"]*",\s*style: \{ visibility: [\w$]+ \? "visible" : "hidden", height: [\w$]+ \? "75%" : 0 \}/.test(bundle) && bundle.includes('= "uikit-whiteboard-container"')],
+  ['the phone layout is sized 100svh × 100vw', 'ZoomRoom.jsx (ROOM_STYLE)', () => bundle.includes('style: { position: "relative", height: "100svh", width: "100vw" }') && bundle.includes('style: { height: "100svh", overflowY: "hidden" }')],
+  ['the pre-join screen is min-h-[100dvh] max-h-[100dvh]', 'ZoomRoom.jsx (ROOM_STYLE)', () => bundle.includes('flex flex-col items-center justify-center w-full min-h-[100dvh] max-h-[100dvh] overflow-y-auto')],
+  ['a received share is a 16:9 box at most 80 % of the video area wide', 'test-online-zoom-classroom.mjs (L3 threshold)', () => /Math\.min\([\w$]+ \* 0\.8, [\w$]+ \* 0\.8 \/ 16 \* 9\)/.test(bundle)],
+  ['both footers are <footer> elements (uikit-footer, uikit-footer-mobile)', 'test-online-zoom-classroom.mjs (L1–L5)', () => /"footer",\s*\{\s*className: `uikit-footer \$/.test(bundle) && /"footer",\s*\{\s*className: `uikit-footer-mobile /.test(bundle)],
+  ['the phone layout hides its controls 7 s after the last touch', 'test-online-zoom-classroom.mjs (L1–L5 tap)', () => /setTimeout\(\(\) => \{\s*[\w$]+\([\w$]+\(!1\)\), [\w$]+\([\w$]+\(!1\)\);\s*\}, 7e3\)/.test(bundle)],
   // French interface.
   ['the en-US resource table is inline', 'zoom-fr-FR.json', () => /"en-US":\s*\{\s*translation:\s*[\w$]+\s*\}/.test(bundle)],
 ];
