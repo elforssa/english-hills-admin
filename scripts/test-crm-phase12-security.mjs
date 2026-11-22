@@ -13,12 +13,20 @@ assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,'http://127.0.0.1:54321');
 const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1'],{input:s,encoding:'utf8',env:{...process.env,PGPASSWORD:'postgres'}}).trim();
 const roles=['director','admin','receptionist','teacher','parent','student','pending'];const users=[],clients={};const nil='00000000-0000-0000-0000-000000000001';let checks=0;
 const root=createClient(env.NEXT_PUBLIC_SUPABASE_URL,env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+// crm_get_centre_hours reads the current policy: 22023 on a database without one.
+const CENTRE_HOURS=sql("select count(*) from public.crm_followup_policies where effective_from<=now() and (retired_at is null or retired_at>now())")==='0'?'22023':undefined;
 const cases=[
  ['crm_list_staff',{},'operations'],['crm_list_open_tasks',{},'operations'],
  ['crm_get_work_queue',{},'operations'],['crm_get_admissions_calendar',{p_start:'2026-10-05',p_end:'2026-10-12'},'operations'],
  ['crm_get_opportunities',{},'operations'],['crm_get_opportunity_filter_options',{p_kind:'source'},'operations'],['crm_get_operational_acquisition_summary',{p_lead:nil},'operations'],['crm_get_timeline',{p_lead:nil},'operations'],
  ['crm_get_today',{},'operations'],['crm_search_leads',{p_query:'phase12 synthetic'},'operations'],['crm_list_intake_review',{},'operations'],['crm_get_workspace_detail',{p_lead:nil},'operations'],['crm_list_placements',{p_lead:nil},'operations'],['crm_get_enrollment_context',{p_lead:nil},'operations'],
  ['crm_get_submission_attribution',{p_submission:nil},'director'],['crm_get_revenue_entries_for_lead',{p_lead:nil},'director'],['crm_get_revenue_reconciliation_queue',{},'director'],['crm_get_meta_diagnostics',{},'director'],['crm_list_external_deliveries',{},'director'],['crm_list_pending_lifecycle_stops',{},'director'],['crm_lifecycle_diagnostics',{},'director'],['crm_insights_diagnostics',{},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02'},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02',p_level:'program',p_session_type:'none'},'director'],['crm_get_marketing_cohort',{p_from:'2026-01-01',p_to:'2026-01-02',p_session_type:'Yearly'},'director'],
+ // RWR-r5 A1 (136): the five commands refuse a missing request key, the pre-check an unknown prospect;
+ // the director-only journal read and default-owner setting (§4.1, OD-6) are closed to other roles.
+ ['crm_log_exchange',{p_request_key:null,p_data:{}},'operations','22023'],['crm_change_next_action',{p_request_key:null,p_data:{}},'operations','22023'],
+ ['crm_record_appointment_outcome',{p_request_key:null,p_data:{}},'operations','22023'],['crm_close_prospect',{p_request_key:null,p_data:{}},'operations','22023'],
+ ['crm_reopen_prospect',{p_request_key:null,p_data:{}},'operations','22023'],['crm_check_action',{p_lead:nil},'operations','22023'],['crm_get_centre_hours',{},'operations',CENTRE_HOURS],
+ ['crm_list_data_step_journal',{},'director'],['crm_set_reception_default_owner',{p_owner:nil},'director','22023'],
  // Harmless arguments: the director passes authorization and reaches the not-found/ineligible check.
  ['crm_configure_insights',{p_connection:nil,p_version:1,p_data:{}},'director','PT409'],['crm_request_insights_sync',{p_connection:nil,p_request:nil},'director','22023'],['crm_retry_insights_sync',{p_run:nil},'director','22023'],
  ['crm_claim_ingestion_jobs',{p_limit:1},'service'],['crm_claim_external_deliveries',{p_limit:1},'service'],['crm_claim_lifecycle_evidence',{p_limit:1},'service'],['crm_cleanup_lifecycle_retention',{p_limit:1},'service'],['crm_claim_insights_sync',{},'service'],['crm_enqueue_insights_refresh',{},'service'],['crm_enrich_meta_attribution',{p_limit:1},'service'],

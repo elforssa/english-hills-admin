@@ -9,7 +9,7 @@ import { useCrmRead } from '@/lib/crm/queries';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import { CALL_RESULTS, CLOSE_KINDS, EXCHANGE_CHANNELS, FAILED_CALL_RESULTS, attemptGapLabel, exchangeResults, nextActionPayload, phoneLinks } from '@/lib/crm/presentation.mjs';
 import { STICKY_DIALOG } from './DialogStickyFooter';
-import { FormFooter, NextActionPicker, control, useDirtyClose, useSeenAction } from './NextActionDialog';
+import { FormFooter, NextActionPicker, control, useDirtyClose, useReturnFocus, useSeenAction } from './NextActionDialog';
 import { useCrmCommand } from './useCrmCommand';
 
 const AGREED = ['keep', 'center_visit', 'callback', 'our_step', 'awaiting', 'enrol', 'lost', 'not_qualified'];
@@ -32,6 +32,7 @@ export default function ExchangeDialog({ lead, initial = {}, onClose }) {
   const picks = result === 'spoke' ? AGREED.filter(k => k !== 'keep' || seen.action) : result === 'wrong_number' ? AFTER_WRONG_NUMBER : null;
   const dirty = !!result && result !== initial.result || !!note || Object.keys(form).length > 0;
   const closer = useDirtyClose(dirty, command.busy, onClose);
+  const returnFocus = useReturnFocus();
   // An error clears when the selection changes.
   const choose = setter => value => { command.clearError(); setter(value); };
   useEffect(() => { if (isRecordConflict(command.error)) setStale(true); }, [command.error, setStale]);
@@ -53,12 +54,14 @@ export default function ExchangeDialog({ lead, initial = {}, onClose }) {
       onClose();
     }
   }
-  return <Dialog open onOpenChange={value => { if (!value) closer.request(); }}><DialogContent className={`operational ${STICKY_DIALOG} sm:max-w-[640px]`}>
+  return <Dialog open onOpenChange={value => { if (!value) closer.request(); }}><DialogContent onCloseAutoFocus={returnFocus} className={`operational ${STICKY_DIALOG} sm:max-w-[640px]`}>
     <DialogHeader><DialogTitle>Noter un échange</DialogTitle><DialogDescription>{lead.contact_name}{lead.learner_name ? ` · ${lead.learner_name}` : ''}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={submit} className="space-y-4"><fieldset disabled={command.busy} className="space-y-4">
       <p className="text-sm">Action actuelle : <span className="font-medium">{seen.action?.label || 'Aucune'}</span></p>
       <div role="tablist" aria-label="Canal" className="flex flex-wrap gap-1">{Object.entries(EXCHANGE_CHANNELS).map(([key, label]) => <Button key={key} type="button" role="tab" aria-selected={channel === key} variant={channel === key ? 'default' : 'outline'} className="min-h-9" onClick={() => { choose(setChannel)(key); setResult(''); setForm({}); }}>{label}</Button>)}</div>
-      {channel === 'phone' && <p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}{links.tel && <a className="ml-3 hidden font-medium text-blue-800 underline max-sm:[@media(pointer:coarse)]:inline" href={links.tel}>Appeler</a>}</p>}
+      {channel === 'phone' && <div className="flex flex-wrap items-center gap-2"><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}{links.tel && <a className="ml-3 hidden font-medium text-blue-800 underline max-sm:[@media(pointer:coarse)]:inline" href={links.tel}>Appeler</a>}</p>
+        {/* Copying or opening the call records nothing; only the saved result does. */}
+        <Button type="button" size="sm" variant="outline" className="min-h-9" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { toast.error('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button></div>}
       {channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? <a className="font-medium text-blue-800 underline" href={links.whatsapp} target="_blank" rel="noopener noreferrer">{`+${links.whatsapp.split('/').at(-1)}`}</a> : 'Indisponible'}</p>}
       <fieldset><legend className="text-sm font-medium">Résultat</legend><div className="mt-2 flex flex-wrap gap-1">{Object.entries(exchangeResults(channel)).map(([key, label]) => <label key={key} className="flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50"><input type="radio" name="exchange-result" value={key} checked={result === key} onChange={() => { choose(setResult)(key); setForm({}); }} />{label}</label>)}</div></fieldset>
       {gap && <div className="rounded-md bg-amber-50 p-3 text-sm"><p>{gap}</p><label className="mt-2 flex min-h-9 items-center gap-2"><input type="checkbox" checked={override} onChange={e => choose(setOverride)(e.target.checked)} />Tentative réelle (hors délai)</label></div>}

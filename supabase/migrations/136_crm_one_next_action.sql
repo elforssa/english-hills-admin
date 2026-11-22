@@ -84,9 +84,8 @@ create table public.crm_data_step_journal(
 create index crm_data_step_journal_step_idx on public.crm_data_step_journal(step, run_at, id);
 alter table public.crm_data_step_journal enable row level security;
 revoke all on table public.crm_data_step_journal from public, anon, authenticated, service_role;
-grant select on table public.crm_data_step_journal to authenticated;
-create policy crm_data_step_journal_director_read on public.crm_data_step_journal for select to authenticated
- using ((select public.get_my_role()) = 'director');
+-- No table grant (079: audited RPCs are the only browser read boundary). The
+-- director reads the journal through crm_list_data_step_journal (§10 reads).
 
 -- ---------------------------------------------------------------------------
 -- 2. Hours (§4.5): one versioned source; hours from the current version.
@@ -782,7 +781,7 @@ begin
   raise exception 'Request key and bounded object payload required' using errcode='22023'; end if;
  allowed:=case cmd
  when 'create_followup_policy' then array['weekly_hours','opening_hours','date_exceptions','timezone','attempt_offsets','minimum_attempt_gap_minutes','first_contact_sla_minutes','post_test_sla_minutes','stale_contacting_minutes','effective_from']
- when 'create_manual_lead' then array['display_name','contact_kind','phone','whatsapp','email','preferred_channel','learner_name','learner_age','learner_birth_date','session_type','program_interest_text','source_label','owner_id']
+ when 'create_manual_lead' then array['display_name','contact_kind','phone','whatsapp','email','preferred_channel','learner_name','learner_age','learner_birth_date','session_type','program_interest_text','source_label','owner_id','first_exchange']
  when 'resolve_submission' then array['lead_id','expected_version','submission_id']
  when 'add_note' then array['lead_id','expected_version','note']
  when 'record_call_outcome' then array['lead_id','expected_version','task_id','expected_task_version','outcome','occurred_at','note','next_task']
@@ -844,6 +843,13 @@ begin
    raise exception 'Contact, learner and source label required (maximum 200 characters)' using errcode='22023'; end if;
   if (data->>'learner_birth_date')::date>public.business_date() then raise exception 'Birth date cannot be in the future' using errcode='22023'; end if;
   perform crm_security.assert_staff((data->>'owner_id')::uuid);
+  -- §4.2/§4.8: a walk-in or an inbound call is created with its first exchange and
+  -- that exchange's next action, in this transaction; « Premier contact » is never scheduled.
+  next_obj:=data->'first_exchange';
+  if next_obj is not null and (jsonb_typeof(next_obj)<>'object' or next_obj-array['channel','next','note']<>'{}'::jsonb
+   or coalesce(next_obj->>'channel','') not in ('phone','whatsapp','in_person') or jsonb_typeof(next_obj->'next') is distinct from 'object'
+   or next_obj->'next' ? 'close' or length(next_obj->>'note')>4000) then
+   raise exception 'Valid first exchange required' using errcode='22023'; end if;
   phone:=crm_security.normalize_phone(data->>'phone'); email:=nullif(lower(btrim(data->>'email')),'');
   if email is not null and (length(email)>254 or email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$') then raise exception 'Invalid email' using errcode='22023'; end if;
   -- No automatic reuse, including a unique phone/email match: shared family
@@ -863,15 +869,24 @@ begin
    case when data->>'learner_age' is not null then now() end,(data->>'learner_birth_date')::date,data->>'session_type',data->>'program_interest_text',
    case when data ? 'owner_id' then (data->>'owner_id')::uuid else actor end,submission,submission,p.id,(due at time zone public.centre_utc_offset())::date) returning * into l;
   insert into public.crm_submissions(id,lead_id,channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,resolved_by,resolved_at,payload_hash)
-  values(submission,l.id,'manual',now(),now(),'server',data,'[]',btrim(data->>'source_label'),'resolved',actor,now(),digest);
+  values(submission,l.id,'manual',now(),now(),'server',data-'first_exchange','[]',btrim(data->>'source_label'),'resolved',actor,now(),digest);
   perform crm_security.event(l.id,'lead_created',source||':lead',null,null,null,null,null,null,null,null,'NEW');
   aid:=crm_security.event(l.id,'submission_received',source||':submission',submission=>submission);
   -- Activity ownership FK is satisfied; acquisition snapshots are never edited.
-  tid:=crm_security.set_next_action(l,jsonb_build_object('task_type','first_contact','due_at',due,'_key','attempt:'||l.id||':1:1','_kind','intake',
-   '_ordinal',1,'_event_source',source||':initial-task'),'intake',source);
+  if next_obj is null then
+   tid:=crm_security.set_next_action(l,jsonb_build_object('task_type','first_contact','due_at',due,'_key','attempt:'||l.id||':1:1','_kind','intake',
+    '_ordinal',1,'_event_source',source||':initial-task'),'intake',source);
+  else
+   -- The exchange runs nested under this command's key (one history entry); its
+   -- private key is fresh per execution, and the outer request owns the replay.
+   perform crm_security.command('log_exchange',gen_random_uuid(),jsonb_build_object('lead_id',l.id,'expected_version',(select version from public.crm_leads where id=l.id),
+    'channel',next_obj->>'channel','result','spoke','next',next_obj->'next')||case when nullif(btrim(next_obj->>'note'),'') is not null then jsonb_build_object('note',next_obj->>'note') else '{}'::jsonb end);
+   tid:=crm_security.next_action_id(l.id);
+  end if;
   if not nested then
-   perform crm_security.primary_event(l.id,cmd,null,null,null,null,crm_security.action_label((select t0 from public.crm_tasks t0 where t0.id=tid)),null,
-    jsonb_build_object('result_label','Prospect créé'));
+   perform crm_security.primary_event(l.id,cmd,nullif(btrim(next_obj->>'note'),''),nullif(next_obj->>'channel','other'),case when next_obj is not null then 'spoke' end,null,
+    crm_security.action_label((select t0 from public.crm_tasks t0 where t0.id=tid)),null,
+    jsonb_build_object('result_label',case when next_obj is null then 'Prospect créé' else 'Prospect créé · On a parlé' end));
   end if;
   result:=crm_security.result(l.id,source)||jsonb_build_object('submission_id',submission,'contact_candidates',candidates,'contact_version',1);
 
@@ -1457,10 +1472,12 @@ declare actor uuid:=auth.uid(); digest text; prior public.crm_command_requests%r
  if not found then raise exception 'CRM placement not found' using errcode='22023'; end if;
  -- NF-2: the prospect version the user saw (lead lock before placement lock,
  -- the order every placement trigger already uses).
+ -- The placement check runs first so a stale test keeps its existing message (119
+ -- contract); the prospect check (NF-2) follows. Both rows are locked before either.
  select * into l from public.crm_leads where id=p.crm_lead_id for update;
- if l.version is distinct from (p_data->>'expected_version')::bigint then raise exception 'Stale lead version; refresh and retry' using errcode='PT409'; end if;
  select * into p from public.placement_tests where id=p.id for update;
  if p.updated_at is distinct from (p_data->>'expected_updated_at')::timestamptz then raise exception 'Stale placement version; refresh and retry' using errcode='PT409'; end if;
+ if l.version is distinct from (p_data->>'expected_version')::bigint then raise exception 'Stale lead version; refresh and retry' using errcode='PT409'; end if;
  update public.placement_tests set date_test=(p_data->>'date_test')::date,heure=p_data->>'heure',examinateur=p_data->>'examinateur',notes=p_data->>'notes',
  status=p_data->>'status',score=(p_data->>'score')::numeric,niveau_recommande=nullif(p_data->>'niveau_recommande','') where id=p.id returning * into p;
  result:=jsonb_build_object('placement',crm_security.placement_summary(p))||crm_security.result(p.crm_lead_id,'placement-edit:'||p.id);
@@ -1873,8 +1890,8 @@ begin
   'schedule_kind',t.schedule_kind,'followup_reason',t.followup_reason,'review_flag',t.review_flag,
   'next_action',crm_security.action_json(t),
   'siblings',(select count(*) from public.crm_leads z where z.contact_id=l.contact_id and z.merged_into_lead_id is null and z.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')),
-  'lead',jsonb_build_object('id',l.id,'version',l.version,'contact_id',l.contact_id,'contact_name',c.display_name,
-  'phone',coalesce(c.phone_e164,c.phone_raw),'failed_attempts',crm_security.failed_count(l),
+  'lead',jsonb_build_object('id',l.id,'version',l.version,'contact_name',c.display_name,
+  'failed_attempts',crm_security.failed_count(l),
   'learner_name',l.learner_name,'program',coalesce(nullif(l.session_type,''),nullif(l.program_interest_text,'')),
   'status',l.status,'owner_id',l.owner_id,'owner_name',o.full_name,'owner_display_label',crm_security.staff_display_label(l.owner_id))) order by s.due_at,s.id)
   from shown s join public.crm_tasks t on t.id=s.id join public.crm_leads l on l.id=s.lead_id
@@ -1979,6 +1996,21 @@ language plpgsql stable security definer set search_path=pg_catalog,pg_temp as $
  from public.placement_tests p join public.crm_leads l on l.id=p.crm_lead_id where p.id=p_test;
  return result;
 end $$;
+
+-- §4.1: the data-step journal is readable by the director, through this read.
+create or replace function public.crm_list_data_step_journal(p_step text default null, p_limit integer default 50, p_offset integer default 0)
+ returns jsonb language plpgsql stable security definer set search_path to 'pg_catalog','pg_temp' as $function$
+declare result jsonb; begin
+ perform crm_security.require_reader(true);
+ perform crm_security.check_page(p_limit,p_offset);
+ if p_step is not null and p_step !~ '^[a-z][a-z0-9_]*$' then raise exception 'Invalid data step' using errcode='22023'; end if;
+ select jsonb_build_object('total',(select count(*) from public.crm_data_step_journal j where p_step is null or j.step=p_step),
+  'rows',coalesce((select jsonb_agg(to_jsonb(j) order by j.run_at desc,j.id) from (select * from public.crm_data_step_journal j
+   where p_step is null or j.step=p_step order by j.run_at desc,j.id limit p_limit offset p_offset) j),'[]'::jsonb)) into result;
+ return result;
+end $function$;
+revoke all on function public.crm_list_data_step_journal(text,integer,integer) from public, anon, authenticated, service_role;
+grant execute on function public.crm_list_data_step_journal(text,integer,integer) to authenticated;
 
 -- History (§4.7): primary rows (and legacy rows without a command key);
 -- secondary rows only with « Détails ». The actor is the profile's full name.

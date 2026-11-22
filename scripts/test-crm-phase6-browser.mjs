@@ -20,7 +20,10 @@ let browser,actor;const pageErrors=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const intake=name=>rpc('create_manual_lead',{display_name:name,learner_name:'Enfant synthétique',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
 let page;
 // Keep fixture dates future without depending on the machine's timezone.
@@ -48,8 +51,12 @@ try {
  page=await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));page.setDefaultTimeout(60000);await login(users[1]);
  const hours=Object.fromEntries([2,3,4,5,6].map(i=>[i,[['10:00','12:30'],['15:20','20:00']]]));hours[1]=[['15:00','20:00']];hours[7]=[];rpc('create_followup_policy',{weekly_hours:hours,attempt_offsets:[0,0,1,3,5]},users[0].id);
  const makeLead=(contact,learner)=>{const id=rpc('create_manual_lead',{display_name:contact,learner_name:learner,phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;act('qualify_lead',id,{conversation_channel:'phone',note:'Le parent souhaite une inscription',qualification_step:'enrollment',next_task:next('enrollment_followup')});return id;};
- const lead=makeLead('Sara inscription CRM','Adam inscription CRM');
- const placement=rpc('book_placement_test',{lead_id:lead,expected_version:detail(lead).version,date_test:new Date(Date.now()+86400000).toISOString().slice(0,10),heure:'10:30'}).placement.id;
+ // RWR-r5 §4.2: a test is booked on the test path (an enrolment action refuses a booking
+ // until it is changed), then its result prefills the enrolment.
+ const lead=rpc('create_manual_lead',{display_name:'Sara inscription CRM',learner_name:'Adam inscription CRM',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
+ act('qualify_lead',lead,{conversation_channel:'phone',note:'Le parent souhaite un test puis une inscription',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
+ const confirm=detail(lead).open_tasks.find(t=>t.task_type==='confirm_placement_test');
+ const placement=rpc('book_placement_test',{lead_id:lead,expected_version:detail(lead).version,task_id:confirm.id,expected_task_version:confirm.version,date_test:inHours().slice(0,10),heure:'10:30'}).placement.id;
  sql(`begin;set local request.jwt.claim.sub='${actor}';set local role authenticated;update public.placement_tests set status='Résultat saisi',niveau_recommande='Child 2' where id='${placement}';commit;`);
  const counts=()=>JSON.parse(sql('select jsonb_build_array((select count(*) from public.students),(select count(*) from public.enrollments),(select count(*) from public.charges),(select count(*) from public.receipts),(select count(*) from public.financial_events),(select count(*) from auth.users),(select count(*) from public.profiles))'));
  const before=counts();await open(lead);await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-before.png'),fullPage:false});
@@ -65,9 +72,9 @@ try {
  const linked=detail(lead);assert.equal(linked.status,'CONVERTED');assert.equal(linked.enrollment.status,'Confirmed');assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${lead}' and task_type='enrollment_followup' and status='open'`),'0','the conversion closes the follow-up');
  assert.equal(sql(`select count(*) from public.receipts where student_id='${linked.enrollment.student_id}'`),'1');await screenshot({path:join(tmpdir(), 'hills-phase6-enrolled.png'),fullPage:false});
  assert.equal(sql(`select student_id is null from public.placement_tests where id='${placement}'`),'t');console.log('PASS explicit enrollment, result prefill, no creation on opening/review, lost-response replay, one receipt, no auth writes, paid enrollment converts at once');
- await open(lead);await page.getByRole('dialog').getByText('Inscription confirmée',{exact:true}).first().waitFor();assert.equal(await page.getByRole('button',{name:'Appel',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).count(),0);await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-converted-drawer.png'),fullPage:false});
+ await open(lead);await page.getByRole('dialog').getByText('Inscription confirmée',{exact:true}).first().waitFor();assert.equal(await page.getByTestId('next-action-panel').count(),0,'no next action on a converted prospect');assert.equal(await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).count(),0);await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-converted-drawer.png'),fullPage:false});
  await page.getByRole('link',{name:"Ouvrir l'apprenant",exact:true}).click();await page.waitForURL(url=>url.pathname==='/students/'+linked.enrollment.student_id);await page.getByRole('heading',{name:'Adam inscription CRM',exact:true}).waitFor();
- await page.goto(app+'/crm/today');await page.getByRole('heading',{name:'Tâches · Mon travail',exact:true}).waitFor();await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();await expect(page.getByTestId('work-row')).toHaveCount(0);
+ await page.goto(app+'/crm/today');await page.getByRole('heading',{name:'Tâches · Mon travail',exact:true}).waitFor();await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();await expect(page.getByTestId('work-row')).toHaveCount(0);
  await page.goto(app+'/crm/leads?layout=list');await page.getByRole('button',{name:/^Filtres/}).click();await page.getByLabel('Statut',{exact:true}).selectOption('CONVERTED');await page.getByTestId('opportunity-row').filter({hasText:'Sara inscription CRM'}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-converted.png'),fullPage:false});
  await page.setViewportSize({width:390,height:844});await open(lead);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot({path:join(tmpdir(), 'hills-phase6-mobile.png'),fullPage:false});await page.setViewportSize({width:1440,height:1000});
  console.log('PASS paid conversion, converted search, sales actions/queue removed, safe student navigation and mobile');

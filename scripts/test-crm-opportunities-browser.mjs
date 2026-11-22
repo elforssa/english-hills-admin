@@ -18,7 +18,10 @@ let browser,actor;const pageErrors=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const intake=name=>rpc('create_manual_lead',{display_name:name,learner_name:'Enfant synthétique',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
 let page,phase;
 // Keep fixture dates future without depending on the machine's timezone.
@@ -58,13 +61,17 @@ try {
   // Drag proposes a command, leaves server stage unchanged, and cancel writes nothing.
   if(engine===chromium) {
    const card=page.getByTestId('opportunity-card').filter({hasText:'O3 parent 31'});const before=sql(`select count(*) from public.crm_activities where lead_id='${leads[31]}'`);
-   await card.dragTo(page.getByRole('region',{name:'Contact en cours'}));await dialog().getByRole('heading',{name:'Enregistrer le résultat de l’appel'}).waitFor();assert.equal(await dialog().getByLabel('Résultat de l’appel').inputValue(),'');
+   await card.dragTo(page.getByRole('region',{name:'Contact en cours'}));// RWR-r5 §4.9: the drop opens « Noter un échange » on the phone channel, no result chosen.
+   await dialog().getByRole('heading',{name:'Noter un échange'}).waitFor();assert.equal(await dialog().getByRole('tab',{name:'Téléphone',exact:true}).getAttribute('aria-selected'),'true');assert.equal(await dialog().locator('input[name="exchange-result"]:checked').count(),0);
    assert.equal(detail(leads[31]).status,'NEW');await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${leads[31]}'`),before);
   }
   await page.getByRole('button',{name:'Liste',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),25);
   await page.getByRole('button',{name:/^Filtres/}).click();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('NEW');await page.waitForURL(url=>url.searchParams.get('stage')==='NEW');await page.getByText(/^28 prospects correspondants/).waitFor();await page.getByRole('combobox',{name:'Statut',exact:true}).selectOption('');await page.waitForURL(url=>!url.searchParams.has('stage'));await page.getByText(/^32 prospects correspondants/).waitFor();
   const firstIds=await page.getByTestId('opportunity-row').evaluateAll(nodes=>nodes.map(n=>n.textContent));await page.getByRole('button',{name:'Suivant',exact:true}).last().click();await page.getByTestId('opportunity-row').filter({hasText:'O3 parent 0'}).waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),7);
-  await page.getByRole('button',{name:'Mes prospects',exact:true}).click();await page.getByText('Aucun prospect correspondant à cette vue et ces filtres.',{exact:true}).waitFor();
+  // RWR-r5 §4.6: a manual prospect belongs to its creator, so « Mes prospects » lists the receptionist's own.
+  {const mine=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_opportunities')&&r.ok()&&r.request().postDataJSON()?.p_view==='mine');
+   await page.getByRole('button',{name:'Mes prospects',exact:true}).click();const total=(await (await mine).json()).total;
+   assert(total>0,'the creator owns her manual prospects');await page.getByText(new RegExp(`^${total} prospects correspondants`)).waitFor();}
   await page.getByRole('button',{name:'Clôturés',exact:true}).click();await page.getByTestId('opportunity-row').first().waitFor();assert.equal(await page.getByTestId('opportunity-row').count(),2);assert(await page.getByRole('button',{name:'Tableau',exact:true}).isDisabled());
   await page.getByRole('button',{name:'Tous les prospects',exact:true}).click();await page.getByRole('button',{name:'Tableau',exact:true}).click();await page.getByTestId('opportunity-card').first().waitFor();
   const search=page.getByRole('searchbox',{name:'Rechercher un prospect'});await search.pressSequentially('O3 parent 31',{delay:25});await page.waitForURL(url=>url.searchParams.get('q')==='O3 parent 31');await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 31'}).waitFor();assert.equal(await search.inputValue(),'O3 parent 31');await search.fill('');await page.waitForURL(url=>!url.searchParams.has('q'));await page.getByTestId('opportunity-card').filter({hasText:'O3 parent 3'}).first().waitFor();

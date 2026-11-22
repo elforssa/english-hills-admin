@@ -7,7 +7,8 @@ import FormField from '@/components/operational/FormField';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
-import { STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
+import { NextActionPicker } from './NextActionDialog';
+import { NEXT_KINDS, nextActionPayload, STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
 import { CONFLICT_CODE, isRecordConflict } from '@/lib/conflictErrors.mjs';
 const titles = {
   manual: 'Ajouter un prospect',
@@ -39,6 +40,11 @@ const stepTasks = {
   enrollment: 'enrollment_followup'
 };
 const COMPLETION_LIMIT = 200;
+// A walk-in, an inbound call or a WhatsApp conversation is created with its first exchange
+// (§4.2/§4.8): the next action agreed now, in the same form; otherwise « Premier contact ».
+const FIRST_CHANNEL = { 'Téléphone': 'phone', 'Visite au centre': 'in_person', WhatsApp: 'whatsapp' };
+const FIRST_KINDS = ['none', 'center_visit', 'callback', 'our_step', 'awaiting', 'enrol'];
+const FIRST_LABELS = { ...NEXT_KINDS, none: 'Pas encore parlé · Premier contact' };
 export const Field = FormField;
 const inputClass = 'operational-control font-normal';
 export default function CrmActionDialog({
@@ -65,6 +71,8 @@ export default function CrmActionDialog({
     assignee: task?.assigned_to || '',
     channel: 'phone'
   });
+  const [first, setFirst] = useState({ kind: 'none' });
+  const hours = useCrmRead('crm_get_centre_hours', {}, action === 'manual');
   const [selectedStaffLabel, setSelectedStaffLabel] = useState((task ? task.assignee_display_label : lead?.owner_display_label) || 'Responsable indisponible');
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -117,7 +125,8 @@ export default function CrmActionDialog({
       email: values.email || null,
       program_interest_text: values.program || null,
       source_label: `Manuel · ${values.source}`,
-      contact_kind: 'unknown'
+      contact_kind: 'unknown',
+      ...(FIRST_CHANNEL[values.source] && first.kind !== 'none' ? { first_exchange: { channel: FIRST_CHANNEL[values.source], next: nextActionPayload(first, null) } } : {})
     }];
     const data = {
       lead_id: lead.id,
@@ -219,7 +228,7 @@ export default function CrmActionDialog({
     setBusy(true);
     setError('');
     try {
-      const intent = JSON.stringify([action, values, task?.id]);
+      const intent = JSON.stringify([action, values, task?.id, action === 'manual' ? first : null]);
       // An uncertain response may have committed. Preserve its exact payload even
       // if a background refresh has since advanced the lead/task versions.
       if (request.current?.intent !== intent) {
@@ -297,7 +306,9 @@ export default function CrmActionDialog({
               WhatsApp: 'WhatsApp',
               Recommandation: 'Recommandation',
               Autre: 'Autre'
-            })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details></>}
+            })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details>
+  {FIRST_CHANNEL[values.source] && <section aria-label="Premier échange" className="space-y-2 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">Premier échange</h3><p className="text-xs text-slate-600">Vous parlez avec le contact maintenant ? Choisissez ce qui est convenu. Sinon, un « Premier contact » est prévu.</p>
+   <NextActionPicker form={first} setForm={value => { setError(''); setFirst(value); }} current={null} lead={null} hours={hours.data} kinds={FIRST_KINDS} labels={FIRST_LABELS} suggestDate /></section>}</>}
   {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="hidden min-h-11 items-center rounded-md border px-4 text-sm font-medium max-sm:[@media(pointer:coarse)]:inline-flex" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}</>}
   {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>}</>}
   {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {

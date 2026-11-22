@@ -94,7 +94,9 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
     locked.current = true;
     setSaving(true);
     setError('');
-    const { crm_lead_id: ignoredLink, is_crm: ignoredFlag, scheduled_for: ignoredTime, ...fields } = form;
+    // Migration 136 adds the cancellation columns; they are written only by the CRM
+    // commands (no UPDATE grant), so a direct edit must never send them back.
+    const { crm_lead_id: ignoredLink, is_crm: ignoredFlag, scheduled_for: ignoredTime, cancelled_at: ignoredCancelledAt, cancelled_by: ignoredCancelledBy, cancel_reason: ignoredCancelReason, ...fields } = form;
     const data = { ...fields, student_id: form.student_id || null, groupe_affecte_id: form.groupe_affecte_id || null, score: form.score !== '' ? parseFloat(form.score) : null };
     try {
       let saved;

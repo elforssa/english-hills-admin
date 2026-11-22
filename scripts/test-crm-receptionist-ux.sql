@@ -81,7 +81,7 @@ begin
  select x into item from jsonb_array_elements(queue->'rows')x where x->>'id'=t::text;
  perform pg_temp.ok(item->>'assignee_display_label'=assignee->>'display_label' and item->'lead'->>'owner_display_label'=owner->>'display_label','task assignee and prospect owner independent safe labels');
  perform pg_temp.ok(item->>'assigned_to'<>item->'lead'->>'owner_id','assignee never falls back to owner');
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(item->'lead')k)=array['contact_id','contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','phone','program','status','version'],'fixed nested lead projection: no private staff fields');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(item->'lead')k)=array['contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed nested lead projection: no private staff fields');
  perform pg_temp.ok(crm_security.staff_display_label(null) is null,'unassigned label remains null');
  perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('anon','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('service_role','crm_security.staff_display_label(uuid)','execute'),'private label helper denied to API roles');
 end $$;

@@ -1,4 +1,4 @@
-import { centreFormatter, centreInstant, CENTRE_UTC_OFFSET_MINUTES } from '../centreClock.mjs';
+import { centreDateTimeInput, centreFormatter, centreInstant, CENTRE_UTC_OFFSET_MINUTES } from '../centreClock.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 
 export const STATUS = {
@@ -279,7 +279,8 @@ export const MEANINGFUL_EVENTS = new Set([
 // Collapsed history: the latest meaningful exchanges of the first loaded page, else the latest entries.
 export function historySummary(rows, size = 3) {
   const list = Array.isArray(rows) ? rows : [];
-  const meaningful = list.filter(row => MEANINGFUL_EVENTS.has(row?.event_type));
+  // A primary row is one user action (RWR-r5 §4.7) and always counts as an exchange.
+  const meaningful = list.filter(row => row?.is_primary || MEANINGFUL_EVENTS.has(row?.event_type));
   return (meaningful.length ? meaningful : list).slice(0, size);
 }
 // Escape inside a modal sheet: an already consumed Escape is final; otherwise a nested
@@ -370,6 +371,15 @@ export function isCallAction(action) {
 // OD-18: replacing an appointment needs « Remplace » ; leaving « Finaliser
 // l’inscription » for anything but another enrolment action needs a reason.
 // Closing is not a replacement.
+// « Changer » opens on the current agreed time (an agreed callback or an appointment), so moving
+// it is the date alone (day script « rappel reporté deux fois puis annulé »: ≤ 9 actions).
+export function prefillFromAction(action) {
+  const kind = action?.task_type === 'center_visit' ? 'center_visit'
+    : action?.task_type === 'callback' && action.schedule_kind === 'appointment' ? 'callback' : null;
+  if (!kind || !action.due_at) return {};
+  const [date, time] = centreDateTimeInput(new Date(action.due_at)).split('T');
+  return kind === 'center_visit' ? { kind, date, time, withTest: !!action.placement_test_id } : { kind, date, time };
+}
 export function replaceRules(current, kind) {
   const replacing = !!current && !!kind && kind !== 'keep' && !CLOSE_KINDS.includes(kind);
   return {
@@ -381,7 +391,18 @@ const pad = n => String(n).padStart(2, '0');
 const isoDow = date => { const d = new Date(`${date}T12:00:00Z`).getUTCDay(); return d === 0 ? 7 : d; };
 // Times offered by the picker: the windows of that weekday in the current hours
 // (calling for calls, opening for visits), none on a closed date, never in the past.
-export function slotTimes(hours, kind, date, { step = 15, now = null } = {}) {
+// The first centre date, from today, with a free slot of that kind (within two weeks), or ''.
+export function firstSlotDate(hours, kind, today, now = null) {
+  if (!hours || !/^\d{4}-\d\d-\d\d$/.test(today || '')) return '';
+  for (let i = 0; i < 15; i += 1) {
+    const date = new Date(Date.parse(`${today}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10);
+    if (slotTimes(hours, kind, date, { now }).length) return date;
+  }
+  return '';
+}
+// `keep`: an agreed time off the 15-minute grid (16:00 in a window opening at 15:20) stays
+// offered when it is inside the hours that day, so changing only the date never drops it.
+export function slotTimes(hours, kind, date, { step = 15, now = null, keep = null } = {}) {
   if (!hours || !/^\d{4}-\d\d-\d\d$/.test(date || '')) return [];
   if ((hours.closed_dates || []).includes(date)) return [];
   const windows = (kind === 'opening' ? hours.opening_hours : hours.calling_hours)?.[String(isoDow(date))] || [];
@@ -391,7 +412,9 @@ export function slotTimes(hours, kind, date, { step = 15, now = null } = {}) {
   for (const [open, close] of windows) {
     for (let t = minutes(open); t < minutes(close); t += step) if (t > floor) out.push(`${pad(Math.floor(t / 60))}:${pad(t % 60)}`);
   }
-  return out;
+  if (/^\d\d:\d\d$/.test(keep || '') && !out.includes(keep) && minutes(keep) > floor
+    && windows.some(([open, close]) => minutes(keep) >= minutes(open) && minutes(keep) < minutes(close))) out.push(keep);
+  return out.sort();
 }
 // The `next` of crm_log_exchange / crm_change_next_action from the picker state.
 // Throws a French message the form shows when a required choice is missing.

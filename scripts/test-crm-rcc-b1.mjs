@@ -38,6 +38,7 @@ const row = (id, event_type) => ({ id, event_type });
 assert.deepEqual(historySummary([row(1,'task_created'), row(2,'call_no_answer'), row(3,'task_completed'), row(4,'note_added'), row(5,'whatsapp_sent'), row(6,'lead_qualified')]).map(r => r.id), [2, 4, 5]);
 assert.deepEqual(historySummary([row(1,'task_created'), row(2,'lead_created'), row(3,'submission_received'), row(4,'task_completed')]).map(r => r.id), [1, 2, 3]);
 assert.deepEqual(historySummary([row(1,'conversation_recorded')]).map(r => r.id), [1]);
+assert.deepEqual(historySummary([row(1,'task_created'), { id: 2, event_type: 'action_recorded', is_primary: true }, row(3,'lead_created')]).map(r => r.id), [2], 'a 136 primary row (one per action, RWR-r5 §4.7) is a meaningful exchange');
 assert.deepEqual(historySummary(undefined), []);
 
 // E5 unit level: the decision is independent of which document listener ran first.

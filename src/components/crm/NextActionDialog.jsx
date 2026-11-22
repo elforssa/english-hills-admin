@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import FormField from '@/components/operational/FormField';
 import { useCrmRead } from '@/lib/crm/queries';
 import { centreDate, centreDateTimeInput } from '@/lib/centreClock.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
-import { CLOSE_KINDS, LOST, NEXT_KINDS, NOT_QUALIFIED, OUR_STEP_PRESETS, REMINDER_PRESETS, STALE_MESSAGE, actionErrorMessage, nextActionPayload, replaceRules, slotTimes } from '@/lib/crm/presentation.mjs';
+import { CLOSE_KINDS, LOST, NEXT_KINDS, NOT_QUALIFIED, OUR_STEP_PRESETS, REMINDER_PRESETS, STALE_MESSAGE, actionErrorMessage, firstSlotDate, nextActionPayload, prefillFromAction, replaceRules, slotTimes } from '@/lib/crm/presentation.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
 import { useCrmCommand } from './useCrmCommand';
 
@@ -24,20 +23,24 @@ const KIND_HELP = {
 };
 
 // The picker of « Noter un échange » (what was agreed) and « Changer » (what comes next).
-export function NextActionPicker({ form, setForm, current, kinds, lead, hours }) {
+// `suggestDate` (the create form) proposes the first day with a free slot for an appointment;
+// the time is always chosen by the user.
+export function NextActionPicker({ form, setForm, current, kinds, lead, hours, labels = NEXT_KINDS, suggestDate = false }) {
   const set = (key, value) => setForm(old => ({ ...old, [key]: value }));
   const kind = form.kind;
   const today = centreDate();
   const now = centreDateTimeInput();
-  const slots = slotTimes(hours, kind === 'center_visit' ? 'opening' : 'calling', form.date, { now: { date: today, time: now.slice(11) } });
+  const slots = slotTimes(hours, kind === 'center_visit' ? 'opening' : 'calling', form.date, { now: { date: today, time: now.slice(11) }, keep: form.time });
   const rules = replaceRules(current, kind);
-  const dateField = (label, required = true, help) => <FormField label={label} help={help}><input type="date" className={control} min={today} required={required} value={form.date || ''} onChange={e => setForm(old => ({ ...old, date: e.target.value, time: '' }))} /></FormField>;
+  // A new date keeps the chosen time when that slot exists on the new day.
+  const changeDate = date => setForm(old => ({ ...old, date, time: old.time && slotTimes(hours, old.kind === 'center_visit' ? 'opening' : 'calling', date, { now: { date: today, time: now.slice(11) }, keep: old.time }).includes(old.time) ? old.time : '' }));
+  const dateField = (label, required = true, help) => <FormField label={label} help={help}><input type="date" className={control} min={today} required={required} value={form.date || ''} onChange={e => changeDate(e.target.value)} /></FormField>;
   const timeField = () => <FormField label="Heure" help={form.date && !slots.length ? 'Aucun créneau ce jour-là (centre fermé ou journée passée).' : 'Créneaux selon les horaires du centre.'}>
     <select className={control} required disabled={!form.date || !slots.length} value={form.time || ''} onChange={e => set('time', e.target.value)}><option value="">Choisir…</option>{slots.map(t => <option key={t} value={t}>{t}</option>)}</select></FormField>;
   return <div className="space-y-3">
     <fieldset><legend className="text-sm font-medium">Prochaine action</legend>
       <div className="mt-2 grid gap-1 sm:grid-cols-2">{kinds.map(key => <label key={key} className="flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50">
-        <input type="radio" name="next-kind" value={key} checked={kind === key} onChange={() => setForm(old => ({ ...old, kind: key, reason: '', time: '' }))} />{NEXT_KINDS[key]}</label>)}</div>
+        <input type="radio" name="next-kind" value={key} checked={kind === key} onChange={() => setForm(old => ({ ...old, kind: key, reason: '', time: '', ...(suggestDate && !old.date && ['center_visit', 'callback'].includes(key) ? { date: firstSlotDate(hours, key === 'center_visit' ? 'opening' : 'calling', today, { date: today, time: now.slice(11) }) } : {}) }))} />{labels[key]}</label>)}</div>
     </fieldset>
     {KIND_HELP[kind] && <p className="text-xs text-slate-600">{KIND_HELP[kind]}</p>}
     {(kind === 'center_visit' || kind === 'callback') && <div className="grid gap-3 sm:grid-cols-2">{dateField('Date')}{timeField()}</div>}
@@ -47,7 +50,7 @@ export function NextActionPicker({ form, setForm, current, kinds, lead, hours })
     {kind === 'awaiting' && <>{!form.noRelance && dateField('Relancer le', false, 'Facultatif : sans date, la relance est prévue dans 5 jours.')}<label className="flex min-h-9 items-center gap-2 text-sm"><input type="checkbox" checked={!!form.noRelance} onChange={e => set('noRelance', e.target.checked)} />Sans date de relance</label></>}
     {CLOSE_KINDS.includes(kind) && <><FormField label="Motif"><select className={control} required value={form.reason || ''} onChange={e => set('reason', e.target.value)}><option value="">Choisir…</option>{Object.entries(kind === 'lost' ? LOST : NOT_QUALIFIED).map(([value, label]) => <option key={value} value={value} disabled={value === 'unreachable' && !lead?.unreachable_eligible}>{label}</option>)}</select></FormField>
       <FormField label={form.reason === 'other' ? 'Précisez le motif' : 'Précision (facultatif)'}><input className={control} maxLength={500} value={form.closeNote || ''} onChange={e => set('closeNote', e.target.value)} /></FormField></>}
-    {kind && !CLOSE_KINDS.includes(kind) && !['enrol', 'keep'].includes(kind) && <FormField label="Précisions (facultatif)"><input className={control} maxLength={4000} value={form.instructions || ''} onChange={e => set('instructions', e.target.value)} /></FormField>}
+    {kind && !CLOSE_KINDS.includes(kind) && !['enrol', 'keep', 'none'].includes(kind) && <FormField label="Précisions (facultatif)"><input className={control} maxLength={4000} value={form.instructions || ''} onChange={e => set('instructions', e.target.value)} /></FormField>}
     {current && kind && kind !== 'keep' && <div className="rounded-md bg-amber-50 p-3 text-sm">
       <p>{CLOSE_KINDS.includes(kind) ? 'Annule' : 'Remplace'} : {current.label}</p>
       {rules.confirmAppointment && <label className="mt-2 flex min-h-9 items-center gap-2 font-medium"><input type="checkbox" checked={!!form.replaceConfirmed} onChange={e => set('replaceConfirmed', e.target.checked)} />Remplace le rendez-vous</label>}
@@ -57,10 +60,12 @@ export function NextActionPicker({ form, setForm, current, kinds, lead, hours })
 }
 
 // Escape or a click outside on a changed form asks before discarding it.
+// Built on the same Dialog primitive as its parent: AlertDialog bundles an older focus
+// scope, and two unrelated focus traps re-focus each other forever.
 export function DiscardGuard({ open, onKeep, onDiscard }) {
-  return <AlertDialog open={open} onOpenChange={value => { if (!value) onKeep(); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Abandonner la saisie ?</AlertDialogTitle>
-    <AlertDialogDescription>Les informations saisies ne seront pas enregistrées.</AlertDialogDescription></AlertDialogHeader>
-    <AlertDialogFooter><AlertDialogCancel onClick={onKeep}>Continuer la saisie</AlertDialogCancel><AlertDialogAction onClick={onDiscard}>Abandonner</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>;
+  return <Dialog open={open} onOpenChange={value => { if (!value) onKeep(); }}><DialogContent role="alertdialog" className="sm:max-w-[440px]"><DialogHeader><DialogTitle>Abandonner la saisie ?</DialogTitle>
+    <DialogDescription>Les informations saisies ne seront pas enregistrées.</DialogDescription></DialogHeader>
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={onKeep}>Continuer la saisie</Button><Button type="button" onClick={onDiscard}>Abandonner</Button></div></DialogContent></Dialog>;
 }
 
 // The version and action the user is looking at. On PT409 the draft stays, the save
@@ -84,6 +89,12 @@ export function FormFooter({ error, stale, busy, onReload, onCancel, submitLabel
   </DialogStickyFooter>;
 }
 
+// Closing returns focus to the control that opened the dialog (E2/E4), as CrmActionDialog does.
+export function useReturnFocus() {
+  const origin = useRef(typeof document !== 'undefined' ? document.activeElement : null);
+  return event => { if (origin.current?.isConnected) { event.preventDefault(); origin.current.focus(); } };
+}
+
 export function useDirtyClose(dirty, busy, onClose) {
   const [asking, setAsking] = useState(false);
   const request = () => { if (busy) return; if (dirty) setAsking(true); else onClose(); };
@@ -93,11 +104,13 @@ export function useDirtyClose(dirty, busy, onClose) {
 // « Changer la prochaine action »: the picker, « Remplace : … », and « Garder
 // l’action actuelle » as the escape.
 export default function NextActionDialog({ lead, onClose }) {
-  const [form, setForm] = useState({});
+  const [initial] = useState(() => prefillFromAction(lead.next_action));
+  const [form, setForm] = useState(initial);
   const hours = useCrmRead('crm_get_centre_hours', {});
   const { seen, stale, setStale, reload } = useSeenAction(lead);
   const command = useCrmCommand();
-  const dirty = Object.values(form).some(v => v !== '' && v !== undefined && v !== false);
+  const returnFocus = useReturnFocus();
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial) && Object.values(form).some(v => v !== '' && v !== undefined && v !== false);
   const closer = useDirtyClose(dirty, command.busy, onClose);
   const update = value => { command.clearError(); setForm(value); };
   async function submit(event) {
@@ -110,7 +123,7 @@ export default function NextActionDialog({ lead, onClose }) {
   }
   const failed = command.error;
   useEffect(() => { if (isRecordConflict(failed)) setStale(true); }, [failed, setStale]);
-  return <Dialog open onOpenChange={value => { if (!value) closer.request(); }}><DialogContent className={`operational ${STICKY_DIALOG} sm:max-w-[600px]`}>
+  return <Dialog open onOpenChange={value => { if (!value) closer.request(); }}><DialogContent onCloseAutoFocus={returnFocus} className={`operational ${STICKY_DIALOG} sm:max-w-[600px]`}>
     <DialogHeader><DialogTitle>Changer la prochaine action</DialogTitle><DialogDescription>{lead.contact_name}{lead.learner_name ? ` · ${lead.learner_name}` : ''}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={submit} className="space-y-4"><fieldset disabled={command.busy} className="space-y-4">
       <NextActionPicker form={form} setForm={update} current={seen.action} lead={lead} hours={hours.data}

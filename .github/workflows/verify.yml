@@ -485,12 +485,13 @@ jobs:
       - name: Portal readiness concurrent invitations of one address
         if: matrix.shard == 'sql-and-concurrency'
         run: python3 scripts/test-portal-readiness-concurrency.py
-      - name: Next action concurrency, time travel and generated sequences (RWR-r5 §9)
+      - name: Next action concurrency, time travel, generated sequences and HTTP edge (RWR-r5 §9, A1)
         if: matrix.shard == 'sql-and-concurrency'
         run: |
           node scripts/test-crm-concurrency-local.mjs
           node scripts/test-crm-time-travel-local.mjs
           node scripts/test-crm-sequences.mjs
+          node scripts/test-crm-next-action-local.mjs
       # Last in its shard: it keeps its synthetic director login after cleanup.
       - name: Competing payments and duplicate idempotency key race
         if: matrix.shard == 'sql-and-concurrency'
@@ -583,6 +584,9 @@ jobs:
       - name: Lead intake director panel browser suite
         if: matrix.shard == 'browser-crm'
         run: npm run test:crm-intake-admin-browser
+      - name: Reception forms and day scripts (RWR-r5 PR A1, §4.9 T7, invariant 15, §8)
+        if: matrix.shard == 'browser-crm'
+        run: npm run test:reception-browser
   required:
     if: always()
     needs: [classify, docs, tooling, app, local-database]

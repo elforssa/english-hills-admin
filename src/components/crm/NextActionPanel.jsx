@@ -31,7 +31,7 @@ export default function NextActionPanel({ lead, onExchange, onChange, onUnreacha
       {action?.relance_due && <span className="rounded bg-amber-50 px-1.5 py-0.5 font-medium text-amber-900">À relancer</span>}
       {SCHEDULE_KINDS[action?.schedule_kind] && <span className="font-medium text-blue-900">{SCHEDULE_KINDS[action.schedule_kind]}</span>}
     </div>
-    {action && <p className="mt-1 text-xs text-muted-foreground">Responsable : {action.assigned_to ? action.assignee_display_label || 'Responsable indisponible' : 'Non attribué'}</p>}
+    {action && <p className="mt-1 text-xs text-muted-foreground">Responsable de la tâche : {action.assigned_to ? action.assignee_display_label || 'Responsable indisponible' : 'Non attribuée'}</p>}
     {action?.instructions && <p className="mt-2 whitespace-pre-wrap break-words text-sm">{action.instructions}</p>}
     {lead.failed_attempts > 0 && <p className="mt-2 text-sm">{pluralFr(lead.failed_attempts, 'appel infructueux', 'appels infructueux')}{lead.failed_attempts < 5 ? ' sur 5' : ' · séquence automatique terminée'}</p>}
     {lead.post_test_result && <p className="mt-1 text-sm">Niveau recommandé : {lead.post_test_result.niveau_recommande}</p>}

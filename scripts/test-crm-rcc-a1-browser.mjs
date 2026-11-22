@@ -18,16 +18,28 @@ let browser,actor;const pageErrors=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const intake=name=>rpc('create_manual_lead',{display_name:name,learner_name:'Enfant synthétique',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
 let page;
-// Keep fixture dates future without depending on the machine's timezone.
+// Keep fixture dates future without depending on the machine's timezone. The centre
+// clock is UTC+0 (public.centre_utc_offset), so a UTC date is the centre date.
 const testDay=new Date(Date.now()+14*86400000);while(testDay.getUTCDay()!==2)testDay.setUTCDate(testDay.getUTCDate()+1);
-const future=testDay.toISOString().slice(0,10)+'T13:00';
+const tuesday=testDay.toISOString().slice(0,10),future=tuesday+'T16:00';
 const dialog=()=>page.getByRole('dialog').last();
-async function save(){const outcome=dialog().getByLabel('Résultat de l’appel',{exact:true});if(await outcome.count() && !(await outcome.inputValue())) await outcome.selectOption('no_answer');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\.|Nouveau prospect créé\./).waitFor();}
-async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
-async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
+const drawer=()=>page.getByRole('dialog').first();
+// RWR-r5 §4.9: no success screen; a toast confirms and the form closes.
+async function toast(text){await page.locator('[data-sonner-toast]').filter({hasText:text}).first().waitFor();}
+async function closed(){await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);}
+async function open(id){await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();await drawer().getByTestId('next-action-panel').waitFor();}
+// « Noter un échange » from the drawer panel; channel tab, then result.
+async function exchange(channel='Téléphone',result){await drawer().getByTestId('next-action-panel').getByRole('button',{name:'Noter un échange',exact:true}).click();await dialog().getByRole('heading',{name:'Noter un échange'}).waitFor();if(channel!=='Téléphone')await dialog().getByRole('tab',{name:channel,exact:true}).click();if(result)await dialog().getByLabel(result,{exact:true}).check();}
+async function pick(kind){await dialog().getByLabel(kind,{exact:true}).check();}
+async function slot(date,time){await dialog().getByLabel('Date',{exact:true}).fill(date);const select=dialog().getByLabel('Heure',{exact:true});await page.waitForFunction(el=>!el.disabled&&el.options.length>1,await select.elementHandle());if(time)await select.selectOption(time);return select;}
+async function submit(){await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();}
+async function settle(id,check){for(let i=0;i<100;i++){const d=detail(id);if(check(d))return d;await page.waitForTimeout(100);}throw new Error('server state not reached for '+id);}
 // RCC-B1 E2: an Autres actions item opens its dialog after the menu returns focus to its trigger.
 async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length>1);}
 async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
@@ -44,97 +56,64 @@ try {
  await context.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());
  page=await context.newPage();page.on('pageerror',e=>pageErrors.push(e.message));page.setDefaultTimeout(60000);await login(users[1]);
  const hours=Object.fromEntries([2,3,4,5,6].map(i=>[i,[['10:00','12:30'],['15:20','20:00']]]));hours[1]=[['15:00','20:00']];hours[7]=[];rpc('create_followup_policy',{weekly_hours:hours,attempt_offsets:[0,0,1,3,5]},users[0].id);
- // Outcome-led call: the parent answered and needs time. The browser sends a preset;
- // PostgreSQL resolves it through the Casablanca policy and derives the stage.
  const lead=intake(run+' réflexion');await open(lead);
- assert.equal(await page.getByRole('dialog').getByRole('button',{name:/Réattribuer/}).count(),0,'no foreground task reassignment');
- assert.equal(await page.getByRole('dialog').getByRole('button',{name:/^Responsable du prospect/}).count(),0,'owner label is not a reassignment control');
- await page.getByRole('dialog').getByText('Nouveau',{exact:true}).first().waitFor();
- // Stale hidden selection: an Other step chosen, then the call outcome changed.
- await page.getByRole('button',{name:'Appel',exact:true}).click();
- await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
- await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('other_step');
- assert.notEqual(await dialog().getByLabel('Note',{exact:true}).getAttribute('required'),null,'visible Other step requires an explanation');
- await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('no_answer');
- assert.equal(await dialog().getByLabel('Résultat de l’échange',{exact:true}).count(),0);
- assert.equal(await dialog().getByLabel('Note',{exact:true}).getAttribute('required'),null,'hidden other_step no longer requires a note');
- await save();await done();assert.equal(detail(lead).failed_attempts,1);assert.equal(detail(lead).status,'CONTACTING');
- console.log('PASS stale hidden other_step selection cannot block a failed-call record');
- await page.getByRole('button',{name:'Appel',exact:true}).click();
- await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
- await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('considering');
- await dialog().getByText(/Étape après enregistrement : En discussion\./).waitFor();
- assert.equal(await dialog().getByLabel('Note',{exact:true}).getAttribute('required'),null,'routine prose optional');
- assert.equal(await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).count(),0,'a preset needs no browser-computed time');
- await dialog().getByLabel('Échéance du rappel',{exact:true}).selectOption('in_2_days');
- const calls=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_record_conversation_decision'))calls.push(request.postDataJSON());});
- await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\./).waitFor();
- assert.equal(calls.length,1);const sent=calls[0].p_data;
- assert.equal(sent.decision,'considering');assert.equal(sent.channel,'phone');assert.equal(sent.next_task.due_preset,'in_2_days');assert.equal(sent.next_task.schedule_kind,'reminder');
- assert(!('due_at' in sent.next_task)&&!('note' in sent)&&!('followup_reason' in sent.next_task),'no browser time, prose or reason marker');
- await dialog().getByText('Prochaine action · Rappel · En réflexion',{exact:true}).waitFor();await dialog().getByText('Rappel interne',{exact:true}).waitFor();
- await done();
- let saved=detail(lead);assert.equal(saved.status,'ENGAGED');assert.equal(saved.next_task.followup_reason,'considering');assert.equal(saved.next_task.schedule_kind,'reminder');
- assert.equal(sql(`select t.due_at=crm_security.next_window(l.followup_policy_id,((now() at time zone public.centre_utc_offset())::date+2)::timestamp at time zone public.centre_utc_offset()) from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.id=${quote(saved.next_task.id)}`),'t','server resolved the preset against the Casablanca policy');
- const nextSection=page.getByRole('dialog').first().locator('section').filter({has:page.getByText('Prochaine action',{exact:true})});
- await nextSection.getByText('Rappel · En réflexion',{exact:true}).waitFor();await nextSection.getByText('Rappel interne',{exact:true}).waitFor();
- await page.getByRole('dialog').first().getByText('En discussion',{exact:true}).first().waitFor();
- console.log('PASS outcome-led call: En réflexion reminder resolved by the server, no prose, stage derived, no foreground reassignment');
- // In-person agreed visit qualifies; the visit is always an agreed appointment.
- await more('Conversation au centre / autre canal');
- await dialog().getByLabel('Canal de la conversation',{exact:true}).selectOption('in_person');
- await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('center_visit');
- await dialog().locator('p').filter({hasText:/^Rendez-vous convenu$/}).waitFor();
- assert.equal(await dialog().getByLabel('Échéance du rappel',{exact:true}).count(),0,'appointments have no reminder presets');
- await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);await save();await done();
- saved=detail(lead);assert.equal(saved.status,'QUALIFIED');assert(saved.open_tasks.some(t=>t.task_type==='center_visit'&&t.schedule_kind==='appointment'));
+ assert.equal(await drawer().getByRole('button',{name:/Réattribuer/}).count(),0,'no foreground action reassignment');
+ assert.equal(await drawer().getByRole('button',{name:/^Responsable/}).count(),0,'owner label is not a reassignment control');
+ await drawer().getByText('Nouveau',{exact:true}).first().waitFor();
+ // Stale hidden selection: a closure picked after « On a parlé », then the result changed.
+ await exchange('Téléphone','On a parlé');await pick('Pas intéressé');await dialog().getByLabel('Motif',{exact:true}).waitFor();
+ await dialog().getByLabel('Pas de réponse',{exact:true}).check();assert.equal(await dialog().getByLabel('Motif',{exact:true}).count(),0,'the picker and its reason are gone');
+ const logged=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_log_exchange'))logged.push(request.postDataJSON().p_data);});
+ await submit();await toast('Pas de réponse enregistré');await closed();
+ assert.deepEqual(Object.keys(logged.at(-1)).sort(),['channel','expected_version','lead_id','result'],'no hidden next or close sent');
+ let saved=await settle(lead,d=>d.failed_attempts===1);assert.equal(saved.status,'CONTACTING');
+ console.log('PASS stale hidden closure choice cannot block a failed-call record');
+ // Outcome-led: the parent needs time. « En attente du prospect » sends no browser time;
+ // PostgreSQL sets the relance (today + 5 days on the centre clock).
+ await exchange('Téléphone','On a parlé');await pick('En attente du prospect');await submit();await toast('Échange enregistré');await closed();
+ let sent=logged.at(-1);assert.equal(sent.channel,'phone');assert.equal(sent.result,'spoke');assert.deepEqual(sent.next,{task_type:'awaiting_prospect'});assert(!('note' in sent),'no prose');
+ saved=await settle(lead,d=>d.status==='ENGAGED');assert.equal(saved.next_action.task_type,'awaiting_prospect');
+ assert.equal(sql(`select (due_at at time zone public.centre_utc_offset())::date-(now() at time zone public.centre_utc_offset())::date from public.crm_tasks where id=${quote(saved.next_action.id)}`),'5','server set the relance five centre days ahead');
+ await drawer().getByText('En discussion',{exact:true}).first().waitFor();
+ // « Changer » → team reminder « Dans 2 jours »: a preset, resolved by the server.
+ const changed=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_change_next_action'))changed.push(request.postDataJSON().p_data);});
+ await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappel pour l’équipe');assert.equal(await dialog().getByLabel('Date',{exact:true}).count(),0,'a preset needs no browser-computed time');
+ await dialog().getByLabel('Quand',{exact:true}).selectOption('in_2_days');await submit();await toast('Prochaine action enregistrée');await closed();
+ sent=changed.at(-1);assert.equal(sent.next.due_preset,'in_2_days');assert.equal(sent.next.schedule_kind,'reminder');assert(!('due_at' in sent.next),'no browser time');
+ saved=await settle(lead,d=>d.next_action?.schedule_kind==='reminder');
+ assert.equal(sql(`select (due_at at time zone public.centre_utc_offset())::date-(now() at time zone public.centre_utc_offset())::date from public.crm_tasks where id=${quote(saved.next_action.id)}`),'2','server resolved « Dans 2 jours » on the centre clock');
+ await drawer().getByText('Rappel interne',{exact:true}).waitFor();
+ console.log('PASS outcome-led call: awaiting relance and team reminder resolved by the server, no prose, stage derived, no foreground reassignment');
+ // In person, an agreed visit qualifies (OD-11); the visit is always an agreed appointment.
+ await exchange('Au centre','On a parlé');await pick('Rendez-vous au centre');assert.equal(await dialog().getByLabel('Quand',{exact:true}).count(),0,'appointments have no presets');
+ await slot(tuesday,'16:05');await submit();await toast('Échange enregistré');await closed();
+ saved=await settle(lead,d=>d.status==='QUALIFIED');assert.equal(saved.next_action.task_type,'center_visit');assert.equal(saved.open_tasks.length,1);
  assert.equal(sql(`select count(*) from public.crm_activities where lead_id=${quote(lead)} and event_type='conversation_recorded' and channel='in_person' and body is null`),'1');
- // Qualified + needs time stays QUALIFIED with En réflexion metadata, never a new stage.
- await page.getByRole('button',{name:'WhatsApp',exact:true}).click();await dialog().getByLabel('Que souhaitez-vous enregistrer ?').selectOption('meaningful_whatsapp_conversation');
- const results=await dialog().getByLabel('Résultat de l’échange',{exact:true}).locator('option').allTextContents();
- assert(!results.includes('Souhaite visiter le centre')&&results.includes('Intéressé, a besoin de réfléchir'),'a qualified lead is not re-qualified');
- await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('considering');await dialog().getByText(/Étape après enregistrement : Qualifié\./).waitFor();
- await dialog().getByLabel('Échéance du rappel',{exact:true}).selectOption('next_week');await save();await done();
- saved=detail(lead);assert.equal(saved.status,'QUALIFIED');
- assert(saved.open_tasks.some(t=>t.task_type==='whatsapp_followup'&&t.followup_reason==='considering'&&t.schedule_kind==='reminder'),'WhatsApp En réflexion reminder');
- console.log('PASS agreed visit is an appointment; QUALIFIED + needs time stays QUALIFIED with En réflexion metadata');
- // Task completion matches the server's 200-character outcome contract.
- await nextSection.getByRole('button',{name:'Marquer comme fait',exact:true}).click();
- const outcome=dialog().getByLabel('Résultat de l’action',{exact:true});assert.equal(await outcome.getAttribute('maxlength'),'200');
- await outcome.fill('x'.repeat(250));assert.equal((await outcome.inputValue()).length,200);await dialog().getByText('200 / 200 caractères',{exact:true}).waitFor();
- await save();await done();
- assert.equal(sql(`select length(body) from public.crm_activities where lead_id=${quote(lead)} and event_type='task_completed' and actor_id=${quote(actor)} order by occurred_at desc,id desc limit 1`),'200');
- console.log('PASS completion outcome capped at 200 characters and accepted by the server');
- // An agreed callback keeps its exact time: outside calling hours it is rejected,
- // and it replaces the open generic follow-up while operational tasks remain.
- const lunch=future,agreed=future.slice(0,10)+'T16:00';
- await page.goto(app+`/crm/leads?lead=${lead}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();
- const genericBefore=detail(lead).open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type));assert.equal(genericBefore.length,1);
- await page.getByRole('button',{name:'Appel',exact:true}).click();
- await dialog().getByLabel('Résultat de l’appel',{exact:true}).selectOption('spoke_with_contact');
- await dialog().getByLabel('Résultat de l’échange',{exact:true}).selectOption('callback');
- assert(await dialog().getByLabel('Rendez-vous convenu',{exact:true}).isChecked(),'a requested callback defaults to an agreed appointment');
- await dialog().getByText(/garde son heure exacte/).waitFor();
- await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(lunch);
- await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').filter({hasText:'hors des horaires d’appel'}).waitFor();
- assert.deepEqual(detail(lead).open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type)).map(t=>t.id),genericBefore.map(t=>t.id),'rejected agreed time changes nothing');
- await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(agreed);await save();await done();
- saved=detail(lead);const generic=saved.open_tasks.filter(t=>['callback','whatsapp_followup'].includes(t.task_type));
- assert.equal(generic.length,1);assert.equal(generic[0].schedule_kind,'appointment');assert.notEqual(generic[0].id,genericBefore[0].id,'latest decision replaced the previous follow-up');
- assert.equal(sql(`select due_at=(${quote(agreed)}::timestamp at time zone public.centre_utc_offset()) from public.crm_tasks where id=${quote(generic[0].id)}`),'t','agreed callback kept its exact time');
- assert(saved.open_tasks.some(t=>t.task_type==='center_visit'),'center visit preserved');
- console.log('PASS agreed callback outside hours rejected, exact compatible time kept, previous follow-up replaced, visit preserved');
+ // QUALIFIED + a later exchange that keeps the appointment stays QUALIFIED, the same action.
+ const visitId=saved.next_action.id;await exchange('WhatsApp','On a échangé');assert(await dialog().getByLabel('Garder l’action actuelle',{exact:true}).count(),'keep is offered while an action exists');await pick('Garder l’action actuelle');await submit();await toast('Échange enregistré');await closed();
+ saved=await settle(lead,d=>sql(`select count(*) from public.crm_activities where lead_id=${quote(lead)} and channel='whatsapp'`)!=='0');assert.equal(saved.status,'QUALIFIED');assert.equal(saved.next_action.id,visitId,'keep leaves the appointment untouched');
+ console.log('PASS agreed visit is an appointment that qualifies; a later kept exchange stays QUALIFIED on the same action');
+ // An agreed callback replaces the appointment only when « Remplace le rendez-vous » is ticked,
+ // and only times inside the calling hours are offered; the time is kept exactly.
+ await drawer().getByRole('button',{name:'Changer',exact:true}).click();await pick('Rappel convenu');const times=await slot(tuesday);
+ const offered=await times.locator('option').evaluateAll(options=>options.map(o=>o.value).filter(Boolean));assert(!offered.includes('13:00')&&offered.includes('16:05'),'lunch not offered');await times.selectOption('16:05');
+ await submit();await dialog().getByRole('alert').filter({hasText:'Cochez « Remplace » pour changer le rendez-vous.'}).waitFor();assert.equal(detail(lead).next_action.id,visitId,'nothing written without the confirmation');
+ await dialog().getByLabel('Remplace le rendez-vous',{exact:true}).check();await submit();await toast('Prochaine action enregistrée');await closed();
+ saved=await settle(lead,d=>d.next_action?.task_type==='callback');assert.equal(saved.open_tasks.length,1,'the appointment was replaced, not duplicated');assert.equal(saved.next_action.schedule_kind,'appointment');assert.equal(saved.status,'QUALIFIED');
+ assert.equal(sql(`select due_at=(${quote(tuesday+'T16:05')}::timestamp at time zone public.centre_utc_offset()) from public.crm_tasks where id=${quote(saved.next_action.id)}`),'t','agreed callback kept its exact time');
+ assert.equal(sql(`select status from public.crm_tasks where id=${quote(visitId)}`),'cancelled');
+ console.log('PASS agreed callback inside the hours only, replacement confirmed explicitly, exact time kept, appointment replaced');
  // Presentation labels; stored values unchanged.
  await page.goto(app+'/crm/leads');await page.getByRole('region',{name:'Contact en cours'}).waitFor();await page.getByRole('region',{name:'Inscription confirmée'}).waitFor();
- // Work Queue: agreed appointment labelled, reassignment moved to the row's overflow menu.
- const visit=detail(lead).open_tasks.find(t=>t.task_type==='center_visit');
- await page.goto(app+'/crm/today?bucket=upcoming&assignee=all');const row=page.locator(`[data-task-id="${visit.id}"]`);await row.waitFor();
+ // Tâches: the agreed callback is labelled; reassignment lives in the row's overflow menu.
+ const callback=detail(lead).next_action;
+ await page.goto(app+'/crm/today?bucket=upcoming&assignee=all');const row=page.locator(`[data-task-id="${callback.id}"]`);await row.waitFor();
  await row.getByText('Rendez-vous convenu',{exact:true}).waitFor();
  assert.equal(await row.getByRole('button',{name:/Réattribuer/}).count(),0,'no foreground reassignment in the queue');
  await row.getByRole('button',{name:/^Plus d’options/}).click();await page.getByRole('menuitem',{name:'Réattribuer l’action',exact:true}).click();
- await dialog().getByLabel('Responsable de l’action',{exact:true}).selectOption(users[2].id);await save();await done();
- assert.equal(sql(`select assigned_to from public.crm_tasks where id=${quote(visit.id)}`),users[2].id,'reassignment still available from the overflow menu');
- assert.equal(detail(lead).owner_id,null,'task reassignment leaves the lead owner unchanged');
+ await dialog().getByLabel('Responsable de l’action',{exact:true}).selectOption(users[2].id);await submit();await toast('Enregistré');
+ await settle(lead,()=>sql(`select assigned_to from public.crm_tasks where id=${quote(callback.id)}`)===users[2].id);
+ assert.equal(detail(lead).owner_id,actor,'action reassignment leaves the owner (the creator, §4.6) unchanged');
  assert.deepEqual(pageErrors,[]);
  console.log('PASS Contact en cours / Inscription confirmée labels; queue appointment label; reassignment intact but secondary; no browser errors');
 } catch(error) {

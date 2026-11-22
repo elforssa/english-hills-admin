@@ -34,7 +34,7 @@ function HistoryItem({ item }) {
   return <li><p className="text-xs text-muted-foreground">{dateLabel(item.occurred_at)}{item.actor_name && <span className="ml-2">{item.actor_name}</span>}</p><p className="mt-1 text-sm font-medium">{title}{item.outcome && !item.is_primary && !item.event_type.startsWith('call_') ? ` · ${OUTCOMES[item.outcome] || LOST[item.outcome] || NOT_QUALIFIED[item.outcome] || 'Mise à jour'}` : ''}</p>{item.summary && <p className="mt-1 break-words text-sm text-slate-700">{item.summary}</p>}{item.body && <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">{activityBody(item.body)}</p>}{item.secondary_count > 0 && <p className="mt-1 text-xs text-muted-foreground">{item.secondary_count} détail{item.secondary_count > 1 ? 's' : ''} système</p>}</li>;
 }
 // Routes from lists and the board onto the two next-action forms (§4.9).
-const ROUTES = { call: ['exchange', { channel: 'phone' }], conversation: ['exchange', {}], qualify: ['exchange', { result: 'spoke' }], exchange: ['exchange', {}],
+const ROUTES = { call: ['exchange', { channel: 'phone' }], no_answer: ['exchange', { channel: 'phone', result: 'no_answer' }], conversation: ['exchange', {}], qualify: ['exchange', { result: 'spoke' }], exchange: ['exchange', {}],
   complete: ['change'], reschedule: ['change'], cancel: ['change'], schedule: ['change'], change: ['change'] };
 const routed = name => ROUTES[name] ? { name: ROUTES[name][0], initial: ROUTES[name][1] || {} } : { name, initial: {} };
 export default function LeadDetailSheet({

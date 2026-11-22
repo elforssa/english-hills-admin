@@ -22,13 +22,16 @@ export function useCrmCommand() {
     setError(null);
     try {
       const signature = JSON.stringify([command, intent]);
-      if (request.current?.signature !== signature) request.current = { signature, key: crypto.randomUUID(), command, data: buildData() };
+      // buildData() throws the form's own validation before any request exists.
+      if (request.current?.signature !== signature) { const data = buildData(); request.current = { signature, key: crypto.randomUUID(), command, data }; }
       const saved = await crmRpc(request.current.command, { p_request_key: request.current.key, p_data: request.current.data });
       request.current = null;
       await refresh();
       return saved;
     } catch (err) {
-      if (isRecordConflict(err) || ['22023', '42501', '23514'].includes(err?.code) || (err instanceof Error && !err.code)) request.current = null;
+      // Only a definitive refusal ends the submission. A transport failure (no code, or a
+      // gateway body) keeps the request so the retry resends the same key and payload.
+      if (isRecordConflict(err) || ['22023', '42501', '23514'].includes(err?.code)) request.current = null;
       setError(err);
       return null;
     } finally {

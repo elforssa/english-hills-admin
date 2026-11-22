@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import FilterBar from '@/components/operational/FilterBar';
 import FormField from '@/components/operational/FormField';
 import CursorPager from '@/components/operational/CursorPager';
@@ -10,11 +11,12 @@ import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
 import { MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { SCHEDULE_KINDS, UUID, WORK_BUCKETS, staffLabel } from '@/lib/crm/presentation.mjs';
+import { CALL_TASKS, SCHEDULE_KINDS, UUID, WORK_BUCKETS, actionErrorMessage, staffLabel } from '@/lib/crm/presentation.mjs';
 import { pluralFr } from '@/lib/ui/pluralFr.mjs';
 import AppointmentOutcome from './AppointmentOutcome';
 import { LifecycleBadge, ReadState } from './CrmShared';
 import CrmIntakeReview from './CrmIntakeReview';
+import { useCrmCommand } from './useCrmCommand';
 
 const buckets = WORK_BUCKETS;
 const MODES = ['all', 'me', 'unassigned', 'me_or_unassigned'];
@@ -24,6 +26,21 @@ function ownerArgs(value, prefix) {
   const mode = prefix === 'owner' && value === 'me_or_unassigned' ? 'all' : MODES.includes(value) ? value : 'staff';
   return { [`p_${prefix}_mode`]: mode, [`p_${prefix}`]: UUID.test(value) ? value : null };
 }
+// « Pas de réponse » in one tap from the Tâches row (RWR-r5 §4.9, OD-20; day script « appel sans
+// réponse »: 1 action). Inside the 3-hour gap the server refuses; the exchange form then opens
+// with the result kept, showing the gap and « Tentative réelle (hors délai) » (invariant 15).
+function RowNoAnswer({ lead, action, onGap }) {
+  const tap = useCrmCommand();
+  const gap = tap.error?.hint === 'crm_exchange.attempt_gap';
+  useEffect(() => { if (gap) { tap.clearError(); onGap(); } }, [gap]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function run() {
+    const saved = await tap.run('crm_log_exchange', () => ({ lead_id: lead.id, expected_version: lead.version, channel: 'phone', result: 'no_answer' }), [lead.id, action.id, 'no_answer']);
+    if (saved) toast.success('Pas de réponse enregistré');
+  }
+  return <><Button size="sm" variant="outline" className="min-h-9" disabled={tap.busy} onClick={run}>{tap.busy ? 'Enregistrement…' : 'Pas de réponse'}</Button>
+    {tap.error && !gap && <p role="alert" className="basis-full text-xs text-red-800">{actionErrorMessage(tap.error)}</p>}</>;
+}
+
 export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset }) {
   const bucket = WORK_BUCKETS[params.get('bucket')] ? params.get('bucket') : 'today', assignee = params.get('assignee') || 'me_or_unassigned', owner = params.get('owner') || 'all';
   const [staffOffset, setStaffOffset] = useState(0), [pages, setPages] = useState({});
@@ -59,8 +76,8 @@ export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset
     <div className="overflow-hidden rounded-lg border bg-white"><ReadState query={query} available={Array.isArray(query.data?.rows)} filtered={assignee !== 'all' || owner !== 'all'} onReset={() => { setPages({}); onReset(); }} empty="Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.">{Array.isArray(query.data?.rows) && query.data.rows.length ? query.data.rows.map(row=>{ const action=row.next_action || row; return <article data-testid="work-row" data-task-id={row.id} data-lead-id={row.lead_id} key={row.id} className="border-b border-slate-100 px-4 py-3 last:border-0">
       <div className="flex flex-wrap items-start justify-between gap-2"><p className="font-semibold">{action.label}{SCHEDULE_KINDS[row.schedule_kind] && <span className="ml-2 text-xs font-medium text-blue-900">{SCHEDULE_KINDS[row.schedule_kind]}</span>}</p><p className="flex flex-wrap gap-1 text-xs">{action.overdue && <span className="rounded bg-red-50 px-1.5 font-medium text-red-800">En retard</span>}{action.relance_due && <span className="rounded bg-amber-50 px-1.5 font-medium text-amber-900">À relancer</span>}{row.review_flag === 'd1_review' && <span className="rounded bg-slate-100 px-1.5 text-slate-700">À vérifier</span>}</p></div>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2"><button className="min-w-0 text-left" onClick={()=>onOpen(row.lead.id)}><span className="block break-words text-sm font-medium">{row.lead.contact_name}{row.siblings > 1 && <span className="ml-2 text-xs font-normal text-slate-600">{pluralFr(row.siblings, 'apprenant')}</span>}</span><span className="block break-words operational-secondary">{row.lead.learner_name || 'Apprenant à préciser'} · {programmeLabel(row.lead.program)}</span></button><LifecycleBadge status={row.lead.status}/></div>
-      <p className="mt-1 text-xs text-slate-500">Responsable : {row.assigned_to ? row.assignee_display_label || 'Responsable indisponible' : 'Non attribué'}{row.lead.failed_attempts > 0 ? ` · ${pluralFr(row.lead.failed_attempts, 'appel infructueux', 'appels infructueux')}` : ''}</p>
-      <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" onClick={()=>onAction(row.lead.id,'exchange')}>Noter un échange</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onAction(row.lead.id,'change')}>Changer</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onOpen(row.lead.id)}>Voir le prospect</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="ghost" className="min-h-9 px-2" aria-label={`Plus d’options · ${row.lead.contact_name}`}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={()=>onAction(row.lead.id,'reassign',row)}>Réattribuer l’action</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+      <p className="mt-1 text-xs text-slate-500">Responsable de la tâche : {row.assigned_to ? row.assignee_display_label || 'Responsable indisponible' : 'Non attribuée'} · Responsable du prospect : {row.lead.owner_id ? row.lead.owner_display_label || 'Responsable indisponible' : 'Non attribué'}{row.lead.failed_attempts > 0 ? ` · ${pluralFr(row.lead.failed_attempts, 'appel infructueux', 'appels infructueux')}` : ''}</p>
+      <div className="mt-2 flex flex-wrap gap-2">{CALL_TASKS.includes(action.task_type) && <RowNoAnswer lead={row.lead} action={action} onGap={()=>onAction(row.lead.id,'no_answer')} />}<Button size="sm" onClick={()=>onAction(row.lead.id,'exchange')}>Noter un échange</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onAction(row.lead.id,'change')}>Changer</Button><Button size="sm" variant="ghost" className="min-h-9" onClick={()=>onOpen(row.lead.id)}>Voir le prospect</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="ghost" className="min-h-9 px-2" aria-label={`Plus d’options · ${row.lead.contact_name}`}><MoreHorizontal size={16} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={()=>onAction(row.lead.id,'reassign',row)}>Réattribuer l’action</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
       {action.task_type === 'center_visit' && <div className="mt-2"><AppointmentOutcome compact leadId={row.lead.id} version={row.lead.version} action={action} /></div>}
     </article>; }) : null}</ReadState></div>
     <CursorPager hasPrevious={cursors.length>1} hasMore={query.data?.has_more} pending={query.isFetching} onPrevious={()=>setPages(x=>({...x,[pageKey]:cursors.slice(0,-1)}))} onNext={()=>setPages(x=>({...x,[pageKey]:[...cursors,query.data.next_cursor]}))}/>

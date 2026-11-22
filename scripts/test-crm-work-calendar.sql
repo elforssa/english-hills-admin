@@ -66,7 +66,7 @@ begin
  perform pg_temp.ok((select count(distinct task_type)=8 from public.crm_tasks where status='open'),'eight task types in fixture');
  -- Exact fixed shape, no technical attribution, notes, scores or finance.
  perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','next_action','review_flag','schedule_kind','scheduled_end_at','siblings','task_type','version'],'fixed task projection');
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0->'lead')k)=array['contact_id','contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','phone','program','status','version'],'fixed lead projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0->'lead')k)=array['contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed lead projection');
  r:=public.crm_get_admissions_calendar(day,day+7);i:=0;
  loop
   perform pg_temp.ok(jsonb_array_length(r->'rows')<=100,'bounded agenda');

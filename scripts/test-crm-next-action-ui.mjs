@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { pluralFr } from '../src/lib/ui/pluralFr.mjs';
 import {
-  WORK_BUCKETS, NEXT_KINDS, CALL_RESULTS, STALE_MESSAGE, exchangeResults, replaceRules, slotTimes,
+  WORK_BUCKETS, NEXT_KINDS, CALL_RESULTS, STALE_MESSAGE, exchangeResults, prefillFromAction, replaceRules, slotTimes, firstSlotDate,
   nextActionPayload, actionErrorMessage, attemptGapLabel, isCallAction, taskTitle
 } from '../src/lib/crm/presentation.mjs';
 import { draftFrom, hoursDraftProblem, hoursPayload } from '../src/lib/crm/centreHours.mjs';
@@ -27,11 +27,26 @@ const hours = {
   closed_dates: ['2026-11-24']
 };
 assert.deepEqual(slotTimes(hours, 'calling', '2026-11-23'), ['15:00', '15:15', '15:30', '15:45']); // a Monday
+// « Changer » opens on the current agreed time; reminders and calls start empty.
+assert.deepEqual(prefillFromAction({ task_type: 'callback', schedule_kind: 'appointment', due_at: '2026-11-25T16:05:00Z' }), { kind: 'callback', date: '2026-11-25', time: '16:05' });
+assert.deepEqual(prefillFromAction({ task_type: 'center_visit', due_at: '2026-11-25T10:30:00Z', placement_test_id: 'x' }), { kind: 'center_visit', date: '2026-11-25', time: '10:30', withTest: true });
+assert.deepEqual(prefillFromAction({ task_type: 'callback', schedule_kind: 'reminder', due_at: '2026-11-25T09:00:00Z' }), {});
+assert.deepEqual(prefillFromAction({ task_type: 'first_contact', due_at: '2026-11-25T09:00:00Z' }), {});
+assert.deepEqual(prefillFromAction(null), {});
 assert.deepEqual(slotTimes(hours, 'opening', '2026-11-23'), ['14:00', '14:15', '14:30', '14:45']);
 assert.deepEqual(slotTimes(hours, 'calling', '2026-11-24'), [], 'closed date has no slot');
 assert.deepEqual(slotTimes(hours, 'calling', '2026-11-22'), [], 'Sunday closed');
 assert.deepEqual(slotTimes(hours, 'calling', '2026-11-23', { now: { date: '2026-11-23', time: '15:20' } }), ['15:30', '15:45']);
 assert.deepEqual(slotTimes(hours, 'calling', '2026-12-01'), ['10:00', '10:15', '15:20', '15:35', '15:50']); // a Tuesday
+// An agreed time off the grid stays offered inside the hours, never outside them or in the past.
+assert.deepEqual(slotTimes(hours, 'calling', '2026-12-01', { keep: '15:40' }), ['10:00', '10:15', '15:20', '15:35', '15:40', '15:50']);
+assert.deepEqual(slotTimes(hours, 'calling', '2026-12-01', { keep: '13:00' }), ['10:00', '10:15', '15:20', '15:35', '15:50'], 'lunch is never kept');
+assert.deepEqual(slotTimes(hours, 'calling', '2026-11-23', { keep: '15:10', now: { date: '2026-11-23', time: '15:20' } }), ['15:30', '15:45'], 'a past time is never kept');
+assert.deepEqual(slotTimes(hours, 'calling', '2026-11-24', { keep: '15:40' }), [], 'a closed date keeps nothing');
+// The create form proposes the first day with a free slot.
+assert.equal(firstSlotDate(hours, 'calling', '2026-11-22'), '2026-11-23');
+assert.equal(firstSlotDate(hours, 'calling', '2026-11-23', { date: '2026-11-23', time: '15:50' }), '2026-11-30', 'past slots, a closed Tuesday and days without hours are skipped');
+assert.equal(firstSlotDate(null, 'calling', '2026-11-23'), '');
 
 // Payloads.
 const visit = { id: 'v1', task_type: 'center_visit' };
