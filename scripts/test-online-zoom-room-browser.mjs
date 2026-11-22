@@ -150,6 +150,18 @@ try {
   const hint = await page.getByTestId('room-audio-hint').innerText().catch(() => '');
   pass('pre-join screen: French, display label locked, phone hint shown', (await nameInput.inputValue()) === 'Amal B.' && await nameInput.isDisabled()
     && hint === 'Touchez l’icône casque pour activer le son, puis le micro et la caméra.', { name: await nameInput.inputValue(), locked: await nameInput.isDisabled(), hint });
+  // Review of #210, N2: in the built application (its stylesheet order is not the room
+  // harness's), on this 390 × 844 phone, the join button is wholly on the screen and
+  // inside the room without any scroll, and a tap at its centre reaches it.
+  const fit = await page.evaluate(() => {
+    const join = document.querySelector('#uikit-preview-join-button'), room = document.querySelector('[data-testid="zoom-room"]'), card = document.querySelector('#uikit-preview-title')?.parentElement;
+    if (!join || !room || !card) return null;
+    const b = join.getBoundingClientRect(), r = room.getBoundingClientRect(), at = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    return { join: { top: Math.round(b.top), bottom: Math.round(b.bottom) }, room: { top: Math.round(r.top), bottom: Math.round(r.bottom) }, screen: innerHeight, pageScroll: document.documentElement.scrollHeight,
+      cardScrollTop: Math.round(card.scrollTop + card.parentElement.scrollTop), reached: at === join || join.contains(at) };
+  });
+  pass('pre-join screen: « Rejoindre le cours » is on the screen and inside the room without any scroll (built application, 390 × 844)',
+    !!fit && fit.join.top >= fit.room.top && fit.join.bottom <= fit.room.bottom + 1 && fit.join.bottom <= fit.screen && fit.pageScroll <= fit.screen + 1 && fit.cardScrollTop === 0 && fit.reached, fit || {});
   await prejoin.click();
 
   // The toolkit joins: a websocket to a zoom.us host opens and the French interface appears.
