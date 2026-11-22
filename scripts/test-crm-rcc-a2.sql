@@ -348,24 +348,65 @@ do $$ declare l uuid; d jsonb; r jsonb; t public.crm_tasks%rowtype; target times
  perform pg_temp.ok((select count(*)=2 from public.crm_activities where source_key in('enrollment-duplicate:'||e||':'||a,'enrollment-duplicate:'||e||':'||c)),'duplicates cancelled with today''s source keys');
 end $$;
 select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept and earliest-retained results';
--- RWR-r5 review of #208 (important 7): linking a legacy unconfirmed enrollment replaces
--- the appointment by « Finaliser l'inscription » and keeps the appointment's planned
--- test (§4.8, enrolment start row: test « kept »).
-do $$ declare l uuid; k public.crm_tasks%rowtype; p uuid; begin
+-- RWR-r5 review of #208 (important 7) and re-review (owner decision 1): linking a legacy
+-- unconfirmed enrollment replaces the appointment by « Finaliser l'inscription », which
+-- carries the appointment's planned test (a real link). Moving the enrolment action to
+-- another enrolment action keeps the link; replacing it by anything else, or closing the
+-- prospect, cancels the test through the existing clean-up.
+create function pg_temp.kept_test_lead(out l uuid,out k uuid,out p uuid,out f uuid) language plpgsql as $$ begin
  perform pg_temp.actor(3);
  l:=pg_temp.lead();
  perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','with_test',true,
   'due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '3 days'))));
- select * into k from public.crm_tasks where id=crm_security.next_action_id(l);
- p:=k.placement_test_id;
- perform pg_temp.ok(k.task_type='center_visit' and p is not null,'fixture: an appointment with its test');
+ select id,placement_test_id into k,p from public.crm_tasks where id=crm_security.next_action_id(l);
+ perform pg_temp.ok((select task_type='center_visit' from public.crm_tasks where id=k) and p is not null,'fixture: an appointment with its test');
  perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ f:=crm_security.next_action_id(l);
+end $$;
+do $$ declare l uuid; k uuid; p uuid; f uuid; g uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
  perform pg_temp.ok((select status<>'CONVERTED' from public.crm_leads where id=l),'a legacy unconfirmed link does not convert');
  perform pg_temp.ok((select count(*)=1 and bool_and(task_type='enrollment_followup') from public.crm_tasks where lead_id=l and status='open'),'« Finaliser l''inscription » is the one next action');
- perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=k.id),'the appointment is replaced');
+ perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=k),'the appointment is replaced');
  perform pg_temp.ok((select status='Planifié' and cancelled_at is null from public.placement_tests where id=p),'its planned test is kept');
+ perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f),'« Finaliser l''inscription » carries the kept test (real link)');
+ perform pg_temp.ok((select count(*)=0 from public.placement_tests x where x.crm_lead_id=l and x.status='Planifié'
+  and not exists(select 1 from public.crm_tasks t where t.placement_test_id=x.id and t.status='open' and t.task_type in ('center_visit','enrollment_followup'))),'Q29 shape: none');
+ -- « Changer » to another « Finaliser l'inscription » moves the link with it.
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',f,'next',jsonb_build_object('task_type','enrollment_followup','due_preset','in_2_days')));
+ g:=crm_security.next_action_id(l);
+ perform pg_temp.ok(g<>f and (select task_type='enrollment_followup' and placement_test_id=p from public.crm_tasks where id=g),'enrolment → enrolment carries the test');
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'the test stays planned');
+ -- Replacing the enrolment action by a callback (with its reason) cancels the linked test.
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',g,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow',
+  'replace_action_id',g,'cancel_enrollment_reason','Le contact préfère réfléchir')));
+ perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=g),'enrolment action replaced');
+ perform pg_temp.ok((select status='Annulé' and cancelled_at is not null from public.placement_tests where id=p),'replacing the enrolment action cancels its test');
+ perform pg_temp.ok((select count(*)=0 from public.placement_tests where crm_lead_id=l and status='Planifié'),'no orphan planned test');
 end $$;
-select 'PASS legacy enrolment link keeps the replaced appointment''s test';
+-- Closing the prospect while « Finaliser l'inscription » carries the test cancels it too.
+do $$ declare l uuid; k uuid; p uuid; f uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ perform pg_temp.act('close_prospect',l,'{"status":"LOST","reason":"price"}');
+ perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=p),'closing cancels the carried test');
+end $$;
+-- An open « Finaliser l'inscription » already exists (kept by the enrolment start) beside a
+-- legacy duplicate appointment with a planned test: the kept action takes the test.
+do $$ declare l uuid; f uuid; v uuid; p uuid; begin
+ perform pg_temp.actor(3);
+ l:=pg_temp.lead('enrollment_followup','enrollment');
+ select id into f from public.crm_tasks where lead_id=l and status='open' and task_type='enrollment_followup';
+ set local session_replication_role=replica;
+ insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
+ values('A2 learner',(now() at time zone public.centre_utc_offset())::date+3,'11:00','Planifié',l,'Fixture') returning id into p;
+ insert into public.crm_tasks(lead_id,task_type,due_at,schedule_kind,placement_test_id,source_kind,source_key)
+ values(l,'center_visit',now()+interval '3 days','appointment',p,'manual','a2-kept-dup:'||l) returning id into v;
+ set local session_replication_role=origin;
+ perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ perform pg_temp.ok(crm_security.next_action_id(l)=f and (select status='cancelled' from public.crm_tasks where id=v),'the existing enrolment action is kept, the duplicate appointment closed');
+ perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f) and (select status='Planifié' from public.placement_tests where id=p),'the kept enrolment action takes the duplicate''s planned test');
+end $$;
+select 'PASS legacy enrolment link: « Finaliser l''inscription » carries the kept test; replacing it or closing cancels the test';
 
 -- Owner and policy reasons, with no partial writes.
 -- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.

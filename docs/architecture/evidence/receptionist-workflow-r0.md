@@ -362,6 +362,8 @@ read_only=on  groups=1  sample=["e847bf1a-7ad5-4454-a70c-aeddcac16058"]
 read_only=on  tests=0  sample=null
 ```
 
+Run with the original predicate (open appointment only). Q29 was amended on 2026-11-22 to also accept the open enrolment action (owner decision, [plan implementation record](../plans/receptionist-workflow.md#implementation-record)); the amended query only exempts more rows, so this 0 stands.
+
 #### Q30 — active prospects with no open action, by D1 rule
 
 ```text

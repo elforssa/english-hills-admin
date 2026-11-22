@@ -212,7 +212,13 @@ try {
   assert.equal(sql(`select owner_id from public.crm_leads where id=${q(assignLead)}`), director.id, 'the assignment applies after the reload');
   const reopenLead = intake(reception.id, 'Forms stale reopen');
   rpc(reception.id, 'close_prospect', { lead_id: reopenLead, expected_version: version(reopenLead), status: 'LOST', reason: 'price' });
-  await staleOld(reopenLead, 'Rouvrir le prospect', () => drawer().getByRole('button', { name: 'Rouvrir le prospect', exact: true }).click(), () => dialog().getByLabel('Motif', { exact: true }).fill('Le contact revient'));
+  await staleOld(reopenLead, 'Rouvrir le prospect', () => drawer().getByRole('button', { name: 'Rouvrir le prospect', exact: true }).click(), async () => {
+    // Re-review of #208 (owner decision 3): reopening offers no appointment; it is booked through the exchange.
+    const options = await dialog().locator('select option').allTextContents();
+    assert.ok(options.includes('Rappel'), 'reopen action choices shown');
+    assert.ok(!options.includes('Rendez-vous au centre'), 'reopen offers no « Rendez-vous au centre »');
+    await dialog().getByLabel('Motif', { exact: true }).fill('Le contact revient');
+  });
   assert.notEqual(sql(`select status from public.crm_leads where id=${q(reopenLead)}`), 'LOST', 'the reopening applies after the reload');
   const deadLead = intake(reception.id, 'Forms stale injoignable');
   sql(`update public.crm_leads set created_at=now()-interval '20 days',outreach_anchor_date=(now() at time zone public.centre_utc_offset())::date-20 where id=${q(deadLead)}`);

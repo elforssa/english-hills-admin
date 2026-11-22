@@ -745,8 +745,9 @@ export default function GuideContent() {
 </div>
 <ul className="tight">
 <li>Une clôture annule la prochaine action du prospect et son test encore «&nbsp;Planifié&nbsp;» (le test passe «&nbsp;Annulé&nbsp;»). Un prospect clôturé n’a plus aucune action.</li>
+<li>Un test gardé au début d’une inscription reste attaché à <b>Finaliser l’inscription</b>. Remplacer cette action par un appel ou un message (<span className="ui">Changer</span>) annule le test&nbsp;; la déplacer à une autre date le garde.</li>
 <li>Les prospects clôturés ne sont plus dans le tableau. Ouvrez la vue <span className="ui">Clôturés</span> ou le lien «&nbsp;0 clôturés&nbsp;» en haut de page (affichage en liste).</li>
-<li><b>Rouvrir</b>&nbsp;: fiche › <span className="ui">Rouvrir le prospect</span>. Un motif est demandé, et une prochaine action est proposée (modifiable). Un test peut de nouveau être réservé. Le prospect revient en «&nbsp;En discussion&nbsp;» s’il y a déjà eu une conversation, sinon en «&nbsp;Contact en cours&nbsp;», et le compteur d’appels repart à zéro.</li>
+<li><b>Rouvrir</b>&nbsp;: fiche › <span className="ui">Rouvrir le prospect</span>. Un motif est demandé, et une prochaine action est proposée (modifiable). La réouverture ne propose pas de rendez-vous au centre&nbsp;: pour en réserver un (avec ou sans test), notez l’échange avec <span className="ui">Noter un échange</span> › «&nbsp;On a parlé&nbsp;». Le prospect revient en «&nbsp;En discussion&nbsp;» s’il y a déjà eu une conversation, sinon en «&nbsp;Contact en cours&nbsp;», et le compteur d’appels repart à zéro.</li>
 <li>Un prospect <span className="st st-conv">Inscription confirmée</span> ne peut plus être rouvert ni modifié depuis cet écran.</li>
 </ul>
 </article>
@@ -1499,7 +1500,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Tests de niveau</h4>
-<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué&nbsp;; un test annulé ou absent ne se replanifie pas&nbsp;: fixez un nouveau rendez-vous). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
+<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué&nbsp;; un test de prospect qui a quitté «&nbsp;Planifié&nbsp;» (annulé, absent ou passé) n’y revient jamais&nbsp;: fixez un nouveau rendez-vous). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
 <ul className="tight">
 <li>Pas de suppression pour vous.</li>
 <li><span className="ui">Planifier un test</span> crée un test sans lien avec un prospect, avec le niveau A1 proposé par défaut.</li>

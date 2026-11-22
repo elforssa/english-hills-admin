@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 import { crmRpc, useCrmRefresh } from '@/lib/crm/queries';
-import { retryKey, commandError, actionErrorMessage } from '@/lib/crm/presentation.mjs';
+import { retryKey, commandError, actionErrorMessage, placementStatusOptions } from '@/lib/crm/presentation.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
 import { localBusinessDate } from '@/lib/receiptFinance';
@@ -51,6 +51,8 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
   const { role } = useAuth();
   const booking = !!crmLead && !test?.id;
   const linked = booking || !!test?.is_crm || !!test?.crm_lead_id;
+  // A prospect's test never returns to « Planifié » once it has left it (owner
+  // decision 2026-11-22); a student's own test keeps today's choices.
   const request = useRef(null), locked = useRef(false), returnFocus = useRef(typeof document !== 'undefined' ? document.activeElement : null);
   const refresh = useCrmRefresh();
   const [error, setError] = useState('');
@@ -179,7 +181,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
             <>{!booking && <><div><label htmlFor="placement-status" className={labelClass}>Statut</label>
               <select id="placement-status" className={inputClass} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value, ...(linked && e.target.value === 'Planifié' ? { niveau_recommande: '', score: '' } : {}) }))}>
                 {/* A cancelled or absent test is never planned again (the server refuses it): it can still get its result; a new booking goes through the appointment. */}
-                {[...new Set([...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : ['Planifié']), 'Passé', 'Résultat saisi', 'Affecté'])].map(s => <option key={s}>{s}</option>)}
+                {placementStatusOptions(test).map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div><label htmlFor="placement-score" className={labelClass}>Score</label><input id="placement-score" type="number" className={inputClass} value={form.score || ''} onChange={e => set('score', e.target.value)} min="0" max="100" /></div>

@@ -24,7 +24,7 @@ insert into baseline select crm_security.d1_plan();
 
 do $$ declare n text; l uuid; begin
  perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000003',true);
- foreach n in array array['L1_dupes','L2_exact','L3_shared_test','L4_five','L5_test_only','L6_test_and_other','L7_past_appt_test','L8_closed','L9_converted','L10_merged','L11_future_and_past','L12_none'] loop
+ foreach n in array array['L1_dupes','L2_exact','L3_shared_test','L4_five','L5_test_only','L6_test_and_other','L7_past_appt_test','L8_closed','L9_converted','L10_merged','L11_future_and_past','L12_none','L14_enrol_test','L15_enrol_linked'] loop
   l:=(public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','D1 '||n,'learner_name','D1 learner','email','d1-'||gen_random_uuid()||'@example.invalid','source_label','Manual'))->'lead'->>'id')::uuid;
   -- Start from no open action; each shape adds what it needs.
   update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where lead_id=l and status='open';
@@ -89,6 +89,19 @@ select lead,'center_visit',pg_temp.at(-1,'11:00'),'appointment',test,'manual','f
 insert into public.crm_tasks(lead_id,task_type,due_at,schedule_kind,source_kind,source_key,created_at)
 select lead,'center_visit',pg_temp.at(3,'17:00'),'appointment','manual','fx:L11:future',now()-interval '3 days' from fx where name='L11_future_and_past';
 update fx set a=(select id from public.crm_tasks where source_key='fx:L11:future'),b=(select id from public.crm_tasks where source_key='fx:L11:past') where name='L11_future_and_past';
+-- Re-review of #208 (owner decision 1): L14 a legacy « Finaliser l'inscription » next to a
+-- planned test it does not carry (rule b links the test to it, never replaces it); its action
+-- still points at an older test already « Passé », which the link replaces and the revert
+-- restores. L15 the 136 shape, an enrolment action already carrying its planned test (no rule).
+insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
+select 'D1 learner',((now() at time zone public.centre_utc_offset())::date+4),'10:00','Planifié',lead,'Fixture' from fx where name in ('L14_enrol_test','L15_enrol_linked');
+update fx set test=(select id from public.placement_tests where crm_lead_id=fx.lead) where name in ('L14_enrol_test','L15_enrol_linked');
+insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
+select 'D1 learner',((now() at time zone public.centre_utc_offset())::date-20),'10:00','Passé',lead,'Fixture' from fx where name='L14_enrol_test';
+update fx set test2=(select id from public.placement_tests where crm_lead_id=fx.lead and status='Passé') where name='L14_enrol_test';
+insert into public.crm_tasks(lead_id,task_type,due_at,placement_test_id,source_kind,source_key)
+select lead,'enrollment_followup',pg_temp.at(1,'16:00'),case when name='L15_enrol_linked' then test else test2 end,'manual','fx:'||name from fx where name in ('L14_enrol_test','L15_enrol_linked');
+update fx set a=(select id from public.crm_tasks where source_key='fx:'||fx.name) where name in ('L14_enrol_test','L15_enrol_linked');
 set local session_replication_role=origin;
 -- L12 stays active with no action and fewer than five failures (rule c with the review flag).
 
@@ -100,7 +113,9 @@ do $$ begin perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-
 end $$;
 do $$ declare base jsonb:=(select plan from baseline); p jsonb:=crm_security.d1_plan(); begin
  perform pg_temp.ok((p->'a'->>'count')::int-(base->'a'->>'count')::int=5,'rule a: L1 L2 L3 L7 L11 '||p::text);
- perform pg_temp.ok((p->'b'->>'count')::int-(base->'b'->>'count')::int=2 and (p->'b'->>'replaced')::int-(base->'b'->>'replaced')::int=1,'rule b: L5 L6 (one action replaced)');
+ perform pg_temp.ok((p->'b'->>'count')::int-(base->'b'->>'count')::int=3 and (p->'b'->>'replaced')::int-(base->'b'->>'replaced')::int=1
+  and (p->'b'->>'linked')::int-(base->'b'->>'linked')::int=1,'rule b: L5 L6 L14 (one action replaced, one test linked to an enrolment action)');
+ perform pg_temp.ok(not exists(select 1 from crm_security.d1_sets() s join fx on fx.lead=s.lead_id where fx.name='L15_enrol_linked'),'L15: a test carried by the enrolment action is in no rule');
  perform pg_temp.ok((p->'c'->>'count')::int-(base->'c'->>'count')::int=2 and (p->'c'->>'after_five_failures')::int-(base->'c'->>'after_five_failures')::int=1,'rule c: L4 (after five) L12');
  perform pg_temp.ok((p->'d'->>'count')::int-(base->'d'->>'count')::int=3,'rule d: L8 L9 L10');
  perform pg_temp.ok((p->'tests_cancelled'->>'count')::int-(base->'tests_cancelled'->>'count')::int=3,'tests cancelled: L8 L10 and L11''s past test (L9 converted keeps its test)');
@@ -143,6 +158,7 @@ do $$ declare l uuid; p jsonb; r jsonb; runs integer:=0; i integer; begin
 end $$;
 \echo PASS B3 d1_revert reverts a prospect processed under two rules, on every run
 
+
 -- d1_apply refuses counts that differ from the approved dry run, then applies.
 do $$ declare p jsonb:=crm_security.d1_plan(); wrong jsonb; r jsonb; begin
  perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000001',true);
@@ -180,6 +196,16 @@ do $$ declare r record; begin
  select * into r from fx where name='L6_test_and_other';
  perform pg_temp.ok((select status='cancelled' and replaced_reason like '%D1%' from public.crm_tasks where id=r.a)
   and (select placement_test_id=r.test from public.crm_tasks where id=crm_security.next_action_id(r.lead)),'L6 callback replaced by the test''s appointment');
+ select * into r from fx where name='L14_enrol_test';
+ perform pg_temp.ok(crm_security.next_action_id(r.lead)=r.a and (select task_type='enrollment_followup' and status='open' and placement_test_id=r.test from public.crm_tasks where id=r.a)
+  and (select status='Planifié' from public.placement_tests where id=r.test),'L14 enrolment action kept and now carries the planned test (never replaced)');
+ select * into r from fx where name='L15_enrol_linked';
+ perform pg_temp.ok(crm_security.next_action_id(r.lead)=r.a and (select placement_test_id=r.test from public.crm_tasks where id=r.a)
+  and (select status='Planifié' from public.placement_tests where id=r.test),'L15 untouched');
+ -- Q29 (amended): every planned test of an active prospect belongs to its open appointment or enrolment action.
+ perform pg_temp.ok(not exists(select 1 from public.crm_leads l join public.placement_tests x on x.crm_lead_id=l.id and x.status='Planifié'
+  where l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
+  and not exists(select 1 from public.crm_tasks t where t.placement_test_id=x.id and t.status='open' and t.task_type in ('center_visit','enrollment_followup'))),'Q29: no planned test of an active prospect without its appointment or enrolment action');
  select * into r from fx where name='L7_past_appt_test';
  perform pg_temp.ok(crm_security.next_action_id(r.lead)=r.a and (select status='cancelled' from public.crm_tasks where id=r.b)
   and (select status='Planifié' from public.placement_tests where id=r.test),'L7 past appointment with its planned test kept; callback cancelled');
@@ -193,7 +219,7 @@ do $$ declare r record; begin
  perform pg_temp.ok((select task_type='awaiting_prospect' and review_flag='d1_review' from public.crm_tasks where id=crm_security.next_action_id(r.lead)),'L12 « En attente » flagged « À revoir (D1) »');
  perform pg_temp.ok((select count(*)>0 from public.crm_data_step_journal where step='d1' and entity='crm_tasks'),'journal lists the actions D1 opened');
 end $$;
-\echo PASS d1_apply: Q04, Q05, Q07, Q29 at zero and every shape resolved as planned
+\echo PASS d1_apply: Q04, Q05, Q07, Q29 (both shapes) at zero and every shape resolved as planned
 
 -- d1_revert (before M-A2): D1's own actions cancelled, the exact cancelled rows reopened,
 -- future tests replanned, past ones left cancelled and listed.
@@ -209,6 +235,11 @@ do $$ declare r jsonb; x record; begin
  select * into x from fx where name='L11_future_and_past';
  perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=x.test)
   and r->'tests_left_cancelled' @> jsonb_build_array(jsonb_build_object('test_id',x.test,'lead_id',x.lead)),'L11 past test left cancelled and listed');
+ select * into x from fx where name='L14_enrol_test';
+ perform pg_temp.ok((select status='open' and placement_test_id=x.test2 from public.crm_tasks where id=x.a) and (r->>'unlinked')::int>=1
+  and (select status='Planifié' from public.placement_tests where id=x.test),'L14 link undone, enrolment action and test as before');
+ select * into x from fx where name='L15_enrol_linked';
+ perform pg_temp.ok((select placement_test_id=x.test from public.crm_tasks where id=x.a),'L15 still linked');
  perform pg_temp.ok((r->>'leads_changed_since')::int=0,'no prospect changed since D1');
 end $$;
 \echo PASS d1_revert restores the pre-D1 rows

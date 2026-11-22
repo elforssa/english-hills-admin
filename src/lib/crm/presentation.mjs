@@ -470,6 +470,19 @@ const HINT_MESSAGES = {
   'crm_create.walk_in_exchange_required': 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.'
 };
 // Refusal text for the next-action forms: hint first, then the shared command messages.
+// Statuses the test form offers (re-review of #208, owner decision 2026-11-22): a
+// prospect's test that has left « Planifié » is never planned again, whatever the path;
+// a student's own test (no prospect) keeps today's choices.
+export function placementStatusOptions(test) {
+  const prospectTest = Boolean(test && (test.is_crm || test.crm_lead_id));
+  const replannable = !test || test.status === 'Planifié' || !prospectTest;
+  return [...new Set([
+    ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : []),
+    ...(replannable ? ['Planifié'] : []),
+    'Passé', 'Résultat saisi', 'Affecté'
+  ])];
+}
+
 export function actionErrorMessage(error) {
   if (error instanceof Error && !error.code && /^(Choisissez|Cochez|Indiquez|Précisez)/.test(error.message)) return error.message;
   if (isRecordConflict(error)) return STALE_MESSAGE;

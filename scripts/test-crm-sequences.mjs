@@ -42,9 +42,10 @@ declare l public.crm_leads; cur public.crm_tasks; open_n integer; ids jsonb; que
  -- 1 and 2: one open action when active; none, and no planned test, when closed.
  if l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') then
   perform pg_temp.ok(open_n=1 and cur.id is not null and cur.status='open','I1 exactly one open next action — '||label);
-  -- Q29 / the M-A2 test trigger: an active prospect's planned test belongs to its open appointment.
+  -- Q29 / the M-A2 test trigger (amended 2026-11-22): an active prospect's planned test
+  -- belongs to its open appointment or to its open enrolment action, and only those.
   perform pg_temp.ok(not exists(select 1 from public.placement_tests p where p.crm_lead_id=lead and p.status='Planifié'
-   and p.id is distinct from (case when cur.task_type='center_visit' then cur.placement_test_id end)),'I2 planned test is the open appointment''s — '||label);
+   and p.id is distinct from (case when cur.task_type in ('center_visit','enrollment_followup') then cur.placement_test_id end)),'I2 planned test is the open appointment''s or enrolment action''s — '||label);
  else
   perform pg_temp.ok(open_n=0 and cur.id is null,'I2 closed prospect has no open action — '||label);
   -- A converted prospect keeps its test (it is now the student's, plan §4.2 table).

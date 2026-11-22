@@ -140,6 +140,11 @@ do $$ declare l uuid; t public.crm_tasks; p uuid; begin
  perform pg_temp.ok(not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'closed: no open action');
  perform pg_temp.ok((select status='Annulé' and cancelled_at is not null from public.placement_tests where id=p),'closed: planned test cancelled');
  perform pg_temp.refused('reopen_prospect',l,'{"reason":"Revient"}');
+ -- Re-review of #208 (owner decision 3): reopening with an appointment follows « Changer ».
+ perform pg_temp.refused('reopen_prospect',l,jsonb_build_object('reason','Revient','next',
+  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',4,'11:00'),'with_test',true)),'22023','crm_next_action.appointment_needs_exchange');
+ perform pg_temp.refused('reopen_lead',l,jsonb_build_object('reason','Revient','next_task',
+  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',4,'11:00'))),'22023','crm_next_action.appointment_needs_exchange');
  perform pg_temp.act('reopen_prospect',l,jsonb_build_object('reason','Revient','next',jsonb_build_object('task_type','callback','due_preset','tomorrow')));
  perform pg_temp.one(l,'reopen');
  t:=pg_temp.na(l);
@@ -357,7 +362,21 @@ do $$ declare l uuid; k public.crm_tasks; p uuid; q jsonb; via text; begin
   perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q),'22023','crm_placement.not_replannable');
   perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Planifié',p),'22023','crm_placement.not_replannable');
   perform pg_temp.ok((select status<>'Planifié' from public.placement_tests where id=p),'still not planned after '||via);
+  -- Re-review of #208: two steps through « Passé » are refused as well (owner decision 2).
+  update public.placement_tests set status='Passé' where id=p;
+  q:=q||jsonb_build_object('expected_updated_at',(select updated_at from public.placement_tests where id=p),'expected_version',(select version from public.crm_leads where id=l));
+  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q),'22023','crm_placement.not_replannable');
+  perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Planifié',p),'22023','crm_placement.not_replannable');
+  perform pg_temp.ok((select status='Passé' from public.placement_tests where id=p),'two-step replan refused after '||via);
  end loop;
+ -- C2 scope: a student's own test (no prospect) keeps today's behaviour.
+ insert into public.placement_tests(student_name,date_test,heure,status,cancelled_at,examinateur)
+ values('Synthetic student',(now() at time zone public.centre_utc_offset())::date+2,'11:00','Annulé',now(),'Fixture') returning id into p;
+ update public.placement_tests set status='Planifié' where id=p;
+ update public.placement_tests set status='Passé' where id=p;
+ update public.placement_tests set status='Planifié' where id=p;
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'a student''s own test can still be planned again');
+ delete from public.placement_tests where id=p;
  -- A result on a cancelled test stays allowed (the migration's cancel check).
  perform pg_temp.ok((select count(*)=0 from public.placement_tests where id=p and status='Planifié'),'cancelled fixture');
  l:=pg_temp.intake();
@@ -370,7 +389,7 @@ do $$ declare l uuid; k public.crm_tasks; p uuid; q jsonb; via text; begin
  update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
  perform pg_temp.ok((select status='Résultat saisi' and cancelled_at is not null from public.placement_tests where id=p),'a result on a cancelled test keeps its cancellation history');
 end $$;
-\echo PASS T5c B2 cancelled or absent test is never planned again
+\echo PASS T5c B2 a prospect's cancelled or absent test is never planned again (one or two steps); students' tests unchanged
 
 -- T5d (review of #208, important 4): an appointment still to come that an exchange
 -- replaces is cancelled « Remplacée », never completed, and is not shown as held.

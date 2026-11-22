@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { pluralFr } from '../src/lib/ui/pluralFr.mjs';
 import {
   WORK_BUCKETS, NEXT_KINDS, CALL_RESULTS, STALE_MESSAGE, exchangeResults, prefillFromAction, replaceRules, slotTimes, firstSlotDate,
-  nextActionPayload, actionErrorMessage, attemptGapLabel, isCallAction, taskTitle
+  nextActionPayload, actionErrorMessage, attemptGapLabel, isCallAction, taskTitle, placementStatusOptions
 } from '../src/lib/crm/presentation.mjs';
 import { draftFrom, hoursDraftProblem, hoursPayload } from '../src/lib/crm/centreHours.mjs';
 
@@ -105,3 +105,15 @@ assert.match(hoursDraftProblem({ ...draft, week: { ...draft.week, 6: [{ start: '
 assert.match(hoursDraftProblem({ week: { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] }, closed: [] }), /au moins une plage/);
 
 console.log('PASS next-action UI helpers: plural, slots, payloads, OD-18 confirmations, messages, centre hours');
+
+// Re-review of #208 (owner decision 2): the test form never offers « Planifié » for a
+// prospect's test that has left it (one or two steps); a student's own test is unchanged.
+assert.deepEqual(placementStatusOptions(null), ['Planifié', 'Passé', 'Résultat saisi', 'Affecté']);
+assert.deepEqual(placementStatusOptions({ status: 'Planifié', crm_lead_id: 'x' }), ['Planifié', 'Passé', 'Résultat saisi', 'Affecté']);
+for (const status of ['Annulé', 'Absent', 'Passé', 'Résultat saisi', 'Affecté']) {
+  assert.ok(!placementStatusOptions({ status, crm_lead_id: 'x' }).includes('Planifié'), `prospect test ${status}`);
+  assert.ok(!placementStatusOptions({ status, is_crm: true }).includes('Planifié'), `CRM test ${status}`);
+  assert.ok(placementStatusOptions({ status, crm_lead_id: null }).includes('Planifié'), `student test ${status}`);
+}
+assert.deepEqual(placementStatusOptions({ status: 'Annulé', crm_lead_id: 'x' }), ['Annulé', 'Passé', 'Résultat saisi', 'Affecté']);
+console.log('PASS placement status options: no « Planifié » for a prospect test that left it');

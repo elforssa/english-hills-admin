@@ -61,15 +61,18 @@ alter table public.placement_tests
  add constraint placement_tests_cancel_check check (status is distinct from 'Annulé' or cancelled_at is not null),
  add constraint placement_tests_cancel_reason_check check (cancel_reason is null or (cancelled_at is not null and length(btrim(cancel_reason)) between 1 and 500));
 
--- A cancelled or absent test is final for planning (invariant 2, Q07/Q29 shapes):
--- it can still receive a result from the placements screen, but it never becomes
--- « Planifié » again, whatever the path (CRM edit, Admissions form, teacher
--- policy). A new booking goes through the appointment. Only d1_revert restores a
--- test D1 cancelled, under its own data-step flag.
+-- A prospect's test never returns to « Planifié » once it has left it (owner
+-- decision 2026-11-22; invariant 2, Q07/Q29 shapes), whatever the path and in
+-- any number of steps (« Annulé » or « Absent » → « Passé » → « Planifié »
+-- included): CRM edit, Admissions form, teacher policy. It can still receive a
+-- result. A new booking goes through the appointment. A student's own test (no
+-- prospect) keeps today's behaviour (C2 scope). Only d1_revert restores a test
+-- D1 cancelled, under its own data-step flag.
 create function crm_security.placement_no_replan()
  returns trigger language plpgsql set search_path to 'pg_catalog','pg_temp' as $function$ begin
- if old.status in ('Annulé','Absent') and new.status='Planifié' and coalesce(current_setting('eh.crm_data_step',true),'')<>'d1_revert' then
-  raise exception 'A cancelled or absent test cannot be planned again; book a new appointment' using errcode='22023',hint='crm_placement.not_replannable';
+ if coalesce(old.crm_lead_id,new.crm_lead_id) is not null and old.status<>'Planifié' and new.status='Planifié'
+  and coalesce(current_setting('eh.crm_data_step',true),'')<>'d1_revert' then
+  raise exception 'A prospect''s test that has left « Planifié » cannot be planned again; book a new appointment' using errcode='22023',hint='crm_placement.not_replannable';
  end if;
  return new;
 end $function$;
@@ -515,6 +518,17 @@ begin
   if cause<>'d1' or data_step is distinct from 'd1' then raise exception 'D1 mode requires the D1 data step' using errcode='42501'; end if;
   if spec->>'d1'='keep' then spec:=jsonb_build_object('_keep_task_id',spec->'keep_task_id','_reason','Doublon de prochaine action (fusion D1)');
   elsif spec->>'d1'='create' then spec:=spec->'spec'; skip:=true;
+  elsif spec->>'d1'='link' then
+   -- Rule (b) on a prospect with an open enrolment action: that action carries
+   -- the test; it is never replaced.
+   select * into o from public.crm_tasks where lead_id=l.id and status='open' and task_type='enrollment_followup' order by due_at,id limit 1 for update;
+   if o.id is null then raise exception 'D1 link needs an open enrolment action' using errcode='22023'; end if;
+   if exists(select 1 from public.placement_tests pt where pt.id=o.placement_test_id and pt.status='Planifié') then
+    raise exception 'D1 rule b: the enrolment action already carries a planned test' using errcode='P0001',hint='crm_d1.enrollment_test_taken'; end if;
+   perform set_config('eh.crm_next_action_writer','1',true);
+   update public.crm_tasks set placement_test_id=(spec->>'test_id')::uuid,version=version+1,updated_at=now() where id=o.id;
+   perform set_config('eh.crm_next_action_writer','',true);
+   return o.id;
   elsif spec is not null and not (spec ? 'none') then raise exception 'Unknown D1 mode' using errcode='22023'; end if;
  end if;
  perform 1 from public.crm_tasks where lead_id=l.id and status='open' order by id for update;
@@ -564,8 +578,20 @@ begin
    perform crm_security.finish_task(o,true,coalesce(spec->>'_reason','Doublon de prochaine action'),source||':'||o.id);
    closed_ids:=closed_ids||o.id;
   end loop;
-  -- Enrolment start keeps the test of the action it replaces (§4.8).
-  for x in select p.* from public.placement_tests p where cause<>'enrollment' and p.status='Planifié' and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
+  -- Enrolment start keeps the test of the action it replaces (§4.8): the kept
+  -- « Finaliser l'inscription » carries it (a real link, owner decision
+  -- 2026-11-22) unless it already carries a planned test. Every other planned
+  -- test left without an open action is cancelled.
+  if cause='enrollment' then
+   select p.id into carried from public.placement_tests p where p.status='Planifié' and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
+    and not exists(select 1 from public.crm_tasks t where t.placement_test_id=p.id and t.status='open')
+    and not exists(select 1 from public.crm_tasks k join public.placement_tests q on q.id=k.placement_test_id and q.status='Planifié' where k.id=keep_id)
+   order by p.date_test,p.heure,p.id limit 1;
+   if carried is not null then
+    update public.crm_tasks set placement_test_id=carried,version=version+1,updated_at=now() where id=keep_id;
+   end if;
+  end if;
+  for x in select p.* from public.placement_tests p where p.status='Planifié' and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
    and not exists(select 1 from public.crm_tasks t where t.placement_test_id=p.id and t.status='open') loop
    perform crm_security.cancel_planned_test(x.id,'Rendez-vous remplacé');
   end loop;
@@ -690,6 +716,14 @@ begin
   if with_test and carried is null and not skip
    and exists(select 1 from public.placement_tests where crm_lead_id=l.id and status='Planifié') then
    raise exception 'Placement already scheduled' using errcode='22023'; end if;
+ elsif typ='enrollment_followup' then
+  -- « Finaliser l'inscription » carries a planned test (owner decision
+  -- 2026-11-22, §4.8): the test of the appointment an enrolment start replaces,
+  -- or the test of the enrolment action it replaces (moved, not abandoned).
+  select t.placement_test_id into carried from public.crm_tasks t join public.placement_tests p on p.id=t.placement_test_id and p.status='Planifié'
+  where t.id in (cur.id,against.id) and (t.task_type='enrollment_followup' or (cause='enrollment' and t.task_type='center_visit'))
+  order by (t.id=cur.id) desc,p.date_test,p.heure,p.id limit 1;
+  with_test:=carried is not null;
  end if;
 
  -- Close the current action, the action acted on and every legacy duplicate,
@@ -718,9 +752,10 @@ begin
   closed_ids:=closed_ids||o.id;
  end loop;
  -- Step 4: a planned test no open action points to any more is cancelled,
- -- except the one carried by the new appointment, a test being resulted and
- -- the test of an action replaced by an enrolment start (kept, §4.8).
- if cause not in ('test_result','enrollment') then
+ -- except the one carried by the new appointment or enrolment action and a
+ -- test being resulted. Replacing or cancelling an enrolment action that
+ -- carries a test cancels it, unless the new action carries it.
+ if cause<>'test_result' then
   for x in select p.* from public.placement_tests p where p.status='Planifié'
    and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
    and p.id is distinct from case when with_test then carried end order by p.id loop
@@ -745,7 +780,7 @@ begin
  end if;
  new_id:=crm_security.new_task(l,task_spec,coalesce(spec->>'_key',source||':next-action'),coalesce(spec->>'_kind','manual'),
   (spec->>'_ordinal')::smallint,spec->>'_event_source',cur.id,
-  case when typ='center_visit' and with_test then carried else (spec->>'_placement_test_id')::uuid end,
+  case when typ in ('center_visit','enrollment_followup') and with_test then carried else (spec->>'_placement_test_id')::uuid end,
   (spec->>'_source_activity_id')::uuid,skip,case when cause='intake' then spec->>'_intake_actor' end);
  if spec->>'_review_flag'='d1_review' then
   if cause<>'d1' then raise exception 'D1 review flag belongs to D1' using errcode='42501'; end if;
@@ -1203,6 +1238,11 @@ begin
    perform crm_security.event(l.id,'lead_reopened',source||':reopened',data->>'reason',null,null,null,null,null,null,initial_status,l.status);
    note:=data->>'reason';
    next_mode:='spec'; next_obj:=case when cmd='reopen_lead' then crm_security.legacy_spec(data->'next_task') else crm_security.user_spec(data->'next') end;
+   -- A reopened prospect is CONTACTING or ENGAGED: like « Changer », its first
+   -- appointment is booked through the exchange that qualifies (OD-11; owner
+   -- decision 2026-11-22).
+   if next_obj->>'task_type'='center_visit' then
+    raise exception 'Book an appointment through the exchange that qualifies the prospect' using errcode='22023',hint='crm_next_action.appointment_needs_exchange'; end if;
    needs_next:=true;
 
   elsif cmd='reassign' then
@@ -1873,7 +1913,7 @@ begin
  union all
  select p.id,p.crm_lead_id,'placement_test',(p.date_test+p.heure::time) at time zone public.centre_utc_offset(),null::bigint,'placement',crm_security.placement_summary(p)
  from public.placement_tests p join active a on a.id=p.crm_lead_id where p.status='Planifié' and p.date_test=(now() at time zone public.centre_utc_offset())::date
- and not exists(select 1 from public.crm_tasks k where k.placement_test_id=p.id and k.status='open')
+ and not exists(select 1 from public.crm_tasks k where k.placement_test_id=p.id and k.status='open' and k.task_type='center_visit')
  ), schedule as(select * from appointments order by due_at,kind,id limit p_limit offset p_schedule_offset)
  select jsonb_build_object('as_of',now(),'timezone','Africa/Casablanca',
  'counts',jsonb_build_object('new',(select count(*) from active where status='NEW' and first_contact),
@@ -2197,7 +2237,7 @@ create or replace function crm_security.d1_sets()
  language sql stable set search_path to 'pg_catalog','pg_temp' as $function$
  with active as (select l.* from public.crm_leads l where l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')),
  b as (select x.id test_id,x.crm_lead_id lead_id from public.placement_tests x join active l on l.id=x.crm_lead_id
-  where x.status='Planifié' and not exists(select 1 from public.crm_tasks t where t.placement_test_id=x.id and t.status='open' and t.task_type='center_visit'))
+  where x.status='Planifié' and not exists(select 1 from public.crm_tasks t where t.placement_test_id=x.id and t.status='open' and t.task_type in ('center_visit','enrollment_followup')))
  select 'a',l.id,null::uuid,null::boolean from active l where (select count(*) from public.crm_tasks t where t.lead_id=l.id and t.status='open')>1
  union all select 'b',b.lead_id,b.test_id,null from b
  union all select 'c',l.id,null,crm_security.failed_count(l)>=5 from active l
@@ -2233,7 +2273,11 @@ declare result jsonb; begin
   'a',jsonb_build_object('count',(select count(*) from crm_security.d1_sets() where rule='a'),
    'sample',coalesce((select jsonb_agg(lead_id) from (select lead_id from crm_security.d1_sets() where rule='a' order by lead_id limit 5) z),'[]'::jsonb)),
   'b',jsonb_build_object('count',(select count(*) from crm_security.d1_sets() where rule='b'),
-   'replaced',(select count(*) from crm_security.d1_sets() s join public.crm_tasks t on t.lead_id=s.lead_id and t.status='open' where s.rule='b'),
+   -- A prospect with an open enrolment action keeps it: D1 links the test to it
+   -- (owner decision 2026-11-22); the others get the test's appointment.
+   'linked',(select count(*) from crm_security.d1_sets() s where s.rule='b' and exists(select 1 from public.crm_tasks t where t.lead_id=s.lead_id and t.status='open' and t.task_type='enrollment_followup')),
+   'replaced',(select count(*) from crm_security.d1_sets() s join public.crm_tasks t on t.lead_id=s.lead_id and t.status='open' where s.rule='b'
+    and not exists(select 1 from public.crm_tasks k where k.lead_id=s.lead_id and k.status='open' and k.task_type='enrollment_followup')),
    'sample',coalesce((select jsonb_agg(jsonb_build_object('lead_id',lead_id,'test_id',test_id)) from (select lead_id,test_id from crm_security.d1_sets() where rule='b' order by lead_id limit 5) z),'[]'::jsonb)),
   'c',jsonb_build_object('count',(select count(*) from crm_security.d1_sets() where rule='c'),
    'after_five_failures',(select count(*) from crm_security.d1_sets() where rule='c' and five),
@@ -2266,6 +2310,14 @@ create or replace function crm_security.d1_journal(lead uuid, before jsonb)
    select 'd1','placement_tests_cancelled',x.id,r,to_jsonb(x),auth.uid() from public.placement_tests x where x.id=(r->>'id')::uuid;
   end if;
  end loop;
+ -- An open action that now carries a test (rule b on an enrolment action):
+ -- d1_revert removes exactly that link.
+ for r in select value from jsonb_array_elements(before->'tasks') loop
+  if exists(select 1 from public.crm_tasks where id=(r->>'id')::uuid and status='open' and placement_test_id is distinct from (r->>'placement_test_id')::uuid) then
+   insert into public.crm_data_step_journal(step,entity,entity_id,before,after,run_by)
+   select 'd1','crm_tasks_linked',t.id,r,to_jsonb(t),auth.uid() from public.crm_tasks t where t.id=(r->>'id')::uuid;
+  end if;
+ end loop;
  -- The actions D1 opened (rules b and c): d1_revert cancels exactly these.
  insert into public.crm_data_step_journal(step,entity,entity_id,before,after,run_by)
  select 'd1','crm_tasks',t.id,null,to_jsonb(t),auth.uid() from public.crm_tasks t
@@ -2295,6 +2347,9 @@ declare plan jsonb; sets jsonb; s record; l public.crm_leads%rowtype; snap jsonb
   snap:=crm_security.d1_snapshot(l.id);
   if s.rule='a' then
    perform crm_security.set_next_action(l,jsonb_build_object('d1','keep','keep_task_id',crm_security.next_action_id(l.id)),'d1','d1:a:'||l.id);
+  elsif s.rule='b' and exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type='enrollment_followup') then
+   -- D1 never replaces an enrolment action: the test becomes the one it carries.
+   perform crm_security.set_next_action(l,jsonb_build_object('d1','link','test_id',s.test_id),'d1','d1:b:'||s.test_id);
   elsif s.rule='b' then
    select (x.date_test+crm_security.calendar_time(x.heure)) at time zone public.centre_utc_offset() into due from public.placement_tests x where x.id=s.test_id;
    perform crm_security.set_next_action(l,jsonb_build_object('d1','create','spec',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',due,
@@ -2317,7 +2372,7 @@ end $function$;
 -- restoring the exact rows D1 cancelled is not a « next action » operation.
 create or replace function crm_security.d1_revert()
  returns jsonb language plpgsql security definer set search_path to 'pg_catalog','pg_temp' as $function$
-declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_open integer:=0; n_tests integer:=0; skipped integer:=0; begin
+declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_open integer:=0; n_tests integer:=0; n_unlinked integer:=0; skipped integer:=0; begin
  perform crm_security.require_reader(true);
  -- A prospect D1 processed under two rules has two journal rows of one
  -- transaction (same run_at): the version left by D1 is the highest one.
@@ -2334,6 +2389,11 @@ declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_ope
     values(lv.lead,j.entity_id,now(),auth.uid(),'user','task_cancelled','d1-revert:'||j.entity_id||':'||gen_random_uuid(),'Annulé (retour D1)');
     n_cancel:=n_cancel+1;
    end if;
+  end loop;
+  for j in select * from public.crm_data_step_journal where step='d1' and entity='crm_tasks_linked' and (before->>'lead_id')::uuid=lv.lead loop
+   update public.crm_tasks set placement_test_id=(j.before->>'placement_test_id')::uuid,version=version+1,updated_at=now()
+   where id=j.entity_id and status='open' and placement_test_id is not distinct from (j.after->>'placement_test_id')::uuid;
+   if found then n_unlinked:=n_unlinked+1; end if;
   end loop;
   for j in select * from public.crm_data_step_journal where step='d1' and entity='crm_tasks_closed' and (before->>'lead_id')::uuid=lv.lead loop
    update public.crm_tasks set status='open',cancelled_at=null,cancelled_by=null,cancellation_reason=null,replaced_reason=null,
@@ -2354,7 +2414,7 @@ declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_ope
   update public.crm_leads set version=version+1,updated_at=now() where id=lv.lead;
  end loop;
  perform set_config('eh.crm_data_step','',true);
- return jsonb_build_object('cancelled',n_cancel,'reopened',n_open,'tests_replanned',n_tests,'tests_left_cancelled',kept,'leads_changed_since',skipped);
+ return jsonb_build_object('cancelled',n_cancel,'reopened',n_open,'tests_replanned',n_tests,'unlinked',n_unlinked,'tests_left_cancelled',kept,'leads_changed_since',skipped);
 end $function$;
 revoke all on function crm_security.d1_plan(),crm_security.d1_apply(jsonb),crm_security.d1_revert(),crm_security.d1_sets(),crm_security.d1_cancelled_tests(),
  crm_security.d1_snapshot(uuid),crm_security.d1_journal(uuid,jsonb) from public, anon, authenticated, service_role;

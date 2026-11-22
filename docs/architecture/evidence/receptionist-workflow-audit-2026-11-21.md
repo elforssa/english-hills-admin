@@ -690,6 +690,8 @@ This matches names regardless of word order, which catches pairs like « Prénom
 
 Before A1 every planned CRM test of an active prospect counts here (none has an appointment yet); after D1 the count must be 0.
 
+*Amended 2026-11-22 (owner decision, [plan implementation record](../plans/receptionist-workflow.md#implementation-record)):* a planned test may belong to the prospect's open appointment **or to its open enrolment action** (« Finaliser l'inscription »), and only those; the predicate accepts both. The amended query only exempts more rows, so the R0 result (0) stands.
+
 ```sql
 set transaction read only;
 with q as (
@@ -697,7 +699,7 @@ select count(*) tests, (array_agg(p.crm_lead_id order by p.crm_lead_id))[1:5] sa
 from public.placement_tests p join public.crm_leads l on l.id=p.crm_lead_id
 where p.status='Planifié' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
  and not exists (select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open'
-                 and t.task_type='center_visit' and t.placement_test_id=p.id)
+                 and t.task_type in ('center_visit','enrollment_followup') and t.placement_test_id=p.id)
 )
 select current_setting('transaction_read_only') as read_only, q.* from (select 1) one left join q on true;
 ```
