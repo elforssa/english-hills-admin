@@ -36,9 +36,13 @@ export const PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE = "Ce paiement a peut-être d�
 const PAYMENT_BUSY_SERVER_MESSAGE = 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.';
 export const PAYMENT_BUSY_MESSAGE = 'Un paiement ou une inscription est en cours pour cet apprenant. Actualisez puis réessayez.';
 
+export const PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE = 'Corrigez l’e-mail depuis le dossier de l’apprenant, puis encaissez.';
+
 export function paymentErrorMessage(error) {
   const message = String(error?.message || '');
   if (message.startsWith('Idempotency key conflict')) return PAYMENT_IDEMPOTENCY_CONFLICT_MESSAGE;
+  // RPW-r2 item 3: the receipt never changes an e-mail for reception; the dossier does.
+  if (message.startsWith('Contact identity cannot be changed')) return PAYMENT_EMAIL_FROM_DOSSIER_MESSAGE;
   // A record conflict (PT409, ADR-009) stored nothing: the known busy text is
   // already French; any other conflict gets the same busy guidance.
   if (isRecordConflict(error) && message !== PAYMENT_BUSY_SERVER_MESSAGE) return PAYMENT_BUSY_MESSAGE;

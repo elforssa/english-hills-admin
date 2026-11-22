@@ -45,8 +45,23 @@ for (const path of ['/crm/today', '/crm/leads', '/students', '/students-director
   assert.equal(receptionistCanAccess(path), true);
   assert.equal(loginDestination('receptionist', path), path);
 }
-for (const path of ['/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
-  '/teachers/new', '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
+// RPW-r2 stage 3: the dossier and teaching pages she now uses.
+for (const path of ['/dismissal', '/portfolios', '/learning-assessments', '/certificates', '/teachers/new', '/leave-requests']) {
+  assert.equal(receptionistCanAccess(path), true, path);
+  assert.equal(loginDestination('receptionist', path), path);
+}
+// RPW-r2 stage 4: communication, dashboard and reports (without finance).
+for (const path of ['/communications', '/notifications', '/dashboard', '/reports']) {
+  assert.equal(receptionistCanAccess(path), true, path);
+  assert.equal(loginDestination('receptionist', path), path);
+}
+for (const capability of ['canMessageAnyAddress', 'canViewPortalConversations', 'canDeleteCommunications',
+  'canViewFinanceCorrections', 'canViewTeacherWorkload', 'canViewFinanceAnalytics']) {
+  assert.equal(hasCapability('receptionist', capability), false, capability);
+  for (const role of ['director', 'admin']) assert.equal(hasCapability(role, capability), true, capability);
+}
+for (const path of ['/activity-log', '/finance', '/students/import', '/students/00000000-0000-0000-0000-000000000001/delete',
+  '/teachers/00000000-0000-0000-0000-000000000001/payroll', '/payroll',
   '/receipts/deletions', '/receipts/00000000-0000-0000-0000-000000000001/delete',
   '/settings/users', '/settings?tab=users', '/integrations', '/crm/analytics', '/crm/integrations/lifecycle',
   '/students/%2fetc', '/groups/not-a-uuid', '/crm/today/anything', '/crm/leads/anything', '/helpdesk/anything',
@@ -66,8 +81,10 @@ for (const role of ['teacher','parent','student','pending',null]) {
 }
 for (const capability of ['canViewFinanceAnalytics','canManageUsers','canManageSystemSettings',
   'canViewTeacherCompensation','canManagePayroll','canManageIntegrations','canCorrectFinance',
-  'canImportStudents','canExportStudents','canEditStudentProgramme'])
+  'canImportStudents','canExportStudents','canIssueCertificates','canDecideLeaveRequests','canWriteStudentRecords'])
   assert.equal(hasCapability('receptionist', capability), false);
+// RPW-r2 item 2: programme, level and source while the learner is in no group (the admin rule).
+assert.equal(hasCapability('receptionist', 'canEditStudentProgramme'), true);
 for (const role of ['director', 'admin']) {
   for (const capability of ['canImportStudents', 'canExportStudents', 'canEditStudentProgramme'])
     assert.equal(hasCapability(role, capability), true);

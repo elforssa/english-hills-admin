@@ -88,9 +88,9 @@ for (const file of ['src/app/(admin)/receipts/new/page.jsx', 'src/app/(admin)/re
   'src/app/(admin)/finance/charges/[id]/edit/page.jsx', 'src/app/(admin)/payroll/page.jsx']) assert.ok(found.finance.has(file), file);
 for (const file of ['src/app/(admin)/students/page.jsx', 'src/app/(admin)/students/[id]/page.jsx',
   'src/app/(admin)/groups/page.jsx', 'src/app/(admin)/groups/[id]/page.jsx', 'src/app/(admin)/attendance/page.jsx',
-  'src/app/(admin)/teacher-portal/page.jsx', 'src/components/students/ReceptionistStudentForm.jsx',
+  'src/app/(admin)/teacher-portal/page.jsx',
   'src/components/students/EnrollmentModal.jsx', 'src/components/students/StudentForm.jsx',
-  'src/components/teachers/ReceptionistTeacherForm.jsx', 'src/components/teachers/TeacherForm.jsx']) assert.ok(found.learner.has(file), file);
+  'src/components/teachers/TeacherForm.jsx']) assert.ok(found.learner.has(file), file);
 // CRM commands refresh through useCrmRefresh, which covers learner and finance caches
 // too; the enrollment start (a learner, an enrollment, a charge) uses it.
 assert.match(readFileSync('src/lib/crm/queries.js', 'utf8'), /invalidateAfterLearnerSave\(client\), invalidateAfterFinance\(client\)/);

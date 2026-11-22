@@ -6,7 +6,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { entities, integrations, reportError } from '@/lib/entities';
 import { getBrowserClient } from '@/lib/supabase';
-import { createLearnerIdentity, createStudentOnce } from '@/lib/studentCreate.mjs';
+import { createLearnerIdentity, createStudentOnce, isReceptionistIdentityConflict, resolveReceptionistIdentityConflict } from '@/lib/studentCreate.mjs';
+import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mjs';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 import { currentSchoolYear } from '@/lib/enrollmentWorkflow.mjs';
 import { membershipErrorMessage, placeLearnerInGroup } from '@/lib/academic/membershipActions.mjs';
 import { toast } from 'sonner';
@@ -57,11 +59,17 @@ export default function StudentForm() {
   const router = useRouter();
   const qc = useQueryClient();
   const isEdit = Boolean(id);
-  // EAP (Q3 = B): a new file has no paid enrollment, so a placement at creation is a
-  // management placement with its reason. Reception enrols at the payment (« Inscrire
-  // et encaisser ») and places afterwards; it never places here.
+  // EAP (Q3 = B): a new file has no paid enrollment, so a placement at creation needs
+  // its reason (logged, listed in Contrôles). RPW-r2 item 1: one form for every staff
+  // role; a role without direct learner writes saves through the reception command.
   const { role } = useAuth();
-  const canPlaceAtCreation = !isEdit && (role === 'director' || role === 'admin');
+  const viaCommand = !hasCapability(role, 'canWriteStudentRecords');
+  const canPlaceAtCreation = !isEdit && hasCapability(role, 'canPlaceWithoutPaidEnrollment');
+  const [loadedVersion, setLoadedVersion] = useState(null);
+  // Edit saves only once the record is loaded: an earlier click would send no version.
+  const [loaded, setLoaded] = useState(!id);
+  // A failed or empty load says so in French instead of leaving « Enregistrer » silently disabled (review N5).
+  const [loadError, setLoadError] = useState(null);
   const [withoutEnrollmentReason, setWithoutEnrollmentReason] = useState('');
   // REL-4: one learner id from the first send to a confirmed success, so a retry
   // after a lost answer replays the create instead of inserting a second learner.
@@ -84,12 +92,11 @@ export default function StudentForm() {
     entities.Group.listAll('name').then(setGroups).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (isEdit) {
-      entities.Student.filter({ id })
+  const loadStudent = () => entities.Student.filter({ id })
         .then(d => {
           if (d[0]) {
             const row = d[0];
+            setLoadedVersion(row.updated_at ?? null);
             setForm(f => ({
               ...f,
               ...row,
@@ -106,14 +113,26 @@ export default function StudentForm() {
               notes:        row.notes        ?? '',
             }));
             setPlaced(Boolean(row.groupe_id));
+            setLoaded(true);
+            setLoadError(null);
+          } else {
+            setLoadError('Fiche introuvable ou inaccessible. Revenez à la liste des apprenants.');
           }
         })
         .catch((err) => {
           // eslint-disable-next-line no-console
           console.error('[StudentForm] load failed:', err);
+          setLoadError('Impossible de charger la fiche de l’apprenant. Rechargez la page.');
         });
-    }
+
+  useEffect(() => {
+    if (isEdit) loadStudent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
+
+  // The reception command answers its own refusals in French (hint rpw.*).
+  const commandErrorMessage = (error) => (String(error?.hint || '').startsWith('rpw.') && error?.message)
+    ? error.message : membershipErrorMessage(error);
 
   const set = (k, v) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -213,12 +232,68 @@ export default function StudentForm() {
     }
     setSaving(true);
     const client = getBrowserClient();
+    if (isEdit && viaCommand) {
+      const { error } = await client.rpc('save_receptionist_student', {
+        p_student: id, p_expected_updated_at: loadedVersion, p_changes: payload,
+      });
+      setSaving(false);
+      if (error && isRecordConflict(error)) {
+        // Changed in the meantime (ADR-009): reload the latest record for review.
+        toast.error(recordConflictMessage());
+        invalidateAfterLearnerSave(qc);
+        await loadStudent();
+        return;
+      }
+      if (error) { toast.error(commandErrorMessage(error)); return; }
+      toast.success('Apprenant mis à jour');
+      invalidateAfterLearnerSave(qc);
+      router.push(`/students/${id}`);
+      return;
+    }
     if (isEdit) {
       const { error } = await client.from('students').update(payload).eq('id', id);
       if (error) { toast.error(membershipErrorMessage(error)); setSaving(false); return; }
       toast.success('Apprenant mis à jour');
       invalidateAfterLearnerSave(qc);
       router.push('/students');
+      return;
+    }
+    if (viaCommand) {
+      const studentId = newStudentId.current();
+      const { data, error } = await client.rpc('save_receptionist_student', {
+        p_student: studentId, p_expected_updated_at: null, p_changes: payload,
+      });
+      if (error && isReceptionistIdentityConflict(error)) {
+        // An earlier send of this learner committed; the reception read hides a deleted
+        // one, and a failed read keeps the id for an exact resend.
+        const conflict = await resolveReceptionistIdentityConflict(async () => {
+          const { data: rows, error: readError } = await client.from('students').select('id').eq('id', studentId);
+          if (readError) throw readError;
+          return rows;
+        });
+        newStudentId.settle(conflict.status);
+        toast.error(conflict.message);
+        setSaving(false);
+        if (conflict.status === 'already_created') router.push(`/students/${studentId}`);
+        return;
+      }
+      if (error) { toast.error(commandErrorMessage(error)); setSaving(false); return; }
+      newStudentId.settle('created');
+      invalidateAfterLearnerSave(qc);
+      const created = Array.isArray(data) ? data[0] : data;
+      if (chosenGroup && canPlaceAtCreation) {
+        const { error: placeError } = await placeLearnerInGroup(client, {
+          student: { id: studentId, updated_at: created?.updated_at }, group: chosenGroup, schoolYear,
+          withoutEnrollmentReason: withoutEnrollmentReason.trim() });
+        if (placeError) {
+          toast.error(`Apprenant créé, mais non affecté : ${membershipErrorMessage(placeError)}`);
+          router.push(`/students/${studentId}`);
+          return;
+        }
+        invalidateAfterLearnerSave(qc);
+      }
+      toast.success('Apprenant créé');
+      router.push(`/students/${studentId}`);
       return;
     }
     let studentId;
@@ -257,7 +332,7 @@ export default function StudentForm() {
       <button onClick={() => router.push('/students')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
         <ArrowLeft size={15} /> Retour
       </button>
-      <h1 className="text-2xl font-bold mb-6">{isEdit ? "Modifier l'apprenant" : 'Ajouter un apprenant'}</h1>
+      <h1 className="text-2xl font-bold mb-6">{isEdit ? 'Modifier l’apprenant' : 'Ajouter un apprenant'}</h1>
 
       <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-5" noValidate>
         <div className="grid grid-cols-2 gap-4">
@@ -268,10 +343,10 @@ export default function StudentForm() {
                 ? <StorageImage src={photoPreview || form.photo_url} alt="" className="w-full h-full object-cover" />
                 : <span className="text-xl font-bold text-muted-foreground">{form.full_name?.[0] || '?'}</span>}
             </div>
-            <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
+            {(isEdit || !viaCommand) ? <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium border border-border rounded-md hover:bg-muted cursor-pointer">
               <Upload size={14} /> {uploading ? 'Téléversement…' : 'Photo'}
               <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={handlePhoto} disabled={uploading} />
-            </label>
+            </label> : <p className="text-xs text-muted-foreground">La photo s’ajoute depuis la fiche, après l’enregistrement.</p>}
           </div>
           <div className="col-span-2">
             <label htmlFor="full_name" className={labelClass}>Nom complet *</label>
@@ -378,8 +453,9 @@ export default function StudentForm() {
             {fieldErr('notes') && <p className="text-xs text-red-600 mt-1">{fieldErr('notes')}</p>}
           </div>
         </div>
+        {loadError && <p role="alert" className="text-sm text-red-600">{loadError}</p>}
         <div className="flex gap-3 pt-2">
-          <button type="submit" disabled={saving || uploading} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
+          <button type="submit" disabled={saving || uploading || !loaded} className="px-5 py-2.5 text-sm font-semibold text-white rounded-md hover:opacity-90 disabled:opacity-50 bg-primary">
             {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
           <button type="button" onClick={() => router.push('/students')} className="px-5 py-2.5 text-sm text-muted-foreground hover:text-foreground">Annuler</button>

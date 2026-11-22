@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { safeReturnTo } from '@/lib/navigation.mjs';
 import { useAuth } from '@/context/AuthContext';
 import { getTeacherOperations } from '@/lib/teacher-directory';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { queryClientInstance } from '@/lib/query-client';
 
@@ -22,15 +23,16 @@ export default function TeacherProfile() {
 function TeacherProfileForRole({ role }) {
   const { id } = useParams();
   const router = useRouter();
+  const seesPay = hasCapability(role, 'canViewTeacherCompensation');
   const [teacher, setTeacher] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    const load = role === 'receptionist' ? getTeacherOperations({ id }) : entities.Teacher.filter({ id });
+    const load = seesPay ? entities.Teacher.filter({ id }) : getTeacherOperations({ id });
     load.then((rows) => setTeacher(rows[0] || null))
       .catch(() => setTeacher(null)).finally(() => setLoading(false));
-  }, [id, role]);
+  }, [id, seesPay]);
 
   const archive = async () => {
     if (!confirm('Archiver cet enseignant ? Sa fiche sera masquée mais conservée.')) return;
@@ -46,9 +48,10 @@ function TeacherProfileForRole({ role }) {
 
   const fields = [
     ['Email', teacher.email], ['Téléphone', teacher.telephone],
-    ...(role === 'receptionist' ? [] : [['Type de contrat', teacher.contract_type]]),
+    ...(seesPay ? [['Type de contrat', teacher.contract_type || 'À compléter']] : []),
     ['Niveaux autorisés', teacher.niveaux_autorises?.join(', ')],
     ['Certifications', teacher.certifications?.join(', ')],
+    ['Notes', teacher.notes],
   ];
   return <div className="p-4 lg:p-8 max-w-3xl">
     <button onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), '/teachers'))} className="inline-flex items-center gap-2 min-h-10 text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded"><ArrowLeft size={16} /> Retour</button>

@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { learnerNoticeTargets } from '@/lib/portal';
 import { createDeliveryTracker } from '@/lib/deliveryOnce.mjs';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -24,7 +26,8 @@ const TYPE_COLORS = {
   general: 'bg-gray-50 text-gray-700',
 };
 
-function SendNotifModal({ students, onSave, onClose }) {
+// RPW-r2 item 23: a learner's family; a free address only for management (canMessageAnyAddress).
+function SendNotifModal({ students, anyAddress, onSave, onClose }) {
   const [form, setForm] = useState({ type: 'general', recipient_email: '', recipient_name: '', subject: '', message: '' });
   const [student, setStudent] = useState(null);
   const [targets, setTargets] = useState(null); // D8: linked accounts, else the dossier address (e-mail only)
@@ -51,7 +54,7 @@ function SendNotifModal({ students, onSave, onClose }) {
 
   const recipients = student
     ? (targets?.targets || [])
-    : (form.recipient_email ? [{ email: form.recipient_email, name: form.recipient_name }] : []);
+    : (anyAddress && form.recipient_email ? [{ email: form.recipient_email, name: form.recipient_name }] : []);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -94,9 +97,9 @@ function SendNotifModal({ students, onSave, onClose }) {
             </select>
           </div>
           <div>
-            <label className={labelClass}>Apprenant (optionnel)</label>
-            <select className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)} disabled={locked}>
-              <option value="">— Ou saisir manuellement —</option>
+            <label htmlFor="notification-student" className={labelClass}>{anyAddress ? 'Apprenant (optionnel)' : 'Apprenant *'}</label>
+            <select id="notification-student" className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)} disabled={locked} required={!anyAddress}>
+              <option value="">{anyAddress ? '— Ou saisir manuellement —' : '— Choisir un apprenant —'}</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
           </div>
@@ -110,7 +113,7 @@ function SendNotifModal({ students, onSave, onClose }) {
                 <p className="mt-1 text-xs text-amber-700">E-mail uniquement, pas de compte : la notification n’apparaîtra dans aucun espace.</p>
               )}
             </div>
-          ) : (
+          ) : anyAddress ? (
             <>
               <div>
                 <label className={labelClass}>Email destinataire *</label>
@@ -121,7 +124,7 @@ function SendNotifModal({ students, onSave, onClose }) {
                 <input className={inputClass} value={form.recipient_name} onChange={e => set('recipient_name', e.target.value)} disabled={locked} />
               </div>
             </>
-          )}
+          ) : null}
           <div>
             <label className={labelClass}>Objet *</label>
             <input className={inputClass} value={form.subject} onChange={e => set('subject', e.target.value)} required disabled={locked} />
@@ -146,6 +149,8 @@ function SendNotifModal({ students, onSave, onClose }) {
 }
 
 export default function Notifications() {
+  const { role } = useAuth();
+  const anyAddress = hasCapability(role, 'canMessageAnyAddress');
   const [notifications, setNotifications] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +219,7 @@ export default function Notifications() {
           </div>
         )}
       </div>
-      {modal && <SendNotifModal students={students} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
+      {modal && <SendNotifModal students={students} anyAddress={anyAddress} onSave={() => { setModal(false); load(); }} onClose={() => setModal(false)} />}
     </div>
   );
 }

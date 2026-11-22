@@ -403,13 +403,16 @@ select pg_temp.ok((public.preview_family_invitation('pr-family-a@example.test', 
   'T-19 the preview lists both matches and flags the mixed phones');
 select pg_temp.ok(public.preview_family_invitation('pr-family-a@example.test', 'parent')::text not like '%@%',
   'T-19 the preview echoes no address');
--- T-20: the receptionist cannot invite, preview, link or revoke (Q4 = A).
+-- T-20: the receptionist links no account (Q4 = A). RPW-r2 item 7 (owner decision, replaces the
+-- rest of Q4 = A): she previews, invites and revokes family links, refused only by the address
+-- and link rules, never by role.
 select pg_temp.act(3);
 select pg_temp.fails(format('select public.prepare_family_invitation(%L, %L, %L)', 'pr-new-family@example.test', 'parent', array[pg_temp.id(213)]),
-  '42501', 'portal.forbidden');
-select pg_temp.fails($$select public.preview_family_invitation('pr-family-a@example.test', 'parent')$$, '42501', 'portal.forbidden');
+  '22023', 'portal.no_match');
+select pg_temp.ok(jsonb_array_length(public.preview_family_invitation('pr-family-a@example.test', 'parent')->'matches') = 2,
+  'T-20 the receptionist previews a family invitation');
 select pg_temp.fails(format('select public.link_family_student(%L, %L)', pg_temp.id(8), pg_temp.id(201)), '42501', 'portal.forbidden');
-select pg_temp.fails(format('select public.revoke_family_link(%L, %L)', pg_temp.id(601), 'x'), '42501', 'portal.forbidden');
+select pg_temp.fails(format('select public.revoke_family_link(%L, %L)', gen_random_uuid(), 'x'), 'PT409', 'portal.link_not_active');
 select pg_temp.ok((select count(*) from public.list_family_links(pg_temp.id(201))) = 1, 'T-20 the receptionist reads the learner''s links');
 select pg_temp.act(7);
 select pg_temp.fails(format('select * from public.list_family_links(%L)', pg_temp.id(201)), '42501', 'portal.forbidden');
@@ -694,9 +697,10 @@ select pg_temp.act(3);
 select pg_temp.ok((select count(*) from public.get_teacher_directory() where id in (pg_temp.id(101), pg_temp.id(102))) = 2,
   'T-33 the receptionist keeps the safe directory');
 -- Review S3: the e-mail recipient check is staff only; any other caller gets the same
--- refusal for a known and an unknown address (nothing about existence leaks).
+-- refusal for a known and an unknown address (nothing about existence leaks). RPW-r2 items 15
+-- and 23 (owner decision): the receptionist holds email_families and gets the staff answer.
 do $$ declare who integer; addr text; begin
-  foreach who in array array[3, 4, 7, 10, 11] loop
+  foreach who in array array[4, 7, 10, 11] loop
     foreach addr in array array['pr-family-a@example.test', 'pr-t1@example.test', 'nobody-' || who || '@example.test'] loop
       perform pg_temp.act(who);
       perform pg_temp.fails(format('select public.can_message_recipient(%L)', addr), '42501');
@@ -705,6 +709,9 @@ do $$ declare who integer; addr text; begin
   perform pg_temp.act(2);
   perform pg_temp.ok(public.can_message_recipient('pr-family-a@example.test') and not public.can_message_recipient('nobody@example.test'),
     'T-33 director/admin keep the e-mail recipient check');
+  perform pg_temp.act(3);
+  perform pg_temp.ok(public.can_message_recipient('pr-family-a@example.test') and not public.can_message_recipient('nobody@example.test'),
+    'T-33 the receptionist gets the staff recipient check (RPW-r2 items 15, 23)');
   perform pg_temp.owner();
 end $$;
 -- T-34: parent:<id> resolves to every active parent link and is refused without one.

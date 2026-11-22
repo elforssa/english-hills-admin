@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { getLevelsForSession } from '@/lib/academicPrograms';
 import PersonLink from '@/components/PersonLink';
 import { useAuth } from '@/context/AuthContext';
-import ReceptionistAssessments from '@/components/students/ReceptionistAssessments';
 import { finalGrade, parseGrade } from '@/lib/assessmentGrades.mjs';
 import { groupMemberIds } from '@/lib/enrollmentWorkflow.mjs';
 import { loadTeacherAcademicRows } from '@/lib/portal';
@@ -139,12 +138,15 @@ function AssessmentModal({ assessment, students, groups, enrollments = [], onSav
 
 export default function AssessmentsPage() {
   const { role } = useAuth();
-  return role === 'receptionist' ? <ReceptionistAssessments /> : <Assessments role={role} />;
+  // RPW-r2 item 16: one page for every role; reception adds and corrects grades.
+  return <Assessments role={role} />;
 }
 
 function Assessments({ role }) {
   // Teachers correct grades; deletion is management only (Q2 = A).
   const canDelete = hasCapability(role, 'canDeleteAcademicRecords');
+  // Item 16: the CSV export stays with management and teachers (reception: screen only).
+  const canExportCsv = hasCapability(role, 'canExportStudents') || role === 'teacher';
   const [assessments, setAssessments] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -214,9 +216,9 @@ function Assessments({ role }) {
           <Button onClick={() => setModal({})} className="self-start sm:self-auto">
             <Plus size={15} /> Nouvelle note
           </Button>
-          <button onClick={exportAssessmentsCsv} className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted self-start sm:self-auto">
+          {canExportCsv && <button onClick={exportAssessmentsCsv} className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium border border-border rounded-md hover:bg-muted self-start sm:self-auto">
             <Download size={15} /> Export CSV
-          </button>
+          </button>}
         </div>
       </div>
       <div className="flex flex-wrap gap-3 mb-5">

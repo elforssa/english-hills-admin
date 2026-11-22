@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import PersonLink from '@/components/PersonLink';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { getTeacherOperations } from '@/lib/teacher-directory';
 
 const STATUS_COLORS = {
   'En attente': 'bg-yellow-100 text-yellow-700',
@@ -72,6 +75,9 @@ function LeaveModal({ leave, teachers, onSave, onClose }) {
 }
 
 export default function LeaveRequests() {
+  // RPW-r2 (leave requests): reception views; creating, editing, deciding and deleting stay management.
+  const { role } = useAuth();
+  const canDecide = hasCapability(role, 'canDecideLeaveRequests');
   const [leaves, setLeaves] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,10 +86,11 @@ export default function LeaveRequests() {
 
   const load = () => Promise.all([
     entities.LeaveRequest.listAll('-created_date'),
-    entities.Teacher.listAll('full_name'),
+    hasCapability(role, 'canViewTeacherCompensation') ? entities.Teacher.listAll('full_name') : getTeacherOperations(),
   ]).then(([l, t]) => { setLeaves(l); setTeachers(t); setLoading(false); });
 
-  useEffect(() => { load(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [role]);
   useEffect(() => { entities.Group.listAll('name').then(setGroups); }, []);
 
   // Notify the teacher of a leave decision — both by email and via an in-app
@@ -145,9 +152,9 @@ export default function LeaveRequests() {
     <div className="p-4 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Congés & absences</h1>
-        <Button onClick={() => setModal({})} className="self-start sm:self-auto">
+        {canDecide && <Button onClick={() => setModal({})} className="self-start sm:self-auto">
           <Plus size={15} /> Nouvelle demande
-        </Button>
+        </Button>}
       </div>
 
       {alerts.length > 0 && (
@@ -192,15 +199,15 @@ export default function LeaveRequests() {
                     <p className="font-semibold text-sm"><PersonLink kind="teacher" id={l.teacher_id}>{l.teacher_name}</PersonLink></p>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[l.status] || ''}`}>{l.status}</span>
                   </div>
-                  <button onClick={() => setModal(l)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut} au {l.date_fin}</button>
+                  {canDecide ? <button onClick={() => setModal(l)} className="block text-xs text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut} au {l.date_fin}</button> : <p className="text-xs">Demande du {l.date_debut} au {l.date_fin}</p>}
                   <p className="text-xs text-muted-foreground">{l.type_conge} · {diffDays(l.date_debut, l.date_fin)} j</p>
                   {l.remplacant && <p className="text-xs text-muted-foreground mt-0.5">Remplaçant: {l.remplacant}</p>}
                   <div className="flex gap-2 mt-3">
-                    {l.status === 'En attente' && <>
+                    {canDecide && l.status === 'En attente' && <>
                       <button onClick={() => handleApprove(l)} className="p-1.5 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={15} /></button>
                       <button onClick={() => handleRefuse(l)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={15} /></button>
                     </>}
-                    <button onClick={() => handleDelete(l.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>
+                    {canDecide && <button aria-label="Supprimer la demande" onClick={() => handleDelete(l.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={15} /></button>}
                   </div>
                 </div>
               ))}
@@ -217,18 +224,18 @@ export default function LeaveRequests() {
                     <tr key={l.id} className="hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium"><PersonLink kind="teacher" id={l.teacher_id}>{l.teacher_name}</PersonLink></td>
                       <td className="px-4 py-3 text-muted-foreground">{l.type_conge}</td>
-                      <td className="px-4 py-3"><button onClick={() => setModal(l)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut}</button></td>
+                      <td className="px-4 py-3">{canDecide ? <button onClick={() => setModal(l)} className="text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">Demande du {l.date_debut}</button> : <>Demande du {l.date_debut}</>}</td>
                       <td className="px-4 py-3 text-muted-foreground">{l.date_fin}</td>
                       <td className="px-4 py-3 text-muted-foreground">{diffDays(l.date_debut, l.date_fin)} j</td>
                       <td className="px-4 py-3 text-muted-foreground">{l.remplacant || '—'}</td>
                       <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[l.status] || ''}`}>{l.status}</span></td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
-                          {l.status === 'En attente' && <>
+                          {canDecide && l.status === 'En attente' && <>
                             <button onClick={() => handleApprove(l)} className="p-1 rounded hover:bg-green-50 text-muted-foreground hover:text-green-600"><CheckCircle size={14} /></button>
                             <button onClick={() => handleRefuse(l)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><XCircle size={14} /></button>
                           </>}
-                          <button onClick={() => handleDelete(l.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>
+                          {canDecide && <button aria-label="Supprimer la demande" onClick={() => handleDelete(l.id)} className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600"><Trash2 size={14} /></button>}
                         </div>
                       </td>
                     </tr>
@@ -239,7 +246,7 @@ export default function LeaveRequests() {
           </>
         )}
       </div>
-      {modal !== null && <LeaveModal leave={modal.id ? modal : null} teachers={teachers} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
+      {canDecide && modal !== null && <LeaveModal leave={modal.id ? modal : null} teachers={teachers} onSave={() => { setModal(null); load(); }} onClose={() => setModal(null)} />}
     </div>
   );
 }

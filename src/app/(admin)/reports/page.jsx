@@ -27,6 +27,9 @@ import { useEntityAll } from '@/lib/queries';
 import { entities } from '@/lib/entities';
 import AcademicOperationsReport from '@/components/reports/AcademicOperationsReport';
 import { getBrowserClient } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { getTeacherOperations } from '@/lib/teacher-directory';
 import {
   attendanceSeries as toAttendanceSeries, attendanceTotals as toAttendanceTotals, loadAcademicSources, reportYears,
 } from '@/lib/reportData.mjs';
@@ -107,6 +110,11 @@ async function rpc(name, args) {
 }
 
 export default function ReportsPage() {
+  // RPW-r2 item 26: without finance analytics, no finance or pay read is made and those KPIs and
+  // panels are absent; without the pay view, teachers come from the operations read.
+  const { role } = useAuth();
+  const seesFinance = hasCapability(role, 'canViewFinanceAnalytics');
+  const seesPay = hasCapability(role, 'canViewTeacherCompensation');
   const [days, setDays]   = useState(30);
   const [chosenYear, setYear] = useState(null);
 
@@ -114,12 +122,16 @@ export default function ReportsPage() {
   const { years: availableYears, current: currentYear } = reportYears(yearsQuery.data);
   const year = chosenYear || currentYear;
   const attendanceQuery = useQuery({ queryKey: ['report', 'attendance', days], queryFn: () => rpc('report_attendance_daily', { p_days: days }) });
-  const financeQuery = useQuery({ queryKey: ['report', 'finance', year], enabled: Boolean(year),
+  const financeQuery = useQuery({ queryKey: ['report', 'finance', year], enabled: Boolean(year) && seesFinance,
     queryFn: () => rpc('get_finance_year_months', { p_year: Number(year) }) });
-  const payrollQuery = useQuery({ queryKey: ['report', 'payroll', year], enabled: Boolean(year),
+  const payrollQuery = useQuery({ queryKey: ['report', 'payroll', year], enabled: Boolean(year) && seesFinance && seesPay,
     queryFn: () => rpc('report_payroll_by_teacher', { p_year: Number(year) }) });
   const mixQuery = useQuery({ queryKey: ['report', 'student-mix'], queryFn: () => rpc('report_student_mix') });
-  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = useEntityAll('Teacher', 'full_name');
+  const teacherTable = useEntityAll('Teacher', 'full_name', { enabled: Boolean(role) && seesPay });
+  const teacherOperations = useQuery({ queryKey: ['report', 'teacher-operations'], enabled: Boolean(role) && !seesPay,
+    queryFn: () => getTeacherOperations() });
+  const teacherSource = seesPay ? teacherTable : teacherOperations;
+  const { data: teachers = [], isLoading: teachersLoading, isError: teachersError } = teacherSource;
   const { data: groups = [], isLoading: groupsLoading, isError: groupsError } = useEntityAll('Group', 'name');
   const academicQuery = useQuery({ queryKey: ['report', 'academic-sources', groups.map(g => g.id)], enabled: !groupsLoading && !groupsError,
     queryFn: () => loadAcademicSources(entities, groups) });
@@ -168,6 +180,7 @@ export default function ReportsPage() {
 
   const studentMixColors = [COLORS.success, COLORS.teal, COLORS.warning, COLORS.purple, '#94a3b8'];
 
+  // A disabled query reports isLoading false (TanStack v5), so skipped reads never block the page.
   const loading = attendanceQuery.isLoading || financeQuery.isLoading || payrollQuery.isLoading || yearsQuery.isLoading;
   const academicLoading = teachersLoading || groupsLoading || academicQuery.isLoading;
   const queries = [yearsQuery, attendanceQuery, financeQuery, payrollQuery, mixQuery, academicQuery];
@@ -191,7 +204,7 @@ export default function ReportsPage() {
           <p className="text-xs font-bold uppercase tracking-widest text-primary">Pilotage du centre</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">Rapports</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Synthèse présences, finance et paie. Les données sont rafraîchies en temps réel.
+            {seesFinance ? 'Synthèse présences, finance et paie.' : 'Synthèse présences et activité académique.'} Les données sont rafraîchies en temps réel.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -214,7 +227,7 @@ export default function ReportsPage() {
           hint={`${attendanceTotals.total} sessions enregistrées`}
           color={COLORS.success}
         />
-        <StatCard
+        {seesFinance && <><StatCard
           label={`Encaissé ${year}`}
           value={loading ? '—' : MAD(financeTotals.encaisse)}
           hint="Paiements datés de l’année"
@@ -231,7 +244,7 @@ export default function ReportsPage() {
           value={loading ? '—' : MAD(payrollTotals.net)}
           hint={`${payrollByTeacher.length} enseignant(s)`}
           color={COLORS.purple}
-        />
+        /></>}
       </div>
 
       <div className="space-y-6">
@@ -241,6 +254,7 @@ export default function ReportsPage() {
           groups={groups}
           enrollments={enrollments}
           loading={academicLoading}
+          showTeacherWorkload={hasCapability(role, 'canViewTeacherWorkload')}
         />
 
         {/* ── Attendance ─────────────────────────────────────────────── */}
@@ -286,7 +300,7 @@ export default function ReportsPage() {
         </Panel>
 
         {/* ── Finance ────────────────────────────────────────────────── */}
-        <Panel
+        {seesFinance && <Panel
           title="Finance"
           subtitle={`Encaissé vs facturé — ${year}`}
           icon={CreditCard}
@@ -318,10 +332,10 @@ export default function ReportsPage() {
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Facturé : engagements créés dans le mois. Encaissé : paiements datés du mois, quel que soit l’engagement. Le reste à encaisser figure dans Finance.</p>
-        </Panel>
+        </Panel>}
 
         {/* ── Payroll YTD ───────────────────────────────────────────── */}
-        <Panel
+        {seesFinance && seesPay && <Panel
           title="Paie YTD"
           subtitle={`Top enseignants — ${year}`}
           icon={Briefcase}
@@ -358,7 +372,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           )}
-        </Panel>
+        </Panel>}
 
         {/* ── Student funnel ────────────────────────────────────────── */}
         <Panel

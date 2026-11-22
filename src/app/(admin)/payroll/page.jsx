@@ -112,6 +112,9 @@ function PayrollModal({ teachers, onSave, onClose }) {
               <input className={inputClass} value={annee} onChange={e => setAnnee(e.target.value)} />
             </div>
           </div>
+          {teacher && !['Employé', 'Freelance'].includes(teacher.contract_type) && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Type de contrat non renseigné : complétez la fiche de l’enseignant (contrat et rémunération) avant la paie.</p>
+          )}
           {teacher?.contract_type === 'Freelance' && (
             <div>
               <label className={labelClass}>Heures travaillées</label>
@@ -129,7 +132,7 @@ function PayrollModal({ teachers, onSave, onClose }) {
           )}
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? '...' : 'Créer la fiche'}</Button>
+            <Button type="submit" disabled={saving || (teacher && !['Employé', 'Freelance'].includes(teacher.contract_type))}>{saving ? '...' : 'Créer la fiche'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

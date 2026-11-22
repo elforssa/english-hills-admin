@@ -1,0 +1,774 @@
+{
+  "append_receptionist_enrollment_document(p_enrollment uuid, p_expected_updated_at timestamp with time zone, p_asset text)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "apply_pending_role()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "59c41496005d887bcf50cd5e129c8f78"
+  },
+  "assign_receptionist_student_group(p_student uuid, p_enrollment uuid, p_group uuid, p_student_updated_at timestamp with time zone, p_enrollment_updated_at timestamp with time zone)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "business_date(p_at timestamp with time zone)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "can_access_premium_group(p_group_id uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "5f3610c91895059bbb88596e577075a1"
+  },
+  "can_message_recipient(p_email text)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "0c249394517684153e41d89a1b78643a"
+  },
+  "centre_school_year(p_date date)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "centre_utc_offset()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "change_user_role(p_user_id uuid, p_role text)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "f5b2fb159bb0468a2cf7dc603e6a7fb1"
+  },
+  "close_course(p_group uuid, p_expected_count integer, p_reason text, p_attach uuid[], p_end_unplaced uuid[])": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "close_course_preview(p_group uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "close_school_year(p_school_year text, p_expected_count integer, p_reason text)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "close_school_year_preview(p_school_year text)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "consume_rate_limit(p_scope text)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "ad0d282463a1ee7eb92c7da38913db8e"
+  },
+  "count_today_dismissals()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "create_charge_payment(p_payload jsonb)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
+  "create_enrollment(p_student uuid, p_changes jsonb)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "create_receptionist_premium_group(p_group uuid, p_name text, p_teacher uuid, p_weekday smallint, p_start_time time without time zone, p_academic_year text, p_notes text)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "crm_add_note(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_bind_pending_lifecycle_stop(p_request uuid, p_pending_stop uuid, p_contact uuid, p_connection uuid, p_decision_reference text)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_book_placement_test(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_cancel_task(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_close_lost(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_close_not_qualified(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_complete_task(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_configure_insights(p_connection uuid, p_version bigint, p_data jsonb)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_configure_lifecycle(p_connection uuid, p_version bigint, p_data jsonb)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_create_followup_policy(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_create_manual_lead(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_disable_lifecycle(p_connection uuid, p_version bigint)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_enroll_and_collect(p_request_key uuid, p_data jsonb)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
+  "crm_enrollment_groups(p_session text, p_level text, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_find_enrollment_candidates(p_student uuid, p_session text, p_year text, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_find_student_candidates(p_lead uuid, p_name text, p_birth_date date, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_admissions_calendar(p_start date, p_end date, p_kind text, p_include_completed boolean, p_cursor jsonb, p_limit integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_enrollment_context(p_lead uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_form_answers(p_lead uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_history(p_lead uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_lead_detail(p_lead uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_marketing_cohort(p_from date, p_to date, p_cutoff_date date, p_connection uuid, p_level text, p_campaign text, p_adset text, p_ad text, p_channel text, p_limit integer, p_offset integer, p_session_type text)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_get_meta_diagnostics(p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_get_operational_acquisition_summary(p_lead uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_opportunities(p_view text, p_query text, p_contact uuid, p_owner_mode text, p_owner uuid, p_channel text, p_source_label text, p_program_kind text, p_program text, p_layout text, p_stage text, p_limit integer, p_cursor jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_opportunity_filter_options(p_kind text, p_query text, p_cursor jsonb, p_limit integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_placement(p_test uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_revenue_entries_for_lead(p_lead uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_get_revenue_reconciliation_queue(p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_get_submission_attribution(p_submission uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_get_timeline(p_lead uuid, p_cursor jsonb, p_limit integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_today(p_limit integer, p_offset integer, p_schedule_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_work_queue(p_bucket text, p_assignee_mode text, p_assignee uuid, p_owner_mode text, p_owner uuid, p_cursor jsonb, p_limit integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_workspace_detail(p_lead uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_insights_diagnostics(p_connection uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_lifecycle_diagnostics()": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_list_activities(p_lead uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_list_external_deliveries(p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_list_intake_review(p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_list_leads(p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_list_open_tasks(p_lead uuid, p_assigned_to uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_list_pending_lifecycle_stops(p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_list_placements(p_lead uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_list_staff(p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_publish_lifecycle_policy(p_connection uuid, p_connection_version bigint, p_data jsonb)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_publish_meta_form_mapping(p_connection uuid, p_data jsonb)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_publish_website_form_mapping(p_connection uuid, p_data jsonb)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_qualify_lead(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_reassign(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_reconcile_external_deliveries(p_limit integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_reconcile_receipt_revenue(p_receipt uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_reconcile_revenue_batch(p_limit integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_record_call_outcome(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_record_conversation(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_record_conversation_decision(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_record_whatsapp(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_reopen_lead(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_request_insights_sync(p_connection uuid, p_request uuid, p_from date, p_to date)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_resolve_external_intake(p_request uuid, p_submission uuid, p_action text, p_data jsonb)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "caee8708008b50c64cecdb8021fff219"
+  },
+  "crm_resolve_meta_intake(p_request uuid, p_submission uuid, p_action text, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_retire_lifecycle_policy(p_policy uuid, p_version integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_retire_meta_form_mapping(p_mapping uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_retry_external_delivery(p_delivery uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_retry_insights_sync(p_run uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_retry_meta_job(p_job uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_revoke_lifecycle_evidence(p_request uuid, p_evidence uuid, p_reason text)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_save_meta_connection(p_data jsonb, p_id uuid, p_version bigint)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_save_website_connection(p_data jsonb, p_id uuid, p_version bigint)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_schedule_task(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_search_leads(p_query text, p_status text, p_contact uuid, p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_stop_lifecycle_sharing(p_request uuid, p_scope text, p_subject uuid, p_connection uuid, p_reason text, p_source_submission uuid, p_decision_reference text, p_pending_contact_review boolean)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
+  "crm_update_placement_test(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "delete_mistaken_receipt(p_receipt_id uuid, p_reason text, p_idempotency_key uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "end_learner(p_student uuid, p_student_updated_at timestamp with time zone, p_final_status text, p_reason text, p_enrollments uuid[])": {
+    "gate": "capability:end_learner",
+    "receptionist": "open"
+  },
+  "family_group_ids()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "95d53fb5b3dcfd66b7cbdbfbf5e00908"
+  },
+  "get_finance_charge_summary()": {
+    "gate": "finance_staff",
+    "receptionist": "locked"
+  },
+  "get_finance_review_queue(p_since date)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "get_finance_year_months(p_year integer)": {
+    "gate": "finance_staff",
+    "receptionist": "locked"
+  },
+  "get_monthly_finance_summary(p_month_start date)": {
+    "gate": "finance_staff",
+    "receptionist": "locked"
+  },
+  "get_my_email()": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "d2e158ee15f8d2fdd082e1a41b3df8e6"
+  },
+  "get_my_role()": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "38683d3be39913aba404fa202d77f1c8"
+  },
+  "get_my_student_id()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "d50139bf29857c4972e726f1512df1ce"
+  },
+  "get_my_teacher_id()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "c63babbd1cd124077033bd4d40f1a435"
+  },
+  "get_referral_breakdown()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "get_storage_upload(p_asset_id uuid)": {
+    "gate": "storage_purpose",
+    "receptionist": "open"
+  },
+  "get_teacher_directory(p_teacher_id uuid)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "be4eeaec47c9786893b31bad72ebdd88"
+  },
+  "get_teacher_operations(p_teacher_id uuid, p_limit integer, p_offset integer)": {
+    "gate": "capability:manage_teacher_operations",
+    "receptionist": "open"
+  },
+  "get_unpaid_charges(lim integer)": {
+    "gate": "finance_staff",
+    "receptionist": "locked"
+  },
+  "get_visible_student_ids()": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "62b63e207fd4fae68ce67c72dd4353b2"
+  },
+  "link_family_student(p_profile_id uuid, p_student_id uuid)": {
+    "gate": "portal_manager",
+    "receptionist": "locked"
+  },
+  "link_teacher_account(p_profile_id uuid, p_teacher_id uuid)": {
+    "gate": "portal_manager",
+    "receptionist": "locked"
+  },
+  "list_activity_log(p_before_created_at timestamp with time zone, p_before_id uuid, p_table text, p_action text, p_from date, p_to date, p_search text, p_limit integer)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "list_activity_log_tables()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "list_archived_students(p_page integer, p_page_size integer)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "list_courses_to_close()": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "list_family_links(p_student_id uuid)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "list_staff_recipients()": {
+    "gate": "capability:message_office",
+    "receptionist": "open"
+  },
+  "mark_message_read(p_message_id uuid)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "3a267b7058b32bae19e6fa8d5fe357f0"
+  },
+  "mark_my_notifications_read()": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "3e4a88760904d2c90cfc696e8b073e99"
+  },
+  "my_member_group_ids()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "7a5b84f6b40b19214335c710a49b1817"
+  },
+  "online_activate_course(p_group uuid, p_expected_version bigint, p_provider text, p_room_ref text)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_add_guest(p_lesson uuid, p_student uuid, p_kind text, p_note text)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_cancel_lesson(p_lesson uuid, p_expected_version bigint, p_reason text, p_scope text)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_check_join(p_lesson uuid, p_student uuid)": {
+    "gate": "roles:admin,director,parent,receptionist,student,teacher",
+    "receptionist": "open"
+  },
+  "online_check_pass(p_jti uuid)": {
+    "gate": "roles:admin,director,parent,receptionist,student,teacher",
+    "receptionist": "open"
+  },
+  "online_close_course(p_group uuid, p_expected_version bigint)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_confirm_pass(p_jti uuid)": {
+    "gate": "roles:admin,director,parent,receptionist,student,teacher",
+    "receptionist": "open"
+  },
+  "online_get_course(p_group uuid, p_lesson uuid)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_get_lesson_roster(p_lesson uuid)": {
+    "gate": "roles:teacher",
+    "receptionist": "locked"
+  },
+  "online_issue_join(p_lesson uuid, p_student uuid)": {
+    "gate": "roles:admin,director,parent,receptionist,student,teacher",
+    "receptionist": "open"
+  },
+  "online_list_courses()": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_list_lessons_for_me(p_from date, p_to date)": {
+    "gate": "roles:student",
+    "receptionist": "locked"
+  },
+  "online_list_lessons_for_my_children(p_from date, p_to date)": {
+    "gate": "roles:parent",
+    "receptionist": "locked"
+  },
+  "online_list_my_lessons(p_from date, p_to date)": {
+    "gate": "roles:teacher",
+    "receptionist": "locked"
+  },
+  "online_record_consent(p_student uuid, p_note text)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_remove_guest(p_guest uuid)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_revoke_consent(p_student uuid)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_room_status(p_deployment text)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_save_attendance(p_lesson uuid, p_expected_version bigint, p_rows jsonb, p_report text)": {
+    "gate": "roles:admin,director,receptionist,teacher",
+    "receptionist": "open"
+  },
+  "online_save_course(p_group uuid, p_expected_version bigint, p_course jsonb)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_save_pattern(p_group uuid, p_patterns jsonb, p_from_date date, p_expected_version bigint)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_set_lesson_teacher(p_lesson uuid, p_expected_version bigint, p_teacher uuid)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_teacher_lesson_counts(p_month date)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "online_update_lesson(p_lesson uuid, p_expected_version bigint, p_changes jsonb, p_scope text)": {
+    "gate": "roles:admin,director,receptionist",
+    "receptionist": "open"
+  },
+  "online_usage_month(p_month date)": {
+    "gate": "roles:admin,director",
+    "receptionist": "locked"
+  },
+  "place_learner_in_group(p_student uuid, p_group uuid, p_student_updated_at timestamp with time zone, p_enrollment uuid, p_school_year text, p_enrollment_updated_at timestamp with time zone, p_capacity_override_reason text, p_without_enrollment_reason text)": {
+    "gate": "capability:assign_group",
+    "receptionist": "open"
+  },
+  "portal_learner_record(p_student_id uuid)": {
+    "gate": "roles:parent,student",
+    "receptionist": "locked"
+  },
+  "portal_message_recipients()": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "2d56453d87e955313079a680269f186b"
+  },
+  "portal_my_learners()": {
+    "gate": "roles:parent,student",
+    "receptionist": "locked"
+  },
+  "portal_my_messages(p_box text, p_before timestamp with time zone)": {
+    "gate": "roles:parent,student,teacher",
+    "receptionist": "locked"
+  },
+  "portal_request_reenrollment(p_student_id uuid)": {
+    "gate": "roles:parent",
+    "receptionist": "locked"
+  },
+  "portal_send_message(p_recipient_key text, p_subject text, p_body text, p_reply_to_id uuid, p_student_id uuid)": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "442e6236a539161f6f3457b472ad4eb0"
+  },
+  "portal_teacher_roster(p_group_id uuid)": {
+    "gate": "roles:teacher",
+    "receptionist": "locked"
+  },
+  "prepare_family_invitation(p_email text, p_role text, p_student_ids uuid[])": {
+    "gate": "capability:invite_family",
+    "receptionist": "open"
+  },
+  "prepare_role_invitation(p_email text, p_role text)": {
+    "gate": "portal_manager",
+    "receptionist": "locked"
+  },
+  "prepare_teacher_invitation(p_email text, p_teacher_id uuid)": {
+    "gate": "portal_manager",
+    "receptionist": "locked"
+  },
+  "preview_family_invitation(p_email text, p_role text)": {
+    "gate": "capability:invite_family",
+    "receptionist": "open"
+  },
+  "receipt_enrollment_candidates(p_student uuid)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
+  "recover_missing_profile()": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "81770f4550acf8712c360f9c9092c410"
+  },
+  "remove_learner_from_group(p_student uuid, p_group uuid, p_student_updated_at timestamp with time zone, p_enrollment uuid, p_enrollment_updated_at timestamp with time zone)": {
+    "gate": "capability:assign_group",
+    "receptionist": "open"
+  },
+  "remove_student_group(p_student uuid, p_group uuid)": {
+    "gate": "capability:assign_group",
+    "receptionist": "open"
+  },
+  "reopen_course(p_group uuid, p_expected_closed_at timestamp with time zone)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "reopen_enrollment(p_enrollment uuid, p_expected_updated_at timestamp with time zone)": {
+    "gate": "capability:reopen_enrollment",
+    "receptionist": "open"
+  },
+  "report_attendance_daily(p_days integer)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "report_payroll_by_teacher(p_year integer)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "report_student_mix()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "report_years()": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "reserve_premium_homework_asset(p_student_id uuid, p_premium_session_id uuid)": {
+    "gate": "storage_purpose",
+    "receptionist": "open"
+  },
+  "reserve_storage_asset(p_purpose text, p_student_id uuid, p_teacher_id uuid, p_enrollment_id uuid)": {
+    "gate": "storage_purpose",
+    "receptionist": "open"
+  },
+  "resolve_storage_asset(p_asset_id uuid)": {
+    "gate": "manual",
+    "receptionist": "open",
+    "md5": "7896f75dbf579293b2a8478896cc99e9"
+  },
+  "restore_student(p_student uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "retry_receipt_email(p_receipt_id uuid)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
+  "revoke_family_link(p_link_id uuid, p_reason text)": {
+    "gate": "capability:invite_family",
+    "receptionist": "open"
+  },
+  "save_attendance(p_student uuid, p_group uuid, p_date date, p_status text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "save_enrollment_changes(p_enrollment uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "capability:edit_enrollment",
+    "receptionist": "open"
+  },
+  "save_receptionist_enrollment(p_student uuid, p_enrollment uuid, p_group uuid, p_status text, p_level text, p_date date, p_notes text, p_session text, p_school_year text)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_group(p_group uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_premium_attendance(p_session uuid, p_student uuid, p_status text, p_expected_updated_at timestamp with time zone)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_premium_membership(p_membership uuid, p_expected_updated_at timestamp with time zone, p_group uuid, p_student uuid, p_start_date date)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_premium_session(p_session uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_student(p_student uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "save_receptionist_teacher_operations(p_teacher uuid, p_expected_updated_at timestamp with time zone, p_changes jsonb)": {
+    "gate": "receptionist_only",
+    "receptionist": "open"
+  },
+  "search_students_page(p_search text, p_status text, p_age_category text, p_session text, p_level text, p_incomplete boolean, p_source text, p_plan text, p_page integer, p_page_size integer, p_group text, p_payment text)": {
+    "gate": "invoker",
+    "receptionist": "rls"
+  },
+  "soft_delete_student(p_student_id uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "cfd90eb67b27e46593ab237d8b7bdd6b"
+  },
+  "soft_delete_teacher(p_teacher_id uuid)": {
+    "gate": "manual",
+    "receptionist": "locked",
+    "md5": "036c8a82e3aef5a9aa4aae632cfd4001"
+  },
+  "teacher_can_access_student_group(p_student uuid, p_group uuid)": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "e2ae525313ffb50472adbffcbd25a6d2"
+  },
+  "teacher_can_see_student(p_student uuid)": {
+    "gate": "manual",
+    "receptionist": "not_staff",
+    "md5": "b536286d8bcf8733d814ce59676a4d20"
+  },
+  "void_financial_charge(p_charge_id uuid, p_reason text, p_idempotency_key uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  },
+  "void_financial_receipt(p_receipt_id uuid, p_reason text, p_idempotency_key uuid)": {
+    "gate": "roles:director",
+    "receptionist": "locked"
+  }
+}

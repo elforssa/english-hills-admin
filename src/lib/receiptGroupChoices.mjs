@@ -24,7 +24,18 @@ export async function loadGroupChoices(client, { sessionType, level, schoolYear 
     rows = rows.filter((group) => !closedIds.has(group.id));
   }
   if (!rows.length) return [];
-  const ids = rows.map((group) => group.id);
+  const free = await countFreeSeats(client, rows);
+  return rows.map((group) => ({ ...group, free: free.get(group.id) }));
+}
+
+// Free seats per group (RPW-r2 C1-1: the receipt form, the enrollment dialog), counted as
+// academic_security.seats_taken does; null for a group without a limit or online. The
+// learner being placed is not counted, as the server leaves p_student out.
+export async function countFreeSeats(client, groups, { excludeStudent = null } = {}) {
+  const limited = (groups || []).filter((group) => group.capacite_max != null && !isOnlineSessionType(group.session_type));
+  const free = new Map((groups || []).map((group) => [group.id, null]));
+  if (!limited.length) return free;
+  const ids = limited.map((group) => group.id);
   const [{ data: enrolled, error: enrolledError }, { data: mainGroup, error: mainGroupError }] = await Promise.all([
     client.from('enrollments').select('student_id,group_id').in('group_id', ids).neq('status', 'Rejected'),
     client.from('students').select('id,groupe_id').in('groupe_id', ids).is('deleted_at', null),
@@ -40,10 +51,11 @@ export async function loadGroupChoices(client, { sessionType, level, schoolYear 
   const members = new Map(ids.map((id) => [id, new Set()]));
   for (const row of enrolled || []) if (live.has(row.student_id)) members.get(row.group_id)?.add(row.student_id);
   for (const row of mainGroup || []) members.get(row.groupe_id)?.add(row.id);
-  return rows.map((group) => {
-    const limited = group.capacite_max != null && !isOnlineSessionType(group.session_type);
-    return { ...group, free: limited ? Math.max(0, Number(group.capacite_max) - members.get(group.id).size) : null };
-  });
+  for (const group of limited) {
+    const taken = [...members.get(group.id)].filter((id) => id !== excludeStudent).length;
+    free.set(group.id, Math.max(0, Number(group.capacite_max) - taken));
+  }
+  return free;
 }
 
 // « 3 places libres », « complet » or, for an unlimited group, « places non limitées ».

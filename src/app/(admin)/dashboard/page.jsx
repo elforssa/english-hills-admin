@@ -17,6 +17,8 @@ import { businessMonthStart, money, receiptAmounts, receiptStatus } from '@/lib/
 import { receiptServiceSummary } from '@/lib/receiptPresentation';
 import { recordHref } from '@/lib/navigation.mjs';
 import ContextLink from '@/components/ContextLink';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { getTeacherOperations } from '@/lib/teacher-directory';
 
 // A failed count reports like the entity reads it replaces (console + error toast).
 async function countRows(entityName, query) {
@@ -53,7 +55,9 @@ export default function Dashboard() {
   // navigation lands, so there's no flash of admin content.
   const [redirecting, setRedirecting] = useState(true);
 
-  const isAdmin = userRole === 'admin' || userRole === 'director';
+  // RPW-r2 item 26: finance panels by capability; the operational shortcuts for every operations role.
+  const isAdmin = hasCapability(userRole, 'canViewFinanceAnalytics');
+  const isOperations = hasCapability(userRole, 'canManageFinanceOperations');
 
   // The session identity and stored role come from AuthContext, which the admin
   // layout resolves before rendering this page; re-reading them here would only
@@ -83,23 +87,28 @@ export default function Dashboard() {
     // "Apprenants actifs": Inscrit and Essai only (EGC, ACA-2); Ancien apprenant is not active.
     const ACTIVE_STATUSES = ACTIVE_STUDENT_STATUSES;
     const sb = getBrowserClient();
+    // RPW-r2 item 26: without finance analytics no finance call is made (the reception dashboard);
+    // without the pay view the teacher count comes from the operations read.
+    const seesFinance = hasCapability(userRole, 'canViewFinanceAnalytics');
+    const seesTeacherTable = hasCapability(userRole, 'canViewTeacherCompensation');
     // EAP: an enrollment is born at the payment; a paid one waits only for its group.
     // CDC (OA5, Q17 = A): only the programmes that use groups (never « Other »).
     const awaitingQuery = () => sb.from('enrollments').select('id', { count: 'exact', head: true })
       .eq('status', 'Confirmed').is('group_id', null).not('session_type', 'in', `(${PROGRAMMES_WITHOUT_GROUPS.map(p => `"${p}"`).join(',')})`);
     Promise.all([
       countRows('Student', sb.from('students').select('id', { count: 'exact', head: true }).in('status', ACTIVE_STATUSES)),
-      countRows('Teacher', sb.from('teachers').select('id', { count: 'exact', head: true })),
+      seesTeacherTable ? countRows('Teacher', sb.from('teachers').select('id', { count: 'exact', head: true }))
+        : getTeacherOperations().then(rows => rows.length),
       // « Groupes actifs »: not closed (in person, the closed mark; online, the online close).
       Promise.all([
         countRows('Group', sb.from('groups').select('id', { count: 'exact', head: true }).is('closed_at', null)),
         countRows('OnlineCourse', sb.from('online_courses').select('group_id', { count: 'exact', head: true }).eq('status', 'closed')),
       ]).then(([open, closedOnline]) => Math.max(0, open - closedOnline)),
-      entities.Receipt.list('-created_date', 5),
+      seesFinance ? entities.Receipt.list('-created_date', 5) : Promise.resolve([]),
       countRows('Enrollment', awaitingQuery()),
       countRows('PlacementTest', sb.from('placement_tests').select('id', { count: 'exact', head: true }).eq('status', 'Planifié')),
-      getBrowserClient().rpc('get_finance_charge_summary'),
-      getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }),
+      seesFinance ? getBrowserClient().rpc('get_finance_charge_summary') : Promise.resolve(null),
+      seesFinance ? getBrowserClient().rpc('get_monthly_finance_summary', { p_month_start: monthStart }) : Promise.resolve(null),
       // Waiting rows carried over from an earlier school year are flagged on the card.
       countRows('Enrollment', awaitingQuery().lt('school_year', currentSchoolYear())),
       // D7: only the director's dashboard calls the finished-course list (admin never does).
@@ -109,10 +118,12 @@ export default function Dashboard() {
       }) : Promise.resolve(null),
     ]).then(([students, teachers, groups, receipts, awaitingGroup, testsPlanifies, financeResult, monthlyResult, awaitingCarriedOver, coursesToClose]) => {
       if (!active) return;
-      const finance = financeReadResult(financeResult, ['total_encaisse','total_restant']);
-      const monthly = financeReadResult(monthlyResult, ['encaisse','restant','total','count']);
-      setFinanceRead(previous => finance.state === 'ready' ? {...finance, scope:authScope} : {...failedRead(previous, finance.reason), state: previous.data ? 'stale' : finance.state});
-      setMonthlyRead(previous => monthly.state === 'ready' ? {...monthly, scope:monthlyScope} : {...failedRead(previous, monthly.reason), scope:monthlyScope, state: previous.data ? 'stale' : monthly.state});
+      const finance = seesFinance ? financeReadResult(financeResult, ['total_encaisse','total_restant']) : { state: 'ready', data: null };
+      const monthly = seesFinance ? financeReadResult(monthlyResult, ['encaisse','restant','total','count']) : { state: 'ready', data: null };
+      if (seesFinance) {
+        setFinanceRead(previous => finance.state === 'ready' ? {...finance, scope:authScope} : {...failedRead(previous, finance.reason), state: previous.data ? 'stale' : finance.state});
+        setMonthlyRead(previous => monthly.state === 'ready' ? {...monthly, scope:monthlyScope} : {...failedRead(previous, monthly.reason), scope:monthlyScope, state: previous.data ? 'stale' : monthly.state});
+      }
       setStats({
         students,
         teachers,
@@ -153,7 +164,7 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-foreground">Tableau de bord</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Almaz 2, Hills Business Center, Bâtiment B, Bureau 6, Casablanca</p>
         </div>
-        {isAdmin && (
+        {isOperations && (
           <Link
             href="/receipts/new"
             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl shadow-sm hover:shadow-md hover:opacity-95 transition-all"
@@ -264,13 +275,13 @@ export default function Dashboard() {
           </div>
           <div className="p-4 space-y-2">
             {[
-              ...(isAdmin ? [
+              ...(isOperations ? [
                 { href: '/receipts/new', label: 'Nouveau reçu de paiement', icon: FileText, color: 'var(--brand)' },
                 { href: '/students/new', label: 'Ajouter un apprenant', icon: UserPlus, color: '#7c3aed' },
               ] : []),
               { href: '/attendance', label: 'Marquer les présences', icon: ClipboardCheck, color: '#0891b2' },
               { href: '/students-directory', label: 'Annuaire des apprenants', icon: Users, color: '#059669' },
-              ...(isAdmin ? [
+              ...(isOperations ? [
                 { href: '/dismissal', label: 'Sortie des jeunes', icon: LogOut, color: '#B91C2E' },
               ] : []),
             ].map(({ href, label, icon: Icon, color }) => (

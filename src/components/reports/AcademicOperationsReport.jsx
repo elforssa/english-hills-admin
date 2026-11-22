@@ -60,7 +60,7 @@ function ActionList({ title, description, items, href, empty, accent = 'amber' }
 }
 
 export default function AcademicOperationsReport({
-  students, teachers, groups, enrollments, loading,
+  students, teachers, groups, enrollments, loading, showTeacherWorkload = true,
 }) {
   const [sessionFilter, setSessionFilter] = useState('');
   const closedOnlineIds = useClosedOnlineGroupIds();
@@ -122,7 +122,8 @@ export default function AcademicOperationsReport({
           </div>
         </section>
 
-        <section className="rounded-xl border border-border bg-white overflow-hidden">
+        {/* RPW-r2 item 26: « Charge des enseignants » is management (canViewTeacherWorkload). */}
+        {showTeacherWorkload && <section className="rounded-xl border border-border bg-white overflow-hidden">
           <div className="border-b border-border px-4 py-3.5"><h3 className="text-sm font-bold">Charge des enseignants</h3><p className="text-[11px] text-muted-foreground">Groupes réguliers actifs.</p></div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-xs">
@@ -133,7 +134,7 @@ export default function AcademicOperationsReport({
               </tbody>
             </table>
           </div>
-        </section>
+        </section>}
       </div>
     </section>
   );

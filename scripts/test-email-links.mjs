@@ -255,9 +255,10 @@ globalThis.__inviteFixture = {
     auth: { getUser: async () => ({ data: { user: { id: 'staff-1' } }, error: null }) },
     from: (table) => ({ select: () => ({ eq: (_c, id) => ({ maybeSingle: async () => {
       if (table !== 'profiles') throw Error('unexpected table');
-      if (id === 'staff-1') return { data: { role: 'director' }, error: null };
+      if (id === 'staff-1') return { data: { role: fixture.actorRole || 'director' }, error: null };
       routeCalls.push(`read-role:${id}`);
-      return fixture.targetRead;
+      // Reception's own client cannot read a pending profile (RLS): no row.
+      return fixture.actorRole === 'receptionist' ? { data: null, error: null } : fixture.targetRead;
     } }) }) }),
     rpc: async (name, args) => {
       if (name === 'consume_rate_limit') return { data: true, error: null };
@@ -265,9 +266,16 @@ globalThis.__inviteFixture = {
       return { data: structuredClone(fixture.result), error: null };
     },
   }),
-  getServiceRoleClient: () => ({ auth: { admin: { inviteUserByEmail: async (email, options) => {
-    routeCalls.push(`invite:${email}:${options.redirectTo}`); return { error: fixture.inviteError || null };
-  } } } }),
+  getServiceRoleClient: () => ({
+    auth: { admin: { inviteUserByEmail: async (email, options) => {
+      routeCalls.push(`invite:${email}:${options.redirectTo}`); return { error: fixture.inviteError || null };
+    } } },
+    from: (table) => ({ select: (columns) => ({ eq: (_c, id) => ({ maybeSingle: async () => {
+      if (table !== 'profiles' || columns !== 'role') throw Error('unexpected service read');
+      routeCalls.push(`service-read-role:${id}`);
+      return fixture.targetRead;
+    } }) }) }),
+  }),
   createClient: (url, key, options) => ({ auth: { signInWithOtp: async (args) => {
     routeCalls.push(`otp:${JSON.stringify({ url, key, flow: options.auth.flowType, persist: options.auth.persistSession, ...args })}`);
     return { error: fixture.otpError || null };
@@ -349,7 +357,26 @@ for (const role of Object.keys(ROLE_HOME)) {
   const { status, json } = await runInvite('invite fails', { result: { ...confirmedPending, needsDelivery: true }, inviteError: { message: 'x' } });
   assert.equal(status, 502); assert.match(json.error, /^Envoi non confirmé/); checks += 2;
 }
-console.log('PASS invite route: a confirmed pending account gets one sign-in e-mail (shouldCreateUser: false); active accounts none; 502 on failure; no queue id');
+// RPW-r2 review N2: reception's family invitation of a confirmed pending account sends the
+// same sign-in e-mail; the role is read server-side only for her, and only the role.
+{
+  const family = { ...confirmedPending, role: 'parent' };
+  const body = { email: 'P@Example.invalid', role: 'parent', studentIds: ['00000000-0000-4000-8000-000000000001'] };
+  const { status, json, calls } = await runInvite('reception pending', { actorRole: 'receptionist', result: family }, body);
+  assert.equal(status, 200); assert.equal(json.userId, 'u-pending');
+  assert.equal(otpCall(calls).length, 1, 'reception: one sign-in e-mail');
+  assert.ok(calls.includes('service-read-role:u-pending') && !calls.includes('read-role:u-pending'), 'reception: server-side role read');
+  const active = await runInvite('reception active', { actorRole: 'receptionist', result: family, targetRead: { data: { role: 'parent' }, error: null } }, body);
+  assert.equal(active.status, 200); assert.deepEqual(otpCall(active.calls), [], 'reception: an active account gets no e-mail');
+  const failed = await runInvite('reception read fails', { actorRole: 'receptionist', result: family, targetRead: { data: null, error: { message: 'x' } } }, body);
+  assert.equal(failed.status, 502); assert.deepEqual(otpCall(failed.calls), []);
+  const staff = await runInvite('reception staff role', { actorRole: 'receptionist', result: family }, { email: 'p@example.invalid', role: 'admin' });
+  assert.equal(staff.status, 403); assert.ok(!staff.calls.some((c) => c.startsWith('rpc:prepare')), 'reception: no staff invitation call');
+  const director = await runInvite('director pending', { result: family }, body);
+  assert.ok(director.calls.includes('read-role:u-pending') && !director.calls.some((c) => c.startsWith('service-read')), 'director: own client, as before');
+  checks += 9;
+}
+console.log('PASS invite route: a confirmed pending account gets one sign-in e-mail (shouldCreateUser: false), reception included; active accounts none; 502 on failure; no queue id');
 
 // ── 6. Source scans ─────────────────────────────────────────────────────────
 function files(dir) {

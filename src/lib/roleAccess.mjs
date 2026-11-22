@@ -7,41 +7,82 @@ export const ROLE_HOME = {
 
 const management = ['director', 'admin'];
 const operations = [...management, 'receptionist'];
-const capabilityRoles = Object.freeze({
-  canManageCRM: operations,
-  canManagePlacement: operations,
-  canManageStudents: operations,
-  canManageGroups: operations,
-  canManageAcademics: operations,
-  canManageFinanceOperations: operations,
-  canManageTeacherOperations: operations,
-  canAssignGroup: operations,
-  canRecordAttendance: operations,
-  canEditTeacherOperationalFields: operations,
-  canManageStudentDocuments: operations,
-  canViewHelp: operations,
+const director = ['director'];
+const signedIn = Object.keys(ROLE_HOME);
+
+// The one capability list (plan RPW-r2, ADR-018). Each entry names its database twin in
+// operational_security.role_has_capability (migration 131 and later); the parity test
+// (scripts/test-capability-parity.mjs) fails when a name or a role list differs.
+// Pages and shared commands ask for a capability, never for a role. Online entries are
+// pinned to their 53c486b values (scripts/test-receptionist-online-pinned.mjs).
+export const CAPABILITIES = Object.freeze({
+  canManageCRM: { sql: 'manage_crm', roles: operations },
+  canManagePlacement: { sql: 'manage_placement', roles: operations },
+  canManageStudents: { sql: 'manage_students', roles: operations },
+  canManageGroups: { sql: 'manage_groups', roles: operations },
+  canManageAcademics: { sql: 'manage_academics', roles: operations },
+  canManageFinanceOperations: { sql: 'manage_finance_operations', roles: operations },
+  canManageTeacherOperations: { sql: 'manage_teacher_operations', roles: operations },
+  canAssignGroup: { sql: 'assign_group', roles: operations },
+  canRecordAttendance: { sql: 'record_attendance', roles: operations },
+  canEditTeacherOperationalFields: { sql: 'edit_teacher_operations', roles: operations },
+  canManageStudentDocuments: { sql: 'manage_student_documents', roles: operations },
+  // Stage 2 (items 9-13): the management enrollment dialog and group page.
+  canEditEnrollment: { sql: 'edit_enrollment', roles: operations },
+  canOverrideCapacity: { sql: 'override_capacity', roles: operations },
+  canPlaceWithoutPaidEnrollment: { sql: 'place_without_paid_enrollment', roles: operations },
+  // Stage 3 (items 1-6, 14, 16, 17, 17c, 18, 18p, 19, L): the dossier and teaching.
+  canEditStudentEmail: { sql: 'edit_student_email', roles: operations },
+  canManageAuthorizedAdults: { sql: 'manage_authorized_adults', roles: operations },
+  canRecordDismissal: { sql: 'record_dismissal', roles: operations },
+  canEndLearner: { sql: 'end_learner', roles: operations },
+  canReopenEnrollment: { sql: 'reopen_enrollment', roles: operations },
+  canManageGrades: { sql: 'manage_grades', roles: operations },
+  canManageLearningRecords: { sql: 'manage_learning_records', roles: operations },
+  canViewCertificates: { sql: 'view_certificates', roles: operations },
+  canAddTeacher: { sql: 'add_teacher', roles: operations },
+  canViewLeaveRequests: { sql: 'view_leave_requests', roles: operations },
+  // Stage 4: communication, payment notes, dashboard and reports without finance.
+  canEmailFamilies: { sql: 'email_families', roles: operations },
+  canMessageOffice: { sql: 'message_office', roles: operations },
+  canViewPaymentNotes: { sql: 'view_payment_notes', roles: operations },
+  canViewDashboard: { sql: 'view_dashboard', roles: operations },
+  canViewReports: { sql: 'view_reports', roles: operations },
+  // Stage 5: family invitations from the dossier (parent or learner at the dossier address).
+  canInviteFamily: { sql: 'invite_family', roles: operations },
+  canMessageAnyAddress: { sql: 'message_any_address', roles: management },
+  canViewPortalConversations: { sql: 'view_portal_conversations', roles: management },
+  canDeleteCommunications: { sql: 'delete_communications', roles: management },
+  canViewFinanceCorrections: { sql: 'view_finance_corrections', roles: management },
+  canViewTeacherWorkload: { sql: 'view_teacher_workload', roles: management },
+  canIssueCertificates: { sql: 'issue_certificates', roles: management },
+  canDecideLeaveRequests: { sql: 'decide_leave_requests', roles: management },
+  // Direct writes to the learner table (row policies). Without it, the shared learner form
+  // saves through save_receptionist_student.
+  canWriteStudentRecords: { sql: 'write_student_records', roles: management },
+  canViewHelp: { sql: 'view_help', roles: operations },
   // Online learning (plan OL-r4 D13): operations run lessons; management sets up courses.
-  canManageOnlineLessons: operations,
-  canManageOnlineCourses: management,
-  canViewFinanceAnalytics: management,
-  canManageUsers: management,
-  canManageSystemSettings: management,
-  canViewTeacherCompensation: management,
-  canManagePayroll: management,
-  canManageIntegrations: ['director'],
-  canViewMarketingAnalytics: ['director'],
-  canCorrectFinance: ['director'],
-  canArchiveStudents: management,
-  canImportStudents: management,
-  canExportStudents: management,
-  canEditStudentProgramme: management,
-  canManageTeacherHR: management,
-  canDeleteAcademicRecords: management,
-  canManageOwnAccount: Object.keys(ROLE_HOME),
+  canManageOnlineLessons: { sql: 'manage_online_lessons', roles: operations },
+  canManageOnlineCourses: { sql: 'manage_online_courses', roles: management },
+  canViewFinanceAnalytics: { sql: 'view_finance_analytics', roles: management },
+  canManageUsers: { sql: 'manage_users', roles: management },
+  canManageSystemSettings: { sql: 'manage_system_settings', roles: management },
+  canViewTeacherCompensation: { sql: 'view_teacher_compensation', roles: management },
+  canManagePayroll: { sql: 'manage_payroll', roles: management },
+  canManageIntegrations: { sql: 'manage_integrations', roles: director },
+  canViewMarketingAnalytics: { sql: 'view_marketing_analytics', roles: director },
+  canCorrectFinance: { sql: 'correct_finance', roles: director },
+  canArchiveStudents: { sql: 'archive_students', roles: management },
+  canImportStudents: { sql: 'import_students', roles: management },
+  canExportStudents: { sql: 'export_students', roles: management },
+  canEditStudentProgramme: { sql: 'edit_student_programme', roles: operations },
+  canManageTeacherHR: { sql: 'manage_teacher_hr', roles: management },
+  canDeleteAcademicRecords: { sql: 'delete_academic_records', roles: management },
+  canManageOwnAccount: { sql: 'manage_own_account', roles: signedIn },
 });
 
 export function hasCapability(role, capability) {
-  return capabilityRoles[capability]?.includes(role) === true;
+  return Object.hasOwn(CAPABILITIES, capability) && CAPABILITIES[capability].roles.includes(role);
 }
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -55,6 +96,13 @@ const exact = new Map([
   ['/receipts', 'canManageFinanceOperations'], ['/receipts/new', 'canManageFinanceOperations'],
   ['/teachers', 'canManageTeacherOperations'], ['/settings', 'canManageOwnAccount'],
   ['/helpdesk', 'canViewHelp'], ['/online', 'canManageOnlineLessons'],
+  // Stage 3.
+  ['/dismissal', 'canRecordDismissal'], ['/portfolios', 'canManageLearningRecords'],
+  ['/learning-assessments', 'canManageLearningRecords'], ['/certificates', 'canViewCertificates'],
+  ['/teachers/new', 'canAddTeacher'], ['/leave-requests', 'canViewLeaveRequests'],
+  // Stage 4.
+  ['/communications', 'canMessageOffice'], ['/notifications', 'canMessageOffice'],
+  ['/dashboard', 'canViewDashboard'], ['/reports', 'canViewReports'],
 ]);
 const detail = [
   [new RegExp(`^/students/${UUID}(?:/edit)?$`, 'i'), 'canManageStudents'],

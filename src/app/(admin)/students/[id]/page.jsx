@@ -10,6 +10,7 @@ import { isRecordConflict, recordConflictMessage } from '@/lib/conflictErrors.mj
 import { useAuth } from '@/context/AuthContext';
 import EnrollmentModal from '@/components/students/EnrollmentModal';
 import FamilyLinksPanel from '@/components/students/FamilyLinksPanel';
+import AuthorizedAdultsEditor from '@/components/students/AuthorizedAdultsEditor';
 import { useQueryClient } from '@tanstack/react-query';
 import PageFrame from '@/components/operational/PageFrame';
 import PageHeader from '@/components/operational/PageHeader';
@@ -28,7 +29,7 @@ import ContextLink from '@/components/ContextLink';
 import { hasCapability } from '@/lib/roleAccess.mjs';
 import { openStoredFile } from '@/lib/storage';
 import { enrollmentParam } from '@/lib/crm/enrollmentActions.mjs';
-import { isOpenEnrollment, LIVE_ENROLLMENT_STATUSES } from '@/lib/enrollmentWorkflow.mjs';
+import { isOpenEnrollment } from '@/lib/enrollmentWorkflow.mjs';
 import { endLearner, membershipErrorMessage, reopenEnrollment } from '@/lib/academic/membershipActions.mjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateAfterFinance, invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
@@ -43,7 +44,7 @@ const Section = ({ title, children }) => (
   </div>
 );
 
-// "Ancien apprenant" (ACA-3, D2): management ends the selected active enrollments
+// "Ancien apprenant" (ACA-3, D2; RPW-r2 item 6: the end_learner capability) ends the selected active enrollments
 // with a reason; with none left the file becomes Ancien apprenant or Inactif and
 // leaves every roster. Charges, receipts and attendance never change.
 function LeaverDialog({ student, enrollments, groups, openBalance, onClose, onDone }) {
@@ -217,7 +218,7 @@ function StudentDetail() {
 
   return (
     <PageFrame width="detail" className="break-words">
-      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{isManagement && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
+      <PageHeader title={student.full_name} breadcrumb={<Button variant="link" className="px-0" onClick={() => router.push(safeReturnTo(new URLSearchParams(window.location.search).get('returnTo')))}><ArrowLeft size={15}/>Retour</Button>} description={<div className="flex flex-wrap items-center gap-2"><span>Statut du dossier</span><span className={`${PILL_CLASS} ${STUDENT_STATUS_COLORS[student.status] || 'bg-slate-100 text-slate-700'}`}>{displayLabel(DOSSIER_LABELS,student.status)}</span></div>} actions={<><Button asChild variant="outline"><ContextLink href={`/students/${id}/edit`}><Edit size={14}/>Modifier</ContextLink></Button>{hasCapability(role, 'canEndLearner') && <Button variant="outline" onClick={() => setLeaver(true)}>Ancien apprenant</Button>}{hasCapability(role, 'canArchiveStudents') && <Button variant="destructive" onClick={handleDelete}><Trash2 size={14}/>Archiver</Button>}</>}/>
       <ReadState state={loading ? 'refreshing' : loadError ? 'stale' : 'ready'} onRetry={loadError ? () => setReload(value=>value+1) : undefined}>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
@@ -284,11 +285,11 @@ function StudentDetail() {
       </Section>
 
       <Section title="Comptes famille">
-        <FamilyLinksPanel studentId={id} canRevoke={isManagement} />
+        <FamilyLinksPanel studentId={id} student={student} canRevoke={hasCapability(role, 'canInviteFamily')} canInvite={hasCapability(role, 'canInviteFamily')} canResend={hasCapability(role, 'canManageUsers')} />
       </Section>
 
       <Section title="Inscriptions et groupes">
-        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception inscrit et encaisse. Les corrections et les fins d’inscription passent par la direction.</p>}
+        {role === 'receptionist' && <p className="mb-3 text-xs text-muted-foreground">La réception inscrit, encaisse et affecte les groupes ; un groupe complet ou une affectation sans paiement demande un motif.</p>}
         {/* EAP: an enrollment is born at the payment; the receipt form confirms it and places the learner. */}
         {(role === 'receptionist' || isManagement) && <Link data-touch-target href={`/receipts/new?student_id=${student.id}`} className="mb-3 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"><CircleDollarSign size={14} />Inscrire et encaisser</Link>}
         {/* The main group is the database's copy of one membership; each enrollment shows its own group. */}
@@ -303,8 +304,8 @@ function StudentDetail() {
                 <p className="text-xs">{displayLabel(ENROLLMENT_LABELS,enrollment.status)}{enrollment.status === 'Ended' && <> · {enrollment.end_reason || 'Motif non renseigné'}{enrollment.ended_at ? ` · ${formatCentre(enrollment.ended_at, 'fr-FR')}` : ''}</>}</p>
               </div>
               <div className="flex items-center gap-3">
-                {isManagement && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}
-                <button disabled={!canManage || (role === 'receptionist' && !LIVE_ENROLLMENT_STATUSES.includes(enrollment.status))} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
+                {hasCapability(role, 'canReopenEnrollment') && enrollment.status === 'Ended' && <button className="text-xs font-semibold text-primary hover:underline" onClick={() => reopen(enrollment)}>Rouvrir l’inscription</button>}
+                <button disabled={!canManage || !hasCapability(role, 'canEditEnrollment')} className="text-xs font-semibold text-primary hover:underline disabled:hidden" onClick={() => setEnrollmentModal(enrollment)}>Modifier l’inscription</button>
               </div>
               {role === 'receptionist' && <div className="w-full flex flex-wrap items-center gap-2">
                 {(enrollment.documents_urls || []).map((ref, index) => <button key={ref} type="button"
@@ -332,20 +333,8 @@ function StudentDetail() {
         }} />}
 
       <Section title="Adultes autorisés au retrait">
-        {adults.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucun adulte autorisé.</p>
-        ) : (
-          <div className="space-y-2">
-            {adults.map(a => (
-              <div key={a.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-md text-sm">
-                <div>
-                  <p className="font-medium">{a.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{a.relation} · {a.telephone}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <AuthorizedAdultsEditor studentId={student.id} adults={adults} canEdit={hasCapability(role, 'canManageAuthorizedAdults')}
+          onChanged={() => setReload(value => value + 1)} />
       </Section>
 
       <Section title={`Paiements (${payments.length})`}>

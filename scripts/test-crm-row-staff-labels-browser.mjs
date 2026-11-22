@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
 assertLocalFeatureBranch();
 const env = Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line => {
   const m = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
@@ -74,7 +75,7 @@ try {
     const page = await ctx.newPage();page.setDefaultTimeout(20000);
     // Drain route reads/prefetches before replacing the document (WebKit).
     const navigate = async url => { await page.waitForTimeout(600);await page.waitForLoadState('networkidle');await page.goto(url); };
-    page.on('pageerror',e=>errors.push(e.message));
+    const fetches=cancelledFetches(page);page.on('pageerror',e=>{if(!fetches.take(e))errors.push(e.message);});
     page.on('request',r=>{if(r.url().includes('/rest/v1/'))requests.push({name:new URL(r.url()).pathname.split('/').at(-1),args:r.postDataJSON()});});
     page.on('response',r=>{
       if(!r.ok() || !/\/rpc\/crm_(list_staff|get_opportunities|get_work_queue|get_workspace_detail|list_open_tasks)$/.test(new URL(r.url()).pathname))return;
@@ -141,7 +142,7 @@ try {
         if(t.id===task.id){assert.equal(t.assignee_display_label,assignee.display_label);assert.equal(t.lead.owner_display_label,owner.display_label);assert.notEqual(t.assigned_to,t.lead.owner_id);}
       }
     }
-    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    assert.deepEqual(errors,[]);assert.deepEqual(fetches.uncancelled(),[],'every WebKit fetch error is a cancelled request');assert.deepEqual(external,[]);
     await ctx.close();await browser.close();browser=null;
     console.log('PASS '+engine.name()+' 54-staff Board/List, task assignee ≠ owner, drawer/current selection, initial outside-page-1 identity, stable 1→2→1 pages, 109 duplicate/reference rule, bounded picker and fixed safe fields');
   }

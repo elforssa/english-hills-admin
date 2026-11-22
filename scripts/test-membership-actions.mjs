@@ -59,6 +59,11 @@ assert.equal(membershipErrorMessage({ code: '23505', message: 'duplicate key val
 assert.equal(membershipErrorMessage({ code: '23514', message: 'new row for relation "enrollments" violates check constraint "enrollments_confirmed_has_programme"' }),
   EGC_REASON_TEXT.programme_required);
 assert.equal(membershipErrorMessage({ code: '42501', message: 'Forbidden' }), 'Vous n’avez pas accès à cette action.');
+// RPW-r2 (C1-2): a plain-ASCII server text is an English internal message: the generic French text replaces it.
+for (const message of ['Student unavailable or stale', 'Only group assignment is permitted', 'Enrollment group must match its session and level', '', undefined]) {
+  assert.equal(membershipErrorMessage({ code: '23514', message }), 'L’action n’a pas pu aboutir. Réessayez ; si le problème persiste, contactez la direction.', String(message));
+}
+assert.equal(membershipErrorMessage({ code: '23514', message: 'Année scolaire requise pour cette affectation.' }), 'Année scolaire requise pour cette affectation.');
 assert.equal(groupDeleteErrorMessage({ code: '23503', message: 'update or delete on table "groups" violates foreign key constraint' }), GROUP_HISTORY_MESSAGE);
 assert.equal(membershipErrorMessage(null), '');
 for (const [reason, text] of Object.entries(EGC_REASON_TEXT)) {

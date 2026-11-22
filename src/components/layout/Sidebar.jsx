@@ -28,15 +28,15 @@ const NAV = [
   ] },
   { href: '/crm/analytics', label: 'Analyse marketing', icon: BarChart3, roles: ['director'] },
   { href: '/crm/integrations/lifecycle', label: 'Retour Meta', icon: RadioTower, roles: ['director'] },
-  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...ADMIN, 'teacher'] },
-  { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: ADMIN },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, roles: [...OPERATIONS, 'teacher'] },
+  { href: '/reports',   label: 'Rapports',         icon: BarChart3,       roles: OPERATIONS },
   {
     label: 'Apprenants', icon: Users, roles: OPERATIONS,
     children: [
       { href: '/students-directory', label: 'Annuaire', roles: OPERATIONS },
       { href: '/students', label: 'Liste des apprenants', roles: OPERATIONS },
       { href: '/students/new', label: 'Ajouter un apprenant', roles: OPERATIONS },
-      { href: '/dismissal', label: 'Sortie des jeunes', roles: ADMIN },
+      { href: '/dismissal', label: 'Sortie des jeunes', roles: OPERATIONS },
     ],
   },
   {
@@ -61,24 +61,24 @@ const NAV = [
     label: 'Enseignants & RH', icon: GraduationCap, roles: OPERATIONS,
     children: [
       { href: '/teachers', label: 'Liste des enseignants', roles: OPERATIONS },
-      { href: '/teachers/new', label: 'Ajouter un enseignant', roles: ADMIN },
-      { href: '/leave-requests', label: 'Congés & absences', roles: ADMIN },
+      { href: '/teachers/new', label: 'Ajouter un enseignant', roles: OPERATIONS },
+      { href: '/leave-requests', label: 'Congés & absences', roles: OPERATIONS },
       { href: '/payroll', label: 'Paie & RH', roles: ADMIN },
     ],
   },
   {
-    label: 'Portfolios & Certifs', icon: FolderOpen, roles: [...ADMIN, 'teacher'],
+    label: 'Portfolios & Certifs', icon: FolderOpen, roles: [...OPERATIONS, 'teacher'],
     children: [
-      { href: '/portfolios', label: 'Portfolios numériques', roles: [...ADMIN, 'teacher'] },
-      { href: '/certificates', label: 'Certificats', roles: ADMIN },
-      { href: '/learning-assessments', label: "Profils d'apprentissage", roles: [...ADMIN, 'teacher'] },
+      { href: '/portfolios', label: 'Portfolios numériques', roles: [...OPERATIONS, 'teacher'] },
+      { href: '/certificates', label: 'Certificats', roles: OPERATIONS },
+      { href: '/learning-assessments', label: "Profils d'apprentissage", roles: [...OPERATIONS, 'teacher'] },
     ],
   },
   {
-    label: 'Communication', icon: MessageSquare, roles: ADMIN,
+    label: 'Communication', icon: MessageSquare, roles: OPERATIONS,
     children: [
-      { href: '/notifications', label: 'Notifications', roles: ADMIN },
-      { href: '/communications', label: 'Messages & Annonces', roles: ADMIN },
+      { href: '/notifications', label: 'Notifications', roles: OPERATIONS },
+      { href: '/communications', label: 'Messages & Annonces', roles: OPERATIONS },
       { href: '/activity-log', label: "Journal d'activité", roles: ADMIN },
     ],
   },

@@ -10,6 +10,10 @@ import { learnerNoticeTargets } from '@/lib/portal';
 import { createDeliveryTracker } from '@/lib/deliveryOnce.mjs';
 import { openCourses } from '@/lib/academic/courseClose.mjs';
 import { useClosedOnlineGroupIds } from '@/lib/queries';
+import { useAuth } from '@/context/AuthContext';
+import { hasCapability } from '@/lib/roleAccess.mjs';
+import { getTeacherDirectory } from '@/lib/teacher-directory';
+import { getBrowserClient } from '@/lib/supabase';
 
 const inputClass = "w-full border border-border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary";
 const labelClass = "block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1";
@@ -75,8 +79,11 @@ function AnnouncementModal({ groups, onSave, onClose }) {
   );
 }
 
-function MessageModal({ students, onSave, onClose }) {
+// RPW-r2 item 23: a known recipient — a learner's family, a teacher or a staff member; a free
+// address only for management (canMessageAnyAddress).
+function MessageModal({ students, teachers, staff, anyAddress, onSave, onClose }) {
   const [form, setForm] = useState({ to_user_email: '', to_name: '', subject: '', body: '', type: 'message' });
+  const [person, setPerson] = useState('');
   const [student, setStudent] = useState(null);
   const [targets, setTargets] = useState(null); // { emailOnly, targets } for a chosen learner
   const [sending, setSending] = useState(false);
@@ -89,6 +96,7 @@ function MessageModal({ students, onSave, onClose }) {
   const handleStudentSelect = async (id) => {
     const s = students.find(row => row.id === id) || null;
     setStudent(s); setTargets(null); setSaved(false); tracker.current = createDeliveryTracker();
+    if (s) setPerson('');
     if (!s) return;
     try {
       setTargets(await learnerNoticeTargets(s));
@@ -97,7 +105,16 @@ function MessageModal({ students, onSave, onClose }) {
     }
   };
 
-  const recipients = student ? (targets?.targets || []) : (form.to_user_email ? [{ email: form.to_user_email, name: form.to_name }] : []);
+  const people = [...teachers.map(t => ({ key: `teacher:${t.id}`, email: t.email, name: t.full_name })),
+    ...staff.map(p => ({ key: `staff:${p.id}`, email: p.email, name: p.full_name }))].filter(p => p.email);
+  const chosen = people.find(p => p.key === person) || null;
+  const handlePersonSelect = (key) => {
+    setPerson(key); setSaved(false); tracker.current = createDeliveryTracker();
+    if (key) { setStudent(null); setTargets(null); }
+  };
+  const recipients = student ? (targets?.targets || [])
+    : chosen ? [{ email: chosen.email, name: chosen.name }]
+    : (anyAddress && form.to_user_email ? [{ email: form.to_user_email, name: form.to_name }] : []);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -150,12 +167,22 @@ function MessageModal({ students, onSave, onClose }) {
             </select>
           </div>
           <div>
-            <label className={labelClass}>Destinataire (apprenant)</label>
-            <select className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)} disabled={Boolean(saved)}>
-              <option value="">— Ou saisir manuellement —</option>
+            <label htmlFor="message-student" className={labelClass}>Destinataire (apprenant)</label>
+            <select id="message-student" className={inputClass} value={student?.id || ''} onChange={e => handleStudentSelect(e.target.value)} disabled={Boolean(saved)}>
+              <option value="">{anyAddress ? '— Ou saisir manuellement —' : '— Choisir un apprenant —'}</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
           </div>
+          {!student && <div>
+            <label htmlFor="message-person" className={labelClass}>Ou un enseignant, un membre de l’équipe</label>
+            <select id="message-person" className={inputClass} value={person} onChange={e => handlePersonSelect(e.target.value)} disabled={Boolean(saved)}>
+              <option value="">— Choisir —</option>
+              {teachers.some(t => t.email) && <optgroup label="Enseignants">
+                {teachers.filter(t => t.email).map(t => <option key={t.id} value={`teacher:${t.id}`}>{t.full_name}</option>)}</optgroup>}
+              {staff.length > 0 && <optgroup label="Équipe">
+                {staff.map(p => <option key={p.id} value={`staff:${p.id}`}>{p.full_name || p.email}</option>)}</optgroup>}
+            </select>
+          </div>}
           {student ? (
             <div className="text-sm">
               <p className={labelClass}>Envoyé à</p>
@@ -166,12 +193,14 @@ function MessageModal({ students, onSave, onClose }) {
                 <p className="mt-1 text-xs text-amber-700">E-mail uniquement, pas de compte : le message n’apparaîtra dans aucun espace.</p>
               )}
             </div>
-          ) : (
+          ) : chosen ? (
+            <div className="text-sm"><p className={labelClass}>Envoyé à</p><p>{chosen.name} · {chosen.email}</p></div>
+          ) : anyAddress ? (
             <div>
-              <label className={labelClass}>Email destinataire *</label>
-              <input type="email" className={inputClass} value={form.to_user_email} onChange={e => set('to_user_email', e.target.value)} required disabled={Boolean(saved)} />
+              <label htmlFor="message-address" className={labelClass}>Email destinataire *</label>
+              <input id="message-address" type="email" className={inputClass} value={form.to_user_email} onChange={e => set('to_user_email', e.target.value)} required disabled={Boolean(saved)} />
             </div>
-          )}
+          ) : null}
           <div>
             <label className={labelClass}>Objet *</label>
             <input className={inputClass} value={form.subject} onChange={e => set('subject', e.target.value)} required disabled={Boolean(saved)} />
@@ -195,7 +224,12 @@ function MessageModal({ students, onSave, onClose }) {
 }
 
 export default function Communications() {
+  const { role } = useAuth();
+  const anyAddress = hasCapability(role, 'canMessageAnyAddress');
+  const canDelete = hasCapability(role, 'canDeleteCommunications');
   const [messages, setMessages] = useState([]);
+  const [teachers, setTeachers] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [students, setStudents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -213,6 +247,11 @@ export default function Communications() {
   ]).then(([m, a, s, g]) => { setMessages(m); setAnnouncements(a); setStudents(s); setGroups(g); setLoading(false); });
 
   useEffect(() => { load(); }, []);
+  // Recipient pickers; a failed read leaves the learner picker usable.
+  useEffect(() => {
+    getTeacherDirectory().then(rows => setTeachers(rows || [])).catch(() => setTeachers([]));
+    getBrowserClient().rpc('list_staff_recipients').then(({ data, error }) => setStaff(error ? [] : (data || [])));
+  }, []);
 
   const deleteAnnouncement = async (id) => { await entities.Announcement.delete(id); toast.success('Supprimé'); load(); };
   const deleteMessage = async (id) => { await entities.Message.delete(id); toast.success('Supprimé'); load(); };
@@ -255,7 +294,7 @@ export default function Communications() {
                   <p className="text-sm text-muted-foreground mt-1">{a.body}</p>
                   <p className="text-xs text-muted-foreground mt-2">Par {a.author} · {a.created_date?.split('T')[0]}</p>
                 </div>
-                <button onClick={() => deleteAnnouncement(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 flex-shrink-0"><Trash2 size={14} /></button>
+                {canDelete && <button aria-label="Supprimer l’annonce" onClick={() => deleteAnnouncement(a.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 flex-shrink-0"><Trash2 size={14} /></button>}
               </div>
             </div>
           ))}
@@ -276,14 +315,14 @@ export default function Communications() {
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{m.body}</p>
                 <p className="text-xs text-muted-foreground mt-1">De {m.from_name} · {m.created_date?.split('T')[0]}</p>
               </div>
-              <button onClick={() => deleteMessage(m.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 flex-shrink-0"><Trash2 size={14} /></button>
+              {canDelete && <button aria-label="Supprimer le message" onClick={() => deleteMessage(m.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 flex-shrink-0"><Trash2 size={14} /></button>}
             </div>
           ))}
           {messages.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm">Aucun message.</div>}
         </div>
       )}
       {announcementModal && <AnnouncementModal groups={openCourses(groups, closedOnline)} onSave={() => { setAnnouncementModal(false); load(); }} onClose={() => setAnnouncementModal(false)} />}
-      {messageModal && <MessageModal students={students} onSave={() => { setMessageModal(false); load(); }} onClose={() => setMessageModal(false)} />}
+      {messageModal && <MessageModal students={students} teachers={teachers} staff={staff} anyAddress={anyAddress} onSave={() => { setMessageModal(false); load(); }} onClose={() => setMessageModal(false)} />}
     </div>
   );
 }

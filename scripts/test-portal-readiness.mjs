@@ -138,7 +138,9 @@ try {
   assert.equal(refusedPlaceholder.status, 403); assert.equal(refusedPlaceholder.data.reason, 'portal.shared_address');
   assert.match(refusedPlaceholder.data.error, /^Adresse partagée par plusieurs familles/);
   const byReception = await route(receptionist, '/api/admin/invite', { email: parent.email, role: 'parent', studentIds: [ids.childA] });
-  assert.equal(byReception.status, 403);
+  // RPW-r2 item 7: reception may invite a family at the dossier's address; this parent is already
+  // linked to the learner, so her repeat invitation is refused as a conflict (it was 403 before RPW).
+  assert.equal(byReception.status, 409);
   ok(await rpc(admin, 'link_family_student', { p_profile_id: student.id, p_student_id: ids.adult }));
   checks += 5;
   console.log('PASS invitation route: links the confirmed learner, refuses the placeholder and reception');

@@ -1,0 +1,433 @@
+{
+    "policies": {
+        "online_courses.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        },
+        "online_lessons.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        },
+        "online_consents.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        },
+        "online_attendance.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        },
+        "online_lesson_guests.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        },
+        "online_lesson_patterns.online_staff_read": {
+            "cmd": "SELECT",
+            "qual": "(( SELECT get_my_role() AS get_my_role) = ANY (ARRAY['director'::text, 'admin'::text, 'receptionist'::text]))",
+            "roles": "authenticated",
+            "permissive": "PERMISSIVE",
+            "with_check": ""
+        }
+    },
+    "functions": {
+        "online_security.today()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "16cd2be89f1933aefba5dba8421bcfd7"
+        },
+        "public.online_list_courses()": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "e772114ec4e1f5adac9e3f23de571691"
+        },
+        "online_security.caller_role()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "66e4fbdd46779de7c0aaa239b105c678"
+        },
+        "online_security.caller_teacher_id()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "c63babbd1cd124077033bd4d40f1a435"
+        },
+        "online_security.guard_online_group()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "2eff1b81b3b80f78cee18bb864ca7240"
+        },
+        "public.online_check_pass(p_jti uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "bb14d135f7273b3d4e8dd710d8144c6e"
+        },
+        "online_security.guard_online_course()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "e656122ad57fec02ae9767ccdb545db9"
+        },
+        "public.online_confirm_pass(p_jti uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "85eba3ab50785ec0067b69a80d867f31"
+        },
+        "public.online_purge_session_evidence()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "175170988594a7daccbea6a20ecc5212"
+        },
+        "public.online_resolve_join(p_jti uuid)": {
+            "acl": "postgres=X/postgres,service_role=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "752d908ac69b8b06d7a0462f97e550cb"
+        },
+        "online_security.base_label(p_name text)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "8772ae474c02d3f1ab1e0158b2d40ad1"
+        },
+        "public.online_usage_month(p_month date)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "e22b4ab34ddd8c09af1a654b38565f42"
+        },
+        "public.online_remove_guest(p_guest uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "a3ec2da74ea93d5a6cc2cb68d8f2ecd7"
+        },
+        "public.online_resolve_room(p_group uuid)": {
+            "acl": "postgres=X/postgres,service_role=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "6200edc2dc0d2c5e8da96b02bff03e80"
+        },
+        "online_security.enforce_online_capacity()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "ff278fcc89b887cbf533e81c684eee4d"
+        },
+        "online_security.evidence_ceiling_reached()": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "9cd87885c4905a3777a8068996a02832"
+        },
+        "online_security.own_pass_state(p_jti uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "b3dd3fb3b4477a4540fac872fff4881c"
+        },
+        "online_security.has_consent(p_student uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "241e404d956aaabc9956e2cdd7946285"
+        },
+        "online_security.require_role(p_roles text[])": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "d4b8480ab4857e0c24c96a5025ffc2d8"
+        },
+        "public.online_revoke_consent(p_student uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "58300b83ca84bb441b2184453a6450c4"
+        },
+        "public.online_room_status(p_deployment text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "fc5983ba9aae10beb851283c37fa2b17"
+        },
+        "online_security.lesson_json(l online_lessons)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "419e830f997297e983e8015dc6926f42"
+        },
+        "online_security.teacher_label(p_teacher uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "c18364caeccbd2a46bf9c5d4e868e9b2"
+        },
+        "online_security.current_patterns(p_group uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "b9039e141eff8105d8432698f7be0291"
+        },
+        "online_security.is_online_type(p_session text)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "3588ba910576ce49231f4037db4c488b"
+        },
+        "public.online_get_lesson_roster(p_lesson uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "c7dba6ce7a3fc42b2bb018599e871ecc"
+        },
+        "online_security.assert_no_overlap(p_group uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "626bde15c0a0d6f0b32297829af18563"
+        },
+        "online_security.lesson_recipients(p_lesson uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "97c13b85fe3e20a1e67ade9864d77b43"
+        },
+        "public.online_teacher_lesson_counts(p_month date)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "d9487a9592cb5f31af314f4a4553859d"
+        },
+        "online_security.refresh_group_schedule(p_group uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "9e394988797aab320607e6f748359b1e"
+        },
+        "public.online_get_course(p_group uuid, p_lesson uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "12a1c43bf8773974ae4e77fd90b9f40c"
+        },
+        "public.online_list_my_lessons(p_from date, p_to date)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "d6b8d21d6069c647d22dc2491d853368"
+        },
+        "online_security.family_lessons(p_from date, p_to date)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "4431bb408db013f9c447b189f394c516"
+        },
+        "public.online_check_join(p_lesson uuid, p_student uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "cd1d8d978fa4e421c5bbe1cfc70f1465"
+        },
+        "public.online_issue_join(p_lesson uuid, p_student uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "e30d7dbd56ddc32f34ba98e220514e94"
+        },
+        "online_security.local_date(p_at timestamp with time zone)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "020798c57b042c702efe258058f64149"
+        },
+        "online_security.local_time(p_at timestamp with time zone)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "d5b61017fe46800ce5b538f04e8f51a7"
+        },
+        "public.online_list_lessons_for_me(p_from date, p_to date)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "881eb01ca0c69b80a146ed8585736c6f"
+        },
+        "public.online_record_consent(p_student uuid, p_note text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "4af00a1ce863c2235dc81faf80645a27"
+        },
+        "online_security.french_when(p_at timestamp with time zone)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "7d928cd897b0333e68a5f513c3bf1bba"
+        },
+        "online_security.student_label(p_student uuid, p_group uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "cb0afcf37a4734ecc18819f5a1b336ee"
+        },
+        "online_security.evaluate_join(p_lesson uuid, p_student uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "1a19def277a0f4e8c7d1d5909c4b64e7"
+        },
+        "online_security.fail(p_reason text, p_code text, p_message text)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "6c40d1446b75a810da00fb31de95905d"
+        },
+        "public.online_list_lessons_for_my_children(p_from date, p_to date)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "1652bd0b62b53cb1318c9b2b2a2c8138"
+        },
+        "online_security.pattern_slots(p_group uuid, p_from date, p_to date)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "abe4dc67ffcfb09e1eb3760359995a2e"
+        },
+        "public.online_close_course(p_group uuid, p_expected_version bigint)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "0c0b0ec09886437fdc2d55b3fbf24960"
+        },
+        "public.online_note_webhook_refusal(p_deployment text, p_reason text)": {
+            "acl": "postgres=X/postgres,service_role=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "4087ed16b34e9291a00914780899e1b8"
+        },
+        "online_security.teacher_sees_lesson(l online_lessons, p_teacher uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "1808a27e78e6e439a43c29742b54c57b"
+        },
+        "online_security.holds_seat(p_lesson uuid, p_group uuid, p_student uuid)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "da926459da164da9c3ebf2b423441e3e"
+        },
+        "online_security.reconcile_lessons(p_group uuid, p_from date, p_to date)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "e30d5c16964dedd94011c9c2784f563b"
+        },
+        "online_security.course_for_update(p_group uuid, p_expected_version bigint)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "fe2689a96a6a8a6a6b9a5bf6a53d9c2a"
+        },
+        "online_security.lesson_for_update(p_lesson uuid, p_expected_version bigint)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "2a892822b2f4f9bd37a8bd50a2bff007"
+        },
+        "online_security.revoke_passes(p_lesson uuid, p_student uuid, p_reason text)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "3074df5fe84c2950473d978c842c431c"
+        },
+        "public.online_add_guest(p_lesson uuid, p_student uuid, p_kind text, p_note text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "d3da1e1de3a1bd5a1d43ab3c7d86b9b5"
+        },
+        "public.online_save_course(p_group uuid, p_expected_version bigint, p_course jsonb)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "932eea6bb23702216d094358cc66dbd7"
+        },
+        "online_security.notify(p_lessons uuid[], p_type text, p_subject text, p_message text)": {
+            "acl": "postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": false,
+            "src_md5": "106cec5228fea9954b8abf026f9a9fe8"
+        },
+        "public.online_set_lesson_teacher(p_lesson uuid, p_expected_version bigint, p_teacher uuid)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "07e2ad833876fd00a14dd8da7efd031c"
+        },
+        "public.online_cancel_lesson(p_lesson uuid, p_expected_version bigint, p_reason text, p_scope text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "8417244b9b807ccb403dc61a61d0feb8"
+        },
+        "public.online_record_join_event(p_jti uuid, p_kind text, p_at timestamp with time zone, p_ref text)": {
+            "acl": "postgres=X/postgres,service_role=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "6f33629228285cda891f9dc8e0e0aae4"
+        },
+        "public.online_save_attendance(p_lesson uuid, p_expected_version bigint, p_rows jsonb, p_report text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "cd9ba5e8f61b735bf66dd0ae9dd12389"
+        },
+        "public.online_update_lesson(p_lesson uuid, p_expected_version bigint, p_changes jsonb, p_scope text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "ca928974181033377679b9cad15d0b3b"
+        },
+        "public.online_save_pattern(p_group uuid, p_patterns jsonb, p_from_date date, p_expected_version bigint)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "3db07b9786a43e249cabe83f2e942b12"
+        },
+        "public.online_activate_course(p_group uuid, p_expected_version bigint, p_provider text, p_room_ref text)": {
+            "acl": "authenticated=X/postgres,postgres=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "d60b9085d6178a1659241a6a917fc932"
+        },
+        "public.online_record_session_event(p_lesson uuid, p_provider text, p_kind text, p_at timestamp with time zone, p_session_name text, p_ref text)": {
+            "acl": "postgres=X/postgres,service_role=X/postgres",
+            "config": "search_path=pg_catalog, pg_temp",
+            "definer": true,
+            "src_md5": "9c9d0ed7b9f397ab5805c90cba1f3ec1"
+        }
+    },
+    "recorded_at": "53c486b (migrations to 130)"
+}
