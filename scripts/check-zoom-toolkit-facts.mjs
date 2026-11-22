@@ -6,7 +6,8 @@
 // reliability PR adds `userKey` (the token's user_key, B1), the deprecation of
 // `userIdentity`, `removeUser` (behind the toolkit's « Retirer »; the platform never calls
 // it, D15) and the three `ClosedReason` values. The room-size fix (2026-11-22) adds how the
-// toolkit sizes itself: from its container's height, or from the window.
+// toolkit sizes itself: from its container's height, or from the window; its follow-up,
+// the markup of the pre-join card and of the phone header.
 //
 //   node scripts/check-zoom-toolkit-facts.mjs                 the installed packages (npm test)
 //   node scripts/check-zoom-toolkit-facts.mjs 2.6.10-1        a packed tarball of that toolkit
@@ -90,7 +91,15 @@ export const FACTS = [
     && /\$\([\w$]+\.current\.clientHeight\), [\w$]+\([\w$]+\.current\.clientWidth\)\);\s*\};\s*return [\w$]+\(\), window\.addEventListener\("resize", [\w$]+\)/.test(bundle)],
   ['the whiteboard box is 75 % of the video area', 'ZoomRoom.jsx (ROOM_STYLE)', () => /id: [\w$]+,\s*className: "whiteboard-container [^"]*",\s*style: \{ visibility: [\w$]+ \? "visible" : "hidden", height: [\w$]+ \? "75%" : 0 \}/.test(bundle) && bundle.includes('= "uikit-whiteboard-container"')],
   ['the phone layout is sized 100svh × 100vw', 'ZoomRoom.jsx (ROOM_STYLE)', () => bundle.includes('style: { position: "relative", height: "100svh", width: "100vw" }') && bundle.includes('style: { height: "100svh", overflowY: "hidden" }')],
-  ['the pre-join screen is min-h-[100dvh] max-h-[100dvh]', 'ZoomRoom.jsx (ROOM_STYLE)', () => bundle.includes('flex flex-col items-center justify-center w-full min-h-[100dvh] max-h-[100dvh] overflow-y-auto')],
+  ['the pre-join screen is min-h-[100dvh] max-h-[100dvh]', 'ZoomRoom.jsx (ROOM_STYLE: SCREEN)', () => bundle.includes('flex flex-col items-center justify-center w-full min-h-[100dvh] max-h-[100dvh] overflow-y-auto')],
+  // Before joining and the phone header (review of #210: N1, N2, item 7, N5).
+  ['the pre-join card is the parent of #uikit-preview-title, and the screen the parent of the card', 'ZoomRoom.jsx (SCREEN, CARD)', () => /max-h-\[100dvh\] overflow-y-auto`,\s*children: \[\s*\/\* @__PURE__ \*\/ [\w$]+\.jsxs\(\s*"div",\s*\{\s*className: `rounded-lg shadow-lg py-4 px-6 w-full [^`]*max-h-\[100dvh\] overflow-y-auto my-auto [^`]*`,\s*children: \[\s*\/\* @__PURE__ \*\/ [\w$]+\.jsx\("h2", \{ className: "[^"]*", id: "uikit-preview-title"/.test(bundle)],
+  ['the camera preview is a 16:9 box across the card, 190 px wide and 3:4 on a phone, around a video-player-container', 'ZoomRoom.jsx (PREVIEW)', () => /className: `mb-4 relative aspect-video rounded-lg border overflow-hidden items-center justify-center \$\{[\w$]+\}`,\s*style: \{\s*width: [\w$]+ \? "190px" : "100%",\s*aspectRatio: [\w$]+ \? "3\/4" : "16\/9"\s*\},\s*ref: [\w$]+,\s*children: \[\s*\/\* @__PURE__ \*\/ [\w$]+\.jsxs\("video-player-container"/.test(bundle)],
+  ['the join button is #uikit-preview-join-button, in the card\'s last row', 'ZoomRoom.jsx (CARD), test-online-zoom-classroom.mjs (L0)', () => /className: "flex justify-center items-center py-4 mb-2", children: [\s\S]{0,700}?id: "uikit-preview-join-button"/.test(bundle)],
+  ['the pre-join name, device choices and preview buttons keep their ids', 'test-online-zoom-classroom.mjs (L0)', () => ['"uikit-preview-name-input"', '"uikit-preview-speaker-select"', '"uikit-preview-mic-select"', '"uikit-preview-camera-select"', '"uikit-preview-mic-button"', '"uikit-preview-camera-button"'].every(id => bundle.includes(`id: ${id}`))],
+  ['the phone header prints the session topic in an h1 and a group\'s name in a titled div around span.truncate', 'ZoomRoom.jsx (HEADER, GROUP_NAME)', () => /className: `uikit-mobile-header /.test(bundle) && /"h1", \{ className: "text-lg font-semibold truncate max-w-\[180px\]", title: [\w$]+\?\.sessionInfo\?\.topic/.test(bundle)
+    && /"div", \{ className: "flex items-center space-x-1 max-w-\[100px\]", title: ([\w$]+)\.subsessionName, children: \[\s*"\(",\s*\/\* @__PURE__ \*\/ [\w$]+\.jsx\("span", \{ className: "truncate", children: \1\.subsessionName \}\),\s*"\)"/.test(bundle)],
+  ['the phone header\'s leave button is button.bg-red-500, after the names', 'test-online-zoom-classroom.mjs (L6)', () => /"button",\s*\{\s*className: "text-theme-text-button bg-red-500 p-2 rounded-full"/.test(bundle)],
   ['a received share is a 16:9 box at most 80 % of the video area wide', 'test-online-zoom-classroom.mjs (L3 threshold)', () => /Math\.min\([\w$]+ \* 0\.8, [\w$]+ \* 0\.8 \/ 16 \* 9\)/.test(bundle)],
   ['both footers are <footer> elements (uikit-footer, uikit-footer-mobile)', 'test-online-zoom-classroom.mjs (L1–L5)', () => /"footer",\s*\{\s*className: `uikit-footer \$/.test(bundle) && /"footer",\s*\{\s*className: `uikit-footer-mobile /.test(bundle)],
   ['the phone layout hides its controls 7 s after the last touch', 'test-online-zoom-classroom.mjs (L1–L5 tap)', () => /setTimeout\(\(\) => \{\s*[\w$]+\([\w$]+\(!1\)\), [\w$]+\([\w$]+\(!1\)\);\s*\}, 7e3\)/.test(bundle)],

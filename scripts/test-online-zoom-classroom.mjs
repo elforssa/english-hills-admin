@@ -120,12 +120,17 @@
 //       taller than about 59 %; the phone fits;
 //   L4. the teacher with two raised hands listed above the room;
 //   L5. the learner and the phone inside a group, and the teacher meanwhile.
+// Two more, from the review of #210 (their rules are above the functions):
+//   L0. before joining, at 1280 × 720, 1366 × 768, 1440 × 900 and 390 × 844: « Rejoindre
+//       le cours » is wholly on the screen, inside the room, without any scroll;
+//   L6. inside a group on the phone: no technical session name in the toolkit's header,
+//       « Groupe n » instead, and its red leave button on the screen.
 // OL_CLASSROOM_LAYOUT_SHOTS=<directory> saves a screenshot at each of these points (the
 // whiteboard's document name, which carries the session name, is masked).
 // Over the whole run: no participant's console has the toolkit's decoded-token line, and
 // each participant's trace says once per join that the groups timer correction is on;
 // zero Content-Security-Policy refusals except the named whiteboard one (check 1).
-// OL_CLASSROOM_PART=whiteboard|groups|media|hands runs one part only, for repairs; such a
+// OL_CLASSROOM_PART=prejoin|whiteboard|groups|media|hands runs one part only, for repairs; such a
 // run is reported as PARTIAL and is not a proof.
 // OL_CLASSROOM_SHOTS=<directory> saves a screenshot per participant when the run breaks.
 // Writes a JSON report (OL_ZOOM_CLASSROOM_REPORT, default
@@ -158,7 +163,7 @@ if (!env.ONLINE_VIDEO_PROVIDER_API_KEY || !env.ONLINE_VIDEO_PROVIDER_API_SECRET)
 }
 const reportPath = process.env.OL_ZOOM_CLASSROOM_REPORT || 'scripts/.zoom-classroom-report.json';
 setTimeout(() => { console.error('FAIL zoom classroom stalled'); process.exit(1); }, 25 * 60_000).unref();
-const PART = ['whiteboard', 'groups', 'media', 'hands'].includes(process.env.OL_CLASSROOM_PART) ? process.env.OL_CLASSROOM_PART : 'all';
+const PART = ['prejoin', 'whiteboard', 'groups', 'media', 'hands'].includes(process.env.OL_CLASSROOM_PART) ? process.env.OL_CLASSROOM_PART : 'all';
 
 const git = args => { try { return execFileSync('git', args, { encoding: 'utf8' }).trim(); } catch { return null; } };
 const zoom = createZoomVideoProvider(env);
@@ -346,6 +351,94 @@ async function layoutNow(page) {
   }
   return l;
 }
+// L0. Before joining: the toolkit's device screen at each window size. « Rejoindre le
+// cours » is wholly on the screen and inside the room without any scroll (the card is at
+// its top, and the button is what a click at its centre reaches); the locked name and
+// the three device choices are on the screen too, and the camera preview keeps a usable
+// size. Nobody joins: these pages never enter the Zoom session.
+const PREJOIN_SIZES = [{ width: 1280, height: 720 }, { width: 1366, height: 768 }, { width: 1440, height: 900 }];
+const PREJOIN_PREVIEW_MIN = 90;
+const prejoinOf = page => page.evaluate(() => {
+  const box = el => { if (!el) return null; const b = el.getBoundingClientRect(); return b.width && b.height ? { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) } : null; };
+  const join = document.querySelector('#uikit-preview-join-button');
+  const card = document.querySelector('#uikit-preview-title')?.parentElement;
+  const centre = join ? (b => document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2))(join.getBoundingClientRect()) : null;
+  const name = document.querySelector('#uikit-preview-name-input');
+  return { viewport: { width: innerWidth, height: innerHeight }, scroll: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
+    room: box(document.querySelector('[data-testid="zoom-room"]')), join: box(join), joinReached: !!join && !!centre && (centre === join || join.contains(centre)),
+    card: box(card), cardScrollTop: card ? Math.round(card.scrollTop + (card.parentElement?.scrollTop || 0)) : null,
+    name: box(name), nameLocked: !!name && name.disabled === true && name.value.length > 0,
+    devices: ['#uikit-preview-speaker-select', '#uikit-preview-mic-select', '#uikit-preview-camera-select'].map(id => box(document.querySelector(id))),
+    preview: box(document.querySelector('[data-testid="zoom-room"] video-player-container')?.parentElement),
+    previewButtons: ['#uikit-preview-mic-button', '#uikit-preview-camera-button'].map(id => box(document.querySelector(id))) };
+});
+const prejoinGood = l => { const screen = screenOf(l); return l.scroll.height <= l.viewport.height + 1 && l.scroll.width <= l.viewport.width + 1
+  && inside(l.room, screen) && inside(l.join, screen) && inside(l.join, l.room) && l.joinReached && l.cardScrollTop === 0
+  && inside(l.name, screen) && l.nameLocked && l.devices.every(d => inside(d, screen) && inside(d, l.room))
+  && inside(l.preview, l.room) && l.preview.height >= PREJOIN_PREVIEW_MIN && l.previewButtons.every(b => inside(b, l.preview)); };
+async function prejoinCheck() {
+  const seen = {};
+  const look = async (page, key) => {
+    await page.getByRole('button', { name: 'Rejoindre le cours' }).waitFor({ timeout: 60000 });
+    let l = await prejoinOf(page);
+    for (const end = Date.now() + 10000; !prejoinGood(l) && Date.now() < end;) { await page.waitForTimeout(500); l = await prejoinOf(page); }
+    seen[key] = { ok: prejoinGood(l), ...l };
+    if (process.env.OL_CLASSROOM_LAYOUT_SHOTS) await page.screenshot({ path: `${process.env.OL_CLASSROOM_LAYOUT_SHOTS}/L0-${key}.png`, mask: [page.getByText(/ehtest-/)] }).catch(() => {});
+  };
+  const visit = async (options, sizes) => {
+    const context = await browser.newContext({ permissions: ['camera', 'microphone'], ...options });
+    try {
+      const page = await context.newPage();
+      await page.goto(`${origin}/?lesson=l0&person=learner&role=participant`);
+      for (const size of sizes) { await page.setViewportSize(size); await page.waitForTimeout(600); await look(page, `${size.width}x${size.height}`); }
+    } finally { await context.close().catch(() => {}); }
+  };
+  await visit({ viewport: PREJOIN_SIZES[0] }, PREJOIN_SIZES);
+  await visit(PHONE, [PHONE.viewport]);
+  report.layout.points['L0. before joining'] = seen;
+  pass(`L0. before joining, at ${Object.keys(seen).join(', ')}: « Rejoindre le cours » is wholly on the screen and inside the room without any scroll; the locked name, the three device choices and the camera preview (≥ ${PREJOIN_PREVIEW_MIN} px) are on the screen`,
+    Object.values(seen).every(entry => entry.ok), Object.fromEntries(Object.entries(seen).map(([key, entry]) => [key, { ok: entry.ok, room: entry.room, join: entry.join, joinReached: entry.joinReached, cardScrollTop: entry.cardScrollTop, preview: entry.preview, nameLocked: entry.nameLocked, devices: entry.devices.map(d => d && d.y + d.height) }])));
+}
+// L6. Inside a group on a phone (review of #210, item 7 and N5): the toolkit's phone
+// header prints the session's technical name and Zoom's own name for the group, and the
+// two together pushed its red leave button off the header. Read after a tap (Zoom hides
+// the header with the controls): no text of the header that a person can see carries the
+// run's session name or « Subsession »; the leave button is wholly on the screen, inside
+// the header, and is what a tap at its centre reaches; what the room prints instead
+// (`label`) is « Groupe » and the group's number.
+const phoneHeaderOf = page => page.evaluate(session => {
+  const box = el => { if (!el) return null; const b = el.getBoundingClientRect(); return b.width && b.height ? { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) } : null; };
+  const header = document.querySelector('#uikit-mobile-header');
+  if (!header) return null;
+  const seenBy = el => { for (let e = el; e && e !== header.parentElement; e = e.parentElement) { const c = getComputedStyle(e); if (c.display === 'none' || c.visibility !== 'visible' || parseFloat(c.fontSize) === 0 || parseFloat(c.opacity) === 0) return false; } return true; };
+  const texts = [];
+  for (const walker = document.createTreeWalker(header, NodeFilter.SHOW_TEXT); walker.nextNode();) {
+    const node = walker.currentNode, text = node.textContent.trim();
+    if (text && seenBy(node.parentElement) && (r => r.width > 0 && r.height > 0)((range => (range.selectNodeContents(node), range.getBoundingClientRect()))(document.createRange()))) texts.push(text);
+  }
+  // Text the room's style prints (a ::before with its own size, on an element whose own text is at size 0).
+  const shownBox = el => { for (let e = el; e && e !== header.parentElement; e = e.parentElement) { const c = getComputedStyle(e); if (c.display === 'none' || c.visibility !== 'visible' || parseFloat(c.opacity) === 0) return false; } return true; };
+  const added = [...header.querySelectorAll('*')].flatMap(el => ['::before', '::after'].map(pseudo => { const c = getComputedStyle(el, pseudo); return shownBox(el) && parseFloat(c.fontSize) > 0 ? c.content : 'none'; })).filter(c => c && c !== 'none' && c !== 'normal').map(c => c.replace(/^"|"$/g, ''));
+  const leave = header.querySelector('button.bg-red-500');
+  const centre = leave ? (b => document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2))(leave.getBoundingClientRect()) : null;
+  const all = [...texts, ...added];
+  return { viewport: { width: innerWidth, height: innerHeight }, header: box(header), leave: box(leave), leaveReached: !!leave && !!centre && (centre === leave || leave.contains(centre)),
+    technical: all.filter(text => text.includes(session) || /subsession/i.test(text)).map(text => text.replace(session, '<session>')), label: added.join(' ') || null, texts: texts.map(text => text.replace(session, '<session>')) };
+}, run);
+async function phoneGroupHeaderCheck(phone) {
+  const good = h => !!h && h.technical.length === 0 && /^Groupe( \d+)?$/.test(h.label || '') && inside(h.leave, screenOf(h)) && inside(h.leave, h.header) && h.leaveReached;
+  let h = null;
+  for (const end = Date.now() + 15000; Date.now() < end;) {
+    const l = await layoutOf(phone);
+    await phone.mouse.click(l.room.x + l.room.width / 2, l.room.y + l.room.height * 0.35);
+    await phone.waitForTimeout(700);
+    h = await phoneHeaderOf(phone);
+    if (good(h)) break;
+  }
+  if (process.env.OL_CLASSROOM_LAYOUT_SHOTS) await phone.screenshot({ path: `${process.env.OL_CLASSROOM_LAYOUT_SHOTS}/L6-phone.png`, mask: [phone.getByText(/ehtest-/)] }).catch(() => {});
+  report.layout.points['L6. the phone header in a group'] = h;
+  pass('L6. inside a group on a phone (390 × 844): the toolkit\'s header shows no technical session name and no « Subsession » but « Groupe n », and its red leave button is wholly on the screen, inside the header, and reached by a tap', good(h), h || {});
+}
 // `wanted[who]`: 'board' or 'share' when that view must be big; polled, since the whiteboard
 // and the share settle to their size a moment after they appear.
 async function layoutCheck(name, people, wanted = {}) {
@@ -359,7 +452,7 @@ async function layoutCheck(name, people, wanted = {}) {
     if (process.env.OL_CLASSROOM_LAYOUT_SHOTS) await page.screenshot({ path: `${process.env.OL_CLASSROOM_LAYOUT_SHOTS}/${name.split('.')[0]}-${who}.png`, mask: [page.getByText(/ehtest-/)] }).catch(() => {});
   }
   report.layout.points[name] = seen;
-  pass(`${name}: no page scroll, the room on the screen, the toolkit's footer inside the room, « Quitter le cours » on the screen${Object.keys(wanted).length ? `; ${Object.entries(wanted).map(([who, need]) => `${who}'s ${need === 'board' ? 'whiteboard canvas' : 'share view'} ≥ ${LAYOUT[need] * 100} % of the window's height, wholly on the screen`).join(', ')}` : ''}`,
+  pass(`${name}: no page scroll, the room on the screen, the toolkit's footer inside the room, « Quitter le cours » on the screen${Object.keys(wanted).length ? `; ${Object.entries(wanted).map(([who, need]) => `${who}'s ${need === 'board' ? 'whiteboard canvas' : 'share view'} ≥ ${Math.round(LAYOUT[need] * 100)} % of the window's height, wholly on the screen`).join(', ')}` : ''}`,
     Object.values(seen).every(entry => entry.ok), Object.fromEntries(Object.entries(seen).map(([who, entry]) => [who, { ok: entry.ok, viewport: entry.viewport, scroll: entry.scroll, room: entry.room, footer: entry.footer, ...(wanted[who] ? { [wanted[who]]: entry[wanted[who]], share: entry[`${wanted[who]}Share`] } : {}) }])));
 }
 
@@ -622,6 +715,7 @@ async function groupsPass(pages, { name, allowReturn, minutes, closedBy, assignF
   pass(`${tag} G2a. each accepts the toolkit's invitation and arrives in its own group; the participant without a group stays in the main room`,
     arrived.learner && arrived.phone && inGroups.learner.group !== inGroups.phone.group && !inGroups.phone2.inGroup, { arrived, invitation: record.invitation, differentGroups: inGroups.learner.group !== inGroups.phone.group });
   if (assignFirst) await layoutCheck('L5. the learner and the phone in their groups', { teacher, learner, phone });
+  if (assignFirst) await phoneGroupHeaderCheck(phone);
   strays.push(...await everyoneStill('in groups'));
   const message = `Encore une minute ${name}`;
   await step(teacher, 'send a message to all groups', async () => {
@@ -1166,6 +1260,8 @@ async function handsPart(pages) {
 }
 
 try {
+  if (PART === 'all' || PART === 'prejoin') await prejoinCheck();
+  if (PART === 'prejoin') throw Object.assign(new Error('prejoin part only'), { partOnly: true });
   const teacher = await open('teacher', 'host', { viewport: LAPTOP });
   const learner = await open('learner', 'participant', { viewport: LAPTOP });
   const phone = await open('phone', 'participant', PHONE);
@@ -1193,8 +1289,10 @@ try {
   await teacher.evaluate(() => window.zmClient?.leave?.(true)).catch(() => {});
   await learner.waitForTimeout(2000);
 } catch (error) {
+  if (error?.partOnly) { /* a repair run of L0 alone: nobody joined */ } else {
   if (process.env.OL_CLASSROOM_SHOTS) for (const [i, context] of contexts.entries()) await context.pages()[0]?.screenshot({ path: `${process.env.OL_CLASSROOM_SHOTS}/fail-${Object.keys(report.people)[i] || i}.png` }).catch(() => {});
   pass('the run completed', false, { error: String(error?.message || error).slice(0, 1200) });
+  }
 } finally {
   for (const context of contexts) await context.close().catch(() => {});
   await browser.close();
