@@ -1,11 +1,11 @@
 // RWR-r5 PR A1 — reception day scripts (plan §8), real UI on the local stack.
 // Each script counts clicks and typed fields through one helper and fails above its target.
-// Numbering: the plan's table, counted from 0 (0 unanswered call … 11 two staff); it is the only
-// numbering under which B1's « 4, 5 » are the people scripts and C1's « 2, 9 » the payment scripts.
+// Numbering: the plan's §8 table rows 0–11 (0 unanswered call … 11 two staff).
 // A1 owns 1, 3, 6, 7, 8, 10, 11; script 0 (the T7 one-tap) is run as well.
-// Scripts 3 and 8 are held at their measured A1 count: their targets need pieces the plan places
-// later (§5.3 « C'est la même personne », §5.4 the « Mauvais numéro » close reason). The suite logs
-// « TARGET NOT MET » for them so the gap stays visible; the PR description records the decision.
+// Scripts 3 and 8 run at the A1 counts the owner accepted on 2026-11-22 (plan, implementation
+// record): 3 at 7, its ≤ 6 target in B1 (« C'est la même personne », §5.3); 8 at 4 (close), its
+// close-in-2 target in B2 (close reasons, §5.4) and its corrected-in-3 target in B1. The suite
+// fails above those ceilings and logs « ACCEPTED A1 COUNT » with the later target so the gap stays visible.
 // Invariant 9 (same next action on card, Tâches row, drawer and calendar) is checked in script 1.
 // Synthetic staff and prospects only, removed in finally. No external requests.
 import assert from 'node:assert/strict';
@@ -49,7 +49,7 @@ function script(name, target, from) {
     check: (locator, label) => step(label, () => locator.check()),
     done(ceiling = target, reason = '') {
       assert(n <= ceiling, `${name}: ${n} actions, ceiling ${ceiling} (${steps.join(' → ')})`);
-      if (n > target) { gaps.push(`${name}: ${n} > ${target} — ${reason}`); console.log(`TARGET NOT MET ${name}: ${n} actions (target ≤ ${target}; ${reason}) from ${from}: ${steps.join(' → ')}`); }
+      if (n > target) { gaps.push(`${name}: ${n} > ${target} — ${reason}`); console.log(`ACCEPTED A1 COUNT ${name}: ${n} actions (later target ≤ ${target}; ${reason}) from ${from}: ${steps.join(' → ')}`); }
       else console.log(`PASS day script ${name}: ${n} actions (target ≤ ${target}) from ${from}: ${steps.join(' → ')}`);
     }
   };
@@ -149,7 +149,7 @@ try {
   await s3.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect créé'); await panel().waitFor();
   // Seven with the phone: the learner name is a separate field until B1's « C'est la même personne » (§5.3).
-  s3.done(7, 'the learner field stays until B1 « C’est la même personne » (§5.3)');
+  s3.done(7, 'accepted for A1; ≤ 6 in B1 with « C’est la même personne » (§5.3)');
   const walkIn = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
   assert.equal(status(walkIn), 'ENGAGED', 'a walk-in is a conversation: ENGAGED');
   assert.deepEqual(openRows(walkIn).map(r => r.type), ['awaiting_prospect'], 'one action: « En attente »');
@@ -182,6 +182,8 @@ try {
     await s7.click(opener(), 'Changer');
     await dialog().getByRole('heading', { name: 'Changer la prochaine action' }).waitFor();
     assert.equal(await dialog().getByLabel('Rappel convenu', { exact: true }).isChecked(), true, '« Changer » opens on the agreed callback');
+    // The hours are loaded and the agreed time is shown before the date changes.
+    await page.waitForFunction(el => !el.disabled && el.options.length > 1 && el.value === '16:00', await dialog().getByLabel('Heure', { exact: true }).elementHandle());
     await s7.fill(dialog().getByLabel('Date', { exact: true }), later(7 * (i + 1)), 'new date (time kept)');
     await s7.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
     await toast('Prochaine action enregistrée'); await closed('Changer la prochaine action');
@@ -195,7 +197,7 @@ try {
   assert.deepEqual(openRows(callback).map(r => r.type), ['awaiting_prospect'], 'never a second action; the callback is cancelled');
   assert.equal(sql(`select to_char(due_at at time zone public.centre_utc_offset(),'HH24:MI') from public.crm_tasks where lead_id=${q(callback)} and task_type='callback' order by created_at desc limit 1`), '16:00', 'the agreed time is kept across date changes');
 
-  // 8 — Wrong number, closed (target 2; 3 with a corrected number is B1).
+  // 8 — Wrong number, closed (A1 ceiling 4; close in 2 is B2, corrected in 3 is B1).
   phase = 'script 8';
   const wrong = intake(reception.id, 'Jour 8 mauvais numéro');
   await openDrawer(wrong);
@@ -206,7 +208,7 @@ try {
   await s8.select(dialog().getByLabel('Motif', { exact: true }), 'invalid_spam', 'Motif');
   await s8.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
   await toast('Prospect clôturé'); await closed('Noter un échange');
-  s8.done(4, 'a one-step close needs the « Mauvais numéro » close reason (§4.8, §5.4)');
+  s8.done(4, 'accepted for A1; close in 2 in B2 with the close-reason list (§5.4)');
   assert.equal(status(wrong), 'NOT_QUALIFIED', 'closed as not qualified');
   assert.equal(openRows(wrong).length, 0, 'a closed prospect has no next action');
 
@@ -279,7 +281,7 @@ try {
   console.log('PASS day script 11: B refused with « rechargez », reloads and saves once; default views split the work');
 
   assert.deepEqual(errors, [], 'no browser errors');
-  console.log(`PASS reception day scripts 0, 1, 3, 6, 7, 8, 10, 11${gaps.length ? ` — targets not met in A1: ${gaps.join('; ')}` : ''}`);
+  console.log(`PASS reception day scripts 0, 1, 3, 6, 7, 8, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
 } catch (error) {
   console.error(phase, error.message);
   if (page) {

@@ -2098,6 +2098,18 @@ end $function$;
 revoke all on function public.crm_get_centre_hours(),public.crm_check_action(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_get_centre_hours(),public.crm_check_action(uuid) to authenticated;
 
+-- Editing the centre hours (a new policy version, now with opening hours) is
+-- director only (RPW-r2 capability classification). The command already refuses
+-- other roles; the wrapper states it first so the classification reads it.
+create or replace function public.crm_create_followup_policy(p_request_key uuid, p_data jsonb)
+ returns jsonb language plpgsql security definer set search_path to 'pg_catalog','pg_temp' as $function$
+begin
+ perform crm_security.require_reader(true);
+ return crm_security.command('create_followup_policy',p_request_key,p_data);
+end $function$;
+revoke all on function public.crm_create_followup_policy(uuid,jsonb) from public, anon, authenticated, service_role;
+grant execute on function public.crm_create_followup_policy(uuid,jsonb) to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 12. Data step D1 (§10). Defined here, NOT run: the operator runs d1_plan,
 --     then d1_apply(expected_counts) after « approve D1 ». M-A2 drops all three.

@@ -32,8 +32,9 @@ export function NextActionPicker({ form, setForm, current, kinds, lead, hours, l
   const now = centreDateTimeInput();
   const slots = slotTimes(hours, kind === 'center_visit' ? 'opening' : 'calling', form.date, { now: { date: today, time: now.slice(11) }, keep: form.time });
   const rules = replaceRules(current, kind);
-  // A new date keeps the chosen time when that slot exists on the new day.
-  const changeDate = date => setForm(old => ({ ...old, date, time: old.time && slotTimes(hours, old.kind === 'center_visit' ? 'opening' : 'calling', date, { now: { date: today, time: now.slice(11) }, keep: old.time }).includes(old.time) ? old.time : '' }));
+  // A new date keeps the chosen time when that slot exists on the new day; before the
+  // hours have loaded it is kept as is (the server still refuses a time outside them).
+  const changeDate = date => setForm(old => ({ ...old, date, time: old.time && !hours ? old.time : old.time && slotTimes(hours, old.kind === 'center_visit' ? 'opening' : 'calling', date, { now: { date: today, time: now.slice(11) }, keep: old.time }).includes(old.time) ? old.time : '' }));
   const dateField = (label, required = true, help) => <FormField label={label} help={help}><input type="date" className={control} min={today} required={required} value={form.date || ''} onChange={e => changeDate(e.target.value)} /></FormField>;
   const timeField = () => <FormField label="Heure" help={form.date && !slots.length ? 'Aucun créneau ce jour-là (centre fermé ou journée passée).' : 'Créneaux selon les horaires du centre.'}>
     <select className={control} required disabled={!form.date || !slots.length} value={form.time || ''} onChange={e => set('time', e.target.value)}><option value="">Choisir…</option>{slots.map(t => <option key={t} value={t}>{t}</option>)}</select></FormField>;

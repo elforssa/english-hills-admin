@@ -35,8 +35,10 @@ function invariants(lead, label) {
   eq(sql(`select count(*) from public.crm_tasks where lead_id=${q(lead)} and status='open' and assigned_to is null`), '0', `${label}: invariant 10 — every open action has an owner`);
 }
 
+// Earlier suites in the same CI step leave their own policies (the CRM concurrency scripts);
+// this suite publishes a newer version and removes only its own rows.
+const policiesBefore = sql('select count(*) from public.crm_followup_policies');
 try {
-  eq(sql('select count(*) from public.crm_followup_policies'), '0', 'clean local policy baseline');
   users = await createStaff(env, run, ['director', 'receptionist', 'receptionist', 'teacher']);
   const [director, reception, colleague, teacher] = users;
   const tokens = Object.fromEntries(await Promise.all([['director', director], ['reception', reception], ['colleague', colleague], ['teacher', teacher]].map(async ([k, u]) => [k, await signIn(env, u)])));
@@ -174,6 +176,6 @@ try {
   console.log(`PASS RWR-r5 next action over HTTP: role edge, 409/PT409 and 400/22023 transport, replay, hours, OD-11/18, outcome before start, close/reopen, old wrapper, history grouping; invariants 1, 2, 8, 10 after every command (${checks} checks)`);
 } finally {
   removeStaff(users.map(u => u.id));
-  assert.equal(sql('select count(*) from public.crm_followup_policies'), '0', 'synthetic policies removed');
+  assert.equal(sql('select count(*) from public.crm_followup_policies'), policiesBefore, 'synthetic policies removed');
   console.log('PASS synthetic HTTP fixtures removed');
 }
