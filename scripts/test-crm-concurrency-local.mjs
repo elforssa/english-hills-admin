@@ -71,8 +71,9 @@ const sqlstate = r => (r.stderr.match(/ERROR:\s+([0-9A-Z]{5}):/) || [])[1];
   const student = sql(`insert into public.students(id,full_name,status,session_type) values(gen_random_uuid(),'Race learner','Enrolled','Mise à niveau') returning id`).split('\n').pop();
   sql(`update public.crm_leads set student_id=${q(student)} where id in (${q(a)},${q(b)})`);
   const slot = sql(`select crm_security.window_at(crm_security.current_policy_id(),'opening',(((now() at time zone public.centre_utc_offset())::date+5)::timestamp+time '11:00') at time zone public.centre_utc_offset())`);
-  const visit = lead => { const s = state(lead); return { lead_id: lead, expected_version: s.version, expected_action_id: s.action, next: { task_type: 'center_visit', due_at: slot } }; };
-  const results = await Promise.all([call('change_next_action', crypto.randomUUID(), visit(a), 0.4), call('change_next_action', crypto.randomUUID(), visit(b), 0.4)]);
+  // Booked through the exchange that qualifies (OD-11; « Changer » refuses a first appointment).
+  const visit = lead => { const s = state(lead); return { lead_id: lead, expected_version: s.version, channel: 'phone', result: 'spoke', next: { task_type: 'center_visit', due_at: slot } }; };
+  const results = await Promise.all([call('log_exchange', crypto.randomUUID(), visit(a), 0.4), call('log_exchange', crypto.randomUUID(), visit(b), 0.4)]);
   assert.equal(results.filter(r => r.status === 0).length, 1, results.map(r => r.stderr).join('\n'));
   assert.match(results.find(r => r.status !== 0).stderr, /overlaps/);
   console.log('PASS overlapping appointments for one student: one wins under the student lock');

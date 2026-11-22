@@ -65,7 +65,8 @@ select lead,'center_visit',pg_temp.at(-2,'11:00'),'appointment',test,'manual','f
 insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key,created_at)
 select lead,'callback',pg_temp.at(1,'16:00'),'manual','fx:L7:cb',now()-interval '1 hour' from fx where name='L7_past_appt_test';
 update fx set a=(select id from public.crm_tasks where source_key='fx:L7:appt'),b=(select id from public.crm_tasks where source_key='fx:L7:cb') where name='L7_past_appt_test';
--- L8 closed, L9 converted, L10 merged: each with an open action and a planned future test (rule d).
+-- L8 closed, L9 converted, L10 merged: each with an open action and a planned future test (rule d;
+-- the converted prospect keeps its test, §4.8, review of #208 important 6).
 insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
 select 'D1 learner',((now() at time zone public.centre_utc_offset())::date+6),'10:00','Planifié',lead,'Fixture' from fx where name in ('L8_closed','L9_converted','L10_merged');
 update fx set test=(select id from public.placement_tests where crm_lead_id=fx.lead) where name in ('L8_closed','L9_converted','L10_merged');
@@ -102,20 +103,59 @@ do $$ declare base jsonb:=(select plan from baseline); p jsonb:=crm_security.d1_
  perform pg_temp.ok((p->'b'->>'count')::int-(base->'b'->>'count')::int=2 and (p->'b'->>'replaced')::int-(base->'b'->>'replaced')::int=1,'rule b: L5 L6 (one action replaced)');
  perform pg_temp.ok((p->'c'->>'count')::int-(base->'c'->>'count')::int=2 and (p->'c'->>'after_five_failures')::int-(base->'c'->>'after_five_failures')::int=1,'rule c: L4 (after five) L12');
  perform pg_temp.ok((p->'d'->>'count')::int-(base->'d'->>'count')::int=3,'rule d: L8 L9 L10');
- perform pg_temp.ok((p->'tests_cancelled'->>'count')::int-(base->'tests_cancelled'->>'count')::int=4,'tests cancelled: L8 L9 L10 and L11''s past test');
+ perform pg_temp.ok((p->'tests_cancelled'->>'count')::int-(base->'tests_cancelled'->>'count')::int=3,'tests cancelled: L8 L10 and L11''s past test (L9 converted keeps its test)');
+ perform pg_temp.ok(not exists(select 1 from crm_security.d1_cancelled_tests() c join fx on fx.test=c.test_id where fx.name='L9_converted'),'a converted prospect''s test is not in the cancelled list');
  perform pg_temp.ok(exists(select 1 from crm_security.d1_cancelled_tests() c join fx on fx.test=c.test_id where fx.name='L11_future_and_past' and c.rule='a'),'L11 past test listed under rule a');
  perform pg_temp.ok(not exists(select 1 from crm_security.d1_cancelled_tests() c join fx on fx.test=c.test_id where fx.name in ('L3_shared_test','L7_past_appt_test')),'a test linked to the kept action is never cancelled');
 end $$;
 \echo PASS d1_plan per-rule counts, samples and cancelled tests
 
+-- B3 (review of #208): a prospect D1 processes under two rules (a: two open actions;
+-- b: a planned test without its appointment) has two journal rows of one transaction
+-- (same run_at). d1_revert takes the highest journalled version, so it is reverted on
+-- every run, whatever the uuids. Twelve runs, each rolled back to this point.
+do $$ declare l uuid; p jsonb; r jsonb; runs integer:=0; i integer; begin
+ for i in 1..12 loop
+  begin
+   perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000003',true);
+   l:=(public.crm_create_manual_lead(gen_random_uuid(),jsonb_build_object('display_name','D1 L13 two rules','learner_name','D1 learner','email','d1-'||gen_random_uuid()||'@example.invalid','source_label','Manual'))->'lead'->>'id')::uuid;
+   set local session_replication_role=replica;
+   update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where lead_id=l and status='open';
+   insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key,created_at)
+   select l,'callback',pg_temp.at(2,'10:00'),'manual','fx:L13:'||i||':'||g,now()-make_interval(hours=>3-g) from generate_series(1,2) g;
+   insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
+   values('D1 learner',((now() at time zone public.centre_utc_offset())::date+6),'11:00','Planifié',l,'Fixture');
+   set local session_replication_role=origin;
+   perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000001',true);
+   perform pg_temp.ok((select count(*)=2 from crm_security.d1_sets() where lead_id=l and rule in ('a','b')),'run '||i||': L13 matches rules a and b');
+   p:=crm_security.d1_plan();
+   perform crm_security.d1_apply(p);
+   perform pg_temp.ok((select count(*)=2 and count(distinct run_at)=1 from public.crm_data_step_journal where step='d1' and entity='crm_leads' and entity_id=l),'run '||i||': two journal rows of one transaction');
+   r:=crm_security.d1_revert();
+   perform pg_temp.ok((r->>'leads_changed_since')::int=0,'run '||i||': no prospect skipped '||r::text);
+   perform pg_temp.ok((select count(*)=2 and bool_and(task_type='callback') from public.crm_tasks where lead_id=l and status='open')
+    and (select status='Planifié' from public.placement_tests where crm_lead_id=l),'run '||i||': L13 back to its two callbacks and its planned test');
+   raise exception using errcode='EH999',message='roll this run back';
+  exception when sqlstate 'EH999' then runs:=runs+1;
+  end;
+ end loop;
+ perform pg_temp.ok(runs=12,'twelve reverted runs');
+end $$;
+\echo PASS B3 d1_revert reverts a prospect processed under two rules, on every run
+
 -- d1_apply refuses counts that differ from the approved dry run, then applies.
-do $$ declare p jsonb:=crm_security.d1_plan(); wrong jsonb; begin
+do $$ declare p jsonb:=crm_security.d1_plan(); wrong jsonb; r jsonb; begin
  perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000001',true);
  wrong:=jsonb_set(p,'{a,count}',to_jsonb((p->'a'->>'count')::int+1));
  begin perform crm_security.d1_apply(wrong); raise exception 'FAIL: d1_apply accepted a wrong count';
  exception when sqlstate 'P0001' then if sqlerrm not like 'D1 dry-run count differs%' then raise; end if; end;
- perform crm_security.d1_apply(p);
+ r:=crm_security.d1_apply(p);
  perform pg_temp.ok(current_setting('eh.crm_data_step',true) is distinct from 'd1','D1 bypass flag cleared after the run');
+ -- Review of #208 (important 7): the counts checked are the sets acted on, and no
+ -- concurrent writer can change them before commit.
+ perform pg_temp.ok((select bool_and(coalesce((r->'applied'->>k)::int,0)=(p->k->>'count')::int) from unnest(array['a','b','c','d']) k),'d1_apply acted on exactly the checked sets '||r::text);
+ perform pg_temp.ok((select count(distinct relation)=3 from pg_locks where pid=pg_backend_pid() and mode='ShareRowExclusiveLock'
+  and relation in ('public.crm_leads'::regclass,'public.crm_tasks'::regclass,'public.placement_tests'::regclass)),'D1 tables locked against writers until commit');
 end $$;
 
 -- Post-checks (Q04, Q05, Q07, Q29) and the shape-specific outcomes.
@@ -144,7 +184,9 @@ do $$ declare r record; begin
  perform pg_temp.ok(crm_security.next_action_id(r.lead)=r.a and (select status='cancelled' from public.crm_tasks where id=r.b)
   and (select status='Planifié' from public.placement_tests where id=r.test),'L7 past appointment with its planned test kept; callback cancelled');
  perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=x.test) and not exists(select 1 from public.crm_tasks where lead_id=x.lead and status='open'),x.name||' cleared, test cancelled')
- from fx x where x.name in ('L8_closed','L9_converted','L10_merged');
+ from fx x where x.name in ('L8_closed','L10_merged');
+ select * into r from fx where name='L9_converted';
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=r.test) and not exists(select 1 from public.crm_tasks where lead_id=r.lead and status='open'),'L9 converted: actions cleared, test kept (§4.8)');
  select * into r from fx where name='L11_future_and_past';
  perform pg_temp.ok(crm_security.next_action_id(r.lead)=r.a and (select status='Annulé' from public.placement_tests where id=r.test),'L11 future appointment kept, past test cancelled');
  select * into r from fx where name='L12_none';

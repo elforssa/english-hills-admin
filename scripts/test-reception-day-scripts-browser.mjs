@@ -156,7 +156,8 @@ try {
   assert.equal(sql(`select count(*) from public.crm_tasks where lead_id=${q(walkIn)} and task_type='first_contact'`), '0', 'a walk-in never schedules « Premier contact »');
   assert.equal(sql(`select count(*) from public.crm_activities where lead_id=${q(walkIn)} and event_type='conversation_recorded' and channel='in_person'`), '1', 'the conversation is logged');
 
-  // 6 — No-show: « Absent » on the Tâches row (target 2: « Pas venu » → the proposed reminder).
+  // 6 — No-show: « Absent » on the Tâches row, then « Confirmer le rappel » (target 2: « Pas venu » →
+  // the proposed reminder; review Important 5: the first tap alone writes nothing).
   phase = 'script 6';
   const noShow = intake(reception.id, 'Jour 6 absent');
   rpc(reception.id, 'log_exchange', { lead_id: noShow, expected_version: version(noShow), channel: 'phone', result: 'spoke', next: { task_type: 'center_visit', due_at: slotAt('opening', 3, '11:00'), with_test: true } });
@@ -164,6 +165,10 @@ try {
   await tasks('overdue', noShow);
   const s6 = script('6 no-show', 2, 'the Tâches row');
   await s6.click(row(noShow).getByRole('button', { name: 'Absent', exact: true }), 'Absent');
+  const reminder = row(noShow).getByRole('group', { name: 'Absent : rappel proposé' });
+  await reminder.waitFor();
+  assert.deepEqual(openRows(noShow).map(r => r.type), ['center_visit'], '« Absent » alone writes nothing');
+  await s6.click(reminder.getByRole('button', { name: 'Confirmer le rappel', exact: true }), 'Confirmer le rappel');
   await toast('Résultat du rendez-vous enregistré');
   s6.done();
   assert.deepEqual(openRows(noShow).map(r => [r.type, r.kind]), [['callback', 'reminder']], 'the proposed reminder is the one next action');
@@ -212,7 +217,8 @@ try {
   assert.equal(status(wrong), 'NOT_QUALIFIED', 'closed as not qualified');
   assert.equal(openRows(wrong).length, 0, 'a closed prospect has no next action');
 
-  // 10 — Closed, then reopened: 3 + 3, and booking a test works afterwards.
+  // 10 — Closed, then reopened: 3 + 3, and booking a test works afterwards — through « Noter un échange »:
+  // the reopened prospect is not qualified, so « Changer » offers no appointment (review B1, OD-11).
   phase = 'script 10';
   const closing = intake(reception.id, 'Jour 10 rouvert');
   rpc(reception.id, 'log_exchange', { lead_id: closing, expected_version: version(closing), channel: 'phone', result: 'spoke', next: { task_type: 'center_visit', due_at: slotAt('opening', 4, '11:00'), with_test: true } });
@@ -235,6 +241,13 @@ try {
   assert.equal(openRows(closing).length, 1, 'reopened with one next action');
   await page.waitForLoadState('networkidle');
   await panel().getByRole('button', { name: 'Changer', exact: true }).click();
+  await dialog().getByTestId('book-through-exchange').waitFor();
+  assert.equal(await dialog().getByLabel('Rendez-vous au centre', { exact: true }).count(), 0, '« Changer » offers no appointment before the exchange');
+  await dialog().getByRole('button', { name: 'Garder l’action actuelle', exact: true }).click();
+  await page.getByRole('heading', { name: 'Changer la prochaine action' }).waitFor({ state: 'detached' });
+  await panel().getByRole('button', { name: 'Noter un échange', exact: true }).click();
+  await dialog().getByRole('heading', { name: 'Noter un échange' }).waitFor();
+  await dialog().getByLabel('On a parlé', { exact: true }).check();
   await dialog().getByLabel('Rendez-vous au centre', { exact: true }).check();
   await dialog().getByLabel('Date', { exact: true }).fill(sql(`select (((now() at time zone public.centre_utc_offset())::date+5)::text)`));
   const reTime = dialog().getByLabel('Heure', { exact: true });
@@ -242,8 +255,9 @@ try {
   await reTime.selectOption((await reTime.locator('option').evaluateAll(os => os.map(o => o.value))).filter(Boolean)[0]);
   await dialog().getByLabel('Avec test de niveau', { exact: true }).check();
   await dialog().getByRole('button', { name: 'Enregistrer', exact: true }).click();
-  await toast('Prochaine action enregistrée'); await closed('Changer la prochaine action');
+  await toast('Échange enregistré'); await closed('Noter un échange');
   assert.equal(sql(`select count(*) from public.placement_tests where crm_lead_id=${q(closing)} and status='Planifié'`), '1', 'booking a test works after reopening');
+  assert.equal(status(closing), 'QUALIFIED', 'the exchange qualifies');
   console.log('PASS day script 10: booking a test works after reopening');
 
   // 11 — Two staff on the same list: B's stale save is refused and reloads; default views split.

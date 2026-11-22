@@ -25,7 +25,7 @@ const cases=[
  // the director-only journal read and default-owner setting (§4.1, OD-6) are closed to other roles.
  ['crm_log_exchange',{p_request_key:null,p_data:{}},'operations','22023'],['crm_change_next_action',{p_request_key:null,p_data:{}},'operations','22023'],
  ['crm_record_appointment_outcome',{p_request_key:null,p_data:{}},'operations','22023'],['crm_close_prospect',{p_request_key:null,p_data:{}},'operations','22023'],
- ['crm_reopen_prospect',{p_request_key:null,p_data:{}},'operations','22023'],['crm_check_action',{p_lead:nil},'operations','22023'],['crm_get_centre_hours',{},'operations',CENTRE_HOURS],
+ ['crm_reopen_prospect',{p_request_key:null,p_data:{}},'operations','22023'],['crm_check_action',{p_lead:nil},'operations','22023'],['crm_get_centre_hours',{},'operations',CENTRE_HOURS],['crm_list_outside_hours',{},'operations',CENTRE_HOURS],
  ['crm_list_data_step_journal',{},'director'],['crm_set_reception_default_owner',{p_owner:nil},'director','22023'],
  // Harmless arguments: the director passes authorization and reaches the not-found/ineligible check.
  ['crm_configure_insights',{p_connection:nil,p_version:1,p_data:{}},'director','PT409'],['crm_request_insights_sync',{p_connection:nil,p_request:nil},'director','22023'],['crm_retry_insights_sync',{p_run:nil},'director','22023'],

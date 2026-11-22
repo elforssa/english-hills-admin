@@ -136,6 +136,8 @@ const studentPills=async role=>{
     if(name==='crm_list_open_tasks')return json([task]);
     // RWR-r5 §4.3 reads: the pre-form check (no 3-hour gap) and the published centre hours.
     if(name==='crm_check_action')return json({lead_id:leadId,status:'NEW',version:1,editable:true,next_action:null,failed_attempts:0,attempt_gap_ok:true,next_attempt_allowed_at:null,minimum_attempt_gap_minutes:180,has_appointment:false,planned_test:null,unreachable_eligible:false,as_of:'2030-06-14T09:00:00Z'});
+    // §4.5 « Hors des nouveaux horaires »: none here, so Tâches shows no panel.
+    if(name==='crm_list_outside_hours')return json({total:0,policy_id:null,as_of:'2030-06-14T09:00:00Z',rows:[]});
     if(name==='crm_get_centre_hours')return json({timezone:'Africa/Casablanca',calling_hours:{},opening_hours:{},opening_same_as_calling:false,closed_dates:[],minimum_attempt_gap_minutes:180,attempt_offsets:[0,0,1,3,5],as_of:'2030-06-14T09:00:00Z'});
     if(name==='crm_get_timeline'||name==='crm_list_placements'||name==='crm_list_intake_review')return json({rows:[],total:0,has_more:false});
     // Learner file "Comptes famille" panel (PRF-r2 D3): a read-only staff list, no family account in this fixture.

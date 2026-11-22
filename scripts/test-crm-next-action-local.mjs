@@ -161,6 +161,12 @@ try {
   const walkIn = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP visite', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', first_exchange: { channel: 'in_person', next: { task_type: 'awaiting_prospect' } } });
   eq([walkIn.status, walkIn.body.lead.status, walkIn.body.next_action?.task_type], [200, 'ENGAGED', 'awaiting_prospect'], 'a walk-in « reviendra » waits, with no date chosen');
   invariants(walkIn.body.lead.id, 'walk-in');
+  // Review Important 2 (§4.8 observation 5): a walk-in is never created without its in-person exchange.
+  for (const first_exchange of [undefined, { channel: 'phone', next: { task_type: 'awaiting_prospect' } }]) {
+    const refused = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP visite refusée', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Visite au centre', ...(first_exchange ? { first_exchange } : {}) });
+    eq([refused.status, refused.body?.hint], [400, 'crm_create.walk_in_exchange_required'], `a walk-in ${first_exchange ? 'with a phone exchange' : 'without its exchange'} is refused`);
+  }
+  eq(sql(`select count(*) from public.crm_submissions where core_fields->>'display_name'='HTTP visite refusée'`), '0', 'a refused walk-in leaves no prospect and no « Premier contact »');
   const lunch = sql(`select to_json((((now() at time zone public.centre_utc_offset())::date+9)::timestamp+'13:00') at time zone public.centre_utc_offset())#>>'{}'`);
   for (const bad of [{ channel: 'phone', next: 'keep' }, { channel: 'phone', next: { close: { status: 'LOST', reason: 'price' } } }, { channel: 'other', next: { task_type: 'awaiting_prospect' } }, { channel: 'phone', next: { task_type: 'callback', schedule_kind: 'appointment', due_at: lunch } }]) {
     const refused = await command(tokens.reception, 'crm_create_manual_lead', { display_name: 'HTTP refusé', learner_name: 'Apprenant synthétique', source_label: 'Manuel · Téléphone', first_exchange: bad });

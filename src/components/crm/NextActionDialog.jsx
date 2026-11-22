@@ -114,6 +114,10 @@ export default function NextActionDialog({ lead, onClose }) {
   const dirty = JSON.stringify(form) !== JSON.stringify(initial) && Object.values(form).some(v => v !== '' && v !== undefined && v !== false);
   const closer = useDirtyClose(dirty, command.busy, onClose);
   const update = value => { command.clearError(); setForm(value); };
+  // OD-11 (review of #208, B1): booking an appointment qualifies, and qualification
+  // needs the conversation, so a prospect not yet qualified books it through
+  // « Noter un échange ». An existing appointment can still be moved here.
+  const canBook = lead.status === 'QUALIFIED' || seen.action?.task_type === 'center_visit';
   async function submit(event) {
     event.preventDefault();
     const saved = await command.run('crm_change_next_action', () => ({
@@ -127,8 +131,9 @@ export default function NextActionDialog({ lead, onClose }) {
   return <Dialog open onOpenChange={value => { if (!value) closer.request(); }}><DialogContent onCloseAutoFocus={returnFocus} className={`operational ${STICKY_DIALOG} sm:max-w-[600px]`}>
     <DialogHeader><DialogTitle>Changer la prochaine action</DialogTitle><DialogDescription>{lead.contact_name}{lead.learner_name ? ` · ${lead.learner_name}` : ''}</DialogDescription></DialogHeader>
     <form noValidate onSubmit={submit} className="space-y-4"><fieldset disabled={command.busy} className="space-y-4">
+      {!canBook && <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700" data-testid="book-through-exchange">Pour fixer un rendez-vous au centre, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.</p>}
       <NextActionPicker form={form} setForm={update} current={seen.action} lead={lead} hours={hours.data}
-        kinds={['center_visit', 'callback', 'our_step', 'reminder', 'awaiting', 'lost', 'not_qualified']} />
+        kinds={[...(canBook ? ['center_visit'] : []), 'callback', 'our_step', 'reminder', 'awaiting', 'lost', 'not_qualified']} />
     </fieldset><FormFooter error={isRecordConflict(failed) ? null : failed} stale={stale} busy={command.busy} onReload={reload} onCancel={closer.request} /></form>
     {closer.guard}
   </DialogContent></Dialog>;

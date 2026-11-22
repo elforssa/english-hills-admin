@@ -154,7 +154,8 @@ function body(s) {
     set local session_replication_role=origin;
    end if;
    perform pg_temp.act('record_appointment_outcome',${L},jsonb_build_object('action_id',t.id,'outcome_code',${q(s.code)}));`;
-    case 'visit_outcome': return `perform pg_temp.act('change_next_action',${L},jsonb_build_object('expected_action_id',crm_security.next_action_id(${L}),'next',
+    // Booked through the exchange that qualifies (OD-11): « Changer » refuses a first appointment (review B1).
+    case 'visit_outcome': return `perform pg_temp.act('log_exchange',${L},jsonb_build_object('channel','phone','result','spoke','next',
      pg_temp.spec(${J({ task_type: 'center_visit', slot: s.slot, with_test: s.with_test, confirm: true })},${L})));
    ${body({ k: 'outcome', lead: s.lead, code: s.code })}`;
     case 'qualify_enrol': return `perform pg_temp.act('log_exchange',${L},jsonb_build_object('channel','phone','result','spoke','next',${J({ enrol: { due_preset: 'tomorrow' } })}));
@@ -234,10 +235,13 @@ const REGRESSIONS = [
   { name: 'spoke → enrol next → start enrollment', creates: ['Manual', 'Walk-in'], steps: [
     { k: 'spoke', lead: 0, channel: 'phone', next: { enrol: { due_preset: 'tomorrow' } } }, { k: 'enrol', lead: 0 }], accepted: [1, 2] },
   { name: 'visit with test → outcome no-show', creates: ['Manual', 'Website'], steps: [
-    { k: 'change', lead: 0, next: { task_type: 'center_visit', slot: slotAt('opening', 3, '10:00'), with_test: true } }, { k: 'outcome', lead: 0, code: 'no_show' }], accepted: [1, 2] },
+    { k: 'spoke', lead: 0, channel: 'phone', next: { task_type: 'center_visit', slot: slotAt('opening', 3, '10:00'), with_test: true } }, { k: 'outcome', lead: 0, code: 'no_show' }], accepted: [1, 2] },
+  // Review B1 (OD-11, §4.8): « Changer » does not book a first appointment for a prospect not yet qualified.
+  { name: 'appointment through « Changer » before qualification → refused', creates: ['Manual', 'Manual'], steps: [
+    { k: 'change', lead: 0, next: { task_type: 'center_visit', slot: slotAt('opening', 3, '10:00'), with_test: true } }], accepted: [] },
   { name: 'visits for both prospects of one learner at the same time → one refused', creates: ['Manual', 'Phone call'], steps: [
-    { k: 'change', lead: 0, next: { task_type: 'center_visit', slot: slotAt('opening', 4, '11:30'), with_test: false } },
-    { k: 'change', lead: 1, next: { task_type: 'center_visit', slot: slotAt('opening', 4, '11:30'), with_test: true } }], accepted: [1] },
+    { k: 'spoke', lead: 0, channel: 'phone', next: { task_type: 'center_visit', slot: slotAt('opening', 4, '11:30'), with_test: false } },
+    { k: 'spoke', lead: 1, channel: 'phone', next: { task_type: 'center_visit', slot: slotAt('opening', 4, '11:30'), with_test: true } }], accepted: [1] },
   { name: 'close → reopen → stale tab → double submit', creates: ['Walk-in', 'Manual'], steps: [
     { k: 'close', lead: 0, close: { status: 'LOST', reason: 'price' } }, { k: 'reopen', lead: 0, next: { task_type: 'awaiting_prospect' } },
     { k: 'stale', lead: 0 }, { k: 'double', lead: 0, result: 'spoke' }], accepted: [1, 2, 3, 4] },

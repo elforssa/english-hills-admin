@@ -348,6 +348,24 @@ do $$ declare l uuid; d jsonb; r jsonb; t public.crm_tasks%rowtype; target times
  perform pg_temp.ok((select count(*)=2 from public.crm_activities where source_key in('enrollment-duplicate:'||e||':'||a,'enrollment-duplicate:'||e||':'||c)),'duplicates cancelled with today''s source keys');
 end $$;
 select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept and earliest-retained results';
+-- RWR-r5 review of #208 (important 7): linking a legacy unconfirmed enrollment replaces
+-- the appointment by « Finaliser l'inscription » and keeps the appointment's planned
+-- test (§4.8, enrolment start row: test « kept »).
+do $$ declare l uuid; k public.crm_tasks%rowtype; p uuid; begin
+ perform pg_temp.actor(3);
+ l:=pg_temp.lead();
+ perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','with_test',true,
+  'due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '3 days'))));
+ select * into k from public.crm_tasks where id=crm_security.next_action_id(l);
+ p:=k.placement_test_id;
+ perform pg_temp.ok(k.task_type='center_visit' and p is not null,'fixture: an appointment with its test');
+ perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ perform pg_temp.ok((select status<>'CONVERTED' from public.crm_leads where id=l),'a legacy unconfirmed link does not convert');
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='enrollment_followup') from public.crm_tasks where lead_id=l and status='open'),'« Finaliser l''inscription » is the one next action');
+ perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=k.id),'the appointment is replaced');
+ perform pg_temp.ok((select status='Planifié' and cancelled_at is null from public.placement_tests where id=p),'its planned test is kept');
+end $$;
+select 'PASS legacy enrolment link keeps the replaced appointment''s test';
 
 -- Owner and policy reasons, with no partial writes.
 -- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.

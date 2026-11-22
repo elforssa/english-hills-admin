@@ -40,7 +40,8 @@ do $$ declare l uuid; step integer; menu integer; t uuid; begin
     case menu
     when 0 then perform pg_temp.act('log_exchange',l,'{"channel":"phone","result":"no_answer","real_attempt_override":true}');
     when 1 then perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','callback','due_preset','tomorrow')));
-    when 2 then perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',t,'next',jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',1+i%9,'10:00')+make_interval(mins=>(i%6)*61),'with_test',i%2=0)));
+    -- An appointment is booked by the exchange that qualifies (OD-11, review of #208 B1).
+    when 2 then perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',1+i%9,'10:00')+make_interval(mins=>(i%6)*61),'with_test',i%2=0,'replace_action_id',t)));
     when 3 then perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',t,'next',jsonb_build_object('task_type','awaiting_prospect')));
     when 4 then perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_preset','in_2_days')));
     when 5 then perform pg_temp.act('log_exchange',l,'{"channel":"phone","result":"spoke","next":{"enrol":{"due_preset":"tomorrow"}}}');

@@ -166,17 +166,21 @@ do $$ declare policy uuid:=(select id from phase3_policy); l uuid:=pg_temp.quali
  perform pg_temp.ok((select policy_id=policy and due_at=crm_security.placement_followup_due(policy,now()) from public.crm_tasks where placement_test_id=p and task_type='post_test_followup'),'result uses frozen lead policy');
  -- Appointment appears once in Casablanca agenda, not as a confirmation task.
  l:=pg_temp.qualified();p:=(public.crm_book_placement_test(gen_random_uuid(),pg_temp.booking(l))->'placement'->>'id')::uuid;
- -- RWR-r5: moving the test moves its appointment, which must sit inside opening hours;
- -- a current policy open all day keeps this late-today agenda case valid.
- perform pg_temp.actor(1);
- perform public.crm_create_followup_policy(gen_random_uuid(),jsonb_build_object('weekly_hours',(select weekly_hours from public.crm_followup_policies where id=policy),
-  'opening_hours',(select jsonb_object_agg(d::text,jsonb_build_array(jsonb_build_array('00:00','23:59'))) from generate_series(1,7) d)));
- perform pg_temp.actor(3);
- update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date,heure='23:30' where id=p;
+ -- RWR-r5: moving a test moves its appointment, which must be in the future and
+ -- inside opening hours, so the late-today agenda case is a fixture written without
+ -- the booking triggers: the test and its appointment at 23:59 today, whatever the
+ -- clock (review of #208: no temporary all-day policy, no midnight flake). now() is
+ -- fixed for the transaction, so the fixture and the read see the same day.
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date,heure='23:59' where id=p;
+ update public.crm_tasks set due_at=((now() at time zone public.centre_utc_offset())::date+time '23:59') at time zone public.centre_utc_offset()
+ where placement_test_id=p and status='open' and task_type='center_visit';
+ set local session_replication_role=origin;
  q:=public.crm_get_today(100);
  perform pg_temp.ok((select count(*)=1 from jsonb_array_elements(q->'today_schedule')x where (x->>'kind'='placement' and x->>'id'=p::text) or (x->>'kind'='task' and x->'placement'->>'id'=p::text)),'one placement in agenda (the appointment with its test)');
- -- RWR-r5: the appointment is the next action, so it is listed as due today, never as missing.
- perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(q->'needs_attention')x where x->>'id'=l::text and (x->>'priority')::integer<>3),'today appointment does not invent missing task');
+ -- RWR-r5: the appointment is the next action, so it is listed as due (today, or
+ -- overdue in the last minute of the day), never as missing (priority 4).
+ perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(q->'needs_attention')x where x->>'id'=l::text and (x->>'priority')::integer not in (1,3)),'today appointment does not invent missing task');
  foreach fn in array array['public.crm_book_placement_test(uuid,jsonb)'::regprocedure,'public.crm_update_placement_test(uuid,jsonb)'::regprocedure,'public.crm_get_placement(uuid)'::regprocedure,'public.crm_list_placements(uuid,integer,integer)'::regprocedure] loop
   perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid=fn),'pinned definer '||fn);
   perform pg_temp.ok(has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute') and not has_function_privilege('service_role',fn,'execute'),'RPC grants '||fn);

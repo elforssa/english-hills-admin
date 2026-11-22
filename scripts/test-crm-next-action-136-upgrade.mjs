@@ -49,7 +49,7 @@ const FINGERPRINT = `select jsonb_build_object(
  'activities',(select count(*)||':'||md5(coalesce(string_agg(id::text,',' order by id),'')) from public.crm_activities),
  'policies',(select md5(string_agg(concat_ws('|',id,version,weekly_hours,date_exceptions),',' order by id)) from public.crm_followup_policies))::text`;
 const before = sql(FINGERPRINT);
-const absent = sql("select count(*) from pg_proc where proname in ('crm_log_exchange','crm_change_next_action','crm_get_centre_hours','crm_check_action','set_next_action','d1_plan')");
+const absent = sql("select count(*) from pg_proc where proname in ('crm_log_exchange','crm_change_next_action','crm_get_centre_hours','crm_check_action','crm_list_outside_hours','set_next_action','d1_plan')");
 assert.equal(absent, '0', 'the 136 functions are absent at 130');
 psql(['-q'], readFileSync('supabase/migrations/136_crm_one_next_action.sql', 'utf8'));
 assert.equal(sql('select max(version) from supabase_migrations.schema_migrations'), '130', 'the file alone does not touch the ledger');
@@ -61,7 +61,7 @@ assert.equal(sql('select count(*) from public.crm_data_step_journal'), '0', 'D1 
 // Grants: public commands and reads for signed-in staff only; data step functions none.
 const acl = name => sql(`select coalesce(proacl::text,'') from pg_proc where oid='${name}'::regprocedure`);
 for (const name of ['public.crm_log_exchange(uuid,jsonb)', 'public.crm_change_next_action(uuid,jsonb)', 'public.crm_record_appointment_outcome(uuid,jsonb)',
-  'public.crm_close_prospect(uuid,jsonb)', 'public.crm_reopen_prospect(uuid,jsonb)', 'public.crm_get_centre_hours()', 'public.crm_check_action(uuid)',
+  'public.crm_close_prospect(uuid,jsonb)', 'public.crm_reopen_prospect(uuid,jsonb)', 'public.crm_get_centre_hours()', 'public.crm_check_action(uuid)', 'public.crm_list_outside_hours(integer,integer)',
   'public.crm_set_reception_default_owner(uuid)']) {
   const grants = acl(name);
   assert.match(grants, /authenticated=X\/postgres/, `${name}: authenticated`);

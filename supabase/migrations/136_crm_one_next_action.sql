@@ -61,6 +61,22 @@ alter table public.placement_tests
  add constraint placement_tests_cancel_check check (status is distinct from 'Annulé' or cancelled_at is not null),
  add constraint placement_tests_cancel_reason_check check (cancel_reason is null or (cancelled_at is not null and length(btrim(cancel_reason)) between 1 and 500));
 
+-- A cancelled or absent test is final for planning (invariant 2, Q07/Q29 shapes):
+-- it can still receive a result from the placements screen, but it never becomes
+-- « Planifié » again, whatever the path (CRM edit, Admissions form, teacher
+-- policy). A new booking goes through the appointment. Only d1_revert restores a
+-- test D1 cancelled, under its own data-step flag.
+create function crm_security.placement_no_replan()
+ returns trigger language plpgsql set search_path to 'pg_catalog','pg_temp' as $function$ begin
+ if old.status in ('Annulé','Absent') and new.status='Planifié' and coalesce(current_setting('eh.crm_data_step',true),'')<>'d1_revert' then
+  raise exception 'A cancelled or absent test cannot be planned again; book a new appointment' using errcode='22023',hint='crm_placement.not_replannable';
+ end if;
+ return new;
+end $function$;
+revoke all on function crm_security.placement_no_replan() from public, anon, authenticated, service_role;
+create trigger placement_tests_no_replan before update of status on public.placement_tests
+ for each row execute function crm_security.placement_no_replan();
+
 -- ALTER ... ADD COLUMN does not fire the immutability trigger (protect_policy):
 -- existing versions keep opening_hours NULL, which means « same as weekly_hours ».
 alter table public.crm_followup_policies add column opening_hours jsonb;
@@ -526,7 +542,9 @@ begin
    for o in select * from public.crm_tasks where lead_id=l.id and status='open' order by id loop
     perform crm_security.finish_task(o,true,reason,source||':'||o.id);
    end loop;
-   if cause in ('close','d1') then
+   -- A converted prospect keeps its planned test (it becomes the student's, §4.8),
+   -- in D1 rule (d) as in A1; a merged prospect's tests are cancelled.
+   if cause='close' or (cause='d1' and (l.status<>'CONVERTED' or l.merged_into_lead_id is not null)) then
     for x in select * from public.placement_tests where crm_lead_id=l.id and status='Planifié' order by id loop
      perform crm_security.cancel_planned_test(x.id,case when cause='d1' then 'Prospect clôturé (D1)' else 'Prospect fermé' end);
     end loop;
@@ -546,7 +564,8 @@ begin
    perform crm_security.finish_task(o,true,coalesce(spec->>'_reason','Doublon de prochaine action'),source||':'||o.id);
    closed_ids:=closed_ids||o.id;
   end loop;
-  for x in select p.* from public.placement_tests p where p.status='Planifié' and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
+  -- Enrolment start keeps the test of the action it replaces (§4.8).
+  for x in select p.* from public.placement_tests p where cause<>'enrollment' and p.status='Planifié' and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
    and not exists(select 1 from public.crm_tasks t where t.placement_test_id=p.id and t.status='open') loop
    perform crm_security.cancel_planned_test(x.id,'Rendez-vous remplacé');
   end loop;
@@ -676,6 +695,14 @@ begin
  -- Close the current action, the action acted on and every legacy duplicate,
  -- before inserting (M-A2's unique index cannot be deferred).
  complete:=cause in ('outcome','system','test_result');
+ -- An appointment still to come that an exchange replaces did not take place:
+ -- it is cancelled « Remplacée », never completed (§4.8). Its own outcome
+ -- (_outcome_of) and an explicit completion of it (old « Terminer ») still
+ -- complete it.
+ if complete and cause='outcome' and cur.task_type='center_visit' and cur.due_at>now() and (spec->>'_outcome_of') is distinct from cur.id::text
+  and against.id is distinct from cur.id then
+  complete:=false;
+ end if;
  replaced:=coalesce(nullif(btrim(spec->>'cancel_enrollment_reason'),''),nullif(btrim(spec->>'_replaced_reason'),''),'Remplacée par une nouvelle prochaine action');
  if cur.id is not null then
   if complete then perform crm_security.finish_task(cur,false,spec->>'_note',source||':complete',null,spec->>'_outcome_code');
@@ -691,8 +718,9 @@ begin
   closed_ids:=closed_ids||o.id;
  end loop;
  -- Step 4: a planned test no open action points to any more is cancelled,
- -- except the one carried by the new appointment and a test being resulted.
- if cause<>'test_result' then
+ -- except the one carried by the new appointment, a test being resulted and
+ -- the test of an action replaced by an enrolment start (kept, §4.8).
+ if cause not in ('test_result','enrollment') then
   for x in select p.* from public.placement_tests p where p.status='Planifié'
    and p.id in (select placement_test_id from public.crm_tasks where id=any(closed_ids))
    and p.id is distinct from case when with_test then carried end order by p.id loop
@@ -850,6 +878,10 @@ begin
    or coalesce(next_obj->>'channel','') not in ('phone','whatsapp','in_person') or jsonb_typeof(next_obj->'next') is distinct from 'object'
    or next_obj->'next' ? 'close' or length(next_obj->>'note')>4000) then
    raise exception 'Valid first exchange required' using errcode='22023'; end if;
+  -- A walk-in has always spoken with us: its exchange is recorded at creation and
+  -- no « Premier contact » is scheduled (§4.8, audit observation 5).
+  if btrim(data->>'source_label')='Manuel · Visite au centre' and (next_obj is null or next_obj->>'channel'<>'in_person') then
+   raise exception 'A walk-in is created with its exchange' using errcode='22023',hint='crm_create.walk_in_exchange_required'; end if;
   phone:=crm_security.normalize_phone(data->>'phone'); email:=nullif(lower(btrim(data->>'email')),'');
   if email is not null and (length(email)>254 or email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$') then raise exception 'Invalid email' using errcode='22023'; end if;
   -- No automatic reuse, including a unique phone/email match: shared family
@@ -1113,6 +1145,12 @@ begin
     close_target:=next_obj->>'status'; close_reason:=next_obj->>'reason'; close_note:=next_obj->>'note';
     if jsonb_typeof(next_obj) is distinct from 'object' or next_obj-array['status','reason','note']<>'{}'::jsonb then raise exception 'Valid closure reason and explanation required' using errcode='22023'; end if;
    else
+    -- OD-11: booking an appointment qualifies, and qualification needs the
+    -- conversation, so a new appointment for a prospect not yet qualified is
+    -- booked through « Noter un échange » (« On a parlé »), never here. Moving
+    -- an existing appointment stays possible.
+    if data->'next'->>'task_type'='center_visit' and l.status<>'QUALIFIED' and na.task_type is distinct from 'center_visit' then
+     raise exception 'Book an appointment through the exchange that qualifies the prospect' using errcode='22023',hint='crm_next_action.appointment_needs_exchange'; end if;
     tid:=crm_security.set_next_action(l,crm_security.user_spec(data->'next'),'user',source); needs_next:=true;
    end if;
 
@@ -1122,12 +1160,26 @@ begin
    if na.id is null or (data->>'action_id') is distinct from na.id::text or na.task_type<>'center_visit' then raise exception 'Next action changed; refresh and retry' using errcode='PT409'; end if;
    if na.due_at>now() then raise exception 'Outcome can be recorded only from the appointment time' using errcode='22023',hint='crm_appointment.before_start'; end if;
    note:=case when nullif(btrim(data->>'note'),'') is not null then data->>'note' end; res:=outcome_code;
+   -- « Venu · pas intéressé » closes the prospect: the reason is asked, never
+   -- assumed (§4.8, « reason required »).
+   if outcome_code='came_not_interested' and jsonb_typeof(data->'next'->'close') is distinct from 'object' then
+    raise exception 'Closure reason required' using errcode='22023',hint='crm_appointment.reason_required'; end if;
+   -- An appointment that already exists on a prospect not yet qualified (reopened
+   -- with an appointment, an old tab, D1 rule b): the visit is the in-person
+   -- conversation, and coming to enrol or to come back qualifies (OD-11), so
+   -- every outcome row of §4.8 starts from QUALIFIED.
+   if outcome_code in ('came_enrolled','came_will_return') and l.status in ('NEW','CONTACTING','ENGAGED') then
+    happened:=now();
+    perform crm_security.event(l.id,'conversation_recorded',source||':conversation',null,'in_person',null,na.id,happened);
+    meaningful:=true;
+    qualify_step:=case when outcome_code='came_enrolled' then 'enrollment' else 'center_visit' end;
+   end if;
    -- The linked test: attended, or « Absent » for a no-show.
    if na.placement_test_id is not null then
     update public.placement_tests set status=case when outcome_code='no_show' then 'Absent' else 'Passé' end where id=na.placement_test_id and status='Planifié';
    end if;
    if outcome_code='came_not_interested' or (jsonb_typeof(data->'next')='object' and data->'next' ? 'close') then
-    next_obj:=coalesce(data->'next'->'close',jsonb_build_object('status','LOST','reason','not_interested'));
+    next_obj:=data->'next'->'close';
     if jsonb_typeof(next_obj) is distinct from 'object' or next_obj-array['status','reason','note']<>'{}'::jsonb then raise exception 'Valid closure reason and explanation required' using errcode='22023'; end if;
     close_target:=coalesce(next_obj->>'status','LOST'); close_reason:=next_obj->>'reason'; close_note:=next_obj->>'note'; next_mode:='close';
     perform crm_security.set_next_action(l,jsonb_build_object('_against',na.id,'_finish',jsonb_build_object('cancelled',false,'reason',note),'_outcome_code',outcome_code),'outcome',source||':complete');
@@ -1136,7 +1188,7 @@ begin
      when outcome_code='came_enrolled' then jsonb_build_object('task_type','enrollment_followup','due_preset','tomorrow','instructions','Finaliser l’inscription avec le contact.')
      when outcome_code='came_will_return' then jsonb_build_object('task_type','awaiting_prospect')
      else jsonb_build_object('task_type','callback','schedule_kind','reminder','due_preset','tomorrow') end;
-    if outcome_code='came_enrolled' then l.qualification_step:='enrollment'; end if;
+    if outcome_code='came_enrolled' then qualify_step:='enrollment'; end if;
     tid:=crm_security.set_next_action(l,next_obj||jsonb_build_object('_outcome_of',na.id,'_outcome_code',outcome_code,'_note',note),'outcome',source);
     needs_next:=true;
    end if;
@@ -2095,8 +2147,32 @@ declare l public.crm_leads%rowtype; p public.crm_followup_policies%rowtype; next
   'has_appointment',exists(select 1 from public.crm_tasks t where t.lead_id=l.id and t.status='open' and t.task_type='center_visit'),
   'as_of',now());
 end $function$;
-revoke all on function public.crm_get_centre_hours(),public.crm_check_action(uuid) from public, anon, authenticated, service_role;
-grant execute on function public.crm_get_centre_hours(),public.crm_check_action(uuid) to authenticated;
+-- §4.5 « Hors des nouveaux horaires »: agreed times booked before a change of
+-- hours are kept, never moved, and listed for the receptionist. An open
+-- appointment or agreed callback still to come is listed when the current hours
+-- would refuse its time (opening hours for an appointment, calling hours for a
+-- callback), so she can call the contact and « Changer » it.
+create or replace function public.crm_list_outside_hours(p_limit integer default 50, p_offset integer default 0)
+ returns jsonb language plpgsql stable security definer set search_path to 'pg_catalog','pg_temp' as $function$
+declare policy uuid; result jsonb; begin
+ perform crm_security.require_reader(false);
+ if p_limit is null or p_limit not between 1 and 100 or p_offset is null or p_offset<0 then raise exception 'Invalid page' using errcode='22023'; end if;
+ policy:=crm_security.current_policy_id();
+ with r as (
+  select t.id,t.due_at from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id
+  where t.status='open' and t.due_at>now() and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED')
+   and (t.task_type='center_visit' or (t.task_type='callback' and t.schedule_kind='appointment'))
+   and crm_security.window_at(policy,case when t.task_type='center_visit' then 'opening' else 'calling' end,t.due_at)<>t.due_at)
+ select jsonb_build_object('total',(select count(*) from r),'policy_id',policy,'as_of',now(),
+  'rows',coalesce((select jsonb_agg(jsonb_build_object('lead_id',l.id,'lead_version',l.version,'contact_name',c.display_name,'learner_name',l.learner_name,
+    'action',crm_security.action_json(t)) order by t.due_at,t.id)
+   from (select id from r order by due_at,id limit p_limit offset p_offset) page join public.crm_tasks t on t.id=page.id
+   join public.crm_leads l on l.id=t.lead_id join public.crm_contacts c on c.id=l.contact_id),'[]'::jsonb))
+ into result;
+ return result;
+end $function$;
+revoke all on function public.crm_get_centre_hours(),public.crm_check_action(uuid),public.crm_list_outside_hours(integer,integer) from public, anon, authenticated, service_role;
+grant execute on function public.crm_get_centre_hours(),public.crm_check_action(uuid),public.crm_list_outside_hours(integer,integer) to authenticated;
 
 -- Editing the centre hours (a new policy version, now with opening hours) is
 -- director only (RPW-r2 capability classification). The command already refuses
@@ -2143,7 +2219,10 @@ create or replace function crm_security.d1_cancelled_tests()
  join public.placement_tests x on x.id=t.placement_test_id and x.status='Planifié'
  where s.rule='a' and not exists(select 1 from public.crm_tasks k where k.id=crm_security.next_action_id(s.lead_id) and k.placement_test_id=x.id)
  union all
- select 'd',x.id,x.crm_lead_id from crm_security.d1_sets() s join public.placement_tests x on x.crm_lead_id=s.lead_id and x.status='Planifié' where s.rule='d'
+ select 'd',x.id,x.crm_lead_id from crm_security.d1_sets() s join public.crm_leads l on l.id=s.lead_id
+ join public.placement_tests x on x.crm_lead_id=s.lead_id and x.status='Planifié'
+ -- A converted prospect keeps its planned test (§4.8, as set_next_action does).
+ where s.rule='d' and (l.status<>'CONVERTED' or l.merged_into_lead_id is not null)
 $function$;
 
 create or replace function crm_security.d1_plan()
@@ -2197,15 +2276,21 @@ end $function$;
 
 create or replace function crm_security.d1_apply(expected_counts jsonb)
  returns jsonb language plpgsql security definer set search_path to 'pg_catalog','pg_temp' as $function$
-declare plan jsonb; s record; l public.crm_leads%rowtype; snap jsonb; step_rule text; done jsonb:='{}'::jsonb; due timestamptz; begin
+declare plan jsonb; sets jsonb; s record; l public.crm_leads%rowtype; snap jsonb; step_rule text; done jsonb:='{}'::jsonb; due timestamptz; begin
  perform crm_security.require_reader(true);
- plan:=crm_security.d1_plan();
+ -- The counts are checked on, and D1 acts on, the same sets: every table D1
+ -- reads or writes is locked against concurrent writers until commit, and the
+ -- plan and the sets come from one statement (one snapshot).
+ lock table public.crm_leads, public.crm_tasks, public.placement_tests in share row exclusive mode;
+ select crm_security.d1_plan(),coalesce(jsonb_agg(to_jsonb(z) order by case z.rule when 'd' then 1 when 'a' then 2 when 'b' then 3 else 4 end,z.lead_id,z.test_id),'[]'::jsonb)
+ into plan,sets from crm_security.d1_sets() z;
  foreach step_rule in array array['a','b','c','d','tests_cancelled'] loop
   if (expected_counts->step_rule->>'count')::bigint is distinct from (plan->step_rule->>'count')::bigint then
    raise exception 'D1 dry-run count differs for rule %: expected %, found %',step_rule,expected_counts->step_rule->>'count',plan->step_rule->>'count' using errcode='P0001'; end if;
  end loop;
  perform set_config('eh.crm_data_step','d1',true);
- for s in select * from crm_security.d1_sets() order by case rule when 'd' then 1 when 'a' then 2 when 'b' then 3 else 4 end,lead_id,test_id loop
+ for s in select z.* from jsonb_array_elements(sets) with ordinality e(v,n)
+  cross join lateral jsonb_to_record(e.v) z(rule text,lead_id uuid,test_id uuid,five boolean) order by e.n loop
   select * into l from public.crm_leads where id=s.lead_id for update;
   snap:=crm_security.d1_snapshot(l.id);
   if s.rule='a' then
@@ -2234,8 +2319,11 @@ create or replace function crm_security.d1_revert()
  returns jsonb language plpgsql security definer set search_path to 'pg_catalog','pg_temp' as $function$
 declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_open integer:=0; n_tests integer:=0; skipped integer:=0; begin
  perform crm_security.require_reader(true);
+ -- A prospect D1 processed under two rules has two journal rows of one
+ -- transaction (same run_at): the version left by D1 is the highest one.
+ perform set_config('eh.crm_data_step','d1_revert',true);
  for lv in select distinct on (entity_id) entity_id lead,(after->>'version')::bigint version from public.crm_data_step_journal
-  where step='d1' and entity='crm_leads' order by entity_id,run_at desc,id desc loop
+  where step='d1' and entity='crm_leads' order by entity_id,(after->>'version')::bigint desc,run_at desc,id desc loop
   perform 1 from public.crm_leads where id=lv.lead and version=lv.version for update;
   if not found then skipped:=skipped+1; continue; end if;
   for j in select * from public.crm_data_step_journal where step='d1' and entity='crm_tasks' and (after->>'lead_id')::uuid=lv.lead loop
@@ -2265,6 +2353,7 @@ declare j record; lv record; kept jsonb:='[]'::jsonb; n_cancel integer:=0; n_ope
   end loop;
   update public.crm_leads set version=version+1,updated_at=now() where id=lv.lead;
  end loop;
+ perform set_config('eh.crm_data_step','',true);
  return jsonb_build_object('cancelled',n_cancel,'reopened',n_open,'tests_replanned',n_tests,'tests_left_cancelled',kept,'leads_changed_since',skipped);
 end $function$;
 revoke all on function crm_security.d1_plan(),crm_security.d1_apply(jsonb),crm_security.d1_revert(),crm_security.d1_sets(),crm_security.d1_cancelled_tests(),

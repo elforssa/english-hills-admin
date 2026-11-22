@@ -136,6 +136,9 @@ try {
   sql(`update public.crm_tasks set version=version+1 where id='${reassigned}'`);
   await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').waitFor();
   assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),actor,'stale intent denied');
+  // §4.9 (PR #208 review, Important 1): never adopted silently — save stays disabled until « Recharger ».
+  await dialog().getByText('Ce prospect a été modifié, rechargez.',{exact:true}).waitFor();assert(await dialog().getByRole('button',{name:'Enregistrer',exact:true}).isDisabled(),'save disabled until reload');
+  await dialog().getByRole('button',{name:'Recharger',exact:true}).click();await dialog().getByTestId('reloaded-state').waitFor();
   await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByText('Enregistré',{exact:true}).waitFor();assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),users[0].id);await closeDrawer();
   assert(requests.some(r=>r.path.endsWith('/rpc/crm_reassign')&&r.args?.p_data?.task_id===reassigned&&Number.isInteger(r.args.p_data.expected_task_version)),'exact task/version reassignment command');
   const calling=page.getByTestId('work-row').filter({hasText:'Premier contact'}).first();await calling.getByRole('button',{name:'Noter un échange',exact:true}).click();await dialog().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();

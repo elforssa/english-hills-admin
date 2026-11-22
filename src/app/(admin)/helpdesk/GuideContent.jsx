@@ -371,7 +371,7 @@ export default function GuideContent() {
 </li>
 <li><p>S’il n’existe pas, cliquez sur <span className="ui">Ajouter un prospect</span> et remplissez le formulaire.</p>
 </li>
-<li><p>Avec l’origine <b>Téléphone</b>, <b>Visite au centre</b> ou <b>WhatsApp</b>, vous êtes en train de parler avec le contact&nbsp;: la section <b>Premier échange</b> demande ce qui a été convenu, avec les mêmes choix que <span className="ui">Noter un échange</span> (<a href="#c3">scénario C3</a>). Pour un rendez-vous ou un rappel convenu, la plateforme propose le premier jour qui a un créneau libre&nbsp;; l’heure, c’est vous qui la choisissez. Si vous n’avez pas encore parlé avec lui, laissez <span className="ui">Pas encore parlé · Premier contact</span>.</p>
+<li><p>Avec l’origine <b>Téléphone</b>, <b>Visite au centre</b> ou <b>WhatsApp</b>, vous êtes en train de parler avec le contact&nbsp;: la section <b>Premier échange</b> demande ce qui a été convenu, avec les mêmes choix que <span className="ui">Noter un échange</span> (<a href="#c3">scénario C3</a>). Pour un rendez-vous ou un rappel convenu, la plateforme propose le premier jour qui a un créneau libre&nbsp;; l’heure, c’est vous qui la choisissez. Si vous n’avez pas encore parlé avec lui, laissez <span className="ui">Pas encore parlé · Premier contact</span>. Pour une <b>Visite au centre</b>, ce choix n’existe pas&nbsp;: le visiteur est devant vous, choisissez ce qui est convenu avec lui.</p>
 </li>
 <li><p>Cliquez sur <span className="ui">Enregistrer</span>. La fiche du nouveau prospect s’ouvre directement, avec sa prochaine action. Le prospect vous est attribué&nbsp;: vous en êtes la responsable.</p>
 </li>
@@ -548,7 +548,7 @@ export default function GuideContent() {
 <li>Une vraie conversation remet à zéro le compteur d’appels ratés.</li>
 </ul>
 <div className="callout info">
-<strong>Les heures proposées</strong><p>Les listes <span className="ui">Heure</span> ne proposent que les créneaux du centre&nbsp;: horaires d’appel pour un rappel, horaires d’ouverture pour un rendez-vous, sans la pause de midi ni les jours de fermeture. Changer la date garde l’heure choisie si ce créneau existe le nouveau jour. «&nbsp;Aucun créneau ce jour-là&nbsp;» signifie que le centre est fermé ou que la journée est passée. Les horaires sont fixés par la direction.</p>
+<strong>Les heures proposées</strong><p>Les listes <span className="ui">Heure</span> ne proposent que les créneaux du centre&nbsp;: horaires d’appel pour un rappel, horaires d’ouverture pour un rendez-vous, sans la pause de midi ni les jours de fermeture. Changer la date garde l’heure choisie si ce créneau existe le nouveau jour. «&nbsp;Aucun créneau ce jour-là&nbsp;» signifie que le centre est fermé ou que la journée est passée. Les horaires sont fixés par la direction. Quand ils changent, les heures déjà convenues sont gardées&nbsp;; celles qui sortent des nouveaux horaires sont listées sur <span className="menu">Tâches</span> («&nbsp;Hors des nouveaux horaires&nbsp;»).</p>
 </div>
 <div className="callout warn">
 <strong>Rappel convenu ou rappel pour l’équipe&nbsp;?</strong><p><b>Rappel convenu</b>&nbsp;: vous avez promis une heure au contact&nbsp;; il attend votre appel à cette heure. <b>Rappel pour l’équipe</b> (dans <span className="ui">Changer</span>)&nbsp;: un pense-bête, aucune heure n’a été promise&nbsp;; la plateforme le place au prochain créneau.</p>
@@ -593,11 +593,11 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="ui">Venu · pas intéressé</span></td>
-<td>Le prospect est clôturé <span className="st st-lost">Perdu</span> («&nbsp;Pas intéressé&nbsp;»). Le test passe «&nbsp;Passé&nbsp;».</td>
+<td>Choisissez le <span className="ui">Motif</span>, puis <span className="ui">Clôturer</span>&nbsp;: le prospect est clôturé <span className="st st-lost">Perdu</span> avec ce motif. Le test passe «&nbsp;Passé&nbsp;».</td>
 </tr>
 <tr>
 <td><span className="ui">Absent</span></td>
-<td>Prochaine action&nbsp;: un rappel pour l’équipe, demain. Le test passe «&nbsp;Absent&nbsp;».</td>
+<td>La plateforme propose un rappel pour l’équipe, demain&nbsp;: cliquez sur <span className="ui">Confirmer le rappel</span>. Le test passe «&nbsp;Absent&nbsp;».</td>
 </tr>
 </tbody>
 </table>
@@ -657,7 +657,7 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span>, <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou une clôture (<span className="ui">Pas intéressé</span>, <span className="ui">Pas pour nous</span>).</p>
+<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou une clôture (<span className="ui">Pas intéressé</span>, <span className="ui">Pas pour nous</span>).</p>
 </li>
 <li><p>Pour simplement déplacer un rendez-vous ou un rappel convenu, gardez le même choix et changez la date&nbsp;: l’heure convenue est gardée.</p>
 </li>
@@ -1494,11 +1494,12 @@ export default function GuideContent() {
 <li><span className="ui">Pas de réponse</span> (appels, un clic), <span className="ui">Noter un échange</span>, <span className="ui">Changer</span>, et les quatre résultats d’un rendez-vous au centre.</li>
 <li>«&nbsp;En attente&nbsp;» n’est jamais en retard&nbsp;; «&nbsp;À relancer&nbsp;» s’affiche quand la date de relance est arrivée.</li>
 <li>Plusieurs apprenants pour un même contact&nbsp;: la ligne l’indique («&nbsp;2 apprenants&nbsp;»).</li>
+<li>«&nbsp;Hors des nouveaux horaires&nbsp;»&nbsp;: après un changement d’horaires, les rendez-vous et rappels convenus qui tombent en dehors des nouveaux horaires sont listés en haut de la page. Leur heure est gardée&nbsp;; appelez le contact et utilisez <span className="ui">Changer</span> si besoin.</li>
 </ul>
 </div>
 <div className="card">
 <h4>Tests de niveau</h4>
-<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
+<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué&nbsp;; un test annulé ou absent ne se replanifie pas&nbsp;: fixez un nouveau rendez-vous). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
 <ul className="tight">
 <li>Pas de suppression pour vous.</li>
 <li><span className="ui">Planifier un test</span> crée un test sans lien avec un prospect, avec le niveau A1 proposé par défaut.</li>

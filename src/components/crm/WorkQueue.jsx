@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useCrmRead } from '@/lib/crm/queries';
 import { MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { CALL_TASKS, SCHEDULE_KINDS, UUID, WORK_BUCKETS, actionErrorMessage, staffLabel } from '@/lib/crm/presentation.mjs';
+import { CALL_TASKS, SCHEDULE_KINDS, UUID, WORK_BUCKETS, actionErrorMessage, scheduledLabel, staffLabel } from '@/lib/crm/presentation.mjs';
 import { pluralFr } from '@/lib/ui/pluralFr.mjs';
 import AppointmentOutcome from './AppointmentOutcome';
 import { LifecycleBadge, ReadState } from './CrmShared';
@@ -39,6 +39,25 @@ function RowNoAnswer({ lead, action, onGap }) {
   }
   return <><Button size="sm" variant="outline" className="min-h-9" disabled={tap.busy} onClick={run}>{tap.busy ? 'Enregistrement…' : 'Pas de réponse'}</Button>
     {tap.error && !gap && <p role="alert" className="basis-full text-xs text-red-800">{actionErrorMessage(tap.error)}</p>}</>;
+}
+
+// Agreed times booked before the centre hours changed are kept, never moved (§4.5):
+// they are listed here so the receptionist can call the contact and « Changer » them.
+// Hidden when there are none.
+function OutsideHours({ onOpen, onAction }) {
+  const [offset, setOffset] = useState(0);
+  const query = useCrmRead('crm_list_outside_hours', { p_limit: 20, p_offset: offset });
+  const total = query.data?.total || 0;
+  if (!Array.isArray(query.data?.rows) || !total) return null;
+  return <section aria-label="Hors des nouveaux horaires" data-testid="outside-hours" className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+    <h3 className="text-sm font-semibold text-amber-900">Hors des nouveaux horaires ({total})</h3>
+    <p className="text-xs text-amber-900">Fixés avant le changement d’horaires : l’heure est gardée. Appelez le contact et changez l’heure si besoin.</p>
+    <ul className="mt-2 divide-y divide-amber-100">{query.data.rows.map(row => <li key={row.action.id} data-testid="outside-hours-row" data-lead-id={row.lead_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+      <button type="button" className="min-w-0 text-left" onClick={() => onOpen(row.lead_id)}><span className="block break-words text-sm font-medium">{row.contact_name}</span><span className="block text-xs text-slate-700">{row.action.label} · {scheduledLabel(row.action)}</span></button>
+      <Button size="sm" variant="outline" className="min-h-9" onClick={() => onAction(row.lead_id, 'change')}>Changer</Button>
+    </li>)}</ul>
+    {total > 20 && <div className="mt-2 flex gap-2"><Button size="sm" variant="ghost" disabled={!offset} onClick={() => setOffset(x => Math.max(0, x - 20))}>Précédents</Button><Button size="sm" variant="ghost" disabled={offset + 20 >= total} onClick={() => setOffset(x => x + 20)}>Suivants</Button></div>}
+  </section>;
 }
 
 export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset }) {
@@ -69,6 +88,7 @@ export default function WorkQueue({ params, setFilter, onOpen, onAction, onReset
       <Link data-touch-target href="/crm/leads?view=attention&layout=list" className="ml-auto inline-flex min-h-9 items-center rounded-md border bg-white px-3 text-sm text-blue-800 hover:bg-blue-50">À traiter · prospects nécessitant un suivi</Link>
     </FilterBar>
     <p className="text-xs text-slate-500">Une ligne par prospect : sa prochaine action. Les deux filtres se combinent.</p>
+    <OutsideHours onOpen={onOpen} onAction={onAction} />
     {(staff.isError || (!staff.isPending && !Array.isArray(staff.data?.rows))) && <p role={staff.isError ? "alert" : "status"} className="text-sm">Équipe indisponible. <Button variant="ghost" onClick={()=>staff.refetch()}>Réessayer</Button></p>}
     {(staffOffset>0 || staff.data?.total>50) && <div className="flex gap-2"><Button variant="ghost" disabled={!staffOffset} onClick={()=>setStaffOffset(x=>x-50)}>Équipe précédente</Button><Button variant="ghost" disabled={staffOffset+50>=staff.data?.total} onClick={()=>setStaffOffset(x=>x+50)}>Équipe suivante</Button></div>}
     <nav aria-label="Échéances des tâches" className="flex flex-wrap gap-1 border-b pb-2">{Object.entries(buckets).map(([key,label])=><Button key={key} variant={bucket===key ? 'default' : 'ghost'} className="min-h-9" aria-pressed={bucket===key} onClick={()=>setFilter('bucket',key)}>{label}<span data-testid={`work-count-${key}`} className="ml-2 rounded bg-slate-100 px-1.5 text-xs tabular-nums text-slate-700">{query.data?.counts?.[key] ?? '—'}</span></Button>)}</nav>

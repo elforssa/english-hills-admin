@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { ALL_LEVELS, getLevelsForSession, groupMatchesSelection } from '@/lib/academicPrograms';
 import { crmRpc, useCrmRefresh } from '@/lib/crm/queries';
-import { retryKey, commandError } from '@/lib/crm/presentation.mjs';
+import { retryKey, commandError, actionErrorMessage } from '@/lib/crm/presentation.mjs';
 import { isRecordConflict } from '@/lib/conflictErrors.mjs';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from '@/components/crm/DialogStickyFooter';
 import { localBusinessDate } from '@/lib/receiptFinance';
@@ -137,7 +137,7 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
       onSave();
     } catch (err) {
       if (linked) {
-        setError(commandError(err));
+        setError(err?.hint === 'crm_placement.not_replannable' ? actionErrorMessage(err) : commandError(err));
         if (isRecordConflict(err)) {
           const latest = await crmRpc(booking ? 'crm_get_workspace_detail' : 'crm_get_placement', booking ? { p_lead: crmLead.id } : { p_test: test.id }).catch(() => null);
           if (latest) setExpected({ lead: booking ? latest.version : latest.lead_version, task: latest.confirm_placement_task, updated: latest.updated_at });
@@ -178,7 +178,8 @@ export default function PlacementTestModal({ test, groups = [], students = [], o
             <div><label htmlFor="placement-examiner" className={labelClass}>Examinateur</label><input id="placement-examiner" maxLength={linked ? 200 : undefined} className={inputClass} value={form.examinateur || ''} onChange={e => set('examinateur', e.target.value)} /></div>
             <>{!booking && <><div><label htmlFor="placement-status" className={labelClass}>Statut</label>
               <select id="placement-status" className={inputClass} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value, ...(linked && e.target.value === 'Planifié' ? { niveau_recommande: '', score: '' } : {}) }))}>
-                {[...new Set([...['Planifié','Passé','Résultat saisi','Affecté'], ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : [])])].map(s => <option key={s}>{s}</option>)}
+                {/* A cancelled or absent test is never planned again (the server refuses it): it can still get its result; a new booking goes through the appointment. */}
+                {[...new Set([...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : ['Planifié']), 'Passé', 'Résultat saisi', 'Affecté'])].map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div><label htmlFor="placement-score" className={labelClass}>Score</label><input id="placement-score" type="number" className={inputClass} value={form.score || ''} onChange={e => set('score', e.target.value)} min="0" max="100" /></div>

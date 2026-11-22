@@ -463,7 +463,11 @@ const HINT_MESSAGES = {
   'crm_next_action.replace_confirmation': 'Cochez « Remplace » pour changer le rendez-vous.',
   'crm_next_action.enrollment_kept': 'Indiquez pourquoi l’inscription n’est plus à finaliser, ou gardez l’action actuelle.',
   'crm_next_action.overlap': 'Un autre rendez-vous ou test de cet apprenant est prévu à cette heure.',
-  'crm_appointment.before_start': 'Le résultat du rendez-vous se saisit à partir de son heure de début.'
+  'crm_appointment.before_start': 'Le résultat du rendez-vous se saisit à partir de son heure de début.',
+  'crm_appointment.reason_required': 'Choisissez le motif : le prospect sera clôturé.',
+  'crm_next_action.appointment_needs_exchange': 'Pour fixer un rendez-vous, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.',
+  'crm_placement.not_replannable': 'Un test annulé ou absent ne se replanifie pas. Fixez un nouveau rendez-vous avec test depuis la fiche du prospect.',
+  'crm_create.walk_in_exchange_required': 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.'
 };
 // Refusal text for the next-action forms: hint first, then the shared command messages.
 export function actionErrorMessage(error) {

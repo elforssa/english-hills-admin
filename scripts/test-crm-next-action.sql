@@ -49,6 +49,12 @@ $$;
 create function pg_temp.backdate(task uuid,minutes integer default 90) returns void language sql as $$
  update public.crm_tasks set due_at=now()-make_interval(mins=>minutes),created_at=least(created_at,now()-make_interval(mins=>minutes+1)) where id=task
 $$;
+-- Book an appointment the way OD-11 qualifies: through the exchange (« On a parlé »).
+-- « Changer » books one only for a prospect already qualified (review of #208, B1).
+create function pg_temp.book(lead uuid,due timestamptz,with_test boolean default false) returns jsonb language sql as $$
+ select pg_temp.act('log_exchange',lead,jsonb_build_object('channel','phone','result','spoke','next',
+  jsonb_build_object('task_type','center_visit','due_at',due,'with_test',with_test)))
+$$;
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select ('a6000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'next-action-'||i||'@example.invalid','authenticated','authenticated',now(),now() from generate_series(1,7)i;
@@ -125,8 +131,7 @@ end $$;
 do $$ declare l uuid; t public.crm_tasks; p uuid; begin
  l:=pg_temp.intake();
  t:=pg_temp.na(l);
- perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',t.id,'next',
-  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',3,'11:00'),'with_test',true)));
+ perform pg_temp.book(l,pg_temp.at('opening',3,'11:00'),true);
  t:=pg_temp.na(l);
  perform pg_temp.one(l,'appointment with test');
  select id into p from public.placement_tests where crm_lead_id=l and status='Planifié';
@@ -138,8 +143,10 @@ do $$ declare l uuid; t public.crm_tasks; p uuid; begin
  perform pg_temp.act('reopen_prospect',l,jsonb_build_object('reason','Revient','next',jsonb_build_object('task_type','callback','due_preset','tomorrow')));
  perform pg_temp.one(l,'reopen');
  t:=pg_temp.na(l);
- perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',t.id,'next',
-  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',4,'11:00'),'with_test',true)));
+ -- A reopened prospect is not qualified: « Changer » refuses the booking, the exchange books it.
+ perform pg_temp.refused('change_next_action',l,jsonb_build_object('expected_action_id',t.id,'next',
+  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',4,'11:00'),'with_test',true)),'22023','crm_next_action.appointment_needs_exchange');
+ perform pg_temp.book(l,pg_temp.at('opening',4,'11:00'),true);
  perform pg_temp.ok((select count(*)=1 from public.placement_tests where crm_lead_id=l and status='Planifié'),'booking works after reopening (audit: closed then reopened)');
 end $$;
 \echo PASS T2 closing cancels the action and the planned test; reopen and rebook
@@ -149,10 +156,10 @@ do $$ declare a uuid; b uuid; s uuid:=gen_random_uuid(); slot timestamptz:=pg_te
  a:=pg_temp.intake(); b:=pg_temp.intake();
  insert into public.students(id,full_name,status,session_type) values(s,'Synthetic learner','Enrolled','Mise à niveau');
  update public.crm_leads set student_id=s where id in (a,b);
- perform pg_temp.act('change_next_action',a,jsonb_build_object('expected_action_id',(pg_temp.na(a)).id,'next',jsonb_build_object('task_type','center_visit','due_at',slot)));
- perform pg_temp.refused('change_next_action',b,jsonb_build_object('expected_action_id',(pg_temp.na(b)).id,'next',jsonb_build_object('task_type','center_visit','due_at',slot+interval '30 minutes')),'22023','crm_next_action.overlap');
- perform pg_temp.refused('change_next_action',b,jsonb_build_object('expected_action_id',(pg_temp.na(b)).id,'next',jsonb_build_object('task_type','center_visit','due_at',slot-interval '30 minutes','with_test',true)),'22023','crm_next_action.overlap');
- perform pg_temp.act('change_next_action',b,jsonb_build_object('expected_action_id',(pg_temp.na(b)).id,'next',jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',6,'11:00'))));
+ perform pg_temp.book(a,slot);
+ perform pg_temp.refused('log_exchange',b,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',slot+interval '30 minutes')),'22023','crm_next_action.overlap');
+ perform pg_temp.refused('log_exchange',b,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',slot-interval '30 minutes','with_test',true)),'22023','crm_next_action.overlap');
+ perform pg_temp.book(b,pg_temp.at('opening',6,'11:00'));
  perform pg_temp.one(b,'non-overlapping appointment');
 end $$;
 \echo PASS T3 overlap refused across prospects of one student
@@ -191,8 +198,7 @@ end $$;
 -- T3d: OD-18 — appointments need the « Remplace » token (A); enrolment actions need an explicit cancel (B).
 do $$ declare l uuid; k public.crm_tasks; p uuid; begin
  l:=pg_temp.intake();
- perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',(pg_temp.na(l)).id,'next',
-  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',8,'10:00'),'with_test',true)));
+ perform pg_temp.book(l,pg_temp.at('opening',8,'10:00'),true);
  k:=pg_temp.na(l); p:=k.placement_test_id;
  perform pg_temp.refused('change_next_action',l,jsonb_build_object('expected_action_id',k.id,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow')),'22023','crm_next_action.replace_confirmation');
  perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',k.id,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow','replace_action_id',k.id)));
@@ -216,7 +222,7 @@ end $$;
 do $$ declare l uuid; k public.crm_tasks; preset text; closing timestamptz; begin
  l:=pg_temp.intake();
  closing:=(((now() at time zone public.centre_utc_offset())::date+2)::timestamp+time '23:00') at time zone public.centre_utc_offset();
- perform pg_temp.refused('change_next_action',l,jsonb_build_object('expected_action_id',(pg_temp.na(l)).id,'next',jsonb_build_object('task_type','center_visit','due_at',closing)),'22023','crm_hours.outside_opening');
+ perform pg_temp.refused('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',closing)),'22023','crm_hours.outside_opening');
  perform pg_temp.refused('change_next_action',l,jsonb_build_object('expected_action_id',(pg_temp.na(l)).id,'next',jsonb_build_object('task_type','callback','schedule_kind','appointment','due_at',closing)),'22023','crm_hours.outside_calling');
  foreach preset in array array['later_today','tomorrow','in_2_days','in_3_days','in_5_days','next_week'] loop
   begin
@@ -261,8 +267,7 @@ end $$;
 do $$ declare l uuid; k public.crm_tasks; code text; begin
  foreach code in array array['came_enrolled','came_will_return','came_not_interested','no_show'] loop
   l:=pg_temp.intake();
-  perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',(pg_temp.na(l)).id,'next',
-   jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',9,'10:00'),'with_test',true)));
+  perform pg_temp.book(l,pg_temp.at('opening',9,'10:00'),true);
   k:=pg_temp.na(l);
   perform pg_temp.refused('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code',code),'22023','crm_appointment.before_start');
   perform pg_temp.backdate(k.id);
@@ -270,11 +275,17 @@ do $$ declare l uuid; k public.crm_tasks; code text; begin
   set local session_replication_role=replica;
   update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=k.placement_test_id;
   set local session_replication_role=origin;
-  perform pg_temp.act('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code',code));
+  -- « Venu · pas intéressé » asks the close reason; it is never assumed (§4.8).
+  if code='came_not_interested' then
+   perform pg_temp.refused('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code',code),'22023','crm_appointment.reason_required');
+   perform pg_temp.ok((select status='open' from public.crm_tasks where id=k.id),'refused outcome changes nothing');
+  end if;
+  perform pg_temp.act('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code',code)
+   ||case when code='came_not_interested' then '{"next":{"close":{"status":"LOST","reason":"price"}}}'::jsonb else '{}'::jsonb end);
   perform pg_temp.ok((select status='completed' and outcome_code=code from public.crm_tasks where id=k.id),'appointment completed with '||code);
   perform pg_temp.ok((select status=case when code='no_show' then 'Absent' else 'Passé' end from public.placement_tests where id=k.placement_test_id),'test status after '||code);
   if code='came_not_interested' then
-   perform pg_temp.ok((select status='LOST' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'not interested closes');
+   perform pg_temp.ok((select status='LOST' and closure_reason='price' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'not interested closes with the chosen reason');
   else
    perform pg_temp.one(l,'after '||code);
    perform pg_temp.ok((pg_temp.na(l)).task_type=case code when 'came_enrolled' then 'enrollment_followup' when 'came_will_return' then 'awaiting_prospect' else 'callback' end,'next action after '||code);
@@ -282,6 +293,101 @@ do $$ declare l uuid; k public.crm_tasks; code text; begin
  end loop;
 end $$;
 \echo PASS T5 outcomes refused before start; test status and next action per outcome
+
+-- T5b (review of #208, B1): « Changer » never books a new appointment for a prospect
+-- not yet qualified (OD-11: the exchange that books it qualifies it); an appointment
+-- that already exists on such a prospect (reopened with one, an old tab, D1 rule b)
+-- qualifies at its outcome, so enrolment can start.
+do $$ declare l uuid; k public.crm_tasks; code text; r jsonb; begin
+ l:=pg_temp.intake();
+ perform pg_temp.refused('change_next_action',l,jsonb_build_object('expected_action_id',(pg_temp.na(l)).id,'next',
+  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',3,'11:00'))),'22023','crm_next_action.appointment_needs_exchange');
+ perform pg_temp.ok((select status='NEW' from public.crm_leads where id=l) and (pg_temp.na(l)).task_type='first_contact','the refused booking changes nothing');
+ perform pg_temp.book(l,pg_temp.at('opening',3,'11:00'));
+ perform pg_temp.ok((select status='QUALIFIED' and qualification_step='center_visit' from public.crm_leads where id=l),'the exchange books and qualifies (OD-11)');
+ -- Once qualified, « Changer » moves or books appointments as before.
+ k:=pg_temp.na(l);
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',k.id,'next',
+  jsonb_build_object('task_type','center_visit','due_at',pg_temp.at('opening',4,'11:00'),'replace_action_id',k.id)));
+ perform pg_temp.one(l,'qualified prospect: « Changer » moves the appointment');
+ foreach code in array array['came_enrolled','came_will_return'] loop
+  l:=pg_temp.intake();
+  -- Fixture: an appointment left on a NEW prospect by an old tab (the legacy « Planifier »).
+  perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',pg_temp.at('opening',3,'11:00'))));
+  k:=pg_temp.na(l);
+  perform pg_temp.ok(k.task_type='center_visit' and (select status='NEW' from public.crm_leads where id=l),'fixture: appointment on a NEW prospect');
+  perform pg_temp.backdate(k.id);
+  perform pg_temp.act('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code',code));
+  perform pg_temp.ok((select status='QUALIFIED' and qualification_step=case when code='came_enrolled' then 'enrollment' else 'center_visit' end from public.crm_leads where id=l),code||' qualifies a prospect not yet qualified');
+  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='conversation_recorded' and channel='in_person'),code||' records the in-person conversation');
+  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='lead_engaged')
+   and (select count(*)=1 from public.crm_activities where lead_id=l and event_type='lead_qualified'),code||': lifecycle events once each');
+  perform pg_temp.one(l,'after '||code||' on an unqualified prospect');
+  if code='came_enrolled' then
+   -- The dead end of the review: enrolment now starts (the payment wrapper converts).
+   r:=public.crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
+    'student_choice','new','learner_name','Synthetic learner B1','birth_date','2015-01-01','session_type','Yearly','school_year','2026/2027','level','Child 2',
+    'candidate_review',crm_security.candidate_token(l,'Synthetic learner B1','2015-01-01'::date),'confirm_new',true,'initial_status','Confirmed'));
+   perform pg_temp.ok(r->'lead'->>'id'=l::text and (select enrollment_id is not null from public.crm_leads where id=l),'enrolment starts after « Venu · s''inscrit »');
+  end if;
+ end loop;
+end $$;
+\echo PASS T5b B1 appointment needs the qualifying exchange; outcomes on a legacy appointment qualify
+
+-- T5c (review of #208, B2): a cancelled or absent test never becomes « Planifié » again,
+-- by any path; a result can still be entered on a cancelled test.
+do $$ declare l uuid; k public.crm_tasks; p uuid; q jsonb; via text; begin
+ foreach via in array array['close','change','no_show'] loop
+  l:=pg_temp.intake();
+  perform pg_temp.book(l,pg_temp.at('opening',3,'11:00'),true);
+  k:=pg_temp.na(l); p:=k.placement_test_id;
+  if via='close' then perform pg_temp.act('close_prospect',l,'{"status":"LOST","reason":"price"}');
+  elsif via='change' then
+   perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',k.id,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow','replace_action_id',k.id)));
+  else
+   perform pg_temp.backdate(k.id);
+   set local session_replication_role=replica;
+   update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+   set local session_replication_role=origin;
+   perform pg_temp.act('record_appointment_outcome',l,jsonb_build_object('action_id',k.id,'outcome_code','no_show'));
+  end if;
+  perform pg_temp.ok((select status=case when via='no_show' then 'Absent' else 'Annulé' end from public.placement_tests where id=p),'fixture: test ended by '||via);
+  q:=jsonb_build_object('placement_id',p,'expected_updated_at',(select updated_at from public.placement_tests where id=p),'expected_version',(select version from public.crm_leads where id=l),
+   'date_test',(select date_test from public.placement_tests where id=p),'heure',(select heure from public.placement_tests where id=p),'status','Planifié');
+  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q),'22023','crm_placement.not_replannable');
+  perform pg_temp.denied(format('update public.placement_tests set status=%L where id=%L','Planifié',p),'22023','crm_placement.not_replannable');
+  perform pg_temp.ok((select status<>'Planifié' from public.placement_tests where id=p),'still not planned after '||via);
+ end loop;
+ -- A result on a cancelled test stays allowed (the migration's cancel check).
+ perform pg_temp.ok((select count(*)=0 from public.placement_tests where id=p and status='Planifié'),'cancelled fixture');
+ l:=pg_temp.intake();
+ perform pg_temp.book(l,pg_temp.at('opening',3,'11:00'),true);
+ k:=pg_temp.na(l); p:=k.placement_test_id;
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',k.id,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow','replace_action_id',k.id)));
+ set local session_replication_role=replica;
+ update public.placement_tests set date_test=(now() at time zone public.centre_utc_offset())::date-1 where id=p;
+ set local session_replication_role=origin;
+ update public.placement_tests set status='Résultat saisi',niveau_recommande='A2' where id=p;
+ perform pg_temp.ok((select status='Résultat saisi' and cancelled_at is not null from public.placement_tests where id=p),'a result on a cancelled test keeps its cancellation history');
+end $$;
+\echo PASS T5c B2 cancelled or absent test is never planned again
+
+-- T5d (review of #208, important 4): an appointment still to come that an exchange
+-- replaces is cancelled « Remplacée », never completed, and is not shown as held.
+do $$ declare l uuid; k public.crm_tasks; d date; begin
+ l:=pg_temp.intake();
+ perform pg_temp.book(l,pg_temp.at('opening',5,'11:00'),true);
+ k:=pg_temp.na(l);
+ perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',
+  jsonb_build_object('task_type','callback','schedule_kind','appointment','due_at',pg_temp.at('calling',2,'16:00'),'replace_action_id',k.id)));
+ perform pg_temp.ok((select status='cancelled' and replaced_reason is not null and completed_at is null and outcome_code is null from public.crm_tasks where id=k.id),
+  'a future appointment replaced by an exchange is cancelled « Remplacée »');
+ perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=k.placement_test_id),'its test is cancelled with it');
+ d:=(k.due_at at time zone public.centre_utc_offset())::date;
+ perform pg_temp.ok(position(k.id::text in public.crm_get_admissions_calendar(d,d+1,'all',true)::text)=0,'« Inclure terminés » does not show it as a visit that took place');
+ perform pg_temp.one(l,'after the exchange');
+end $$;
+\echo PASS T5d future appointment replaced by an exchange is cancelled, not completed
 
 -- T7b: five failed calls → attempts 1–5, « En attente » after the fifth (OD-17), then « Injoignable ».
 do $$ declare l uuid; r jsonb; begin
@@ -365,5 +471,32 @@ do $$ declare l uuid; t public.crm_tasks; begin
  perform pg_temp.one(l,'R-4 visit moved, not duplicated');
 end $$;
 \echo PASS R-n replays of R0 histories yield one action
+
+
+-- T4c (review of #208, important 3; §4.5): agreed times booked before a change of
+-- hours are kept, never moved, and listed « Hors des nouveaux horaires ». Last in
+-- the file: it publishes new hours.
+do $$ declare v uuid; c uuid; kv public.crm_tasks; kc public.crm_tasks; q jsonb; begin
+ v:=pg_temp.intake(); c:=pg_temp.intake();
+ perform pg_temp.book(v,pg_temp.at('opening',3,'11:00'));
+ perform pg_temp.act('log_exchange',c,jsonb_build_object('channel','phone','result','spoke','next',
+  jsonb_build_object('task_type','callback','schedule_kind','appointment','due_at',pg_temp.at('calling',3,'16:00'))));
+ kv:=pg_temp.na(v); kc:=pg_temp.na(c);
+ perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(public.crm_list_outside_hours()->'rows') x where x->>'lead_id' in (v::text,c::text)),'inside the hours: not listed');
+ perform pg_temp.actor(1);
+ perform public.crm_create_followup_policy(gen_random_uuid(),jsonb_build_object(
+  'weekly_hours',(select jsonb_object_agg(d::text,jsonb_build_array(jsonb_build_array('07:00','08:00'))) from generate_series(1,7) d),
+  'opening_hours',(select jsonb_object_agg(d::text,jsonb_build_array(jsonb_build_array('07:00','08:00'))) from generate_series(1,7) d)));
+ perform pg_temp.actor(3);
+ q:=public.crm_list_outside_hours();
+ perform pg_temp.ok((select count(*)=1 from jsonb_array_elements(q->'rows') x where x->>'lead_id'=v::text and x->'action'->>'id'=kv.id::text)
+  and (select count(*)=1 from jsonb_array_elements(q->'rows') x where x->>'lead_id'=c::text and x->'action'->>'id'=kc.id::text),'the appointment and the agreed callback are listed');
+ perform pg_temp.ok((select due_at=kv.due_at and status='open' from public.crm_tasks where id=kv.id) and (select due_at=kc.due_at and status='open' from public.crm_tasks where id=kc.id),'agreed times are kept, never moved');
+ perform pg_temp.ok((q->>'total')::integer>=2,'the total counts them');
+ perform pg_temp.actor(4);
+ perform pg_temp.denied('select public.crm_list_outside_hours()','42501');
+ perform pg_temp.actor(3);
+end $$;
+\echo PASS T4c « Hors des nouveaux horaires » lists kept agreed times outside the current hours
 
 rollback;
