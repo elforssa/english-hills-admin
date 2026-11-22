@@ -2,7 +2,7 @@
 
 ## Status
 
-**Accepted for implementation** (Maroine, 2026-11-21) with the [receptionist permissions plan](../plans/receptionist-permissions.md), revision RPW-r2 (RPW-r1 at `08881a1`, N1 = B, N2 = A). Not implemented, merged or released.
+**Accepted** (Maroine, 2026-11-21) with the [receptionist permissions plan](../plans/receptionist-permissions.md), revision RPW-r2 (RPW-r1 at `08881a1`, N1 = B, N2 = A). **Implemented and released on 2026-11-22:** PR #204 merged as `5764504`, migrations 131–135 applied in Production ([release record](../plans/receptionist-permissions.md#release-record-r0r4--2026-11-22)). Follow-up F7 (the menu by capability) is still open.
 
 ## Date
 
