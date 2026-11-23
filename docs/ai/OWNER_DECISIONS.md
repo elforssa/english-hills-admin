@@ -644,11 +644,15 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
 
     > Owner approval (Maroine, 2026-11-23): prepare data step D1 of plan RWR-r5 (docs/architecture/plans/receptionist-workflow.md §10). Tier 3 Production operation.
     >
+    > […]
+    >
     > Not authorized: M-A2, any migration, any change to hours or the follow-up policy, merge or other PRs. Documentation of D1 is a separate change afterwards.
 
   - **Counts approval and « go », owner's words, verbatim excerpt** (full text in the [D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23)):
 
     > Owner approval (Maroine, 2026-11-23): I approve D1 with exactly these counts: a 19 (19 prospects / 45 actions, 26 cancelled), b 0, c 18, d 0, tests cancelled 0, open actions 186 → 178. go — run now, before reception opens at 15:00.
+    >
+    > […]
     >
     > Stop and roll back on any mismatch. Must finish before 15:00 centre time; if not, stop safely and tell me. Not authorized: M-A2, any migration, hours or policy changes, d1_revert unless I ask. Report the results, then stop; documentation of D1 is a separate change.
 
