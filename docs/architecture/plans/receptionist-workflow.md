@@ -736,7 +736,40 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 
 ### Release record: PR A1 — 2026-11-23
 
-**Owner release approval (Maroine, 2026-11-23), as given:** release PR #208 (RWR-r5 PR A1) at exact head `7a0bc410d968a10fdd2778c9844002085e7d802b`, following the independent re-review verdict READY FOR FINAL REVIEW on that head, with Verify run `45147613788` green on tested merge `505c85d`. Apply `136_crm_one_next_action.sql` first through the guarded wrapper of §10 (MD5 preconditions, `DRYRUN_OK` rehearsal, then commit), then squash-merge at that head and verify Vercel Production READY on the merged commit. The owner accepted the short window in which the old drawer's history list may fail (the 3-argument `crm_get_timeline` is dropped; old command wrappers stay callable, §4.2), the release during opening hours with a 10–15 minute disruption, and told the receptionist before « go ». Not authorized: D1 or any data step, M-A2, a change to the follow-up policy or hours, any other migration or PR. Before « go » the owner also accepted the two points the operator raised: the PR has no rollback file, and no Production backup exists.
+**Owner release approval (Maroine, 2026-11-23), verbatim:**
+
+> You are the release operator (AGENTS.md, docs/ai/templates/PRODUCTION_ROLLOUT.md). Tier 3 Production operation.
+>
+> Owner release approval (Maroine, 2026-11-23): I approve releasing PR #208 (RWR-r5 PR A1) at exact head 7a0bc410d968a10fdd2778c9844002085e7d802b. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45147613788 is green on tested merge 505c85d.
+>
+> Scope:
+> - Apply supabase/migrations/136_crm_one_next_action.sql to Production, migration first, through the guarded wrapper pattern of plan §10 (md5 preconditions, DRYRUN_OK rehearsal, then commit).
+> - Then squash-merge PR #208 at that exact head and verify Vercel Production READY on the merged commit.
+> - I accept the short window between the two in which the old drawer's history list may fail (the 3-argument crm_get_timeline is dropped). Old command wrappers remain callable by design (plan §4.2).
+> Window: now, during opening hours. I accept the 10–15 minute disruption; I will tell the receptionist before "go". No Production write before my "go".
+>
+> Before any mutation:
+> - confirm head, base and main;
+> - confirm the Production migration ledger is exactly 001–135 (stop if any of #204's 131–135 is missing or differs);
+> - confirm the deployed source and the recovery plan (prior function bodies from the migration's rollback file).
+> Prepare the concrete checklist and show it to me, then wait for my "go" before the first Production write.
+>
+> After release:
+> - run Production acceptance with bounded, reversible probes, no customer data in reports;
+> - check roles: receptionist, director and teacher, plus the director-only functions;
+> - check one prospect through exchange, « Changer », calendar and the Settings « Horaires du centre » card, read-only where possible;
+> - check Meta intake still works, and look at runtime errors.
+> Stop and report on any mismatch.
+>
+> Not authorized: D1 or any data step, M-A2, changing the follow-up policy or hours, any other migration or PR. Hand off with the merge SHA, the deployed SHA, the ledger state and acceptance results; documentation closeout is a separate change.
+
+**Owner's « go » (2026-11-23, after the operator showed the checklist, which listed the missing rollback file and the missing backup as two points to accept), verbatim:**
+
+> Go
+
+**The two risks, owner's words (2026-11-23, at the closeout review), verbatim:**
+
+> Before « go » I was told the PR has no rollback file and no Production backup exists, and I accepted both.
 
 | Step | When (UTC) | Evidence |
 | --- | --- | --- |

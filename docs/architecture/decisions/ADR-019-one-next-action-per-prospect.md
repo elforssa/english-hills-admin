@@ -6,8 +6,6 @@
 
 **Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, with OD-18 answered, the product rule that keeps operational tasks beside a new follow-up: after the user confirms « Remplace : … », a call or message may replace an appointment (A), while an enrolment action can only be rescheduled, cancelled or given an outcome (B). The five-failure stop is kept (OD-17 = A). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
 
-The number is provisional: ADR-018 belongs to the receptionist permissions plan (RPW-r2, PR #203). If that ADR lands under another number, this one keeps 019 unless the owner asks otherwise.
-
 ## Date
 
 2026-11-21.
