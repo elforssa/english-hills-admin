@@ -1,11 +1,11 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: APPROVED (architecture only), revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21** ([approval record](#approval-record)). Implementation is not authorized. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Nothing is implemented, applied, merged or released. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). D1, A2, B1, B2, C1 and C2 remain; data steps D3–D7 are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
 - **Baseline:** `origin/main` `53c486b`, migration ceiling 130.
-- **Overlapping open work:** plan RPW-r2 (PR #203, approved 2026-11-21) and its implementation PR #204 (migrations 131–135, not merged).
+- **Overlapping open work:** plan RPW-r2 (PR #203, approved 2026-11-21) and its implementation PR #204 (migrations 131–135), released on 2026-11-22 before A1 (OD-19 = A).
 
 | Revision | Date | Change |
 | --- | --- | --- |
@@ -687,7 +687,8 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 
 **Owner inputs still to come (each is a gate):**
 - the weekday hours and closed dates (OD-3): **given 2026-11-21** — « same time as before, no need for holidays »: the current published `weekly_hours` unchanged, `opening_hours` NULL, `date_exceptions` `[]`; values read by R0 Q01 (recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md));
-- the default owner's account (OD-6): **D1 must not run without it**;
+- the default owner's account (OD-6): **D1 must not run without it**; still to come at the A1 release (2026-11-23);
+- a confirmed Production backup or PITR: **D1 must not run without it** (added at the A1 release, 2026-11-23, because A1 itself was released without one);
 - the 2026/2027 programme prices (OD-16): before release B2.
 
 **Reviewer's notes:** the four non-blocking notes of the independent re-review of RWR-r5 at `824252a`, copied here as review notes (they are not part of the owner's words). They are follow-ups for the A1 implementation and do not change the approved design; notes a and c are applied to the text above.
@@ -733,6 +734,71 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 
 **Effect:** the kept-test item above names this decision. The old « reschedule in place » path (`crm_schedule_task` with a task id) moves a planned test only when the rescheduled action is an appointment; « Finaliser l'inscription » is rescheduled without touching its test (review finding B5, `test-crm-rcc-a2.sql`).
 
+### Release record: PR A1 — 2026-11-23
+
+**Owner release approval (Maroine, 2026-11-23), verbatim:**
+
+> You are the release operator (AGENTS.md, docs/ai/templates/PRODUCTION_ROLLOUT.md). Tier 3 Production operation.
+>
+> Owner release approval (Maroine, 2026-11-23): I approve releasing PR #208 (RWR-r5 PR A1) at exact head 7a0bc410d968a10fdd2778c9844002085e7d802b. The independent re-review verdict on that head is READY FOR FINAL REVIEW; Verify run 45147613788 is green on tested merge 505c85d.
+>
+> Scope:
+> - Apply supabase/migrations/136_crm_one_next_action.sql to Production, migration first, through the guarded wrapper pattern of plan §10 (md5 preconditions, DRYRUN_OK rehearsal, then commit).
+> - Then squash-merge PR #208 at that exact head and verify Vercel Production READY on the merged commit.
+> - I accept the short window between the two in which the old drawer's history list may fail (the 3-argument crm_get_timeline is dropped). Old command wrappers remain callable by design (plan §4.2).
+> Window: now, during opening hours. I accept the 10–15 minute disruption; I will tell the receptionist before "go". No Production write before my "go".
+>
+> Before any mutation:
+> - confirm head, base and main;
+> - confirm the Production migration ledger is exactly 001–135 (stop if any of #204's 131–135 is missing or differs);
+> - confirm the deployed source and the recovery plan (prior function bodies from the migration's rollback file).
+> Prepare the concrete checklist and show it to me, then wait for my "go" before the first Production write.
+>
+> After release:
+> - run Production acceptance with bounded, reversible probes, no customer data in reports;
+> - check roles: receptionist, director and teacher, plus the director-only functions;
+> - check one prospect through exchange, « Changer », calendar and the Settings « Horaires du centre » card, read-only where possible;
+> - check Meta intake still works, and look at runtime errors.
+> Stop and report on any mismatch.
+>
+> Not authorized: D1 or any data step, M-A2, changing the follow-up policy or hours, any other migration or PR. Hand off with the merge SHA, the deployed SHA, the ledger state and acceptance results; documentation closeout is a separate change.
+
+**Owner's « go » (2026-11-23, after the operator showed the checklist, which listed the missing rollback file and the missing backup as two points to accept), verbatim:**
+
+> Go
+
+**The two risks, owner's words (2026-11-23, at the closeout review), verbatim:**
+
+> Before « go » I was told the PR has no rollback file and no Production backup exists, and I accepted both.
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Pre-checks (read-only) | before 10:35 | head `7a0bc41`, base = `main` = deployed `269618a`; squash tree `db908b3` = tested merge `505c85d`; ledger 001–135, rows 131–135 equal to the files; catalogue digest = clean 135 (no drift); no backup, PITR off |
+| Local rehearsal | before 10:35 | clean 135 + `receipts_number_required` = Production digest; pinned dry run, apply and a plain `migration up` give the same post-136 digest; recovery parts A + B return to the pre-136 digest; 136 re-applies after recovery |
+| Production dry run | 10:35:59 | `DRYRUN_OK 136 tables=86`; ledger re-read 001–135 |
+| **136 applied** | **10:36:15–17** | ledger 001–136; row 136 MD5 `9dabd82005ef8eb3cc922dae49c4c39b`, `created_by` from row 135; digest = clean-136 pin; row counts of the 86 app tables unchanged inside the wrapper |
+| Merge | 10:36:38 | squash `25e91e6ae8143e4281aa40e52a399e2060b4f239` |
+| Deploy | 10:38:39 | GitHub `Production` deployment `7996419644` `success`; the domain serves a file present only in this merge |
+| Acceptance | 10:40:59 | rolled-back probe per role (below) |
+| Integrations and logs | 10:41–10:45 | intake run 10:40 → 200; 305 ingestion jobs `done`; only the release's two sentinel errors in Postgres |
+
+**Old-drawer window:** about 2.5 minutes (10:36:17–10:38:39 UTC) with no logged error.
+
+**Acceptance by role** (one transaction ending in a sentinel exception; statuses, codes and counts only; CRM counts and prospect versions equal before and after):
+- **Receptionist:** `crm_get_centre_hours` (the « Horaires du centre » card), `crm_check_action`, `crm_get_workspace_detail`, the 4-argument `crm_get_timeline`, `crm_get_work_queue` (« Aujourd'hui », « En attente »), `crm_list_outside_hours`, `crm_get_admissions_calendar` all answered. One prospect: « Noter un échange » · « Pas de réponse » kept one open action; « Changer » → « En attente » without a date left one open action of that type with no date; one primary history line per command. `crm_list_data_step_journal`, `crm_set_reception_default_owner` and `crm_create_followup_policy` refused (`42501`).
+- **Director:** the same readers and `crm_list_data_step_journal` answered; the two director writers were not run.
+- **Teacher:** every function above refused (`42501`).
+- **Old command wrappers:** still executable by `authenticated` until A2.
+
+**Gates after this release:** A1 done. **Next: D1**, which needs the default owner's account (OD-6), a confirmed Production backup or PITR, a fresh `d1_plan()` dry run with per-rule and cancelled-test counts for the owner's « approve D1 », and a run outside reception hours. Then A2; B1, B2 (prices, OD-16), C1 and C2 follow (§8).
+
+**Limitations and follow-ups:**
+- **No rollback file shipped.** §10's M-A1 rollback refers to « the migration's rollback file »; PR #208 has none. The operator generated the recovery from the clean-135 catalogue (part A: the 21 replaced and 3 dropped functions back, the 40 new functions and the new trigger dropped, ledger row removed; part B: the additive schema, refused while any row uses it) and rehearsed it. The owner keeps the files outside the repository; using them needs a separate approval, application first (redeploy `269618a`). Part A refuses once D1 has written to `crm_data_step_journal`, so after D1 recovery is D1's own `d1_revert` first.
+- **No Production backup** for 136 (additive; no row written, checked inside the wrapper). A confirmed backup or PITR is now a precondition for D1.
+- **Not verified:** the screens in a signed-in browser; a new Meta lead through intake on 136 (none arrived after 09:16 UTC); Vercel runtime errors (no connector access to the team).
+- **Known pre-existing, not caused by A1:** `crm_get_today` fails on legacy non-CRM tests with malformed times (`invalid input syntax for type time`), the same at `main` `269618a` (PR #208 description); `npm run audit:policy` fails on `main` (advisories on `next`).
+- Until D1, prospects can still hold several open actions or none (R0: Q04, Q05); until A2, nothing in the database enforces one.
+
 ## IMPLEMENTATION CONTRACT
 
 **Scope:** sections 2a and 4–10 of this plan at revision RWR-r5, as amended by the owner's answers to OD-1–OD-20, recorded in the [approval record](#approval-record) (owner approval of 2026-11-21 at `824252a`, architecture only).
@@ -742,7 +808,8 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 - **A clean merged base.**
 - **For A1:** R0 done (its own approval); the owner's weekday hours and closed dates (OD-3) given before A1 starts — given 2026-11-21: current published `weekly_hours` unchanged, no closed dates (values from Q01). **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
 - **For B1 and C2:** PR #204 merged.
-- **For D1:** the default owner's account named (OD-6).
+- **A1:** done — released 2026-11-23 ([release record](#release-record-pr-a1--2026-11-23)).
+- **For D1 (next):** the default owner's account named (OD-6); a confirmed Production backup or PITR; « approve D1 » with the per-rule counts and the cancelled-test count from a fresh `d1_plan()` dry run (§10); run outside reception hours.
 - **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**

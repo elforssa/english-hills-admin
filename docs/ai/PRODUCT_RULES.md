@@ -33,9 +33,9 @@ RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_fol
 - Structured outcomes need no prose. Explanations remain required for standalone notes, Other reasons, cancellation and reopening.
 - CONTACTING and CONVERTED display as **Contact en cours** and **Inscription confirmée**; stored values are unchanged.
 
-### One next action (RWR-r5 PR A1, migration 136) — built, not merged or released
+### One next action (RWR-r5 PR A1, migration 136) — released 2026-11-23, D1 not run
 
-[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §4, approved 2026-11-21. Built on PR #208 with migration 136 (provisional number, after #204's 131–135); **not merged, not applied, not released**. Until release the RCC-A1 rules above stay current. On release these rules replace the RCC-A1 bullet on conversation decisions:
+[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §4, approved 2026-11-21. **Released 2026-11-23**: PR #208 merged as `25e91e6` and deployed, migration 136 applied, Production verified with bounded acceptance ([closeout](CURRENT_STATE.md#receptionist-workflow-pr-a1-rwr-r5--released-2026-11-23-migration-136)). These rules replace the RCC-A1 bullet on conversation decisions above for every command from that date. **Existing data is not yet converted:** prospects created before the release keep the open actions they had (several, or none) until data step D1, and the database enforces « exactly one » only after PR A2 (M-A2); D1 and A2 each need the owner's approval.
 
 - An active prospect has **exactly one next action**, written only by `crm_security.set_next_action`. A closed prospect has none. Every screen (card, drawer, « Tâches », pre-check) shows that same action.
 - Hours come from the **current** published version (`current_policy_id()`); the follow-up cadence stays the one pinned on the prospect. One set of hours serves calls and the desk (OD-3 = B); closed dates are listed with the hours. An agreed time (callback « rendez-vous convenu », appointment at the centre) outside the hours or on a closed date is **refused**, never moved; reminders and system times move to the next window. Agreed times booked before a change of hours are kept.

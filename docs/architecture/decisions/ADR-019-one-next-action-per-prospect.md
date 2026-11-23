@@ -2,11 +2,9 @@
 
 ## Status
 
-**Accepted** (2026-11-21, architecture only) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r5, which the owner approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2` after an independent re-review verdict of READY FOR FINAL REVIEW (r1–r4 were each reviewed CHANGES REQUIRED the same day). OD-1–OD-20 are answered in the plan's [approval record](../plans/receptionist-workflow.md#approval-record). Not implemented: implementation, migrations, data steps, merge and release each need the owner's separate approval.
+**Accepted** (2026-11-21, architecture only) with the [receptionist workflow plan](../plans/receptionist-workflow.md), revision RWR-r5, which the owner approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2` after an independent re-review verdict of READY FOR FINAL REVIEW (r1–r4 were each reviewed CHANGES REQUIRED the same day). OD-1–OD-20 are answered in the plan's [approval record](../plans/receptionist-workflow.md#approval-record). **Implementation: the single writer and the one-action read (PR A1, migration 136) are released and Production verified with bounded acceptance on 2026-11-23** ([release record](../plans/receptionist-workflow.md#release-record-pr-a1--2026-11-23)). The enforcement (unique index and presence triggers, PR A2) is not built and data step D1 has not run, so « exactly one » is not yet a database invariant; each needs the owner's separate approval.
 
 **Amends** [ADR-001](ADR-001-crm-lifecycle.md) (« at least one open task, several allowed » becomes one next action) and, with OD-18 answered, the product rule that keeps operational tasks beside a new follow-up: after the user confirms « Remplace : … », a call or message may replace an appointment (A), while an enrolment action can only be rescheduled, cancelled or given an outcome (B). The five-failure stop is kept (OD-17 = A). It **keeps** [ADR-015](ADR-015-enrollment-at-payment.md) decision 4: conversion still comes only from `evaluate_conversion`. The plan's §2a lists each rule.
-
-The number is provisional: ADR-018 belongs to the receptionist permissions plan (RPW-r2, PR #203). If that ADR lands under another number, this one keeps 019 unless the owner asks otherwise.
 
 ## Date
 
