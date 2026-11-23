@@ -26,8 +26,20 @@ create function pg_temp.intake() returns uuid language plpgsql as $$ declare r j
  r:=public.crm_create_manual_lead(gen_random_uuid(),'{"display_name":"Synthetic guardian","learner_name":"Synthetic learner","phone":"0612345678","source_label":"Manual"}');
  return (r->'lead'->>'id')::uuid;
 end $$;
+-- This file is also a fixture for upgrades from 107 (work-calendar, rcc-a1/a2,
+-- receptionist-ux): the hours helpers of 136 are used only when they exist.
+create function pg_temp.slot(k text, t timestamptz) returns timestamptz language plpgsql as $$ declare r timestamptz; begin
+ if to_regprocedure('crm_security.window_at(uuid,text,timestamp with time zone)') is null then return t; end if;
+ execute 'select crm_security.window_at(crm_security.current_policy_id(),$1,$2)' into r using k,t;
+ return r;
+end $$;
+create function pg_temp.tz() returns interval language plpgsql as $$ declare r interval; begin
+ if to_regprocedure('public.centre_utc_offset()') is null then return (now() at time zone 'Africa/Casablanca')-(now() at time zone 'UTC'); end if;
+ execute 'select public.centre_utc_offset()' into r;
+ return r;
+end $$;
 create function pg_temp.next_task(typ text default 'callback') returns jsonb language sql as $$
- select jsonb_build_object('task_type',typ,'due_at',now()+interval '1 day')
+ select jsonb_build_object('task_type',typ,'due_at',pg_temp.slot(case when typ='center_visit' then 'opening' else 'calling' end,now()+interval '1 day'))
 $$;
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select ('80000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'phase3-'||i||'@example.invalid','authenticated','authenticated',now(),now() from generate_series(1,7)i;
@@ -46,7 +58,7 @@ create function pg_temp.qualified() returns uuid language plpgsql as $$ declare 
 end $$;
 create function pg_temp.booking(l uuid) returns jsonb language sql as $$
  select jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
- 'date_test',((now() at time zone 'Africa/Casablanca')::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
+ 'date_test',(pg_temp.slot('opening',((now() at time zone pg_temp.tz())::date+2+time '10:30') at time zone pg_temp.tz()) at time zone pg_temp.tz())::date,'heure',to_char(pg_temp.slot('opening',((now() at time zone pg_temp.tz())::date+2+time '10:30') at time zone pg_temp.tz()) at time zone pg_temp.tz(),'HH24:MI'),'examinateur','Examinatrice test','notes','Projet anglais',
  'task_id',(select id from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1),
  'expected_task_version',(select version from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1))
 $$;

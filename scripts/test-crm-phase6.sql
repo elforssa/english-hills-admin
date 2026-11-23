@@ -27,7 +27,7 @@ create function pg_temp.intake() returns uuid language plpgsql as $$ declare r j
  return (r->'lead'->>'id')::uuid;
 end $$;
 create function pg_temp.next_task(typ text default 'callback') returns jsonb language sql as $$
- select jsonb_build_object('task_type',typ,'due_at',now()+interval '1 day')
+ select jsonb_build_object('task_type',typ,'due_at',crm_security.window_at(crm_security.current_policy_id(),case when typ='center_visit' then 'opening' else 'calling' end,now()+interval '1 day'))
 $$;
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select ('80000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'phase3-'||i||'@example.invalid','authenticated','authenticated',now(),now() from generate_series(1,7)i;
@@ -46,7 +46,7 @@ create function pg_temp.qualified() returns uuid language plpgsql as $$ declare 
 end $$;
 create function pg_temp.booking(l uuid) returns jsonb language sql as $$
  select jsonb_build_object('lead_id',l,'expected_version',(select version from public.crm_leads where id=l),
- 'date_test',((now() at time zone public.centre_utc_offset())::date+2),'heure','10:30','examinateur','Examinatrice test','notes','Projet anglais',
+ 'date_test',(crm_security.window_at(crm_security.current_policy_id(),'opening',((now() at time zone public.centre_utc_offset())::date+2+time '10:30') at time zone public.centre_utc_offset()) at time zone public.centre_utc_offset())::date,'heure',to_char(crm_security.window_at(crm_security.current_policy_id(),'opening',((now() at time zone public.centre_utc_offset())::date+2+time '10:30') at time zone public.centre_utc_offset()) at time zone public.centre_utc_offset(),'HH24:MI'),'examinateur','Examinatrice test','notes','Projet anglais',
  'task_id',(select id from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1),
  'expected_task_version',(select version from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1))
 $$;

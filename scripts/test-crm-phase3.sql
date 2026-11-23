@@ -121,7 +121,8 @@ begin
   if i<5 then perform pg_temp.denied(format('select pg_temp.act(''close_lost'',%L,''{"reason":"unreachable"}'')',l)); end if;
   r:=pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome',(array['no_answer','busy','declined','unreachable','no_answer'])[i],'occurred_at',at_time));
   perform pg_temp.ok((r->>'failed_attempts')::integer=i and r->'lead'->>'status'='CONTACTING','attempt ordinal and lifecycle '||i);
-  perform pg_temp.ok((select count(*)=case when i<5 then 1 else 0 end from public.crm_tasks where lead_id=l and status='open'),'single generated next task '||i);
+  -- RWR-r5 invariant 1 and T7b (OD-17): the fifth failure leaves one « En attente » action, not none.
+  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open'),'single next action '||i);
   perform pg_temp.denied(format('select pg_temp.act(''record_call_outcome'',%L,%L::jsonb)',l,jsonb_build_object('outcome','no_answer','occurred_at',at_time+interval '1 minute')));
   at_time:=at_time+interval '1 day';
  end loop;
@@ -258,7 +259,8 @@ do $$ declare l uuid; wanted text; r jsonb; i integer; old_history jsonb;
   perform pg_temp.ok((r->>'unreachable_eligible')::boolean,'fifth new-cycle failure enables closure for '||wanted);
   perform pg_temp.ok(old_history=(select jsonb_agg(to_jsonb(a) order by a.attempt_ordinal) from public.crm_activities a
     where lead_id=l and outreach_cycle=1 and attempt_ordinal is not null),'historical attempts unchanged');
-  perform pg_temp.act('schedule_task',l,jsonb_build_object('task',pg_temp.next_task()));
+  -- RWR-r5 §4.2 step 3 / OD-18: a call task never replaces the qualified prospect's enrolment action.
+  if wanted='ENGAGED' then perform pg_temp.act('schedule_task',l,jsonb_build_object('task',pg_temp.next_task())); end if;
   r:=pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome','busy','occurred_at',fresh_call+interval '5 days'));
   perform pg_temp.ok((r->>'failed_attempts')::integer=6 and r->'lead'->>'status'=wanted,'sixth call consistent without lifecycle downgrade');
   perform pg_temp.act('close_lost',l,'{"reason":"unreachable"}');
@@ -281,12 +283,13 @@ do $$ declare l uuid; wanted text; channel text; i integer; r jsonb; base_time t
    perform pg_temp.act('record_conversation',l,jsonb_build_object('channel','in_person','note','Initial conversation','occurred_at',base_time-interval '1 day','next_task',pg_temp.next_task()));
    if wanted='QUALIFIED' then perform pg_temp.act('qualify_lead',l,jsonb_build_object('qualification_step','enrollment','next_task',pg_temp.next_task('enrollment_followup'))); end if;
    for i in 0..1 loop perform pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome','no_answer','occurred_at',base_time+i*interval '1 day')); end loop;
+   -- RWR-r5 §4.2 step 3 / OD-18: a qualified prospect keeps its enrolment action as the next one.
    if channel='phone' then
-    perform pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome','spoke_with_contact','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task()));
+    perform pg_temp.act('record_call_outcome',l,jsonb_build_object('outcome','spoke_with_contact','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task(case when wanted='QUALIFIED' then 'enrollment_followup' else 'callback' end)));
    elsif channel='whatsapp' then
-    perform pg_temp.act('record_whatsapp',l,jsonb_build_object('kind','meaningful_whatsapp_conversation','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task()));
+    perform pg_temp.act('record_whatsapp',l,jsonb_build_object('kind','meaningful_whatsapp_conversation','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task(case when wanted='QUALIFIED' then 'enrollment_followup' else 'callback' end)));
    else
-    perform pg_temp.act('record_conversation',l,jsonb_build_object('channel','in_person','note','Parent answered again','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task()));
+    perform pg_temp.act('record_conversation',l,jsonb_build_object('channel','in_person','note','Parent answered again','occurred_at',base_time+interval '2 days','next_task',pg_temp.next_task(case when wanted='QUALIFIED' then 'enrollment_followup' else 'callback' end)));
    end if;
    perform pg_temp.ok((select status=wanted and outreach_cycle=3 and outreach_anchor_date is null and last_attempt_at is null
       from public.crm_leads where id=l),'later conversation interrupts '||wanted||' via '||channel);

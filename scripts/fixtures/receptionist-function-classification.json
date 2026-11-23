@@ -92,11 +92,23 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_change_next_action(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_check_action(p_lead uuid)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "crm_close_lost(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
   "crm_close_not_qualified(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_close_prospect(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -113,8 +125,8 @@
     "receptionist": "locked"
   },
   "crm_create_followup_policy(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
+    "gate": "crm_director",
+    "receptionist": "locked"
   },
   "crm_create_manual_lead(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
@@ -141,6 +153,10 @@
     "receptionist": "open"
   },
   "crm_get_admissions_calendar(p_start date, p_end date, p_kind text, p_include_completed boolean, p_cursor jsonb, p_limit integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_get_centre_hours()": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -196,7 +212,7 @@
     "gate": "crm_director",
     "receptionist": "locked"
   },
-  "crm_get_timeline(p_lead uuid, p_cursor jsonb, p_limit integer)": {
+  "crm_get_timeline(p_lead uuid, p_cursor jsonb, p_limit integer, p_details boolean)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -224,6 +240,10 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_list_data_step_journal(p_step text, p_limit integer, p_offset integer)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
+  },
   "crm_list_external_deliveries(p_limit integer, p_offset integer)": {
     "gate": "crm_director",
     "receptionist": "locked"
@@ -240,6 +260,10 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
+  "crm_list_outside_hours(p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "crm_list_pending_lifecycle_stops(p_limit integer, p_offset integer)": {
     "gate": "crm_director",
     "receptionist": "locked"
@@ -249,6 +273,10 @@
     "receptionist": "open"
   },
   "crm_list_staff(p_limit integer, p_offset integer)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_log_exchange(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -284,6 +312,10 @@
     "gate": "crm_director",
     "receptionist": "locked"
   },
+  "crm_record_appointment_outcome(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
   "crm_record_call_outcome(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
@@ -301,6 +333,10 @@
     "receptionist": "open"
   },
   "crm_reopen_lead(p_request_key uuid, p_data jsonb)": {
+    "gate": "crm_reader",
+    "receptionist": "open"
+  },
+  "crm_reopen_prospect(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -356,6 +392,10 @@
   "crm_search_leads(p_query text, p_status text, p_contact uuid, p_limit integer, p_offset integer)": {
     "gate": "crm_reader",
     "receptionist": "open"
+  },
+  "crm_set_reception_default_owner(p_owner uuid)": {
+    "gate": "crm_director",
+    "receptionist": "locked"
   },
   "crm_stop_lifecycle_sharing(p_request uuid, p_scope text, p_subject uuid, p_connection uuid, p_reason text, p_source_submission uuid, p_decision_reference text, p_pending_contact_review boolean)": {
     "gate": "crm_director",

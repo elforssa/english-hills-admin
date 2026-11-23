@@ -12,8 +12,8 @@ export default function GuideContent() {
 <h1>Guide Accueil</h1>
 <p className="lead">Tout ce qu’il faut savoir pour travailler dans votre espace de la plateforme&nbsp;: suivre les prospects jusqu’à l’inscription, puis gérer au quotidien les apprenants, les paiements, les groupes, les présences et les enseignants.</p>
 <ul className="chips">
-<li>Version 2.3</li>
-<li>5 novembre 2026</li>
+<li>Version 2.5</li>
+<li>22 novembre 2026</li>
 <li>Heures de Casablanca</li>
 <li>Captures sur données fictives</li>
 </ul>
@@ -26,8 +26,8 @@ export default function GuideContent() {
 <h4>Partie 1 · Prospects (CRM)</h4>
 <p>Vous passez ici l’essentiel de votre temps&nbsp;: de la première demande à l’inscription payée.</p>
 <ul className="tight">
-<li><a href="#c1">C1</a> Un nouveau prospect · <a href="#c2">C2</a> J’appelle · <a href="#c3">C3</a> Le parent a répondu</li>
-<li><a href="#c4">C4</a> Test de niveau · <a href="#c5">C5</a> Visite · <a href="#c6">C6</a> Inscrire · <a href="#c7">C7</a> Clôturer</li>
+<li><a href="#c1">C1</a> Un nouveau prospect · <a href="#c2">C2</a> J’appelle · <a href="#c3">C3</a> On a parlé</li>
+<li><a href="#c4">C4</a> Rendez-vous et test · <a href="#c5">C5</a> Changer · <a href="#c6">C6</a> Inscrire · <a href="#c7">C7</a> Clôturer</li>
 </ul>
 </div>
 <div className="card">
@@ -151,13 +151,13 @@ export default function GuideContent() {
 <td><a href="#c1">Scénario C1</a></td>
 </tr>
 <tr>
-<td>Noter le résultat d’un appel</td>
-<td><span className="menu">Tâches</span> ou la fiche du prospect</td>
+<td>Noter un appel ou un échange</td>
+<td><span className="menu">Tâches</span> ou la fiche du prospect › <span className="ui">Pas de réponse</span> ou <span className="ui">Noter un échange</span></td>
 <td><a href="#c2">Scénario C2</a></td>
 </tr>
 <tr>
-<td>Réserver un test de niveau pour un prospect</td>
-<td>Fiche du prospect › <span className="ui">Réserver un test</span></td>
+<td>Réserver un rendez-vous ou un test de niveau pour un prospect</td>
+<td>Fiche du prospect › <span className="ui">Noter un échange</span> › <span className="ui">Rendez-vous au centre</span> (avec test si besoin)</td>
 <td><a href="#c4">Scénario C4</a></td>
 </tr>
 <tr>
@@ -274,7 +274,7 @@ export default function GuideContent() {
 </div>
 <h3 id="reflexes">Les six réflexes</h3>
 <ul className="rules">
-<li><b>Ouvrir un appel n’enregistre rien.</b><p>Après chaque appel, enregistrez le résultat. C’est ce qui fait avancer le prospect et planifie la suite.</p>
+<li><b>Copier un numéro n’enregistre rien.</b><p>Après chaque appel ou conversation, notez-le&nbsp;: <span className="ui">Pas de réponse</span> en un clic, sinon <span className="ui">Noter un échange</span>. C’est ce qui fait avancer le prospect et planifie la suite.</p>
 </li>
 <li><b>Chercher avant de créer.</b><p>Avant d’ajouter un prospect ou un apprenant, cherchez-le. La plateforme ne bloque jamais un doublon sur «&nbsp;Ajouter un apprenant&nbsp;».</p>
 </li>
@@ -284,7 +284,7 @@ export default function GuideContent() {
 </li>
 <li><b>Après un clic sur Enregistrer, ne recommencez pas.</b><p>Si un message dit «&nbsp;Impossible de confirmer l’enregistrement&nbsp;», relancez <span className="ui">Enregistrer</span> sans rien modifier. Pour un paiement, vérifiez d’abord les reçus de l’apprenant.</p>
 </li>
-<li><b>Chaque prospect a toujours une prochaine action.</b><p>Quand vous terminez ou annulez une tâche, la plateforme vous demande d’en choisir une nouvelle. Pour arrêter le suivi, il faut clôturer le prospect.</p>
+<li><b>Chaque prospect a une seule prochaine action.</b><p>Jamais zéro, jamais deux&nbsp;: <span className="ui">Noter un échange</span> ou <span className="ui">Changer</span> la remplacent. Pour arrêter le suivi, il faut clôturer le prospect.</p>
 </li>
 </ul>
 </section>
@@ -294,12 +294,12 @@ export default function GuideContent() {
 <p>Une routine simple pour ne rien laisser passer. Pour la rentrée et la fin de mois, voir <a href="#q14">Q14</a>.</p>
 </header>
 <figure className="fig">
-<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches · Mon travail avec les filtres, les onglets En retard, Aujourd’hui, Demain, À venir, et deux tâches" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin.</figcaption>
+<Image src="/helpdesk/s04-tasks.jpg" width={1700} height={1075} alt="Page Tâches avec le filtre Moi plus non attribué, les onglets En retard, Aujourd’hui, Demain, À venir, En attente, un appel et un rendez-vous au centre" unoptimized tabIndex={0} role="button" /><figcaption>La page <span className="menu">Tâches</span>&nbsp;: votre point de départ chaque matin. Une ligne par prospect, avec sa prochaine action.</figcaption>
 <ol className="legend">
-<li><span className="ui">Responsable de la tâche</span>&nbsp;: «&nbsp;Mes tâches&nbsp;» par défaut. Passez à <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span> pour voir le reste.</li>
-<li>Les échéances&nbsp;: <b>En retard</b>, <b>Aujourd’hui</b>, <b>Demain</b>, <b>À venir</b>, avec le nombre de tâches dans chaque onglet.</li>
-<li><span className="ui">Résultat d’appel</span>&nbsp;: ouvre la fenêtre pour noter ce qui s’est passé.</li>
-<li><span className="ui">À traiter · prospects nécessitant un suivi</span>&nbsp;: les prospects qui risquent d’être oubliés.</li>
+<li><span className="ui">Responsable de la tâche</span>&nbsp;: «&nbsp;Moi + non attribué&nbsp;» par défaut. Passez à <span className="ui">Mes tâches</span>, <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span> pour voir autre chose.</li>
+<li>Les échéances&nbsp;: <b>En retard</b>, <b>Aujourd’hui</b>, <b>Demain</b>, <b>À venir</b> et <b>En attente</b>, avec le nombre de prospects dans chaque onglet.</li>
+<li><span className="ui">Pas de réponse</span>&nbsp;: un seul clic enregistre l’appel sans réponse.</li>
+<li>Un rendez-vous au centre&nbsp;: ses quatre résultats s’activent à l’heure du rendez-vous.</li>
 </ol>
 </figure>
 <div className="cols">
@@ -308,11 +308,11 @@ export default function GuideContent() {
 <ol className="steps">
 <li><p>Ouvrez <span className="menu">Tâches</span>. Traitez d’abord <b>En retard</b>, puis <b>Aujourd’hui</b>.</p>
 </li>
-<li><p>Passez <span className="ui">Responsable de la tâche</span> sur <span className="ui">Non attribué</span>&nbsp;: les prospects ajoutés à la main et les demandes des formulaires y arrivent sans responsable.</p>
+<li><p>Le filtre par défaut, «&nbsp;Moi + non attribué&nbsp;», montre vos prospects et ceux qui n’ont pas encore de responsable (par exemple une demande de formulaire). Vos collègues voient les leurs.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">À traiter · prospects nécessitant un suivi</span> pour repérer les prospects sans prochaine action.</p>
+<li><p>Cliquez sur <span className="ui">À traiter · prospects nécessitant un suivi</span> pour repérer les prospects qui risquent d’être oubliés.</p>
 </li>
-<li><p>Ouvrez <span className="menu">Admissions</span> › <span className="menu">Calendrier</span> en vue <span className="ui">Jour</span>&nbsp;: tests et visites attendus.</p>
+<li><p>Ouvrez <span className="menu">Admissions</span> › <span className="menu">Calendrier</span> en vue <span className="ui">Jour</span>&nbsp;: les rendez-vous au centre du jour, avec ou sans test de niveau.</p>
 </li>
 <li><p>En bas de <span className="menu">Tâches</span>, la section <b>À vérifier</b> apparaît s’il y a des demandes ambiguës à examiner (<a href="#c1">scénario C1</a>).</p>
 </li>
@@ -321,21 +321,21 @@ export default function GuideContent() {
 <div className="card">
 <h4>Pendant la journée</h4>
 <ul className="tight">
-<li>Notez chaque appel juste après l’avoir passé.</li>
+<li>Notez chaque échange juste après&nbsp;: <span className="ui">Pas de réponse</span> en un clic, sinon <span className="ui">Noter un échange</span> (<a href="#c2">C2</a>, <a href="#c3">C3</a>).</li>
+<li>À l’heure d’un rendez-vous, notez s’il est venu (<a href="#c4">C4</a>).</li>
 <li>Une personne se présente&nbsp;: <a href="#q3">scénario Q3</a>.</li>
 <li>Chaque paiement donne un reçu à imprimer.</li>
 <li>Chaque nouvelle inscription payée attend un groupe&nbsp;: <a href="#q9">scénario Q9</a>.</li>
-<li>Un parent demande un test ou une visite&nbsp;: <a href="#c4">scénarios C4</a> et <a href="#c5">C5</a>.</li>
 <li>Une famille veut un reçu, un solde ou un horaire&nbsp;: <a href="#q6">Q6</a>, <a href="#q5">Q5</a>, <a href="#q13">Q13</a>.</li>
 </ul>
 </div>
 <div className="card">
 <h4>Avant de partir</h4>
 <ul className="tight">
-<li><b>En retard</b> est à 0, ou chaque tâche est replanifiée.</li>
+<li><b>En retard</b> est à 0, ou chaque action a été notée ou changée (<a href="#c5">C5</a>).</li>
+<li>Les rendez-vous du jour ont leur résultat.</li>
 <li>Dans <span className="menu">Liste des apprenants</span>, le filtre <span className="ui">Groupe à affecter</span> ne renvoie plus personne.</li>
 <li>Les présences des groupes du jour sont enregistrées.</li>
-<li>Aucun prospect du jour n’est resté sans prochaine action.</li>
 </ul>
 </div>
 </div>
@@ -345,14 +345,17 @@ export default function GuideContent() {
 <h2>Partie 1 · Prospects (CRM)</h2>
 <p>Un prospect est une personne qui n’est pas encore inscrite. Vous la suivez, étape par étape, jusqu’à son inscription payée&nbsp;: C1 à C7 suivent cette vie. Une fois le paiement enregistré, tout continue dans la <a href="#quotidien">partie 2</a>.</p>
 </header>
+<div className="callout info">
+<strong>Une seule prochaine action par prospect</strong><p>Un prospect en cours a toujours <b>une</b> prochaine action, jamais deux&nbsp;: un appel, un rendez-vous au centre, un rappel, une chose à faire par nous, ou l’attente de sa réponse. Elle s’affiche dans l’encadré <b>Prochaine action</b> de sa fiche, sur sa carte, sur sa ligne de <span className="menu">Tâches</span> et dans le calendrier, toujours la même. Deux boutons suffisent pour la faire avancer&nbsp;: <span className="ui">Noter un échange</span> (il s’est passé quelque chose) et <span className="ui">Changer</span> (ce qui était prévu change).</p>
+</div>
 <article className="scn" id="c1">
 <header className="scn-head">
 <p className="kicker">Scénario C1</p>
 <h3>Un nouveau prospect arrive</h3>
-<p className="when">Une demande est reçue par un formulaire, ou une personne appelle ou passe sans formulaire.</p>
+<p className="when">Une demande est reçue par un formulaire, ou une personne appelle, écrit ou passe sans formulaire.</p>
 </header>
 <h4>Cas A&nbsp;: la demande vient d’un formulaire (Meta, site web)</h4>
-<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec une tâche <b>Premier contact</b>. Rien à saisir&nbsp;: appelez-le (<a href="#c2">scénario C2</a>).</p>
+<p>Le prospect apparaît tout seul dans la colonne <span className="st st-new">Nouveau</span>, avec la prochaine action <b>Premier contact</b>. Il est attribué au responsable choisi par la direction pour les nouveaux prospects&nbsp;; s’il n’y en a pas, il arrive «&nbsp;Non attribué&nbsp;» et toute l’équipe le voit dans «&nbsp;Moi + non attribué&nbsp;». Rien à saisir&nbsp;: appelez-le (<a href="#c2">scénario C2</a>).</p>
 <p>Si la plateforme hésite sur l’identité de la personne (même téléphone, plusieurs candidats), la demande n’est pas créée toute seule. Elle attend en bas de la page <span className="menu">Tâches</span>, dans <b>À vérifier</b>&nbsp;:</p>
 <ol className="steps">
 <li><p>Ouvrez la demande et lisez les informations. Vérifiez avec la personne si besoin.</p>
@@ -364,66 +367,65 @@ export default function GuideContent() {
 </ol>
 <h4>Cas B&nbsp;: vous ajoutez le prospect vous-même</h4>
 <ol className="steps">
-<li><p><b>Cherchez d’abord.</b> Dans <span className="menu">Opportunités</span>, tapez le nom du parent, de l’apprenant ou le téléphone dans <span className="ui">Rechercher un prospect</span>.</p>
+<li><p><b>Cherchez d’abord.</b> Dans <span className="menu">Opportunités</span>, tapez le nom du contact, de l’apprenant ou le téléphone dans <span className="ui">Rechercher un prospect</span>.</p>
 </li>
 <li><p>S’il n’existe pas, cliquez sur <span className="ui">Ajouter un prospect</span> et remplissez le formulaire.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">Enregistrer</span>. Un panneau confirme «&nbsp;Nouveau prospect créé&nbsp;» et indique la prochaine action&nbsp;: <b>Premier contact</b>.</p>
+<li><p>Avec l’origine <b>Téléphone</b>, <b>Visite au centre</b> ou <b>WhatsApp</b>, vous êtes en train de parler avec le contact&nbsp;: la section <b>Premier échange</b> demande ce qui a été convenu, avec les mêmes choix que <span className="ui">Noter un échange</span> (<a href="#c3">scénario C3</a>). Pour un rendez-vous ou un rappel convenu, la plateforme propose le premier jour qui a un créneau libre&nbsp;; l’heure, c’est vous qui la choisissez. Si vous n’avez pas encore parlé avec lui, laissez <span className="ui">Pas encore parlé · Premier contact</span>. Pour une <b>Visite au centre</b>, ce choix n’existe pas&nbsp;: le visiteur est devant vous, choisissez ce qui est convenu avec lui.</p>
 </li>
-<li><p>Cliquez sur <span className="ui">Continuer avec le nouveau prospect</span> pour ouvrir sa fiche, puis <b>attribuez-le-vous</b> (voir plus bas).</p>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span>. La fiche du nouveau prospect s’ouvre directement, avec sa prochaine action. Le prospect vous est attribué&nbsp;: vous en êtes la responsable.</p>
 </li>
 </ol>
 <figure className="fig">
-<Image src="/helpdesk/s05-manual.jpg" width={1700} height={1075} alt="Formulaire Ajouter un prospect rempli" unoptimized tabIndex={0} role="button" /><figcaption>Le formulaire <span className="ui">Ajouter un prospect</span>.</figcaption>
+<Image src="/helpdesk/s05-manual.jpg" width={1700} height={1075} alt="Formulaire Ajouter un prospect rempli, origine Visite au centre, avec la section Premier échange" unoptimized tabIndex={0} role="button" /><figcaption>Le formulaire <span className="ui">Ajouter un prospect</span>, pour une personne venue au centre.</figcaption>
 <ol className="legend">
-<li><span className="ui">Nom du contact</span>&nbsp;: le parent ou la personne qui appelle (obligatoire).</li>
+<li><span className="ui">Nom du contact</span>&nbsp;: la personne qui appelle ou qui passe (obligatoire).</li>
 <li><span className="ui">Téléphone</span>&nbsp;: la plateforme le met au format international (+212…). Facultatif, mais sans numéro valide vous ne pourrez pas appeler depuis la fiche.</li>
 <li><span className="ui">Nom de l’apprenant</span> (obligatoire) et <span className="ui">Âge</span> (facultatif).</li>
 <li><span className="ui">Origine</span>&nbsp;: Téléphone, Visite au centre, WhatsApp, Recommandation ou Autre.</li>
+<li><b>Premier échange</b>&nbsp;: ce qui a été convenu, par exemple «&nbsp;En attente du prospect&nbsp;» pour quelqu’un qui reviendra.</li>
 </ol>
 </figure>
+<p>Exemple&nbsp;: une mère passe au centre et «&nbsp;reviendra après la paie&nbsp;». Origine <b>Visite au centre</b>, Premier échange <span className="ui">En attente du prospect</span>, sans date&nbsp;: le prospect passe <span className="st st-eng">En discussion</span>, et la plateforme prévoit une relance dans 5 jours. Aucun «&nbsp;Premier contact&nbsp;» n’est planifié.</p>
 <div className="callout info">
-<strong>Contact existant possible</strong><p>Si le même téléphone ou le même email existe déjà, un encadré jaune le signale après la création. Le prospect est créé quand même et rien n’est fusionné&nbsp;: plusieurs enfants d’une même famille restent des prospects séparés. Cliquez sur <span className="ui">Ouvrir les prospects existants</span> pour comparer.</p>
+<strong>Contact existant possible</strong><p>Si le même téléphone ou le même email existe déjà, la fenêtre reste ouverte après la création et le signale dans un encadré jaune. Le prospect est créé quand même et rien n’est fusionné&nbsp;: plusieurs enfants d’une même famille restent des prospects séparés. Cliquez sur <span className="ui">Ouvrir les prospects existants</span> pour comparer.</p>
 </div>
-<h4>S’attribuer un prospect créé à la main</h4>
-<p>Un prospect ajouté à la main n’a pas de responsable («&nbsp;Non attribué&nbsp;»). Il n’apparaît donc ni dans <span className="ui">Mes prospects</span>, ni dans vos <span className="ui">Mes tâches</span>.</p>
+<h4>Changer le responsable d’un prospect</h4>
 <figure className="fig narrow">
-<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect non attribué avec le menu Autres actions ouvert sur Attribuer un responsable" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li>La fiche indique «&nbsp;Responsable&nbsp;: Non attribué&nbsp;».</li>
-<li><span className="ui">Autres actions</span> › <span className="ui">Attribuer un responsable</span>, puis choisissez-vous.</li>
+<Image src="/helpdesk/s05b-assign.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec le menu Autres actions ouvert sur Attribuer un responsable" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>La fiche indique le responsable du prospect, ou «&nbsp;Non attribué&nbsp;».</li>
+<li><span className="ui">Autres actions</span> › <span className="ui">Attribuer un responsable</span> (le prospect) ou <span className="ui">Réattribuer la prochaine action</span> (seulement l’action).</li>
 </ol>
 </figure>
-<div className="callout warn">
-<strong>Si vous ne le faites pas</strong><p>Le prospect existe et sa tâche aussi, mais vous les trouverez avec <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span>. Si votre équipe se répartit les prospects autrement, suivez la consigne de la direction.</p>
-</div>
+<p>Prenez un prospect «&nbsp;Non attribué&nbsp;» dès que vous vous en occupez&nbsp;: il reste ainsi dans votre vue, et vos collègues savent qu’il est suivi. Si votre équipe se répartit les prospects autrement, suivez la consigne de la direction.</p>
 </article>
 <article className="scn" id="c2">
 <header className="scn-head">
 <p className="kicker">Scénario C2</p>
 <h3>J’appelle un prospect</h3>
-<p className="when">Une tâche <b>Premier contact</b>, <b>Appel de suivi</b> ou <b>Rappel</b> est à faire.</p>
+<p className="when">La prochaine action est <b>Premier contact</b>, <b>Appel de suivi</b> ou <b>Rappel convenu</b>, ou vous appelez pour une autre raison.</p>
 </header>
 <figure className="fig narrow">
-<Image src="/helpdesk/s02-drawer.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec la prochaine action, les actions rapides et les autres actions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche du prospect s’ouvre sur le côté en cliquant sur son nom.</figcaption>
+<Image src="/helpdesk/s02-drawer.jpg" width={1700} height={1075} alt="Fiche d’un prospect avec l’encadré Prochaine action, les résultats d’appel, Noter un échange, Changer et Autres actions" unoptimized tabIndex={0} role="button" /><figcaption>La fiche du prospect s’ouvre sur le côté en cliquant sur son nom.</figcaption>
 <ol className="legend">
-<li><b>Prochaine action</b>&nbsp;: ce que la plateforme attend de vous maintenant.</li>
-<li><span className="ui">Enregistrer un appel</span>&nbsp;: le bouton principal quand la tâche est un appel.</li>
-<li><span className="ui">Appel</span>&nbsp;: à utiliser pour tout appel, même hors tâche.</li>
-<li><span className="ui">Autres actions</span>&nbsp;: qualifier, clôturer, attribuer.</li>
+<li><b>Prochaine action</b>&nbsp;: ce qui est prévu, quand, et qui s’en occupe. «&nbsp;En retard&nbsp;» s’affiche si l’heure est passée.</li>
+<li><b>Appel</b>&nbsp;: <span className="ui">Pas de réponse</span> s’enregistre en un clic&nbsp;; les autres résultats ouvrent <span className="ui">Noter un échange</span>.</li>
+<li><span className="ui">Noter un échange</span> (il s’est passé quelque chose) et <span className="ui">Changer</span> (ce qui était prévu change).</li>
+<li><span className="ui">Autres actions</span>&nbsp;: clôturer, attribuer un responsable, réattribuer l’action.</li>
 </ol>
 </figure>
 <ol className="steps">
-<li><p>Ouvrez la fiche (clic sur le nom dans <span className="menu">Tâches</span> ou dans le tableau), puis cliquez sur <span className="ui">Enregistrer un appel</span> ou <span className="ui">Appel</span>.</p>
+<li><p>Ouvrez la fiche (clic sur le nom dans <span className="menu">Tâches</span>, sur une carte ou dans la liste). Pour voir le numéro, cliquez sur <span className="ui">Noter un échange</span>&nbsp;: <span className="ui">Copier le numéro</span>, puis passez l’appel avec votre téléphone ou votre standard. Sur un téléphone tactile, un lien <span className="ui">Appeler</span> apparaît.</p>
 </li>
-<li><p>La fenêtre affiche le numéro. Cliquez sur <span className="ui">Copier le numéro</span>, puis passez l’appel avec votre téléphone ou votre standard. Sur un téléphone tactile, un lien <span className="ui">Appeler</span> apparaît.</p>
+<li><p><b>Personne ne répond&nbsp;?</b> Cliquez sur <span className="ui">Pas de réponse</span>, dans la fiche ou directement sur la ligne de <span className="menu">Tâches</span>. C’est enregistré tout de suite («&nbsp;Pas de réponse enregistré&nbsp;»)&nbsp;: il n’y a rien d’autre à remplir.</p>
 </li>
-<li><p>Après l’appel, choisissez <span className="ui">Résultat de l’appel</span> (liste ci-dessous), ajoutez une note si utile, puis <span className="ui">Enregistrer</span>.</p>
+<li><p><b>Autre résultat</b> (<span className="ui">Occupé</span>, <span className="ui">Refusé</span>, <span className="ui">Injoignable</span>, <span className="ui">Mauvais numéro</span>, <span className="ui">On a parlé</span>)&nbsp;? Cliquez dessus&nbsp;: <span className="ui">Noter un échange</span> s’ouvre avec ce résultat déjà choisi. Ajoutez une note si utile, puis <span className="ui">Enregistrer</span>.</p>
 </li>
 </ol>
 <div className="callout stop">
-<strong>Ouvrir l’appel n’enregistre rien</strong><p>La fenêtre le rappelle&nbsp;: «&nbsp;Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.&nbsp;» Copier le numéro ou ouvrir WhatsApp non plus. Tant que vous n’avez pas cliqué sur <span className="ui">Enregistrer</span>, la plateforme ne sait pas que vous avez appelé.</p>
+<strong>Copier le numéro n’enregistre rien</strong><p>Copier le numéro ou ouvrir WhatsApp ne dit pas à la plateforme que vous avez appelé. Seul un résultat enregistré compte. Il n’y a pas de bouton «&nbsp;Annuler&nbsp;»&nbsp;: si vous vous êtes trompée, notez un nouvel échange avec le bon résultat. L’historique des appels n’est jamais modifié.</p>
 </div>
-<h4>Que choisir comme résultat de l’appel&nbsp;?</h4>
+<h4>Que se passe-t-il après chaque résultat&nbsp;?</h4>
 <div className="scroll">
 <table>
 <thead>
@@ -434,189 +436,244 @@ export default function GuideContent() {
 </thead>
 <tbody>
 <tr>
-<td><span className="ui">Pas de réponse</span><br /><span className="ui">Occupé</span><br /><span className="ui">Appel refusé</span><br /><span className="ui">Injoignable</span></td>
-<td><p>Appel raté. Il compte dans la série de 5 appels. Un nouveau prospect passe en <span className="st st-cont">Contact en cours</span>. La plateforme crée toute seule la tâche suivante (<b>Appel de suivi</b>) à une heure compatible avec les horaires d’appel. Vous n’avez rien à choisir.</p>
-<p>La fiche affiche «&nbsp;1 appels infructueux enregistrés sur 5&nbsp;».</p>
+<td><span className="ui">Pas de réponse</span><br /><span className="ui">Occupé</span><br /><span className="ui">Refusé</span><br /><span className="ui">Injoignable</span></td>
+<td><p>Appel raté. Il compte dans la série de 5 appels. Un nouveau prospect passe en <span className="st st-cont">Contact en cours</span>. Si la prochaine action était un appel, la plateforme la déplace toute seule au prochain créneau d’appel (<b>Appel de suivi</b>). Un rendez-vous, un rappel convenu ou une autre action ne bouge pas.</p>
+<p>La fiche affiche par exemple «&nbsp;1 appel infructueux sur 5&nbsp;».</p>
 </td>
 </tr>
 <tr>
 <td><span className="ui">Mauvais numéro</span></td>
-<td><p>Ne compte pas dans les 5 appels. La plateforme vous demande de choisir une prochaine action (par exemple retrouver le bon numéro).</p>
+<td><p>Ne compte pas dans les 5 appels. Sous <b>Et ensuite&nbsp;?</b>, gardez l’action actuelle ou choisissez une autre suite&nbsp;: rappel convenu, à faire par nous (retrouver le bon numéro), en attente, ou <span className="ui">Pas pour nous</span> pour clôturer. Le numéro ne se corrige pas encore depuis la fiche&nbsp;: notez le bon numéro dans la note.</p>
 </td>
 </tr>
 <tr>
-<td><span className="ui">Conversation avec le parent</span></td>
-<td><p>La personne a répondu. Un second champ apparaît&nbsp;: <span className="ui">Résultat de l’échange</span>. Voir le <a href="#c3">scénario C3</a>.</p>
+<td><span className="ui">On a parlé</span></td>
+<td><p>La personne a répondu. Indiquez ce qui a été convenu&nbsp;: voir le <a href="#c3">scénario C3</a>.</p>
 </td>
 </tr>
 </tbody>
 </table>
 </div>
 <div className="callout info">
-<strong>Le cycle de 5 appels</strong><p>La règle prévue&nbsp;: deux appels le premier jour, un le deuxième, un le quatrième, un le sixième. La plateforme planifie les appels à votre place et respecte un délai minimum entre deux appels ratés. Si vous voyez «&nbsp;Le délai minimum entre deux appels n’est pas encore écoulé&nbsp;», attendez avant d’enregistrer un autre appel raté.</p>
-<p>Après le 5ᵉ appel raté, la plateforme n’en planifie plus et indique «&nbsp;Séquence automatique terminée&nbsp;». <b>Le prospect n’est pas clôturé</b>&nbsp;: à vous de décider. Vous pouvez <span className="ui">Prévoir un autre appel</span> ou <span className="ui">Clôturer&nbsp;: injoignable</span> (<a href="#c7">scénario C7</a>).</p>
+<strong>Le délai entre deux appels ratés</strong><p>Après un appel raté, la plateforme attend un délai minimum avant de compter le suivant. La fiche l’indique au-dessus des boutons&nbsp;: «&nbsp;Prochain essai possible à 14:20&nbsp;». Pendant ce délai, <span className="ui">Pas de réponse</span> ouvre la fenêtre au lieu d’enregistrer&nbsp;: si vous avez vraiment rappelé, cochez <span className="ui">Tentative réelle (hors délai)</span>, puis <span className="ui">Enregistrer</span>.</p>
+</div>
+<div className="callout info">
+<strong>Le cycle de 5 appels</strong><p>La règle&nbsp;: deux appels le premier jour, un le deuxième, un le quatrième, un le sixième. La plateforme planifie ces appels à votre place, aux heures d’appel du centre.</p>
+<p>Après le 5ᵉ appel raté, la plateforme n’en planifie plus&nbsp;: la fiche affiche «&nbsp;5 appels infructueux · séquence automatique terminée&nbsp;», la prochaine action devient <b>En attente du prospect</b>, sans date de relance, et le bouton <span className="ui">Clôturer&nbsp;: injoignable</span> apparaît. <b>Le prospect n’est pas clôturé</b>&nbsp;: à vous de décider. Vous pouvez prévoir un autre appel avec <span className="ui">Changer</span> (<a href="#c5">C5</a>) ou clôturer (<a href="#c7">C7</a>).</p>
 </div>
 <h4>Appeler depuis le tableau ou la liste</h4>
-<p>Dans <span className="menu">Opportunités</span>, déposer une carte sur une autre colonne n’enregistre rien&nbsp;: cela ouvre seulement la bonne fenêtre. L’étape change uniquement quand vous enregistrez un résultat, et c’est la plateforme qui la calcule.</p>
+<p>Dans <span className="menu">Opportunités</span>, chaque carte montre la prochaine action. Déposer une carte sur une autre colonne n’enregistre rien&nbsp;: cela ouvre seulement la bonne fenêtre. L’étape change uniquement quand vous enregistrez un échange, et c’est la plateforme qui la calcule.</p>
 </article>
 <article className="scn" id="c3">
 <header className="scn-head">
 <p className="kicker">Scénario C3</p>
-<h3>Le parent a répondu&nbsp;: le résultat de l’échange</h3>
+<h3>On a parlé&nbsp;: noter un échange</h3>
 <p className="when">Vous avez eu une vraie conversation, par téléphone, par WhatsApp ou au centre.</p>
 </header>
 <figure className="fig narrow">
-<Image src="/helpdesk/s03-call.jpg" width={1700} height={1075} alt="Fenêtre Enregistrer le résultat de l’appel avec Conversation avec le parent et Intéressé, a besoin de réfléchir" unoptimized tabIndex={0} role="button" /><ol className="legend">
-<li>Rappel&nbsp;: ouvrir l’appel ne suffit pas.</li>
-<li><span className="ui">Résultat de l’appel</span>&nbsp;: <span className="ui">Conversation avec le parent</span>.</li>
-<li><span className="ui">Résultat de l’échange</span>&nbsp;: ce que le parent a dit. La plateforme affiche «&nbsp;Étape après enregistrement&nbsp;» et calcule l’étape elle-même.</li>
+<Image src="/helpdesk/s03-call.jpg" width={1700} height={1075} alt="Fenêtre Noter un échange : Téléphone, On a parlé, Rendez-vous au centre avec date, heure et test de niveau" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li>Le canal&nbsp;: <span className="ui">Téléphone</span>, <span className="ui">WhatsApp</span>, <span className="ui">Au centre</span> ou <span className="ui">Autre</span>.</li>
+<li><span className="ui">Résultat</span>&nbsp;: <span className="ui">On a parlé</span> (sur WhatsApp&nbsp;: <span className="ui">On a échangé</span>).</li>
+<li><b>Ce qui a été convenu</b>&nbsp;: la prochaine action, une seule.</li>
+<li><span className="ui">Heure</span>&nbsp;: seuls les créneaux des horaires du centre sont proposés.</li>
 <li><span className="ui">Enregistrer</span>&nbsp;: seul ce clic sauvegarde.</li>
 </ol>
 </figure>
-<p>Pour une conversation sur WhatsApp ou au centre, utilisez <span className="ui">WhatsApp</span> › <span className="ui">Conversation réelle avec le parent</span>, ou <span className="ui">Autres actions</span> › <span className="ui">Conversation au centre / autre canal</span>. Les choix sont les mêmes.</p>
+<ol className="steps">
+<li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Noter un échange</span>. La fenêtre rappelle l’action actuelle.</p>
+</li>
+<li><p>Choisissez le canal, puis le résultat <span className="ui">On a parlé</span>.</p>
+</li>
+<li><p>Sous <b>Ce qui a été convenu</b>, choisissez la suite (tableau ci-dessous) et remplissez ce qu’elle demande. Une note est facultative.</p>
+</li>
+<li><p>Cliquez sur <span className="ui">Enregistrer</span>. L’étape est calculée par la plateforme.</p>
+</li>
+</ol>
 <div className="scroll">
 <table>
 <thead>
 <tr>
-<th>Résultat de l’échange</th>
+<th>Ce qui a été convenu</th>
 <th>Étape</th>
-<th>Prochaine action créée</th>
+<th>Prochaine action</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><span className="ui">Souhaite passer un test de niveau</span></td>
+<td><span className="ui">Rendez-vous au centre</span></td>
 <td><span className="st st-qual">Qualifié</span></td>
-<td><b>Préparer un test de niveau</b> (rappel interne). <b>Cela ne réserve aucun test</b>&nbsp;: voir <a href="#c4">scénario C4</a>.</td>
+<td>Date et heure convenues, dans les horaires d’ouverture. Cochez <span className="ui">Avec test de niveau</span> si le test a lieu pendant le rendez-vous&nbsp;: il est réservé en même temps. <a href="#c4">Scénario C4</a>.</td>
 </tr>
 <tr>
-<td><span className="ui">Souhaite visiter le centre</span></td>
+<td><span className="ui">Rappel convenu</span></td>
+<td><span className="st st-eng">En discussion</span></td>
+<td>Une heure exacte promise au contact, dans les horaires d’appel. Elle ne sera jamais déplacée par la plateforme.</td>
+</tr>
+<tr>
+<td><span className="ui">À faire par nous</span></td>
+<td><span className="st st-eng">En discussion</span></td>
+<td>Envoyer le prix, confirmer un groupe… Choisissez <span className="ui">Quand</span>&nbsp;: demain, dans 2 jours, dans une semaine ou une date.</td>
+</tr>
+<tr>
+<td><span className="ui">En attente du prospect</span></td>
+<td><span className="st st-eng">En discussion</span></td>
+<td>Le contact doit revenir vers nous («&nbsp;je réfléchis&nbsp;», «&nbsp;après la paie&nbsp;»). Relance dans 5 jours par défaut, ou à la date choisie, ou <span className="ui">Sans date de relance</span>.</td>
+</tr>
+<tr>
+<td><span className="ui">Inscrire maintenant</span></td>
 <td><span className="st st-qual">Qualifié</span></td>
-<td><b>Visite au centre</b>, avec date et heure précises (rendez-vous convenu). <a href="#c5">Scénario C5</a>.</td>
-</tr>
-<tr>
-<td><span className="ui">Prêt à avancer vers l’inscription</span></td>
-<td><span className="st st-qual">Qualifié</span></td>
-<td>Suivi «&nbsp;Finaliser l’inscription&nbsp;»&nbsp;: rendez-vous convenu (par défaut) ou rappel interne.</td>
-</tr>
-<tr>
-<td><span className="ui">Intéressé, a besoin de réfléchir</span></td>
-<td><span className="st st-eng">En discussion</span> (un prospect déjà <span className="st st-qual">Qualifié</span> le reste)</td>
-<td><b>Rappel · En réflexion</b> (ou Suivi WhatsApp). Rappel interne par défaut, avec une échéance à choisir.</td>
-</tr>
-<tr>
-<td><span className="ui">Souhaite être rappelé</span></td>
-<td><span className="st st-eng">En discussion</span> (ou inchangé si déjà qualifié)</td>
-<td><b>Rappel</b>, par défaut avec une heure convenue avec le parent.</td>
+<td><b>Finaliser l’inscription</b>, demain. <a href="#c6">Scénario C6</a>.</td>
 </tr>
 <tr>
 <td><span className="ui">Pas intéressé</span></td>
 <td><span className="st st-lost">Perdu</span></td>
-<td>Aucune. Le prospect est clôturé tout de suite et ses tâches sont annulées.</td>
+<td>Aucune. Choisissez un <span className="ui">Motif</span>&nbsp;: le prospect est clôturé tout de suite (<a href="#c7">C7</a>).</td>
 </tr>
 <tr>
-<td><span className="ui">Projet non adapté</span></td>
+<td><span className="ui">Pas pour nous</span></td>
 <td><span className="st st-nq">Non qualifié</span></td>
-<td>Aucune. Il faut choisir un <span className="ui">Motif</span>&nbsp;: âge non adapté, programme non adapté, invalide ou indésirable, doublon, hors périmètre, autre.</td>
+<td>Aucune. Motif&nbsp;: âge ou programme non adapté, invalide ou indésirable, doublon, hors périmètre, autre.</td>
 </tr>
 <tr>
-<td><span className="ui">Autre prochaine étape</span></td>
-<td><span className="st st-qual">Qualifié</span></td>
-<td>L’action de votre choix. Une note est obligatoire.</td>
+<td><span className="ui">Garder l’action actuelle</span></td>
+<td><span className="st st-eng">En discussion</span></td>
+<td>Rien ne change&nbsp;: l’échange est seulement noté dans l’historique.</td>
 </tr>
 </tbody>
 </table>
 </div>
 <ul className="tight">
-<li>Quand le prospect est déjà <span className="st st-qual">Qualifié</span>, les quatre résultats qui qualifient (test, visite, inscription, autre) ne sont plus proposés.</li>
-<li>Un résultat qui fixe une suite (test, visite, inscription, réflexion, rappel) remplace le rappel ou le suivi WhatsApp déjà prévu, pour ne pas avoir deux relances en double. Les visites, les préparations de test et les suivis d’inscription déjà prévus restent.</li>
+<li>Un prospect déjà <span className="st st-qual">Qualifié</span> le reste&nbsp;: une conversation ne le fait jamais reculer.</li>
+<li>Quand une action est déjà prévue, la fenêtre écrit ce que votre choix va faire&nbsp;: «&nbsp;Remplace&nbsp;: …&nbsp;» ou «&nbsp;Annule&nbsp;: …&nbsp;». Pour remplacer un rendez-vous, cochez <span className="ui">Remplace le rendez-vous</span>. Pour abandonner «&nbsp;Finaliser l’inscription&nbsp;», la fenêtre demande pourquoi.</li>
 <li>Une vraie conversation remet à zéro le compteur d’appels ratés.</li>
 </ul>
 <div className="callout info">
-<strong>Rendez-vous convenu ou Rappel interne&nbsp;?</strong><p><b>Rendez-vous convenu</b>&nbsp;: vous avez fixé une heure avec le parent (il l’attend). <b>Rappel interne</b>&nbsp;: c’est un pense-bête pour l’équipe, aucune heure n’a été promise.</p>
-<p>Un rappel convenu garde son heure exacte, qui doit tomber dans les horaires d’appel fixés par la direction. Sinon l’enregistrement est refusé avec «&nbsp;Cette heure convenue est hors des horaires d’appel&nbsp;». Les horaires ne sont pas affichés à l’écran&nbsp;: demandez-les à la direction. Un rappel interne, lui, est décalé automatiquement au prochain créneau.</p>
+<strong>Les heures proposées</strong><p>Les listes <span className="ui">Heure</span> ne proposent que les créneaux du centre&nbsp;: horaires d’appel pour un rappel, horaires d’ouverture pour un rendez-vous, sans la pause de midi ni les jours de fermeture. Changer la date garde l’heure choisie si ce créneau existe le nouveau jour. «&nbsp;Aucun créneau ce jour-là&nbsp;» signifie que le centre est fermé ou que la journée est passée. Les horaires sont fixés par la direction. Quand ils changent, les heures déjà convenues sont gardées&nbsp;; celles qui sortent des nouveaux horaires sont listées sur <span className="menu">Tâches</span> («&nbsp;Hors des nouveaux horaires&nbsp;»).</p>
 </div>
 <div className="callout warn">
-<strong>«&nbsp;En réflexion&nbsp;» n’est pas une étape</strong><p>C’est une précision sur le rappel. Un prospect qui a besoin de temps garde son étape actuelle.</p>
+<strong>Rappel convenu ou rappel pour l’équipe&nbsp;?</strong><p><b>Rappel convenu</b>&nbsp;: vous avez promis une heure au contact&nbsp;; il attend votre appel à cette heure. <b>Rappel pour l’équipe</b> (dans <span className="ui">Changer</span>)&nbsp;: un pense-bête, aucune heure n’a été promise&nbsp;; la plateforme le place au prochain créneau.</p>
 </div>
 <div className="callout info">
-<strong>WhatsApp «&nbsp;Message envoyé&nbsp;»</strong><p>Dans <span className="ui">WhatsApp</span>, le choix <span className="ui">Message envoyé</span> ajoute seulement une ligne à l’historique. Il ne change ni l’étape ni la prochaine action, et il ne termine pas une tâche «&nbsp;Suivi WhatsApp&nbsp;».</p>
+<strong>WhatsApp «&nbsp;Message envoyé&nbsp;» et «&nbsp;Simple note&nbsp;»</strong><p>Sur le canal <span className="ui">WhatsApp</span>, <span className="ui">Message envoyé</span> ajoute seulement une ligne à l’historique&nbsp;: il ne change ni l’étape ni la prochaine action. Sur le canal <span className="ui">Autre</span>, <span className="ui">Simple note</span> fait de même pour une information utile à l’équipe.</p>
+</div>
+<div className="callout warn">
+<strong>«&nbsp;Ce prospect a été modifié, rechargez.&nbsp;»</strong><p>Une collègue a enregistré quelque chose sur ce prospect pendant que vous remplissiez la fenêtre. Votre saisie est gardée et <span className="ui">Enregistrer</span> est désactivé. Cliquez sur <span className="ui">Recharger</span>&nbsp;: la fenêtre affiche la nouvelle action actuelle. Vérifiez que votre échange a toujours du sens, puis enregistrez.</p>
 </div>
 </article>
 <article className="scn" id="c4">
 <header className="scn-head">
 <p className="kicker">Scénario C4</p>
-<h3>Réserver un test de niveau</h3>
-<p className="when">Un prospect <span className="st st-qual">Qualifié</span> veut passer un test.</p>
+<h3>Rendez-vous au centre et test de niveau</h3>
+<p className="when">Le contact veut venir au centre, pour une visite, un test de niveau, ou les deux.</p>
 </header>
 <ol className="steps">
-<li><p>Ouvrez la fiche. Si la prochaine action est <b>Préparer un test de niveau</b>, le bouton <span className="ui">Réserver un test</span> est dans cet encadré. Sinon il est dans la section <b>Test de niveau</b>, plus bas.</p>
+<li><p><span className="ui">Noter un échange</span> › <span className="ui">On a parlé</span> › <span className="ui">Rendez-vous au centre</span>. Choisissez la date et l’heure convenues. Cochez <span className="ui">Avec test de niveau</span> si l’apprenant passe le test pendant ce rendez-vous.</p>
 </li>
-<li><p>Remplissez la fenêtre, puis <span className="ui">Enregistrer</span>. Un message confirme «&nbsp;Test créé&nbsp;».</p>
+<li><p>Le prospect passe <span className="st st-qual">Qualifié</span>. Sa prochaine action devient par exemple «&nbsp;Rendez-vous au centre 23/11 16:00 (avec test)&nbsp;». Le test est créé «&nbsp;Planifié&nbsp;» à la même heure. Le rendez-vous apparaît une seule fois dans <span className="menu">Tâches</span> et dans <span className="menu">Calendrier</span>.</p>
 </li>
-<li><p>Le prospect affiche «&nbsp;Test de niveau prévu&nbsp;», et la tâche de préparation est fermée automatiquement. Le test apparaît dans <span className="menu">Admissions</span> › <span className="menu">Calendrier</span>.</p>
+<li><p>À l’heure du rendez-vous, notez son résultat avec l’un des quatre boutons, depuis la fiche, la ligne de <span className="menu">Tâches</span> ou le calendrier. Avant l’heure, les boutons sont grisés («&nbsp;à partir de 16:00&nbsp;»).</p>
 </li>
 </ol>
+<div className="scroll">
+<table>
+<thead>
+<tr>
+<th>Résultat du rendez-vous</th>
+<th>Ce qui se passe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span className="ui">Venu · s’inscrit</span></td>
+<td>Prochaine action&nbsp;: <b>Finaliser l’inscription</b>, demain (<a href="#c6">C6</a>). Le test passe «&nbsp;Passé&nbsp;».</td>
+</tr>
+<tr>
+<td><span className="ui">Venu · reviendra</span></td>
+<td>Prochaine action&nbsp;: <b>En attente du prospect</b>, relance dans 5 jours. Le test passe «&nbsp;Passé&nbsp;».</td>
+</tr>
+<tr>
+<td><span className="ui">Venu · pas intéressé</span></td>
+<td>Choisissez le <span className="ui">Motif</span>, puis <span className="ui">Clôturer</span>&nbsp;: le prospect est clôturé <span className="st st-lost">Perdu</span> avec ce motif. Le test passe «&nbsp;Passé&nbsp;».</td>
+</tr>
+<tr>
+<td><span className="ui">Absent</span></td>
+<td>La plateforme propose un rappel pour l’équipe, demain&nbsp;: cliquez sur <span className="ui">Confirmer le rappel</span>. Le test passe «&nbsp;Absent&nbsp;».</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Pour <b>déplacer</b> le rendez-vous&nbsp;: <span className="ui">Changer</span>. La fenêtre s’ouvre sur le rendez-vous actuel&nbsp;: changez la date (l’heure est gardée si le créneau existe), cochez <span className="ui">Remplace le rendez-vous</span>, puis <span className="ui">Enregistrer</span>. Pour l’<b>annuler</b>, choisissez une autre suite dans <span className="ui">Changer</span> (par exemple <span className="ui">En attente du prospect</span>)&nbsp;: le rendez-vous et son test sont annulés (le test passe «&nbsp;Annulé&nbsp;»). Voir <a href="#c5">C5</a>.</p>
+<h4>Réserver un test depuis la fiche</h4>
+<p>Pour un prospect «&nbsp;Qualifié&nbsp;» sans test prévu, vous pouvez aussi réserver depuis la section <b>Test de niveau</b> de la fiche, bouton <span className="ui">Réserver un test</span>. Remplissez la fenêtre, puis <span className="ui">Enregistrer</span>&nbsp;: le test et son rendez-vous deviennent la prochaine action du prospect.</p>
 <figure className="fig narrow">
 <Image src="/helpdesk/s06-booking.jpg" width={1700} height={1075} alt="Fenêtre de réservation d’un test de niveau" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Date</span>&nbsp;: doit être dans le futur.</li>
-<li><span className="ui">Heure</span>&nbsp;: obligatoire pour un prospect.</li>
+<li><span className="ui">Heure</span>&nbsp;: obligatoire pour un prospect, dans les horaires d’ouverture.</li>
 <li><span className="ui">Examinateur</span>&nbsp;: un simple nom. La plateforme ne vérifie aucune disponibilité.</li>
 <li><span className="ui">Enregistrer</span>.</li>
 </ol>
 </figure>
 <h4>Le calendrier</h4>
 <figure className="fig">
-<Image src="/helpdesk/s07-calendar.jpg" width={1700} height={1075} alt="Calendrier admissions sur une semaine avec des tests de niveau et une visite au centre" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<Image src="/helpdesk/s07-calendar.jpg" width={1700} height={1075} alt="Calendrier admissions sur une semaine avec des rendez-vous au centre, avec ou sans test de niveau, et leurs boutons de résultat" unoptimized tabIndex={0} role="button" /><ol className="legend">
 <li><span className="ui">Période</span>&nbsp;: <b>Jour</b> ou <b>Semaine</b>. La semaine compte 7 jours à partir de la date de début, pas du lundi.</li>
-<li><span className="ui">Rendez-vous</span>&nbsp;: tests et visites, tests seulement, ou visites seulement.</li>
-<li><span className="ui">Inclure les tests terminés</span>&nbsp;: sans cette case, seuls les tests «&nbsp;Planifié&nbsp;» sont affichés.</li>
+<li><span className="ui">Rendez-vous</span>&nbsp;: tous, avec test de niveau, ou rendez-vous au centre.</li>
+<li><span className="ui">Inclure terminés</span>&nbsp;: sans cette case, seuls les rendez-vous ouverts et les tests «&nbsp;Planifié&nbsp;» sont affichés.</li>
+<li>Le résultat du rendez-vous se note aussi depuis le calendrier.</li>
 </ol>
 </figure>
-<p>Cliquer sur une ligne liée à un prospect ouvre sa fiche. Une ligne sans prospect (test créé à la main) ouvre le formulaire du test.</p>
+<p>Cliquer sur le nom d’un prospect ouvre sa fiche. Une ligne sans prospect (test créé à la main) ouvre le formulaire du test.</p>
 <h4>Après le test</h4>
 <ol className="steps">
 <li><p>Ouvrez la fiche du prospect, section <b>Test de niveau</b>, puis <span className="ui">Voir</span>.</p>
 </li>
-<li><p>Changez <span className="ui">Statut</span>&nbsp;: <b>Passé</b> quand le test a eu lieu, puis <b>Résultat saisi</b> avec le <span className="ui">Score</span> et le <span className="ui">Niveau recommandé</span> (obligatoire).</p>
+<li><p>Passez le <span className="ui">Statut</span> à <b>Résultat saisi</b> avec le <span className="ui">Score</span> et le <span className="ui">Niveau recommandé</span> (obligatoire).</p>
 </li>
-<li><p>La plateforme crée la tâche <b>Rappeler le parent · Résultat disponible</b>. Appelez le parent&nbsp;: aucun email de résultat n’est envoyé depuis votre espace.</p>
+<li><p>La prochaine action devient <b>Proposer l’inscription</b>, et la fiche affiche le niveau recommandé. Appelez le contact&nbsp;: aucun email de résultat n’est envoyé depuis votre espace.</p>
 </li>
 </ol>
 <div className="callout warn">
 <strong>À retenir</strong><ul className="tight">
-<li><b>Un test ne peut pas être annulé.</b> Si la date change, utilisez <span className="ui">Reprogrammer</span>. Ne marquez pas «&nbsp;Passé&nbsp;» pour le faire disparaître.</li>
+<li>Ne marquez pas un test «&nbsp;Passé&nbsp;» pour le faire disparaître&nbsp;: déplacez ou annulez le rendez-vous avec <span className="ui">Changer</span>.</li>
 <li>Un test terminé n’inscrit pas le prospect&nbsp;: il reste <span className="st st-qual">Qualifié</span>.</li>
-<li><span className="ui">Planifier un test</span> sur la page <span className="menu">Tests de niveau</span> crée un test <b>sans lien avec un prospect</b>&nbsp;: aucune tâche n’est fermée et l’historique du prospect n’est pas mis à jour. Pour un prospect, réservez toujours depuis sa fiche.</li>
+<li><span className="ui">Planifier un test</span> sur la page <span className="menu">Tests de niveau</span> crée un test <b>sans lien avec un prospect</b>&nbsp;: la prochaine action du prospect n’est pas mise à jour. Pour un prospect, passez toujours par sa fiche.</li>
 </ul>
 </div>
 </article>
 <article className="scn" id="c5">
 <header className="scn-head">
 <p className="kicker">Scénario C5</p>
-<h3>Organiser une visite au centre</h3>
-<p className="when">Le parent veut venir voir le centre.</p>
+<h3>Changer la prochaine action</h3>
+<p className="when">Ce qui était prévu change sans nouvel échange&nbsp;: un rendez-vous à déplacer, un rappel à reporter, une action devenue inutile.</p>
 </header>
+<figure className="fig narrow">
+<Image src="/helpdesk/s03b-changer.jpg" width={1700} height={1075} alt="Fenêtre Changer la prochaine action sur un rendez-vous au centre, avec Remplace et la case Remplace le rendez-vous" unoptimized tabIndex={0} role="button" /><ol className="legend">
+<li><b>Prochaine action</b>&nbsp;: la nouvelle suite. La fenêtre s’ouvre sur l’action actuelle.</li>
+<li><span className="ui">Date</span> et <span className="ui">Heure</span>&nbsp;: pour un rendez-vous ou un rappel convenu.</li>
+<li>«&nbsp;Remplace&nbsp;: …&nbsp;»&nbsp;: ce qui sera remplacé. Un rendez-vous demande la case <span className="ui">Remplace le rendez-vous</span>.</li>
+<li><span className="ui">Garder l’action actuelle</span>&nbsp;: ferme sans rien changer.</li>
+</ol>
+</figure>
 <ol className="steps">
-<li><p>Au téléphone, choisissez <span className="ui">Conversation avec le parent</span> puis <span className="ui">Souhaite visiter le centre</span>.</p>
+<li><p>Dans la fiche ou sur la ligne de <span className="menu">Tâches</span>, cliquez sur <span className="ui">Changer</span>.</p>
 </li>
-<li><p>Saisissez la <span className="ui">Date et heure · Casablanca</span> convenue avec le parent. La visite est toujours un rendez-vous convenu.</p>
+<li><p>Choisissez la nouvelle prochaine action&nbsp;: <span className="ui">Rendez-vous au centre</span> (pour un prospect <span className="st st-qual">Qualifié</span>, ou pour déplacer un rendez-vous&nbsp;; sinon, notez l’échange avec <span className="ui">On a parlé</span>, qui qualifie le prospect), <span className="ui">Rappel convenu</span>, <span className="ui">À faire par nous</span>, <span className="ui">Rappel pour l’équipe</span>, <span className="ui">En attente du prospect</span>, ou une clôture (<span className="ui">Pas intéressé</span>, <span className="ui">Pas pour nous</span>).</p>
 </li>
-<li><p>Le prospect passe <span className="st st-qual">Qualifié</span>. La visite apparaît dans <span className="menu">Tâches</span> et dans <span className="menu">Calendrier</span>.</p>
+<li><p>Pour simplement déplacer un rendez-vous ou un rappel convenu, gardez le même choix et changez la date&nbsp;: l’heure convenue est gardée.</p>
 </li>
-<li><p>Après la visite, cliquez sur <span className="ui">Marquer comme fait</span>. Indiquez le <span className="ui">Résultat de l’action</span> (200 caractères au maximum) et <b>choisissez la prochaine action</b>.</p>
+<li><p>Lisez «&nbsp;Remplace&nbsp;: …&nbsp;», cochez ce qui est demandé, puis <span className="ui">Enregistrer</span> («&nbsp;Prochaine action enregistrée&nbsp;»).</p>
 </li>
 </ol>
 <div className="callout warn">
-<strong>«&nbsp;Marquer comme fait&nbsp;» ne fait que fermer la tâche</strong><p>Cela ne réserve pas de test, ne commence pas d’inscription et ne change pas l’étape. Pour avancer, utilisez les boutons de la fiche&nbsp;: <span className="ui">Réserver un test</span> ou <span className="ui">Commencer l&apos;inscription</span>.</p>
+<strong>Jamais deux actions</strong><p>Le nouveau choix <b>remplace</b> l’ancien&nbsp;: un prospect en cours n’a jamais deux actions à la fois. Un rendez-vous remplacé est annulé avec son test. Pour arrêter le suivi, il faut clôturer le prospect (<a href="#c7">C7</a>).</p>
 </div>
-<p>Pour décaler une visite&nbsp;: <span className="ui">Replanifier</span>, nouvelle date et heure. Pour la supprimer&nbsp;: <span className="ui">Annuler l’action</span> dans la fiche (un motif et une nouvelle prochaine action sont demandés). Le bouton <span className="ui">Annuler</span> n’existe pas sur les lignes de la page Tâches.</p>
+<p>Pour confier seulement l’action à une collègue, sans changer le responsable du prospect&nbsp;: <span className="ui">Autres actions</span> › <span className="ui">Réattribuer la prochaine action</span>.</p>
 </article>
 <article className="scn" id="c6">
 <header className="scn-head">
 <p className="kicker">Scénario C6</p>
 <h3>Inscrire un prospect&nbsp;: inscription et paiement en une fois</h3>
-<p className="when">Le prospect est <span className="st st-qual">Qualifié</span> et veut s’inscrire. L’inscription et le paiement se font ensemble, dans la même fenêtre&nbsp;: une inscription n’existe qu’une fois payée.</p>
+<p className="when">Le prospect est <span className="st st-qual">Qualifié</span> et veut s’inscrire (prochaine action <b>Finaliser l’inscription</b> ou <b>Proposer l’inscription</b>). L’inscription et le paiement se font ensemble, dans la même fenêtre&nbsp;: une inscription n’existe qu’une fois payée.</p>
 </header>
 <ol className="flow">
 <li><b>Prospect Qualifié</b><small>le projet est qualifié</small></li>
@@ -633,7 +690,7 @@ export default function GuideContent() {
 </li>
 <li><p><b>Étape 3/3, Paiement.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle avec son motif, le <span className="ui">Montant payé aujourd’hui</span>, la date et le mode de paiement (les règles sont dans le <a href="#regles-paiement">scénario Q3</a>), puis <span className="ui">Inscrire et encaisser</span>.</p>
 </li>
-<li><p>La fenêtre affiche «&nbsp;Inscription confirmée · reçu&nbsp;…&nbsp;» (avec le numéro du reçu), puis la ligne «&nbsp;Groupe&nbsp;: …&nbsp;» (avec le nom du groupe choisi) ou «&nbsp;Groupe à affecter&nbsp;» (sans groupe), et le bouton <span className="ui">Ouvrir le reçu</span>. Avec une remise de 100&nbsp;%, le titre est «&nbsp;Inscription confirmée sans paiement (remise 100&nbsp;%)&nbsp;» et aucun reçu n’est émis. Le prospect passe aussitôt en <span className="st st-conv">Inscription confirmée</span> et ses tâches sont fermées. Sans groupe, terminez plus tard par le <a href="#q9">scénario Q9</a>.</p>
+<li><p>La fenêtre affiche «&nbsp;Inscription confirmée · reçu&nbsp;…&nbsp;» (avec le numéro du reçu), puis la ligne «&nbsp;Groupe&nbsp;: …&nbsp;» (avec le nom du groupe choisi) ou «&nbsp;Groupe à affecter&nbsp;» (sans groupe), et le bouton <span className="ui">Ouvrir le reçu</span>. Avec une remise de 100&nbsp;%, le titre est «&nbsp;Inscription confirmée sans paiement (remise 100&nbsp;%)&nbsp;» et aucun reçu n’est émis. Le prospect passe aussitôt en <span className="st st-conv">Inscription confirmée</span> et sa prochaine action est terminée. Sans groupe, terminez plus tard par le <a href="#q9">scénario Q9</a>.</p>
 </li>
 </ol>
 <figure className="fig narrow">
@@ -661,7 +718,7 @@ export default function GuideContent() {
 <p className="when">Le suivi est terminé sans inscription, ou un prospect clôturé redevient actif.</p>
 </header>
 <ol className="steps">
-<li><p>Dans la fiche, cliquez sur <span className="ui">Autres actions</span>, puis <span className="ui">Clôturer comme perdu</span> ou <span className="ui">Clôturer comme non qualifié</span>.</p>
+<li><p>Dans la fiche, cliquez sur <span className="ui">Autres actions</span>, puis <span className="ui">Clôturer comme perdu</span> ou <span className="ui">Clôturer comme non qualifié</span>. Après une conversation, vous pouvez aussi choisir <span className="ui">Pas intéressé</span> ou <span className="ui">Pas pour nous</span> directement dans <span className="ui">Noter un échange</span> ou <span className="ui">Changer</span>.</p>
 </li>
 <li><p>Choisissez le <span className="ui">Motif</span>, ajoutez une note (obligatoire si le motif est «&nbsp;Autre&nbsp;»), puis <span className="ui">Enregistrer</span>.</p>
 </li>
@@ -677,7 +734,7 @@ export default function GuideContent() {
 <tbody>
 <tr>
 <td><span className="st st-lost">Perdu</span></td>
-<td>Injoignable, Pas intéressé, Prix, Horaires, Localisation, Autre centre choisi, Projet reporté, Autre.<br />«&nbsp;Injoignable&nbsp;» n’est possible qu’après 5 appels ratés.</td>
+<td>Injoignable, Pas intéressé, Prix, Horaires, Localisation, Autre centre choisi, Projet reporté, Autre.<br />«&nbsp;Injoignable&nbsp;» n’est possible qu’après 5 appels ratés&nbsp;: la fiche affiche alors <span className="ui">Clôturer&nbsp;: injoignable</span>.</td>
 </tr>
 <tr>
 <td><span className="st st-nq">Non qualifié</span></td>
@@ -687,9 +744,10 @@ export default function GuideContent() {
 </table>
 </div>
 <ul className="tight">
-<li>Une clôture annule <b>toutes</b> les tâches ouvertes du prospect.</li>
+<li>Une clôture annule la prochaine action du prospect et son test encore «&nbsp;Planifié&nbsp;» (le test passe «&nbsp;Annulé&nbsp;»). Un prospect clôturé n’a plus aucune action.</li>
+<li>Un test gardé au début d’une inscription reste attaché à <b>Finaliser l’inscription</b>. Remplacer cette action par un appel ou un message (<span className="ui">Changer</span>) annule le test&nbsp;; la déplacer à une autre date le garde.</li>
 <li>Les prospects clôturés ne sont plus dans le tableau. Ouvrez la vue <span className="ui">Clôturés</span> ou le lien «&nbsp;0 clôturés&nbsp;» en haut de page (affichage en liste).</li>
-<li><b>Rouvrir</b>&nbsp;: fiche › <span className="ui">Rouvrir le prospect</span>. Un motif et une prochaine action sont demandés. Le prospect revient en «&nbsp;En discussion&nbsp;» s’il y a déjà eu une conversation, sinon en «&nbsp;Contact en cours&nbsp;», et le compteur d’appels repart à zéro.</li>
+<li><b>Rouvrir</b>&nbsp;: fiche › <span className="ui">Rouvrir le prospect</span>. Un motif est demandé, et une prochaine action est proposée (modifiable). La réouverture ne propose pas de rendez-vous au centre&nbsp;: pour en réserver un (avec ou sans test), notez l’échange avec <span className="ui">Noter un échange</span> › «&nbsp;On a parlé&nbsp;». Le prospect revient en «&nbsp;En discussion&nbsp;» s’il y a déjà eu une conversation, sinon en «&nbsp;Contact en cours&nbsp;», et le compteur d’appels repart à zéro.</li>
 <li>Un prospect <span className="st st-conv">Inscription confirmée</span> ne peut plus être rouvert ni modifié depuis cet écran.</li>
 </ul>
 </article>
@@ -1332,14 +1390,19 @@ export default function GuideContent() {
 <td><span className="ui">Autres actions</span> › <span className="ui">Attribuer un responsable</span>.</td>
 </tr>
 <tr>
+<td>Mauvais résultat d’appel ou d’échange</td>
+<td>Vous</td>
+<td>Notez un nouvel échange avec le bon résultat. L’historique garde les deux&nbsp;; la prochaine action suit le dernier.</td>
+</tr>
+<tr>
 <td>Prospect clôturé par erreur</td>
 <td>Vous</td>
 <td><span className="ui">Rouvrir le prospect</span>.</td>
 </tr>
 <tr>
-<td>Mauvaise date de test ou de visite</td>
+<td>Mauvaise date de rendez-vous ou de test</td>
 <td>Vous</td>
-<td><span className="ui">Reprogrammer</span> (test) ou <span className="ui">Replanifier</span> (visite).</td>
+<td><span className="ui">Changer</span>, nouvelle date, puis <span className="ui">Remplace le rendez-vous</span> (<a href="#c5">C5</a>).</td>
 </tr>
 <tr>
 <td>Faute dans le nom, le téléphone ou les notes d’un apprenant</td>
@@ -1426,16 +1489,18 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Tâches</h4>
-<p>Une ligne par tâche ouverte. Quatre onglets, heure de Casablanca. Se met à jour chaque minute.</p>
+<p>Une ligne par prospect&nbsp;: sa prochaine action. Cinq onglets (<b>En retard, Aujourd’hui, Demain, À venir, En attente</b>), heure de Casablanca. Se met à jour chaque minute.</p>
 <ul className="tight">
-<li><span className="ui">Résultat d’appel</span> pour les appels, <span className="ui">Terminer l’action</span> pour les autres tâches.</li>
-<li><span className="ui">Replanifier</span>, <span className="ui">Voir le prospect</span>, et «&nbsp;Réattribuer l’action&nbsp;» dans le menu «&nbsp;…&nbsp;».</li>
-<li>«&nbsp;Terminer l’action&nbsp;» demande un résultat (200 caractères) et une prochaine action.</li>
+<li>Par défaut «&nbsp;Moi + non attribué&nbsp;»&nbsp;; le filtre du responsable du prospect se combine avec celui de la tâche.</li>
+<li><span className="ui">Pas de réponse</span> (appels, un clic), <span className="ui">Noter un échange</span>, <span className="ui">Changer</span>, et les quatre résultats d’un rendez-vous au centre.</li>
+<li>«&nbsp;En attente&nbsp;» n’est jamais en retard&nbsp;; «&nbsp;À relancer&nbsp;» s’affiche quand la date de relance est arrivée.</li>
+<li>Plusieurs apprenants pour un même contact&nbsp;: la ligne l’indique («&nbsp;2 apprenants&nbsp;»).</li>
+<li>«&nbsp;Hors des nouveaux horaires&nbsp;»&nbsp;: après un changement d’horaires, les rendez-vous et rappels convenus qui tombent en dehors des nouveaux horaires sont listés en haut de la page. Leur heure est gardée&nbsp;; appelez le contact et utilisez <span className="ui">Changer</span> si besoin.</li>
 </ul>
 </div>
 <div className="card">
 <h4>Tests de niveau</h4>
-<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
+<p>Liste de tous les tests&nbsp;: apprenant, date, heure, examinateur, score, niveau, statut (<b>Planifié, Passé, Résultat saisi, Affecté</b>, et <b>Annulé</b> ou <b>Absent</b> pour un rendez-vous annulé ou manqué&nbsp;; un test de prospect qui a quitté «&nbsp;Planifié&nbsp;» (annulé, absent ou passé) n’y revient jamais&nbsp;: fixez un nouveau rendez-vous). Les tests liés à un prospect portent l’étiquette «&nbsp;Prospect CRM&nbsp;».</p>
 <ul className="tight">
 <li>Pas de suppression pour vous.</li>
 <li><span className="ui">Planifier un test</span> crée un test sans lien avec un prospect, avec le niveau A1 proposé par défaut.</li>
@@ -1443,7 +1508,7 @@ export default function GuideContent() {
 </div>
 <div className="card">
 <h4>Calendrier</h4>
-<p>Tests «&nbsp;Planifié&nbsp;» et visites au centre ouvertes, jour par jour. Pas de glisser-déposer, pas de création depuis le calendrier.</p>
+<p>Rendez-vous au centre ouverts et tests «&nbsp;Planifié&nbsp;», jour par jour&nbsp;; un rendez-vous avec test n’apparaît qu’une fois. Le résultat d’un rendez-vous se note depuis sa ligne. Pas de glisser-déposer, pas de création depuis le calendrier.</p>
 </div>
 </div>
 <h3>Partie 2 · Au quotidien</h3>
@@ -1537,7 +1602,7 @@ export default function GuideContent() {
 <header>
 <h2>Comprendre les statuts et les mots</h2>
 </header>
-<h3>Prospect, étape, tâche, historique</h3>
+<h3>Prospect, étape, prochaine action, historique</h3>
 <div className="scroll">
 <table>
 <thead>
@@ -1552,8 +1617,8 @@ export default function GuideContent() {
 <td>Où en est le prospect, commercialement. Elle est calculée par la plateforme à partir de ce que vous enregistrez.</td>
 </tr>
 <tr>
-<td><b>Tâche</b></td>
-<td>Ce qu’il faut faire ensuite, à quelle date. Elle se termine ou s’annule, et la plateforme en demande une nouvelle.</td>
+<td><b>Prochaine action</b></td>
+<td>Ce qu’il faut faire ensuite, et quand. Un prospect en cours en a toujours une seule&nbsp;; <span className="ui">Noter un échange</span> ou <span className="ui">Changer</span> la remplacent. La page <span className="menu">Tâches</span> en montre une par ligne.</td>
 </tr>
 <tr>
 <td><b>Historique</b></td>
@@ -1586,11 +1651,11 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td><span className="st st-eng">En discussion</span></td>
-<td>Une vraie conversation a eu lieu, le parent réfléchit ou veut être rappelé.</td>
+<td>Une vraie conversation a eu lieu&nbsp;: le contact réfléchit, attend quelque chose de nous, ou veut être rappelé.</td>
 </tr>
 <tr>
 <td><span className="st st-qual">Qualifié</span></td>
-<td>Le projet est confirmé&nbsp;: test, visite ou inscription à préparer.</td>
+<td>Le projet est confirmé&nbsp;: rendez-vous au centre (avec ou sans test) ou inscription à finaliser.</td>
 </tr>
 <tr>
 <td><span className="st st-conv">Inscription confirmée</span></td>
@@ -1718,24 +1783,32 @@ export default function GuideContent() {
 </thead>
 <tbody>
 <tr>
-<td>«&nbsp;Ce prospect a changé depuis son ouverture. Les informations sont actualisées.&nbsp;»</td>
-<td>Quelqu’un d’autre a modifié la fiche. Relisez-la, puis refaites votre action.</td>
+<td>«&nbsp;Ce prospect a été modifié, rechargez.&nbsp;» ou «&nbsp;Ce prospect a changé depuis son ouverture…&nbsp;»</td>
+<td>Quelqu’un d’autre a modifié la fiche. Votre saisie est gardée&nbsp;: <span className="ui">Recharger</span>, vérifiez la nouvelle action, puis refaites votre enregistrement.</td>
 </tr>
 <tr>
 <td>«&nbsp;Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon.&nbsp;»</td>
 <td>La connexion a coupé. Cliquez à nouveau sur <span className="ui">Enregistrer</span> sans rien changer.</td>
 </tr>
 <tr>
-<td>«&nbsp;Cette heure convenue est hors des horaires d’appel.&nbsp;»</td>
-<td>Choisissez avec le parent une autre heure, ou utilisez un rappel interne.</td>
+<td>«&nbsp;Cette heure est hors des horaires d’appel.&nbsp;» ou «&nbsp;…hors des horaires d’ouverture du centre.&nbsp;»</td>
+<td>Choisissez un créneau proposé dans la liste <span className="ui">Heure</span>, avec le contact.</td>
 </tr>
 <tr>
-<td>«&nbsp;Le délai minimum entre deux appels n’est pas encore écoulé.&nbsp;»</td>
-<td>Attendez avant d’enregistrer un autre appel raté.</td>
+<td>«&nbsp;Le délai minimum entre deux appels n’est pas écoulé…&nbsp;»</td>
+<td>Si l’appel a bien eu lieu, cochez <span className="ui">Tentative réelle (hors délai)</span>. Sinon, attendez l’heure «&nbsp;Prochain essai possible à…&nbsp;».</td>
+</tr>
+<tr>
+<td>«&nbsp;Cochez «&nbsp;Remplace&nbsp;» pour changer le rendez-vous.&nbsp;»</td>
+<td>Un rendez-vous est déjà prévu. Cochez <span className="ui">Remplace le rendez-vous</span> si c’est voulu, sinon <span className="ui">Garder l’action actuelle</span>.</td>
+</tr>
+<tr>
+<td>«&nbsp;Le résultat du rendez-vous se saisit à partir de son heure de début.&nbsp;»</td>
+<td>Attendez l’heure du rendez-vous pour noter s’il est venu.</td>
 </tr>
 <tr>
 <td>«&nbsp;Le calendrier de suivi n’est pas encore configuré. Demandez à un directeur de le publier.&nbsp;»</td>
-<td>Prévenez la direction&nbsp;: sans horaires d’appel publiés, on ne peut pas créer de prospect.</td>
+<td>Prévenez la direction&nbsp;: sans horaires du centre publiés, on ne peut pas créer de prospect.</td>
 </tr>
 <tr>
 <td>«&nbsp;Cinq appels sans réponse dans la séquence actuelle sont nécessaires.&nbsp;»</td>
@@ -1743,7 +1816,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>«&nbsp;Un test est déjà prévu. Ouvrez-le pour le reprogrammer.&nbsp;»</td>
-<td>Fiche › Test de niveau › <span className="ui">Reprogrammer</span>.</td>
+<td><span className="ui">Changer</span> › <span className="ui">Remplace le rendez-vous</span> (<a href="#c5">C5</a>), ou fiche › Test de niveau › <span className="ui">Reprogrammer</span>.</td>
 </tr>
 <tr>
 <td>«&nbsp;Le paiement dépasse le solde de … MAD.&nbsp;»</td>
@@ -1822,8 +1895,8 @@ export default function GuideContent() {
 </div>
 <h3>Questions fréquentes</h3>
 <details className="faq">
-<summary>«&nbsp;Mes tâches&nbsp;» est vide, mais je sais qu’il y a du travail</summary>
-<p>«&nbsp;Mes tâches&nbsp;» ne montre que les tâches qui vous sont attribuées. Les prospects créés à la main et les demandes des formulaires n’ont pas de responsable. Choisissez <span className="ui">Non attribué</span> ou <span className="ui">Toute l’équipe</span> dans <span className="ui">Responsable de la tâche</span>, ou attribuez-vous le prospect.</p>
+<summary>Ma page Tâches est vide, mais je sais qu’il y a du travail</summary>
+<p>Par défaut, <span className="menu">Tâches</span> montre «&nbsp;Moi + non attribué&nbsp;»&nbsp;: vos prospects et ceux sans responsable. Les prospects de vos collègues n’y sont pas. Choisissez <span className="ui">Toute l’équipe</span> dans <span className="ui">Responsable de la tâche</span>, ou vérifiez l’onglet <b>En attente</b>.</p>
 </details>
 <details className="faq">
 <summary>Je ne trouve pas un apprenant avec son numéro de téléphone</summary>
@@ -1846,8 +1919,8 @@ export default function GuideContent() {
 <p>Déposer une carte n’enregistre rien&nbsp;: cela ouvre la fenêtre correspondante. L’étape ne change que si vous enregistrez un résultat. Certains déplacements (retour en arrière, vers «&nbsp;Inscription confirmée&nbsp;» sans inscription) ne sont pas pris en charge.</p>
 </details>
 <details className="faq">
-<summary>Je ne vois pas les horaires d’appel</summary>
-<p>Ils sont fixés par la direction et ne sont pas affichés dans votre espace. Demandez-les-lui. Les rappels internes sont décalés automatiquement&nbsp;; seuls les rappels «&nbsp;Rendez-vous convenu&nbsp;» doivent tomber dans les horaires.</p>
+<summary>Je ne trouve pas l’heure que le contact demande</summary>
+<p>Les listes <span className="ui">Heure</span> ne proposent que les créneaux des horaires du centre, fixés par la direction&nbsp;: horaires d’appel pour un rappel, horaires d’ouverture pour un rendez-vous, sans la pause de midi ni les jours de fermeture. Proposez au contact un créneau de la liste. «&nbsp;Aucun créneau ce jour-là&nbsp;»&nbsp;: le centre est fermé ce jour-là, choisissez une autre date.</p>
 </details>
 <details className="faq">
 <summary>Je ne peux pas modifier l’email d’un apprenant</summary>
@@ -1906,7 +1979,7 @@ export default function GuideContent() {
 </tr>
 <tr>
 <td>Prospects</td>
-<td>Horaires d’appel, analyse marketing, suivi Meta.</td>
+<td>Horaires du centre (<span className="menu">Paramètres</span> › <span className="ui">Horaires du centre</span>&nbsp;: plages d’appel et jours de fermeture), responsable par défaut des nouveaux prospects (Meta, site), analyse marketing, suivi Meta.</td>
 </tr>
 <tr>
 <td>Comptes</td>
@@ -1926,19 +1999,19 @@ export default function GuideContent() {
 <h4>Un prospect</h4>
 <ul className="tight">
 <li>Chercher avant d’ajouter.</li>
-<li>Appel ouvert ≠ appel enregistré&nbsp;: <span className="ui">Enregistrer</span>.</li>
-<li>Conversation&nbsp;: choisir le <b>Résultat de l’échange</b>.</li>
-<li>Pas de réponse&nbsp;: la plateforme planifie la suite (5 appels).</li>
-<li>Prospect créé à la main&nbsp;: se l’attribuer.</li>
+<li>Une seule prochaine action, toujours.</li>
+<li>Pas de réponse&nbsp;: un clic, la plateforme planifie la suite (5 appels).</li>
+<li>On a parlé&nbsp;: <span className="ui">Noter un échange</span>, ce qui a été convenu.</li>
+<li>Ce qui était prévu change&nbsp;: <span className="ui">Changer</span>.</li>
 </ul>
 </div>
 <div className="card mini">
-<h4>Test et visite</h4>
+<h4>Rendez-vous et test</h4>
 <ul className="tight">
-<li>«&nbsp;Souhaite passer un test&nbsp;» ne réserve rien.</li>
-<li><span className="ui">Réserver un test</span> depuis la fiche.</li>
-<li>Pas d’annulation&nbsp;: <span className="ui">Reprogrammer</span>.</li>
-<li>Visite&nbsp;: date et heure obligatoires.</li>
+<li><span className="ui">Rendez-vous au centre</span>, <span className="ui">Avec test de niveau</span> si besoin.</li>
+<li>Heure&nbsp;: un créneau proposé.</li>
+<li>À l’heure&nbsp;: <span className="ui">Venu · s’inscrit</span>, <span className="ui">Venu · reviendra</span>, <span className="ui">Venu · pas intéressé</span> ou <span className="ui">Absent</span>.</li>
+<li>Déplacer ou annuler&nbsp;: <span className="ui">Changer</span>.</li>
 </ul>
 </div>
 <div className="card mini">
@@ -2005,7 +2078,7 @@ export default function GuideContent() {
 </div>
 </div>
 </section>
-<footer className="foot"><p>Guide Accueil, version 2.4, 21 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
+<footer className="foot"><p>Guide Accueil, version 2.5, 22 novembre 2026. Il décrit la plateforme à cette date. Les captures montrent des données fictives. Signalez à la direction tout écart entre ce guide et l’écran.</p>
 <a className="backtop" href="#prise-en-main">Retour en haut</a></footer>
     </>
   );

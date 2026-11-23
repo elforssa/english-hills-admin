@@ -7,7 +7,8 @@ import FormField from '@/components/operational/FormField';
 import { Button } from '@/components/ui/button';
 import { crmRpc, useCrmRead, useCrmRefresh } from '@/lib/crm/queries';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
-import { STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
+import { NextActionPicker } from './NextActionDialog';
+import { NEXT_KINDS, nextActionPayload, STALE_MESSAGE, STATUS, OUTCOMES, LOST, NOT_QUALIFIED, SCHEDULE_KINDS, REMINDER_PRESETS, CONVERSATION_OUTCOMES, scheduledLabel, phoneLinks, casablancaInstant, commandError, retryKey, staffLabel, conversationOutcomes, outcomeStage, outcomeTask, scheduleKindRule, nextTaskSpec, conversationDecision, taskTitle, noteRequired as requiresNote } from '@/lib/crm/presentation.mjs';
 import { CONFLICT_CODE, isRecordConflict } from '@/lib/conflictErrors.mjs';
 const titles = {
   manual: 'Ajouter un prospect',
@@ -30,15 +31,23 @@ const nextTypes = {
   callback: 'Rappel',
   whatsapp_followup: 'Suivi WhatsApp',
   confirm_placement_test: 'Préparer un test de niveau',
-  center_visit: 'Visite au centre',
+  center_visit: 'Rendez-vous au centre',
   enrollment_followup: 'Suivi d’inscription'
 };
+// A reopened prospect is not qualified: its first appointment is booked through
+// « Noter un échange » (OD-11), so reopening offers no appointment.
+const REOPEN_TYPES = Object.fromEntries(Object.entries(nextTypes).filter(([key]) => key !== 'center_visit'));
 const stepTasks = {
   placement_test: 'confirm_placement_test',
   center_visit: 'center_visit',
   enrollment: 'enrollment_followup'
 };
 const COMPLETION_LIMIT = 200;
+// A walk-in, an inbound call or a WhatsApp conversation is created with its first exchange
+// (§4.2/§4.8): the next action agreed now, in the same form; otherwise « Premier contact ».
+const FIRST_CHANNEL = { 'Téléphone': 'phone', 'Visite au centre': 'in_person', WhatsApp: 'whatsapp' };
+const FIRST_KINDS = ['none', 'center_visit', 'callback', 'our_step', 'awaiting', 'enrol'];
+const FIRST_LABELS = { ...NEXT_KINDS, none: 'Pas encore parlé · Premier contact' };
 export const Field = FormField;
 const inputClass = 'operational-control font-normal';
 export default function CrmActionDialog({
@@ -65,6 +74,17 @@ export default function CrmActionDialog({
     assignee: task?.assigned_to || '',
     channel: 'phone'
   });
+  const [first, setFirst] = useState({ kind: 'none' });
+  // A walk-in has always spoken with us: no « Pas encore parlé », the agreed next
+  // action is chosen now and no « Premier contact » is created (§4.8, review of #208).
+  const walkIn = action === 'manual' && values.source === 'Visite au centre';
+  const firstForm = walkIn && first.kind === 'none' ? { ...first, kind: '' } : first;
+  const firstKinds = walkIn ? FIRST_KINDS.filter(kind => kind !== 'none') : FIRST_KINDS;
+  // §4.9 / NF-1: a stale save is refused and the form keeps its draft; « Recharger »
+  // re-reads the prospect and shows its new state before the save is enabled again.
+  // The dialog never adopts a newer version on its own.
+  const [stale, setStale] = useState(false), [reloaded, setReloaded] = useState(null);
+  const hours = useCrmRead('crm_get_centre_hours', {}, action === 'manual');
   const [selectedStaffLabel, setSelectedStaffLabel] = useState((task ? task.assignee_display_label : lead?.owner_display_label) || 'Responsable indisponible');
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -117,7 +137,8 @@ export default function CrmActionDialog({
       email: values.email || null,
       program_interest_text: values.program || null,
       source_label: `Manuel · ${values.source}`,
-      contact_kind: 'unknown'
+      contact_kind: 'unknown',
+      ...(FIRST_CHANNEL[values.source] && firstForm.kind !== 'none' ? { first_exchange: { channel: FIRST_CHANNEL[values.source], next: nextActionPayload(firstForm, null) } } : {})
     }];
     const data = {
       lead_id: lead.id,
@@ -212,6 +233,14 @@ export default function CrmActionDialog({
     if (task) { withTask(); return ['crm_reassign', {...data,assigned_to:values.assignee || null}]; }
     return ['crm_reassign', {...data,owner_id:values.owner || null}];
   }
+  async function reload() {
+    const latest = await crmRpc('crm_get_workspace_detail', { p_lead: lead.id }).catch(() => null);
+    if (!latest) { setError('Rechargement impossible. Réessayez.'); return; }
+    await refresh();
+    setExpected({ lead: latest.version, task: latest.open_tasks?.find(t => t.id === task?.id)?.version });
+    setReloaded(latest);
+    setStale(false);
+  }
   async function submit(event) {
     event.preventDefault();
     if (locked.current) return;
@@ -219,7 +248,7 @@ export default function CrmActionDialog({
     setBusy(true);
     setError('');
     try {
-      const intent = JSON.stringify([action, values, task?.id]);
+      const intent = JSON.stringify([action, values, task?.id, action === 'manual' ? firstForm : null, expected]);
       // An uncertain response may have committed. Preserve its exact payload even
       // if a background refresh has since advanced the lead/task versions.
       if (request.current?.intent !== intent) {
@@ -233,10 +262,6 @@ export default function CrmActionDialog({
           });
           const latestTask = latest?.open_tasks?.find(t => t.id === task?.id);
           if (!latest || latest.version !== expected.lead || task && (latestTask && latestTask.version !== expected.task || !latestTask && latest.open_task_count <= 100)) {
-            setExpected({
-              lead: latest?.version,
-              task: latestTask?.version
-            });
             throw {
               code: CONFLICT_CODE
             };
@@ -253,24 +278,22 @@ export default function CrmActionDialog({
         p_request_key: request.current.key,
         p_data: request.current.data
       });
-      setResult(saved);
       await refresh();
-      toast.success('Enregistré');
+      // No success pop-up (§4.9): a toast, and a new prospect opens in the drawer. Only
+      // possible existing contacts keep the result screen.
+      if (action === 'manual' && saved?.contact_candidates?.length) { setResult(saved); toast.success('Prospect créé'); }
+      else if (action === 'manual') { toast.success('Prospect créé'); onCreated(saved.lead.id); }
+      else { toast.success('Enregistré'); onClose(); }
     } catch (err) {
-      setError(err instanceof Error && !err.code && /^Choisissez|^Cette heure/.test(err.message) ? err.message : commandError(err));
       if (isRecordConflict(err)) {
-        const latest = await crmRpc('crm_get_workspace_detail', {
-          p_lead: lead.id
-        }).catch(() => null);
-        if (latest) setExpected({
-          lead: latest.version,
-          task: latest.open_tasks?.find(t => t.id === task?.id)?.version
-        });
-        await refresh();
+        setError('');
+        setReloaded(null);
+        setStale(true);
         request.current = null;
       } else if (['22023', '42501'].includes(err?.code)) {
         request.current = null;
       }
+      if (!isRecordConflict(err)) setError(err instanceof Error && !err.code && /^Choisissez|^Cette heure/.test(err.message) ? err.message : err?.hint === 'crm_create.walk_in_exchange_required' ? 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.' : commandError(err));
     } finally {
       locked.current = false;
       setBusy(false);
@@ -294,15 +317,17 @@ export default function CrmActionDialog({
               WhatsApp: 'WhatsApp',
               Recommandation: 'Recommandation',
               Autre: 'Autre'
-            })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details></>}
+            })}<details><summary className="cursor-pointer text-sm text-slate-500">Ajouter un e-mail</summary><div className="mt-3">{text('email', 'E-mail', false, 'email', 254)}</div></details>
+  {FIRST_CHANNEL[values.source] && <section aria-label="Premier échange" className="space-y-2 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">Premier échange</h3><p className="text-xs text-slate-600">{walkIn ? 'Le visiteur est au centre : choisissez ce qui est convenu avec lui.' : 'Vous parlez avec le contact maintenant ? Choisissez ce qui est convenu. Sinon, un « Premier contact » est prévu.'}</p>
+   <NextActionPicker form={firstForm} setForm={value => { setError(''); setFirst(typeof value === 'function' ? old => value(walkIn && old.kind === 'none' ? { ...old, kind: '' } : old) : value); }} current={null} lead={null} hours={hours.data} kinds={firstKinds} labels={FIRST_LABELS} suggestDate /></section>}</>}
   {action === 'call' && <><p className="break-all text-sm">{lead.phone || 'Téléphone à préciser'}</p><Button type="button" variant="outline" disabled={!lead.phone} onClick={async () => { try { await navigator.clipboard.writeText(lead.phone); toast.success('Numéro copié'); } catch { setError('Copie indisponible ; sélectionnez le numéro.'); } }}>Copier le numéro</Button>{links.tel && <a className="hidden min-h-11 items-center rounded-md border px-4 text-sm font-medium max-sm:[@media(pointer:coarse)]:inline-flex" href={links.tel}>Appeler {lead.phone}</a>}<p className="text-xs text-slate-500">Ouvrir l’appel n’enregistre rien. Enregistrez le résultat après votre appel.</p>{select('outcome', 'Résultat de l’appel', OUTCOMES)}{!links.tel && <p className="text-sm text-slate-600">Aucun numéro valide pour lancer l’appel. Vous pouvez enregistrer un échange déjà effectué.</p>}</>}
   {action === 'conversation' && <>{select('channel', 'Canal de la conversation', {phone:'Téléphone',whatsapp:'WhatsApp',in_person:'Au centre'})}{values.channel === 'whatsapp' && <p className="break-all text-sm">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>}</>}
   {action === 'whatsapp' && <><p className="break-all text-sm font-medium">WhatsApp : {links.whatsapp ? `+${links.whatsapp.split('/').at(-1)}` : 'Indisponible'}</p>{links.whatsapp && <a data-touch-target className="inline-flex min-h-9 items-center rounded-md border px-4 text-sm font-medium" href={links.whatsapp} target="_blank" rel="noopener noreferrer">Ouvrir WhatsApp</a>}<p className="text-xs text-slate-500">Ouvrir WhatsApp n’enregistre aucun envoi.</p>{!links.whatsapp && <p className="text-sm text-slate-600">Aucun numéro WhatsApp valide. Vous pouvez enregistrer un échange déjà effectué.</p>}{select('kind', 'Que souhaitez-vous enregistrer ?', {
               whatsapp_sent: 'Message envoyé',
-              meaningful_whatsapp_conversation: 'Conversation réelle avec le parent'
+              meaningful_whatsapp_conversation: 'Conversation réelle avec le contact'
             })}</>}
   {outcomeLed && <>{select('interaction', 'Résultat de l’échange', conversationOutcomes(lead.status))}{values.interaction && <p className="text-xs text-slate-600">Étape après enregistrement : {STATUS[outcomeStage(values.interaction, lead.status)]}. L’étape est calculée par le serveur à partir de ce résultat.</p>}{values.interaction === 'not_suitable' && select('unsuitableReason', 'Motif', NOT_QUALIFIED)}{values.interaction === 'placement_test' && <p className="rounded-lg bg-blue-50 p-3 text-sm">Ce résultat prépare le suivi du test. Il ne réserve aucun test de niveau.</p>}</>}
-  {qualifying && <>{select('step', 'Le parent souhaite…', {
+  {qualifying && <>{select('step', 'Le contact souhaite…', {
               placement_test: 'Préparer un test de niveau',
               center_visit: 'Visiter le centre',
               enrollment: 'Avancer vers une inscription',
@@ -315,11 +340,13 @@ export default function CrmActionDialog({
   {closing && <>{select('reason', 'Motif', action === 'notQualified' ? NOT_QUALIFIED : LOST)}{values.reason === 'unreachable' && <p className="text-sm">{lead.failed_attempts} / 5 appels infructueux dans la séquence actuelle.</p>}</>}
   {action === 'reassign' && <><Field label={task ? 'Responsable de l’action' : 'Responsable du prospect'}><select className={inputClass} value={task ? values.assignee : values.owner} onChange={e => { set(task ? 'assignee' : 'owner', e.target.value); setSelectedStaffLabel(e.target.selectedOptions[0].textContent); }}><option value="">Non attribué</option>{(task ? values.assignee : values.owner) && !staff.data?.rows.some(p => p.id === (task ? values.assignee : values.owner)) && <option value={task ? values.assignee : values.owner}>{selectedStaffLabel}</option>}{staff.data?.rows.map(person => <option key={person.id} value={person.id}>{staffLabel(person)}</option>)}</select></Field>{staff.isError && <p role="alert" className="text-sm">Liste indisponible. <button type="button" onClick={() => staff.refetch()}>Réessayer</button></p>}{(staff.data?.total > 50 || staffOffset > 0) && <div className="flex gap-2"><Button type="button" variant="outline" disabled={!staffOffset} onClick={() => setStaffOffset(x => Math.max(0, x - 50))}>Précédents</Button><Button type="button" variant="outline" disabled={staffOffset + 50 >= staff.data?.total} onClick={() => setStaffOffset(x => x + 50)}>Suivants</Button></div>}<p className="text-xs text-slate-500">{task ? 'Seule cette action change de responsable. Le responsable du prospect reste inchangé.' : 'Les responsables des actions déjà prévues restent inchangés.'}</p></>}
   {!['manual', 'reassign', 'schedule', 'reschedule'].includes(action) && <Field label={['cancel', 'reopen'].includes(action) ? 'Motif' : action === 'complete' ? 'Résultat de l’action' : 'Note'} help={action === 'complete' ? `${(values.note || '').length} / ${COMPLETION_LIMIT} caractères` : noteRequired ? undefined : 'Facultative : les choix ci-dessus suffisent comme trace.'}><textarea className={`${inputClass} min-h-24`} maxLength={action === 'complete' ? COMPLETION_LIMIT : 4000} required={noteRequired} value={values.note || ''} onChange={e => set('note', e.target.value)} /></Field>}
-  {needsTask && <div className="space-y-3 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">{action === 'reschedule' ? 'Nouvel horaire' : 'Prochaine action'}</h3>{action !== 'reschedule' && (fixedTask ? <p className="text-sm">{nextTypes[fixedTask] || taskTitle({ task_type: fixedTask })}{interactionKey === 'considering' ? ' · En réflexion' : ''}</p> : select('taskType', 'Action', nextTypes))}
-   {action !== 'reschedule' && (kindRule.fixed ? <p className="text-sm font-medium text-blue-900">{SCHEDULE_KINDS[kindRule.kind]}</p> : <fieldset><legend className="text-sm font-medium">Type de suivi</legend><div className="mt-1 flex flex-wrap gap-x-4">{Object.entries(SCHEDULE_KINDS).map(([value, label]) => <label key={value} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="radio" name="schedule-kind" value={value} checked={kindRule.kind === value} onChange={() => set('scheduleKind', value)} />{label}</label>)}</div><p className="text-xs text-slate-500">{kindRule.kind === 'appointment' ? 'Horaire fixé avec le parent.' : 'Rappel pour l’équipe ; aucun horaire n’a été promis au parent.'}</p></fieldset>)}
+  {needsTask && <div className="space-y-3 rounded-lg border bg-slate-50 p-4"><h3 className="text-sm font-semibold">{action === 'reschedule' ? 'Nouvel horaire' : 'Prochaine action'}</h3>{action !== 'reschedule' && (fixedTask ? <p className="text-sm">{nextTypes[fixedTask] || taskTitle({ task_type: fixedTask })}{interactionKey === 'considering' ? ' · En réflexion' : ''}</p> : select('taskType', 'Action', action === 'reopen' ? REOPEN_TYPES : nextTypes))}
+   {action !== 'reschedule' && (kindRule.fixed ? <p className="text-sm font-medium text-blue-900">{SCHEDULE_KINDS[kindRule.kind]}</p> : <fieldset><legend className="text-sm font-medium">Type de suivi</legend><div className="mt-1 flex flex-wrap gap-x-4">{Object.entries(SCHEDULE_KINDS).map(([value, label]) => <label key={value} className="inline-flex min-h-9 items-center gap-2 text-sm"><input type="radio" name="schedule-kind" value={value} checked={kindRule.kind === value} onChange={() => set('scheduleKind', value)} />{label}</label>)}</div><p className="text-xs text-slate-500">{kindRule.kind === 'appointment' ? 'Horaire fixé avec le contact.' : 'Rappel pour l’équipe ; aucun horaire n’a été promis au contact.'}</p></fieldset>)}
    {action !== 'reschedule' && kindRule.kind === 'reminder' && <Field label="Échéance du rappel" help={values.preset === 'exact' ? undefined : 'Calculée par le serveur selon les horaires de suivi de Casablanca.'}><select className={inputClass} value={values.preset} onChange={e => set('preset', e.target.value)}>{Object.entries(REMINDER_PRESETS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="exact">Date et heure précises</option></select></Field>}
    {exactTime && <Field label="Date et heure · Casablanca"><input className={inputClass} type="datetime-local" required value={values.due || ''} onChange={e => set('due', e.target.value)} /></Field>}{text('instructions', 'Précisions (facultatif)', false, 'text', 4000)}<p className="text-xs text-slate-500">{agreedCallback ? 'Un rappel convenu garde son heure exacte : elle doit tomber dans les horaires d’appel, sinon l’enregistrement est refusé.' : 'Les appels hors horaires d’ouverture sont décalés au prochain créneau par le calendrier de suivi.'}</p></div>}
-  </fieldset><DialogStickyFooter>{error && <p role="alert" className={`rounded-md bg-red-50 p-3 text-sm text-red-800 ${FOOTER_ALERT}`}>{error}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Annuler</Button><Button type="submit" disabled={busy || action === 'unreachable' && !lead.unreachable_eligible}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button></div></DialogStickyFooter>
+  </fieldset><DialogStickyFooter>{stale ? <div role="alert" className={`rounded-md bg-amber-50 p-3 text-sm text-amber-900 ${FOOTER_ALERT}`}><p>{STALE_MESSAGE}</p><Button type="button" size="sm" variant="outline" className="mt-2" onClick={reload}>Recharger</Button></div>
+   : error ? <p role="alert" className={`rounded-md bg-red-50 p-3 text-sm text-red-800 ${FOOTER_ALERT}`}>{error}</p>
+   : reloaded && <p role="status" className={`rounded-md bg-blue-50 p-3 text-sm text-blue-900 ${FOOTER_ALERT}`} data-testid="reloaded-state">Rechargé · {STATUS[reloaded.status] || reloaded.status}{reloaded.next_action?.label ? ` · prochaine action : ${reloaded.next_action.label}` : ' · aucune prochaine action'}. Vérifiez puis enregistrez.</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Annuler</Button><Button type="submit" disabled={busy || stale || action === 'unreachable' && !lead.unreachable_eligible}>{busy ? 'Enregistrement…' : 'Enregistrer'}</Button></div></DialogStickyFooter>
  </form>}
  </DialogContent></Dialog>;
 }

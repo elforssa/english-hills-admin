@@ -3,9 +3,12 @@
 update public.crm_tasks set due_at=now()+interval '100 days',scheduled_end_at=null where task_type='center_visit';
 do $$ declare l uuid:=(select lead from fixture where i=2); t uuid; stamp timestamptz;
  civil jsonb; detail jsonb; tasks jsonb; queue jsonb; calendar jsonb; card jsonb; item jsonb;
- day date; bucket text; first_page jsonb; second_page jsonb; labels text[];
+ day date; bucket text; first_page jsonb; second_page jsonb; labels text[]; parked uuid[];
 begin
  perform set_config('request.jwt.claim.sub','a3000000-0000-0000-0000-000000000003',true);
+ -- RWR-r5: readers show the prospect's one current action, so park its other tasks while probing.
+ with p as (update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='UX probe isolation' where lead_id=l and status='open' returning id)
+ select array_agg(id) into parked from p;
  for stamp in select unnest(array['2026-10-07 09:35Z'::timestamptz,'2026-02-15 02:35Z'::timestamptz,'2026-03-22 02:35Z'::timestamptz]) loop
   insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key)
   values(l,'center_visit',stamp,'a3000000-0000-0000-0000-000000000001','manual','ux-display:'||stamp) returning id into t;
@@ -30,6 +33,7 @@ begin
   perform pg_temp.ok(item @> civil and (item->>'starts_at')::timestamptz=stamp,'Calendar same instant and civil time');
   delete from public.crm_tasks where id=t;
  end loop;
+ update public.crm_tasks set status='open',cancelled_at=null,cancellation_reason=null where id=any(parked);
  -- Missing/invalid legacy time keeps its known date, never fabricated midnight.
  select crm_security.placement_summary(p) into detail from public.placement_tests p where p.crm_lead_id is null and p.heure='invalid' limit 1;
  perform pg_temp.ok(detail->>'local_date' is not null and detail->'local_time'='null'::jsonb and detail->'scheduled_for'='null'::jsonb,'unknown legacy time is truthful in drawer summary');
@@ -64,6 +68,8 @@ begin
  perform pg_temp.ok(owner is not null and assignee is not null,'two outside-page-1 staff identities');
  update public.crm_leads set owner_id=(owner->>'id')::uuid where id=l;
  select id into t from public.crm_tasks where lead_id=l and status='open' order by due_at,id limit 1;
+ -- RWR-r5: keep t as the prospect's one current action.
+ update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='UX probe isolation' where lead_id=l and status='open' and id<>t;
  update public.crm_tasks set assigned_to=(assignee->>'id')::uuid,due_at=now()-interval '1 hour' where id=t;
  card:=crm_security.opportunity_card(l);detail:=public.crm_get_workspace_detail(l);
  perform pg_temp.ok(card->>'owner_display_label'=owner->>'display_label','opportunity owner uses exact safe picker authority');
@@ -75,7 +81,7 @@ begin
  select x into item from jsonb_array_elements(queue->'rows')x where x->>'id'=t::text;
  perform pg_temp.ok(item->>'assignee_display_label'=assignee->>'display_label' and item->'lead'->>'owner_display_label'=owner->>'display_label','task assignee and prospect owner independent safe labels');
  perform pg_temp.ok(item->>'assigned_to'<>item->'lead'->>'owner_id','assignee never falls back to owner');
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(item->'lead')k)=array['contact_name','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed nested lead projection: no private staff fields');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(item->'lead')k)=array['contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed nested lead projection: no private staff fields');
  perform pg_temp.ok(crm_security.staff_display_label(null) is null,'unassigned label remains null');
  perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('anon','crm_security.staff_display_label(uuid)','execute') and not has_function_privilege('service_role','crm_security.staff_display_label(uuid)','execute'),'private label helper denied to API roles');
 end $$;

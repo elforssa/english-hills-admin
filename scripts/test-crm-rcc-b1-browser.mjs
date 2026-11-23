@@ -10,7 +10,7 @@ import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.mjs';
-import { BAND_QUERIES, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
+import { BAND_QUERIES, COMMAND_LABELS, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
 process.on('unhandledRejection',error=>{console.error('unhandled',error?.message);});
@@ -24,7 +24,10 @@ const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const timeline=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select public.crm_get_timeline(p_lead=>'${id}',p_limit=>20);commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const phone=()=>'06'+String(randomInt(10000000,99999999));
 const intake=(name,extra={})=>rpc('create_manual_lead',{display_name:name,learner_name:extra.learner||'Enfant synthétique',phone:phone(),source_label:'Manuel · Téléphone',...extra.data}).lead.id;
 const LONG='أسماء عبد الرحمن بن عبد الله · Marie-Claire de la Roche Saint André';
@@ -33,7 +36,8 @@ const WIDTHS=[{width:1440,height:900},{width:1280,height:800},{width:1024,height
 const EDGES=[639,640,767,768,1023,1024];
 // B1_PHASES (e.g. 5,9) narrows a local iteration; the acceptance run executes every phase.
 const PHASES=process.env.B1_PHASES?.split(','),on=n=>!PHASES||PHASES.includes(String(n));
-const isWrite=name=>!/^crm_(get|list|find)_|^crm_enrollment_groups$/.test(name);
+// crm_check_action is a read (RWR-r5 §4.3: attempt gap and current action).
+const isWrite=name=>!/^crm_(get|list|find)_|^crm_enrollment_groups$|^crm_check_action$/.test(name);
 const sheet=()=>page.getByRole('dialog').first(),top=()=>page.getByRole('dialog').last();
 const fermer=()=>sheet().getByRole('button',{name:'Fermer',exact:true});
 // Drain the current route's reads before replacing its document (WebKit reports cancelled fetches as errors).
@@ -61,6 +65,9 @@ async function gotoLeads(query=''){await nav(app+'/crm/leads'+query);await ready
 async function setSize(viewport){await page.setViewportSize(viewport);await page.waitForFunction(w=>innerWidth===w,viewport.width);await page.waitForTimeout(150);}
 async function targets(scope,label){const small=await scope.evaluate(root=>[...root.querySelectorAll('button,select,input:not([type=checkbox]):not([type=radio]),summary,[data-touch-target]')].filter(el=>{const r=el.getBoundingClientRect();return r.width&&r.height&&getComputedStyle(el).visibility!=='hidden';}).map(el=>({name:el.getAttribute('aria-label')||el.textContent.trim().slice(0,40),h:Math.round(el.getBoundingClientRect().height),w:Math.round(el.getBoundingClientRect().width)})).filter(t=>t.h<44||t.w<44));assert.deepEqual(small,[],`${phase} ${label}: touch targets ≥ 44px below lg`);}
 async function openDrawer(id,from='leads'){if(from==='leads')await nav(`${app}/crm/leads?lead=${id}`);await sheet().getByRole('heading',{name:'Historique',exact:true}).waitFor();}
+// RWR-r5 §4.9: the drawer's primary dialog is « Noter un échange »; a note is its « Autre » channel.
+async function openExchange(){await sheet().getByRole('button',{name:'Noter un échange',exact:true}).click();await top().getByRole('heading',{name:'Noter un échange'}).waitFor();}
+async function fillNote(text){await openExchange();await top().getByRole('tab',{name:'Autre'}).click();await top().getByLabel('Simple note').check();await top().getByLabel('Note',{exact:true}).fill(text);}
 async function closeDrawer(){await fermer().click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.locator('[role=dialog]').waitFor({state:'detached'});}
 async function drawerShape(label,ordinary=false){
  await settled(sheet());const m=await mode(),shape=await sheet().evaluate(el=>{const body=el.querySelector('[data-drawer-body]'),head=el.querySelector('[data-drawer-header]'),r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,height:r.height,overflowY:getComputedStyle(el).overflowY,scrollTop:el.scrollTop,bodyScroll:body.scrollHeight>body.clientHeight,header:head.getBoundingClientRect().height,bodyBelow:body.getBoundingClientRect().top>=head.getBoundingClientRect().bottom-0.5,vw:document.documentElement.clientWidth,vh:innerHeight};});
@@ -118,9 +125,9 @@ async function escapeSequences(label,reopen,restored){
  await top().getByLabel('Responsable du prospect',{exact:true}).waitFor();await top().getByRole('button',{name:'Annuler',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E2 focus returns to Autres actions');await settle();await noPopup(label+' E2');
  await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await restored();
- phase=label+' E4';await reopen();await sheet().getByRole('button',{name:'Note',exact:true}).focus();await page.keyboard.press('Enter');await top().getByLabel('Note',{exact:true}).waitFor();await dialogFocused();
+ phase=label+' E4';await reopen();await sheet().getByRole('button',{name:'Noter un échange',exact:true}).focus();await page.keyboard.press('Enter');await top().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialogFocused();
  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);assert(await sheet().getByRole('heading',{name:'Historique'}).isVisible(),'E4: only the Dialog closed');
- await focusIs(()=>document.activeElement?.textContent?.trim()==='Note','E4 focus returns to Note');await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await restored();
+ await focusIs(()=>document.activeElement?.textContent?.trim()==='Noter un échange','E4 focus returns to Noter un échange');await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await restored();
 }
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local policy baseline');
@@ -187,14 +194,14 @@ try {
    await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}.png`)});
    // Drawer at each width: shape, single pinned Fermer, body order, close/Back.
    await openDrawer(rich);const {m:dm}=await drawerShape(phase+' drawer');await fermerPinned(phase+' drawer');
-   const order=await sheet().evaluate(el=>['Prochaine action','Actions rapides','Toutes les prochaines actions','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
+   const order=await sheet().evaluate(el=>['Prochaine action','Autres actions','Demande','Test de niveau','Inscription','Historique'].map(t=>{const n=[...el.querySelectorAll('h3,p,summary,section[aria-label]')].find(x=>(x.getAttribute('aria-label')||x.textContent.trim()).startsWith(t));return n?n.getBoundingClientRect().top:null;}));
    assert(order.every(v=>v!==null)&&order.every((v,i)=>!i||v>order[i-1]),`${phase}: drawer body order ${JSON.stringify(order)}`);
    if(dm.band!=='desktop')await targets(sheet(),'drawer');
    await noOverflow('drawer');await page.screenshot({path:join(tmpdir(),`b1-${E}-${viewport.width}-drawer.png`)});
    if(dm.sm){await page.mouse.click(10,Math.round(viewport.height/2));await page.locator('[role=dialog]').waitFor({state:'detached'});}else await closeDrawer();
    await page.waitForURL(url=>!url.searchParams.has('lead'));
    // Dialog bounds and sticky footer (call dialog from the drawer's primary action).
-   await openDrawer(fresh[1]);await drawerShape(phase+' ordinary drawer',true);await sheet().getByRole('button',{name:'Enregistrer un appel',exact:true}).click();await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();await settled(top());
+   await openDrawer(fresh[1]);await drawerShape(phase+' ordinary drawer',true);await openExchange();await settled(top());
    const dialogBox=await top().evaluate(el=>{const r=el.getBoundingClientRect(),f=el.querySelector('[data-dialog-footer]').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,fb:f.bottom,ft:f.top,vw:innerWidth,vh:innerHeight,scroll:el.scrollHeight>el.clientHeight,paddingBottom:getComputedStyle(el).paddingBottom};});
    assert(dialogBox.top>=0&&dialogBox.bottom<=dialogBox.vh&&dialogBox.left>=0&&dialogBox.right<=dialogBox.vw,`${phase}: dialog within viewport ${JSON.stringify(dialogBox)}`);
    assert.equal(dialogBox.paddingBottom,'0px',`${phase}: the dialog's bottom padding is carried by the footer`);
@@ -216,7 +223,8 @@ try {
     if(width>=976){const visible=await page.evaluate(()=>{const region=document.querySelector('[data-board-region]').getBoundingClientRect();return [...document.querySelectorAll('[data-board-stage]')].filter(c=>{const r=c.getBoundingClientRect();return r.left>=region.left-1&&r.right<=region.right+1;}).length;});assert.equal(visible,5,`${phase}: 1023/1024 without the sidebar fits 5/5 stages with Tableau active`);}
     await gotoLeads();}
    await openDrawer(rich);await drawerShape(phase+' drawer');
-   const grid=await sheet().getByRole('button',{name:'Autres actions',exact:true}).evaluate(b=>{const p=b.parentElement.getBoundingClientRect(),r=b.getBoundingClientRect();return Math.abs(r.width-p.width)<2;});assert.equal(grid,!m.sm,`${phase}: quick actions grid (full-width Autres actions only on phone)`);
+   // RWR-r5 §4.9: the quick-action grid is gone; the next-action panel's buttons wrap inside it at every band.
+   const fits=await sheet().getByTestId('next-action-panel').evaluate(el=>el.scrollWidth<=el.clientWidth+1&&[...el.querySelectorAll('button')].every(b=>{const r=b.getBoundingClientRect(),p=el.getBoundingClientRect();return r.left>=p.left-1&&r.right<=p.right+1;}));assert(fits,`${phase}: next-action panel buttons wrap inside the panel`);
    await closeDrawer();
   }
   console.log(`PASS ${E} edges 639/640, 767/768, 1023/1024: band = shared queries; card columns, sheet width, quick-action grid and shell follow the resolved band`);
@@ -261,7 +269,7 @@ try {
    {const card=page.locator(`[data-board-stage="ENGAGED"] [data-testid=opportunity-card] button`).first();await card.evaluate(el=>el.scrollIntoView({block:'center',inline:'nearest'}));const box=await card.boundingBox();await page.mouse.click(box.x+box.width/2,box.y+box.height/2);}
    await sheet().getByRole('heading',{name:'Historique'}).waitFor();
    assert(await regionNode.evaluate(el=>el.isConnected),'board stays mounted beneath the drawer');assert.equal(await region.evaluate(el=>el.scrollLeft),saved,'board scroll kept beneath the drawer');
-   await sheet().getByRole('button',{name:'Note',exact:true}).click();await top().getByLabel('Note',{exact:true}).fill('Note B1 rafraîchissement');await top().getByRole('button',{name:'Enregistrer',exact:true}).click();await top().getByText('Action enregistrée.',{exact:false}).waitFor();await footerlessSpacing('action result');await top().getByRole('button',{name:'Terminé',exact:true}).click();
+   await fillNote('Note B1 rafraîchissement');await top().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByText('Échange enregistré',{exact:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);
    await closeDrawer();await newColumn.getByRole('button',{name:'Voir les suivants',exact:true}).waitFor();
    assert.equal(await newColumn.getByRole('button',{name:'Précédents',exact:true}).count(),0,'refresh still remounts the board: column paging back on page 1');
    const restored=await page.locator('[data-board-region]').evaluate(el=>({left:el.scrollLeft,max:el.scrollWidth-el.clientWidth}));
@@ -277,8 +285,9 @@ try {
    await setSize(viewport);await gotoLeads();
    await escapeSequences(`${E} Opportunités ${viewport.width}`,async()=>{const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${engaged[0]}"]:visible button`).first();await card.scrollIntoViewIfNeeded();await card.focus();await page.keyboard.press('Enter');await sheet().getByRole('heading',{name:'Historique'}).waitFor();},()=>focusIs(id=>document.activeElement?.closest('[data-lead-id]')?.dataset.leadId===id,'focus returns to the opening card',engaged[0]));
    // E3 open-task menu; E5 popup-first order with the injected consumer.
-   phase=`${E} E3 ${viewport.width}`;await openDrawer(rich);await sheet().getByText(/^Toutes les prochaines actions/).click();const option=sheet().getByRole('button',{name:/^Plus d’options/}).first();await option.click();await page.locator('[role=menu]').waitFor();
-   await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});assert(await sheet().isVisible());await focusIs(()=>document.activeElement?.getAttribute('aria-label')?.startsWith('Plus d’options'),'E3 focus returns to the row trigger');await settle();
+   // RWR-r5 §4.9: the open-task list is gone; E3 is the drawer's own menu (Autres actions).
+   phase=`${E} E3 ${viewport.width}`;await openDrawer(rich);await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.locator('[role=menu]').waitFor();
+   await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});assert(await sheet().isVisible());await focusIs(()=>document.activeElement?.textContent?.trim()==='Autres actions','E3 focus returns to the menu trigger');await settle();
    await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});await headingFocused();
    phase=`${E} E5 ${viewport.width}`;await openDrawer(rich);await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();await page.locator('[role=menu]').waitFor();
    await page.evaluate(()=>{window.__b1Consume=true;});await page.keyboard.press('Escape');await page.waitForTimeout(400);
@@ -287,16 +296,18 @@ try {
    await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});assert(await sheet().isVisible());await settle();
    await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});
    // E4 busy: a pending command ignores Escape.
-   phase=`${E} E4 busy ${viewport.width}`;await openDrawer(rich);await sheet().getByRole('button',{name:'Note',exact:true}).click();await top().getByLabel('Note',{exact:true}).fill('Note en attente');
-   let release;const held=new Promise(resolve=>{release=resolve;});await page.route('**/rest/v1/rpc/crm_add_note',async route=>{await held;await route.fulfill({status:502,contentType:'text/plain',body:'Bad Gateway'});});
+   phase=`${E} E4 busy ${viewport.width}`;await openDrawer(rich);await fillNote('Note en attente');
+   let release;const held=new Promise(resolve=>{release=resolve;});await page.route('**/rest/v1/rpc/crm_log_exchange',async route=>{await held;await route.fulfill({status:502,contentType:'text/plain',body:'Bad Gateway'});});
    await top().getByRole('button',{name:'Enregistrer',exact:true}).click();await top().getByRole('button',{name:'Enregistrement…'}).waitFor();await page.keyboard.press('Escape');await settle();
-   assert.equal(await page.locator('[role=dialog]').count(),2,'E4: a busy dialog ignores Escape');release();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();await page.unroute('**/rest/v1/rpc/crm_add_note');
-   await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await settle();await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});
+   assert.equal(await page.locator('[role=dialog]').count(),2,'E4: a busy dialog ignores Escape');release();await top().getByRole('alert').filter({hasText:UNCERTAIN}).waitFor();await page.unroute('**/rest/v1/rpc/crm_log_exchange');
+   // A filled exchange asks before discarding (RWR-r5 §4.9).
+   await page.keyboard.press('Escape');await page.getByRole('alertdialog').getByRole('button',{name:'Abandonner',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await settle();await page.keyboard.press('Escape');await page.locator('[role=dialog]').waitFor({state:'detached'});
   }
   await setSize({width:390,height:844});
   await escapeSequences(`${E} Tâches 390`,async()=>{await nav(app+'/crm/today?bucket=overdue');const row=page.locator('[data-testid=work-row]').filter({hasText:'B1 tâche en retard'});await row.getByRole('button',{name:'Voir le prospect',exact:true}).focus();await page.keyboard.press('Enter');await sheet().getByRole('heading',{name:'Historique'}).waitFor();},()=>focusIs(()=>!!document.activeElement?.closest('[data-testid=work-row]')||document.activeElement?.tagName==='H1','Tâches focus restoration'));
   phase=`${E} Tâches drawer 390`;await nav(app+'/crm/today?bucket=overdue');await page.locator('[data-testid=work-row]').filter({hasText:'B1 tâche en retard'}).getByRole('button',{name:'Voir le prospect',exact:true}).click();await drawerShape(phase);await fermerPinned(phase);await noOverflow('tâches drawer');await page.goBack();await page.locator('[role=dialog]').waitFor({state:'detached'});
-  const calendarEvent=()=>page.locator(`[data-event-key="placement:${detail(calendarLead).next_placement.id}"]`);
+  // RWR-r5 §4.2: a booked test is one appointment action, shown once as its center_visit row.
+  const calendarEvent=()=>page.locator(`[data-event-key="center_visit:${detail(calendarLead).next_task.id}"] button`).first();
   await escapeSequences(`${E} Calendrier 390`,async()=>{await nav(`${app}/placement-tests?view=calendar&date=${day}`);await calendarEvent().focus();await page.keyboard.press('Enter');await sheet().getByRole('heading',{name:'Historique'}).waitFor();},()=>focusIs(()=>!!document.activeElement?.closest('[data-testid=calendar-event]')||document.activeElement?.tagName==='H1','Calendar focus restoration'));
   phase=`${E} Calendar drawer 390`;await nav(`${app}/placement-tests?view=calendar&date=${day}`);await calendarEvent().click();await sheet().getByRole('heading',{name:'Historique'}).waitFor();await drawerShape(phase);await fermerPinned(phase);await noOverflow('calendar drawer');
   await page.goBack();await page.locator('[role=dialog]').waitFor({state:'detached'});assert.equal(new URL(page.url()).searchParams.get('view'),'calendar','Back closes the Calendar sheet');
@@ -313,13 +324,14 @@ try {
   // 6. History and Demande at 1440 and 390, including per-read failure isolation.
   for(const viewport of [{width:1440,height:900},{width:390,height:844}]){
    phase=`${E} history ${viewport.width}`;await setSize(viewport);await openDrawer(rich);
-   const rows=timeline(rich).rows,summary=historySummary(rows).map(r=>EVENTS[r.event_type]);
+   const rows=timeline(rich).rows,summary=historySummary(rows).map(r=>r.is_primary?COMMAND_LABELS[r.command]||'Action enregistrée':EVENTS[r.event_type]);
    const shown=await sheet().locator(`[id] > div > ol > li p:nth-child(2), [id] > ol > li p:nth-child(2)`).allInnerTexts();
    const historyList=sheet().getByRole('heading',{name:'Historique'}).locator('xpath=..').locator('ol > li');
    const collapsed=(await historyList.locator('p:nth-child(2)').allInnerTexts()).map(t=>t.split(' · ')[0]);
    assert(collapsed.length<=3,'collapsed shows ≤ 3');assert.deepEqual(collapsed,summary.map(t=>t.split(' · ')[0]),'collapsed = latest meaningful exchanges');void shown;
    await sheet().getByText('Derniers échanges',{exact:true}).waitFor();const toggle=sheet().getByRole('button',{name:'Afficher tout l’historique',exact:true});assert.equal(await toggle.getAttribute('aria-expanded'),'false');
-   await toggle.click();assert.equal(await historyList.count(),rows.length,'expanded shows the complete first page');assert(await sheet().getByText('Prochaine action planifiée',{exact:true}).count(),'bookkeeping visible when expanded');
+   await toggle.click();assert.equal(await historyList.count(),rows.length,'expanded shows the complete first page');// RWR-r5 §4.7: secondary rows (bookkeeping) appear only on « Détails ».
+   await sheet().getByRole('button',{name:'Détails',exact:true}).click();await sheet().getByText('Prochaine action planifiée',{exact:true}).first().waitFor();await sheet().getByRole('button',{name:'Masquer les détails',exact:true}).click();await page.waitForFunction(n=>document.querySelectorAll('[role=dialog] ol > li').length===n,rows.length);
    await sheet().getByRole('button',{name:'Charger les plus anciens',exact:true}).waitFor();await sheet().getByRole('button',{name:'Afficher les derniers échanges',exact:true}).click();assert(await historyList.count()<=3);
    phase=`${E} Demande ${viewport.width}`;for(const text of ['Origine du prospect · ','Dernière demande · ','Intérêt déclaré · ','Résumé de la dernière demande','Toutes les réponses aux formulaires'])await sheet().getByText(text,{exact:true}).waitFor();
    await sheet().getByText('Programme annuel · Anglais pour jeunes apprenants',{exact:true}).first().waitFor();
@@ -337,11 +349,11 @@ try {
   phase=`${E} reachability 390`;await setSize({width:390,height:844});await gotoLeads();
   const card=page.locator(`[data-testid=opportunity-card][data-lead-id="${qualified[0]}"]:visible`);await card.scrollIntoViewIfNeeded();await card.getByRole('button',{name:/^Actions ·/}).click();
   const items=await page.getByRole('menuitem').allInnerTexts();assert.deepEqual(items,['Ouvrir l’inscription','Clôturer comme perdu','Clôturer comme non qualifié','Attribuer un responsable'],'grouped overflow keeps exactly today’s items');assert.equal(await page.locator('[role=menu] [role=separator]').count(),2);await page.keyboard.press('Escape');
-  await openDrawer(qualified[0]);for(const name of ['Marquer comme fait','Replanifier','Annuler l’action','Appel','WhatsApp','Note','Planifier','Autres actions','Inscrire et encaisser','Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
-  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Conversation au centre / autre canal','Clôturer comme perdu','Clôturer comme non qualifié','Attribuer un responsable','Réattribuer la prochaine action']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
-  phase=`${E} focus trap 390`;const noteButton=sheet().getByRole('button',{name:'Note',exact:true});await noteButton.focus();await page.keyboard.press('Enter');await top().getByLabel('Note',{exact:true}).waitFor();await dialogFocused();
+  await openDrawer(qualified[0]);for(const name of ['Pas de réponse','On a parlé','Noter un échange','Changer','Autres actions','Inscrire et encaisser','Afficher tout l’historique']){const b=sheet().getByRole('button',{name,exact:true}).first();await b.scrollIntoViewIfNeeded();const box=await b.boundingBox();assert(box&&box.height>=44&&box.x>=0&&box.x+box.width<=390,`${phase}: ${name} reachable ${JSON.stringify(box)}`);}
+  await sheet().getByRole('button',{name:'Autres actions',exact:true}).click();assert.deepEqual(await page.getByRole('menuitem').allInnerTexts(),['Clôturer comme perdu','Clôturer comme non qualifié','Attribuer un responsable','Réattribuer la prochaine action']);await page.keyboard.press('Escape');await page.locator('[role=menu]').waitFor({state:'detached'});
+  phase=`${E} focus trap 390`;const noteButton=sheet().getByRole('button',{name:'Noter un échange',exact:true});await noteButton.focus();await page.keyboard.press('Enter');await top().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialogFocused();
   for(let i=0;i<8;i++){await page.keyboard.press(i%3===2?'Shift+Tab':'Tab');assert(await page.evaluate(()=>!!document.activeElement?.closest('[role=dialog]:last-of-type')||document.activeElement===document.querySelectorAll('[role=dialog]')[1]||!!document.querySelectorAll('[role=dialog]')[1]?.contains(document.activeElement)),'focus stays in the dialog');}
-  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Note','dialog closes back to its trigger');await closeDrawer();
+  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await focusIs(()=>document.activeElement?.textContent?.trim()==='Noter un échange','dialog closes back to its trigger');await closeDrawer();
   phase=`${E} keyboard 1440`;await setSize({width:1440,height:900});await gotoLeads();await page.getByRole('searchbox',{name:'Rechercher un prospect'}).focus();
   let reached=false;for(let i=0;i<30&&!reached;i++){await page.keyboard.press('Tab');reached=await page.evaluate(()=>document.activeElement?.matches('[data-board-region]'));}
   assert(reached,'Tab order reaches the board region from the toolbar');await page.waitForTimeout(100);// lets the reduced-motion 0.01ms outline transition finish
@@ -402,9 +414,9 @@ try {
    for(const width of cases){
     phase=`${E} telephone ${touch?'coarse':'fine'} ${width}`;await setSize({width,height:900});await openDrawer(fresh[3]);const m=await mode();
     assert.equal(m.coarse,touch,`${phase}: pointer emulation asserted first`);
-    await sheet().getByRole('button',{name:'Enregistrer un appel',exact:true}).click();await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();
+    await openExchange();
     const link=top().getByRole('link',{name:/^Appeler/});const expected=m.coarse&&!m.sm;assert.equal(await link.count(),expected?1:0,`${phase}: tel: link ${expected?'present':'absent'}`);
-    for(const text of ['Copier le numéro'])await top().getByRole('button',{name:text,exact:true}).waitFor();await top().getByText(detail(fresh[3]).phone,{exact:true}).waitFor();
+    for(const text of ['Copier le numéro'])await top().getByRole('button',{name:text,exact:true}).waitFor();await top().getByText(detail(fresh[3]).phone).first().waitFor();
     if(expected){assert.match(await link.getAttribute('href'),/^tel:\+212/);const count=sql(`select count(*) from public.crm_activities where lead_id='${fresh[3]}'`);await link.evaluate(node=>node.addEventListener('click',e=>e.preventDefault(),{once:true}));await link.click();await settle();assert.equal(sql(`select count(*) from public.crm_activities where lead_id='${fresh[3]}'`),count,'launching the call records nothing');}
     await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
    }
@@ -442,8 +454,8 @@ try {
   phase=`${E} drop control 1280`;await setSize({width:1280,height:800});await gotoLeads();let writesBefore=writes.length;
   const control=await syntheticDrop(page.locator(`[data-testid=opportunity-card][data-lead-id="${ordinaryCard}"]`),page.locator('[data-board-stage="CONTACTING"]'));
   assert(control.payload.includes(ordinaryCard)&&control.accepted,`${phase}: the card wrote its drag payload and the column accepted it ${JSON.stringify(control)}`);
-  // The column routes to the same guarded path as the card menu: the lead drawer with the call dialog above it.
-  await top().getByLabel('Résultat de l’appel',{exact:true}).waitFor();await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
+  // The column routes to the same guarded path as the card menu: the lead drawer with the exchange dialog (Téléphone) above it (RWR-r5 §4.9).
+  await top().getByRole('heading',{name:'Noter un échange'}).waitFor();assert.equal(await top().getByRole('tab',{name:'Téléphone'}).getAttribute('aria-selected'),'true');await top().getByRole('button',{name:'Annuler',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length===1);await closeDrawer();
   assert.equal(writes.length,writesBefore,'the guarded dialog was cancelled: no command');
   // ...then the same sequence onto a stage chip is a no-op: no dialog, no write, no stage or URL change.
   for(const width of [768,390]){

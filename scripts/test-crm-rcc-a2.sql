@@ -348,20 +348,112 @@ do $$ declare l uuid; d jsonb; r jsonb; t public.crm_tasks%rowtype; target times
  perform pg_temp.ok((select count(*)=2 from public.crm_activities where source_key in('enrollment-duplicate:'||e||':'||a,'enrollment-duplicate:'||e||':'||c)),'duplicates cancelled with today''s source keys');
 end $$;
 select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept and earliest-retained results';
+-- RWR-r5 review of #208 (important 7) and re-review (owner decision 1): linking a legacy
+-- unconfirmed enrollment replaces the appointment by « Finaliser l'inscription », which
+-- carries the appointment's planned test (a real link). Moving the enrolment action to
+-- another enrolment action keeps the link; replacing it by anything else, or closing the
+-- prospect, cancels the test through the existing clean-up.
+create function pg_temp.kept_test_lead(out l uuid,out k uuid,out p uuid,out f uuid) language plpgsql as $$ begin
+ perform pg_temp.actor(3);
+ l:=pg_temp.lead();
+ perform pg_temp.act('log_exchange',l,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','with_test',true,
+  'due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '3 days'))));
+ select id,placement_test_id into k,p from public.crm_tasks where id=crm_security.next_action_id(l);
+ perform pg_temp.ok((select task_type='center_visit' from public.crm_tasks where id=k) and p is not null,'fixture: an appointment with its test');
+ perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ f:=crm_security.next_action_id(l);
+end $$;
+do $$ declare l uuid; k uuid; p uuid; f uuid; g uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ perform pg_temp.ok((select status<>'CONVERTED' from public.crm_leads where id=l),'a legacy unconfirmed link does not convert');
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='enrollment_followup') from public.crm_tasks where lead_id=l and status='open'),'« Finaliser l''inscription » is the one next action');
+ perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=k),'the appointment is replaced');
+ perform pg_temp.ok((select status='Planifié' and cancelled_at is null from public.placement_tests where id=p),'its planned test is kept');
+ perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f),'« Finaliser l''inscription » carries the kept test (real link)');
+ perform pg_temp.ok((select count(*)=0 from public.placement_tests x where x.crm_lead_id=l and x.status='Planifié'
+  and not exists(select 1 from public.crm_tasks t where t.placement_test_id=x.id and t.status='open' and t.task_type in ('center_visit','enrollment_followup'))),'Q29 shape: none');
+ -- « Changer » to another « Finaliser l'inscription » moves the link with it.
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',f,'next',jsonb_build_object('task_type','enrollment_followup','due_preset','in_2_days')));
+ g:=crm_security.next_action_id(l);
+ perform pg_temp.ok(g<>f and (select task_type='enrollment_followup' and placement_test_id=p from public.crm_tasks where id=g),'enrolment → enrolment carries the test');
+ perform pg_temp.ok((select status='Planifié' from public.placement_tests where id=p),'the test stays planned');
+ -- Replacing the enrolment action by a callback (with its reason) cancels the linked test.
+ perform pg_temp.act('change_next_action',l,jsonb_build_object('expected_action_id',g,'next',jsonb_build_object('task_type','callback','due_preset','tomorrow',
+  'replace_action_id',g,'cancel_enrollment_reason','Le contact préfère réfléchir')));
+ perform pg_temp.ok((select status='cancelled' from public.crm_tasks where id=g),'enrolment action replaced');
+ perform pg_temp.ok((select status='Annulé' and cancelled_at is not null from public.placement_tests where id=p),'replacing the enrolment action cancels its test');
+ perform pg_temp.ok((select count(*)=0 from public.placement_tests where crm_lead_id=l and status='Planifié'),'no orphan planned test');
+end $$;
+-- Review of #208 at f559f5d (B5): rescheduling « Finaliser l'inscription » in place
+-- through the old crm_schedule_task (an old tab or a direct call) moves the action,
+-- never its kept test; only an appointment moves its test.
+do $$ declare l uuid; k uuid; p uuid; f uuid; before record; d timestamptz; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ select date_test,heure,status into before from public.placement_tests where id=p;
+ d:=crm_security.next_window(crm_security.current_policy_id(),now()+interval '5 days');
+ perform pg_temp.act('schedule_task',l,jsonb_build_object('task_id',f,'expected_task_version',(select version from public.crm_tasks where id=f),'task',jsonb_build_object('due_at',d)));
+ perform pg_temp.ok((select due_at=d and status='open' and placement_test_id=p from public.crm_tasks where id=f),'the enrolment action is rescheduled in place and still carries the test');
+ perform pg_temp.ok((select (date_test,heure,status)=(before.date_test,before.heure,before.status) from public.placement_tests where id=p),'its kept test keeps its date, time and status');
+end $$;
+-- Conversion keeps a test carried by « Finaliser l'inscription » (§4.8; owner decision 1).
+do $$ declare l uuid; k uuid; p uuid; f uuid; e uuid; s uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ select enrollment_id into e from public.crm_leads where id=l;
+ select student_id into s from public.enrollments where id=e;
+ perform pg_temp.ok(e is not null and (select placement_test_id=p from public.crm_tasks where id=f),'fixture: linked enrolment, action carries the test');
+ -- The payment on the linked enrolment confirms it and converts the prospect.
+ perform pg_temp.actor(2);
+ perform public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','gross_amount',1500,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ perform pg_temp.ok((select status='CONVERTED' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'payment converts and closes the enrolment action');
+ perform pg_temp.ok((select status='Planifié' and cancelled_at is null from public.placement_tests where id=p),'conversion keeps the carried test');
+end $$;
+-- Closing the prospect while « Finaliser l'inscription » carries the test cancels it too.
+do $$ declare l uuid; k uuid; p uuid; f uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ perform pg_temp.act('close_prospect',l,'{"status":"LOST","reason":"price"}');
+ perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=p),'closing cancels the carried test');
+end $$;
+-- An open « Finaliser l'inscription » already exists (kept by the enrolment start) beside a
+-- legacy duplicate appointment with a planned test: the kept action takes the test.
+do $$ declare l uuid; f uuid; v uuid; p uuid; begin
+ perform pg_temp.actor(3);
+ l:=pg_temp.lead('enrollment_followup','enrollment');
+ select id into f from public.crm_tasks where lead_id=l and status='open' and task_type='enrollment_followup';
+ set local session_replication_role=replica;
+ insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
+ values('A2 learner',(now() at time zone public.centre_utc_offset())::date+3,'11:00','Planifié',l,'Fixture') returning id into p;
+ insert into public.crm_tasks(lead_id,task_type,due_at,schedule_kind,placement_test_id,source_kind,source_key)
+ values(l,'center_visit',now()+interval '3 days','appointment',p,'manual','a2-kept-dup:'||l) returning id into v;
+ set local session_replication_role=origin;
+ perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
+ perform pg_temp.ok(crm_security.next_action_id(l)=f and (select status='cancelled' from public.crm_tasks where id=v),'the existing enrolment action is kept, the duplicate appointment closed');
+ perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f) and (select status='Planifié' from public.placement_tests where id=p),'the kept enrolment action takes the duplicate''s planned test');
+end $$;
+select 'PASS legacy enrolment link: « Finaliser l''inscription » carries the kept test; replacing it or closing cancels the test; rescheduling it in place or converting keeps the test';
 
 -- Owner and policy reasons, with no partial writes.
 -- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.
-do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; d jsonb; begin
+do $$ declare l uuid:=pg_temp.lead(); before jsonb; p uuid; d jsonb; seen boolean:=false; begin
  update public.crm_leads set owner_id=pg_temp.uid(4) where id=l;
  d:=pg_temp.legacy_pick(l);before:=pg_temp.counts();
  perform pg_temp.rejects(d,'22023','Assignee must be operational staff','owner_not_operational');
  perform pg_temp.ok(pg_temp.counts()=before and (select enrollment_id is null from public.crm_leads where id=l),'owner rejection leaves no partial writes');
  -- validate_policy prevents a policy without windows; only a direct synthetic row reaches it.
+ -- RWR §4.5: hours come from the current published version, so the synthetic
+ -- window-less version is made current (after the lead exists) to reach the
+ -- reason, inside a block rolled back so the rest of the suite keeps its hours.
+ l:=pg_temp.lead();
+ begin
  insert into public.crm_followup_policies select (jsonb_populate_record(null::public.crm_followup_policies,to_jsonb(x)||jsonb_build_object('id',gen_random_uuid(),
-  'version',(select max(version)+1 from public.crm_followup_policies),'effective_from',now()+interval '100 years','weekly_hours','{"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[]}'::jsonb))).*
+  'version',(select max(version)+1 from public.crm_followup_policies),'effective_from',now(),'weekly_hours','{"1":[],"2":[],"3":[],"4":[],"5":[],"6":[],"7":[]}'::jsonb))).*
  from public.crm_followup_policies x where x.id=(select id from a2_policy) returning id into p;
- l:=pg_temp.lead();update public.crm_leads set followup_policy_id=p where id=l;
+ update public.crm_leads set followup_policy_id=p where id=l;
  perform pg_temp.rejects(pg_temp.legacy_pick(l),'22023','Policy has no available calling window','followup_policy_unavailable');
+ seen:=true;
+ raise exception 'rollback synthetic policy' using errcode='P0099';
+ exception when sqlstate 'P0099' then null;
+ end;
+ if seen then insert into a2_seen values('followup_policy_unavailable'); end if;
 end $$;
 select 'PASS owner_not_operational and followup_policy_unavailable without partial writes';
 

@@ -1,4 +1,4 @@
-import { centreFormatter, centreInstant } from '../centreClock.mjs';
+import { centreDateTimeInput, centreFormatter, centreInstant, CENTRE_UTC_OFFSET_MINUTES } from '../centreClock.mjs';
 import { isRecordConflict } from '../conflictErrors.mjs';
 
 export const STATUS = {
@@ -14,11 +14,12 @@ export const TASKS = {
   first_contact: 'Premier contact',
   contact_attempt: 'Appel de suivi',
   callback: 'Rappel',
-  whatsapp_followup: 'Suivi WhatsApp',
+  whatsapp_followup: 'À faire par nous (WhatsApp)',
   confirm_placement_test: 'Préparer un test de niveau',
-  post_test_followup: 'Rappeler le parent · Résultat disponible',
-  center_visit: 'Visite au centre',
-  enrollment_followup: 'Finaliser l’inscription'
+  post_test_followup: 'Proposer l’inscription',
+  center_visit: 'Rendez-vous au centre',
+  enrollment_followup: 'Finaliser l’inscription',
+  awaiting_prospect: 'En attente du prospect'
 };
 // Agreed appointments and internal reminders are separate server facts.
 export const SCHEDULE_KINDS = {
@@ -59,7 +60,7 @@ export function outcomeStage(key, status) {
   if (decision === 'not_qualified') return 'NOT_QUALIFIED';
   return ['NEW', 'CONTACTING'].includes(status) ? 'ENGAGED' : status;
 }
-// A conversation by WhatsApp naturally continues on WhatsApp while the parent decides.
+// A conversation by WhatsApp naturally continues on WhatsApp while the contact decides.
 export function outcomeTask(key, channel) {
   const outcome = CONVERSATION_OUTCOMES[key];
   return outcome?.decision === 'considering' && channel === 'whatsapp' ? 'whatsapp_followup' : outcome?.task || null;
@@ -107,7 +108,7 @@ export const OUTCOMES = {
   busy: 'Occupé',
   declined: 'Appel refusé',
   unreachable: 'Injoignable',
-  spoke_with_contact: 'Conversation avec le parent',
+  spoke_with_contact: 'Conversation avec le contact',
   wrong_number: 'Mauvais numéro'
 };
 export const LOST = {
@@ -212,10 +213,10 @@ export function commandError(error) {
   if (message.includes('No effective follow-up policy')) return 'Le calendrier de suivi n’est pas encore configuré. Demandez à un directeur de le publier.';
   if (message.includes('minimum spacing')) return 'Le délai minimum entre deux appels n’est pas encore écoulé (3 heures par défaut).';
   if (message.includes('five current-cycle')) return 'Cinq appels sans réponse dans la séquence actuelle sont nécessaires.';
-  if (message.includes('Agreed callback time is outside calling hours')) return 'Cette heure convenue est hors des horaires d’appel. Choisissez avec le parent une autre heure compatible.';
+  if (message.includes('Agreed callback time is outside calling hours')) return 'Cette heure convenue est hors des horaires d’appel. Choisissez avec le contact une autre heure compatible.';
   if (message.includes('Reminder preset')) return 'Choisissez soit un rappel rapide, soit une date précise.';
-  if (message.includes('Invalid follow-up kind')) return 'Une visite au centre est toujours un rendez-vous convenu avec le parent.';
-  if (message.includes('Considering decision')) return 'Pour un parent en réflexion, prévoyez un rappel ou un suivi WhatsApp.';
+  if (message.includes('Invalid follow-up kind')) return 'Une visite au centre est toujours un rendez-vous convenu avec le contact.';
+  if (message.includes('Considering decision')) return 'Pour un contact en réflexion, prévoyez un rappel ou un suivi WhatsApp.';
   if (message.includes('next') || message.includes('Next')) return 'Choisissez une prochaine action et une date future.';
   if (error?.code === '22023') return 'Vérifiez les champs, la date future et les conditions de cette action.';
   return 'Impossible de confirmer l’enregistrement. Réessayez sans modifier les champs pour éviter un doublon.';
@@ -278,7 +279,8 @@ export const MEANINGFUL_EVENTS = new Set([
 // Collapsed history: the latest meaningful exchanges of the first loaded page, else the latest entries.
 export function historySummary(rows, size = 3) {
   const list = Array.isArray(rows) ? rows : [];
-  const meaningful = list.filter(row => MEANINGFUL_EVENTS.has(row?.event_type));
+  // A primary row is one user action (RWR-r5 §4.7) and always counts as an exchange.
+  const meaningful = list.filter(row => row?.is_primary || MEANINGFUL_EVENTS.has(row?.event_type));
   return (meaningful.length ? meaningful : list).slice(0, size);
 }
 // Escape inside a modal sheet: an already consumed Escape is final; otherwise a nested
@@ -324,4 +326,174 @@ export function adSourceLabel(ad) {
   const campaign = text(ad.campaign_name);
   if (!main && !campaign) return null;
   return main ? { main, campaign } : { main: campaign, campaign: null };
+}
+
+// ---------------------------------------------------------------------------
+// RWR-r5 §4.9: one next action per prospect. Vocabulary, payload builder, slot
+// list and refusal messages shared by NextActionPanel, ExchangeDialog,
+// NextActionDialog and AppointmentOutcome. The server stays authoritative: these
+// helpers only shape what the user picked.
+// ---------------------------------------------------------------------------
+export const WORK_BUCKETS = { overdue: 'En retard', today: 'Aujourd’hui', tomorrow: 'Demain', upcoming: 'À venir', awaiting: 'En attente' };
+export const STALE_MESSAGE = 'Ce prospect a été modifié, rechargez.';
+export const CALL_RESULTS = { no_answer: 'Pas de réponse', busy: 'Occupé', declined: 'Refusé', unreachable: 'Injoignable', wrong_number: 'Mauvais numéro', spoke: 'On a parlé' };
+export const FAILED_CALL_RESULTS = ['no_answer', 'busy', 'declined', 'unreachable'];
+export const EXCHANGE_CHANNELS = { phone: 'Téléphone', whatsapp: 'WhatsApp', in_person: 'Au centre', other: 'Autre' };
+export function exchangeResults(channel) {
+  if (channel === 'phone') return CALL_RESULTS;
+  if (channel === 'whatsapp') return { whatsapp_sent: 'Message envoyé', spoke: 'On a échangé' };
+  if (channel === 'in_person') return { spoke: 'On a parlé' };
+  return { spoke: 'On a parlé', note: 'Simple note' };
+}
+// What was agreed (« On a parlé ») or what comes next (« Changer »).
+export const NEXT_KINDS = {
+  keep: 'Garder l’action actuelle',
+  center_visit: 'Rendez-vous au centre',
+  callback: 'Rappel convenu',
+  our_step: 'À faire par nous',
+  reminder: 'Rappel pour l’équipe',
+  awaiting: 'En attente du prospect',
+  enrol: 'Inscrire maintenant',
+  lost: 'Pas intéressé',
+  not_qualified: 'Pas pour nous'
+};
+export const CLOSE_KINDS = ['lost', 'not_qualified'];
+export const OUR_STEP_PRESETS = { tomorrow: 'Demain', in_2_days: 'Dans 2 jours', in_3_days: 'Dans 3 jours', next_week: 'Dans une semaine' };
+export const APPOINTMENT_OUTCOMES = { came_enrolled: 'Venu · s’inscrit', came_will_return: 'Venu · reviendra', came_not_interested: 'Venu · pas intéressé', no_show: 'Absent' };
+export const COMMAND_LABELS = {
+  log_exchange: 'Échange', change_next_action: 'Prochaine action changée', appointment_outcome: 'Résultat du rendez-vous',
+  close_prospect: 'Prospect clôturé', reopen_prospect: 'Prospect rouvert', create_manual_lead: 'Prospect créé'
+};
+const CALL_ACTIONS = ['first_contact', 'contact_attempt', 'callback'];
+export function isCallAction(action) {
+  return CALL_ACTIONS.includes(action?.task_type);
+}
+// OD-18: replacing an appointment needs « Remplace » ; leaving « Finaliser
+// l’inscription » for anything but another enrolment action needs a reason.
+// Closing is not a replacement.
+// « Changer » opens on the current agreed time (an agreed callback or an appointment), so moving
+// it is the date alone (day script « rappel reporté deux fois puis annulé »: ≤ 9 actions).
+export function prefillFromAction(action) {
+  const kind = action?.task_type === 'center_visit' ? 'center_visit'
+    : action?.task_type === 'callback' && action.schedule_kind === 'appointment' ? 'callback' : null;
+  if (!kind || !action.due_at) return {};
+  const [date, time] = centreDateTimeInput(new Date(action.due_at)).split('T');
+  return kind === 'center_visit' ? { kind, date, time, withTest: !!action.placement_test_id } : { kind, date, time };
+}
+export function replaceRules(current, kind) {
+  const replacing = !!current && !!kind && kind !== 'keep' && !CLOSE_KINDS.includes(kind);
+  return {
+    confirmAppointment: replacing && current.task_type === 'center_visit',
+    enrollmentReason: replacing && current.task_type === 'enrollment_followup' && kind !== 'enrol'
+  };
+}
+const pad = n => String(n).padStart(2, '0');
+const isoDow = date => { const d = new Date(`${date}T12:00:00Z`).getUTCDay(); return d === 0 ? 7 : d; };
+// Times offered by the picker: the windows of that weekday in the current hours
+// (calling for calls, opening for visits), none on a closed date, never in the past.
+// The first centre date, from today, with a free slot of that kind (within two weeks), or ''.
+export function firstSlotDate(hours, kind, today, now = null) {
+  if (!hours || !/^\d{4}-\d\d-\d\d$/.test(today || '')) return '';
+  for (let i = 0; i < 15; i += 1) {
+    const date = new Date(Date.parse(`${today}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10);
+    if (slotTimes(hours, kind, date, { now }).length) return date;
+  }
+  return '';
+}
+// `keep`: an agreed time off the 15-minute grid (16:00 in a window opening at 15:20) stays
+// offered when it is inside the hours that day, so changing only the date never drops it.
+export function slotTimes(hours, kind, date, { step = 15, now = null, keep = null } = {}) {
+  if (!hours || !/^\d{4}-\d\d-\d\d$/.test(date || '')) return [];
+  if ((hours.closed_dates || []).includes(date)) return [];
+  const windows = (kind === 'opening' ? hours.opening_hours : hours.calling_hours)?.[String(isoDow(date))] || [];
+  const minutes = value => { const [h, m] = String(value).split(':').map(Number); return h * 60 + m; };
+  const floor = now && now.date === date ? minutes(now.time) : -1;
+  const out = [];
+  for (const [open, close] of windows) {
+    for (let t = minutes(open); t < minutes(close); t += step) if (t > floor) out.push(`${pad(Math.floor(t / 60))}:${pad(t % 60)}`);
+  }
+  if (/^\d\d:\d\d$/.test(keep || '') && !out.includes(keep) && minutes(keep) > floor
+    && windows.some(([open, close]) => minutes(keep) >= minutes(open) && minutes(keep) < minutes(close))) out.push(keep);
+  return out.sort();
+}
+// The `next` of crm_log_exchange / crm_change_next_action from the picker state.
+// Throws a French message the form shows when a required choice is missing.
+export function nextActionPayload(form, current) {
+  const kind = form?.kind;
+  if (!NEXT_KINDS[kind]) throw new Error('Choisissez la prochaine action.');
+  if (kind === 'keep') return 'keep';
+  if (CLOSE_KINDS.includes(kind)) {
+    if (!form.reason) throw new Error('Choisissez le motif.');
+    if (form.reason === 'other' && !form.closeNote?.trim()) throw new Error('Précisez le motif « Autre ».');
+    return { close: { status: kind === 'lost' ? 'LOST' : 'NOT_QUALIFIED', reason: form.reason, ...(form.closeNote?.trim() ? { note: form.closeNote.trim() } : {}) } };
+  }
+  if (kind === 'enrol') return { enrol: form.date ? { due_at: centreInstant(`${form.date}T00:00`) } : { due_preset: 'tomorrow' } };
+  const at = () => {
+    if (!form.date || !form.time) throw new Error('Choisissez la date et l’heure.');
+    return centreInstant(`${form.date}T${form.time}`);
+  };
+  let spec;
+  if (kind === 'center_visit') spec = { task_type: 'center_visit', due_at: at(), with_test: !!form.withTest };
+  else if (kind === 'callback') spec = { task_type: 'callback', schedule_kind: 'appointment', due_at: at() };
+  else if (kind === 'our_step' || kind === 'reminder') {
+    const base = kind === 'our_step' ? { task_type: 'whatsapp_followup' } : { task_type: 'callback', schedule_kind: 'reminder' };
+    if (OUR_STEP_PRESETS[form.preset] || (kind === 'reminder' && REMINDER_PRESETS[form.preset])) spec = { ...base, due_preset: form.preset };
+    else if (form.date) spec = { ...base, due_at: centreInstant(`${form.date}T00:00`) };
+    else throw new Error('Choisissez quand le faire.');
+  } else {
+    // « En attente »: default relance today + 5 days (server), an explicit date, or none.
+    spec = { task_type: 'awaiting_prospect', ...(form.noRelance ? { due_at: null } : form.date ? { due_at: centreInstant(`${form.date}T00:00`) } : {}) };
+  }
+  if (form.instructions?.trim()) spec.instructions = form.instructions.trim();
+  const rules = replaceRules(current, kind);
+  if (rules.confirmAppointment) {
+    if (!form.replaceConfirmed) throw new Error('Cochez « Remplace » pour changer le rendez-vous.');
+    spec.replace_action_id = current.id;
+  }
+  if (rules.enrollmentReason) {
+    if (!form.cancelEnrollmentReason?.trim()) throw new Error('Indiquez pourquoi l’inscription n’est plus à finaliser.');
+    spec.cancel_enrollment_reason = form.cancelEnrollmentReason.trim();
+  }
+  return spec;
+}
+const HINT_MESSAGES = {
+  'crm_exchange.attempt_gap': 'Le délai minimum entre deux appels n’est pas écoulé. Cochez « Tentative réelle (hors délai) » si l’appel a bien eu lieu.',
+  'crm_hours.outside_calling': 'Cette heure est hors des horaires d’appel. Choisissez un créneau proposé.',
+  'crm_hours.outside_opening': 'Cette heure est hors des horaires d’ouverture du centre. Choisissez un créneau proposé.',
+  'crm_next_action.replace_confirmation': 'Cochez « Remplace » pour changer le rendez-vous.',
+  'crm_next_action.enrollment_kept': 'Indiquez pourquoi l’inscription n’est plus à finaliser, ou gardez l’action actuelle.',
+  'crm_next_action.overlap': 'Un autre rendez-vous ou test de cet apprenant est prévu à cette heure.',
+  'crm_appointment.before_start': 'Le résultat du rendez-vous se saisit à partir de son heure de début.',
+  'crm_appointment.reason_required': 'Choisissez le motif : le prospect sera clôturé.',
+  'crm_next_action.appointment_needs_exchange': 'Pour fixer un rendez-vous, notez l’échange (« Noter un échange » → « On a parlé ») : le prospect devient qualifié.',
+  'crm_placement.not_replannable': 'Un test annulé ou absent ne se replanifie pas. Fixez un nouveau rendez-vous avec test depuis la fiche du prospect.',
+  'crm_create.walk_in_exchange_required': 'Une visite au centre s’enregistre avec ce qui a été convenu : choisissez la prochaine action.'
+};
+// Refusal text for the next-action forms: hint first, then the shared command messages.
+// Statuses the test form offers (re-review of #208, owner decision 2026-11-22): a
+// prospect's test that has left « Planifié » is never planned again, whatever the path;
+// a student's own test (no prospect) keeps today's choices.
+export function placementStatusOptions(test) {
+  const prospectTest = Boolean(test && (test.is_crm || test.crm_lead_id));
+  const replannable = !test || test.status === 'Planifié' || !prospectTest;
+  return [...new Set([
+    ...(['Annulé', 'Absent'].includes(test?.status) ? [test.status] : []),
+    ...(replannable ? ['Planifié'] : []),
+    'Passé', 'Résultat saisi', 'Affecté'
+  ])];
+}
+
+export function actionErrorMessage(error) {
+  if (error instanceof Error && !error.code && /^(Choisissez|Cochez|Indiquez|Précisez)/.test(error.message)) return error.message;
+  if (isRecordConflict(error)) return STALE_MESSAGE;
+  return HINT_MESSAGES[error?.hint] || commandError(error);
+}
+// « Prochain essai possible à 14:20 » from crm_check_action.
+export function attemptGapLabel(check) {
+  if (!check || check.attempt_gap_ok !== false || !check.next_attempt_allowed_at) return null;
+  return `Prochain essai possible à ${centreTimeLabel(check.next_attempt_allowed_at)}`;
+}
+function centreTimeLabel(value) {
+  const shifted = new Date(new Date(value).getTime() + CENTRE_UTC_OFFSET_MINUTES * 60000);
+  return `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
 }

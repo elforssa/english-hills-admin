@@ -11,19 +11,29 @@ begin
  perform pg_temp.ok(r->'boundaries'->>'d1'=to_jsonb(bounds.d1)#>>'{}','server independent midnights');
  for v in select unnest(array['overdue','today','tomorrow','upcoming']) loop
   b:=public.crm_get_work_queue(p_bucket=>v,p_assignee_mode=>'all');
-  select count(*) into n from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
-   and case v when 'overdue' then t.due_at<now() when 'today' then t.due_at>=now() and t.due_at<bounds.d1 when 'tomorrow' then t.due_at>=bounds.d1 and t.due_at<bounds.d2 else t.due_at>=bounds.d2 end;
+  -- RWR-r5: one row per prospect, its current next action (crm_security.next_action_id).
+  select count(*) into n from public.crm_leads l join public.crm_tasks t on t.id=crm_security.next_action_id(l.id) where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null
+   and t.task_type<>'awaiting_prospect' and case v when 'overdue' then t.due_at<now() when 'today' then t.due_at>=now() and t.due_at<bounds.d1 when 'tomorrow' then t.due_at>=bounds.d1 and t.due_at<bounds.d2 else t.due_at>=bounds.d2 end;
   perform pg_temp.ok((b->'counts'->>v)::bigint=n and jsonb_array_length(b->'rows')<=25,'exact bucket count and page '||v);
   perform pg_temp.ok(b->'counts'=r->'counts','counts share predicates across buckets');
  end loop;
- perform pg_temp.ok((select sum(value::bigint) from jsonb_each_text(r->'counts'))=(select count(*) from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.status='open' and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null),'bucket partition exhaustive');
+ perform pg_temp.ok((select sum(value::bigint) from jsonb_each_text(r->'counts'))=(select count(*) from public.crm_leads l join public.crm_tasks t on t.id=crm_security.next_action_id(l.id) where l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and l.merged_into_lead_id is null),'bucket partition exhaustive, one row per prospect');
+ perform pg_temp.ok((select count(*)=count(distinct x->>'lead_id') from jsonb_array_elements(public.crm_get_work_queue(p_bucket=>'upcoming',p_assignee_mode=>'all',p_limit=>50)->'rows')x),'a prospect never appears twice');
  -- Real public-read edge fixtures: exactly as_of, D1, D2 and earlier today.
- insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key)
- select (select f.lead from fixture f where f.i=2),'callback',edge,'a3000000-0000-0000-0000-000000000002','manual','boundary:'||ordinal
- from unnest(array[now()-interval '1 second',now(),bounds.d1,bounds.d2]) with ordinality x(edge,ordinal);
- b:=public.crm_get_work_queue(p_assignee_mode=>'staff',p_assignee=>'a3000000-0000-0000-0000-000000000002',p_owner_mode=>'unassigned');
- perform pg_temp.ok(b->'counts'='{"overdue":1,"today":1,"tomorrow":1,"upcoming":1}'::jsonb,'real read half-open boundaries and overdue earlier today');
- delete from public.crm_tasks where source_key like 'boundary:%';
+ -- One prospect has one next action, so each edge is probed on its own and rolled back.
+ c:='{}'::jsonb;
+ for stamp,v in select * from unnest(array[now()-interval '1 second',now(),bounds.d1,bounds.d2],array['overdue','today','tomorrow','upcoming']) loop
+  begin
+   update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Boundary probe' where lead_id=(select f.lead from fixture f where f.i=2) and status='open';
+   insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key)
+   select (select f.lead from fixture f where f.i=2),'callback',stamp,'a3000000-0000-0000-0000-000000000002','manual','boundary:'||v;
+   b:=public.crm_get_work_queue(p_assignee_mode=>'staff',p_assignee=>'a3000000-0000-0000-0000-000000000002',p_owner_mode=>'unassigned');
+   c:=c||jsonb_build_object(v,b->'counts');
+   raise exception using errcode='P0001',message='boundary-probe-rollback';
+  exception when raise_exception then if sqlerrm<>'boundary-probe-rollback' then raise; end if;
+  end;
+ end loop;
+ perform pg_temp.ok(c='{"overdue":{"overdue":1,"today":0,"tomorrow":0,"upcoming":0,"awaiting":0},"today":{"overdue":0,"today":1,"tomorrow":0,"upcoming":0,"awaiting":0},"tomorrow":{"overdue":0,"today":0,"tomorrow":1,"upcoming":0,"awaiting":0},"upcoming":{"overdue":0,"today":0,"tomorrow":0,"upcoming":1,"awaiting":0}}'::jsonb,'real read half-open boundaries and overdue earlier today');
  -- SQL is the timezone oracle, independent of Node/browser ICU and host TZ. The centre clock
  -- (plan AFU-r1, D-TZ = A) has a fixed offset: dates that were the tz-data offset switches
  -- (2026-02-15, 2026-03-22) are plain 24-hour days with midnight boundaries.
@@ -55,8 +65,8 @@ begin
  perform pg_temp.denied('select public.crm_get_work_queue(p_cursor=>''{"v":1}'')');
  perform pg_temp.ok((select count(distinct task_type)=8 from public.crm_tasks where status='open'),'eight task types in fixture');
  -- Exact fixed shape, no technical attribution, notes, scores or finance.
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','schedule_kind','scheduled_end_at','task_type','version'],'fixed task projection');
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0->'lead')k)=array['contact_name','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed lead projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','next_action','review_flag','schedule_kind','scheduled_end_at','siblings','task_type','version'],'fixed task projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0->'lead')k)=array['contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version'],'fixed lead projection');
  r:=public.crm_get_admissions_calendar(day,day+7);i:=0;
  loop
   perform pg_temp.ok(jsonb_array_length(r->'rows')<=100,'bounded agenda');
@@ -66,18 +76,21 @@ begin
   r:=public.crm_get_admissions_calendar(day,day+7,p_cursor=>r->'next_cursor');
  end loop;
  perform pg_temp.ok(i>1,'calendar continuation beyond 100');
- select count(*) into n from public.placement_tests p where p.date_test>=day and p.date_test<day+7 and p.status='Planifié';
+ -- RWR-r5 §4.9: a test inside an appointment is that appointment's badge; closed prospects are excluded.
+ select count(*) into n from public.placement_tests p left join public.crm_leads l on l.id=p.crm_lead_id where p.date_test>=day and p.date_test<day+7 and p.status='Planifié'
+  and (p.crm_lead_id is null or l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED','CONVERTED') and l.merged_into_lead_id is null)
+  and not exists(select 1 from public.crm_tasks k where k.placement_test_id=p.id and k.task_type='center_visit' and k.status='open');
  select n+count(*) into n from public.crm_tasks t join public.crm_leads l on l.id=t.lead_id where t.task_type='center_visit' and t.status='open' and l.merged_into_lead_id is null and l.status in ('NEW','CONTACTING','ENGAGED','QUALIFIED') and t.due_at>=day::timestamp at time zone public.centre_utc_offset() and t.due_at<(day+7)::timestamp at time zone public.centre_utc_offset();
  perform pg_temp.ok(cardinality(keys)=n,'exact sources, no preparation/result/callback appointments');
  r:=public.crm_get_admissions_calendar(day,day+7,p_kind=>'placement',p_include_completed=>true);
- perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at'],'fixed event projection');
+ perform pg_temp.ok((select array_agg(k order by k) from jsonb_object_keys(r->'rows'->0)k)=array['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','lead_version','local_date','local_time','outcome_code','outcome_enabled','placement_status','placement_test_id','stage','starts_at','student_id','task_status','task_type','task_version','updated_at','with_test'],'fixed event projection');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'placement_status'<>'Planifié'),'completed toggle');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(r->'rows')x where x->'starts_at'='null'::jsonb and x->'local_time'='null'::jsonb),'truthful unspecified lane');
- perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(r->'rows')x where x->'ends_at'<>'null'::jsonb),'no invented placement duration');
+ perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(r->'rows')x where x->>'kind'='placement' and x->'ends_at'<>'null'::jsonb),'no invented placement duration');
  b:=public.crm_get_admissions_calendar(day,day+1,p_kind=>'center_visit');
  perform pg_temp.ok(exists(select 1 from jsonb_array_elements(b->'rows')x where x->'ends_at'<>'null'::jsonb and (x->>'ends_at')::timestamptz>(x->>'starts_at')::timestamptz),'genuine visit duration preserved');
  b:=public.crm_get_admissions_calendar(day+1,day+2,p_kind=>'placement');
- perform pg_temp.ok(exists(select 1 from jsonb_array_elements(b->'rows')x where x->>'display_name'='Closed synthetic appointment' and x->>'stage'='LOST'),'closed planned appointment stays visible');
+ perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(b->'rows')x where x->>'display_name'='Closed synthetic appointment'),'closed prospects are excluded from the calendar (RWR-r5 §4.9)');
  perform pg_temp.ok(not exists(select 1 from jsonb_array_elements(b->'rows')x where (x->>'local_date')::date<>day+1),'exclusive end date');
  c:=public.crm_get_admissions_calendar(day,day+7,p_limit=>1)->'next_cursor';
  perform pg_temp.denied(format('select public.crm_get_admissions_calendar(%L,%L,p_include_completed=>true,p_cursor=>%L::jsonb)',day,day+7,c));

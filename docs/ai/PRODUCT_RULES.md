@@ -33,6 +33,21 @@ RCC-A1 ([migration 111](../../supabase/migrations/111_crm_rcc_a1_outcome_led_fol
 - Structured outcomes need no prose. Explanations remain required for standalone notes, Other reasons, cancellation and reopening.
 - CONTACTING and CONVERTED display as **Contact en cours** and **Inscription confirmée**; stored values are unchanged.
 
+### One next action (RWR-r5 PR A1, migration 136) — built, not merged or released
+
+[Plan RWR-r5](../architecture/plans/receptionist-workflow.md) §4, approved 2026-11-21. Built on PR #208 with migration 136 (provisional number, after #204's 131–135); **not merged, not applied, not released**. Until release the RCC-A1 rules above stay current. On release these rules replace the RCC-A1 bullet on conversation decisions:
+
+- An active prospect has **exactly one next action**, written only by `crm_security.set_next_action`. A closed prospect has none. Every screen (card, drawer, « Tâches », pre-check) shows that same action.
+- Hours come from the **current** published version (`current_policy_id()`); the follow-up cadence stays the one pinned on the prospect. One set of hours serves calls and the desk (OD-3 = B); closed dates are listed with the hours. An agreed time (callback « rendez-vous convenu », appointment at the centre) outside the hours or on a closed date is **refused**, never moved; reminders and system times move to the next window. Agreed times booked before a change of hours are kept.
+- « En attente du prospect » is a next action, not a stage. Its relance defaults to today + 5 days (OD-5); « Sans date de relance » is allowed. After five failed calls the next action is « En attente » with no relance date: nothing is scheduled automatically, and the prospect is never automatically Lost (OD-17 = A).
+- Replacing an appointment at the centre needs the form's « Remplace le rendez-vous » confirmation, and cancels its planned test (OD-18 = A for appointments). An enrolment action is only rescheduled, kept, or cancelled with a reason (OD-18 = B for enrolment). Closing and keeping need neither.
+- A call attempt less than the minimum gap (3 hours) after the previous one is refused unless marked « Tentative réelle (hors délai) ». « Pas de réponse » saves on one tap with no undo; a mistake is corrected by a new exchange (OD-20 = B).
+- An appointment's outcome (four results) can be recorded from its start time; « Venu · pas intéressé » closes the prospect.
+- Conversion keeps the planned test: it becomes the student's. A planned test of an active prospect belongs to its open appointment.
+- Intake prospects (Meta, website) are owned by the director-chosen default owner, or are unassigned when none is set (OD-6). The next action's assignee is the prospect's owner. « Tâches » opens on « Moi + non attribué » and shows one row per prospect.
+- History shows one row per user action; the rows it caused are behind « Détails ».
+- A placement-test edit sends the prospect version the user saw. Placement tests may be « Annulé » (with its cancellation) or « Absent ».
+
 Implementation caveat: SQL validates five ordered offsets with the first two on Day 1, but allows later offsets beyond the approved Day 2/4/6 cadence. The approved cadence above is the product rule; do not assume the live policy matches it without inspecting authorized configuration. Changing that product cadence needs an explicit decision.
 
 Sources: [078 schema](../../supabase/migrations/078_crm_core_schema.sql), [080 commands](../../supabase/migrations/080_crm_commands_and_followup_engine.sql), [082 conversation decisions](../../supabase/migrations/082_crm_conversation_decision.sql), [ADR-001](../architecture/decisions/ADR-001-crm-lifecycle.md).

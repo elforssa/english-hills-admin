@@ -19,20 +19,15 @@ let browser,actor;const pageErrors=[];const legacyIds=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const intake=name=>rpc('create_manual_lead',{display_name:name,learner_name:'Enfant synthétique',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
 let page,phase;
-// Keep fixture dates future without depending on the machine's timezone.
-const testDay=new Date(Date.now()+14*86400000);while(testDay.getUTCDay()!==2)testDay.setUTCDate(testDay.getUTCDate()+1);
-const future=testDay.toISOString().slice(0,10)+'T13:00';
 const dialog=()=>page.getByRole('dialog').last();
-async function save(){const outcome=dialog().getByLabel('Résultat de l’appel',{exact:true});if(await outcome.count() && !(await outcome.inputValue())) await outcome.selectOption('no_answer');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByText(/Action enregistrée\.|Nouveau prospect créé\./).waitFor();}
-async function done(){await dialog().getByRole('button',{name:'Terminé',exact:true}).click();}
 async function open(id){await page.waitForLoadState('networkidle');await page.goto(`${app}/crm/leads?lead=${id}`);await page.getByRole('dialog').getByText('Historique',{exact:true}).waitFor();}
-// RCC-B1 E2: an Autres actions item opens its dialog after the menu returns focus to its trigger.
-async function more(label){await page.getByRole('button',{name:'Autres actions',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[role=dialog]').length>1);}
 async function closeDrawer(){await page.getByRole('button',{name:'Fermer',exact:true}).click();await page.waitForURL(url=>!url.searchParams.has('lead'));await page.getByRole('dialog').waitFor({state:'hidden'});await page.waitForLoadState('networkidle');}
-async function fillTask(){const preset=dialog().getByLabel('Échéance du rappel',{exact:true});if(await preset.count())await preset.selectOption('exact');await dialog().getByLabel('Date et heure · Casablanca',{exact:true}).fill(future);}
 async function login(user){await page.goto(app+'/login');await page.waitForFunction(()=>Object.keys(document.querySelector('#email')||{}).some(k=>k.startsWith('__reactProps')));await page.waitForTimeout(500);await page.getByLabel('Adresse email',{exact:true}).fill(user.email);await page.getByLabel('Mot de passe',{exact:true}).fill(password);await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.waitForURL(url=>!url.pathname.startsWith('/login'));await page.getByRole('heading',{name:'Pipeline admissions',exact:true}).waitFor();await page.getByTestId('opportunity-card').first().waitFor();await page.waitForLoadState('networkidle');}
 try {
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0','clean local synthetic baseline');
@@ -46,24 +41,34 @@ try {
  act('qualify_lead',closed,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
  const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:day,heure:'10:00',examinateur:'Libellé examinateur'});
+ const closedTest=detail(closed).next_placement.id;
  act('close_lost',closed,{reason:'price'});
+ // RWR-r5 §4.9 and invariant 2: closing cancels the test and the calendar excludes closed
+ // prospects, so the linked event checks use a prospect whose booked test is still open.
+ const booked=intake('Rendez-vous ouvert');act('qualify_lead',booked,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
+ {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'11:00',examinateur:'Libellé examinateur'});}
+ const bookedEvent='center_visit:'+detail(booked).next_task.id;
  sql(`update public.crm_leads set owner_id='${users[0].id}',conversion_review_required=true where id='${lead}';
  update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Synthetic taskless fixture' where lead_id='${taskless}';
  update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${lead}';`);
  const types=['first_contact','contact_attempt','callback','whatsapp_followup','confirm_placement_test','post_test_followup','center_visit','enrollment_followup'];
- const taskIds=[];
- for(let i=0;i<40;i++)taskIds.push(sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${lead}',${quote(types[i%8])},now()-interval '1 hour'+make_interval(secs=>${i}),'${actor}','manual',${quote(run+':task:'+i)}) returning id`));
- sql(`insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key) values('${lead}','callback',now()-interval '1 minute','manual',${quote(run+':unassigned')});`);
- for(const [bucket,expr] of [['today',"now()+(((((now() at time zone public.centre_utc_offset())::date+1)::timestamp at time zone public.centre_utc_offset())-now())/2)"],['tomorrow',"((now() at time zone public.centre_utc_offset())::date+1)::timestamp at time zone public.centre_utc_offset()"],['upcoming',"((now() at time zone public.centre_utc_offset())::date+2)::timestamp at time zone public.centre_utc_offset()"]])
-  sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${lead}','center_visit',${expr},'${actor}','manual',${quote(run+':'+bucket)})`);
+ // RWR-r5 §4.2: the work queue is one row per prospect (its next action), so a paged
+ // queue needs 40 prospects with one action each, not 40 actions on one prospect.
+ const taskIds=[],queueLeads=[];
+ for(let i=0;i<40;i++){const id=intake('File synthétique '+i);queueLeads.push(id);taskIds.push(sql(`update public.crm_tasks set task_type=${quote(types[i%8])},due_at=now()-interval '1 hour'+make_interval(secs=>${i}),assigned_to='${actor}' where lead_id='${id}' and status='open' returning id`));}
+ const unassignedLead=intake('File non attribuée');queueLeads.push(unassignedLead);
+ sql(`update public.crm_tasks set task_type='callback',due_at=now()-interval '1 minute',assigned_to=null where lead_id='${unassignedLead}' and status='open';
+ update public.crm_leads set owner_id='${users[0].id}' where id in(${queueLeads.map(quote).join(',')});`);
  for(let i=0;i<114;i++)legacyIds.push(sql(`insert into public.placement_tests(student_name,date_test,heure,status,notes,examinateur) values(${quote('Legacy appointment '+i)},${i<3?quote(day):`(${quote(day)}::date+2)`},${i===0?'null':i===1?quote('invalid'):quote('11:00')},${quote(i===2?'Passé':'Planifié')},'PRIVATE EXCLUDED NOTE','Examiner label') returning id`));
  const legacy=legacyIds[0],completed=legacyIds[2];
  const visitLead=intake('UX scheduled visit');
  const visit=sql(`update public.crm_tasks set task_type='center_visit',due_at=(${quote(day)}::date+time '10:35') at time zone public.centre_utc_offset(),
  scheduled_end_at=(${quote(day)}::date+time '11:05') at time zone public.centre_utc_offset(),assigned_to='${actor}' where lead_id='${visitLead}' and status='open' returning id`);
+ // Owned like the queue fixture, so « Demain » under the owner filter shows exactly this visit.
+ sql(`update public.crm_leads set owner_id='${users[0].id}' where id='${visitLead}'`);
  const visitTask=detail(visitLead).next_task;
- const {scheduledLabel}=await import('../src/lib/crm/presentation.mjs');
- const expected=scheduledLabel(visitTask);
+ // RWR-r5 §4.9: the card, the queue row and the drawer all show the server's action label.
+ const expected=detail(visitLead).next_action.label;
  const staffRows=JSON.parse(sql(`begin;set local request.jwt.claim.sub='${actor}';select public.crm_list_staff();commit;`)).rows;
  const labels=users.map(u=>staffRows.find(p=>p.id===u.id).display_label);
  assert.equal(new Set(labels).size,users.length);
@@ -99,19 +104,20 @@ try {
   await page.goto(app+'/placement-tests?view=calendar&date='+day+'&kind=center_visit');
   await page.locator(`[data-event-key="center_visit:${visit}"]`).getByText('10:35',{exact:false}).waitFor();
   await page.locator(`[data-event-key="center_visit:${visit}"]`).getByText('jusqu’à 11:05',{exact:true}).waitFor();
-  await page.goto(app+'/crm/today?bucket=tomorrow');await page.locator(`[data-task-id="${visit}"]`).getByText(expected,{exact:true}).waitFor();
+  await page.goto(app+'/crm/today?bucket=tomorrow');await page.locator(`[data-task-id="${visit}"]`).getByText(expected,{exact:false}).first().waitFor();
   await page.locator(`[data-task-id="${visit}"]`).getByRole('button',{name:'Voir le prospect'}).click();
   await dialog().getByText('Historique',{exact:true}).waitFor();
-  await dialog().getByText(expected,{exact:true}).waitFor();await closeDrawer();
+  await dialog().getByTestId('next-action-label').filter({hasText:expected}).waitFor();await closeDrawer();
   console.log('PASS identical server Casablanca display under deliberately divergent browser tzdata; shared distinguishable staff labels');
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
-  assert.equal(await page.getByLabel('Responsable de la tâche').inputValue(),'me');assert.equal(await page.getByTestId('work-row').count(),25,'bounded task page, multiple tasks of same lead');
+  // RWR-r5 invariant 10 / §4.6: the default view is « Moi + non attribué ».
+  assert.equal(await page.getByLabel('Responsable de la tâche').inputValue(),'me_or_unassigned');assert.equal(await page.getByTestId('work-row').count(),25,'bounded page, one row per prospect');
   const first=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:'Suivant',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId!==id,first);
   const second=await page.getByTestId('work-row').evaluateAll(ns=>ns.map(n=>n.dataset.taskId));assert(!second.includes(first));
   await page.getByRole('button',{name:'Précédent',exact:true}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,first);
-  for(const label of ['Premier contact','Appel de suivi','Rappel','Suivi WhatsApp','Préparer un test de niveau','Rappeler le parent · Résultat disponible','Visite au centre','Finaliser l’inscription'])assert(await page.getByTestId('work-row').filter({hasText:label}).count()>0,label);
-  await page.getByLabel('Responsable du prospect').selectOption('me');await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
+  for(const label of ['Premier contact','Appel de suivi','Rappel','À faire par nous (WhatsApp)','Confirmer le test de niveau','Proposer l’inscription','Rendez-vous au centre','Finaliser l’inscription'])assert(await page.getByTestId('work-row').filter({hasText:label}).count()>0,label);
+  await page.getByLabel('Responsable du prospect').selectOption('me');await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
   await page.getByLabel('Responsable du prospect').selectOption(users[0].id);await page.getByTestId('work-row').first().waitFor();
   await page.getByLabel('Responsable de la tâche').selectOption('unassigned');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByLabel('Responsable de la tâche').selectOption('me');await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===25);
@@ -120,7 +126,9 @@ try {
   const remembered=await page.getByTestId('work-row').first().getAttribute('data-task-id');
   await page.getByRole('button',{name:/^Demain/}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-testid=work-row]').length===1);assert.equal(await page.getByTestId('work-row').count(),1);
   await page.getByRole('button',{name:/^En retard/}).click();await page.waitForFunction(id=>document.querySelector('[data-testid=work-row]')?.dataset.taskId===id,remembered);
-  await page.getByRole('link',{name:/À traiter/}).click();await page.getByTestId('opportunity-row').filter({hasText:'Sans prochaine action'}).waitFor();
+  await page.getByRole('link',{name:/À traiter/}).click();await page.waitForURL(url=>url.searchParams.get('view')==='attention');
+  // The 40 overdue queue prospects fill the first page; the search narrows to the taskless one.
+  await page.getByRole('searchbox',{name:'Rechercher un prospect'}).fill('Sans prochaine action');await page.getByTestId('opportunity-row').filter({hasText:'Sans prochaine action'}).first().waitFor();
   await page.goto(app+'/crm/today?bucket=overdue');await page.getByTestId('work-row').first().waitFor();
   // Exact chosen task, including stale rejection and explicit renewed confirmation.
   const reassigned=engine===chromium?taskIds[1]:taskIds[2];
@@ -128,9 +136,12 @@ try {
   sql(`update public.crm_tasks set version=version+1 where id='${reassigned}'`);
   await dialog().getByLabel('Responsable de l’action').selectOption(users[0].id);await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').waitFor();
   assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),actor,'stale intent denied');
-  await save();await done();assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),users[0].id);assert.equal(detail(lead).owner_id,users[0].id);await closeDrawer();
+  // §4.9 (PR #208 review, Important 1): never adopted silently — save stays disabled until « Recharger ».
+  await dialog().getByText('Ce prospect a été modifié, rechargez.',{exact:true}).waitFor();assert(await dialog().getByRole('button',{name:'Enregistrer',exact:true}).isDisabled(),'save disabled until reload');
+  await dialog().getByRole('button',{name:'Recharger',exact:true}).click();await dialog().getByTestId('reloaded-state').waitFor();
+  await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByText('Enregistré',{exact:true}).waitFor();assert.equal(sql(`select assigned_to from crm_tasks where id='${reassigned}'`),users[0].id);await closeDrawer();
   assert(requests.some(r=>r.path.endsWith('/rpc/crm_reassign')&&r.args?.p_data?.task_id===reassigned&&Number.isInteger(r.args.p_data.expected_task_version)),'exact task/version reassignment command');
-  const calling=page.getByTestId('work-row').filter({hasText:'Premier contact'}).first();await calling.getByRole('button',{name:'Résultat d’appel',exact:true}).click();await dialog().getByLabel('Résultat de l’appel',{exact:true}).waitFor();await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();
+  const calling=page.getByTestId('work-row').filter({hasText:'Premier contact'}).first();await calling.getByRole('button',{name:'Noter un échange',exact:true}).click();await dialog().getByRole('heading',{name:'Noter un échange'}).waitFor();await dialog().getByRole('button',{name:'Annuler',exact:true}).click();await closeDrawer();
   // Keyboard, Back and task return context.
   const opener=page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect',exact:true});await opener.focus();await page.keyboard.press('Enter');await dialog().getByText('Historique',{exact:true}).waitFor();assert(new URL(page.url()).searchParams.has('bucket'));
   await page.goBack();await page.getByRole('dialog').waitFor({state:'hidden'});await opener.waitFor();
@@ -139,20 +150,21 @@ try {
   assert.equal(await page.getByTestId('calendar-event').count(),100);await page.getByText('D’autres rendez-vous restent à charger. Cette page ne couvre pas toute la période.',{exact:true}).waitFor();
   const keys=await page.getByTestId('calendar-event').evaluateAll(ns=>ns.map(n=>n.dataset.eventKey));assert.equal(new Set(keys).size,keys.length);
   await page.getByText('Heure non précisée',{exact:true}).waitFor();assert(await page.getByTestId('calendar-event').filter({hasText:'Libellé examinateur'}).count());
-  assert(keys.includes('placement:'+detail(closed).next_placement.id),'closed still-planned test visible');
-  assert(!keys.includes('placement:'+completed));await page.getByLabel('Inclure les tests terminés').click();await page.waitForURL(url=>url.searchParams.get('completed')==='1');assert(await page.getByLabel('Inclure les tests terminés').isChecked());await page.locator(`[data-event-key="placement:${completed}"]`).waitFor();await page.getByLabel('Inclure les tests terminés').click();await page.waitForURL(url=>!url.searchParams.has('completed'));assert(!(await page.getByLabel('Inclure les tests terminés').isChecked()));await page.locator(`[data-event-key="placement:${completed}"]`).waitFor({state:'hidden'});
+  assert(keys.includes(bookedEvent),'a booked test is one appointment event (§4.2)');assert(!keys.some(k=>k.endsWith(closedTest)),'the closed prospect’s cancelled test is not shown (§4.9)');
+  assert.equal(sql(`select status from public.placement_tests where id='${closedTest}'`)==='Planifié',false,'invariant 2: closing left no planned test');
+  assert(!keys.includes('placement:'+completed));await page.getByLabel('Inclure terminés').click();await page.waitForURL(url=>url.searchParams.get('completed')==='1');assert(await page.getByLabel('Inclure terminés').isChecked());await page.locator(`[data-event-key="placement:${completed}"]`).waitFor();await page.getByLabel('Inclure terminés').click();await page.waitForURL(url=>!url.searchParams.has('completed'));assert(!(await page.getByLabel('Inclure terminés').isChecked()));await page.locator(`[data-event-key="placement:${completed}"]`).waitFor({state:'hidden'});
   await page.getByRole('button',{name:'Suivants',exact:true}).click();await page.waitForFunction(first=>document.querySelector('[data-testid=calendar-event]')?.dataset.eventKey!==first,keys[0]);assert(await page.getByTestId('calendar-event').count()<100);
   await page.getByRole('button',{name:'Précédents',exact:true}).click();await page.locator(`[data-event-key="placement:${legacy}"]`).waitFor();
   const legacyButton=page.locator(`[data-event-key="placement:${legacy}"]`);await legacyButton.click();await dialog().getByRole('heading',{name:'Modifier le test',exact:true}).waitFor();assert.equal(await dialog().getByLabel('Heure',{exact:true}).inputValue(),'');
   assert(requests.filter(r=>r.path==='/rest/v1/students'||r.path==='/rest/v1/groups').every(r=>{const u=new URL(r.url);return u.searchParams.has('id')||Number(u.searchParams.get('limit'))<=26&&u.searchParams.has('limit');}),'modal option reads are bounded');await dialog().getByRole('button',{name:'Annuler',exact:true}).click();
-  const linkedButton=page.locator(`[data-event-key="placement:${detail(closed).next_placement.id}"]`);await linkedButton.click();await dialog().getByText('Historique',{exact:true}).waitFor();await dialog().getByText('Perdu',{exact:true}).first().waitFor();
+  const linkedButton=page.locator(`[data-event-key="${bookedEvent}"] button`).first();await linkedButton.click();await dialog().getByText('Historique',{exact:true}).waitFor();await dialog().getByTestId('next-action-label').filter({hasText:'avec test'}).waitFor();
   await page.goBack();await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(new URL(page.url()).searchParams.get('view'),'calendar');assert.equal(new URL(page.url()).searchParams.get('date'),day);
   for(const viewport of [{width:1440,height:900},{width:768,height:1024},{width:390,height:844},{width:720,height:450}]) {
    phase=engine.name()+' viewport '+viewport.width;await page.setViewportSize(viewport);await page.waitForLoadState('networkidle');
    for(const route of ['/crm/today?bucket=overdue','/placement-tests?view=calendar&date='+day]) {
     await page.goto(app+route);await page.waitForLoadState('networkidle');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no body overflow');
     await page.screenshot({path:join(tmpdir(),`o3-work-${engine.name()}-${viewport.width}-${route.startsWith('/crm')?'tasks':'calendar'}-overview.png`)});
-    const button=route.startsWith('/crm')?page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect'}):page.locator(`[data-event-key="placement:${detail(closed).next_placement.id}"]`);
+    const button=route.startsWith('/crm')?page.getByTestId('work-row').first().getByRole('button',{name:'Voir le prospect'}):page.locator(`[data-event-key="${bookedEvent}"] button`).first();
     await button.click();await dialog().getByText('Historique',{exact:true}).waitFor();await page.waitForFunction(()=>{const b=document.querySelector('[role=dialog]')?.getBoundingClientRect();return b&&b.x>=-1&&b.right<=innerWidth+1;});
     await page.screenshot({path:join(tmpdir(),`o3-work-${engine.name()}-${viewport.width}-${route.startsWith('/crm')?'tasks':'calendar'}.png`)});await closeDrawer();
    }
@@ -167,7 +179,7 @@ try {
   await page.getByRole('alert').filter({hasText:'Impossible de charger ces informations.'}).waitFor();
   await page.unroute(readUrl);
   await page.getByRole('alert').getByRole('button',{name:'Réessayer',exact:true}).click();
-  await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
+  await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();
   // Real query interval; the server still owns all scheduling and bucket logic.
   await page.goto(app+'/crm/today?bucket=overdue');await page.waitForLoadState('networkidle');
   const minuteRead=page.waitForResponse(r=>r.url().endsWith('/rpc/crm_get_work_queue')&&r.ok());
@@ -178,8 +190,10 @@ try {
  }
  assert.deepEqual(external,[],'no external browser/provider requests');
  assert(!requests.some(r=>r.path.endsWith('/rpc/crm_get_lead_detail')||r.path.endsWith('/rpc/crm_get_submission_attribution')));
- for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','schedule_kind','scheduled_end_at','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
- for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','local_date','local_time','placement_status','stage','starts_at','student_id','task_type','task_version','updated_at']);
+ // RWR-r5 §4.9: rows add the next action, the D1 review flag and the sibling count (work queue),
+ // and the appointment outcome state and test link (calendar). No notes, scores or provider data.
+ for(const payload of workPayloads)for(const row of payload.rows){assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','next_action','review_flag','schedule_kind','scheduled_end_at','siblings','task_type','version']);assert(!JSON.stringify(row).includes('conversion_review_required'));}
+ for(const payload of eventPayloads)for(const row of payload.rows)assert.deepEqual(Object.keys(row).sort(),['assigned_to','assignee_name','display_name','end_local_date','end_local_time','ends_at','examiner_label','id','kind','lead_id','lead_version','local_date','local_time','outcome_code','outcome_enabled','placement_status','placement_test_id','stage','starts_at','student_id','task_status','task_type','task_version','updated_at','with_test']);
  console.log('PASS actual fixed RPC response shapes; no technical/score/notes/provider payload or browser Meta activity');
 } catch(error) {
  console.error(phase,error.message);

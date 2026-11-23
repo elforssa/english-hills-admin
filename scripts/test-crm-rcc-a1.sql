@@ -73,7 +73,7 @@ do $$ begin
  perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.reminder_due(uuid,text)','execute')
   and not has_function_privilege('anon','crm_security.reminder_due(uuid,text)','execute')
   and not has_function_privilege('service_role','crm_security.reminder_due(uuid,text)','execute'),'preset helper is private');
- perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.new_task(public.crm_leads,jsonb,text,text,smallint,text)','execute'),'task primitive stays private');
+ perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.new_task(public.crm_leads,jsonb,text,text,smallint,text,uuid,uuid,uuid,boolean,text)','execute'),'task primitive stays private');
  perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.crm_record_conversation_decision(uuid,jsonb)'::regprocedure),'decision pinned definer');
  perform pg_temp.ok(has_function_privilege('authenticated','public.crm_record_conversation_decision(uuid,jsonb)','execute')
   and not has_function_privilege('anon','public.crm_record_conversation_decision(uuid,jsonb)','execute')
@@ -89,7 +89,10 @@ do $$ declare src text:=(select prosrc from pg_proc where oid='crm_security.comm
  perform pg_temp.ok(src like '%perform crm_security.lifecycle_pending_handoff((data->>''submission_id'')::uuid);%','103 pending-stop handoff retained');
  perform pg_temp.ok((select prosecdef from pg_proc where oid='crm_security.command(text,uuid,jsonb)'::regprocedure),'dispatcher remains security definer');
  perform pg_temp.ok(src not like '%(''phone'',''whatsapp'',''in_person'') or nullif(btrim(data->>''note''),'''') is null%','structured conversation prose optional');
- perform pg_temp.ok(src like '%if t.schedule_kind=''appointment'' and crm_security.next_window(l.followup_policy_id,due)<>due then%','agreed callback reschedule never shifts');
+ -- RWR-r5 A1: reschedule-in-place moved into the single writer (§4.2), which
+ -- refuses an agreed time outside hours instead of shifting it.
+ perform pg_temp.ok((select prosrc from pg_proc where oid='crm_security.set_next_action(public.crm_leads,jsonb,text,text)'::regprocedure)
+  like '%perform crm_security.assert_in_hours(case when o.task_type=''center_visit'' then ''opening'' else ''calling'' end,due);%','agreed callback reschedule never shifts');
  perform pg_temp.ok(src like '%Valid closure reason and explanation required%' and src like '%Valid qualification step and explanation required%'
   and src like '%Closed lead and reopen reason required%' and src like '%nullif(btrim(data->>''note''),'''') is null then raise exception ''Note required''%','explanation checks retained');
 end $$;
@@ -149,12 +152,14 @@ do $$ declare l uuid; r jsonb; req uuid; preset text; due timestamptz; expected 
  r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','callback','due_at',((today+8)::timestamp+time '12:45') at time zone public.centre_utc_offset())),req);
  task:=pg_temp.created(req);
  perform pg_temp.ok(task.due_at=due and task.schedule_kind is null and task.followup_reason is null,'legacy explicit callback keeps window adjustment and NULL kind');
- r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',((today+9)::timestamp+time '11:00') at time zone public.centre_utc_offset())));
- perform pg_temp.ok((select schedule_kind='appointment' and due_at=((today+9)::timestamp+time '11:00') at time zone public.centre_utc_offset() from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open'),'explicit agreed appointment keeps its exact agreed time');
+ -- RWR §4.4: an appointment is agreed inside opening hours (refused outside).
+ due:=crm_security.window_at(crm_security.current_policy_id(),'opening',((today+9)::timestamp+time '11:00') at time zone public.centre_utc_offset());
+ r:=pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',due)));
+ perform pg_temp.ok((select schedule_kind='appointment' and due_at=due from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open'),'explicit agreed appointment keeps its exact agreed time');
  -- Rescheduling keeps the identity, kind and reason; presets are not a reschedule input.
  select * into task from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open';
  perform pg_temp.denied(format('select public.crm_schedule_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task_id',task.id,'task',jsonb_build_object('due_preset','tomorrow')))));
- r:=pg_temp.act('schedule_task',l,jsonb_build_object('task_id',task.id,'task',jsonb_build_object('due_at',now()+interval '10 days')));
+ r:=pg_temp.act('schedule_task',l,jsonb_build_object('task_id',task.id,'task',jsonb_build_object('due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '10 days'))));
  perform pg_temp.ok((select schedule_kind='appointment' and version=task.version+1 from public.crm_tasks where id=task.id),'reschedule preserves identity and kind');
 end $$;
 \echo PASS server-side Casablanca presets, appointment/reminder separation and explicit-date compatibility
@@ -172,15 +177,21 @@ do $$ declare l uuid; r jsonb; r2 jsonb; d jsonb; req uuid; t uuid; task public.
  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='conversation_recorded' and outcome='spoke_with_contact' and body is null),'phone conversation evidence without prose');
  -- Qualified lead who needs time stays QUALIFIED; no new lifecycle-relevant event.
  l:=pg_temp.intake();
- perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day','schedule_kind','appointment')));
+ perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','qualification_step','other','note','Attend le budget','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(1),'schedule_kind','appointment')));
  select count(*) into qualified_events from public.crm_activities where lead_id=l and event_type in ('lead_qualified','lead_lost','lead_not_qualified','lead_reopened','lead_converted');
  select qualification_step into step from public.crm_leads where id=l;
  r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','considering','channel','whatsapp','next_task',jsonb_build_object('task_type','whatsapp_followup','due_preset','next_week')));
  perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED' and (select qualification_step=step from public.crm_leads where id=l),'qualified + needs time stays QUALIFIED with unchanged step');
  perform pg_temp.ok(qualified_events=(select count(*) from public.crm_activities where lead_id=l and event_type in ('lead_qualified','lead_lost','lead_not_qualified','lead_reopened','lead_converted')),'En réflexion emits no lifecycle status event');
  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and followup_reason='considering' and schedule_kind='reminder' and task_type='whatsapp_followup'),'WhatsApp En réflexion reminder');
- perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and task_type='enrollment_followup' and schedule_kind='appointment'),'existing agreed appointment untouched');
+ -- RWR-r5 (one next action): the reminder replaced the agreed callback.
+ perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open'),'one next action: the reminder replaced the agreed callback');
  perform pg_temp.ok((select count(*)=1 from public.crm_activities where lead_id=l and event_type='whatsapp_conversation'),'WhatsApp channel evidence');
+ -- OD-18 (B): an enrolment action is kept; a decision cannot replace it.
+ l:=pg_temp.intake();
+ perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','qualification_step','enrollment','next_task',jsonb_build_object('task_type','enrollment_followup','due_at',pg_temp.slot(1),'schedule_kind','appointment')));
+ perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),pg_temp.data(l,'{"decision":"considering","channel":"whatsapp","next_task":{"task_type":"whatsapp_followup","due_preset":"next_week"}}')));
+ perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and task_type='enrollment_followup' and schedule_kind='appointment'),'existing agreed enrolment action untouched');
  -- Agreed callback in person; considering an agreed time may be an appointment.
  l:=pg_temp.intake();
  r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','callback','channel','in_person','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(3),'schedule_kind','appointment')));
@@ -190,7 +201,7 @@ do $$ declare l uuid; r jsonb; r2 jsonb; d jsonb; req uuid; t uuid; task public.
  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and followup_reason='considering' and schedule_kind='appointment'),'considering with agreed time; previous callback superseded');
  -- Qualification by WhatsApp without prose, with an agreed center visit.
  l:=pg_temp.intake();
- r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','channel','whatsapp','qualification_step','center_visit','next_task',jsonb_build_object('task_type','center_visit','due_at',now()+interval '2 days','schedule_kind','appointment')));
+ r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','channel','whatsapp','qualification_step','center_visit','next_task',jsonb_build_object('task_type','center_visit','due_at',pg_temp.slot(2),'schedule_kind','appointment')));
  perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED' and (select count(*)=1 from public.crm_activities where lead_id=l and event_type='conversation_recorded' and channel='whatsapp'),'WhatsApp qualification without prose');
  -- Closures: structured reason suffices except Other.
  l:=pg_temp.intake();
@@ -234,34 +245,32 @@ do $$ declare l uuid; r jsonb; r2 jsonb; d jsonb; req uuid; t uuid; task public.
 end $$;
 \echo PASS outcome-led decisions derive status, keep QUALIFIED for En réflexion, preserve idempotency and role denials
 
--- One active generic commercial follow-up: the latest conversation decision replaces
--- any open callback or WhatsApp follow-up, whatever the channel; other work stays.
-do $$ declare l uuid; r jsonb; generic integer; begin
+-- RWR-r5 A1 (ADR-019, one next action): each decision replaces the current
+-- action; an appointment or an enrolment action is kept (OD-18) and a decision
+-- cannot replace it. Replaces RCC-A1's « one generic follow-up beside other work ».
+do $$ declare l uuid; r jsonb; visit timestamptz:=crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '5 days'); begin
  l:=pg_temp.intake();
- -- Unrelated operational tasks that a conversation decision must never cancel.
- perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',now()+interval '5 days')));
- perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','confirm_placement_test','due_preset','tomorrow')));
- perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','enrollment_followup','due_preset','next_week')));
  -- Repeated callback.
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','callback','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(2),'schedule_kind','appointment')));
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','callback','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(3),'schedule_kind','appointment')));
- perform pg_temp.ok((select count(*)=1 and min(due_at)=pg_temp.slot(3) from public.crm_tasks where lead_id=l and status='open' and task_type in ('callback','whatsapp_followup')),'repeated callback keeps only the latest');
+ perform pg_temp.ok((select count(*)=1 and min(due_at)=pg_temp.slot(3) from public.crm_tasks where lead_id=l and status='open'),'repeated callback keeps only the latest');
  -- Callback -> WhatsApp En réflexion replacement.
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','considering','channel','whatsapp','next_task',jsonb_build_object('task_type','whatsapp_followup','due_preset','in_2_days')));
- perform pg_temp.ok((select count(*)=1 and bool_and(task_type='whatsapp_followup' and followup_reason='considering') from public.crm_tasks where lead_id=l and status='open' and task_type in ('callback','whatsapp_followup')),'callback replaced by WhatsApp follow-up');
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='whatsapp_followup' and followup_reason='considering') from public.crm_tasks where lead_id=l and status='open'),'callback replaced by WhatsApp follow-up');
  -- Repeated WhatsApp En réflexion.
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','considering','channel','whatsapp','next_task',jsonb_build_object('task_type','whatsapp_followup','due_preset','next_week')));
- perform pg_temp.ok((select count(*)=1 and bool_and(task_type='whatsapp_followup') from public.crm_tasks where lead_id=l and status='open' and task_type in ('callback','whatsapp_followup')),'repeated WhatsApp En réflexion keeps one follow-up');
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='whatsapp_followup') from public.crm_tasks where lead_id=l and status='open'),'repeated WhatsApp En réflexion keeps one follow-up');
  -- WhatsApp -> callback replacement, by phone.
  perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','considering','next_task',jsonb_build_object('task_type','callback','due_preset','tomorrow')));
- perform pg_temp.ok((select count(*)=1 and bool_and(task_type='callback' and followup_reason='considering') from public.crm_tasks where lead_id=l and status='open' and task_type in ('callback','whatsapp_followup')),'WhatsApp follow-up replaced by callback');
- perform pg_temp.ok((select count(*)=4 from public.crm_activities where lead_id=l and event_type='task_cancelled' and body='Conversation follow-up replaced'),'each replacement is an audited cancellation');
- -- Unrelated tasks survive every replacement.
- perform pg_temp.ok((select count(*)=3 from public.crm_tasks where lead_id=l and status='open' and task_type in ('center_visit','confirm_placement_test','enrollment_followup')),'visit, placement and enrollment tasks preserved');
- -- A qualifying decision also replaces the generic follow-up but keeps operational work.
- r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','qualification_step','placement_test','next_task',jsonb_build_object('task_type','confirm_placement_test','due_preset','in_2_days')));
- perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED' and not exists(select 1 from public.crm_tasks where lead_id=l and status='open' and task_type in ('callback','whatsapp_followup'))
-  and (select count(*)=4 from public.crm_tasks where lead_id=l and status='open'),'qualification replaces generic follow-up only');
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='callback' and followup_reason='considering') from public.crm_tasks where lead_id=l and status='open'),'WhatsApp follow-up replaced by callback');
+ perform pg_temp.ok((select count(*)>=3 from public.crm_tasks where lead_id=l and status in ('cancelled','completed') and task_type in ('callback','whatsapp_followup')),'each replacement closes the previous action, audited');
+ -- An agreed appointment is kept: a decision cannot replace it (OD-18 A).
+ perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',visit)));
+ perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('decision','callback','next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(4),'schedule_kind','appointment')))));
+ perform pg_temp.ok((select count(*)=1 and bool_and(task_type='center_visit' and due_at=visit) from public.crm_tasks where lead_id=l and status='open'),'appointment kept, one next action');
+ -- Qualifying with the existing appointment reuses it.
+ r:=pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','qualify','qualification_step','center_visit','next_task',jsonb_build_object('task_type','center_visit','due_at',visit,'schedule_kind','appointment')));
+ perform pg_temp.ok(r->'lead'->>'status'='QUALIFIED' and (select count(*)=1 and bool_and(task_type='center_visit' and due_at=visit) from public.crm_tasks where lead_id=l and status='open'),'qualification reuses the existing appointment');
 end $$;
 \echo PASS one active generic follow-up across callback and WhatsApp; unrelated tasks preserved
 
@@ -298,17 +307,28 @@ do $$ declare l uuid; r jsonb; begin
  r:=pg_temp.act('record_call_outcome',l,'{"outcome":"no_answer"}');
  perform pg_temp.ok((r->>'failed_attempts')::integer=1 and r->'lead'->>'status'='ENGAGED','failed call counts after conversation without status change');
  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and task_type='contact_attempt' and attempt_ordinal=2 and schedule_kind is null),'cadence slot 2 created as system work');
- perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and followup_reason='considering'),'En réflexion reminder survives the failed call');
+ -- RWR-r5 §4.2: a callback is a call, so the system step replaces it; one next action remains.
+ perform pg_temp.ok((select count(*)=0 from public.crm_tasks where lead_id=l and status='open' and followup_reason='considering'),'En réflexion callback replaced by the next slot');
+ perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open'),'exactly one next action after the failed call');
 end $$;
-\echo PASS failed-call cadence unchanged alongside En réflexion
+-- A non-call En réflexion reminder (WhatsApp) is kept: the call is recorded, no slot is added.
+do $$ declare l uuid; r jsonb; begin
+ l:=pg_temp.intake();
+ perform pg_temp.act('record_conversation_decision',l,jsonb_build_object('decision','considering','next_task',jsonb_build_object('task_type','whatsapp_followup','due_at',now()+interval '1 hour')));
+ r:=pg_temp.act('record_call_outcome',l,'{"outcome":"no_answer"}');
+ perform pg_temp.ok((r->>'failed_attempts')::integer=1 and r->'lead'->>'status'='ENGAGED','failed call still counted');
+ perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open' and task_type='whatsapp_followup' and followup_reason='considering'),'En réflexion WhatsApp reminder kept');
+ perform pg_temp.ok((select count(*)=0 from public.crm_tasks where lead_id=l and status='open' and task_type='contact_attempt'),'no cadence slot added beside a kept action');
+end $$;
+\echo PASS failed-call cadence follows the one-next-action rule
 
 -- Task completion keeps its 200-character outcome contract (the UI now matches it).
 do $$ declare l uuid; t uuid; begin
  l:=pg_temp.intake();
- perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',now()+interval '1 day')));
+ perform pg_temp.act('schedule_task',l,jsonb_build_object('task',jsonb_build_object('task_type','center_visit','schedule_kind','appointment','due_at',pg_temp.slot(1))));
  select id into t from public.crm_tasks where lead_id=l and task_type='center_visit' and status='open';
- perform pg_temp.denied(format('select public.crm_complete_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task_id',t,'outcome',repeat('x',201)))));
- perform pg_temp.act('complete_task',l,jsonb_build_object('task_id',t,'outcome',repeat('x',200)));
+ perform pg_temp.denied(format('select public.crm_complete_task(%L,%L)',gen_random_uuid(),pg_temp.data(l,jsonb_build_object('task_id',t,'outcome',repeat('x',201),'next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(2))))));
+ perform pg_temp.act('complete_task',l,jsonb_build_object('task_id',t,'outcome',repeat('x',200),'next_task',jsonb_build_object('task_type','callback','due_at',pg_temp.slot(2))));
  perform pg_temp.ok((select status='completed' from public.crm_tasks where id=t),'200-character completion outcome accepted');
 end $$;
 \echo PASS completion outcome limit is 200 characters

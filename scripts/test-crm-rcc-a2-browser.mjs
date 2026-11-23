@@ -21,7 +21,10 @@ let browser,actor,page;const pageErrors=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={},who=actor)=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data},who);
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const phone=()=>'06'+String(randomInt(10000000,99999999));
 const rawLead=(contact,learner)=>rpc('create_manual_lead',{display_name:contact,learner_name:learner,phone:phone(),source_label:'Manuel · Téléphone'}).lead.id;
 const makeLead=(contact,learner,step='placement_test',task='confirm_placement_test')=>{const id=rawLead(contact,learner);act('qualify_lead',id,{conversation_channel:'phone',note:'Projet confirmé',qualification_step:step,next_task:next(task)});return id;};

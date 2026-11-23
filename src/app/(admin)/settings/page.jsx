@@ -2,6 +2,7 @@
 import { useAuth } from '@/context/AuthContext';
 
 import { ReceptionistAccount } from '@/components/students/ReceptionistOperations';
+import CentreHoursCard from '@/components/crm/CentreHoursCard';
 
 import { useEffect, useState } from 'react';
 import { entities, users } from '@/lib/entities';
@@ -548,6 +549,7 @@ function Settings() {
   const tabs = [
     { id: 'center', label: 'Informations' },
     { id: 'term', label: 'Terme actuel' },
+    ...(isDirectorRole ? [{ id: 'hours', label: 'Horaires du centre' }] : []),
     ...(isAdminOrDirector ? [
       { id: 'users', label: 'Utilisateurs' },
       { id: 'invite', label: 'Inviter' },
@@ -662,6 +664,7 @@ function Settings() {
       )}
 
       {tab === 'term' && <CurrentTermSettings />}
+      {tab === 'hours' && isDirectorRole && <CentreHoursCard />}
 
       {tab === 'users' && <UserManagement currentUser={currentUser} />}
       {tab === 'invite' && <InviteUserForm currentUser={currentUser} />}

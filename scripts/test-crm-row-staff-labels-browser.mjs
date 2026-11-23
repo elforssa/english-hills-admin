@@ -137,8 +137,8 @@ try {
       if(name==='crm_list_staff')for(const p of data.rows)assert.deepEqual(Object.keys(p).sort(),['display_label','id','name','role']);
       if(name==='crm_get_opportunities')for(const p of Object.values(data.pages))for(const l of p.rows)if(l.id===lead)assert.equal(l.owner_display_label,owner.display_label);
       if(name==='crm_get_work_queue')for(const t of data.rows) {
-        assert.deepEqual(Object.keys(t).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','schedule_kind','scheduled_end_at','task_type','version']);
-        assert.deepEqual(Object.keys(t.lead).sort(),['contact_name','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version']);
+        assert.deepEqual(Object.keys(t).sort(),['assigned_to','assignee_display_label','assignee_name','attempt_ordinal','due_at','followup_reason','id','lead','lead_id','local_date','local_time','next_action','review_flag','schedule_kind','scheduled_end_at','siblings','task_type','version']);
+        assert.deepEqual(Object.keys(t.lead).sort(),['contact_name','failed_attempts','id','learner_name','owner_display_label','owner_id','owner_name','program','status','version']);
         if(t.id===task.id){assert.equal(t.assignee_display_label,assignee.display_label);assert.equal(t.lead.owner_display_label,owner.display_label);assert.notEqual(t.assigned_to,t.lead.owner_id);}
       }
     }

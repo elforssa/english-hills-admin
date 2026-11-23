@@ -19,7 +19,10 @@ let browser,actor;const pageErrors=[];
 const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
-const next=(type='callback')=>({task_type:type,due_at:new Date(Date.now()+3*86400000).toISOString()});
+// RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
+// centre clock (UTC+0, public.centre_utc_offset) is inside every fixture policy.
+const inHours=()=>{const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()!==3)d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10)+'T10:30:00Z';};
+const next=(type='callback')=>({task_type:type,due_at:inHours()});
 const intake=name=>rpc('create_manual_lead',{display_name:name,learner_name:'Enfant synthétique',phone:'0612345678',source_label:'Manuel · Téléphone'}).lead.id;
 let page;
 // Keep fixture dates future without depending on the machine's timezone.
@@ -53,22 +56,25 @@ try {
  await page.getByRole('button',{name:'Réserver un test',exact:true}).click();
  assert.equal(await dialog().getByRole('combobox').count(),0,'booking has no student/status/level selector');
  assert.equal(await dialog().getByLabel('Niveau recommandé').count(),0,'no fake booking result');
- const futureDate=new Date(Date.now()+2*86400000).toISOString().slice(0,10);
+ // RWR-r5 §4.4: the booked test is the appointment; it must fall inside the opening hours.
+ const futureDate=inHours().slice(0,10),laterDate=new Date(Date.parse(futureDate)+7*86400000).toISOString().slice(0,10);
  await dialog().getByLabel('Date *',{exact:true}).fill(futureDate);await dialog().getByLabel('Heure',{exact:true}).fill('10:30');await dialog().getByLabel('Examinateur',{exact:true}).fill('Examinateur test');
  await screenshot({path:join(tmpdir(), 'hills-phase5-booking.png'),fullPage:false});
  const requests=[];let drop=true;
  await page.route('**/rest/v1/rpc/crm_book_placement_test',async route=>{requests.push(route.request().postDataJSON());if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
  await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await dialog().getByRole('alert').filter({hasText:'Impossible de confirmer'}).waitFor();
- await dialog().getByRole('button',{name:'Enregistrer',exact:true}).dblclick();await page.getByRole('button',{name:'Voir le test',exact:true}).waitFor();assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);await page.unroute('**/rest/v1/rpc/crm_book_placement_test');
- assert.equal(before,counts());assert.equal(detail(lead).status,'QUALIFIED');assert.equal(detail(lead).open_tasks.length,0);const pid=detail(lead).next_placement.id;assert.equal(detail(lead).next_placement.niveau_recommande,null);
+ await dialog().getByRole('button',{name:'Enregistrer',exact:true}).dblclick();await page.getByRole('dialog').first().getByRole('button',{name:'Reprogrammer',exact:true}).waitFor();assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);await page.unroute('**/rest/v1/rpc/crm_book_placement_test');
+ assert.equal(before,counts());assert.equal(detail(lead).status,'QUALIFIED');const pid=detail(lead).next_placement.id;
+ // RWR-r5 §4.2: the booked test becomes the one next action, an appointment carrying the test.
+ assert.equal(detail(lead).open_tasks.length,1);assert.equal(sql(`select count(*) from public.crm_tasks where lead_id='${lead}' and status='open' and task_type='center_visit' and placement_test_id='${pid}'`),'1');assert.equal(detail(lead).next_placement.niveau_recommande,null);
  assert.equal(sql(`select count(*) from public.placement_tests where crm_lead_id='${lead}'`),'1');await screenshot({path:join(tmpdir(), 'hills-phase5-scheduled.png'),fullPage:false});
  console.log('PASS qualified booking, exact network replay/double-click, no fake A1, no student/enrollment/finance writes');
  await page.getByRole('button',{name:'Reprogrammer',exact:true}).click();
- // Match the server's Casablanca Today view with an explicit HTML date format.
- const todayDate=sql("select to_char(now() at time zone public.centre_utc_offset(),'YYYY-MM-DD')");
- await dialog().getByLabel('Date *',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('23:59');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('button',{name:'Voir le test',exact:true}).waitFor();
- assert.equal(detail(lead).next_placement.id,pid);assert.equal(detail(lead).next_placement.heure,'23:59');
- await page.goto(app+'/placement-tests?view=calendar&date='+todayDate);await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).waitFor();assert.equal(await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).count(),1,'scheduled appointment appears once');await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Aucune tâche dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),0,'scheduled appointment is not a fake task');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
+ // A week later, inside the opening hours (§4.4); the same row moves.
+ const todayDate=laterDate;
+ await dialog().getByLabel('Date *',{exact:true}).fill(todayDate);await dialog().getByLabel('Heure',{exact:true}).fill('16:05');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();await page.getByRole('dialog').first().getByRole('button',{name:'Reprogrammer',exact:true}).waitFor();
+ assert.equal(detail(lead).next_placement.id,pid);assert.equal(detail(lead).next_placement.heure,'16:05');
+ await page.goto(app+'/placement-tests?view=calendar&date='+todayDate);await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).waitFor();assert.equal(await page.getByTestId('calendar-event').filter({hasText:'Adam test CRM'}).count(),1,'scheduled appointment appears once');await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Aucun prospect dans cette échéance et ce périmètre. Choisissez une autre échéance ou ajustez les filtres.',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),0,'a future appointment is not overdue');await screenshot({path:join(tmpdir(), 'hills-phase5-agenda.png'),fullPage:true});
  console.log('PASS same-row reschedule and one appointment in Agenda, without a fake task or missing-action warning');
  await page.goto(app+'/placement-tests');const row=page.getByRole('row').filter({hasText:'Adam test CRM'});await row.getByText('Prospect CRM',{exact:true}).waitFor();await row.getByRole('button',{name:/Test du/}).click();
  await dialog().getByLabel('Statut',{exact:true}).selectOption('Résultat saisi');await dialog().getByRole('button',{name:'Enregistrer',exact:true}).click();
@@ -77,7 +83,8 @@ try {
  assert.equal(before,counts());assert.equal(detail(lead).status,'QUALIFIED');assert.equal(detail(lead).open_tasks.length,1);assert.equal(detail(lead).next_task.task_type,'post_test_followup');
  await open(lead);await page.getByText('Niveau recommandé : A2',{exact:true}).first().waitFor();await screenshot({path:join(tmpdir(), 'hills-phase5-result.png'),fullPage:false});
  sql(`update public.crm_tasks set due_at=now()-interval '1 minute' where lead_id='${lead}' and task_type='post_test_followup'`);
- await page.goto(app+'/crm/today?assignee=all&bucket=overdue');await page.getByText('Rappeler le parent · Résultat disponible',{exact:true}).waitFor();assert.equal(await page.getByTestId('work-row').count(),1);await screenshot({path:join(tmpdir(), 'hills-phase5-followup.png'),fullPage:true});
+ await page.goto(app+'/crm/today?assignee=all&bucket=overdue');// RWR-r5 §4.8 labels: the post-test follow-up reads « Proposer l’inscription ».
+ await page.getByTestId('work-row').getByText(/^Proposer l’inscription/).waitFor();assert.equal(await page.getByTestId('work-row').count(),1);await screenshot({path:join(tmpdir(), 'hills-phase5-followup.png'),fullPage:true});
  assert.doesNotMatch(await page.locator('body').innerText(),/placement_test_id|crm_lead_id|source_key|post_test_followup/);
  console.log('PASS existing placement page edits, explicit result, one followup, qualified lifecycle and humanized Today');
  await page.setViewportSize({width:390,height:844});await open(lead);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await screenshot({path:join(tmpdir(), 'hills-phase5-mobile.png'),fullPage:false});await context.close();
