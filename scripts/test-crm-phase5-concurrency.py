@@ -41,6 +41,18 @@ commit;"""
         return {'error': result.stderr}
     return json.loads(result.stdout.strip())
 
+def trusted(name, key, payload):
+    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # fixture setup, runs from the trusted postgres session as the same staff member, so the
+    # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
+    result = sql(f"""begin;
+set local request.jwt.claim.sub={quote(actor)};
+select public.crm_{name}({quote(key)}::uuid,{quote(json.dumps(payload))}::jsonb);
+commit;""", False)
+    if result.returncode:
+        return {'error': result.stderr}
+    return json.loads(result.stdout.strip())
+
 def race(name, requests):
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         return list(pool.map(lambda item: command(name, *item), requests))
@@ -66,7 +78,7 @@ commit;""")
         intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Placement race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
         lead = intake['lead']['id']
         due = sql("select (now()+interval '1 day')::text").stdout.strip()
-        result = command('qualify_lead', str(uuid.uuid4()), {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'Placement agreed', 'qualification_step': 'placement_test', 'next_task': {'task_type': 'confirm_placement_test', 'due_at': due}})
+        result = trusted('qualify_lead', str(uuid.uuid4()), {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'Placement agreed', 'qualification_step': 'placement_test', 'next_task': {'task_type': 'confirm_placement_test', 'due_at': due}})
         assert 'error' not in result, result
         task = result['open_tasks'][0]
         return {'lead_id': lead, 'expected_version': result['lead']['version'], 'task_id': task['id'], 'expected_task_version': task['version'], 'date_test': slot_date, 'heure': slot_time}
@@ -132,7 +144,7 @@ select count(*) from removed_leads;
 delete from public.crm_contacts where created_by='{actor}';
 delete from public.crm_command_requests where actor_scope='{actor}';
 delete from public.crm_followup_policies where created_by='{actor}';
-alter table public.placement_tests enable trigger crm_placement_integrity;
+set constraints all immediate;alter table public.placement_tests enable trigger crm_placement_integrity;
 alter table public.crm_activities enable trigger crm_activities_immutable;
 alter table public.crm_submissions enable trigger crm_submission_immutable;
 alter table public.crm_command_requests enable trigger crm_requests_immutable;

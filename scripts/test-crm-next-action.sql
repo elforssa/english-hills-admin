@@ -71,9 +71,13 @@ do $$ begin perform pg_temp.actor(3); end $$;
 -- Schema and grants: the writer and its helpers are private; the new commands are RPCs.
 do $$ declare fn text; begin
  foreach fn in array array['crm_security.set_next_action(public.crm_leads,jsonb,text,text)','crm_security.next_action_id(uuid)','crm_security.next_actions()',
-  'crm_security.assert_in_hours(text,timestamptz)','crm_security.d1_apply(jsonb)','crm_security.d1_revert()','crm_security.d1_plan()'] loop
+  'crm_security.assert_in_hours(text,timestamptz)'] loop
   perform pg_temp.ok(not has_function_privilege('authenticated',fn,'execute') and not has_function_privilege('anon',fn,'execute')
    and not has_function_privilege('service_role',fn,'execute'),'private '||fn);
+ end loop;
+ -- M-A2 (PR A2) dropped D1: the data step can no longer run or be reverted.
+ foreach fn in array array['crm_security.d1_apply(jsonb)','crm_security.d1_revert()','crm_security.d1_plan()'] loop
+  perform pg_temp.ok(to_regprocedure(fn) is null,'dropped by M-A2 '||fn);
  end loop;
  foreach fn in array array['public.crm_log_exchange(uuid,jsonb)','public.crm_change_next_action(uuid,jsonb)','public.crm_record_appointment_outcome(uuid,jsonb)',
   'public.crm_close_prospect(uuid,jsonb)','public.crm_reopen_prospect(uuid,jsonb)','public.crm_get_centre_hours()','public.crm_check_action(uuid)'] loop

@@ -389,6 +389,17 @@ jobs:
           supabase db reset --local --version 130 --no-seed
           node scripts/test-crm-next-action-136-upgrade.mjs
           supabase db reset --local --no-seed
+      # RWR-r5 PR A2: fixture → 136 → D1 → 137 in one rolled-back transaction, then the
+      # committed 136→137 path (precondition refusal, D1, the file, writers, COMMIT refusals,
+      # restore file, re-apply).
+      - name: One next action enforced 136 to 137 upgrade (RWR-r5 PR A2)
+        if: matrix.shard == 'upgrades-from-112-to-116'
+        run: |
+          supabase db reset --local --version 136 --no-seed
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-upgrade.sql
+          supabase db reset --local --version 136 --no-seed
+          node scripts/test-crm-next-action-137-upgrade.mjs
+          supabase db reset --local --no-seed
 
       # Shard sql-and-concurrency: rollback-only SQL suites and database races.
       - name: Receptionist capability list parity, function classification, policy manifest and online pin (RPW-r2)
@@ -425,8 +436,9 @@ jobs:
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-task-writers.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-views.sql
-          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-upgrade.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-next-action-enforced.sql
+          psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-single-writer.sql
+          node scripts/test-crm-next-action-enforced-suites.mjs
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-phase11.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b.sql
           psql -X -q -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/test-crm-dgi-b2.sql

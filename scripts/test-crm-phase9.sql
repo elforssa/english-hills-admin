@@ -90,6 +90,8 @@ select pg_temp.ok(crm_list_intake_review()::text not like '%observed-click%','tr
 select crm_resolve_external_intake(gen_random_uuid(),id,'reject') from crm_submissions where match_status='needs_review';
 select pg_temp.actor(0);
 update crm_leads set status='LOST',closed_at=now(),closure_reason='postponed' where learner_name='Lina';
+-- RWR-r5 M-A2: a closed prospect holds no open action (the close path cancels it).
+update crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where status='open' and lead_id in (select id from crm_leads where learner_name='Lina');
 select pg_temp.website('Lina');select pg_temp.ok((select count(*)=2 from crm_leads where learner_name='Lina'),'closed cross-channel opportunity not reopened');
 -- Website first touch flows through unchanged Phase 6 conversion and Phase 7 revenue.
 alter table public.receipts disable trigger on_receipt_created;

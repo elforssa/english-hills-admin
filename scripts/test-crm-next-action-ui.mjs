@@ -117,3 +117,13 @@ for (const status of ['Annulé', 'Absent', 'Passé', 'Résultat saisi', 'Affect�
 }
 assert.deepEqual(placementStatusOptions({ status: 'Annulé', crm_lead_id: 'x' }), ['Annulé', 'Passé', 'Résultat saisi', 'Affecté']);
 console.log('PASS placement status options: no « Planifié » for a prospect test that left it');
+
+// PR A2 (migration 137): no screen calls a revoked command wrapper.
+{
+  const { readdirSync, readFileSync, statSync } = await import('node:fs');
+  const REVOKED = /\bcrm_(add_note|record_call_outcome|record_whatsapp|record_conversation|record_conversation_decision|qualify_lead|schedule_task|complete_task|cancel_task|close_lost|close_not_qualified|reopen_lead)\b/;
+  const walk = dir => readdirSync(dir).flatMap(name => { const path = `${dir}/${name}`; return statSync(path).isDirectory() ? walk(path) : [path]; });
+  const callers = walk('src').filter(path => /\.(js|jsx|mjs|ts|tsx)$/.test(path) && REVOKED.test(readFileSync(path, 'utf8')));
+  assert.deepEqual(callers, [], 'no source file names a wrapper revoked by migration 137');
+  console.log('PASS no screen calls a command wrapper revoked by migration 137');
+}

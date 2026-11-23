@@ -35,6 +35,11 @@ insert into public.crm_submissions(id,lead_id,channel,received_at,occurred_at,ti
  union all select last_touch,lead,'meta_instant_form',now(),now(),'server','{}'::jsonb,'[]'::jsonb,'Ad source latest '||k,'resolved',encode(sha256(convert_to(k||'latest','UTF8')),'hex'),now() from fx;
 insert into public.crm_leads(id,contact_id,learner_name,learner_name_normalized,status,first_submission_id,latest_submission_id,followup_policy_id)
  select lead,contact,'Ad source learner '||k,'ad source learner '||k,'NEW',first_touch,last_touch,(select id from policy) from fx;
+-- Fixture: each active prospect holds its one open next action (migration 137 checks it at commit).
+set local session_replication_role=replica;
+insert into public.crm_tasks(lead_id,task_type,status,due_at,assigned_to,source_kind,source_key)
+ select lead,'callback','open',now()+interval '1 day','12600000-0000-0000-0000-000000000003','manual','ad-source-fixture:'||k from fx;
+set local session_replication_role=origin;
 -- Website rows with secrets that must never leave the database through this read.
 insert into public.crm_submission_attribution(submission_id,provider,attribution_status,landing_page,referrer,utm_source,utm_medium,utm_campaign,utm_term,utm_content,fbclid,fbc,fbp,raw_payload,consent_evidence)
  select first_touch,'website','partial','https://example.invalid/secret-landing-'||k,'https://example.invalid/secret-referrer','facebook','paid',

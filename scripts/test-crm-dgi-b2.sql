@@ -71,6 +71,8 @@ select pg_temp.ev('L5','whatsapp_sent');select pg_temp.ev('L8','whatsapp_convers
 -- L7: contacted and qualified, then merged into L1: excluded from every count.
 select pg_temp.ev('L7','contact_attempted');select pg_temp.ev('L7','lead_qualified');
 update crm_leads set merged_into_lead_id=pg_temp.lead('L1') where id=pg_temp.lead('L7');
+-- RWR-r5 M-A2: a merged prospect holds no open action (the merge closes it).
+update crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where status='open' and lead_id=pg_temp.lead('L7');
 -- L1 also gets a later website submission: first touch stays Meta, no fan-out.
 do $$ declare s uuid;l uuid:=pg_temp.lead('L1');begin
  insert into crm_submissions(channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,payload_hash) values('website','2026-03-02 09:00Z','2026-03-02 09:00Z','server','{}','[]','Later','needs_review',repeat('e',64)) returning id into s;

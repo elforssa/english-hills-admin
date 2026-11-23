@@ -61,29 +61,43 @@ commit;""")
     assert abs(policies[0]['version'] - policies[1]['version']) == 1
     print('PASS concurrent policy publication uses distinct increasing versions', flush=True)
 
+    # RWR-r5 PR A2 (migration 137): the conversation decision is recorded through
+    # « Noter un échange » (crm_log_exchange, result « On a parlé »), which replaces the
+    # revoked crm_record_conversation_decision. Same replay, conflict and stale-version
+    # assertions; the old wrapper is refused for authenticated.
+    due = sql("select (now()+interval '1 day')::text").stdout.strip()
+    visit = sql("select crm_security.window_at(crm_security.current_policy_id(),'opening',now()+interval '2 days')::text").stdout.strip()
+    nexts = {
+        'callback': {'task_type': 'callback', 'due_at': due},
+        # An appointment qualifies (OD-11); without a test, so no placement row to clean up.
+        'qualify': {'task_type': 'center_visit', 'due_at': visit},
+        'lost': {'close': {'status': 'LOST', 'reason': 'not_interested', 'note': 'Parent conversation'}},
+        'not_qualified': {'close': {'status': 'NOT_QUALIFIED', 'reason': 'program_not_suitable', 'note': 'Parent conversation'}},
+    }
     for decision in ('callback', 'qualify', 'lost', 'not_qualified'):
         intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision test', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
         lead = intake['lead']['id']
         task = intake['open_tasks'][0]
-        payload = {'lead_id': lead, 'expected_version': 1, 'task_id': task['id'], 'expected_task_version': task['version'], 'decision': decision, 'note': 'Parent conversation'}
-        if decision in ('callback', 'qualify'):
-            payload['next_task'] = {'task_type': 'callback' if decision == 'callback' else 'confirm_placement_test', 'due_at': sql("select (now()+interval '1 day')::text").stdout.strip()}
-            if decision == 'qualify':
-                payload['qualification_step'] = 'placement_test'
-        else:
-            payload['reason'] = 'not_interested' if decision == 'lost' else 'program_not_suitable'
+        if decision == 'callback':
+            old = {'lead_id': lead, 'expected_version': 1, 'task_id': task['id'], 'expected_task_version': task['version'], 'decision': decision, 'note': 'Parent conversation',
+                   'next_task': {'task_type': 'callback', 'due_at': due}}
+            refused = command('record_conversation_decision', str(uuid.uuid4()), old)
+            assert 'permission denied for function crm_record_conversation_decision' in refused.get('error', ''), refused
+            assert sql(f"select version from public.crm_leads where id='{lead}'").stdout.strip() == '1'
+            print('PASS crm_record_conversation_decision refused for authenticated (42501), nothing written', flush=True)
+        payload = {'lead_id': lead, 'expected_version': 1, 'task_id': task['id'], 'channel': 'phone', 'result': 'spoke', 'note': 'Parent conversation', 'next': nexts[decision]}
         key = str(uuid.uuid4())
-        results = race('record_conversation_decision', [(key, payload), (key, payload)])
+        results = race('log_exchange', [(key, payload), (key, payload)])
         assert results[0] == results[1] and 'error' not in results[0], results
         assert len(results[0]['open_tasks']) == (1 if decision in ('callback', 'qualify') else 0), results
         assert sql(f"select count(*) from public.crm_activities where lead_id='{lead}' and event_type='conversation_recorded'").stdout.strip() == '1'
-        assert command('record_conversation_decision', key, payload) == results[0]
-        assert 'Request key payload conflict' in command('record_conversation_decision', key, payload | {'note': 'Changed'}).get('error', '')
+        assert command('log_exchange', key, payload) == results[0]
+        assert 'Request key payload conflict' in command('log_exchange', key, payload | {'note': 'Changed'}).get('error', '')
         print('PASS concurrent + network replay: ' + decision, flush=True)
     intake = command('create_manual_lead', str(uuid.uuid4()), {'display_name': 'Decision race', 'learner_name': 'Synthetic learner', 'source_label': 'Manual'})
     lead = intake['lead']['id']
-    payload = {'lead_id': lead, 'expected_version': 1, 'decision': 'lost', 'reason': 'not_interested', 'note': 'Parent conversation'}
-    results = race('record_conversation_decision', [(str(uuid.uuid4()), payload), (str(uuid.uuid4()), payload)])
+    payload = {'lead_id': lead, 'expected_version': 1, 'channel': 'phone', 'result': 'spoke', 'note': 'Parent conversation', 'next': nexts['lost']}
+    results = race('log_exchange', [(str(uuid.uuid4()), payload), (str(uuid.uuid4()), payload)])
     assert sum('error' in r for r in results) == 1, results
     assert 'Stale lead version' in next(r['error'] for r in results if 'error' in r)
     print('PASS competing decisions: one commit, one stale rejection', flush=True)

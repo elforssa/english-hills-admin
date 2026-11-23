@@ -84,9 +84,10 @@ create function pg_temp.lead(n integer) returns uuid language plpgsql as $$ decl
   perform pg_temp.act(3);
   l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'EAP parent ' || n,
     'learner_name', 'EAP child ' || n, 'phone', '06' || lpad((71000000 + n)::text, 8, '0'), 'source_label', 'Phone'))->'lead'->>'id')::uuid;
-  perform public.crm_qualify_lead(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
-    'conversation_channel', 'phone', 'note', 'x', 'qualification_step', 'enrollment',
-    'next_task', jsonb_build_object('task_type', 'enrollment_followup', 'due_at', now() + interval '1 day')));
+  -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies at step enrollment (OD-11).
+  perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
+    'channel', 'phone', 'result', 'spoke', 'note', 'x',
+    'next', jsonb_build_object('enrol', jsonb_build_object('due_at', now() + interval '1 day'))));
   perform pg_temp.owner();
   return l;
 end $$;

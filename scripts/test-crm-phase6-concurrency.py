@@ -42,6 +42,18 @@ commit;"""
         return {'error': result.stderr}
     return json.loads(result.stdout.strip())
 
+def trusted(name, key, payload):
+    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # fixture setup, runs from the trusted postgres session as the same staff member, so the
+    # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
+    result = sql(f"""begin;
+set local request.jwt.claim.sub={quote(actor)};
+select public.crm_{name}({quote(key)}::uuid,{quote(json.dumps(payload))}::jsonb);
+commit;""", False)
+    if result.returncode:
+        return {'error': result.stderr}
+    return json.loads(result.stdout.strip())
+
 def race(name, requests):
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         return list(pool.map(lambda item: command(name, *item), requests))
@@ -56,7 +68,7 @@ try:
     command('create_followup_policy',str(uuid.uuid4()),{'weekly_hours':hours})
     def qualified():
         lead=command('create_manual_lead',str(uuid.uuid4()),{'display_name':'Enrollment concurrency','learner_name':'Synthetic learner','source_label':'Manual'})['lead']['id']
-        result=command('qualify_lead',str(uuid.uuid4()),{'lead_id':lead,'expected_version':1,'conversation_channel':'phone','note':'Enrollment agreed','qualification_step':'enrollment','next_task':{'task_type':'enrollment_followup','due_at':sql("select (now()+interval '2 days')::text").stdout.strip()}})
+        result=trusted('qualify_lead',str(uuid.uuid4()),{'lead_id':lead,'expected_version':1,'conversation_channel':'phone','note':'Enrollment agreed','qualification_step':'enrollment','next_task':{'task_type':'enrollment_followup','due_at':sql("select (now()+interval '2 days')::text").stdout.strip()}})
         return lead,result['lead']['version']
     def payload(lead,version,name):
         token=sql(f"select crm_security.candidate_token('{lead}',{quote(name)},null)").stdout.strip()

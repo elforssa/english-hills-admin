@@ -165,7 +165,18 @@ function body(s) {
    ${body({ k: 'reopen', lead: s.lead, next: s.next })}`;
     case 'close': return `perform pg_temp.act('close_prospect',${L},${J(s.close)});`;
     case 'reopen': return `perform pg_temp.act('reopen_prospect',${L},jsonb_build_object('reason','Le contact rappelle','next',${next(s.next, L)}));`;
-    case 'legacy_schedule': return `perform pg_temp.act('schedule_task',${L},${J({ task: { task_type: 'callback', due_preset: 'in_2_days' } })});`;
+    // M-A2 (137): the old wrapper is refused for authenticated (42501) and changes nothing;
+    // the same change goes through crm_change_next_action (trusted session, as every step).
+    case 'legacy_schedule': return `d:=pg_temp.data(${L},${J({ task: { task_type: 'callback', due_preset: 'in_2_days' } })});
+   begin
+    perform set_config('role','authenticated',true);
+    perform public.crm_schedule_task(gen_random_uuid(),d);
+    raise exception 'FAIL: revoked crm_schedule_task ran for authenticated — %',label;
+   exception when insufficient_privilege then null;
+   end;
+   perform pg_temp.ok(current_user='postgres' and (select version from public.crm_leads where id=${L})=v0
+     and crm_security.next_action_id(${L}) is not distinct from o0,'refused wrapper changed nothing — '||label);
+   perform pg_temp.act('change_next_action',${L},jsonb_build_object('expected_action_id',crm_security.next_action_id(${L}),'next',${next({ task_type: 'callback', due_preset: 'in_2_days' }, L)}));`;
     case 'enrol': return `perform public.crm_start_enrollment(gen_random_uuid(),pg_temp.data(${L},jsonb_build_object('student_choice','existing','student_id',(select student_id from public.crm_leads where id=${L}),'session_type','Adults','school_year',extract(year from now())::integer||'/'||extract(year from now())::integer+1,'initial_status','Confirmed')));`;
     case 'stale': return `begin
     perform public.crm_change_next_action(gen_random_uuid(),jsonb_build_object('lead_id',${L},'expected_version',v0-1,'expected_action_id',o0,'next','{"task_type":"awaiting_prospect"}'::jsonb));

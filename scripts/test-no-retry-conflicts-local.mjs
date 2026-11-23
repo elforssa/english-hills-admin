@@ -122,8 +122,10 @@ const CASES = [
   ['save_receptionist_premium_membership', receptionist, 'save_receptionist_premium_membership', { p_membership: randomUUID(), p_expected_updated_at: old }, 'Membership unavailable or stale'],
   ['save_receptionist_premium_attendance', receptionist, 'save_receptionist_premium_attendance', { p_session: randomUUID(), p_student: id('student'), p_status: 'Present', p_expected_updated_at: old }, 'Premium attendance unavailable'],
   // CRM lead, placement and enrollment commands (stale versions).
-  ['crm_complete_task via command', director, 'crm_complete_task', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, expected_task_version: 1, outcome: 'completed', note: 'NRC', next_task: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
-  ['crm_record_conversation_decision', director, 'crm_record_conversation_decision', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, expected_task_version: 1, decision: 'callback', note: 'NRC', next_task: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
+  // M-A2 (137) revoked crm_complete_task and crm_record_conversation_decision; their stale-lead
+  // conflict is reached through the replacement commands (the wrappers' 42501 refusal is below).
+  ['crm_log_exchange', director, 'crm_log_exchange', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, channel: 'phone', result: 'spoke', note: 'NRC', next: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
+  ['crm_change_next_action', director, 'crm_change_next_action', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, expected_action_id: task, next: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
   ['crm_book_placement_test', director, 'crm_book_placement_test', { p_request_key: randomUUID(), p_data: { lead_id: qualified, expected_version: 999, date_test: day(2), heure: '10:30', examinateur: 'NRC', notes: 'NRC' } }, 'Stale lead version; refresh and retry'],
   ['crm_update_placement_test', director, 'crm_update_placement_test', { p_request_key: randomUUID(), p_data: { placement_id: id('placement'), expected_updated_at: old, notes: 'NRC' } }, 'Stale placement version; refresh and retry'],
   // EAP (127): crm_start_enrollment is no longer callable by API roles; its stale-lead conflict
@@ -175,6 +177,20 @@ async function refused([label, caller, name, args, message, hint = null]) {
 const baseline = rollbacks();
 for (const testCase of CASES) await refused(testCase);
 
+// The two wrappers revoked by M-A2 (137): refused for authenticated (42501, HTTP 403), no row changed.
+let revokedCalls = 0;
+for (const [name, data] of [
+  ['crm_complete_task', { lead_id: lead, expected_version: 1, task_id: task, expected_task_version: 1, outcome: 'completed', note: 'NRC' }],
+  ['crm_record_conversation_decision', { lead_id: lead, expected_version: 1, task_id: task, expected_task_version: 1, decision: 'callback', note: 'NRC' }]
+]) {
+  const before = fingerprint();
+  const res = await director.client.rpc(name, { p_request_key: randomUUID(), p_data: data }).abortSignal(AbortSignal.timeout(5000));
+  revokedCalls++;
+  assert(res.error, `${name}: unexpected success after M-A2`);
+  assert.deepEqual([res.status, res.error.code], [403, '42501'], `${name}: refused with 42501`);
+  assert.equal(fingerprint(), before, `${name}: a row changed`);
+}
+
 // Busy (class B): a held enrollment-intent lock refuses a payment at once, no replay.
 const holder = spawn('psql', pgArgs, { env: processEnv, stdio: ['pipe', 'pipe', 'pipe'] });
 let held = '';
@@ -195,7 +211,7 @@ console.log(`PASS ${calls} former-retry paths: HTTP 409 PT409 with today's messa
 // Quiet period: nothing keeps re-running in the server.
 await new Promise(r => setTimeout(r, 3000));
 const grew = rollbacks() - baseline;
-assert(grew <= calls + 25, `xact_rollback grew by ${grew} for ${calls} refused calls: a retry loop is running`);
+assert(grew <= calls + revokedCalls + 25, `xact_rollback grew by ${grew} for ${calls + revokedCalls} refused calls: a retry loop is running`);
 assert.equal(sql("select count(*) from pg_stat_activity where usename = 'authenticator' and state = 'active' and pid <> pg_backend_pid()"), '0', 'no authenticator backend still active');
 const current = sql(`select to_json(updated_at) #>> '{}' from public.students where id=${q(id('student'))}`);
 const ok = await receptionist.client.rpc('save_receptionist_student', { p_student: id('student'), p_expected_updated_at: current, p_changes: { telephone: '0600000009' } });

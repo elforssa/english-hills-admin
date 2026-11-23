@@ -193,7 +193,7 @@ Approving this plan approves the amendments marked « amended »; the ones marke
 | `crm_leads.owner_id` gets defaults through the service (no column change); new setting row `crm_reception_default_owner` in an existing settings table or a new `crm_settings` row (implementer chooses the existing table if one fits) | ownership (§4.6) |
 | `crm_data_step_journal(step text, entity text, entity_id uuid, before jsonb, after jsonb, run_at timestamptz, run_by uuid)` | journal of D1 and later steps, readable by the director |
 
-M-A2, only after data step D1's post-checks are all 0 (§10: Q04, Q05 zero-action count, Q07, Q29):
+M-A2, only after data step D1's post-checks are all 0 (§10: Q04, Q05 zero-action count, Q07 as amended 2026-11-23, Q29):
 
 - `create unique index crm_tasks_one_open_per_lead on crm_tasks(lead_id) where status='open'`. A unique index can't be deferred, so `set_next_action` always closes the current action **before** inserting the new one, in the same transaction.
 - Deferred constraint triggers `crm_next_action_presence` (`after insert or update on crm_leads`, `after insert or update or delete on crm_tasks`, `initially deferred`), checking the touched lead at commit:
@@ -617,7 +617,7 @@ Every migration is forward-only, rehearsed on a private local stack at the ceili
 | R0 | Q01–Q30 | — | — | — | — | « approve R0 read-only » |
 | M-A1 | schema, services, readers (§4) | function md5 guards | — | wrapper | restore the prior function bodies from the journal of the wrapper (the old bodies are kept in the migration's rollback file); new columns are additive | « approve M-A1 » |
 | D1 | bring every existing prospect into the model | `select crm_security.d1_plan()` returns a count and 5 sample lead ids **per rule**, and separately the count and 5 samples (test id, lead id, rule) of **every planned test D1 would cancel under any rule**; that count is part of `expected_counts`. (a) **several open actions:** keep, in this order, the earliest future agreed appointment (`schedule_kind='appointment'`, `due_at > now()`), else an appointment linked to a **still-planned test** (past or future; the earliest test if several), else the most recently created, through `set_next_action` in D1 mode `keep` (§4.2): the others are cancelled « Doublon de prochaine action (fusion D1) », and a test linked to the kept action is never cancelled, even when a cancelled duplicate pointed to it too. (b) **planned CRM test of an active prospect without its appointment or enrolment action:** if the prospect has an open « Finaliser l'inscription », D1 **links the test to it and never replaces it** (D1 mode `link`; `d1_plan` reports these under `linked`; an enrolment action that already carries a planned test stops the run, hint `crm_d1.enrollment_test_taken`) (*amended 2026-11-22*); otherwise create the « Rendez-vous au centre » linked to the test at the test's time (even if past, so its outcome gets recorded); any other open action is replaced « Remplacée par le rendez-vous du test (D1) » and listed in the sample (`replaced`). (c) **active prospect with no open action:** after 5 failed calls, « En attente » with no relance date (OD-17); otherwise « En attente » with no relance date and a « À revoir (D1) » flag the receptionist sees in « En attente ». (d) **closed, converted or merged prospect** with open actions: cancelled « Prospect clôturé (D1) »; its planned tests → `Annulé`. | Q04, Q05, Q06, Q07, Q29, Q30 (owner's brief: 20 leads with 2+ actions, 9 with exact duplicates) | `select crm_security.d1_apply(expected_counts jsonb)`, which raises if any rule's count, or the cancelled-test count, differs from the approved dry run. It writes **only through `set_next_action`** in its D1 mode (§4.2: `keep` for rule a, `link` or `create` for rule b, `create` for rule c, `null` for rule d), so it needs no writer exception. `d1_apply` locks `crm_leads`, `crm_tasks` and `placement_tests` (share row exclusive) until commit: **run it outside reception hours**. Rule (b)'s appointments may be in the past or outside the new hours: `d1_apply` sets the transaction-local flag `eh.crm_data_step = 'd1'`, under which `set_next_action` skips the « future » and `assert_in_hours` checks for that transaction only, and each such row is journalled with « hors règles (D1) ». | `crm_security.d1_revert()`, **only before M-A2**, deletes nothing (`crm_activities` references tasks `on delete restrict`, `078:248`, and history is append-only): it **cancels** the actions D1 created (« Annulé (retour D1) ») and **reopens** the exact rows D1 cancelled (the `crm_tasks_terminal` check allows `open` with the cancellation fields cleared; the journal and a « Rouvert (retour D1) » activity keep the record), and **unlinks** the tests it linked to an enrolment action (the action's previous `placement_test_id` returns, *amended 2026-11-22*), only for leads whose version hasn't changed since; a test cancelled by D1 returns to `Planifié` only if its date hasn't passed, otherwise it stays `Annulé` and is listed for the receptionist (a closed prospect's test, or an active prospect's past test cancelled under rule a, review note a) | « approve D1 » with the per-rule counts and the cancelled-test count |
-| M-A2 | index, triggers, revokes; drops `d1_plan`, `d1_apply`, `d1_revert` and the `eh.crm_data_step` bypass | just before: Q04 = 0, Q05 active prospects with 0 actions = 0, Q07 = 0 (closed, converted **and merged** prospects, r3), Q29 = 0 (the wrapper re-checks them in the same transaction and aborts otherwise) | all 0 | wrapper | drop the index and triggers; re-grant the wrappers (the D1 functions are not restored: D1 can no longer be reverted after M-A2) | « approve M-A2 » |
+| M-A2 | index, triggers, revokes; drops `d1_plan`, `d1_apply`, `d1_revert` and the `eh.crm_data_step` bypass | just before: Q04 = 0, Q05 active prospects with 0 actions = 0, Q07 = 0 (closed, converted **and merged** prospects, r3; *amended 2026-11-23*: open actions on closed, converted or merged prospects, and planned tests on closed or merged ones — a converted prospect's kept planned test is legitimate under the 2026-11-22 decision « Conversion keeps the test » and is reported, not counted), Q29 = 0 (the wrapper re-checks them in the same transaction and aborts otherwise) | all 0 | wrapper | drop the index and triggers; re-grant the wrappers (the D1 functions are not restored: D1 can no longer be reverted after M-A2) | « approve M-A2 » |
 | M-B1 | identity (§5.1–5.3) | md5 guards | — | wrapper | prior bodies; additive columns and tables | « approve M-B1 » |
 | D3 | phones: students, authorized adults, contacts (`212…` without « + »); placeholders → NULL | `d3_plan()`: counts per category (E.164 already, no « + », no leading 0, separators, placeholder, unnormalisable) and 5 sample ids | Q11 (owner's brief: 181 students, 83 standard, 34 without « + », 29 without leading 0, 28 malformed) | `d3_apply(counts…)`; unnormalisable rows untouched and listed for manual correction | journal holds raw values: `d3_revert()` | « approve D3 with counts » |
 | M-B2 | catalogues | — | — | wrapper | additive. The FK on `crm_leads.session_type` is dropped; the old 8-value check is restored **only after `d4_revert()`** (D4 may have written codes outside it), or else restored `not valid` so existing rows aren't rejected. The rollback file states both orders. | « approve M-B2 » |
@@ -904,6 +904,81 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 
 **Gates after D1:** D1 done. **Next: A2** (unique index, presence triggers, revokes; M-A2), which needs its own implementation approval and review and then « approve M-A2 ». Then B1, B2 (prices, OD-16), C1 and C2 (§8).
 
+### Implementation record: PR A2 (M-A2, migration 137)
+
+**Owner approval (Maroine, 2026-11-23), scope lines verbatim:**
+
+> Scope, M-A2 only (plan §4.1, §4.2, §8 PR A2 row, §10 M-A2 row): the single-open-action unique index; the deferred presence trigger (exactly one open action per active prospect); the closed-prospect guard; the placement trigger as amended — an active prospect's planned test belongs to its open appointment or its open enrolment action, and only those; revoke the old command wrappers from authenticated; drop d1_plan, d1_apply, d1_revert and the eh.crm_data_step bypass. The migration itself re-checks Q04, Q05 (active with 0), Q07 and Q29 and refuses to apply unless all are 0.
+>
+> Not authorized: Production, data steps, merge, release.
+
+**What `137_crm_one_next_action_enforce.sql` does.**
+
+- **Precondition.** Under a share-row-exclusive lock on `crm_leads`, `crm_tasks` and `placement_tests`, it re-counts Q04, Q05 (active with no open action), Q07 and Q29 and refuses with `55000`, hint `crm_next_action.d1_postchecks`, unless all are 0.
+- **The index.** `crm_tasks_one_open_per_lead` is a unique index on `crm_tasks(lead_id) where status='open'`.
+- **Deferred constraint triggers.** `crm_next_action_presence` on `crm_leads` and `crm_tasks`, and `crm_planned_test_placement` on `placement_tests`, call `crm_security.assert_next_action_state`. It enforces three rules:
+  - an active prospect has exactly one open action (`crm_next_action.exactly_one`);
+  - a planned test belongs to the prospect's open appointment or enrolment action (`crm_placement.test_without_action`);
+  - a closed, converted or merged prospect has no open action (`crm_next_action.closed_has_action`), and a closed or merged one has no planned test (`crm_placement.closed_has_test`).
+- **D1 bypass removed.** `set_next_action` and `placement_no_replan` are re-created from their 136 bodies without the D1 bypass.
+- **D1 dropped.** The seven D1 functions are dropped. `crm_data_step_journal` and its rows stay.
+- **Wrappers revoked.** Twelve old wrappers are revoked from `public`, `anon`, `authenticated` and `service_role`: `crm_add_note`, `crm_record_call_outcome`, `crm_record_whatsapp`, `crm_record_conversation`, `crm_record_conversation_decision`, `crm_qualify_lead`, `crm_schedule_task`, `crm_complete_task`, `crm_cancel_task`, `crm_close_lost`, `crm_close_not_qualified` and `crm_reopen_lead`. `crm_reassign`, `crm_book_placement_test` and `crm_update_placement_test` keep their grant, because current screens call them.
+- **`placement_tests` grants.** `anon` loses every table and column privilege; `authenticated` loses `TRUNCATE` and keeps `DELETE` and its column `INSERT`/`UPDATE` (owner decision 2026-11-23, below).
+- **Rows.** The migration writes no row.
+- **Restore file.** `scripts/rollback/137_crm_one_next_action_enforce_restore.sql` drops the triggers, functions and index, re-grants the wrappers and restores the 136 `placement_tests` grants exactly (checked with `aclexplode`). D1 is not restored.
+
+**Owner decisions on A2 (Maroine, 2026-11-23).**
+
+- **Revoked wrappers in tests.** Approved: setup-only calls move to the replacement commands or a trusted `postgres` session with the fixture state unchanged; a suite that tested a revoked wrapper keeps its replay, stale-version and conflict assertions against the replacement command and adds a `42501` refusal check for the old wrapper. The CRM browser suites are handled the same way.
+- **Deviations 1–4 approved** as listed below (Q07, release order, the two `rcc-a2` cases, idempotent drops).
+- **`placement_tests` grants.** `anon`: nothing. `authenticated`: no `TRUNCATE`; `DELETE` stays because a current screen needs it (finding below). Mirrored in the restore file; `test-single-writer.sql` asserts the result.
+- **Other tables.** The 24 other public tables that grant `DELETE` and `TRUNCATE` to `anon` and `authenticated` are listed in the PR description only and are not changed here; a separate hardening PR will handle them.
+
+**Deviations (approved 2026-11-23).**
+
+1. **Q07 and converted prospects.** The precondition counts open actions on closed, converted or merged prospects, and planned tests on closed or merged ones. A converted prospect that keeps its planned test is only reported in a notice: the owner decision of 2026-11-22 (decision 1: « Conversion keeps the test ») makes that a legitimate state, which every enrolment with a kept test produces. Q07's definition in §4 and in the §10 M-A2 row is amended to match. The R0 query file `supabase/manual/rwr_r0/q07_…sql` stays as run for R0 (evidence); its `CONVERTED` · `with_planned_test` count is informational.
+2. **Screens.** The drawer's close (« Clôturer comme perdu », « Clôturer : injoignable », « Clôturer comme non qualifié ») and « Rouvrir » now call `crm_close_prospect` and `crm_reopen_prospect`, which exist since 136. `CrmActionDialog` no longer contains any revoked wrapper, and refuses an action it does not support. A static check in `test-crm-next-action-ui.mjs` fails if any file under `src/` names a revoked wrapper.
+3. **Changed test cases in `test-crm-rcc-a2.sql`.** « several open enrolment follow-ups: earliest retained » and the legacy duplicate appointment with a test are now assertions that a second open action is refused (`unique_violation`): the single-action rule makes those shapes impossible.
+4. **Re-apply after restore.** The D1 drops use `if exists`, so 137 can be re-applied after its restore file.
+
+**Finding: `placement_tests` `DELETE`.** The Admissions page « Tests de niveau » (`src/app/(admin)/placement-tests/page.jsx`, trash button) calls `entities.PlacementTest.delete(id)` for non-receptionists on tests not linked to a CRM prospect; RLS policy `placement admin all` limits the delete to admin and director. Revoking `DELETE` would break that button, so it stays.
+
+**Release notes for A2 (approved order).**
+
+1. Deploy the A2 application build first. It works on 136; the deployed A1 drawer still calls `crm_close_lost`, `crm_close_not_qualified` and `crm_reopen_lead`, which 137 revokes.
+2. Then apply 137. Its precondition re-checks Q04, Q05, Q07 (as amended) and Q29 under lock and refuses unless all are 0.
+3. Rollback: `scripts/rollback/137_crm_one_next_action_enforce_restore.sql` (wrappers, triggers, index, `placement_tests` grants). D1 cannot be reverted after 137.
+
+**Tests: every changed file.**
+
+- **New:**
+  - `test-single-writer.sql`: no API write on `crm_*` tables; the `placement_tests` exception (column insert and update under RLS, `DELETE` kept, no `TRUNCATE`, nothing for `anon`); the twelve wrappers not executable and refused with `42501`; current commands granted; the index valid; no D1 left.
+  - `test-crm-next-action-enforced-suites.mjs`: runs the 20 CRM and finance suites with every deferred check fired before their rollback, as COMMIT would.
+  - `test-crm-next-action-137-upgrade.mjs`: the committed 136→137 path — refusal before D1, D1, the file with no row changed, the writers, real-COMMIT refusals, the `placement_tests` grants, the restore file (ACL restored exactly) and the re-apply.
+- **Rewritten:** `test-crm-next-action-enforced.sql` (real index and triggers); `test-crm-next-action-upgrade.sql` (fixture → 136 → D1 → 137, then intake resubmission, reassignment, test result, enrolment start and the kept test on conversion).
+- **Assertions changed for the revoke (old wrapper now refused with `42501`, same assertions on the replacement):**
+  - `test-crm-phase4-concurrency.py`: the decision race runs through `crm_log_exchange` with the same race, replay, open-task count, `conversation_recorded`, payload-conflict and stale-race assertions; `crm_record_conversation_decision` is refused and the lead version is unchanged.
+  - `test-no-retry-conflicts-local.mjs`: the `crm_complete_task` and `crm_record_conversation_decision` stale rows become `crm_log_exchange` and `crm_change_next_action` stale rows (same `409 PT409` « Stale lead version; refresh and retry », no row changed); both old wrappers are refused with HTTP 403 / `42501`.
+  - `test-crm-next-action-local.mjs`: `crm_schedule_task` over HTTP is refused (403 / `42501`, version unchanged); the same change through `crm_change_next_action` keeps one action.
+  - `test-crm-sequences.mjs`: the `legacy_schedule` step asserts the refusal for `authenticated` with the prospect unchanged, then makes the change through `crm_change_next_action`.
+  - `test-crm-rcc-a1.sql`: `crm_record_conversation_decision` is asserted revoked (was: granted).
+  - `test-crm-next-action.sql`: the D1 functions are asserted dropped (was: private).
+  - `test-crm-task-writers.sql`: fails if any `d1_` function still exists.
+  - `test-crm-rcc-a2.sql`: the two cases in deviation 3.
+  - `test-crm-next-action-ui.mjs`: static check that no `src/` file names a revoked wrapper.
+- **Fixture-only (no assertion changed):**
+  - `test-crm-phase8.sql`, `test-crm-phase9.sql`, `test-crm-dgi-b2.sql`: cancel the open actions of prospects they close, convert or merge by direct update.
+  - `test-crm-lead-ad-source.sql`: each directly inserted prospect gets one open action.
+  - `test-enrollment-at-payment.sql`, `test-course-dates-close.sql`, `test-finance-batch-e.sql`: `crm_qualify_lead`, `crm_close_lost` and `crm_close_not_qualified` replaced by `crm_log_exchange` and `crm_close_prospect`.
+  - `test-crm-phase5-concurrency.py`, `test-crm-phase6-concurrency.py`, `test-crm-rcc-a2-concurrency.py`, `test-finance-batch-e-concurrency.py`: the `crm_qualify_lead` setup runs in a trusted session.
+  - Browser suites `test-crm-phase4-browser.mjs`, `test-crm-opportunities-browser.mjs`, `test-crm-phase5-browser.mjs`, `test-crm-phase6-browser.mjs`, `test-crm-rcc-a2-browser.mjs`, `test-crm-rcc-b1-browser.mjs`, `test-crm-work-calendar-browser.mjs`: setup calls to a revoked wrapper run in a trusted session (same JWT claim, same rows); every other call still runs as `authenticated`.
+  - Teardowns: `test-crm-phase5-concurrency.py` and the browser suites phase4, opportunities, phase5, phase6, rcc-a2, rcc-b1, row-staff-labels and work-calendar run `set constraints all immediate` before re-enabling the `placement_tests` trigger.
+- **Upgrade-lane ceilings raised to 137:** `test-conflicts-without-retry-upgrade.mjs`, `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-premium-retirement-upgrade-113-current.sql`.
+- **Fixture:** `scripts/fixtures/receptionist-function-classification.json` regenerated without the twelve wrappers.
+- **CI:** `verify.yml` adds the 136→137 upgrade step, `test-single-writer.sql` and the enforced-suites runner, and moves the upgrade SQL out of the sql-and-concurrency shard.
+- **Meta lifecycle.** No Meta lifecycle suite changed and no Meta lifecycle expectation changed (`test-crm-meta-funnel-r4.sql` and the lifecycle suites are identical to main). The concurrency changes above keep every existing expectation; none needed a new one.
+- **Not wired in CI, not changed:** `test-crm-phase3-concurrency.py` and `test-crm-phase7-concurrency.py` still call old wrappers as `authenticated` and would fail after 137 if run.
+
 ## IMPLEMENTATION CONTRACT
 
 **Scope:** sections 2a and 4–10 of this plan at revision RWR-r5, as amended by the owner's answers to OD-1–OD-20, recorded in the [approval record](#approval-record) (owner approval of 2026-11-21 at `824252a`, architecture only).
@@ -915,7 +990,7 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
 - **For B1 and C2:** PR #204 merged.
 - **A1:** done — released 2026-11-23 ([release record](#release-record-pr-a1--2026-11-23)).
 - **D1:** done — run 2026-11-23 after its four gates were met ([D1 record](#release-record-data-step-d1--2026-11-23)). `d1_revert` stays available until M-A2 and needs the owner's request.
-- **For A2 (next):** its own implementation approval and review, then « approve M-A2 », whose wrapper re-checks Q04, Q05, Q07 and Q29 at zero in the same transaction (§10). M-A2 drops the D1 functions, so D1 can no longer be reverted after it.
+- **For A2 (next):** its own implementation approval and review, then « approve M-A2 », whose wrapper re-checks Q04, Q05, Q07 (as amended 2026-11-23) and Q29 at zero in the same transaction (§10); deploy the A2 application before applying 137 ([A2 record](#implementation-record-pr-a2-m-a2-migration-137)). M-A2 drops the D1 functions, so D1 can no longer be reverted after it.
 - **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**

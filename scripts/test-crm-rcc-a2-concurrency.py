@@ -68,6 +68,18 @@ commit;""", False)
         return {'error': result.stderr, 'code': code and code.group(1), 'message': code and code.group(2).strip(), 'reason': hint and hint.group(1)}
     return json.loads(result.stdout.strip())
 
+def trusted(name, key, payload):
+    # RWR-r5 PR A2 (migration 137): a wrapper revoked from authenticated, used here only as
+    # fixture setup, runs from the trusted postgres session as the same staff member, so the
+    # fixture state is unchanged; the revocation itself is tested in test-single-writer.sql.
+    result = sql(f"""begin;
+set local request.jwt.claim.sub={quote(actor)};
+select public.crm_{name}({quote(key)}::uuid,{quote(json.dumps(payload))}::jsonb);
+commit;""", False)
+    if result.returncode:
+        return {'error': result.stderr}
+    return json.loads(result.stdout.strip())
+
 class Holder:
     """A second session that runs a statement and keeps its transaction open."""
     def __init__(self, statement):
@@ -106,7 +118,7 @@ try:
     def lead(name):
         result = call('create_manual_lead', str(uuid.uuid4()), {'display_name': 'A2 race ' + name, 'learner_name': name, 'phone': '06' + str(uuid.uuid4().int)[:8], 'source_label': 'Manual'})
         identifier = result['lead']['id']
-        call('qualify_lead', str(uuid.uuid4()), {'lead_id': identifier, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'A2', 'qualification_step': 'placement_test',
+        trusted('qualify_lead', str(uuid.uuid4()), {'lead_id': identifier, 'expected_version': 1, 'conversation_channel': 'phone', 'note': 'A2', 'qualification_step': 'placement_test',
              'next_task': {'task_type': 'confirm_placement_test', 'due_at': value("select (now()+interval '2 days')::text")}})
         return identifier
     def new(identifier, name, extra=None):

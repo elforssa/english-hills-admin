@@ -76,19 +76,11 @@
     "gate": "receptionist_only",
     "receptionist": "open"
   },
-  "crm_add_note(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
   "crm_bind_pending_lifecycle_stop(p_request uuid, p_pending_stop uuid, p_contact uuid, p_connection uuid, p_decision_reference text)": {
     "gate": "crm_director",
     "receptionist": "locked"
   },
   "crm_book_placement_test(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_cancel_task(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -100,19 +92,7 @@
     "gate": "crm_reader",
     "receptionist": "open"
   },
-  "crm_close_lost(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_close_not_qualified(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
   "crm_close_prospect(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_complete_task(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -292,10 +272,6 @@
     "gate": "crm_director",
     "receptionist": "locked"
   },
-  "crm_qualify_lead(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
   "crm_reassign(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
@@ -313,26 +289,6 @@
     "receptionist": "locked"
   },
   "crm_record_appointment_outcome(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_record_call_outcome(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_record_conversation(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_record_conversation_decision(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_record_whatsapp(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
-  },
-  "crm_reopen_lead(p_request_key uuid, p_data jsonb)": {
     "gate": "crm_reader",
     "receptionist": "open"
   },
@@ -384,10 +340,6 @@
   "crm_save_website_connection(p_data jsonb, p_id uuid, p_version bigint)": {
     "gate": "crm_director",
     "receptionist": "locked"
-  },
-  "crm_schedule_task(p_request_key uuid, p_data jsonb)": {
-    "gate": "crm_reader",
-    "receptionist": "open"
   },
   "crm_search_leads(p_query text, p_status text, p_contact uuid, p_limit integer, p_offset integer)": {
     "gate": "crm_reader",
