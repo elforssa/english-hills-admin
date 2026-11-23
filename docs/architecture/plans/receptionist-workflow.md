@@ -1,6 +1,6 @@
 # Receptionist workflow — one next action, one identity, one rule per form
 
-**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). D1, A2, B1, B2, C1 and C2 remain; data steps D3–D7 are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
+**Status: ACTIVE.** Architecture APPROVED, revision RWR-r5 at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`, 2026-11-21 ([approval record](#approval-record)). **PR A1 released on 2026-11-23** (PR #208, merge `25e91e6`, migration 136 applied and Production verified with bounded acceptance; [release record](#release-record-pr-a1--2026-11-23)). **Data step D1 run on 2026-11-23** (applied 11:39:41 UTC with the owner-approved counts, post-checks Q04, Q05, Q07 and Q29 at zero; [D1 record](#release-record-data-step-d1--2026-11-23)); `d1_revert` stays available until M-A2. A2 is next; A2, B1, B2, C1 and C2 remain; data steps D3–D7 are not run. Tier 3: the plan covers CRM commands and their invariants, migrations that change existing Production data, finance screens, conversion-adjacent paths and a role-surface change. Every Production read, migration, data step, merge and release needs the owner's separate approval.
 
 - **Evidence:** the [audit of 2026-11-21](../evidence/receptionist-workflow-audit-2026-11-21.md). It covers every finding with its status and file references, plus the new findings NF-1–NF-17, the entry-point matrix, the current state machine and the read-only queries Q01–Q30.
 - **Decision record:** [ADR-019 (accepted)](../decisions/ADR-019-one-next-action-per-prospect.md).
@@ -687,8 +687,8 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 
 **Owner inputs still to come (each is a gate):**
 - the weekday hours and closed dates (OD-3): **given 2026-11-21** — « same time as before, no need for holidays »: the current published `weekly_hours` unchanged, `opening_hours` NULL, `date_exceptions` `[]`; values read by R0 Q01 (recorded in [OWNER_DECISIONS](../../ai/OWNER_DECISIONS.md));
-- the default owner's account (OD-6): **D1 must not run without it**; still to come at the A1 release (2026-11-23);
-- a confirmed Production backup or PITR: **D1 must not run without it** (added at the A1 release, 2026-11-23, because A1 itself was released without one);
+- the default owner's account (OD-6): **D1 must not run without it**; still to come at the A1 release (2026-11-23); **given 2026-11-23** (set by the owner in Settings at 11:07 UTC, a receptionist account), before D1;
+- a confirmed Production backup or PITR: **D1 must not run without it** (added at the A1 release, 2026-11-23, because A1 itself was released without one); **met 2026-11-23**: a full backup taken and verified by a restore before D1 ([D1 record](#release-record-data-step-d1--2026-11-23));
 - the 2026/2027 programme prices (OD-16): before release B2.
 
 **Reviewer's notes:** the four non-blocking notes of the independent re-review of RWR-r5 at `824252a`, copied here as review notes (they are not part of the owner's words). They are follow-ups for the A1 implementation and do not change the approved design; notes a and c are applied to the text above.
@@ -793,11 +793,116 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 **Gates after this release:** A1 done. **Next: D1**, which needs the default owner's account (OD-6), a confirmed Production backup or PITR, a fresh `d1_plan()` dry run with per-rule and cancelled-test counts for the owner's « approve D1 », and a run outside reception hours. Then A2; B1, B2 (prices, OD-16), C1 and C2 follow (§8).
 
 **Limitations and follow-ups:**
-- **No rollback file shipped.** §10's M-A1 rollback refers to « the migration's rollback file »; PR #208 has none. The operator generated the recovery from the clean-135 catalogue (part A: the 21 replaced and 3 dropped functions back, the 40 new functions and the new trigger dropped, ledger row removed; part B: the additive schema, refused while any row uses it) and rehearsed it. The owner keeps the files outside the repository; using them needs a separate approval, application first (redeploy `269618a`). Part A refuses once D1 has written to `crm_data_step_journal`, so after D1 recovery is D1's own `d1_revert` first.
+- **No rollback file shipped.** §10's M-A1 rollback refers to « the migration's rollback file »; PR #208 has none. The operator generated the recovery from the clean-135 catalogue (part A: the 21 replaced and 3 dropped functions back, the 40 new functions and the new trigger dropped, ledger row removed; part B: the additive schema, refused while any row uses it) and rehearsed it. The owner keeps the files outside the repository; using them needs a separate approval, application first (redeploy `269618a`). Part A refuses once D1 has written to `crm_data_step_journal`, and `d1_revert` does not clear those rows: after D1 these files must be regenerated for the post-D1 state before any use (see the [D1 record](#release-record-data-step-d1--2026-11-23), recovery notes).
 - **No Production backup** for 136 (additive; no row written, checked inside the wrapper). A confirmed backup or PITR is now a precondition for D1.
 - **Not verified:** the screens in a signed-in browser; a new Meta lead through intake on 136 (none arrived after 09:16 UTC); Vercel runtime errors (no connector access to the team).
 - **Known pre-existing, not caused by A1:** `crm_get_today` fails on legacy non-CRM tests with malformed times (`invalid input syntax for type time`), the same at `main` `269618a` (PR #208 description); `npm run audit:policy` fails on `main` (advisories on `next`).
 - Until D1, prospects can still hold several open actions or none (R0: Q04, Q05); until A2, nothing in the database enforces one.
+
+### Release record: data step D1 — 2026-11-23
+
+**D1 RUN AND VERIFIED (2026-11-23).** `crm_security.d1_apply` committed at **11:39:41 UTC** with the counts the owner approved; the read-only post-checks Q04, Q05, Q07 and Q29 are all zero. No migration, merge or deployment; the deployed source is unchanged. M-A2 not run; `d1_revert` stays available until M-A2.
+
+**Preparation approval, owner's words (2026-11-23), verbatim** (the backup folder's path is left out here, marked […], because this repository is public):
+
+> Owner approval (Maroine, 2026-11-23): prepare data step D1 of plan RWR-r5 (docs/architecture/plans/receptionist-workflow.md §10). Tier 3 Production operation.
+>
+> Gates already met:
+> - the default owner is set: Reception EH, saved 2026-11-23 11:07 UTC via Settings;
+> - A1 is released (migration 136, merge 25e91e6).
+>
+> Part 1 — now, read-only only:
+> - Verify the ledger is 001–136 and main is current.
+> - Run select crm_security.d1_plan() on Production in a read-only transaction.
+> - Show me the per-rule counts (a, b — linked/replaced, c, d), the cancelled-test count and the sample lead ids (ids only, no names), compared with R0 (a: 19 prospects / 45 actions, b: 0, c: 18, d: 0). Explain any difference.
+> - Prepare the apply checklist: the backup method, the guarded wrapper, the expected_counts, the post-checks (Q04, Q05, Q07, Q29 must be 0) and the rollback with d1_revert (only before M-A2).
+> - Then STOP and wait for my approval of the exact counts.
+>
+> Part 2 — only after I approve the counts AND say "go" (outside reception hours):
+> - Take a full backup of the Production database first (pg_dump of the whole database, including auth). Store it ONLY in […] on this Mac, never in the repo (it contains personal data). Verify it is readable and report its size and checksum.
+> - Then run d1_apply with the approved expected_counts through the guarded wrapper, and run the post-checks.
+> - Report the journal counts. Stop on any mismatch.
+>
+> Not authorized: M-A2, any migration, any change to hours or the follow-up policy, merge or other PRs. Documentation of D1 is a separate change afterwards.
+
+**Counts approval and « go », owner's words (2026-11-23), verbatim** (path left out, marked […]):
+
+> Owner approval (Maroine, 2026-11-23): I approve D1 with exactly these counts: a 19 (19 prospects / 45 actions, 26 cancelled), b 0, c 18, d 0, tests cancelled 0, open actions 186 → 178. go — run now, before reception opens at 15:00.
+>
+> Order:
+> 1. The backup to […] (roles, schema, data including auth, ledger). Verify it by restoring it locally and comparing row counts, and report each file's size and SHA-256. Stop if the backup can't be verified.
+> 2. The Production dry run (must end in DRYRUN_OK).
+> 3. The apply through the guarded wrapper with expected_counts {"a":{"count":19},"b":{"count":0},"c":{"count":18},"d":{"count":0},"tests_cancelled":{"count":0}}.
+> 4. Read-only post-checks Q04, Q05, Q07, Q29, plus the journal counts.
+>
+> Stop and roll back on any mismatch. Must finish before 15:00 centre time; if not, stop safely and tell me. Not authorized: M-A2, any migration, hours or policy changes, d1_revert unless I ask. Report the results, then stop; documentation of D1 is a separate change.
+
+**Gates (§10 and the [approval record](#approval-record)):** (1) default owner (OD-6): set by the owner in Settings at 11:07 UTC; (2) backup: taken and verified before any write (below); (3) a fresh `d1_plan()` with the counts approved above; (4) outside reception hours: run at 12:39 centre time on a Monday, before the desk opened at 15:00.
+
+**Counts: approved and actual (identical, and identical to R0)**
+
+| Rule | Approved | `d1_plan()` (read-only, 11:23 UTC) | Applied |
+| --- | --- | --- | --- |
+| a — several open actions | 19 prospects / 45 actions, 26 cancelled | 19 / 45 (19 kept, 26 to cancel) | 19 |
+| b — planned test without its appointment (linked / replaced) | 0 | 0 (0 / 0) | 0 |
+| c — no open action | 18 | 18, all after five failed calls | 18 |
+| d — closed or merged prospect with work left | 0 | 0 | 0 |
+| Planned tests cancelled | 0 | 0 | 0 |
+| Open actions (all prospects) | 186 → 178 | 186 | 178 |
+
+Rule (a) detail from the read-only plan: no cancelled action carried a test, and no prospect lost a future appointment. The 18 rule (c) actions are « En attente » with no date and no « À revoir (D1) » flag (OD-17: every one followed five failed calls). After D1 each of the 178 active prospects has exactly one open action.
+
+| Step | When (UTC) | Evidence |
+| --- | --- | --- |
+| Read-only checks | 11:23 | ledger 001–136, row 136 MD5 `9dabd82005ef8eb3cc922dae49c4c39b`; `crm_data_step_journal` empty; default owner set; latest Production deployment on the #212 docs merge `e22f9f2` |
+| Local rehearsal | before 11:30 | private stack at 136 with a rule (a) and rule (c) fixture (one prospect under five failures, so flagged): wrapper dry run `DRYRUN_OK`, a wrong count refused by `d1_apply`, apply, a second run refused (journal not empty), `d1_revert` restored the earlier open actions exactly |
+| Backup | 11:34–11:38 | roles, schema, data (including `auth`) and the migration ledger, then a restore check (below) |
+| Production dry run | 11:39:31 | `DRYRUN_OK`: applied a 19, c 18; journal 37 / 26 / 36; open 178; prospects, students, enrolments, receipts, charges and placement tests unchanged |
+| **D1 applied** | **11:39:41** (journal `run_at` 11:39:40.97) | same wrapper ending in `commit` |
+| Post-checks (read-only) | 11:39:58 | below |
+
+**The guarded wrapper** (one transaction, `lock_timeout` 5 s, `statement_timeout` 300 s) refused to run unless: the ledger was exactly 136 rows with row 136 as above; the journal was empty; the default owner was set; the whole-app catalogue digest equalled the clean-136 pin; exactly one director existed (the run is made as that director, so the journal names the director as `run_by`); and exactly 186 actions were open. It then called `d1_apply` with the approved `expected_counts`, required `applied` = `{"a": 19, "c": 18}`, re-ran Q04, Q05, Q07 and Q29 and the state comparison inside the transaction, and checked the journal counts before committing.
+
+**Journal (`crm_data_step_journal`, step `d1`): 99 rows**, all from the one transaction, `run_by` the director:
+
+| Entity | Rows | Meaning |
+| --- | --- | --- |
+| `crm_leads` | 37 | one per prospect processed (19 rule a + 18 rule c), with the version D1 left |
+| `crm_tasks_closed` | 26 | the rule (a) actions cancelled, with their rows before and after |
+| `crm_tasks` | 36 | the 18 actions D1 created, **each journalled twice by design**: once by `set_next_action` in its D1 « create » mode (marked « hors règles (D1) ») and once by `d1_journal`. `d1_revert` cancels each such action once; the second row finds it already cancelled and does nothing |
+| `placement_tests_cancelled`, `crm_tasks_linked` | 0 | no test cancelled, no action linked |
+
+**Post-checks (read-only, 11:39:58 UTC):**
+
+| Query | Result |
+| --- | --- |
+| Q04 — prospects with more than one open action | **0** (before: 19 prospects / 45 actions) |
+| Q05 — active prospects by number of open actions | **178 prospects, each with exactly 1**; none with 0 (before: 0 → 18, 1 → 141, 2 → 16, 3 → 1, 5 → 2) |
+| Q07 — closed, converted or merged prospects with an open action or a planned test | **0** (CONVERTED 0 / 0, LOST 0 / 0, NOT_QUALIFIED 0 / 0) |
+| Q29 — planned tests of active prospects not carried by an open appointment or enrolment action | **0** |
+| `d1_sets()` (what D1 would still process) | empty |
+| Open « En attente » actions | 18, all without a date, none flagged |
+
+**Backup before D1.** A full backup of the Production database was taken before any write and verified by restoring it: roles, schema, data (including `auth`; `supabase db dump`, which runs `pg_dump`, one part after the other) and the migration ledger, plus a restore script. Restored into an empty private local database, **all 121 dumped tables matched Production row for row (13,440 rows)**, and the ledger copy holds 136 rows with row 136 intact; the local copy was then removed. **The backup holds personal data and is kept by the owner, outside this repository**; it is identified here by checksum only:
+
+| Part | Size (bytes) | SHA-256 |
+| --- | --- | --- |
+| roles | 297 | `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| schema | 1,483,021 | `1fd966642d0090c07f1a1efd6bae4c9b47daa2205acf1af59abb0f185f98eacb` |
+| data (including `auth`) | 9,980,786 | `d6bcee138644abd4cc4f59a86be80feba01da704244a9860376823f4c2beb567` |
+| migration ledger | 2,931,202 | `e8218de71bd731caf3fbf0fe5b1d0307f15d3ea9d351c2b27762bfdd7b3f97b5` |
+| restore script | 1,038 | `a2912f21ac8c4359357c26fb4db953d8f6c92e71deca6ca22cfe9fbef96cc37b` |
+
+**Recovery notes**
+- **Reverting D1:** `select crm_security.d1_revert()`, run as the director, **only before M-A2** and only on the owner's request. It cancels the 18 actions D1 created, reopens the 26 it cancelled, and skips (and counts) any prospect whose version changed after D1, so work done since is never overwritten. M-A2 drops the D1 functions; after it, D1 cannot be reverted.
+- **Migration 136's recovery files after D1** (A1 record above; kept by the owner outside the repository, checked 2026-11-23): **as generated, neither part can run any more, even after `d1_revert`.** Part A refuses whenever `crm_data_step_journal` holds any row (`R136_PRE_DATA_STEP_RAN`), and nothing deletes journal rows: `d1_revert` reads the journal and leaves all 99 rows in place, so part A's own hint « revert the data step first » is not enough. Part B refuses on the same journal rows and on any row that uses the 136 schema (« En attente » or undated actions, outcomes, cancelled tests, primary history lines), which D1, `d1_revert` (it cancels actions, it does not delete them) and ordinary use since the release have all written. **What an operator does after `d1_revert`, if 136 itself must be undone:** stop, and do not delete journal rows or edit the guards to get past them (the journal is D1's audit record). The recovery must be **regenerated for the post-D1 state**: new files built from the catalogue at that time, which also settle how the 135 functions treat rows only 136 allows (« En attente » actions, actions without a date). They are rehearsed on a private stack holding those shapes, independently reviewed, and run only with **the owner's separate approval** (Tier 3), with the application first (redeploy the `269618a` build).
+- **Restoring the backup** (only with the owner's approval, into an empty database). Two caveats found when it was verified:
+  - **Legacy e-mail checks:** the five lower-case e-mail checks on `messages`, `notifications`, `students` (two) and `teachers` are `NOT VALID` in Production because older rows predate them. A schema-then-data restore creates them before the rows and fails, so the restore script drops every `NOT VALID` check before loading the data and re-adds it `NOT VALID` afterwards (six on the verified restore). It runs as a superuser: as `postgres` it could not alter some of the restored tables.
+  - **Platform auth and storage versions:** Production's `auth` and `storage` schemas belong to the platform and are newer than a local stack's: `auth.one_time_tokens.link_token_hash`, `auth.saml_providers.dedicated_scope` and two storage lifecycle tables were missing locally. All four were empty in Production; for the check they were added locally as empty stand-ins. A restore into a Supabase project of the same platform version needs none of this.
+
+**Not verified:** the drawer and « Tâches » in a signed-in browser after D1.
+
+**Gates after D1:** D1 done. **Next: A2** (unique index, presence triggers, revokes; M-A2), which needs its own implementation approval and review and then « approve M-A2 ». Then B1, B2 (prices, OD-16), C1 and C2 (§8).
 
 ## IMPLEMENTATION CONTRACT
 
@@ -809,7 +914,8 @@ RWR-r1 (`6a43e75`), RWR-r2 (`d24d736`), RWR-r3 (`55351aa`) and RWR-r4 (`94a0c35`
 - **For A1:** R0 done (its own approval); the owner's weekday hours and closed dates (OD-3) given before A1 starts — given 2026-11-21: current published `weekly_hours` unchanged, no closed dates (values from Q01). **A1 merges** only after PR #204 (OD-19 = A), rebased, with a fresh CI run and exact-SHA review.
 - **For B1 and C2:** PR #204 merged.
 - **A1:** done — released 2026-11-23 ([release record](#release-record-pr-a1--2026-11-23)).
-- **For D1 (next):** the default owner's account named (OD-6); a confirmed Production backup or PITR; « approve D1 » with the per-rule counts and the cancelled-test count from a fresh `d1_plan()` dry run (§10); run outside reception hours.
+- **D1:** done — run 2026-11-23 after its four gates were met ([D1 record](#release-record-data-step-d1--2026-11-23)). `d1_revert` stays available until M-A2 and needs the owner's request.
+- **For A2 (next):** its own implementation approval and review, then « approve M-A2 », whose wrapper re-checks Q04, Q05, Q07 and Q29 at zero in the same transaction (§10). M-A2 drops the D1 functions, so D1 can no longer be reverted after it.
 - **For B2:** the 2026/2027 programme prices (OD-16).
 
 **Object manifest (provisional names; migration numbers are claimed at merge):**
