@@ -578,7 +578,7 @@ Plan: [online room reliability](../architecture/plans/online-room-reliability.md
 Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), revision **RWR-r5 approved at exact head `824252a359f99ad5d8077754c3504b2aa4eb07f2`** (Tier 3; PR #205; [ADR-019](../architecture/decisions/ADR-019-one-next-action-per-prospect.md) accepted, architecture only; evidence: [audit of 2026-11-21](../architecture/evidence/receptionist-workflow-audit-2026-11-21.md)). RWR-r1 to RWR-r4 were each independently reviewed CHANGES REQUIRED on 2026-11-21; the owner records the re-review of RWR-r5 as READY FOR FINAL REVIEW with four non-blocking notes.
 
 - **Answers:** OD-1 A (exactly one next action per active prospect); OD-2 A (« Réserver sans paiement » holds no seat; ADR-015 kept); **OD-3 B (one set of hours for calling and the desk)**; OD-4 visit 60 minutes, level test 45 minutes; **OD-5 5 days** (default « relancer le »; the brief said 7); OD-6 A (a default owner chosen by the direction); OD-7 A (director only voids receipts); OD-8 A (student merge links, never moves history); OD-9 A (keep RPW-r2); OD-10 A; OD-11 A (qualification implied); OD-12 « Sans inscription »; OD-13 A; OD-14 A; OD-15 keep the brand text, translate everything else; OD-17 A (« En attente » with no relance date after five failed calls); OD-18 B for enrolment actions, A for appointments; OD-19 A (#204 merges first); OD-20 B (« Pas de réponse » saves immediately, no « Annuler »).
-- **Owner inputs still to come (gates):** ~~the weekday hours and closed dates before A1 starts~~ (given 2026-11-21, see below); the default owner's account before D1 (D1 must not run without it); **D1 also needs a confirmed Production backup or PITR, a fresh `d1_plan()` dry run whose per-rule and cancelled-test counts the owner approves, and a run outside reception hours** (gates recorded 2026-11-23 at the A1 release); the 2026/2027 programme prices before B2 (OD-16).
+- **Owner inputs still to come (gates):** ~~the weekday hours and closed dates before A1 starts~~ (given 2026-11-21, see below); ~~the default owner's account before D1 (D1 must not run without it); **D1 also needs a confirmed Production backup or PITR, a fresh `d1_plan()` dry run whose per-rule and cancelled-test counts the owner approves, and a run outside reception hours** (gates recorded 2026-11-23 at the A1 release)~~ (all four met and D1 run on 2026-11-23, see below); the 2026/2027 programme prices before B2 (OD-16).
 - **OD-3 hours given (2026-11-21), owner's words, verbatim:**
 
   > same time as before, no need for holidays
@@ -638,6 +638,21 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
   - **The two risks, owner's words (closeout review, 2026-11-23), verbatim:**
 
     > Before « go » I was told the PR has no rollback file and no Production backup exists, and I accepted both.
+- **Data step D1 — APPROVED and DONE (2026-11-23).** Done: `d1_apply` committed 11:39:41 UTC with exactly the approved counts (a 19 prospects / 45 actions, 26 cancelled; b 0; c 18; d 0; tests cancelled 0; open actions 186 → 178); journal 99 rows (37 / 26 / 36: each of the 18 created actions is journalled twice by design); Q04, Q05, Q07 and Q29 = 0; a full backup verified by a restore before the write, kept by the owner outside the repository ([D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23)). `d1_revert` stays available until M-A2, only on the owner's request. **Next: A2**, with its own approvals.
+  - **Gates, as the owner recorded them:** the default owner set in Settings at 11:07 UTC (« Reception EH », a receptionist account); A1 released; the backup, the fresh `d1_plan()` counts and the time window as in the approvals below.
+  - **Preparation approval, owner's words, verbatim excerpt** (the full text is in the [D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23); the backup folder's path is left out of this public repository):
+
+    > Owner approval (Maroine, 2026-11-23): prepare data step D1 of plan RWR-r5 (docs/architecture/plans/receptionist-workflow.md §10). Tier 3 Production operation.
+    >
+    > Not authorized: M-A2, any migration, any change to hours or the follow-up policy, merge or other PRs. Documentation of D1 is a separate change afterwards.
+
+  - **Counts approval and « go », owner's words, verbatim excerpt** (full text in the [D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23)):
+
+    > Owner approval (Maroine, 2026-11-23): I approve D1 with exactly these counts: a 19 (19 prospects / 45 actions, 26 cancelled), b 0, c 18, d 0, tests cancelled 0, open actions 186 → 178. go — run now, before reception opens at 15:00.
+    >
+    > Stop and roll back on any mismatch. Must finish before 15:00 centre time; if not, stop safely and tell me. Not authorized: M-A2, any migration, hours or policy changes, d1_revert unless I ask. Report the results, then stop; documentation of D1 is a separate change.
+
+  - **Not authorized:** M-A2 and A2's implementation, any migration, hours or follow-up policy changes, `d1_revert` unless the owner asks; each needs a separate approval.
 
 ## Deferred backlog after RCC-r1
 
