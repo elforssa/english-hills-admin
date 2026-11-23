@@ -618,7 +618,7 @@ begin
 
  -- C. Legacy reschedule in place (old crm_schedule_task with a task id). An
  --    agreed time is refused outside hours; a reminder moves to the next window.
- --    A rescheduled appointment moves its test.
+ --    A rescheduled appointment moves its test; an enrolment action does not (B5).
  if spec ? '_reschedule' then
   select * into o from public.crm_tasks where id=(spec->'_reschedule'->>'task_id')::uuid and lead_id=l.id and status='open';
   if o.id is null then raise exception 'Open task not found on this lead' using errcode='PT409'; end if;
@@ -632,7 +632,9 @@ begin
   update public.crm_tasks set due_at=due,scheduled_end_at=null,
    instructions=case when spec->'_reschedule' ? 'instructions' then spec->'_reschedule'->>'instructions' else instructions end,
    updated_at=now(),version=version+1 where id=o.id;
-  if o.placement_test_id is not null then
+  -- Only an appointment moves its test. « Finaliser l'inscription » that carries
+  -- a kept test is rescheduled without touching the test (review of #208, B5).
+  if o.task_type='center_visit' and o.placement_test_id is not null then
    start_local:=due at time zone public.centre_utc_offset();
    update public.placement_tests set date_test=start_local::date,heure=to_char(start_local,'HH24:MI')
    where id=o.placement_test_id and status='Planifié' and (date_test,heure) is distinct from (start_local::date,to_char(start_local,'HH24:MI'));

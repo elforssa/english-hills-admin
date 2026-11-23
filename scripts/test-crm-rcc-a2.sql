@@ -384,6 +384,29 @@ do $$ declare l uuid; k uuid; p uuid; f uuid; g uuid; begin
  perform pg_temp.ok((select status='Annulé' and cancelled_at is not null from public.placement_tests where id=p),'replacing the enrolment action cancels its test');
  perform pg_temp.ok((select count(*)=0 from public.placement_tests where crm_lead_id=l and status='Planifié'),'no orphan planned test');
 end $$;
+-- Review of #208 at f559f5d (B5): rescheduling « Finaliser l'inscription » in place
+-- through the old crm_schedule_task (an old tab or a direct call) moves the action,
+-- never its kept test; only an appointment moves its test.
+do $$ declare l uuid; k uuid; p uuid; f uuid; before record; d timestamptz; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ select date_test,heure,status into before from public.placement_tests where id=p;
+ d:=crm_security.next_window(crm_security.current_policy_id(),now()+interval '5 days');
+ perform pg_temp.act('schedule_task',l,jsonb_build_object('task_id',f,'expected_task_version',(select version from public.crm_tasks where id=f),'task',jsonb_build_object('due_at',d)));
+ perform pg_temp.ok((select due_at=d and status='open' and placement_test_id=p from public.crm_tasks where id=f),'the enrolment action is rescheduled in place and still carries the test');
+ perform pg_temp.ok((select (date_test,heure,status)=(before.date_test,before.heure,before.status) from public.placement_tests where id=p),'its kept test keeps its date, time and status');
+end $$;
+-- Conversion keeps a test carried by « Finaliser l'inscription » (§4.8; owner decision 1).
+do $$ declare l uuid; k uuid; p uuid; f uuid; e uuid; s uuid; begin
+ select * into l,k,p,f from pg_temp.kept_test_lead();
+ select enrollment_id into e from public.crm_leads where id=l;
+ select student_id into s from public.enrollments where id=e;
+ perform pg_temp.ok(e is not null and (select placement_test_id=p from public.crm_tasks where id=f),'fixture: linked enrolment, action carries the test');
+ -- The payment on the linked enrolment confirms it and converts the prospect.
+ perform pg_temp.actor(2);
+ perform public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','gross_amount',1500,'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ perform pg_temp.ok((select status='CONVERTED' from public.crm_leads where id=l) and not exists(select 1 from public.crm_tasks where lead_id=l and status='open'),'payment converts and closes the enrolment action');
+ perform pg_temp.ok((select status='Planifié' and cancelled_at is null from public.placement_tests where id=p),'conversion keeps the carried test');
+end $$;
 -- Closing the prospect while « Finaliser l'inscription » carries the test cancels it too.
 do $$ declare l uuid; k uuid; p uuid; f uuid; begin
  select * into l,k,p,f from pg_temp.kept_test_lead();
@@ -406,7 +429,7 @@ do $$ declare l uuid; f uuid; v uuid; p uuid; begin
  perform pg_temp.ok(crm_security.next_action_id(l)=f and (select status='cancelled' from public.crm_tasks where id=v),'the existing enrolment action is kept, the duplicate appointment closed');
  perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f) and (select status='Planifié' from public.placement_tests where id=p),'the kept enrolment action takes the duplicate''s planned test');
 end $$;
-select 'PASS legacy enrolment link: « Finaliser l''inscription » carries the kept test; replacing it or closing cancels the test';
+select 'PASS legacy enrolment link: « Finaliser l''inscription » carries the kept test; replacing it or closing cancels the test; rescheduling it in place or converting keeps the test';
 
 -- Owner and policy reasons, with no partial writes.
 -- EAP (127): both are follow-up checks, reached by linking a legacy unconfirmed row.
