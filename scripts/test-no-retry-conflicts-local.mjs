@@ -61,9 +61,15 @@ insert into fx select 'pending_run', crm_request_insights_sync((select v::uuid f
 set request.jwt.claim.role='service_role'; set request.jwt.claim.sub='';
 insert into fx select 'running_run', crm_claim_insights_sync()->>'id';
 reset request.jwt.claim.role; reset request.jwt.claim.sub;
-update crm_leads set status='QUALIFIED' where id=(select v::uuid from fx where k='qualified');
+-- M-A2 (137): the qualified prospect and its planned test come from the real path — a spoken
+-- exchange that books a visit « avec test de niveau » (OD-11) in three days at 10:30, centre time.
+set request.jwt.claim.role='authenticated'; set request.jwt.claim.sub=${q(director.id)};
+create temp table booked as select crm_log_exchange(gen_random_uuid(),jsonb_build_object('lead_id',(select v::uuid from fx where k='qualified'),
+  'expected_version',(select version from crm_leads where id=(select v::uuid from fx where k='qualified')),'channel','phone','result','spoke','note','NRC booking',
+  'next',jsonb_build_object('task_type','center_visit','with_test',true,'due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',
+    (((now() at time zone centre_utc_offset())::date+3)::timestamp+time '10:30') at time zone centre_utc_offset())))) r;
+reset request.jwt.claim.role; reset request.jwt.claim.sub;
 insert into fx select 'candidate', crm_security.candidate_token((select v::uuid from fx where k='qualified'),'NRC qualified learner','2015-03-04');
-insert into placement_tests(id,student_name,date_test,heure,crm_lead_id) values(gen_random_uuid(),'NRC qualified learner',${q(day(3))},'10:30',(select v::uuid from fx where k='qualified'));
 insert into fx select 'placement', id::text from placement_tests where crm_lead_id=(select v::uuid from fx where k='qualified');
 insert into fx values('lease', gen_random_uuid()::text);
 insert into crm_ingestion_jobs(id,connection_id,external_key,event_kind,payload,payload_hash,status,lease_token,lease_until)

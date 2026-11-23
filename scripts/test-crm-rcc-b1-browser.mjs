@@ -146,11 +146,11 @@ try {
  const engaged=[];for(let i=0;i<3;i++){const id=intake(`B1 discussion ${i}`);act('record_conversation',id,{channel:'in_person',note:'Échange synthétique',next_task:next()});engaged.push(id);}
  const qualified=[];for(let i=0;i<5;i++){const id=intake(`B1 qualifié ${i}`,{learner:`B1 apprenant qualifié ${i}`});act('qualify_lead',id,{conversation_channel:'whatsapp',note:'Projet synthétique',qualification_step:'center_visit',next_task:next('center_visit')});qualified.push(id);}
  const lost=intake('B1 perdu');act('close_lost',lost,{reason:'price'});const nq=intake('B1 non qualifié');act('close_not_qualified',nq,{reason:'outside_scope'});
- // Rich prospect: long mixed name, history noise, a second open task (E3).
+ // Rich prospect: long mixed name, history noise.
  const rich=intake(LONG,{learner:'Apprenant distinct · أحمد',data:{learner_age:9,program_interest_text:'Programme annuel · Anglais pour jeunes apprenants'}});
  for(let i=0;i<4;i++)act('add_note',rich,{note:`Note synthétique ${i}`});act('record_whatsapp',rich,{kind:'whatsapp_sent'});
  {const d=detail(rich);rpc('record_call_outcome',{lead_id:rich,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,outcome:'no_answer'});}
- sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${rich}','center_visit',now()+interval '4 days','${actor}','manual',${quote(run+':second')})`);
+ // M-A2 (137): one open action per prospect (unique index); the second open task is gone, and E3 uses the drawer menu (§4.9).
  // Tâches: an overdue task assigned to the receptionist. Calendar: a booked placement tomorrow.
  const taskLead=intake('B1 tâche en retard');sql(`update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${taskLead}' and status='open'`);
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");

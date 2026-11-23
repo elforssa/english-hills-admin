@@ -97,6 +97,7 @@ export function removeStaff(ids) {
  delete from public.placement_tests where crm_lead_id in(${mine});
  with a as(delete from public.crm_activities where actor_id in(${list}) returning id),s as(delete from public.crm_submissions where resolved_by in(${list}) returning id),l as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${list})) returning id) select count(*) from l;
  delete from public.crm_contacts where created_by in(${list});delete from public.crm_command_requests where actor_scope in(${list});delete from public.crm_followup_policies where created_by in(${list});
+ set constraints all immediate; -- M-A2 (137): fire the deferred checks (prospects are gone) before the ALTERs
  alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;alter table public.placement_tests enable trigger crm_placement_integrity;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${list});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;
  delete from public.activity_log where actor_id in(${list}) or target_id in(${list});delete from public.rate_limits where user_id in(${list});commit;`);

@@ -52,7 +52,17 @@ try {
  {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'11:00',examinateur:'Libellé examinateur'});}
  const bookedEvent='center_visit:'+detail(booked).next_task.id;
  sql(`update public.crm_leads set owner_id='${users[0].id}',conversion_review_required=true where id='${lead}';
- update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Synthetic taskless fixture' where lead_id='${taskless}';
+ -- M-A2 (137): an active prospect with no open action is refused (23514); « Sans prochaine action » stays
+ -- a NEW prospect with its first contact, so « À traiter » still lists it (priority 2) for the search below.
+ begin;do $fixture$ declare t public.crm_tasks%rowtype;begin
+ begin
+  for t in select * from public.crm_tasks where lead_id='${taskless}' and status='open' loop perform crm_security.finish_task(t,true,'Synthetic missing action',gen_random_uuid()::text);end loop;
+  set constraints all immediate;
+  raise exception 'FAIL work-calendar: an active prospect without an action was accepted';
+ exception when check_violation then null;
+ end;
+ set constraints all deferred;
+end $fixture$;commit;
  update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${lead}';`);
  const types=['first_contact','contact_attempt','callback','whatsapp_followup','confirm_placement_test','post_test_followup','center_visit','enrollment_followup'];
  // RWR-r5 §4.2: the work queue is one row per prospect (its next action), so a paged

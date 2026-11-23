@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { committedOpportunitiesFixture } from './lib/crm-opportunities-committed-fixture.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -129,7 +130,8 @@ try {
 
  if (!process.argv.includes('--behavior-only')) {
  // Browser read/render budget against the same real 10k/50k fixture as SQL.
- let load=readFileSync('scripts/test-crm-opportunities.sql','utf8');load=load.slice(load.indexOf('begin;'),load.indexOf('do $$ declare r jsonb;'));
+ // M-A2 (137): committed here, so its 120 planned tests are booked through the real path.
+ let load=committedOpportunitiesFixture();
  load=load.replace('phone_e164) select id','phone_e164,created_by) select id').replace("lpad(i::text,8,'0') from parents","lpad(i::text,8,'0'),auth.uid() from parents");
  for(let i=1;i<=7;i++)users.push({id:'a3000000-0000-0000-0000-'+String(i).padStart(12,'0')});
  sql(load+'\ncommit;');
