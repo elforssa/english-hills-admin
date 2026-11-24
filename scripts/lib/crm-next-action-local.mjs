@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { DAY_SHIFT } from './centre-days.mjs';
 
 export const PORT = process.env.CRM_LOCAL_DB_PORT || '54322';
 const ARGS = ['-X', '-qAt', '-h', '127.0.0.1', '-p', PORT, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
@@ -103,8 +104,9 @@ export function removeStaff(ids) {
  delete from public.activity_log where actor_id in(${list}) or target_id in(${list});delete from public.rate_limits where user_id in(${list});commit;`);
 }
 
-// A time inside the current policy's window ('calling' or 'opening'), `days` ahead on the centre clock.
+// A time inside the current policy's window ('calling' or 'opening'), `days` ahead on the centre clock
+// (plus CRM_TEST_DAY_SHIFT for a weekday sweep, scripts/lib/centre-days.mjs).
 export function slotAt(kind, days, hhmm = '16:00') {
   return sql(`select to_json(crm_security.window_at(crm_security.current_policy_id(),${q(kind)},
-   (((now() at time zone public.centre_utc_offset())::date+${Number(days)})::timestamp+${q(hhmm)}::time) at time zone public.centre_utc_offset()))#>>'{}'`);
+   (((now() at time zone public.centre_utc_offset())::date+${Number(days) + DAY_SHIFT})::timestamp+${q(hhmm)}::time) at time zone public.centre_utc_offset()))#>>'{}'`);
 }

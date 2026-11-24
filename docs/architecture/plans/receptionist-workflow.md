@@ -992,6 +992,30 @@ Rule (a) detail from the read-only plan: no cancelled action carried a test, and
   - Date-dependent preset assertions (same run, browser-crm; A1 test defect, same lines on main): `test-crm-rcc-a1-browser.mjs` asserted the « En attente du prospect » relance at exactly today + 5 centre days and « Dans 2 jours » at today + 2.
     - The server rule (`reminder_due`, OD-5, unchanged) is that date's midnight moved to the first calling window. On a Tuesday, day 5 is the closed Sunday, so the relance is Monday 15:00 (6 days; « '6' !== '5' »). « Dans 2 jours » fails the same way on a Friday.
     - Both now assert the exact stored local date and time against an oracle built from the suite's own hours, as `test-crm-rcc-a1.sql` already does for the presets. They no longer compare against a day count.
+  - Typed and booked dates from a fixed offset (Verify run 45404021587, browser-crm, on a Tuesday; A1 test defects, same lines on main): `test-reception-day-scripts-browser.mjs` day script 10 typed « today + 5 » into the reopened prospect's form. On a Tuesday that is the closed Sunday, so the form correctly showed « Aucun créneau ce jour-là » and the Heure select never got options.
+    - New `scripts/lib/centre-days.mjs`. `openDaySql(fromDays, times, kind)` lets the server pick the first centre date, from today + `fromDays`, on which every given time is inside the current policy's hours (`window_at`, so closed dates count). With no times, it picks any date with hours. `openSlotSql` is that date at that exact time. No suite now books or types a date from a fixed day count.
+    - Fixed:
+      - day script 10: the first date from tomorrow with opening hours;
+      - day script 7: the « Rappel convenu » is exactly 16:00 on a day with calling hours at 16:00. `slotAt('calling', 2, '16:00')` clamped Friday + 2 (Sunday) to Monday 15:00, so the wait for the kept 16:00 timed out. The weekday sweep found this one;
+      - `test-crm-work-calendar-browser.mjs`: both placement bookings, at 10:00 and 11:00, were on tomorrow and were refused when tomorrow is the closed Sunday or Monday morning;
+      - `test-crm-rcc-b1-browser.mjs`: the placement booking at tomorrow 10:00, same defect;
+      - `test-crm-next-action-137-upgrade.mjs`: the appointment at `now() + 2 days`, which depended on the time of day.
+    - Already safe, unchanged:
+      - the `inHours()` and `testDay` helpers (next Wednesday, next Tuesday) in phase4/5/6, rcc-a1/a2/b1, work-calendar, opportunities and reception-forms;
+      - the `slotAt` callers that only need a valid slot (window-clamped, distinct people): day scripts 6 and 10, forms, next-action-local, sequences;
+      - `test-crm-time-travel-local.mjs` (`window_at` and ISO weekdays);
+      - the concurrency and no-retry slots (window-clamped). The no-retry stale-version calls are refused with PT409 before any hours check;
+      - the opportunities fixture: its own policy is open every day;
+      - next-action-local's night and lunch refusals: they hold on every day.
+    - Not under opening or calling hours:
+      - past backdates;
+      - direct pre-D1 legacy inserts and updates;
+      - course, leave and online-lesson ranges;
+      - expiries and reconciliation times;
+      - the old engine's reminders in `rcc-a2` and `enrollment-at-payment` upgrades, which `next_window` moves rather than refuses.
+    - `CRM_TEST_DAY_SHIFT=0..6` (default 0) moves the reference day of `openDaySql` and `slotAt` forward. Every such date is at least a day ahead, so a shift of k is the suite run k days later.
+      - All 7 weekdays pass on 137 for each of these: `test-reception-day-scripts-browser.mjs`, `test-reception-forms-browser.mjs`, `test-crm-sequences.mjs`, `test-crm-next-action-local.mjs`, the helper itself, and `test-crm-next-action-137-upgrade.mjs` (each run starts with a reset to 136). The upgrade suite computes the date as `postgres`, because its commands run as the staff role, which cannot read `crm_security`.
+      - `test-crm-work-calendar-browser.mjs` and `test-crm-rcc-b1-browser.mjs` can't be shifted. They assert the server's real « Demain » bucket and open the calendar on the real tomorrow for 7 days, so a shifted booking could fall outside the shown week. They run at the real date, and their dates come from the helper that the sweep checked.
 - **Upgrade-lane ceilings raised to 137:** `test-conflicts-without-retry-upgrade.mjs`, `test-crm-batch2-upgrade-current.sql`, `test-crm-h3-upgrade-103-current.sql`, `test-crm-r4-upgrade-100-current.sql`, `test-crm-r4-upgrade-102-current.sql`, `test-premium-retirement-upgrade-113-current.sql`.
 - **Fixture:** `scripts/fixtures/receptionist-function-classification.json` regenerated without the twelve wrappers.
 - **CI:** `verify.yml` adds the 136→137 upgrade step, `test-single-writer.sql` and the enforced-suites runner, and moves the upgrade SQL out of the sql-and-concurrency shard.

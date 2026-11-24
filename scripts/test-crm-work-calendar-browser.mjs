@@ -9,6 +9,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
+import { openDaySql } from './lib/centre-days.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -43,13 +44,16 @@ try {
  const lead=intake('Parent · '+'NomLong'.repeat(18)),taskless=intake('Sans prochaine action'),closed=intake('Rendez-vous clos');
  act('qualify_lead',closed,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
- const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:day,heure:'10:00',examinateur:'Libellé examinateur'});
+ // Booked tests are appointments, refused outside opening hours: the first day from tomorrow where 10:00 and
+ // 11:00 are open (tomorrow can be the closed Sunday or Monday morning). The Calendar shows 7 days from `day`.
+ const bookDay=sql(`select ${openDaySql(1,['10:00','11:00'])}`);
+ const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:bookDay,heure:'10:00',examinateur:'Libellé examinateur'});
  const closedTest=detail(closed).next_placement.id;
  act('close_lost',closed,{reason:'price'});
  // RWR-r5 §4.9 and invariant 2: closing cancels the test and the calendar excludes closed
  // prospects, so the linked event checks use a prospect whose booked test is still open.
  const booked=intake('Rendez-vous ouvert');act('qualify_lead',booked,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
- {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'11:00',examinateur:'Libellé examinateur'});}
+ {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:bookDay,heure:'11:00',examinateur:'Libellé examinateur'});}
  const bookedEvent='center_visit:'+detail(booked).next_task.id;
  sql(`update public.crm_leads set owner_id='${users[0].id}',conversion_review_required=true where id='${lead}';
  -- M-A2 (137): an active prospect with no open action is refused (23514); « Sans prochaine action » stays

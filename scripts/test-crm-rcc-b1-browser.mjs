@@ -10,6 +10,7 @@ import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.mjs';
+import { openDaySql } from './lib/centre-days.mjs';
 import { BAND_QUERIES, COMMAND_LABELS, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
@@ -154,8 +155,11 @@ try {
  // Tâches: an overdue task assigned to the receptionist. Calendar: a booked placement tomorrow.
  const taskLead=intake('B1 tâche en retard');sql(`update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${taskLead}' and status='open'`);
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
+ // The booked test is an appointment, refused outside opening hours: the first day from tomorrow where
+ // 10:00 is open. The Calendar opens on `day` and shows 7 days.
+ const bookDay=sql(`select ${openDaySql(1,['10:00'])}`);
  const calendarLead=intake('B1 calendrier');act('qualify_lead',calendarLead,{conversation_channel:'phone',note:'Test souhaité',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
- {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'10:00',examinateur:'Examinateur B1'});}
+ {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:bookDay,heure:'10:00',examinateur:'Examinateur B1'});}
  // I1: a deliberately long learner identity beside the overflow trigger (En discussion column).
  const risky=intake('B1 identité longue',{learner:'Yasmine El Fassi-Bennani',data:{learner_age:8}});act('record_conversation',risky,{channel:'in_person',note:'Échange synthétique',next_task:next()});
  // D1 positive branch: a later, distinct inquiry (first touch is immutable; the latest moves).

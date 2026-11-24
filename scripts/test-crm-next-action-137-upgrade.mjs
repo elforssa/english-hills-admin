@@ -17,6 +17,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { openSlotSql } from './lib/centre-days.mjs';
 
 const port = process.env.CRM_UPGRADE_PORT || '54322';
 const base = ['-X', '-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
@@ -133,9 +134,11 @@ call(staff(3), 'crm_enroll_and_collect', `jsonb_build_object('enrollment',jsonb_
 assert.equal(sql(`select status from public.crm_leads where id='${testOnly}'`), 'CONVERTED', 'enrol and collect: converted');
 assert.equal(openActions(testOnly), 0, 'converted: no action');
 assert.equal(sql(`select status from public.placement_tests where id='${test}'`), 'Planifié', 'converted: the planned test kept');
-// A test result through the CRM command on a new appointment with a test.
+// A test result through the CRM command on a new appointment with a test, at 11:00 on an open
+// day (computed as postgres: the command runs as the staff role, which cannot read crm_security).
+const visitAt = sql(`select (${openSlotSql(2, '11:00')})::text`);
 call(staff(3), 'crm_log_exchange', `jsonb_build_object('lead_id','${single}','expected_version',${version(single)},'channel','phone','result','spoke','next',
- jsonb_build_object('task_type','center_visit','with_test',true,'due_at',(now()+interval '2 days')::text))`);
+ jsonb_build_object('task_type','center_visit','with_test',true,'due_at','${visitAt}'))`);
 const test2 = nextAction(single).split('|')[2];
 assert.ok(test2, 'appointment with a test');
 call(staff(3), 'crm_update_placement_test', `(select jsonb_build_object('placement_id',id,'expected_updated_at',updated_at,'expected_version',${version(single)},
