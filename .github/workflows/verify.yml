@@ -244,8 +244,12 @@ jobs:
         run: |
           supabase db reset --local --version 107 --no-seed
           node scripts/test-crm-work-calendar-upgrade.mjs
-          supabase db reset --local --no-seed
+          # RWR-r5 PR A2: the fixture holds the pre-D1 shapes, so it runs at 136 (all
+          # assertions, rolled back), then committed through D1 to 137 (bounded reads).
+          supabase db reset --local --version 136 --no-seed
           npm run test:crm-work-calendar-local
+          node scripts/test-crm-work-calendar-137-upgrade.mjs
+          supabase db reset --local --no-seed
       - name: Receptionist UX stateful 108 upgrade
         if: matrix.shard == 'upgrades-from-106-to-111'
         run: |
