@@ -157,78 +157,21 @@ export default function CrmActionDialog({
       due: values.due,
       instructions: values.instructions
     }) : null;
-    if (action === 'note') return ['crm_add_note', {
+    // M-A2 (migration 137) revokes the old command wrappers. The drawer opens this dialog
+    // only to close, reopen or reassign (« Noter un échange » and « Changer » have their own
+    // dialogs); any other action is refused here, never sent to a revoked function.
+    if (!['lost', 'unreachable', 'notQualified', 'reopen', 'reassign'].includes(action)) throw new Error(`Unsupported CRM action: ${action}`);
+    // RWR-r5 §4.3: the replacement commands.
+    if (closing) return ['crm_close_prospect', {
       ...data,
-      note: values.note.trim()
-    }];
-    if (outcomeLed) {
-      if (action === 'call') withTask();
-      return ['crm_record_conversation_decision', {
-        ...data,
-        ...conversationDecision(interactionKey, { channel, note: values.note, reason: values.unsuitableReason, next })
-      }];
-    }
-    if (action === 'call') {
-      withTask();
-      return ['crm_record_call_outcome', {
-        ...data,
-        outcome: values.outcome,
-        note: values.note || null,
-        ...(next ? {
-          next_task: next
-        } : {})
-      }];
-    }
-    // Only a sent message reaches here: it is activity-only and schedules nothing.
-    if (action === 'whatsapp') return ['crm_record_whatsapp', {
-      ...data,
-      kind: values.kind,
-      note: values.note || null
-    }];
-    if (['schedule', 'reschedule'].includes(action)) {
-      withTask();
-      return ['crm_schedule_task', {
-        ...data,
-        task: task ? {
-          due_at: casablancaInstant(values.due),
-          instructions: values.instructions || null
-        } : next
-      }];
-    }
-    if (action === 'complete') {
-      withTask();
-      return ['crm_complete_task', {
-        ...data,
-        outcome: values.note.trim(),
-        next_task: next
-      }];
-    }
-    if (action === 'cancel') {
-      withTask();
-      return ['crm_cancel_task', {
-        ...data,
-        reason: values.note.trim(),
-        next_task: next
-      }];
-    }
-    if (action === 'qualify') return ['crm_qualify_lead', {
-      ...data,
-      qualification_step: values.step,
-      ...(values.note?.trim() ? { note: values.note.trim() } : {}),
-      ...(!lead.last_conversation_at ? {
-        conversation_channel: values.channel
-      } : {}),
-      next_task: next
-    }];
-    if (closing) return [action === 'notQualified' ? 'crm_close_not_qualified' : 'crm_close_lost', {
-      ...data,
+      status: action === 'notQualified' ? 'NOT_QUALIFIED' : 'LOST',
       reason: values.reason,
       note: values.note || null
     }];
-    if (action === 'reopen') return ['crm_reopen_lead', {
+    if (action === 'reopen') return ['crm_reopen_prospect', {
       ...data,
       reason: values.note.trim(),
-      next_task: next
+      next
     }];
     if (task) { withTask(); return ['crm_reassign', {...data,assigned_to:values.assignee || null}]; }
     return ['crm_reassign', {...data,owner_id:values.owner || null}];

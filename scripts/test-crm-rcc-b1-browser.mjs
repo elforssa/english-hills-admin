@@ -10,6 +10,7 @@ import { randomUUID, randomBytes, randomInt } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches, ORIGIN_REFUSED } from './lib/webkit-cancelled-fetch.mjs';
+import { openDaySql } from './lib/centre-days.mjs';
 import { BAND_QUERIES, COMMAND_LABELS, historySummary, resolveBand, EVENTS } from '../src/lib/crm/presentation.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
 assertLocalFeatureBranch();
@@ -20,7 +21,10 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='rcc-b1-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
 let browser,actor,page,phase='setup',context;const pageErrors=[],consoleErrors=[],writes=[],external=[],fetchChecks=[];
-const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// M-A2 (137) revoked these wrappers for API roles: fixture-only calls to them run in a trusted
+// session (same JWT claim, same rows); every other call still runs as authenticated.
+const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead']);
+const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${REVOKED.has(name)?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const timeline=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};set local role authenticated;select public.crm_get_timeline(p_lead=>'${id}',p_limit=>20);commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
@@ -143,16 +147,19 @@ try {
  const engaged=[];for(let i=0;i<3;i++){const id=intake(`B1 discussion ${i}`);act('record_conversation',id,{channel:'in_person',note:'Échange synthétique',next_task:next()});engaged.push(id);}
  const qualified=[];for(let i=0;i<5;i++){const id=intake(`B1 qualifié ${i}`,{learner:`B1 apprenant qualifié ${i}`});act('qualify_lead',id,{conversation_channel:'whatsapp',note:'Projet synthétique',qualification_step:'center_visit',next_task:next('center_visit')});qualified.push(id);}
  const lost=intake('B1 perdu');act('close_lost',lost,{reason:'price'});const nq=intake('B1 non qualifié');act('close_not_qualified',nq,{reason:'outside_scope'});
- // Rich prospect: long mixed name, history noise, a second open task (E3).
+ // Rich prospect: long mixed name, history noise.
  const rich=intake(LONG,{learner:'Apprenant distinct · أحمد',data:{learner_age:9,program_interest_text:'Programme annuel · Anglais pour jeunes apprenants'}});
  for(let i=0;i<4;i++)act('add_note',rich,{note:`Note synthétique ${i}`});act('record_whatsapp',rich,{kind:'whatsapp_sent'});
  {const d=detail(rich);rpc('record_call_outcome',{lead_id:rich,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,outcome:'no_answer'});}
- sql(`insert into public.crm_tasks(lead_id,task_type,due_at,assigned_to,source_kind,source_key) values('${rich}','center_visit',now()+interval '4 days','${actor}','manual',${quote(run+':second')})`);
+ // M-A2 (137): one open action per prospect (unique index); the second open task is gone, and E3 uses the drawer menu (§4.9).
  // Tâches: an overdue task assigned to the receptionist. Calendar: a booked placement tomorrow.
  const taskLead=intake('B1 tâche en retard');sql(`update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${taskLead}' and status='open'`);
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
+ // The booked test is an appointment, refused outside opening hours: the first day from tomorrow where
+ // 10:00 is open. The Calendar opens on `day` and shows 7 days.
+ const bookDay=sql(`select ${openDaySql(1,['10:00'])}`);
  const calendarLead=intake('B1 calendrier');act('qualify_lead',calendarLead,{conversation_channel:'phone',note:'Test souhaité',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
- {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'10:00',examinateur:'Examinateur B1'});}
+ {const d=detail(calendarLead);rpc('book_placement_test',{lead_id:calendarLead,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:bookDay,heure:'10:00',examinateur:'Examinateur B1'});}
  // I1: a deliberately long learner identity beside the overflow trigger (En discussion column).
  const risky=intake('B1 identité longue',{learner:'Yasmine El Fassi-Bennani',data:{learner_age:8}});act('record_conversation',risky,{channel:'in_person',note:'Échange synthétique',next_task:next()});
  // D1 positive branch: a later, distinct inquiry (first touch is immutable; the latest moves).
@@ -588,7 +595,7 @@ try {
  alter table public.crm_revenue_entries disable trigger crm_revenue_immutable;delete from public.crm_revenue_entries where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));alter table public.crm_revenue_entries enable trigger crm_revenue_immutable;
  with removed_placements as(delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
- alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
+ set constraints all immediate;alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
  set local english_hills.receipt_test_cleanup = 'on';delete from public.financial_events where actor_id in(${ids});delete from public.financial_requests where actor_id in(${ids});delete from public.receipts where student_id in(${studentIds});delete from public.charge_discount_reasons where charge_id in(select id from public.charges where student_id in(${studentIds}));delete from public.charges where student_id in(${studentIds});
  set local eh.enrollment_command = on; set local eh.membership_sync = on; delete from public.enrollments where student_id in(${studentIds});delete from public.students where id in(${studentIds});alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);
  assert.equal(sql(`select count(*) from public.crm_leads`),'0');console.log('PASS synthetic browser fixtures removed; history guards restored');}

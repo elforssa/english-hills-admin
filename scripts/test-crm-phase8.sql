@@ -78,6 +78,8 @@ select pg_temp.ok((select match_status='needs_review' from crm_submissions where
 update crm_contacts set display_name='Sara' where display_name='Different guardian';
 -- Closed opportunities are historical; an identified later inquiry is new.
 update crm_leads set status='LOST',closed_at=now(),closure_reason='postponed' where learner_name='Lina';
+-- RWR-r5 M-A2: a closed prospect holds no open action (the close path cancels it).
+update crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where status='open' and lead_id in (select id from crm_leads where learner_name='Lina');
 select pg_temp.ingest('880011','Lina');
 select pg_temp.ok((select count(*)=2 from crm_leads where learner_name='Lina'),'closed inquiry creates new opportunity');
 select pg_temp.ok((select count(*)=1 from crm_leads where learner_name='Lina' and status='LOST'),'closed history not reopened');
@@ -88,6 +90,8 @@ do $$ declare l uuid;student uuid;enrollment uuid;activity uuid;before_center js
  insert into enrollments(student_id,session_type,school_year,status,level) values(student,'Yearly','2026/2027','Confirmed','Child 2') returning id into enrollment;
  insert into crm_activities(lead_id,occurred_at,actor_kind,event_type,source_key,enrollment_id) values(l,now(),'system','lead_converted','phase8-test-conversion',enrollment) returning id into activity;
  update crm_leads set status='CONVERTED',student_id=student,enrollment_id=enrollment,converted_at=now(),conversion_activity_id=activity where id=l;
+ -- RWR-r5 M-A2: a converted prospect holds no open action (conversion cancels it).
+ update crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Fixture' where status='open' and lead_id=l;
  select jsonb_build_array((select count(*) from students),(select count(*) from enrollments),(select count(*) from placement_tests),(select count(*) from charges),(select count(*) from receipts),(select count(*) from financial_events)) into before_center;
  perform pg_temp.ingest('880013','Adam','Summer');
  perform pg_temp.ok((select count(*)=2 from crm_leads where learner_name='Adam' and program_interest_text='Summer'),'converted inquiry creates separate new opportunity');

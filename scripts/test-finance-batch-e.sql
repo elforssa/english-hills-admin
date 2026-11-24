@@ -219,9 +219,10 @@ declare l uuid; n bigint := nextval('e2_n'); begin
   perform pg_temp.act(3);
   l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'Batch E parent ' || n,
     'learner_name', 'BatchE' || n || ' Learner', 'phone', '06' || lpad((72900000 + n)::text, 8, '0'), 'source_label', 'Manual'))->'lead'->>'id')::uuid;
-  perform public.crm_qualify_lead(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,
-    'conversation_channel', 'phone', 'note', 'Batch E synthetic', 'qualification_step', 'placement_test',
-    'next_task', jsonb_build_object('task_type', 'confirm_placement_test', 'due_at', now() + interval '2 days')));
+  -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies the prospect (OD-11).
+  perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', (pg_temp.lead(l)).version,
+    'channel', 'phone', 'result', 'spoke', 'note', 'Batch E synthetic',
+    'next', jsonb_build_object('enrol', jsonb_build_object('due_at', now() + interval '2 days'))));
   perform pg_temp.owner();
   return l;
 end $$;
@@ -387,11 +388,11 @@ do $$ declare s text; i integer := 114; c jsonb; p jsonb; begin
     c := pg_temp.legacy_crm_enrollment(pg_temp.id(i));  -- EAP (127): legacy linked Submitted row
     perform pg_temp.act(3);
     if s = 'LOST' then
-      perform public.crm_close_lost(gen_random_uuid(), jsonb_build_object('lead_id', c->>'lead',
-        'expected_version', (pg_temp.lead((c->>'lead')::uuid)).version, 'reason', 'not_interested'));
+      perform public.crm_close_prospect(gen_random_uuid(), jsonb_build_object('lead_id', c->>'lead',
+        'expected_version', (pg_temp.lead((c->>'lead')::uuid)).version, 'status', 'LOST', 'reason', 'not_interested'));
     else
-      perform public.crm_close_not_qualified(gen_random_uuid(), jsonb_build_object('lead_id', c->>'lead',
-        'expected_version', (pg_temp.lead((c->>'lead')::uuid)).version, 'reason', 'program_not_suitable'));
+      perform public.crm_close_prospect(gen_random_uuid(), jsonb_build_object('lead_id', c->>'lead',
+        'expected_version', (pg_temp.lead((c->>'lead')::uuid)).version, 'status', 'NOT_QUALIFIED', 'reason', 'program_not_suitable'));
     end if;
     p := pg_temp.pay(2, jsonb_build_object('student_id', pg_temp.id(i), 'enrollment_id', c->>'enrollment', 'session_type', 'Adults',
       'school_year', '2026/2027', 'gross_amount', 1000, 'payment_amount', 300));

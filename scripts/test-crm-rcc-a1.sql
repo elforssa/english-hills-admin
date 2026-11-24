@@ -75,9 +75,10 @@ do $$ begin
   and not has_function_privilege('service_role','crm_security.reminder_due(uuid,text)','execute'),'preset helper is private');
  perform pg_temp.ok(not has_function_privilege('authenticated','crm_security.new_task(public.crm_leads,jsonb,text,text,smallint,text,uuid,uuid,uuid,boolean,text)','execute'),'task primitive stays private');
  perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid='public.crm_record_conversation_decision(uuid,jsonb)'::regprocedure),'decision pinned definer');
- perform pg_temp.ok(has_function_privilege('authenticated','public.crm_record_conversation_decision(uuid,jsonb)','execute')
+ -- RWR-r5 M-A2 (PR A2) revokes the old wrapper: « Noter un échange » (crm_log_exchange) replaces it (§4.3).
+ perform pg_temp.ok(not has_function_privilege('authenticated','public.crm_record_conversation_decision(uuid,jsonb)','execute')
   and not has_function_privilege('anon','public.crm_record_conversation_decision(uuid,jsonb)','execute')
-  and not has_function_privilege('service_role','public.crm_record_conversation_decision(uuid,jsonb)','execute'),'decision grants unchanged');
+  and not has_function_privilege('service_role','public.crm_record_conversation_decision(uuid,jsonb)','execute'),'decision wrapper revoked by M-A2');
 end $$;
 \echo PASS additive nullable task metadata, private helpers and unchanged grants
 

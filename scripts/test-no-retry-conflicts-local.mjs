@@ -61,9 +61,15 @@ insert into fx select 'pending_run', crm_request_insights_sync((select v::uuid f
 set request.jwt.claim.role='service_role'; set request.jwt.claim.sub='';
 insert into fx select 'running_run', crm_claim_insights_sync()->>'id';
 reset request.jwt.claim.role; reset request.jwt.claim.sub;
-update crm_leads set status='QUALIFIED' where id=(select v::uuid from fx where k='qualified');
+-- M-A2 (137): the qualified prospect and its planned test come from the real path — a spoken
+-- exchange that books a visit « avec test de niveau » (OD-11) in three days at 10:30, centre time.
+set request.jwt.claim.role='authenticated'; set request.jwt.claim.sub=${q(director.id)};
+create temp table booked as select crm_log_exchange(gen_random_uuid(),jsonb_build_object('lead_id',(select v::uuid from fx where k='qualified'),
+  'expected_version',(select version from crm_leads where id=(select v::uuid from fx where k='qualified')),'channel','phone','result','spoke','note','NRC booking',
+  'next',jsonb_build_object('task_type','center_visit','with_test',true,'due_at',crm_security.window_at(crm_security.current_policy_id(),'opening',
+    (((now() at time zone centre_utc_offset())::date+3)::timestamp+time '10:30') at time zone centre_utc_offset())))) r;
+reset request.jwt.claim.role; reset request.jwt.claim.sub;
 insert into fx select 'candidate', crm_security.candidate_token((select v::uuid from fx where k='qualified'),'NRC qualified learner','2015-03-04');
-insert into placement_tests(id,student_name,date_test,heure,crm_lead_id) values(gen_random_uuid(),'NRC qualified learner',${q(day(3))},'10:30',(select v::uuid from fx where k='qualified'));
 insert into fx select 'placement', id::text from placement_tests where crm_lead_id=(select v::uuid from fx where k='qualified');
 insert into fx values('lease', gen_random_uuid()::text);
 insert into crm_ingestion_jobs(id,connection_id,external_key,event_kind,payload,payload_hash,status,lease_token,lease_until)
@@ -122,8 +128,10 @@ const CASES = [
   ['save_receptionist_premium_membership', receptionist, 'save_receptionist_premium_membership', { p_membership: randomUUID(), p_expected_updated_at: old }, 'Membership unavailable or stale'],
   ['save_receptionist_premium_attendance', receptionist, 'save_receptionist_premium_attendance', { p_session: randomUUID(), p_student: id('student'), p_status: 'Present', p_expected_updated_at: old }, 'Premium attendance unavailable'],
   // CRM lead, placement and enrollment commands (stale versions).
-  ['crm_complete_task via command', director, 'crm_complete_task', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, expected_task_version: 1, outcome: 'completed', note: 'NRC', next_task: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
-  ['crm_record_conversation_decision', director, 'crm_record_conversation_decision', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, expected_task_version: 1, decision: 'callback', note: 'NRC', next_task: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
+  // M-A2 (137) revoked crm_complete_task and crm_record_conversation_decision; their stale-lead
+  // conflict is reached through the replacement commands (the wrappers' 42501 refusal is below).
+  ['crm_log_exchange', director, 'crm_log_exchange', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, task_id: task, channel: 'phone', result: 'spoke', note: 'NRC', next: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
+  ['crm_change_next_action', director, 'crm_change_next_action', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: 999, expected_action_id: task, next: { task_type: 'callback', due_at: new Date(Date.now() + 86400000).toISOString() } } }, 'Stale lead version; refresh and retry'],
   ['crm_book_placement_test', director, 'crm_book_placement_test', { p_request_key: randomUUID(), p_data: { lead_id: qualified, expected_version: 999, date_test: day(2), heure: '10:30', examinateur: 'NRC', notes: 'NRC' } }, 'Stale lead version; refresh and retry'],
   ['crm_update_placement_test', director, 'crm_update_placement_test', { p_request_key: randomUUID(), p_data: { placement_id: id('placement'), expected_updated_at: old, notes: 'NRC' } }, 'Stale placement version; refresh and retry'],
   // EAP (127): crm_start_enrollment is no longer callable by API roles; its stale-lead conflict
@@ -175,6 +183,20 @@ async function refused([label, caller, name, args, message, hint = null]) {
 const baseline = rollbacks();
 for (const testCase of CASES) await refused(testCase);
 
+// The two wrappers revoked by M-A2 (137): refused for authenticated (42501, HTTP 403), no row changed.
+let revokedCalls = 0;
+for (const [name, data] of [
+  ['crm_complete_task', { lead_id: lead, expected_version: 1, task_id: task, expected_task_version: 1, outcome: 'completed', note: 'NRC' }],
+  ['crm_record_conversation_decision', { lead_id: lead, expected_version: 1, task_id: task, expected_task_version: 1, decision: 'callback', note: 'NRC' }]
+]) {
+  const before = fingerprint();
+  const res = await director.client.rpc(name, { p_request_key: randomUUID(), p_data: data }).abortSignal(AbortSignal.timeout(5000));
+  revokedCalls++;
+  assert(res.error, `${name}: unexpected success after M-A2`);
+  assert.deepEqual([res.status, res.error.code], [403, '42501'], `${name}: refused with 42501`);
+  assert.equal(fingerprint(), before, `${name}: a row changed`);
+}
+
 // Busy (class B): a held enrollment-intent lock refuses a payment at once, no replay.
 const holder = spawn('psql', pgArgs, { env: processEnv, stdio: ['pipe', 'pipe', 'pipe'] });
 let held = '';
@@ -195,7 +217,7 @@ console.log(`PASS ${calls} former-retry paths: HTTP 409 PT409 with today's messa
 // Quiet period: nothing keeps re-running in the server.
 await new Promise(r => setTimeout(r, 3000));
 const grew = rollbacks() - baseline;
-assert(grew <= calls + 25, `xact_rollback grew by ${grew} for ${calls} refused calls: a retry loop is running`);
+assert(grew <= calls + revokedCalls + 25, `xact_rollback grew by ${grew} for ${calls + revokedCalls} refused calls: a retry loop is running`);
 assert.equal(sql("select count(*) from pg_stat_activity where usename = 'authenticator' and state = 'active' and pid <> pg_backend_pid()"), '0', 'no authenticator backend still active');
 const current = sql(`select to_json(updated_at) #>> '{}' from public.students where id=${q(id('student'))}`);
 const ok = await receptionist.client.rpc('save_receptionist_student', { p_student: id('student'), p_expected_updated_at: current, p_changes: { telephone: '0600000009' } });

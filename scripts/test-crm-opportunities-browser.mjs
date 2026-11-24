@@ -8,6 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
+import { committedOpportunitiesFixture } from './lib/crm-opportunities-committed-fixture.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -15,7 +16,10 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='o3-browser-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
 let browser,actor;const pageErrors=[];
-const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// M-A2 (137) revoked these wrappers for API roles: fixture-only calls to them run in a trusted
+// session (same JWT claim, same rows); every other call still runs as authenticated.
+const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead']);
+const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${REVOKED.has(name)?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
 // RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
@@ -126,7 +130,8 @@ try {
 
  if (!process.argv.includes('--behavior-only')) {
  // Browser read/render budget against the same real 10k/50k fixture as SQL.
- let load=readFileSync('scripts/test-crm-opportunities.sql','utf8');load=load.slice(load.indexOf('begin;'),load.indexOf('do $$ declare r jsonb;'));
+ // M-A2 (137): committed here, so its 120 planned tests are booked through the real path.
+ let load=committedOpportunitiesFixture();
  load=load.replace('phone_e164) select id','phone_e164,created_by) select id').replace("lpad(i::text,8,'0') from parents","lpad(i::text,8,'0'),auth.uid() from parents");
  for(let i=1;i<=7;i++)users.push({id:'a3000000-0000-0000-0000-'+String(i).padStart(12,'0')});
  sql(load+'\ncommit;');
@@ -156,7 +161,7 @@ try {
  delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));
  with removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where actor_id in(${ids}) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) or lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
- alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submission_attribution enable trigger crm_attribution_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
+ set constraints all immediate;alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submission_attribution enable trigger crm_attribution_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});drop index public.o3_test_cleanup_activity_task,public.o3_test_cleanup_activity_prior,public.o3_test_cleanup_task_source,public.o3_test_cleanup_task_completion,public.o3_test_cleanup_task_prior,public.o3_test_cleanup_lead_conversion;commit;`);}
  assert.equal(sql("select count(*) from pg_indexes where schemaname='public' and indexname like 'o3_test_cleanup_%'"),'0');
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0');

@@ -1,8 +1,14 @@
--- RWR-r5 §9/§10 upgrade: pre-D1 shapes (several or no open actions, tests without
--- their appointment, closed/converted/merged prospects with work left) → d1_plan →
--- d1_apply → post-checks Q04/Q05/Q07/Q29 → d1_revert. Rolled back; no personal data.
--- The shapes are written directly, as the live data holds them before D1.
+-- RWR-r5 §9/§10 upgrade, fixture → 136 → D1 → 137. Run on a database at migration 136
+-- (the upgrade lane resets to 136): pre-D1 shapes (several or no open actions, tests
+-- without their appointment, closed/converted/merged prospects with work left) → d1_plan
+-- → d1_apply → post-checks Q04/Q05/Q07/Q29 → d1_revert (inside a savepoint, rolled back
+-- to the D1 state) → the 137 file → the enforced writers on the D1-processed prospects,
+-- each checked as at commit. Rolled back; no personal data. The shapes are written
+-- directly, as the live data holds them before D1. The 137 precondition refusal and
+-- the committed path are in scripts/test-crm-next-action-137-upgrade.mjs.
 \set ON_ERROR_STOP on
+do $$ begin if (select max(version) from supabase_migrations.schema_migrations)<>'136' then
+ raise exception 'Run on a database at migration 136 (supabase db reset --local --version 136)'; end if; end $$;
 begin;
 create function pg_temp.ok(value boolean,label text) returns void language plpgsql as $$ begin
  if value is not true then raise exception 'FAIL: %',label; end if;
@@ -102,6 +108,8 @@ update fx set test2=(select id from public.placement_tests where crm_lead_id=fx.
 insert into public.crm_tasks(lead_id,task_type,due_at,placement_test_id,source_kind,source_key)
 select lead,'enrollment_followup',pg_temp.at(1,'16:00'),case when name='L15_enrol_linked' then test else test2 end,'manual','fx:'||name from fx where name in ('L14_enrol_test','L15_enrol_linked');
 update fx set a=(select id from public.crm_tasks where source_key='fx:'||fx.name) where name in ('L14_enrol_test','L15_enrol_linked');
+-- L5 and L14 are qualified, as prospects with a test usually are (enrolment starts on them after 137).
+update public.crm_leads set status='QUALIFIED' where id in (select lead from fx where name in ('L5_test_only','L14_enrol_test'));
 set local session_replication_role=origin;
 -- L12 stays active with no action and fewer than five failures (rule c with the review flag).
 
@@ -230,7 +238,9 @@ end $$;
 \echo PASS d1_apply: Q04, Q05, Q07, Q29 (both shapes) at zero and every shape resolved as planned
 
 -- d1_revert (before M-A2): D1's own actions cancelled, the exact cancelled rows reopened,
--- future tests replanned, past ones left cancelled and listed.
+-- future tests replanned, past ones left cancelled and listed. Checked inside a savepoint,
+-- then rolled back to the D1 state that migration 137 is applied on.
+savepoint before_revert;
 do $$ declare r jsonb; x record; begin
  perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000001',true);
  r:=crm_security.d1_revert();
@@ -251,4 +261,105 @@ do $$ declare r jsonb; x record; begin
  perform pg_temp.ok((r->>'leads_changed_since')::int=0,'no prospect changed since D1');
 end $$;
 \echo PASS d1_revert restores the pre-D1 rows
+rollback to savepoint before_revert;
+
+-- M-A2: migration 137 on the D1-processed state. Its own precondition re-checks
+-- Q04, Q05, Q07 and Q29 and would refuse here if any were not zero.
+-- D1 commits before the migration runs: fire the deferred checks queued so far, as COMMIT
+-- would (CREATE INDEX refuses a table with pending trigger events).
+set constraints all immediate;
+\ir ../supabase/migrations/137_crm_one_next_action_enforce.sql
+set constraints all deferred;
+do $$ begin
+ perform pg_temp.ok((select indisvalid and indisunique from pg_index where indexrelid='public.crm_tasks_one_open_per_lead'::regclass),'137: index valid');
+ perform pg_temp.ok(to_regprocedure('crm_security.d1_revert()') is null and to_regprocedure('crm_security.d1_apply(jsonb)') is null
+  and to_regprocedure('crm_security.d1_plan()') is null,'137: D1 functions dropped, D1 can no longer be reverted');
+ perform pg_temp.ok(not has_function_privilege('authenticated','public.crm_close_lost(uuid,jsonb)','execute')
+  and not has_function_privilege('authenticated','public.crm_qualify_lead(uuid,jsonb)','execute'),'137: old wrappers revoked');
+ perform pg_temp.ok((select count(*)>0 from public.crm_data_step_journal where step='d1'),'137: the D1 journal is kept');
+end $$;
+\echo PASS 137 applied on the D1 state: index valid, D1 dropped, wrappers revoked, journal kept
+
+-- The enforced writers on D1-processed prospects, each checked as at commit.
+create function pg_temp.committed() returns void language plpgsql as $$ begin set constraints all immediate; set constraints all deferred; end $$;
+create function pg_temp.actions(lead uuid) returns integer language sql as $$ select count(*)::integer from public.crm_tasks where lead_id=lead and status='open' $$;
+create function pg_temp.enrol(lead uuid) returns void language plpgsql as $$ declare s uuid; e uuid; begin
+ -- Enrolment start as « Inscrire et encaisser » runs it, linking a legacy unconfirmed
+ -- enrolment as test-crm-rcc-a2 does (the API grant of crm_start_enrollment is revoked).
+ insert into public.students(full_name,date_naissance,status,session_type) values('D1 legacy learner','2015-03-01','Prospect','Yearly') returning id into s;
+ perform set_config('eh.membership_sync','on',true),set_config('eh.enrollment_command','on',true);
+ insert into public.enrollments(student_id,session_type,school_year,status,level) values(s,'Yearly','2026/2027','Submitted','Child 2') returning id into e;
+ perform set_config('eh.membership_sync','',true),set_config('eh.enrollment_command','',true);
+ perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000003',true);
+ perform public.crm_start_enrollment(gen_random_uuid(),jsonb_build_object('lead_id',lead,'expected_version',(select version from public.crm_leads where id=lead),
+  'student_choice','existing','student_id',s,'session_type','Yearly','school_year','2026/2027','enrollment_id',e,
+  'expected_enrollment_updated_at',(select updated_at from public.enrollments where id=e),'followup_at',null,'initial_status','Confirmed'));
+end $$;
+do $$ declare x record; sid uuid:=gen_random_uuid(); e uuid; s uuid; t uuid; begin
+ -- Intake resubmission onto L12 (D1 « En attente », flagged): the attach path of the
+ -- website and Meta review queue (later than the first submission, as one transaction's
+ -- now() would otherwise tie).
+ select * into x from fx where name='L12_none';
+ insert into public.crm_submissions(id,channel,received_at,occurred_at,time_source,core_fields,form_answers,source_label,match_status,payload_hash)
+ values(sid,'website',now()+interval '1 minute',now()+interval '1 minute','server','{"contact_name":"D1 parent","program_interest_text":"Annual English"}','[]','D1 resubmission','needs_review',encode(sha256(convert_to(sid::text,'UTF8')),'hex'));
+ perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000003',true);
+ perform crm_security.lifecycle_barrier(true);
+ perform crm_security.accept_external_submission(sid,null,x.lead);
+ perform pg_temp.committed();
+ perform pg_temp.ok(pg_temp.actions(x.lead)=1 and (select latest_submission_id=sid from public.crm_leads where id=x.lead),'intake resubmission on a D1 prospect: one action');
+
+ -- Reassignment of L1 (D1 kept the most recent of two callbacks).
+ select * into x from fx where name='L1_dupes';
+ perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000001',true);
+ perform public.crm_reassign(gen_random_uuid(),jsonb_build_object('lead_id',x.lead,'expected_version',(select version from public.crm_leads where id=x.lead),
+  'owner_id','a8000000-0000-0000-0000-000000000002'::uuid));
+ perform pg_temp.committed();
+ perform pg_temp.ok(pg_temp.actions(x.lead)=1 and (select assigned_to='a8000000-0000-0000-0000-000000000002'::uuid from public.crm_tasks where id=crm_security.next_action_id(x.lead)),
+  'reassignment of a D1 prospect: one action, new owner');
+
+ -- Test result on L7 (D1 kept the past appointment carrying its planned test).
+ select * into x from fx where name='L7_past_appt_test';
+ perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000003',true);
+ perform public.crm_update_placement_test(gen_random_uuid(),jsonb_build_object('placement_id',x.test,'expected_updated_at',(select updated_at from public.placement_tests where id=x.test),
+  'expected_version',(select version from public.crm_leads where id=x.lead),'date_test',(select date_test from public.placement_tests where id=x.test),
+  'heure',(select heure from public.placement_tests where id=x.test),'status','Résultat saisi','niveau_recommande','B1'));
+ perform pg_temp.committed();
+ perform pg_temp.ok(pg_temp.actions(x.lead)=1 and (select task_type='post_test_followup' from public.crm_tasks where id=crm_security.next_action_id(x.lead)),
+  'test result on a D1 prospect: « Proposer l''inscription » is the one action');
+
+ -- Enrolment start on L5 (the appointment D1 created for its planned test), then the
+ -- payment: the test moves to « Finaliser l'inscription » and is kept at conversion.
+ select * into x from fx where name='L5_test_only';
+ perform pg_temp.enrol(x.lead);
+ perform pg_temp.committed();
+ t:=crm_security.next_action_id(x.lead);
+ perform pg_temp.ok(pg_temp.actions(x.lead)=1 and (select task_type='enrollment_followup' and placement_test_id=x.test from public.crm_tasks where id=t)
+  and (select status='Planifié' from public.placement_tests where id=x.test),'enrolment start on a D1 prospect: « Finaliser l''inscription » carries the kept test');
+ select enrollment_id into e from public.crm_leads where id=x.lead; select student_id into s from public.enrollments where id=e;
+ perform set_config('request.jwt.claim.sub','a8000000-0000-0000-0000-000000000002',true);
+ perform public.create_charge_payment(jsonb_build_object('student_id',s,'enrollment_id',e,'session_type','Yearly','school_year','2026/2027','gross_amount',1500,
+  'payment_amount',500,'payment_method','Espèces','idempotency_key',gen_random_uuid()));
+ perform pg_temp.committed();
+ perform pg_temp.ok((select status='CONVERTED' from public.crm_leads where id=x.lead) and pg_temp.actions(x.lead)=0
+  and (select status='Planifié' from public.placement_tests where id=x.test),'conversion of a D1 prospect: no action, the test kept');
+
+ -- Enrolment start on L14, whose « Finaliser l'inscription » D1 linked to its planned test:
+ -- the action and its test are kept.
+ select * into x from fx where name='L14_enrol_test';
+ perform pg_temp.enrol(x.lead);
+ perform pg_temp.committed();
+ perform pg_temp.ok(pg_temp.actions(x.lead)=1 and (select task_type='enrollment_followup' and placement_test_id=x.test from public.crm_tasks where id=crm_security.next_action_id(x.lead))
+  and (select status='Planifié' from public.placement_tests where id=x.test),'enrolment start on a D1-linked enrolment action: the action keeps its test');
+end $$;
+\echo PASS enforced writers on D1 prospects: intake resubmission, reassignment, test result, enrolment start, conversion with the kept test
+
+-- After 137, a second open action on a D1 prospect is refused (unique index).
+do $$ declare l uuid:=(select lead from fx where name='L11_future_and_past'); begin
+ begin
+  insert into public.crm_tasks(lead_id,task_type,due_at,source_kind,source_key) values(l,'callback',now()+interval '1 day','manual','fx:L11:second');
+  raise exception 'FAIL: a second open action was accepted';
+ exception when unique_violation then null;
+ end;
+end $$;
+\echo PASS a second open action on a D1 prospect is refused by crm_tasks_one_open_per_lead
 rollback;

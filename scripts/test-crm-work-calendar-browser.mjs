@@ -9,6 +9,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { chromium, webkit } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { cancelledFetches } from './lib/webkit-cancelled-fetch.mjs';
+import { openDaySql } from './lib/centre-days.mjs';
 assertLocalFeatureBranch();
 const env=Object.fromEntries(readFileSync('.env.local','utf8').split('\n').flatMap(line=>{const m=line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);return m?[[m[1],m[2].trim().replace(/^['"]|['"]$/g,'')]]:[];}));
 const base='http://127.0.0.1:54321',app='http://localhost:3101';assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,base);
@@ -16,7 +17,10 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='o3-work-browser-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
 let browser,actor;const pageErrors=[];const legacyIds=[];
-const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// M-A2 (137) revoked these wrappers for API roles: fixture-only calls to them run in a trusted
+// session (same JWT claim, same rows); every other call still runs as authenticated.
+const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead']);
+const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${REVOKED.has(name)?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
 // RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
@@ -40,16 +44,29 @@ try {
  const lead=intake('Parent · '+'NomLong'.repeat(18)),taskless=intake('Sans prochaine action'),closed=intake('Rendez-vous clos');
  act('qualify_lead',closed,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
  const day=sql("select to_char((now() at time zone public.centre_utc_offset())::date+1,'YYYY-MM-DD')");
- const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:day,heure:'10:00',examinateur:'Libellé examinateur'});
+ // Booked tests are appointments, refused outside opening hours: the first day from tomorrow where 10:00 and
+ // 11:00 are open (tomorrow can be the closed Sunday or Monday morning). The Calendar shows 7 days from `day`.
+ const bookDay=sql(`select ${openDaySql(1,['10:00','11:00'])}`);
+ const prepared=detail(closed);rpc('book_placement_test',{lead_id:closed,expected_version:prepared.version,task_id:prepared.next_task.id,expected_task_version:prepared.next_task.version,date_test:bookDay,heure:'10:00',examinateur:'Libellé examinateur'});
  const closedTest=detail(closed).next_placement.id;
  act('close_lost',closed,{reason:'price'});
  // RWR-r5 §4.9 and invariant 2: closing cancels the test and the calendar excludes closed
  // prospects, so the linked event checks use a prospect whose booked test is still open.
  const booked=intake('Rendez-vous ouvert');act('qualify_lead',booked,{conversation_channel:'in_person',note:'Projet réel synthétique',qualification_step:'placement_test',next_task:next('confirm_placement_test')});
- {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:day,heure:'11:00',examinateur:'Libellé examinateur'});}
+ {const d=detail(booked);rpc('book_placement_test',{lead_id:booked,expected_version:d.version,task_id:d.next_task.id,expected_task_version:d.next_task.version,date_test:bookDay,heure:'11:00',examinateur:'Libellé examinateur'});}
  const bookedEvent='center_visit:'+detail(booked).next_task.id;
  sql(`update public.crm_leads set owner_id='${users[0].id}',conversion_review_required=true where id='${lead}';
- update public.crm_tasks set status='cancelled',cancelled_at=now(),cancellation_reason='Synthetic taskless fixture' where lead_id='${taskless}';
+ -- M-A2 (137): an active prospect with no open action is refused (23514); « Sans prochaine action » stays
+ -- a NEW prospect with its first contact, so « À traiter » still lists it (priority 2) for the search below.
+ begin;do $fixture$ declare t public.crm_tasks%rowtype;begin
+ begin
+  for t in select * from public.crm_tasks where lead_id='${taskless}' and status='open' loop perform crm_security.finish_task(t,true,'Synthetic missing action',gen_random_uuid()::text);end loop;
+  set constraints all immediate;
+  raise exception 'FAIL work-calendar: an active prospect without an action was accepted';
+ exception when check_violation then null;
+ end;
+ set constraints all deferred;
+end $fixture$;commit;
  update public.crm_tasks set due_at=now()-interval '1 minute',assigned_to='${actor}' where lead_id='${lead}';`);
  const types=['first_contact','contact_attempt','callback','whatsapp_followup','confirm_placement_test','post_test_followup','center_visit','enrollment_followup'];
  // RWR-r5 §4.2: the work queue is one row per prospect (its next action), so a paged
@@ -217,7 +234,7 @@ try {
  delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));
  with removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where actor_id in(${ids}) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) or lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
- alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submission_attribution enable trigger crm_attribution_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
+ set constraints all immediate;alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submission_attribution enable trigger crm_attribution_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});drop index public.o3_test_cleanup_activity_task,public.o3_test_cleanup_activity_prior,public.o3_test_cleanup_task_source,public.o3_test_cleanup_task_completion,public.o3_test_cleanup_task_prior,public.o3_test_cleanup_lead_conversion;commit;`);}
  assert.equal(sql("select count(*) from pg_indexes where schemaname='public' and indexname like 'o3_test_cleanup_%'"),'0');
  assert.equal(sql('select count(*) from public.crm_followup_policies'),'0');

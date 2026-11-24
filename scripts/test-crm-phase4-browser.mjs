@@ -16,7 +16,10 @@ const sql=s=>execFileSync('psql',['-X','-qAt','-h','127.0.0.1','-p','54322','-U'
 const quote=s=>"'"+String(s).replaceAll("'","''")+"'";
 const run='phase4-'+randomUUID(),password=randomBytes(24).toString('base64url'),users=[];
 let browser,actor;const pageErrors=[];
-const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};set local role authenticated;select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
+// M-A2 (137) revoked these wrappers for API roles: fixture-only calls to them run in a trusted
+// session (same JWT claim, same rows); every other call still runs as authenticated.
+const REVOKED=new Set(['add_note','record_call_outcome','record_whatsapp','record_conversation','record_conversation_decision','qualify_lead','schedule_task','complete_task','cancel_task','close_lost','close_not_qualified','reopen_lead']);
+const rpc=(name,data,id=actor,key=randomUUID())=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(id)};${REVOKED.has(name)?'':'set local role authenticated;'}select public.crm_${name}(${quote(key)},${quote(JSON.stringify(data))}::jsonb);commit;`));
 const detail=id=>JSON.parse(sql(`begin;set local request.jwt.claim.sub=${quote(actor)};select public.crm_get_workspace_detail('${id}');commit;`));
 const act=(name,id,data={})=>rpc(name,{lead_id:id,expected_version:detail(id).version,...data});
 // RWR-r5 §4.4: an agreed time must fall inside the centre hours. A Wednesday at 10:30 on the
@@ -165,8 +168,17 @@ try {
  const overdue=intake('Urgence synthétique'),stale=intake('Relance synthétique'),taskless=intake('Sans action synthétique');
  sql(`begin;set local request.jwt.claim.sub='${actor}';update public.crm_tasks set due_at=now()-interval '7 days' where lead_id='${overdue}';
  update public.crm_leads set status='CONTACTING',created_at=now()-interval '4 days' where id='${stale}';update public.crm_tasks set due_at=now()+interval '3 days' where lead_id='${stale}';
- -- A pre-D1 shape the writers no longer produce: an active prospect with no open action.
- do $fixture$ declare t public.crm_tasks%rowtype;begin for t in select * from public.crm_tasks where lead_id='${taskless}' loop perform crm_security.finish_task(t,true,'Synthetic missing action',gen_random_uuid()::text);end loop;end $fixture$;
+ -- M-A2 (137): an active prospect with no open action is refused (23514, crm_next_action.exactly_one);
+ -- « Sans action synthétique » stays a NEW prospect with its first contact, listed in « À traiter » (priority 2).
+ do $fixture$ declare t public.crm_tasks%rowtype;begin
+ begin
+  for t in select * from public.crm_tasks where lead_id='${taskless}' and status='open' loop perform crm_security.finish_task(t,true,'Synthetic missing action',gen_random_uuid()::text);end loop;
+  set constraints all immediate;
+  raise exception 'FAIL phase4: an active prospect without an action was accepted';
+ exception when check_violation then null;
+ end;
+ set constraints all deferred;
+end $fixture$;
  alter table public.crm_submissions disable trigger crm_submission_immutable;
  update public.crm_submissions set form_answers='[{"key":"age","label":"Âge déclaré","value":8,"value_type":"number","label_source":"synthetic"},{"key":"days","label":"Jours souhaités","value":["Mercredi","Samedi"],"value_type":"array","label_source":"synthetic"},{"key":"ready","label":"Disponible","value":true,"value_type":"boolean","label_source":"synthetic"},{"key":"campaign_id","label":"Campagne","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"leadgen_id","label":"Référence","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"},{"key":"financial_balance","label":"Solde","value":"PRIVATE-SENTINEL","value_type":"string","label_source":"synthetic"}]' where lead_id='${lead}';
  alter table public.crm_submissions enable trigger crm_submission_immutable;commit;`);
@@ -214,13 +226,14 @@ try {
  if(browser)await browser.close();
  if(users.length){const ids=users.map(u=>quote(u.id)).join(',');sql(`begin;
  lock table public.placement_tests,public.crm_activities,public.crm_command_requests,public.crm_contacts,public.crm_followup_policies,public.crm_leads,public.crm_submission_attribution,public.crm_submissions,public.crm_tasks in access exclusive mode;
- alter table public.crm_activities disable trigger crm_activities_immutable;alter table public.crm_submissions disable trigger crm_submission_immutable;alter table public.crm_command_requests disable trigger crm_requests_immutable;alter table public.crm_followup_policies disable trigger crm_policy_immutable;
+ alter table public.placement_tests disable trigger crm_placement_integrity;alter table public.crm_activities disable trigger crm_activities_immutable;alter table public.crm_submissions disable trigger crm_submission_immutable;alter table public.crm_command_requests disable trigger crm_requests_immutable;alter table public.crm_followup_policies disable trigger crm_policy_immutable;
  -- RWR-r5 §4.2: an appointment « avec test de niveau » carries a planned test row.
  with removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id) select count(*) from removed_tasks;
- alter table public.placement_tests disable trigger crm_placement_integrity;delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));alter table public.placement_tests enable trigger crm_placement_integrity;
+ delete from public.placement_tests where crm_lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})));
  with removed_tasks as(delete from public.crm_tasks where lead_id in(select id from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids}))) returning id),removed_activities as(delete from public.crm_activities where actor_id in(${ids}) returning id),removed_submissions as(delete from public.crm_submissions where resolved_by in(${ids}) returning id),removed_leads as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${ids})) returning id) select count(*) from removed_leads;
  delete from public.crm_contacts where created_by in(${ids});delete from public.crm_command_requests where actor_scope in(${ids});delete from public.crm_followup_policies where created_by in(${ids});
- alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
+ -- M-A2 (137): the deferred checks fire once the prospects are gone, before the ALTER.
+ set constraints all immediate;alter table public.placement_tests enable trigger crm_placement_integrity;alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${ids});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;delete from public.activity_log where actor_id in(${ids}) or target_id in(${ids});delete from public.rate_limits where user_id in(${ids});commit;`);}
  console.log('PASS synthetic browser fixtures removed; history guards restored');
 }

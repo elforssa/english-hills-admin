@@ -72,6 +72,14 @@ def command(name, payload):
     return json.loads(out.stdout.strip())
 
 
+
+def trusted(name, payload):
+    # RWR-r5 PR A2 (migration 137): crm_qualify_lead is revoked from authenticated; as
+    # fixture setup it runs from the trusted postgres session as the same staff member, so
+    # the converted enrolment fixture is unchanged.
+    out = sql(f"begin; set local request.jwt.claim.sub={quote(actor)}; select public.crm_{name}({quote(uuid.uuid4())}::uuid,{quote(json.dumps(payload))}::jsonb); commit;")
+    return json.loads(out.stdout.strip())
+
 def pay(payload, check=True):
     body = {'payment_method': 'Espèces', 'idempotency_key': str(uuid.uuid4()), **payload}
     result = sql(as_actor(f"select public.create_charge_payment({quote(json.dumps(body))}::jsonb);"), check)
@@ -170,7 +178,7 @@ from jsonb_each_text({quote(json.dumps(students))}::jsonb) x(k,v);""")
     command('create_followup_policy', {'weekly_hours': hours})
     lead = command('create_manual_lead', {'display_name': 'Batch E race', 'learner_name': 'Batch E race learner',
                                           'source_label': 'Manual'})['lead']['id']
-    version = command('qualify_lead', {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone',
+    version = trusted('qualify_lead', {'lead_id': lead, 'expected_version': 1, 'conversation_channel': 'phone',
                                        'note': 'Enrollment agreed', 'qualification_step': 'enrollment',
                                        'next_task': {'task_type': 'enrollment_followup',
                                                      'due_at': value("select (now()+interval '1 day')::text")}})['lead']['version']

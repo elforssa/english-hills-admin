@@ -1,22 +1,26 @@
 -- RWR-r5 invariant 14 (§4.2 inventory): only the single writer and its primitives
--- write crm_tasks. d1_revert is the one named, time-boxed exception (§10, until M-A2).
+-- write crm_tasks. d1_revert was the one named, time-boxed exception: M-A2 (PR A2,
+-- migration 137) drops it, and this test fails if it, or any D1 function, still exists.
 \set ON_ERROR_STOP on
 begin;
 create function pg_temp.ok(value boolean,label text) returns void language plpgsql as $$ begin
  if value is not true then raise exception 'FAIL: %',label; end if;
 end $$;
 do $$ declare found text[]; expected text[]:=array[
- 'crm_security.d1_revert()',
  'crm_security.finish_task(crm_tasks,boolean,text,text,text,text)',
  'crm_security.new_task(crm_leads,jsonb,text,text,smallint,text,uuid,uuid,uuid,boolean,text)',
  'crm_security.set_next_action(crm_leads,jsonb,text,text)'];
 begin
+ -- M-A2 removed the time-boxed exception and the rest of D1 (plan §4.2, §10).
+ perform pg_temp.ok(to_regprocedure('crm_security.d1_revert()') is null,'d1_revert dropped by M-A2 (PR A2)');
+ perform pg_temp.ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='crm_security' and p.proname like 'd1\_%'),
+  'no D1 function left after M-A2');
  -- Every function in every non-system schema, static SQL.
  select coalesce(array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text),'{}') into found
  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
  where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg_toast%'
  and p.prosrc ~* '(insert\s+into|update|delete\s+from|merge\s+into)\s+(public\.)?"?crm_tasks"?\M';
- perform pg_temp.ok(found=expected,'crm_tasks writers are exactly the writer, its primitives and d1_revert: '||array_to_string(found,', '));
+ perform pg_temp.ok(found=expected,'crm_tasks writers are exactly the writer and its primitives: '||array_to_string(found,', '));
  -- No function builds a crm_tasks write dynamically.
  perform pg_temp.ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname not in ('pg_catalog','information_schema') and p.prosrc ~* 'execute' and p.prosrc ~* 'crm_tasks' and p.prosrc ~* '(insert|update|delete)'
@@ -36,5 +40,5 @@ begin
   where n.nspname not in ('pg_catalog','information_schema') and p.prosrc ~* 'crm_security\.(finish_task|cancel_tasks)\s*\('
   and p.oid::regprocedure::text not in ('crm_security.set_next_action(crm_leads,jsonb,text,text)','crm_security.cancel_tasks(uuid,text,text,boolean)')),'only set_next_action closes tasks (cancel_tasks is its own helper)');
 end $$;
-\echo PASS crm_tasks writer inventory: set_next_action, new_task, finish_task, d1_revert only
+\echo PASS crm_tasks writer inventory: set_next_action, new_task, finish_task only; d1_revert dropped
 rollback;

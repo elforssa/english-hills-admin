@@ -145,7 +145,16 @@ do $$ declare k text; answer jsonb; l uuid; newer uuid; older uuid; r jsonb; r2 
  for i in 4..7 loop
   perform pg_temp.actor(i);perform pg_temp.denied(format('select public.crm_record_conversation_decision(%L,%L)',gen_random_uuid(),d),'42501');
  end loop;
- perform pg_temp.ok(not has_function_privilege('anon',fn,'execute') and not has_function_privilege('service_role',fn,'execute') and has_function_privilege('authenticated',fn,'execute'),'decision grants');
+ -- RWR-r5 M-A2 (137) revokes the wrapper from every API role (« Noter un échange », crm_log_exchange,
+ -- replaces it); the behaviour above still runs from this trusted session. As authenticated: 42501.
+ perform pg_temp.ok(not has_function_privilege('anon',fn,'execute') and not has_function_privilege('service_role',fn,'execute') and not has_function_privilege('authenticated',fn,'execute'),'decision grants: revoked by M-A2');
+ perform pg_temp.actor(1);
+ begin
+  perform set_config('role','authenticated',true);
+  perform public.crm_record_conversation_decision(gen_random_uuid(),d);
+  raise exception 'FAIL decision wrapper ran for authenticated after M-A2';
+ exception when insufficient_privilege then null;
+ end;
  perform pg_temp.ok((select prosecdef and proconfig=array['search_path=pg_catalog, pg_temp'] from pg_proc where oid=fn),'decision pinned definer');
 end $$;
 

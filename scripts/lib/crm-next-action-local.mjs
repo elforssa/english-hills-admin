@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { DAY_SHIFT } from './centre-days.mjs';
 
 export const PORT = process.env.CRM_LOCAL_DB_PORT || '54322';
 const ARGS = ['-X', '-qAt', '-h', '127.0.0.1', '-p', PORT, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'];
@@ -97,13 +98,15 @@ export function removeStaff(ids) {
  delete from public.placement_tests where crm_lead_id in(${mine});
  with a as(delete from public.crm_activities where actor_id in(${list}) returning id),s as(delete from public.crm_submissions where resolved_by in(${list}) returning id),l as(delete from public.crm_leads where contact_id in(select id from public.crm_contacts where created_by in(${list})) returning id) select count(*) from l;
  delete from public.crm_contacts where created_by in(${list});delete from public.crm_command_requests where actor_scope in(${list});delete from public.crm_followup_policies where created_by in(${list});
+ set constraints all immediate; -- M-A2 (137): fire the deferred checks (prospects are gone) before the ALTERs
  alter table public.crm_activities enable trigger crm_activities_immutable;alter table public.crm_submissions enable trigger crm_submission_immutable;alter table public.crm_command_requests enable trigger crm_requests_immutable;alter table public.crm_followup_policies enable trigger crm_policy_immutable;alter table public.placement_tests enable trigger crm_placement_integrity;
  alter table public.profiles disable trigger role_security_guard;delete from auth.users where id in(${list});update role_security.director_guard set director_count=(select count(*) from profiles where role='director');alter table public.profiles enable trigger role_security_guard;
  delete from public.activity_log where actor_id in(${list}) or target_id in(${list});delete from public.rate_limits where user_id in(${list});commit;`);
 }
 
-// A time inside the current policy's window ('calling' or 'opening'), `days` ahead on the centre clock.
+// A time inside the current policy's window ('calling' or 'opening'), `days` ahead on the centre clock
+// (plus CRM_TEST_DAY_SHIFT for a weekday sweep, scripts/lib/centre-days.mjs).
 export function slotAt(kind, days, hhmm = '16:00') {
   return sql(`select to_json(crm_security.window_at(crm_security.current_policy_id(),${q(kind)},
-   (((now() at time zone public.centre_utc_offset())::date+${Number(days)})::timestamp+${q(hhmm)}::time) at time zone public.centre_utc_offset()))#>>'{}'`);
+   (((now() at time zone public.centre_utc_offset())::date+${Number(days) + DAY_SHIFT})::timestamp+${q(hhmm)}::time) at time zone public.centre_utc_offset()))#>>'{}'`);
 }

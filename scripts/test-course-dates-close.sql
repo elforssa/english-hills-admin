@@ -473,9 +473,10 @@ create function pg_temp.lead() returns uuid language plpgsql as $$ declare l uui
   perform pg_temp.act(3);
   l := (public.crm_create_manual_lead(gen_random_uuid(), jsonb_build_object('display_name', 'CDC parent',
     'learner_name', 'CDC CRM child', 'phone', '0671999001', 'source_label', 'Phone'))->'lead'->>'id')::uuid;
-  perform public.crm_qualify_lead(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
-    'conversation_channel', 'phone', 'note', 'x', 'qualification_step', 'enrollment',
-    'next_task', jsonb_build_object('task_type', 'enrollment_followup', 'due_at', now() + interval '1 day')));
+  -- RWR-r5 M-A2 revokes crm_qualify_lead: « On a parlé » → « Inscrire maintenant » qualifies at step enrollment (OD-11).
+  perform public.crm_log_exchange(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
+    'channel', 'phone', 'result', 'spoke', 'note', 'x',
+    'next', jsonb_build_object('enrol', jsonb_build_object('due_at', now() + interval '1 day'))));
   perform public.crm_enroll_and_collect(gen_random_uuid(), jsonb_build_object(
     'enrollment', jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l), 'student_choice', 'new',
       'learner_name', 'CDC CRM child', 'birth_date', '2012-03-04', 'session_type', 'Mise à niveau', 'school_year', pg_temp.yr(),

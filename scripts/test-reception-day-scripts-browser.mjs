@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
 import { LIVE_POLICY, createStaff, localEnv, q, removeStaff, slotAt, sql } from './lib/crm-next-action-local.mjs';
+import { openDaySql, openSlotSql } from './lib/centre-days.mjs';
 
 assertLocalFeatureBranch();
 const env = localEnv(), app = 'http://localhost:3101', run = 'day-' + randomUUID();
@@ -177,7 +178,8 @@ try {
   // 7 — Callback rescheduled twice, then cancelled: ≤ 9, never a second action.
   phase = 'script 7';
   const callback = intake(reception.id, 'Jour 7 rappel');
-  rpc(reception.id, 'log_exchange', { lead_id: callback, expected_version: version(callback), channel: 'phone', result: 'spoke', next: { task_type: 'callback', schedule_kind: 'appointment', due_at: slotAt('calling', 2, '16:00') } });
+  // Exactly 16:00 on a day with calling hours at 16:00: slotAt('calling', 2, …) clamps Friday + 2 (Sunday) to Monday 15:00.
+  rpc(reception.id, 'log_exchange', { lead_id: callback, expected_version: version(callback), channel: 'phone', result: 'spoke', next: { task_type: 'callback', schedule_kind: 'appointment', due_at: sql(`select to_json(${openSlotSql(2, '16:00', 'calling')})#>>'{}'`) } });
   const agreed = detail(reception.id, callback).next_action;
   await tasks(bucketOf(agreed), callback);
   const s7 = script('7 callback rescheduled twice, then cancelled', 9, 'the Tâches row');
@@ -249,7 +251,8 @@ try {
   await dialog().getByRole('heading', { name: 'Noter un échange' }).waitFor();
   await dialog().getByLabel('On a parlé', { exact: true }).check();
   await dialog().getByLabel('Rendez-vous au centre', { exact: true }).check();
-  await dialog().getByLabel('Date', { exact: true }).fill(sql(`select (((now() at time zone public.centre_utc_offset())::date+5)::text)`));
+  // The first centre date from tomorrow with opening hours (a fixed today + 5 is the closed Sunday on a Tuesday).
+  await dialog().getByLabel('Date', { exact: true }).fill(sql(`select ${openDaySql(1)}`));
   const reTime = dialog().getByLabel('Heure', { exact: true });
   await page.waitForFunction(el => !el.disabled && el.options.length > 1, await reTime.elementHandle());
   await reTime.selectOption((await reTime.locator('option').evaluateAll(os => os.map(o => o.value))).filter(Boolean)[0]);

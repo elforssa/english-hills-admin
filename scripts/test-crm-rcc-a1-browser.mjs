@@ -73,7 +73,12 @@ try {
  await exchange('Téléphone','On a parlé');await pick('En attente du prospect');await submit();await toast('Échange enregistré');await closed();
  let sent=logged.at(-1);assert.equal(sent.channel,'phone');assert.equal(sent.result,'spoke');assert.deepEqual(sent.next,{task_type:'awaiting_prospect'});assert(!('note' in sent),'no prose');
  saved=await settle(lead,d=>d.status==='ENGAGED');assert.equal(saved.next_action.task_type,'awaiting_prospect');
- assert.equal(sql(`select (due_at at time zone public.centre_utc_offset())::date-(now() at time zone public.centre_utc_offset())::date from public.crm_tasks where id=${quote(saved.next_action.id)}`),'5','server set the relance five centre days ahead');
+ // The preset's midnight (today + n centre days) moved to the first calling window from it, as rcc-a1.sql's
+ // oracle does from this policy's hours: a day without hours (the closed Sunday) moves to the next one.
+ const presetDue=n=>{const [today,stored]=sql(`select (now() at time zone public.centre_utc_offset())::date::text||'|'||to_char(due_at at time zone public.centre_utc_offset(),'YYYY-MM-DD HH24:MI') from public.crm_tasks where id=${quote(saved.next_action.id)}`).split('|');
+  const day=new Date(`${today}T00:00:00Z`);day.setUTCDate(day.getUTCDate()+n);const dow=d=>(d.getUTCDay()+6)%7+1;
+  while(!hours[dow(day)].length)day.setUTCDate(day.getUTCDate()+1);return [stored,`${day.toISOString().slice(0,10)} ${hours[dow(day)][0][0]}`];};
+ {const [stored,expected]=presetDue(5);assert.equal(stored,expected,'server set the relance five centre days ahead, in the first calling window from that midnight');}
  await drawer().getByText('En discussion',{exact:true}).first().waitFor();
  // « Changer » → team reminder « Dans 2 jours »: a preset, resolved by the server.
  const changed=[];page.on('request',request=>{if(request.url().endsWith('/rpc/crm_change_next_action'))changed.push(request.postDataJSON().p_data);});
@@ -81,7 +86,7 @@ try {
  await dialog().getByLabel('Quand',{exact:true}).selectOption('in_2_days');await submit();await toast('Prochaine action enregistrée');await closed();
  sent=changed.at(-1);assert.equal(sent.next.due_preset,'in_2_days');assert.equal(sent.next.schedule_kind,'reminder');assert(!('due_at' in sent.next),'no browser time');
  saved=await settle(lead,d=>d.next_action?.schedule_kind==='reminder');
- assert.equal(sql(`select (due_at at time zone public.centre_utc_offset())::date-(now() at time zone public.centre_utc_offset())::date from public.crm_tasks where id=${quote(saved.next_action.id)}`),'2','server resolved « Dans 2 jours » on the centre clock');
+ {const [stored,expected]=presetDue(2);assert.equal(stored,expected,'server resolved « Dans 2 jours » on the centre clock, in the first calling window from that midnight');}
  await drawer().getByText('Rappel interne',{exact:true}).waitFor();
  console.log('PASS outcome-led call: awaiting relance and team reminder resolved by the server, no prose, stage derived, no foreground reassignment');
  // In person, an agreed visit qualifies (OD-11); the visit is always an agreed appointment.

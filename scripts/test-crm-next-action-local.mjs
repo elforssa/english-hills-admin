@@ -135,10 +135,16 @@ try {
   eq(nextAction(lead).task_type, 'awaiting_prospect', 'the reopened prospect waits, with no date forced');
   invariants(lead, 'reopen');
 
-  // An old wrapper over HTTP still leaves one action (old browser tabs, §4.3).
-  const legacy = await command(tokens.reception, 'crm_schedule_task', { lead_id: lead, expected_version: version(lead), task: { task_type: 'callback', due_preset: 'tomorrow' } });
-  eq(legacy.status, 200, 'old crm_schedule_task still callable before M-A2');
-  invariants(lead, 'old wrapper');
+  // M-A2 (137): the old wrapper is refused over HTTP (42501) and changes nothing; the same
+  // change goes through crm_change_next_action and still leaves one action (§4.3).
+  const beforeLegacy = version(lead);
+  const legacy = await command(tokens.reception, 'crm_schedule_task', { lead_id: lead, expected_version: beforeLegacy, task: { task_type: 'callback', due_preset: 'tomorrow' } });
+  eq([legacy.status, legacy.body.code], [403, '42501'], 'old crm_schedule_task refused after M-A2');
+  eq(version(lead), beforeLegacy, 'the refused wrapper changed nothing');
+  const replaced = await command(tokens.reception, 'crm_change_next_action', { lead_id: lead, expected_version: beforeLegacy, expected_action_id: nextAction(lead).id, next: { task_type: 'callback', due_preset: 'tomorrow' } });
+  eq(replaced.status, 200, 'the same change through crm_change_next_action');
+  eq(nextAction(lead).task_type, 'callback', 'the replacement set the callback');
+  invariants(lead, 'replacement command');
 
   // §4.2/§4.8: an inbound call created with its first exchange — one transaction, QUALIFIED with
   // the appointment and its test, « Premier contact » never scheduled, one history entry.

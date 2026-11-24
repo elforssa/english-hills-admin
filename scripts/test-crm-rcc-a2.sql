@@ -336,18 +336,19 @@ do $$ declare l uuid; d jsonb; r jsonb; t public.crm_tasks%rowtype; target times
  select * into strict t from public.crm_tasks where id=keep;
  perform pg_temp.ok(t.status='open' and r->'enrollment_followup'=jsonb_build_object('id',keep,'created',false)||crm_security.scheduled_civil(t.due_at),'kept follow-up reported with created=false');
  perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open'),'still exactly one');
- -- Several open enrollment follow-ups: the earliest is retained and reported.
+ -- Several open enrollment follow-ups (the pre-D1 shape this case de-duplicated) can no
+ -- longer exist: since M-A2 (RWR-r5 PR A2) the unique index refuses a second open action.
  l:=pg_temp.lead('enrollment_followup','enrollment');select id into a from public.crm_tasks where lead_id=l and task_type='enrollment_followup' and status='open';
  perform pg_temp.actor(3);
- keep:=crm_security.new_task((select x from public.crm_leads x where id=l),jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day'),'a2-dup-early:'||l);
- c:=crm_security.new_task((select x from public.crm_leads x where id=l),jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '3 days'),'a2-dup-late:'||l);
- r:=pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"initial_status":"Confirmed"}');e:=(r->'enrollment'->>'id')::uuid;
- perform pg_temp.ok(r->'enrollment_followup'->>'id'=keep::text and not (r->'enrollment_followup'->>'created')::boolean,'earliest retained follow-up reported, never the last cancelled duplicate');
- perform pg_temp.ok(r->'enrollment_followup'=jsonb_build_object('id',keep,'created',false)||crm_security.scheduled_civil((select due_at from public.crm_tasks where id=keep)),'retained task time');
- perform pg_temp.ok((select bool_and(status='cancelled' and cancellation_reason='Suivi de cette inscription déjà prévu') from public.crm_tasks where id in(a,c)),'duplicates cancelled with today''s reason');
- perform pg_temp.ok((select count(*)=2 from public.crm_activities where source_key in('enrollment-duplicate:'||e||':'||a,'enrollment-duplicate:'||e||':'||c)),'duplicates cancelled with today''s source keys');
+ begin
+  c:=crm_security.new_task((select x from public.crm_leads x where id=l),jsonb_build_object('task_type','enrollment_followup','due_at',now()+interval '1 day'),'a2-dup-early:'||l);
+  raise exception 'FAIL: a second open enrolment action was accepted';
+ exception when unique_violation then
+  perform pg_temp.ok(sqlerrm like '%crm_tasks_one_open_per_lead%','second open action refused by crm_tasks_one_open_per_lead');
+ end;
+ perform pg_temp.ok((select count(*)=1 from public.crm_tasks where lead_id=l and status='open') and crm_security.next_action_id(l)=a,'the one enrolment action stays');
 end $$;
-select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept and earliest-retained results';
+select 'PASS follow-up default, explicit window resolution, past/malformed/empty/infinite reasons, kept follow-up; a second open one refused (M-A2)';
 -- RWR-r5 review of #208 (important 7) and re-review (owner decision 1): linking a legacy
 -- unconfirmed enrollment replaces the appointment by « Finaliser l'inscription », which
 -- carries the appointment's planned test (a real link). Moving the enrolment action to
@@ -413,21 +414,23 @@ do $$ declare l uuid; k uuid; p uuid; f uuid; begin
  perform pg_temp.act('close_prospect',l,'{"status":"LOST","reason":"price"}');
  perform pg_temp.ok((select status='Annulé' from public.placement_tests where id=p),'closing cancels the carried test');
 end $$;
--- An open « Finaliser l'inscription » already exists (kept by the enrolment start) beside a
--- legacy duplicate appointment with a planned test: the kept action takes the test.
-do $$ declare l uuid; f uuid; v uuid; p uuid; begin
+-- An open « Finaliser l'inscription » beside a legacy duplicate appointment (the pre-D1
+-- shape this case resolved, there with a planned test) can no longer exist: since M-A2 (RWR-r5 PR A2)
+-- the unique index refuses the second open action, even written directly.
+do $$ declare l uuid; f uuid; v uuid; begin
  perform pg_temp.actor(3);
  l:=pg_temp.lead('enrollment_followup','enrollment');
  select id into f from public.crm_tasks where lead_id=l and status='open' and task_type='enrollment_followup';
  set local session_replication_role=replica;
- insert into public.placement_tests(student_name,date_test,heure,status,crm_lead_id,examinateur)
- values('A2 learner',(now() at time zone public.centre_utc_offset())::date+3,'11:00','Planifié',l,'Fixture') returning id into p;
- insert into public.crm_tasks(lead_id,task_type,due_at,schedule_kind,placement_test_id,source_kind,source_key)
- values(l,'center_visit',now()+interval '3 days','appointment',p,'manual','a2-kept-dup:'||l) returning id into v;
+ begin
+  insert into public.crm_tasks(lead_id,task_type,due_at,schedule_kind,source_kind,source_key)
+  values(l,'center_visit',now()+interval '3 days','appointment','manual','a2-kept-dup:'||l) returning id into v;
+  raise exception 'FAIL: a duplicate open appointment was accepted';
+ exception when unique_violation then
+  perform pg_temp.ok(sqlerrm like '%crm_tasks_one_open_per_lead%','duplicate appointment refused by crm_tasks_one_open_per_lead');
+ end;
  set local session_replication_role=origin;
- perform pg_temp.start_direct(pg_temp.legacy_pick(l)||'{"followup_at":null,"initial_status":"Confirmed"}');
- perform pg_temp.ok(crm_security.next_action_id(l)=f and (select status='cancelled' from public.crm_tasks where id=v),'the existing enrolment action is kept, the duplicate appointment closed');
- perform pg_temp.ok((select placement_test_id=p from public.crm_tasks where id=f) and (select status='Planifié' from public.placement_tests where id=p),'the kept enrolment action takes the duplicate''s planned test');
+ perform pg_temp.ok(crm_security.next_action_id(l)=f and (select count(*)=1 from public.crm_tasks where lead_id=l and status='open'),'the enrolment action stays the one action');
 end $$;
 select 'PASS legacy enrolment link: « Finaliser l''inscription » carries the kept test; replacing it or closing cancels the test; rescheduling it in place or converting keeps the test';
 
