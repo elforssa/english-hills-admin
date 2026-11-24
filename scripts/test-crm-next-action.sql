@@ -168,7 +168,10 @@ do $$ declare a uuid; b uuid; s uuid:=gen_random_uuid(); slot timestamptz:=pg_te
  perform pg_temp.book(a,slot);
  perform pg_temp.refused('log_exchange',b,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',slot+interval '30 minutes')),'22023','crm_next_action.overlap');
  perform pg_temp.refused('log_exchange',b,jsonb_build_object('channel','phone','result','spoke','next',jsonb_build_object('task_type','center_visit','due_at',slot-interval '30 minutes','with_test',true)),'22023','crm_next_action.overlap');
- perform pg_temp.book(b,pg_temp.at('opening',6,'11:00'));
+ -- The calendar day after a's appointment, whatever today's weekday: pg_temp.at('opening',6)
+ -- met a's slot when day 5 fell on the closed Sunday (both moved to Monday 14:00).
+ perform pg_temp.book(b,crm_security.window_at(crm_security.current_policy_id(),'opening',
+  (((slot at time zone public.centre_utc_offset())::date+1)::timestamp+time '11:00') at time zone public.centre_utc_offset()));
  perform pg_temp.one(b,'non-overlapping appointment');
 end $$;
 \echo PASS T3 overlap refused across prospects of one student
