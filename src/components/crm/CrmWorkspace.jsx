@@ -133,9 +133,10 @@ export default function CrmWorkspace({
     {LeadDetailSheet => <LeadDetailSheet leadId={selected} initialAction={initialAction} initialTask={initialTask} onRestoreFocus={restoreLeadFocus} onClose={() => selectLead(null)} />}
   </LazyOverlay>}
   {manual && <LazyOverlay loader={crmActionDialog} kind="form" onClose={() => setManual(false)} onRestoreFocus={() => manualOrigin.current?.focus()}>
-    {CrmActionDialog => <CrmActionDialog action="manual" returnFocusRef={manualOrigin} onClose={() => setManual(false)} onCreated={id => {
+    {CrmActionDialog => <CrmActionDialog action="manual" returnFocusRef={manualOrigin} onClose={() => setManual(false)} onCreated={(id, enrol) => {
       setManual(false);
-      selectLead(id);
+      // « Inscrire maintenant »: the drawer opens on « Inscrire et encaisser » once the prospect is qualified.
+      if (enrol) routeAction(id, 'enrollment'); else selectLead(id);
     }} onCandidate={id => {
       setManual(false);
       router.push(`/crm/leads?contact=${id}`);

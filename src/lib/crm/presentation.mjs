@@ -99,8 +99,11 @@ export function noteRequired({ action, outcomeLed, interaction, reason, step, un
     || result === 'other_step'
     || result === 'not_suitable' && unsuitableReason === 'other';
 }
+// RWR-r5 C1 (OD-2 = A): the enrolment action after « Réserver sans paiement ».
+export const DEPOSIT_ACTION = 'Encaisser l’acompte';
 export function taskTitle(task) {
   if (!task) return 'Action';
+  if (task.task_type === 'enrollment_followup' && String(task.instructions || '').startsWith(DEPOSIT_ACTION)) return DEPOSIT_ACTION;
   return `${TASKS[task.task_type] || 'Action'}${FOLLOWUP_REASONS[task.followup_reason] ? ` · ${FOLLOWUP_REASONS[task.followup_reason]}` : ''}`;
 }
 export const OUTCOMES = {

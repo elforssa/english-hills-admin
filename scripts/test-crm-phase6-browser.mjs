@@ -65,8 +65,10 @@ try {
  const before=counts();await open(lead);await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).waitFor();await screenshot({path:join(tmpdir(), 'hills-phase6-before.png'),fullPage:false});
  await page.getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await dialog().getByLabel('Nom de l’apprenant',{exact:true}).waitFor();assert.deepEqual(counts(),before,'opening dialog creates nothing');assert.equal(await dialog().getByLabel('Nom de l’apprenant',{exact:true}).inputValue(),'Adam inscription CRM');await screenshot({path:join(tmpdir(), 'hills-phase6-dialog.png'),fullPage:false});
  await dialog().getByRole('button',{name:'Créer un nouvel apprenant',exact:true}).click();
- const decision=dialog().getByLabel('J’ai vérifié les correspondances : il s’agit d’un autre apprenant.',{exact:true});if(await decision.count())await decision.check();
- await dialog().getByRole('button',{name:'Continuer',exact:true}).click();await expect(dialog().getByLabel('Niveau proposé',{exact:true})).toHaveValue('Child 2');assert.equal(await dialog().getByLabel('Démarrage',{exact:true}).count(),0,'no initial status choice');await dialog().getByLabel('Année scolaire',{exact:true}).fill('2026/2027');await dialog().getByRole('button',{name:'Continuer',exact:true}).click();await dialog().getByText('3 / 3 · Paiement').waitFor();assert.deepEqual(counts(),before,'payment step creates nothing');
+ // RWR-r5 C1 (§6.1): no matching learner → straight to step 2; otherwise confirm the review, then « Continuer ».
+ const decision=dialog().getByLabel('J’ai vérifié les correspondances : il s’agit d’un autre apprenant.',{exact:true});await dialog().getByText('2 / 3 · Inscription').or(decision).first().waitFor();
+ if(await decision.count()){await decision.check();await dialog().getByRole('button',{name:'Continuer',exact:true}).click();}
+ await expect(dialog().getByLabel('Niveau proposé',{exact:true})).toHaveValue('Child 2');assert.equal(await dialog().getByLabel('Démarrage',{exact:true}).count(),0,'no initial status choice');await dialog().getByLabel('Année scolaire',{exact:true}).fill('2026/2027');await dialog().getByRole('button',{name:'Continuer',exact:true}).click();await dialog().getByText('3 / 3 · Paiement').waitFor();assert.deepEqual(counts(),before,'payment step creates nothing');
  await dialog().getByLabel('Prix brut convenu',{exact:true}).fill('3000');await dialog().getByLabel('Montant payé aujourd’hui',{exact:true}).fill('1000');
  const requests=[];let drop=true;await page.route('**/rest/v1/rpc/crm_enroll_and_collect',async route=>{requests.push(route.request().postDataJSON());if(drop){drop=false;await route.fetch();await route.abort('failed');}else await route.continue();});
  await dialog().getByRole('button',{name:'Inscrire et encaisser',exact:true}).click();await dialog().getByRole('alert').filter({hasText:'Impossible de confirmer'}).waitFor();await dialog().getByRole('button',{name:'Inscrire et encaisser',exact:true}).dblclick();await dialog().getByRole('button',{name:'Terminé',exact:true}).waitFor();assert.equal(requests.length,2);assert.deepEqual(requests[0],requests[1]);await page.unroute('**/rest/v1/rpc/crm_enroll_and_collect');await done();
@@ -96,6 +98,10 @@ try {
  await context.close();const directorContext=await browser.newContext({viewport:{width:1440,height:1000}});await directorContext.route('**/*',route=>['localhost','127.0.0.1'].includes(new URL(route.request().url()).hostname)?route.continue():route.abort());page=await directorContext.newPage();page.on('pageerror',e=>pageErrors.push(e.message));await login(users[0]);await open(second);await page.getByText(/Direction : cette conversion nécessite une vérification/).waitFor();assert.deepEqual(pageErrors,[]);
  await page.goto(`${app}/receipts/new?student_id=${linked.enrollment.student_id}`);
  await page.getByText('Apprenant sélectionné',{exact:true}).waitFor();
+ // RWR-r5 C1 (§6.1): « Encaisser » opens on the oldest open balance (the CRM enrollment's own charge);
+ // « Nouvelle inscription » leads to the new-charge path checked below.
+ await page.locator('[data-balance-id] button[aria-pressed=true]').waitFor();
+ await page.getByRole('button',{name:'Nouvelle inscription',exact:true}).click();
  await page.getByText('Session *',{exact:true}).locator('..').locator('select').selectOption('Yearly');
  await page.getByText('Année scolaire *',{exact:true}).locator('..').locator('select').selectOption('2026/2027');
  const receiptChoice=page.getByText('Inscription à rattacher',{exact:true}).locator('..').locator('select');await receiptChoice.waitFor();

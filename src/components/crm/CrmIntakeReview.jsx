@@ -1,8 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useCrmRead, useCrmRefresh, crmRpc } from '@/lib/crm/queries';
+import { retryKey } from '@/lib/crm/presentation.mjs';
 import { Pager } from './CrmShared';
 
 function ReviewItem({ item, onDone }) {
@@ -12,18 +13,24 @@ function ReviewItem({ item, onDone }) {
   const [learner, setLearner] = useState(item.learner_name || '');
   const [program, setProgram] = useState(item.program_interest_text || '');
   const [busy, setBusy] = useState(false);
+  // RWR-r5 C1 (§6.1): one request key per opened item, reused while the decision is unchanged
+  // (a double click or a retry replays it); a ref lock stops a second click before the render.
+  const request = useRef(null), sending = useRef(false);
   async function resolve() {
-    setBusy(true);
+    if (sending.current) return;
+    sending.current = true; setBusy(true);
     try {
       const candidate = item.candidates.find(c => c.id === action);
       const contact = item.contact_candidates?.find(c => `contact:${c.id}` === action);
-      await crmRpc('crm_resolve_external_intake', { p_request: crypto.randomUUID(), p_submission: item.id,
+      const args = { p_submission: item.id,
         p_action: candidate ? 'attach' : contact ? 'new' : action,
         p_data: candidate ? { lead_id: candidate.id, expected_version: candidate.version } : action === 'new' || contact
-          ? { contact_name: name.trim(), learner_name: learner.trim() || (learnerOptional ? null : ''), program_interest_text: program.trim(), ...(contact ? { contact_id: contact.id, contact_version: contact.version } : {}) } : {} });
+          ? { contact_name: name.trim(), learner_name: learner.trim() || (learnerOptional ? null : ''), program_interest_text: program.trim(), ...(contact ? { contact_id: contact.id, contact_version: contact.version } : {}) } : {} };
+      request.current = retryKey(request.current, 'crm_resolve_external_intake', args);
+      await crmRpc('crm_resolve_external_intake', { p_request: request.current.key, ...args });
       toast.success('Demande traitée'); onDone();
     } catch { toast.error('Impossible de traiter cette demande. Actualisez et vérifiez les informations.'); }
-    finally { setBusy(false); }
+    finally { sending.current = false; setBusy(false); }
   }
   return <details className="border-t border-slate-100 px-4 py-3" data-testid="intake-review-item">
     <summary className="cursor-pointer text-sm font-medium text-slate-800">{item.contact_name || 'Contact à préciser'} · {item.learner_name || 'Apprenant à préciser'}</summary>

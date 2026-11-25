@@ -300,6 +300,10 @@
     "gate": "crm_director",
     "receptionist": "locked"
   },
+  "crm_reserve_without_payment(p_request_key uuid, p_data jsonb)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
   "crm_resolve_external_intake(p_request uuid, p_submission uuid, p_action text, p_data jsonb)": {
     "gate": "manual",
     "receptionist": "open",
@@ -370,6 +374,10 @@
     "receptionist": "not_staff",
     "md5": "95d53fb5b3dcfd66b7cbdbfbf5e00908"
   },
+  "find_duplicate_receipts(p_student uuid, p_charge uuid, p_amount numeric, p_date date)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
+  },
   "get_finance_charge_summary()": {
     "gate": "finance_staff",
     "receptionist": "locked"
@@ -405,6 +413,10 @@
     "gate": "manual",
     "receptionist": "not_staff",
     "md5": "c63babbd1cd124077033bd4d40f1a435"
+  },
+  "get_open_balances(p_student uuid)": {
+    "gate": "capability:manage_finance_operations",
+    "receptionist": "open"
   },
   "get_referral_breakdown()": {
     "gate": "invoker",

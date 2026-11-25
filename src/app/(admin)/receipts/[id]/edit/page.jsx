@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getBrowserClient } from '@/lib/supabase';
@@ -22,6 +22,10 @@ export default function ReceiptCorrection() {
   const [saving, setSaving] = useState(false);
   const [lastPayment, setLastPayment] = useState(false);
   const [reload, setReload] = useState(0);
+  // RWR-r5 C1 (§6.1, invariant 13): one request key per opening of this form, reused by a
+  // double click or a retry of the same reason; a new reason or a conflict reload takes a new
+  // one. The ref lock stops a second click before the first render.
+  const request = useRef(null), sending = useRef(false);
   useEffect(() => { getBrowserClient().from('receipts').select('*').eq('id', id).single().then(({ data }) => setReceipt(data)); }, [id, reload]);
   useEffect(() => {
     if (!receipt || role !== 'director') return undefined;
@@ -32,15 +36,17 @@ export default function ReceiptCorrection() {
 
   const voidReceipt = async () => {
     if (reason.trim().length < 3) return toast.error('Indiquez le motif de correction.');
+    if (sending.current) return;
     if (!confirm('Annuler ce paiement ? Le reçu original restera visible. Le montant de ce paiement redeviendra dû. Pour une entrée créée par erreur, utilisez Supprimer le reçu.')) return;
-    setSaving(true);
+    sending.current = true; setSaving(true);
+    if (request.current?.reason !== reason.trim()) request.current = { key: crypto.randomUUID(), reason: reason.trim() };
     const { data, error } = await getBrowserClient().rpc('void_financial_receipt', {
-      p_receipt_id: id, p_reason: reason.trim(), p_idempotency_key: crypto.randomUUID(),
-    });
+      p_receipt_id: id, p_reason: request.current.reason, p_idempotency_key: request.current.key,
+    }).finally(() => { sending.current = false; });
     if (error) {
       toast.error(correctionErrorMessage(error, 'Annulation non confirmée. Réessayez.')); setSaving(false);
-      // ADR-009: a conflict reloads the record so the notice below reflects the current state.
-      if (isRecordConflict(error)) { invalidateAfterFinance(queryClientInstance); setReload((value) => value + 1); }
+      // ADR-009: a conflict reloads the record (and a new request key) so the notice below reflects the current state.
+      if (isRecordConflict(error)) { request.current = null; invalidateAfterFinance(queryClientInstance); setReload((value) => value + 1); }
       return;
     }
     invalidateAfterFinance(queryClientInstance);

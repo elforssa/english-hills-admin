@@ -673,7 +673,7 @@ export default function GuideContent() {
 <header className="scn-head">
 <p className="kicker">Scénario C6</p>
 <h3>Inscrire un prospect&nbsp;: inscription et paiement en une fois</h3>
-<p className="when">Le prospect est <span className="st st-qual">Qualifié</span> et veut s’inscrire (prochaine action <b>Finaliser l’inscription</b> ou <b>Proposer l’inscription</b>). L’inscription et le paiement se font ensemble, dans la même fenêtre&nbsp;: une inscription n’existe qu’une fois payée.</p>
+<p className="when">Le prospect est <span className="st st-qual">Qualifié</span> et veut s’inscrire (prochaine action <b>Finaliser l’inscription</b>, <b>Encaisser l’acompte</b> ou <b>Proposer l’inscription</b>). L’inscription et le paiement se font ensemble, dans la même fenêtre&nbsp;: une inscription n’existe qu’une fois payée.</p>
 </header>
 <ol className="flow">
 <li><b>Prospect Qualifié</b><small>le projet est qualifié</small></li>
@@ -682,13 +682,16 @@ export default function GuideContent() {
 </ol>
 <ol className="steps">
 <li><p>Dans la fiche, section <b>Inscription</b>, cliquez sur <span className="ui">Inscrire et encaisser</span>. Le bouton n’existe que pour un prospect <span className="st st-qual">Qualifié</span> sans inscription.</p>
+<p><b>Visite qui paie tout de suite.</b> Dans <span className="ui">Ajouter un prospect</span>, choisissez l’origine «&nbsp;Visite au centre&nbsp;» et la prochaine action <span className="ui">Inscrire maintenant</span>&nbsp;: après <span className="ui">Enregistrer</span>, la fenêtre <span className="ui">Inscrire et encaisser</span> s’ouvre directement.</p>
 </li>
-<li><p><b>Étape 1/3, Apprenant.</b> Saisissez le <span className="ui">Nom de l’apprenant</span> et, si vous la connaissez, la date de naissance (pas dans le futur). La plateforme cherche les apprenants déjà connus&nbsp;: <span className="ui">Utiliser cet apprenant</span> s’il s’agit de lui, sinon <span className="ui">Créer un nouvel apprenant</span> et cochez «&nbsp;J’ai vérifié les correspondances&nbsp;: il s’agit d’un autre apprenant&nbsp;».</p>
+<li><p><b>Étape 1/3, Apprenant.</b> Saisissez le <span className="ui">Nom de l’apprenant</span> et, si vous la connaissez, la date de naissance (pas dans le futur). La plateforme cherche les apprenants déjà connus&nbsp;: <span className="ui">Utiliser cet apprenant</span> s’il s’agit de lui, sinon <span className="ui">Créer un nouvel apprenant</span>. Quand aucun apprenant ne correspond, ce clic passe directement à l’étape 2&nbsp;; sinon cochez «&nbsp;J’ai vérifié les correspondances&nbsp;: il s’agit d’un autre apprenant&nbsp;» puis <span className="ui">Continuer</span>.</p>
 </li>
 <li><p><b>Étape 2/3, Inscription.</b> Programme, année scolaire, niveau proposé et <span className="ui">Groupe (facultatif)</span> (ou «&nbsp;À affecter plus tard&nbsp;»). Le programme «&nbsp;Autre&nbsp;» n’est pas une inscription&nbsp;: il s’encaisse depuis la fiche apprenant (<a href="#q3">Q3</a>).</p>
 <p><b>L’année scolaire suit le groupe.</b> Dès que vous choisissez un groupe, son année scolaire remplit le champ <span className="ui">Année scolaire</span>, qui ne se modifie plus («&nbsp;L’année scolaire suit le groupe choisi.&nbsp;»). Pour une autre année, choisissez un groupe de cette année. Avec «&nbsp;À affecter plus tard&nbsp;», vérifiez vous-même l’année (format 2026/2027).</p>
 </li>
-<li><p><b>Étape 3/3, Paiement.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle avec son motif, le <span className="ui">Montant payé aujourd’hui</span>, la date et le mode de paiement (les règles sont dans le <a href="#regles-paiement">scénario Q3</a>), puis <span className="ui">Inscrire et encaisser</span>.</p>
+<li><p><b>Étape 3/3, Paiement.</b> Saisissez le <span className="ui">Prix brut convenu</span>, la <span className="ui">Remise</span> éventuelle avec son motif, le <span className="ui">Montant payé aujourd’hui</span>, la date et le mode de paiement (les règles sont dans le <a href="#regles-paiement">scénario Q3</a>), puis <span className="ui">Inscrire et encaisser</span>. Toutes les erreurs du paiement s’affichent en même temps, avant l’enregistrement.</p>
+<p><b>L’apprenant a déjà un engagement sans inscription</b> pour ce programme et cette année&nbsp;? La fenêtre l’affiche en haut, sélectionné, avec <span className="ui">Encaisser sur cet engagement</span>&nbsp;: saisissez seulement le montant payé. Aucun deuxième engagement n’est créé. <span className="ui">Nouvelle session</span> sert uniquement à une vraie deuxième inscription.</p>
+<p><b>Le prospect réserve mais ne paie pas aujourd’hui&nbsp;?</b> Choisissez <span className="ui">Réserver sans paiement</span>, saisissez le prix et l’<span className="ui">Échéance de l’acompte</span>. L’engagement est enregistré sans reçu, sans inscription et sans place dans un groupe&nbsp;; le prospect reste <span className="st st-qual">Qualifié</span> et sa prochaine action devient <b>Encaisser l’acompte</b>, à la date d’échéance. Le jour du paiement, rouvrez le prospect › <span className="ui">Inscrire et encaisser</span>&nbsp;: l’engagement réservé est déjà sélectionné.</p>
 </li>
 <li><p>La fenêtre affiche «&nbsp;Inscription confirmée · reçu&nbsp;…&nbsp;» (avec le numéro du reçu), puis la ligne «&nbsp;Groupe&nbsp;: …&nbsp;» (avec le nom du groupe choisi) ou «&nbsp;Groupe à affecter&nbsp;» (sans groupe), et le bouton <span className="ui">Ouvrir le reçu</span>. Avec une remise de 100&nbsp;%, le titre est «&nbsp;Inscription confirmée sans paiement (remise 100&nbsp;%)&nbsp;» et aucun reçu n’est émis. Le prospect passe aussitôt en <span className="st st-conv">Inscription confirmée</span> et sa prochaine action est terminée. Sans groupe, terminez plus tard par le <a href="#q9">scénario Q9</a>.</p>
 </li>
@@ -705,7 +708,7 @@ export default function GuideContent() {
 <p>Si l’enregistrement répond «&nbsp;L’année scolaire de l’inscription doit être celle du groupe. Choisissez un groupe de cette année ou une autre année.&nbsp;», revenez à l’étape 2 et choisissez un groupe de l’année voulue. «&nbsp;Ce groupe n’a pas d’année scolaire…&nbsp;»&nbsp;: choisissez un autre groupe ou demandez à la direction de la renseigner.</p>
 <p>Si le groupe ne peut pas être affecté (complet entre-temps, par exemple), le paiement reste enregistré et la fenêtre l’indique&nbsp;: «&nbsp;Groupe non affecté&nbsp;: …&nbsp;Apprenant inscrit — groupe à affecter.&nbsp;» Affectez un autre groupe avec le <a href="#q9">scénario Q9</a>.</p>
 <div className="callout stop">
-<strong>Montant à 0&nbsp;: refusé</strong><p>Sans paiement, la fenêtre répond «&nbsp;L’inscription se confirme à l’encaissement&nbsp;: saisissez un paiement.&nbsp;» et rien n’est créé&nbsp;: ni apprenant, ni inscription, ni conversion. Seule exception&nbsp;: une remise de 100&nbsp;% avec son motif (inscription gratuite, visible par la direction dans <span className="ui">Contrôles</span>).</p>
+<strong>Montant à 0&nbsp;: refusé</strong><p>Sans paiement, la fenêtre répond «&nbsp;L’inscription se confirme à l’encaissement&nbsp;: saisissez un paiement.&nbsp;» et rien n’est créé&nbsp;: ni apprenant, ni inscription, ni conversion. Exceptions&nbsp;: une remise de 100&nbsp;% avec son motif (inscription gratuite, visible par la direction dans <span className="ui">Contrôles</span>), et <span className="ui">Réserver sans paiement</span>, qui n’inscrit pas.</p>
 </div>
 <div className="callout info">
 <strong>Le prospect a déjà payé à l’accueil&nbsp;?</strong><p>À l’étape 2, choisissez son inscription existante («&nbsp;Inscription payée sélectionnée&nbsp;») puis <span className="ui">Rattacher cette inscription payée</span>&nbsp;: l’étape 3 devient une vérification, sans nouveau paiement, et la fenêtre affiche «&nbsp;Inscription payée rattachée&nbsp;». Une inscription non payée ne peut pas être rattachée.</p><p>Si un montant est déjà enregistré sur cette inscription («&nbsp;Un montant est déjà enregistré sur cette inscription · reste … MAD&nbsp;»), la fenêtre ne crée jamais un deuxième montant&nbsp;: <span className="ui">Encaisser sur ce montant</span> ouvre le formulaire de reçu sur ce solde. Une fois payée, revenez rattacher l’inscription.</p>
@@ -942,7 +945,7 @@ export default function GuideContent() {
 <strong>Terminez ensuite le dossier</strong><p>Un apprenant créé depuis le reçu n’a que son nom et ses contacts. Complétez la date de naissance et la catégorie depuis sa fiche (<span className="ui">Modifier</span>, <a href="#q2">Q2</a>).</p>
 </div>
 <div className="callout stop">
-<strong>Ne saisissez pas deux fois</strong><p>Un nouveau formulaire enregistre toujours un nouveau reçu. Si un message dit «&nbsp;Ce paiement a peut-être déjà été enregistré&nbsp;», ouvrez d’abord la liste des reçus de l’apprenant et vérifiez avant de recommencer.</p>
+<strong>Ne saisissez pas deux fois</strong><p>Avant d’enregistrer, la plateforme cherche un reçu identique&nbsp;: même apprenant, même montant, même jour et même engagement, ou un reçu que vous avez enregistré pour cet apprenant il y a moins de 2 minutes. Si elle en trouve un, le cadre «&nbsp;Ce paiement est peut-être déjà enregistré&nbsp;» montre son numéro, sa date, son montant et son engagement, et rien n’est enregistré. Vérifiez ce reçu&nbsp;: <span className="ui">Annuler</span> s’il s’agit du même paiement, <span className="ui">C’est un autre paiement</span> sinon. La même vérification existe dans <span className="ui">Inscrire et encaisser</span>.</p>
 </div>
 </article>
 <article className="scn" id="q4">
@@ -961,7 +964,8 @@ export default function GuideContent() {
 </ol>
 </figure>
 <ol className="steps">
-<li><p>Ouvrez la fiche de l’apprenant, puis cliquez sur <span className="ui">Encaisser</span> à côté de l’engagement. Ou&nbsp;: <span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span> › <span className="ui">Choisir un engagement</span>.</p>
+<li><p>Ouvrez la fiche de l’apprenant, puis cliquez sur <span className="ui">Encaisser</span> à côté de l’engagement. Ou&nbsp;: <span className="menu">Nouveau reçu</span> › <span className="ui">Rechercher un apprenant</span>&nbsp;: le formulaire s’ouvre sur le plus ancien solde ouvert, déjà sélectionné. Pour un autre engagement, cliquez sur <span className="ui">Encaisser sur cet engagement</span> sur sa ligne&nbsp;; pour un nouvel engagement, sur <span className="ui">Nouvelle inscription</span>.</p>
+<p>Un engagement «&nbsp;Réservé pour un prospect&nbsp;» ne s’encaisse pas ici&nbsp;: <span className="ui">Ouvrir le prospect</span>, puis <span className="ui">Inscrire et encaisser</span>, pour que le paiement confirme l’inscription du prospect.</p>
 </li>
 <li><p>Les conditions de l’engagement sont verrouillées. Vous voyez <b>Prix net</b>, <b>Déjà payé</b> et <b>Solde</b>.</p>
 </li>
@@ -970,7 +974,7 @@ export default function GuideContent() {
 </ol>
 <p>Pas de champ remise ici&nbsp;: la remise fait partie des conditions de l’engagement, fixées à sa création.</p>
 <p>Chaque paiement donne un nouveau reçu. Les reçus précédents ne changent jamais&nbsp;: le «&nbsp;restant historique&nbsp;» est le solde à la date de chaque reçu, alors que «&nbsp;Situation des paiements&nbsp;» montre le solde d’aujourd’hui.</p>
-<p>Pour retrouver ensuite le reçu ou la liste des impayés&nbsp;: <a href="#q6">Q6</a> et <a href="#q5">Q5</a>.</p>
+<p>Pour retrouver ensuite le reçu ou la liste des impayés&nbsp;: <a href="#q6">Q6</a> et <a href="#q5">Q5</a>. Dans <span className="menu">Tous les reçus</span>, le bouton <span className="ui">Avec solde</span> ne garde que les reçus dont l’engagement a encore un reste à payer aujourd’hui.</p>
 <p>Les états de paiement&nbsp;: <b>Soldé</b>, <b>Acompte versé</b>, <b>En attente</b> (rien de payé, échéance pas dépassée), <b>En retard</b> (échéance dépassée), <b>Aucun engagement</b>.</p>
 </article>
 <article className="scn" id="q5">

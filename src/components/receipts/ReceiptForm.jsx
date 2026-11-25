@@ -8,7 +8,9 @@ import { PAYMENT_METHODS, localBusinessDate, money, receiptNumberLabel } from '@
 import { DEFAULT_SCHOOL_YEAR, SCHOOL_YEAR_OPTIONS, buildServiceDescription } from '@/lib/receiptPresentation';
 import { createStableIdempotencyKey } from '@/lib/stableIdempotencyKey.mjs';
 import { createInitialChargeCoordinator, createLatestRequestGate, emptyChargeTerms } from '@/lib/receiptInitialCharge.mjs';
-import { clearPendingPayment, identicalReceiptPrompt, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
+import { clearPendingPayment, pendingPaymentSettled, recoverPendingPayment, savePendingPayment } from '@/lib/receiptDraftKey.mjs';
+import { defaultOpenBalance, fetchDuplicates, reservedForProspect } from '@/lib/finance/paymentPanel.mjs';
+import { DuplicateReceiptPanel, OpenBalanceChooser } from '@/components/finance/PaymentPanel';
 import { DISCOUNT_REASONS, DISCOUNT_REASON_MAX_LENGTH, addDays, deskGuardError, isFreeEnrollment, isPayableEnrollmentCandidate, paymentBackdateDays } from '@/lib/financeCorrections.mjs';
 import { groupSeatsLabel, loadGroupChoices } from '@/lib/receiptGroupChoices.mjs';
 import { courseEndedSuffix } from '@/lib/academic/courseClose.mjs';
@@ -52,12 +54,16 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const [duplicateWarning, setDuplicateWarning] = useState('');
   const [previousAttempt, setPreviousAttempt] = useState(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  // §6.1: possible duplicates found before saving; nothing is saved until « C’est un autre paiement ».
+  const [duplicates, setDuplicates] = useState([]);
   // D3 (EAP): the optional group, placed by the page right after the payment.
   const [groupId, setGroupId] = useState('');
   const [groupChoices, setGroupChoices] = useState({ state: 'idle', rows: [], error: '' });
   // A ref, not state: a second click in the same render must see the first one at once.
   const submitting = useRef(false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // A changed amount, date or engagement is a new check.
+  useEffect(() => { setDuplicates([]); }, [form.payment_amount, form.payment_date, form.charge_id]);
 
   // After a reload, look the last pressed Save up by its key before anything is re-entered.
   useEffect(() => {
@@ -121,17 +127,22 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!form.student_id) { setCharges([]); setChargesError(''); setChargesLoading(false); return undefined; }
     const request = initialCharge.current.startChargeLoad(form.student_id);
     setCharges([]); setChargesError(''); setChargesLoading(true);
-    getBrowserClient().from('charge_balances').select('*').eq('student_id', form.student_id)
-      .is('voided_at', null).gt('balance', 0).order('created_at', { ascending: false })
+    // RWR-r5 C1 (§6.1, invariant 12): the same read as « Inscrire et encaisser », oldest first.
+    getBrowserClient().rpc('get_open_balances', { p_student: form.student_id })
       .then(({ data, error }) => {
-        const rows = data || [];
+        const rows = data?.rows || [];
         const resolution = initialCharge.current.resolveChargeLoad(request, rows);
         if (resolution.status === 'stale') return;
         setChargesLoading(false);
         if (error) { setChargesError(error.message || 'Impossible de charger les soldes.'); return; }
         setCharges(rows);
-        if (resolution.status === 'apply') applyCharge(resolution.charge);
+        if (resolution.status === 'apply') {
+          if (reservedForProspect(resolution.charge)) toast.error('Ce montant est réservé pour un prospect : encaissez-le depuis sa fiche CRM.');
+          else applyCharge(resolution.charge);
+        }
         if (resolution.status === 'missing') toast.error('Le solde demandé est introuvable, réglé ou inaccessible.');
+        // « Encaisser » opens on the oldest open balance, else on « Nouvelle inscription ».
+        if (resolution.status === 'ready') { const first = defaultOpenBalance(rows); if (first) applyCharge(first); }
       });
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +190,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const resetLearner = (nextMode) => {
     studentLookupVersion.current += 1; searchGate.current.invalidate(); initialCharge.current.clearStudent();
     setMode(nextMode); setSearch(''); setStudents([]); setSearchState('idle'); setSearchError(''); setSearchLimit(SEARCH_PAGE_SIZE);
-    setCharges([]); setChargesError(''); setEnrollments([]); setEnrollmentsError(''); setDuplicateMatches([]); setDuplicateWarning('');
+    setCharges([]); setChargesError(''); setEnrollments([]); setEnrollmentsError(''); setDuplicateMatches([]); setDuplicateWarning(''); setDuplicates([]);
     setForm((current) => ({
       ...current, ...emptyStudent, ...emptyChargeTerms(), enrollment_id: '', payment_amount: '', transaction_reference: '', note: '',
       update_contacts: false, request_email: false, email_recipient: '',
@@ -190,7 +201,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (!fromInitialLink) studentLookupVersion.current += 1;
     searchGate.current.invalidate(); initialCharge.current.selectStudent(student.id, { fromInitialLink });
     setMode('existing'); setStudents([]); setSearch(student.full_name || ''); setSearchState('idle');
-    setDuplicateMatches([]); setDuplicateWarning('');
+    setDuplicateMatches([]); setDuplicateWarning(''); setDuplicates([]);
     setForm((current) => ({
       ...current, ...emptyStudent, ...emptyChargeTerms(), enrollment_id: '', student_id: student.id, student_name: student.full_name || '',
       phone: student.telephone || '', student_email: student.email || '', parent_email: student.parent_email || '',
@@ -209,8 +220,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   };
 
   const selectCharge = (id) => {
-    initialCharge.current.userSelectedCharge();
-    const charge = charges.find((item) => item.id === id);
+    initialCharge.current.userSelectedCharge(); setDuplicates([]);
+    const charge = charges.find((item) => item.id === id && !reservedForProspect(item));
     if (!charge) { setForm((current) => ({ ...current, ...emptyChargeTerms(), enrollment_id: '' })); return; }
     applyCharge(charge);
   };
@@ -249,6 +260,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const freeEnrollment = isFreeEnrollment({ newCharge: !lockedCharge, sessionType: form.session_type, gross, discount,
     reasonCode: form.discount_reason_code, payment: todayPayment });
   const confirmsEnrollment = todayPayment > 0 || freeEnrollment;
+  // OD-2 = A at the desk: a new charge without payment is « Réserver sans paiement » (a due date).
+  const reserving = !lockedCharge && todayPayment === 0 && !freeEnrollment;
   // D3: a group is offered for a tuition session once programme, level and year are known,
   // unless the enrollment being paid is already in a group.
   const groupOffered = Boolean(groupSession && form.level && form.school_year) && !targetEnrollment?.group_id;
@@ -256,6 +269,7 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
   const submit = async (event) => {
     event.preventDefault();
     if (submitting.current) return;
+    setDuplicates([]);
     if (!form.student_id && mode !== 'new') return toast.error('Sélectionnez un apprenant existant.');
     if (mode === 'new' && form.student_name.trim().length < 2) return toast.error('Le nom complet du nouvel apprenant est obligatoire.');
     if (!form.charge_id && (!form.session_type || !form.school_year)) return toast.error('La session et l’année scolaire sont obligatoires.');
@@ -276,16 +290,24 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     if (form.enrollment_id && form.enrollment_id !== 'new' && !selectedCharge?.enrollment_id
       && !enrollmentChoices.some((row) => row.id === form.enrollment_id)) return toast.error('L’inscription choisie ne correspond pas à cette session et année.');
     if (todayPayment > 0 && form.request_email && !/^\S+@\S+\.\S+$/.test(form.email_recipient.trim())) return toast.error('Indiquez un destinataire email valide ou désactivez l’envoi.');
+    // OD-2 = A: « Réserver sans paiement » is a charge with a due date.
+    if (reserving && !form.due_date) return toast.error('Indiquez la date d’échéance pour réserver sans paiement.');
+    if (reserving && form.due_date < today) return toast.error('L’échéance ne peut pas être dans le passé.');
     if (todayPayment > 0 && form.student_id) {
       submitting.current = true; setCheckingDuplicate(true);
       try {
-        // Soft check only; the server is unchanged and a lookup failure never blocks the payment.
-        const { data } = await getBrowserClient().from('receipts').select('id,receipt_number')
-          .eq('student_id', form.student_id).eq('montant_paye', todayPayment).eq('date', form.payment_date)
-          .is('voided_at', null).is('deleted_at', null).limit(1);
-        if (data?.length && !window.confirm(identicalReceiptPrompt(data[0], { paymentDate: form.payment_date, today: localBusinessDate() }))) return;
-      } catch { /* soft check */ } finally { submitting.current = false; setCheckingDuplicate(false); }
+        // §6.1 rule, read from the server; a lookup failure never blocks the payment.
+        const found = await fetchDuplicates(getBrowserClient(), { studentId: form.student_id, chargeId: form.charge_id,
+          amount: todayPayment, date: form.payment_date });
+        if (found.length) { setDuplicates(found); return; }
+      } finally { submitting.current = false; setCheckingDuplicate(false); }
     }
+    finish();
+  };
+
+  // « C’est un autre paiement »: the same submission, after the staff member checked.
+  const finish = () => {
+    setDuplicates([]);
     if (todayPayment > 0) savePendingPayment(idempotencyKey.current());
     onSubmit({ ...form, enrollment_id: form.enrollment_id === 'new' ? '' : form.enrollment_id,
       discount_reason_code: needsDiscountReason ? form.discount_reason_code : '',
@@ -332,7 +354,8 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
     <Step number="2" title="Solde existant ou nouvelle session" subtitle="Les conditions enregistrées d’un engagement existant restent inchangées">
       {chargesLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des soldes…</SearchMessage>}
       {chargesError && <SearchMessage icon={AlertCircle} tone="error">Impossible de charger les soldes : {chargesError}</SearchMessage>}
-      {form.student_id && charges.length > 0 && <div className="space-y-3"><Field label="Choisir un engagement"><select className={input} value={form.charge_id} onChange={(e) => selectCharge(e.target.value)}><option value="">Créer une nouvelle session</option>{charges.map((charge) => <option key={charge.id} value={charge.id}>{charge.session_type}{charge.school_year ? ` · ${charge.school_year}` : ''} · reste {money(charge.balance)} MAD</option>)}</select></Field>{selectedCharge && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-black text-amber-950">{selectedCharge.service_description}</p><p className="mt-1 text-sm text-amber-900">{selectedCharge.session_type}{selectedCharge.school_year ? ` · année ${selectedCharge.school_year}` : ''}</p><div className="mt-3 grid grid-cols-3 gap-2"><MiniAmount label="Prix net" value={selectedCharge.net_amount} /><MiniAmount label="Déjà payé" value={selectedCharge.paid_amount} /><MiniAmount label="Solde" value={selectedCharge.balance} /></div>{selectedCharge.due_date && <p className="mt-2 text-xs text-amber-800">Échéance : {selectedCharge.due_date}</p>}</div>}</div>}
+      {form.student_id && charges.length > 0 && <div className="space-y-3"><OpenBalanceChooser rows={charges} value={form.charge_id} onChange={selectCharge} newLabel="Nouvelle inscription"
+        crmHref={(lead) => `/crm/leads?lead=${lead}`} />{selectedCharge && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="font-black text-amber-950">{selectedCharge.service_description}</p><p className="mt-1 text-sm text-amber-900">{selectedCharge.session_type}{selectedCharge.school_year ? ` · année ${selectedCharge.school_year}` : ''}</p><div className="mt-3 grid grid-cols-3 gap-2"><MiniAmount label="Prix net" value={selectedCharge.net_amount} /><MiniAmount label="Déjà payé" value={selectedCharge.paid_amount} /><MiniAmount label="Solde" value={selectedCharge.balance} /></div>{selectedCharge.due_date && <p className="mt-2 text-xs text-amber-800">Échéance : {selectedCharge.due_date}</p>}</div>}</div>}
       {form.student_id && form.session_type && form.session_type !== 'Other' && !selectedCharge?.enrollment_id && <div className="mt-4">
         {enrollmentsLoading && <SearchMessage icon={LoaderCircle} spin>Chargement des inscriptions…</SearchMessage>}
         {enrollmentsError && <SearchMessage icon={AlertCircle} tone="error">Inscriptions indisponibles : {enrollmentsError}</SearchMessage>}
@@ -354,15 +377,17 @@ export default function ReceiptForm({ onSubmit, onCancel, saving, initialData = 
 
     <Step number="3" title="Paiement" subtitle="Montant, date et mode d’encaissement">
       <div className="grid gap-4 sm:grid-cols-3">
-        {!lockedCharge && <><Field label="Prix brut convenu *"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} placeholder="0" /></Field><Field label="Échéance (facultative)"><input type="date" className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field>{needsDiscountReason && <><Field label="Motif de la remise *"><select required className={input} value={form.discount_reason_code} onChange={(e) => set('discount_reason_code', e.target.value)}><option value="">Choisir…</option>{DISCOUNT_REASONS.map((reason) => <option key={reason.code} value={reason.code}>{reason.label}</option>)}</select></Field>{form.discount_reason_code === 'other' && <div className="sm:col-span-2"><Field label="Précisez le motif *"><input required minLength={3} maxLength={DISCOUNT_REASON_MAX_LENGTH} className={input} value={form.discount_reason} onChange={(e) => set('discount_reason', e.target.value)} /></Field></div>}</>}</>}
+        {!lockedCharge && <><Field label="Prix brut convenu *"><input required type="number" min="0" step="0.01" className={input} value={form.gross_amount} onChange={(e) => set('gross_amount', e.target.value)} placeholder="Aucun prix implicite" /></Field><Field label="Remise (MAD)"><input type="number" min="0" step="0.01" className={input} value={form.discount_amount} onChange={(e) => set('discount_amount', e.target.value)} placeholder="0" /></Field><Field label={reserving ? 'Échéance *' : 'Échéance (facultative)'}><input type="date" min={today} className={input} value={form.due_date} onChange={(e) => set('due_date', e.target.value)} /></Field>{needsDiscountReason && <><Field label="Motif de la remise *"><select required className={input} value={form.discount_reason_code} onChange={(e) => set('discount_reason_code', e.target.value)}><option value="">Choisir…</option>{DISCOUNT_REASONS.map((reason) => <option key={reason.code} value={reason.code}>{reason.label}</option>)}</select></Field>{form.discount_reason_code === 'other' && <div className="sm:col-span-2"><Field label="Précisez le motif *"><input required minLength={3} maxLength={DISCOUNT_REASON_MAX_LENGTH} className={input} value={form.discount_reason} onChange={(e) => set('discount_reason', e.target.value)} /></Field></div>}</>}</>}
         <Field label="Montant payé aujourd’hui *"><input required type="number" min="0" step="0.01" className={input} value={form.payment_amount} onChange={(e) => set('payment_amount', e.target.value)} /></Field><Field label="Date du paiement *"><input required type="date" min={addDays(today, -paymentBackdateDays(role))} max={today} className={input} value={form.payment_date} onChange={(e) => set('payment_date', e.target.value)} /><p className="mt-1 text-[11px] font-medium text-muted-foreground">Jamais dans le futur ; au plus {paymentBackdateDays(role)} jours en arrière.</p></Field><Field label="Mode de paiement *"><select required className={input} value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}>{PAYMENT_METHODS.map((method) => <option key={method}>{method}</option>)}</select><p className="mt-1 text-[11px] font-medium text-muted-foreground">Espèces est sélectionné par défaut.</p></Field><Field label="Référence (facultative)"><input maxLength={120} className={input} value={form.transaction_reference} onChange={(e) => set('transaction_reference', e.target.value)} /></Field><div className="sm:col-span-2"><Field label="Note interne (non imprimée)"><textarea maxLength={500} rows={2} className={input} value={form.note} onChange={(e) => set('note', e.target.value)} /></Field></div>
       </div>
+      {!lockedCharge && discount > gross && <p role="alert" className="mt-3 text-sm font-bold text-rose-700">La remise dépasse le prix.</p>}
       <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-4"><Amount label="Prix net" value={net} /><Amount label="Déjà payé" value={paidBefore} /><Amount label="Payé aujourd’hui" value={todayPayment} accent /><Amount label="Solde restant" value={balanceAfter} warning={balanceAfter > 0} /></div>
       {todayPayment === 0 && freeEnrollment ? <p role="note" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Remise de 100 % : aucun reçu ne sera émis ; l’inscription sera confirmée sans paiement (visible dans Contrôles).</p>
-        : todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Vous enregistrez uniquement l’engagement. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée.</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
+        : todayPayment === 0 ? <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">Réserver sans paiement : le montant est dû à l’échéance. Aucun reçu ne sera émis, aucun email ne sera envoyé et l’inscription ne sera pas confirmée (elle se confirme au premier paiement).</p> : <div className="mt-4 rounded-2xl border bg-slate-50 p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1" checked={form.request_email} onChange={(e) => setForm((current) => ({ ...current, request_email: e.target.checked, email_recipient: e.target.checked && !current.email_recipient ? (current.parent_email || current.student_email || '') : current.email_recipient }))} /><span><span className="flex items-center gap-2 text-sm font-bold"><Mail size={15} /> Envoyer aussi le reçu par email</span><span className="mt-0.5 block text-xs text-muted-foreground">Facultatif. L’absence d’email ne bloque jamais le paiement ni l’impression.</span></span></label>{form.request_email && <div className="mt-3 max-w-md"><Field label="Destinataire email *"><input required type="email" className={input} value={form.email_recipient} onChange={(e) => set('email_recipient', e.target.value)} placeholder="famille@exemple.com" /></Field></div>}</div>}
     </Step>
 
-    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving || checkingDuplicate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : freeEnrollment ? 'Enregistrer et confirmer l’inscription' : 'Enregistrer l’engagement'}</button></div>
+    <DuplicateReceiptPanel matches={duplicates} onConfirm={finish} onCancel={() => setDuplicates([])} busy={saving} />
+    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-xl border px-5 py-2.5 text-sm font-semibold">Annuler</button><button disabled={saving || checkingDuplicate || duplicates.length > 0} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"><CircleDollarSign size={17} />{saving ? 'Enregistrement…' : todayPayment > 0 ? 'Enregistrer et générer le reçu' : freeEnrollment ? 'Enregistrer et confirmer l’inscription' : 'Réserver sans paiement'}</button></div>
   </form>;
 }
 

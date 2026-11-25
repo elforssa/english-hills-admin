@@ -1,26 +1,28 @@
 // RWR-r5 PR A1 — reception day scripts (plan §8), real UI on the local stack.
 // Each script counts clicks and typed fields through one helper and fails above its target.
 // Numbering: the plan's §8 table rows 0–11 (0 unanswered call … 11 two staff).
-// A1 owns 1, 3, 6, 7, 8, 10, 11; script 0 (the T7 one-tap) is run as well.
+// A1 owns 1, 3, 6, 7, 8, 10, 11; script 0 (the T7 one-tap) is run as well. C1 (payments, §6.1)
+// owns 2 (walk-in who pays now, one flow) and 9 (partial payment, then the balance).
 // Scripts 3 and 8 run at the A1 counts the owner accepted on 2026-11-22 (plan, implementation
 // record): 3 at 7, its ≤ 6 target in B1 (« C'est la même personne », §5.3); 8 at 4 (close), its
 // close-in-2 target in B2 (close reasons, §5.4) and its corrected-in-3 target in B1. The suite
 // fails above those ceilings and logs « ACCEPTED A1 COUNT » with the later target so the gap stays visible.
 // Invariant 9 (same next action on card, Tâches row, drawer and calendar) is checked in script 1.
-// Synthetic staff and prospects only, removed in finally. No external requests.
+// Synthetic staff, prospects, learners and payments only, removed in finally. No external requests.
 import assert from 'node:assert/strict';
 import { randomInt, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
 import { assertLocalFeatureBranch } from './lib/assert-local-feature-branch.mjs';
-import { LIVE_POLICY, createStaff, localEnv, q, removeStaff, slotAt, sql } from './lib/crm-next-action-local.mjs';
+import { LIVE_POLICY, createStaff, localEnv, q, slotAt, sql } from './lib/crm-next-action-local.mjs';
 import { openDaySql, openSlotSql } from './lib/centre-days.mjs';
+import { removeStaffAndPayments } from './lib/desk-payments-local.mjs';
 
 assertLocalFeatureBranch();
 const env = localEnv(), app = 'http://localhost:3101', run = 'day-' + randomUUID();
 const STALE = 'Ce prospect a été modifié, rechargez.';
-let browser, page, users = [], phase = 'setup';
+let browser, page, users = [], learners = [], phase = 'setup';
 const errors = [], gaps = [];
 const as = id => `begin;select set_config('request.jwt.claim.sub',${q(id)},true);set local role authenticated;`;
 const rpc = (id, name, data) => JSON.parse(sql(`${as(id)}select public.crm_${name}(gen_random_uuid(),${q(JSON.stringify(data))}::jsonb);commit;`).split('\n').pop());
@@ -136,6 +138,40 @@ try {
   await page.locator(`[data-event-key="center_visit:${action.id}"]`).getByText(action.local_time.slice(0, 5), { exact: false }).waitFor();
   console.log(`PASS invariant 9: « ${action.label} » on the drawer, the card, the Tâches row and the calendar`);
 
+  // 2 — Walk-in who pays now (C1, ≤ 12, one flow): the prospect form with « Inscrire maintenant » goes on to
+  // « Inscrire et encaisser », and step 1 is one click when no learner matches (§6.1).
+  phase = 'script 2';
+  await page.goto(`${app}/crm/leads`);
+  const learner2 = `Apprenant jour 2 ${run.slice(-8)}`;
+  const s2 = script('2 walk-in who pays now', 12, 'the prospect list');
+  await s2.click(page.getByRole('button', { name: 'Ajouter un prospect', exact: true }), 'Ajouter un prospect');
+  await s2.fill(dialog().getByLabel('Nom du contact', { exact: true }), 'Jour 2 paie maintenant', 'contact');
+  await s2.fill(dialog().getByLabel('Téléphone', { exact: true }), phone(), 'phone');
+  await s2.fill(dialog().getByLabel('Nom de l’apprenant', { exact: true }), learner2, 'learner');
+  await s2.select(dialog().getByLabel('Origine', { exact: true }), 'Visite au centre', 'Origine : Visite au centre');
+  await s2.check(dialog().getByLabel('Inscrire maintenant', { exact: true }), 'Inscrire maintenant');
+  await s2.click(dialog().getByRole('button', { name: 'Enregistrer', exact: true }), 'Enregistrer');
+  await toast('Prospect créé');
+  await dialog().getByText('1 / 3 · Apprenant', { exact: true }).waitFor();
+  const create = dialog().getByRole('button', { name: 'Créer un nouvel apprenant', exact: true });
+  await page.waitForFunction(el => !el.disabled, await create.elementHandle());
+  await s2.click(create, 'Créer un nouvel apprenant');
+  await dialog().getByText('2 / 3 · Inscription', { exact: true }).waitFor();
+  await s2.click(dialog().getByRole('button', { name: 'Continuer', exact: true }), 'Continuer');
+  await dialog().getByText('3 / 3 · Paiement', { exact: true }).waitFor();
+  await s2.fill(dialog().getByLabel('Prix brut convenu', { exact: true }), '3000', 'prix');
+  await s2.fill(dialog().getByLabel('Montant payé aujourd’hui', { exact: true }), '1000', 'montant');
+  await s2.click(dialog().getByRole('button', { name: 'Inscrire et encaisser', exact: true }), 'Inscrire et encaisser');
+  await dialog().getByText(/^Inscription confirmée · reçu \S+$/).waitFor();
+  s2.done();
+  const paidNow = await page.evaluate(() => new URL(location.href).searchParams.get('lead'));
+  assert.equal(status(paidNow), 'CONVERTED', 'ADR-015: the payment confirms the enrollment and converts the prospect');
+  const paidLearner = sql(`select student_id from public.crm_leads where id=${q(paidNow)}`);
+  learners.push(paidLearner);
+  assert.equal(sql(`select count(*) from public.receipts where student_id=${q(paidLearner)} and voided_at is null`), '1', 'one receipt');
+  assert.equal(Number(sql(`select balance from public.charge_balances where student_id=${q(paidLearner)}`)), 2000, 'open balance = price − payments (invariant 12)');
+  assert.equal(openRows(paidNow).length, 0, 'a converted prospect has no next action');
+
   // 3 — Walk-in « reviendra après la paie »: no date unless chosen (target ≤ 6).
   phase = 'script 3';
   await page.goto(`${app}/crm/leads`);
@@ -219,6 +255,26 @@ try {
   assert.equal(status(wrong), 'NOT_QUALIFIED', 'closed as not qualified');
   assert.equal(openRows(wrong).length, 0, 'a closed prospect has no next action');
 
+  // 9 — Partial payment, then the balance (C1, ≤ 4): « Encaisser » opens on the oldest open balance.
+  // The first payment was taken earlier by the director, so no duplicate warning applies (§6.1 rule).
+  phase = 'script 9';
+  const learner9 = sql(`insert into public.students(full_name,status,session_type) values(${q('Jour 9 solde ' + run.slice(-8))},'Prospect','Yearly') returning id`).split('\n').pop();
+  learners.push(learner9);
+  sql(`${as(director.id)}select public.create_charge_payment(${q(JSON.stringify({ student_id: learner9, session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', gross_amount: 3000, discount_amount: 0, payment_amount: 1000, payment_method: 'Espèces', idempotency_key: randomUUID() }))}::jsonb);commit;`);
+  const charge9 = sql(`select id from public.charges where student_id=${q(learner9)}`);
+  await page.goto(`${app}/students/${learner9}`); await page.waitForLoadState('networkidle');
+  const s9 = script('9 partial payment, then the balance', 4, 'the learner file');
+  await s9.click(page.getByRole('link', { name: 'Inscrire et encaisser', exact: true }), '« Inscrire et encaisser » (Encaisser)');
+  await page.locator(`[data-balance-id="${charge9}"] button[aria-pressed=true]`).waitFor();
+  assert.equal(await page.getByText('Session *', { exact: true }).count(), 0, 'opens on the balance: no new-charge terms');
+  await s9.fill(page.locator('label').filter({ hasText: 'Montant payé aujourd’hui *' }).locator('input'), '2000', 'montant');
+  await s9.click(page.getByRole('button', { name: 'Enregistrer et générer le reçu', exact: true }), 'Enregistrer et générer le reçu');
+  await page.waitForURL(url => /\/receipts\/[0-9a-f-]{36}\/print$/.test(url.pathname));
+  s9.done();
+  assert.equal(Number(sql(`select balance from public.charge_balances where id=${q(charge9)}`)), 0, 'the balance is collected on the same charge');
+  assert.equal(sql(`select count(*) from public.charges where student_id=${q(learner9)}`), '1', 'no second charge');
+  assert.equal(sql(`select count(*) from public.receipts where charge_id=${q(charge9)} and voided_at is null`), '2', 'two receipts, one charge');
+
   // 10 — Closed, then reopened: 3 + 3, and booking a test works afterwards — through « Noter un échange »:
   // the reopened prospect is not qualified, so « Changer » offers no appointment (review B1, OD-11).
   phase = 'script 10';
@@ -298,7 +354,7 @@ try {
   console.log('PASS day script 11: B refused with « rechargez », reloads and saves once; default views split the work');
 
   assert.deepEqual(errors, [], 'no browser errors');
-  console.log(`PASS reception day scripts 0, 1, 3, 6, 7, 8, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
+  console.log(`PASS reception day scripts 0, 1, 2, 3, 6, 7, 8, 9, 10, 11${gaps.length ? ` — accepted A1 counts (owner, 2026-11-22): ${gaps.join('; ')}` : ''}`);
 } catch (error) {
   console.error(phase, error.message);
   if (page) {
@@ -308,6 +364,6 @@ try {
   throw error;
 } finally {
   if (browser) await browser.close();
-  removeStaff(users.map(u => u.id));
+  removeStaffAndPayments(users.map(u => u.id), learners);
   console.log('PASS synthetic browser fixtures removed');
 }
