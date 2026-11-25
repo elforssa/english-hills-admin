@@ -3,10 +3,10 @@
 // second charge when two staff members act on the same learner at once. Covers « Encaisser »
 // (create_charge_payment), « Inscrire et encaisser » (crm_enroll_and_collect, with and
 // without « Encaisser sur cet engagement »), « Réserver sans paiement »
-// (crm_reserve_without_payment) and the director's void (void_financial_receipt), and the 139
+// (crm_reserve_without_payment) and the director's void (void_financial_receipt), and the 138
 // payment guards (no receipt on a commitment reserved for an open prospect outside its card,
 // no second charge from « Encaisser ») with two staff members at once.
-// Synthetic rows only; run on a database at the current migrations (139 or later). Never
+// Synthetic rows only; run on a database at the current migrations (138 or later). Never
 // reads .env.local or accepts a URL from the environment. Booking and due dates come from
 // scripts/lib/centre-days.mjs (weekday-independent).
 import assert from 'node:assert/strict';
@@ -27,7 +27,7 @@ const q = s => `'${String(s).replaceAll("'", "''")}'`;
 const status = JSON.parse(cli(['status', '-o', 'json']));
 assert.equal(status.API_URL, 'http://127.0.0.1:54321');
 const latest = Math.max(...readdirSync('supabase/migrations').map(name => Number(/^(\d+)_/.exec(name)?.[1] ?? 0)));
-assert(latest >= 139);
+assert(latest >= 138);
 assert.equal(sql('select max(version::integer) from supabase_migrations.schema_migrations'), String(latest), 'run on a database at the current migrations');
 
 const options = { auth: { persistSession: false, autoRefreshToken: false }, db: { retry: false } };
@@ -196,7 +196,7 @@ const check = (cond, label) => { assert(cond, label); checks += 1; console.log(`
   check(count(`select count(*) from charges where student_id=${q(s3)}`) === 1, 'two staff reserve at once: one charge');
 }
 
-// ── 4. The 139 payment guards with two staff members at once ────────────────
+// ── 4. The 138 payment guards with two staff members at once ────────────────
 {
   // Two « Encaisser » openings create a tuition charge for the same learner, programme and
   // year at once (a commitment and a payment): one charge, the other refused.

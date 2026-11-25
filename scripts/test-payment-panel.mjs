@@ -6,8 +6,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  DUPLICATE_REASON, PAYMENT_REQUIRED, balanceLine, defaultOpenBalance, duplicateLine, duplicateRule, fetchDuplicates, mad,
-  paymentAmounts, paymentErrors, reservedForProspect, unlinkedCommitments,
+  COMMITMENT_CHOICE, DUPLICATE_REASON, PAYMENT_REQUIRED, balanceLine, defaultOpenBalance, duplicateLine, duplicateRule, fetchDuplicates, mad,
+  paymentAmounts, paymentErrors, reservedElsewhere, reservedForProspect, selectableCommitments, unlinkedCommitments,
 } from '../src/lib/finance/paymentPanel.mjs';
 import { enrollmentFailure } from '../src/lib/crm/enrollmentErrors.mjs';
 import { DEPOSIT_ACTION, taskTitle } from '../src/lib/crm/presentation.mjs';
@@ -36,6 +36,18 @@ test('« Encaisser sur cet engagement » lists unlinked commitments of the same 
   assert.deepEqual(unlinkedCommitments(rows, { sessionType: 'Yearly', schoolYear: '2027/2028' }), []);
   assert.deepEqual(unlinkedCommitments(rows, { sessionType: 'Adults', schoolYear: '2026/2027' }), [], 'a linked charge is not a commitment');
   assert.deepEqual(unlinkedCommitments(rows, { sessionType: 'Legacy', schoolYear: '' }), [], 'legacy never blocks or offers');
+});
+
+test('the wizard selects only its own prospect’s reservation (PR #216 review, B2)', () => {
+  const rows = unlinkedCommitments([legacy, reserved, unlinked, linked], { sessionType: 'Yearly', schoolYear: '2026/2027' });
+  assert.equal(reservedElsewhere(reserved, 'lead-2'), true, 'another prospect’s reservation');
+  assert.equal(reservedElsewhere(reserved, 'lead-1'), false, 'this prospect’s own reservation');
+  assert.equal(reservedElsewhere(unlinked, 'lead-2'), false);
+  assert.equal(reservedElsewhere(reserved, null), true, '« Encaisser » (no prospect) never collects a reservation');
+  assert.deepEqual(selectableCommitments(rows, 'lead-2').map(r => r.id), ['u'], 'shown with « Ouvrir le prospect », not selectable');
+  assert.deepEqual(selectableCommitments(rows, 'lead-1').map(r => r.id), ['r', 'u']);
+  assert.deepEqual(selectableCommitments([reserved], 'lead-2'), [], 'nothing to select: the staff chooses « Nouvelle session » or opens the prospect');
+  assert.match(COMMITMENT_CHOICE, /« Nouvelle session »/);
 });
 
 test('amounts: price − discount − payments (invariant 12)', () => {

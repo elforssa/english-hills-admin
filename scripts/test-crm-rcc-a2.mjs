@@ -23,14 +23,14 @@ const hinted = new Set([...commands.matchAll(/'crm_enrollment\.([a-z_]+)'/g)].ma
 assert.deepEqual([...hinted].sort(), [...PLAN, ...FALLBACK_REASONS].sort(), 'every server hint is mapped and every mapped reason is emitted');
 assert(!/trial_requires_group/.test(commands), 'the essai reason is gone from the server command');
 // The wrapper's eap.* refusals come from its latest bodies: crm_start_enrollment (127) and,
-// from migration 139 (RWR-r5 C1), crm_enroll_and_collect, crm_reserve_without_payment and
+// from migration 138 (RWR-r5 C1), crm_enroll_and_collect, crm_reserve_without_payment and
 // the payment guards. Every one has a French message and a recovery, and nothing else is mapped.
-const desk = readFileSync(new URL('../supabase/migrations/139_desk_payments.sql', import.meta.url), 'utf8');
+const desk = readFileSync(new URL('../supabase/migrations/138_desk_payments.sql', import.meta.url), 'utf8');
 const eapHints = new Set([...`${commands}\n${desk}`.matchAll(/hint = 'eap\.([a-z_]+)'/g)].map(m => m[1]));
 assert.deepEqual([...eapHints].sort(), Object.keys(EAP_REASONS).sort(), 'the wrapper\'s eap.* refusals are mapped');
 // The client words are the server's own (a raise doubles its %).
 for (const reason of eapHints) if (desk.includes(`'eap.${reason}'`)) {
-  assert(desk.replaceAll('%%', '%').includes(EAP_REASON_TEXT[reason]), `${reason}: the 139 server text is the client text`);
+  assert(desk.replaceAll('%%', '%').includes(EAP_REASON_TEXT[reason]), `${reason}: the 138 server text is the client text`);
 }
 for (const [reason, entry] of Object.entries(EAP_REASONS)) assert.equal(entry.message, EAP_REASON_TEXT[reason], `${reason}: the shared French wording`);
 const FIELDS = [null,'name','birth','confirmNew','session','year','level','group','amount','gross','discount','dueDate'];

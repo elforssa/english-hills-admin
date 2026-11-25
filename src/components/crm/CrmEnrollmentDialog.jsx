@@ -19,7 +19,7 @@ import { invalidateAfterLearnerSave } from '@/lib/cacheInvalidation.mjs';
 import { membershipErrorMessage, placeLearnerInGroup } from '@/lib/academic/membershipActions.mjs';
 import { courseEndedSuffix } from '@/lib/academic/courseClose.mjs';
 import { DuplicateReceiptPanel, OpenBalanceChooser } from '@/components/finance/PaymentPanel';
-import { PAYMENT_REQUIRED, fetchDuplicates, mad, paymentAmounts, paymentErrors, unlinkedCommitments } from '@/lib/finance/paymentPanel.mjs';
+import { COMMITMENT_CHOICE, PAYMENT_REQUIRED, fetchDuplicates, mad, paymentAmounts, paymentErrors, selectableCommitments, unlinkedCommitments } from '@/lib/finance/paymentPanel.mjs';
 import { Pager, ReadState } from './CrmShared';
 import DialogStickyFooter, { FOOTER_ALERT, STICKY_DIALOG } from './DialogStickyFooter';
 const input = 'min-h-11 w-full rounded-md border bg-white px-3 py-2 text-sm';
@@ -36,11 +36,12 @@ const amount = value => Number(value || 0);
 const FIELD_OF = [[/prix brut|prix supérieur/, 'gross'], [/remise dépasse|remise ne peut|100 %/, 'discount'], [/Indiquez le motif|Motif de remise/, 'reasonCode'],
   [/Précisez le motif|motif de la remise ne doit/, 'reasonText'], [/échéance/i, 'dueDate'], [/date du paiement/i, 'paymentDate'], [/mode de paiement/, 'method'],
   [/destinataire/, 'emailRecipient'], [/paiement|montant payé/, 'amount']];
-function paymentIssues(form, { role, today, commitment }) {
+function paymentIssues(form, { role, today, commitment, choiceNeeded }) {
   const paid = amount(form.amount), reserve = form.reserve && !commitment;
-  const messages = paymentErrors({ mode: reserve ? 'reserve' : 'pay', newCharge: !commitment, gross: form.gross, discount: form.discount, reasonCode: form.reasonCode,
+  const messages = choiceNeeded ? [COMMITMENT_CHOICE] : [];
+  messages.push(...paymentErrors({ mode: reserve ? 'reserve' : 'pay', newCharge: !commitment, gross: form.gross, discount: form.discount, reasonCode: form.reasonCode,
     reasonText: form.reasonText, payment: form.amount, paymentMethod: form.method, dueDate: form.dueDate, today,
-    open: commitment ? commitment.balance : Math.max(0, amount(form.gross) - amount(form.discount)) });
+    open: commitment ? commitment.balance : Math.max(0, amount(form.gross) - amount(form.discount)) }));
   if (!reserve) {
     const guard = deskGuardError({ role, newCharge: false, payment: paid, paymentDate: form.paymentDate, today });
     if (guard) messages.push(guard);
@@ -87,10 +88,14 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
   const balances = useQuery({ queryKey: ['crm-open-balances', form.student?.id], enabled: form.choice === 'existing' && !!form.student && step >= 2,
     queryFn: async () => { const { data, error } = await getBrowserClient().rpc('get_open_balances', { p_student: form.student.id }); if (error) throw error; return data?.rows || []; } });
   const commitments = form.choice === 'existing' ? unlinkedCommitments(balances.data || [], { sessionType: form.session, schoolYear: form.year }) : [];
-  const commitmentKey = commitments.map(c => c.id).join(',');
-  const commitment = commitments.find(c => c.id === form.charge) || null;
-  // Opens on the oldest open commitment unless « Nouvelle session » was chosen.
+  // Another open prospect's reservation is shown (« Ouvrir le prospect »), never selected.
+  const selectable = selectableCommitments(commitments, lead.id);
+  const commitmentKey = selectable.map(c => c.id).join(',');
+  const commitment = selectable.find(c => c.id === form.charge) || null;
+  // Opens on the oldest selectable commitment unless « Nouvelle session » was chosen.
   useEffect(() => { setForm(f => { const ids = commitmentKey ? commitmentKey.split(',') : []; const next = ids.includes(f.charge) ? f.charge : f.newSession || !ids.length ? '' : ids[0]; return next === f.charge ? f : { ...f, charge: next, reserve: next ? false : f.reserve }; }); }, [commitmentKey]);
+  // Next to a commitment, a new charge needs the explicit « Nouvelle session » click.
+  const choiceNeeded = commitments.length > 0 && !commitment && !form.newSession;
   // §6.1 duplicate panel: rows found before saving; dupChecked lets « C’est un autre paiement » through once.
   const [duplicates, setDuplicates] = useState([]), dupChecked = useRef(false);
   const groups = useCrmRead('crm_enrollment_groups', { p_session: form.session, p_level: form.level || null, p_limit: 50, p_offset: groupOffset }, step >= 2);
@@ -132,10 +137,10 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
     const paying = { payment_amount: amount(f.amount), payment_date: f.paymentDate, payment_method: f.method, transaction_reference: f.reference.trim() || null,
       note: f.note.trim() || null, request_email: emailed, email_recipient: emailed ? f.emailRecipient.trim() : null };
     // « Encaisser sur cet engagement »: the stored terms stay; only today's payment is sent.
-    if (f.charge && commitments.some(c => c.id === f.charge)) return { enrollment, payment: { charge_id: f.charge, ...paying } };
+    if (f.charge && selectable.some(c => c.id === f.charge)) return { enrollment, payment: { charge_id: f.charge, ...paying } };
     return { enrollment, payment: { gross_amount: amount(f.gross), discount_amount: amount(f.discount), discount_reason_code: reduced ? f.reasonCode : null,
       discount_reason: reduced && f.reasonCode === 'other' ? f.reasonText.trim() : null, due_date: f.dueDate || null, ...paying,
-      ...(commitments.length ? { new_session: true } : {}) } };
+      ...(f.newSession ? { new_session: true } : {}) } };
   }
   // « Réserver sans paiement » (OD-2 = A): a charge with a due date for this prospect's learner.
   function reservation(f, view) {
@@ -174,7 +179,7 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
     // Re-evaluated now, not at the last render: the birth bound always applies.
     const birth = checked.view.linkedActive ? null : birthDateReason(checked.form.birth);
     if (birth) return fail(reasonFailure(birth), 1);
-    if (!replay && !linking) { const issue = paymentIssues(form, { role, today, commitment }); if (issue) return fail(issue, 3); }
+    if (!replay && !linking) { const issue = paymentIssues(form, { role, today, commitment, choiceNeeded }); if (issue) return fail(issue, 3); }
     // §6.1: the duplicate rule before a payment for a known learner (a lookup failure never blocks).
     if (!replay && !linking && !reserving && paid > 0 && form.choice === 'existing' && form.student && !dupChecked.current) {
       locked.current = true;setSaving(true);
@@ -205,7 +210,13 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
       if (next.submit === false) setBlocked({ intent: null });else if (next.submit === 'until-change') setBlocked({ intent: JSON.stringify(form) });
       let target = next.step || (!next.reason && ['22023', '42501'].includes(err.code) ? 2 : null);
       if (next.recovery === 'pay') setForm(f => ({ ...f, mode: 'pay' }));
-      else if (next.recovery === 'balances') { await balances.refetch();setForm(f => ({ ...f, charge: '', newSession: false, reserve: false })); }
+      else if (next.recovery === 'balances') {
+        // Re-read the balances and open on the oldest selectable commitment, or on no
+        // choice at all: a refusal never lands on « Nouvelle session ».
+        const fresh = await balances.refetch();
+        const first = selectableCommitments(unlinkedCommitments(fresh.data || [], { sessionType: form.session, schoolYear: form.year }), lead.id)[0];
+        setForm(f => ({ ...f, charge: first?.id || '', newSession: false, reserve: false }));
+      }
       else if (next.recovery === 'discovered' || isRecordConflict(err) || next.recovery === 'linked') {
         const latest = await crmRpc('crm_get_workspace_detail', { p_lead: lead.id }).catch(() => null);
         if (latest?.enrollment) { setResult({ data: { lead: latest, enrollment: latest.enrollment }, origin: 'discovered' });await refresh();return; }
@@ -268,13 +279,15 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
       {step === 3 && !linking && <>{summary}
         {balances.isError && <p role="alert" className="text-sm">Soldes indisponibles. <button type="button" className="underline" onClick={() => balances.refetch()}>Réessayer</button></p>}
         {commitments.length > 0 && <OpenBalanceChooser rows={commitments} value={form.charge} title="Engagement sans inscription pour ce programme et cette année" newLabel="Nouvelle session"
+          crmHref={id => `/crm/leads?lead=${id}`} currentLeadId={lead.id} newPressed={form.newSession}
           onChange={id => { setForm(f => ({ ...f, charge: id, newSession: !id, reserve: false }));setFailure(null);setDuplicates([]);dupChecked.current = false; }} />}
-        {!commitment && !form.enrollment && <div role="group" aria-label="Paiement" className="flex flex-wrap gap-2">
+        {choiceNeeded && <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{COMMITMENT_CHOICE}</p>}
+        {!choiceNeeded && !commitment && !form.enrollment && <div role="group" aria-label="Paiement" className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant={form.reserve ? 'outline' : 'default'} aria-pressed={!form.reserve} onClick={() => set('reserve', false)}>Encaisser maintenant</Button>
           {!commitments.length && <Button type="button" size="sm" variant={form.reserve ? 'default' : 'outline'} aria-pressed={form.reserve} onClick={() => set('reserve', true)}>Réserver sans paiement</Button>}
         </div>}
         {reserving && <p className="rounded-lg bg-slate-50 p-3 text-sm">Le montant est dû à l’échéance. Aucun reçu, aucune inscription ni place dans un groupe tant qu’il n’y a pas de paiement ; la prochaine action devient « Encaisser l’acompte ».</p>}
-        <div className="grid gap-3 sm:grid-cols-2">
+        {!choiceNeeded && <><div className="grid gap-3 sm:grid-cols-2">
           {!commitment && <>
           <Field label="Prix brut convenu" name="gross" failure={shown}><input className={input} type="number" min="0" step="0.01" required value={form.gross} onChange={e => set('gross', e.target.value)} placeholder="Aucun prix implicite" /></Field>
           <Field label="Remise (MAD)" name="discount" failure={shown}><input className={input} type="number" min="0" step="0.01" value={form.discount} onChange={e => set('discount', e.target.value)} placeholder="0" />{form.gross !== '' && discount > gross && <span role="alert" className="block text-xs font-medium text-red-800">La remise dépasse le prix.</span>}</Field>
@@ -294,7 +307,7 @@ function EnrollmentForm({ lead, context, refetchContext, onClose, setBusy }) {
         {guardPreview ? <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{guardPreview}</p>
           : free ? <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{FREE_ENROLLMENT_MESSAGE}</p>
             : !reserving && form.amount !== '' && !(paid > 0) && <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{PAYMENT_REQUIRED}</p>}
-        {!reserving && paid > 0 && <div className="space-y-2 rounded-lg border bg-slate-50 p-3 text-sm"><label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={form.requestEmail} onChange={e => set('requestEmail', e.target.checked)} /><span>Envoyer aussi le reçu par e-mail<span className="block text-xs text-slate-500">Facultatif. L’absence d’e-mail ne bloque jamais le paiement ni l’impression.</span></span></label>{form.requestEmail && <Field label="Destinataire e-mail" name="emailRecipient" failure={shown}><input className={input} type="email" required value={form.emailRecipient} onChange={e => set('emailRecipient', e.target.value)} placeholder="famille@exemple.com" /></Field>}</div>}
+        {!reserving && paid > 0 && <div className="space-y-2 rounded-lg border bg-slate-50 p-3 text-sm"><label className="flex items-start gap-2"><input type="checkbox" className="mt-1" checked={form.requestEmail} onChange={e => set('requestEmail', e.target.checked)} /><span>Envoyer aussi le reçu par e-mail<span className="block text-xs text-slate-500">Facultatif. L’absence d’e-mail ne bloque jamais le paiement ni l’impression.</span></span></label>{form.requestEmail && <Field label="Destinataire e-mail" name="emailRecipient" failure={shown}><input className={input} type="email" required value={form.emailRecipient} onChange={e => set('emailRecipient', e.target.value)} placeholder="famille@exemple.com" /></Field>}</div>}</>}
         <DuplicateReceiptPanel matches={duplicates} busy={saving} onCancel={() => setDuplicates([])} onConfirm={() => { dupChecked.current = true;setDuplicates([]);formRef.current?.requestSubmit(); }} />
       </>}
     </fieldset>

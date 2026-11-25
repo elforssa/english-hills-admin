@@ -1,4 +1,4 @@
--- Desk payments (RWR-r5 PR C1, migration 139) acceptance: synthetic local fixtures, fully
+-- Desk payments (RWR-r5 PR C1, migration 138) acceptance: synthetic local fixtures, fully
 -- rolled back. Covers get_open_balances (invariant 12 read), find_duplicate_receipts (§6.1
 -- rule), « Réserver sans paiement » (OD-2 = A: a charge with a due date, linked to the
 -- prospect, no enrollment, no seat, no receipt, no conversion; the next action
@@ -26,6 +26,13 @@ create function pg_temp.owner() returns void language plpgsql as $$ begin
   execute 'reset role';
   perform set_config('request.jwt.claim.sub', '', true);
   perform set_config('request.jwt.claims', '', true);
+end $$;
+-- The service role, as PostgREST and Edge Functions run it with the service key.
+create function pg_temp.svc() returns void language plpgsql as $$ begin
+  execute 'reset role';
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  execute 'set local role service_role';
 end $$;
 create function pg_temp.refused(q text, st text, h text, label text) returns void language plpgsql as $$
 declare s text; hh text; m text; begin
@@ -91,6 +98,11 @@ create function pg_temp.n_charges(s uuid) returns bigint language sql security d
 select pg_temp.ok(has_function_privilege('authenticated', f, 'execute') and not has_function_privilege('anon', f, 'execute'), 'grants ' || f)
 from unnest(array['public.get_open_balances(uuid)', 'public.find_duplicate_receipts(uuid,uuid,numeric,date)',
   'public.crm_reserve_without_payment(uuid,jsonb)', 'public.crm_enroll_and_collect(uuid,jsonb)']) f;
+-- The CRM payment commands act for a signed-in staff member: no service-role grant (127).
+select pg_temp.ok(not has_function_privilege('service_role', f, 'execute'), 'not executable by service_role: ' || f)
+from unnest(array['public.crm_reserve_without_payment(uuid,jsonb)', 'public.crm_enroll_and_collect(uuid,jsonb)']) f;
+select pg_temp.ok((select prosecdef and proconfig @> array['search_path=pg_catalog, pg_temp'] from pg_proc
+  where oid = 'crm_security.reserved_commitment_receipt_guard()'::regprocedure), 'receipt guard: security definer, search_path pinned');
 select pg_temp.ok(not has_table_privilege(r, 'public.crm_charge_reservations', p), 'no table grant ' || r || ' ' || p)
 from unnest(array['anon', 'authenticated', 'service_role']) r, unnest(array['select', 'insert', 'update', 'delete']) p;
 select pg_temp.ok((select relrowsecurity from pg_class where oid = 'public.crm_charge_reservations'::regclass), 'reservations RLS on');
@@ -245,6 +257,15 @@ select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'labe
 select pg_temp.ok((select crm_security.action_label(t) like 'Finaliser l’inscription %' from public.crm_tasks t
   where t.task_type = 'enrollment_followup' and coalesce(t.instructions, '') not like 'Encaisser%' and t.due_at is not null limit 1) is not false,
   'other enrolment actions keep « Finaliser l''inscription »');
+-- The label follows the structured marker (the task's source key), not the text.
+select pg_temp.ok((select source_kind = 'enrollment' and source_key like 'reservation:%:next-action'
+  from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'the action carries the reservation source key');
+select pg_temp.ok(crm_security.action_label(jsonb_populate_record(null::public.crm_tasks, jsonb_build_object(
+  'id', gen_random_uuid(), 'task_type', 'enrollment_followup', 'source_kind', 'enrollment', 'source_key', 'enrollment-followup:x:y',
+  'instructions', 'Encaisser l’acompte', 'due_at', now()))) like 'Finaliser l’inscription %', 'the instruction text alone does not relabel');
+select pg_temp.ok(crm_security.action_label(jsonb_populate_record(null::public.crm_tasks, jsonb_build_object(
+  'id', gen_random_uuid(), 'task_type', 'enrollment_followup', 'source_kind', 'enrollment', 'source_key', 'reservation:x:y:next-action',
+  'instructions', 'Rappeler le prospect', 'due_at', now()))) like 'Encaisser l’acompte %', 'the reservation key labels it, whatever the text');
 select pg_temp.ok((select count(*) = 1 from public.crm_activities where lead_id = pg_temp.uid_of('l1') and event_type = 'charge_reserved'
   and is_primary and command_key like 'reservation:%'), 'one primary history entry');
 select pg_temp.ok((select count(*) = 1 from public.crm_tasks where lead_id = pg_temp.uid_of('l1') and status <> 'open'
@@ -297,6 +318,10 @@ select pg_temp.act(3);
 select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.enrol_existing(pg_temp.uid_of('l1'), pg_temp.uid_of('s1'),
   jsonb_build_object('gross_amount', 3000, 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date()))),
   '22023', 'eap.unlinked_commitment_exists', 'no second charge');
+-- Only an explicit « Nouvelle session » (new_session true) opens a second tuition charge.
+select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.enrol_existing(pg_temp.uid_of('l1'), pg_temp.uid_of('s1'),
+  jsonb_build_object('gross_amount', 3000, 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date(), 'new_session', false))),
+  '22023', 'eap.unlinked_commitment_exists', 'no second charge with new_session false');
 -- « nouvelle session » must be a boolean.
 select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.enrol_existing(pg_temp.uid_of('l1'), pg_temp.uid_of('s1'),
   jsonb_build_object('gross_amount', 3000, 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date(), 'new_session', 'yes'))),
@@ -443,10 +468,15 @@ select pg_temp.act(i), pg_temp.refused(pg_temp.desk_pay(pg_temp.uid_of('s8'), js
   '22023', 'eap.reservation_collect_on_prospect', 'Encaisser on a reserved commitment, role ' || i)
 from unnest(array[1, 2, 3]) i;
 select pg_temp.owner();
--- Nor by a service-role write.
+-- Nor by a service-role write: the guard runs as its owner (SECURITY DEFINER), so it reads
+-- the reservation the service role cannot read and refuses with its own reason.
+select pg_temp.svc();
+select pg_temp.ok(current_user = 'service_role' and not has_table_privilege('public.crm_charge_reservations', 'select')
+  and not has_table_privilege('public.crm_leads', 'select'), 'running as the service role, which cannot read reservations or prospects');
 select pg_temp.refused(format($q$insert into public.receipts(student_id, charge_id, date, nom_prenom, montant_total, montant_paye, mode_paiement)
   values (%L, %L, public.business_date(), 'DP child 8', 3000, 500, 'Espèces')$q$, pg_temp.uid_of('s8'), pg_temp.uid_of('ch8')),
   '22023', 'eap.reservation_collect_on_prospect', 'service-role receipt on a reserved commitment');
+select pg_temp.owner();
 -- Nor through another prospect of the same learner.
 select pg_temp.put('l11', to_jsonb(pg_temp.lead(11)));
 select pg_temp.act(3);
@@ -508,6 +538,15 @@ select pg_temp.put('p80', create_charge_payment(jsonb_build_object('student_id',
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.get('p80')->>'receipt_id' is not null and pg_temp.n_charges(pg_temp.id(680)) = 3
   and (select enrollment_id is not null from public.charges where id = (pg_temp.get('c80')->>'charge_id')::uuid), 'commitment paid at Encaisser with its enrollment');
+-- A service-role receipt on an unreserved charge is written exactly as at 137 (PR #216
+-- review, B1): the guard finds no reservation and lets it through.
+select pg_temp.svc();
+with x as (insert into public.receipts(student_id, charge_id, date, nom_prenom, montant_total, montant_paye, mode_paiement)
+  values (pg_temp.id(680), (pg_temp.get('c80')->>'charge_id')::uuid, public.business_date(), 'DP T one commitment', 3000, 100, 'Espèces') returning id)
+select pg_temp.put('sv80', to_jsonb(x.id)) from x;
+select pg_temp.owner();
+select pg_temp.ok((select charge_id = (pg_temp.get('c80')->>'charge_id')::uuid from public.receipts where id = pg_temp.uid_of('sv80')),
+  'service-role receipt on an unreserved charge written');
 -- A next-session commitment and a charge paid onto the current enrollment the staff chose
 -- (the « Clôturer le cours » shape, 128): a deliberate link passes; without it, refused.
 select pg_temp.put('e80', to_jsonb((select enrollment_id from public.charges where id = (pg_temp.get('c80')->>'charge_id')::uuid)));

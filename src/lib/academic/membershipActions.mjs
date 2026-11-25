@@ -55,7 +55,7 @@ export const EAP_REASON_TEXT = {
   program_not_enrollable: 'Choisissez le programme de l’inscription : « Autre » s’encaisse sans inscription.',
   enrollment_already_charged: 'Cette inscription a déjà un montant enregistré : encaissez sur ce montant depuis le reçu, ou rattachez-la si elle est payée.',
   public_registration_retired: 'Les inscriptions en ligne sont fermées. Contactez le centre.',
-  // RWR-r5 C1 (migration 139): one commitment per learner, programme and year; OD-2 = A.
+  // RWR-r5 C1 (migration 138): one commitment per learner, programme and year; OD-2 = A.
   unlinked_commitment_exists: 'Un engagement sans inscription existe déjà pour ce programme et cette année : encaissez sur cet engagement, ou choisissez « Nouvelle session ».',
   commitment_unavailable: 'Cet engagement ne correspond plus à cet apprenant, ce programme et cette année. Les soldes sont actualisés.',
   reservation_price_required: 'Indiquez le prix convenu (supérieur à la remise) pour réserver sans paiement.',
@@ -63,7 +63,7 @@ export const EAP_REASON_TEXT = {
   reservation_due_required: 'Indiquez la date d’échéance de l’acompte.',
   reservation_due_invalid: 'L’échéance doit être entre aujourd’hui et dans un an.',
   reservation_already_enrolled: 'Cet apprenant a déjà une inscription pour ce programme et cette année : encaissez sur son inscription.',
-  // The 139 payment guards: a reserved commitment is collected only from its prospect's card.
+  // The 138 payment guards: a reserved commitment is collected only from its prospect's card.
   reservation_collect_on_prospect: 'Cet engagement est réservé pour un prospect : encaissez-le depuis la fiche du prospect avec « Inscrire et encaisser ».',
   reservation_append_only: 'Une réservation ne se modifie pas et ne se supprime pas.',
 };

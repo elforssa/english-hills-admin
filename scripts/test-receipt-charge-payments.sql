@@ -142,7 +142,7 @@ end $$;
 
 -- Every current catalog session accepts a charge without level/group. These are open
 -- commitments (no payment, no enrollment); they use their own school year because from
--- migration 139 (RWR-r5 C1, NF-4) « Encaisser » refuses a second charge without a chosen
+-- migration 138 (RWR-r5 C1, NF-4) « Encaisser » refuses a second charge without a chosen
 -- enrollment next to an unlinked commitment of the same programme and year, which the
 -- 2026/2027 payments below would otherwise be.
 do $$ declare session_name text; result jsonb; begin

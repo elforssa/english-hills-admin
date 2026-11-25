@@ -6,15 +6,17 @@
 // Each screen keeps its own payment fields and passes them as children.
 import Link from 'next/link';
 import { AlertTriangle, CalendarClock, CircleDollarSign, Link2, Plus } from 'lucide-react';
-import { DUPLICATE_REASON, balanceLine, duplicateLine, mad, reservedForProspect } from '@/lib/finance/paymentPanel.mjs';
+import { DUPLICATE_REASON, balanceLine, duplicateLine, mad, reservedElsewhere } from '@/lib/finance/paymentPanel.mjs';
 
+// currentLeadId: in a prospect's wizard, that prospect's own reservation stays selectable.
+// newPressed: whether « Nouvelle … » is the explicit choice (default: nothing else chosen).
 export function OpenBalanceChooser({ rows = [], value = '', onChange, newLabel = 'Nouvelle inscription', allowNew = true,
-  crmHref = null, actionLabel = 'Encaisser sur cet engagement', title = 'Soldes ouverts', compact = false }) {
+  crmHref = null, actionLabel = 'Encaisser sur cet engagement', title = 'Soldes ouverts', compact = false, currentLeadId = null, newPressed }) {
   if (!rows.length) return null;
   return <fieldset className="space-y-2" aria-label={title}>
     <legend className="mb-1.5 text-xs font-bold text-slate-600">{title}</legend>
     {rows.map((row) => {
-      const reserved = reservedForProspect(row) && crmHref;
+      const reserved = crmHref && reservedElsewhere(row, currentLeadId);
       const selected = value === row.id;
       return <div key={row.id} className={`rounded-2xl border p-3 ${selected ? 'border-primary bg-primary/[0.05] ring-2 ring-primary/20' : 'bg-white'}`} data-balance-id={row.id}>
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -30,7 +32,7 @@ export function OpenBalanceChooser({ rows = [], value = '', onChange, newLabel =
         </div>
       </div>;
     })}
-    {allowNew && <button type="button" aria-pressed={value === ''} onClick={() => onChange('')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold ${value === '' ? 'bg-slate-900 text-white' : 'border text-slate-700'}`}><Plus size={14} /> {newLabel}</button>}
+    {allowNew && <button type="button" aria-pressed={newPressed ?? value === ''} onClick={() => onChange('')} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold ${(newPressed ?? value === '') ? 'bg-slate-900 text-white' : 'border text-slate-700'}`}><Plus size={14} /> {newLabel}</button>}
   </fieldset>;
 }
 

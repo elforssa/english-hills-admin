@@ -9,6 +9,10 @@
 //   3. OD-2 = A: « Réserver sans paiement » from the wizard (no receipt, no enrollment, no
 //      conversion, next action « Encaisser l'acompte »); « Encaisser » sends that charge back
 //      to the prospect; the wizard then collects it on the same charge and converts.
+//      PR #216 review (B2): in another prospect's wizard for the same learner that
+//      reservation shows « Ouvrir le prospect », is never selected and nothing sends a new
+//      session without the « Nouvelle session » click; after a reservation_collect_on_prospect
+//      refusal (a stale balance read) the screen lands on no choice, never on « Nouvelle session ».
 //   4. The receipts list « Avec solde » filter.
 // Synthetic staff, prospects, learners and payments only, removed in finally. Dates from
 // scripts/lib/centre-days.mjs. No external requests.
@@ -22,6 +26,8 @@ import { LIVE_POLICY, createStaff, localEnv, q, sql } from './lib/crm-next-actio
 import { openDaySql, openSlotSql } from './lib/centre-days.mjs';
 import { removeStaffAndPayments } from './lib/desk-payments-local.mjs';
 import { enrollmentSchoolYear } from '../src/lib/crm/enrollment.mjs';
+import { EAP_REASON_TEXT } from '../src/lib/academic/membershipActions.mjs';
+import { COMMITMENT_CHOICE } from '../src/lib/finance/paymentPanel.mjs';
 
 assertLocalFeatureBranch();
 const env = localEnv(), app = 'http://localhost:3101', run = 'pay-' + randomUUID().slice(0, 8), YEAR = enrollmentSchoolYear();
@@ -206,6 +212,64 @@ try {
   assert.equal(await reservedRow.getByRole('button').count(), 0, '« Encaisser » cannot collect a reserved charge');
   await page.getByRole('button', { name: 'Nouvelle inscription', exact: true, pressed: true }).waitFor();
 
+  // B2 — another open prospect of the same learner: the reservation is not this prospect's.
+  phase = 'reservation of another prospect';
+  const leadR2 = qualified(reception.id, `Contact R2 ${run}`, nameR);
+  const toPayment = async () => {
+    await openWizard(leadR2);
+    await dialog().getByText(nameR, { exact: true }).locator('..').getByRole('button', { name: 'Utiliser cet apprenant', exact: true }).click();
+    await dialog().getByRole('button', { name: 'Continuer', exact: true }).click();
+    await dialog().getByText('2 / 3 · Inscription', { exact: true }).waitFor();
+    await dialog().getByLabel('Année scolaire', { exact: true }).fill(YEAR);
+    await dialog().getByRole('button', { name: 'Continuer', exact: true }).click();
+    await dialog().getByText('3 / 3 · Paiement', { exact: true }).waitFor();
+  };
+  const otherRow = () => dialog().locator(`[data-balance-id="${chargeR}"]`);
+  const newSession = () => dialog().getByRole('button', { name: 'Nouvelle session', exact: true });
+  const nothingChosen = async label => {
+    await otherRow().getByRole('link', { name: 'Ouvrir le prospect' }).waitFor();
+    assert.equal(await otherRow().getByRole('link', { name: 'Ouvrir le prospect' }).getAttribute('href'), `/crm/leads?lead=${leadR}`, `${label}: links to its prospect`);
+    assert.equal(await otherRow().getByRole('button').count(), 0, `${label}: not selectable`);
+    assert.equal(await newSession().getAttribute('aria-pressed'), 'false', `${label}: « Nouvelle session » is not chosen`);
+    assert.equal(await dialog().locator('[data-balance-id] button[aria-pressed=true]').count(), 0, `${label}: no commitment chosen`);
+    await dialog().getByRole('note').filter({ hasText: COMMITMENT_CHOICE }).first().waitFor();
+    assert.equal(await dialog().getByLabel('Prix brut convenu', { exact: true }).count(), 0, `${label}: no new price until « Nouvelle session »`);
+  };
+  await toPayment();
+  await nothingChosen('wizard of another prospect');
+  await footer().getByRole('button', { name: 'Inscrire et encaisser', exact: true }).click();
+  await dialog().getByRole('alert').filter({ hasText: COMMITMENT_CHOICE }).first().waitFor();
+  assert.equal(count(`select count(*) from public.enrollments where student_id=${q(studentR)}`), 0, 'nothing sent without a choice');
+  await page.keyboard.press('Escape');
+  await page.getByText('3 / 3 · Paiement', { exact: true }).waitFor({ state: 'detached' });
+
+  // A stale balance read (the reservation not yet seen) selects it; the server refuses with
+  // reservation_collect_on_prospect, and the re-read lands on no choice.
+  let stale = true;
+  await page.route('**/rest/v1/rpc/get_open_balances', async route => {
+    if (!stale) return route.continue();
+    const response = await route.fetch(), json = await response.json();
+    await route.fulfill({ response, json: { ...json, rows: json.rows.map(row => ({ ...row, reserved_lead_id: null })) } });
+  });
+  await toPayment();
+  await otherRow().locator('button[aria-pressed=true]').filter({ hasText: 'Encaisser sur cet engagement' }).waitFor();
+  await dialog().getByLabel('Montant payé aujourd’hui', { exact: true }).fill('500');
+  stale = false;
+  await footer().getByRole('button', { name: 'Inscrire et encaisser', exact: true }).click();
+  await dialog().getByText(EAP_REASON_TEXT.reservation_collect_on_prospect, { exact: false }).first().waitFor();
+  await nothingChosen('after the refusal');
+  assert.equal(count(`select count(*) from public.receipts where student_id=${q(studentR)}`), 0, 'the refusal wrote no receipt');
+  assert.equal(count(`select count(*) from public.enrollments where student_id=${q(studentR)}`), 0, 'nor an enrollment');
+  assert.equal(status(leadR2), 'QUALIFIED'); assert.equal(status(leadR), 'QUALIFIED');
+  await newSession().click();
+  await dialog().getByLabel('Prix brut convenu', { exact: true }).waitFor();
+  assert.equal(await newSession().getAttribute('aria-pressed'), 'true', '« Nouvelle session » only on its click');
+  await page.unroute('**/rest/v1/rpc/get_open_balances');
+  await page.keyboard.press('Escape');
+  await page.getByText('3 / 3 · Paiement', { exact: true }).waitFor({ state: 'detached' });
+  console.log('PASS B2: another prospect’s reservation is « Ouvrir le prospect », never selected; after a refusal no choice is made');
+
+  phase = 'reservation';
   await openWizard(leadR);
   await dialog().getByText(/^Apprenant rattaché à ce prospect/).waitFor();
   await dialog().getByRole('button', { name: 'Continuer', exact: true }).click();

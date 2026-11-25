@@ -1,5 +1,4 @@
--- Restore for migration 139 (RWR-r5 PR C1, desk payments; provisional number,
--- renumbered with the migration at merge).
+-- Restore for migration 138 (RWR-r5 PR C1, desk payments).
 --
 -- Run only with its own owner approval, after the application is back on a build
 -- without PR C1 (a C1 build calls get_open_balances, find_duplicate_receipts and
@@ -20,21 +19,21 @@
 -- « Encaisser l'acompte » next action stays open (an ordinary enrolment action).
 -- Only the prospect ↔ charge link rows are lost, so the restore refuses, changing
 -- nothing, while reservation rows exist, unless the operator has exported them
--- first and sets eh.restore_139_drop_reservations to 'exported' in the session:
---   \copy (select * from public.crm_charge_reservations) to 'reservations-139.csv' csv header
---   set eh.restore_139_drop_reservations = 'exported';
--- It also refuses unless migration 139 is applied. The ledger row 139 is removed by
+-- first and sets eh.restore_138_drop_reservations to 'exported' in the session:
+--   \copy (select * from public.crm_charge_reservations) to 'reservations-138.csv' csv header
+--   set eh.restore_138_drop_reservations = 'exported';
+-- It also refuses unless migration 138 is applied. The ledger row 138 is removed by
 -- the operator wrapper, not here.
 begin;
 
 do $$ begin
   if to_regclass('public.crm_charge_reservations') is null
      or to_regprocedure('public.crm_reserve_without_payment(uuid,jsonb)') is null then
-    raise exception 'Restore 139: migration 139 is not applied' using errcode = '55000';
+    raise exception 'Restore 138: migration 138 is not applied' using errcode = '55000';
   end if;
   if exists (select 1 from public.crm_charge_reservations)
-     and coalesce(current_setting('eh.restore_139_drop_reservations', true), '') <> 'exported' then
-    raise exception 'Restore 139: reservation rows exist; export them, then set eh.restore_139_drop_reservations = ''exported'''
+     and coalesce(current_setting('eh.restore_138_drop_reservations', true), '') <> 'exported' then
+    raise exception 'Restore 138: reservation rows exist; export them, then set eh.restore_138_drop_reservations = ''exported'''
       using errcode = '55000';
   end if;
 end $$;
@@ -410,15 +409,15 @@ grant execute on function public.create_charge_payment(jsonb) to authenticated;
 do $$ begin
   if (select md5(prosrc) from pg_proc where oid = 'public.crm_enroll_and_collect(uuid,jsonb)'::regprocedure)
      is distinct from '84babfb6f1305fb2cab565bfdf9e5e07' then
-    raise exception 'Restore 139: crm_enroll_and_collect is not the 127 body after the restore' using errcode = 'XX000';
+    raise exception 'Restore 138: crm_enroll_and_collect is not the 127 body after the restore' using errcode = 'XX000';
   end if;
   if (select md5(prosrc) from pg_proc where oid = 'crm_security.action_label(public.crm_tasks)'::regprocedure)
      is distinct from 'fae61b36be35b068532fbd9e29dc10f2' then
-    raise exception 'Restore 139: crm_security.action_label is not the 136 body after the restore' using errcode = 'XX000';
+    raise exception 'Restore 138: crm_security.action_label is not the 136 body after the restore' using errcode = 'XX000';
   end if;
   if (select md5(prosrc) from pg_proc where oid = 'public.create_charge_payment(jsonb)'::regprocedure)
      is distinct from '2263c8d7c1ba4b41f0c863c81b82edd8' then
-    raise exception 'Restore 139: create_charge_payment is not the 127 body after the restore' using errcode = 'XX000';
+    raise exception 'Restore 138: create_charge_payment is not the 127 body after the restore' using errcode = 'XX000';
   end if;
 end $$;
 

@@ -27,6 +27,14 @@ export function unlinkedCommitments(rows = [], { sessionType, schoolYear } = {})
     && (row.school_year || '') === (schoolYear || ''));
 }
 
+// In the wizard of one prospect, a commitment reserved for another open prospect is shown
+// with « Ouvrir le prospect », never selected (the server refuses it; PR #216 review, B2).
+export const reservedElsewhere = (row, leadId) => reservedForProspect(row) && row.reserved_lead_id !== leadId;
+export const selectableCommitments = (rows = [], leadId = null) => rows.filter(row => !reservedElsewhere(row, leadId));
+// Next to an unlinked commitment the wizard sends a new charge only on an explicit
+// « Nouvelle session »; with neither chosen it says so before sending anything.
+export const COMMITMENT_CHOICE = 'Choisissez l’engagement à encaisser, ou « Nouvelle session ».';
+
 export function balanceLine(row) {
   const what = [row.session_type === 'Legacy' ? 'Ancien solde' : row.session_type, row.school_year].filter(Boolean).join(' · ');
   return `${what} · reste ${mad(row.balance)}`;

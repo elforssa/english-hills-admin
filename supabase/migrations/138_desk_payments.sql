@@ -2,7 +2,7 @@
 -- Plan: docs/architecture/plans/receptionist-workflow.md §6.1, §7 (invariants 12
 -- and 13), §8 (PR C1). OD-2 = A, OD-7 = A (owner approval of 2026-11-25).
 --
--- PROVISIONAL NUMBER 139 (PR B1 holds 138): renumber at merge.
+-- Number 138: C1 merges before PR B1, which rebases onto it as 139 (owner, 2026-11-25).
 --
 -- What it does:
 --  * public.get_open_balances(student): every live charge of a learner with a
@@ -26,10 +26,11 @@
 --    enrolment action, due on the due date) through crm_security.set_next_action,
 --    so migration 137's one-action index and deferred triggers apply unchanged.
 --  * public.crm_charge_reservations: append-only link table, no API grant.
---  * crm_security.action_label re-created from its 136 body with one change: an
---    enrolment action whose instructions start with « Encaisser l'acompte » is
---    labelled so on the card, the drawer, the Tâches row and the calendar
---    (invariant 9); every other label is unchanged.
+--  * crm_security.action_label re-created from its 136 body with one change: the
+--    enrolment action written by crm_reserve_without_payment (source key
+--    « reservation:… », a structured marker, not the instruction text) is
+--    labelled « Encaisser l'acompte » on the card, the drawer, the Tâches row and
+--    the calendar (invariant 9); every other label is unchanged.
 --  * Payment guards (section 7): a row trigger on receipts refuses any receipt on a
 --    commitment reserved for a prospect that is still open, whatever the path (it is
 --    collected only through « Inscrire et encaisser » on that prospect); and
@@ -50,21 +51,21 @@
 do $$ begin
   if (select md5(prosrc) from pg_proc where oid = 'public.crm_enroll_and_collect(uuid,jsonb)'::regprocedure)
      is distinct from '84babfb6f1305fb2cab565bfdf9e5e07' then
-    raise exception 'Migration 139: crm_enroll_and_collect differs from its 127 body; rebuild 139 on the live definition'
+    raise exception 'Migration 138: crm_enroll_and_collect differs from its 127 body; rebuild 138 on the live definition'
       using errcode = '55000';
   end if;
   if (select md5(prosrc) from pg_proc where oid = 'crm_security.action_label(public.crm_tasks)'::regprocedure)
      is distinct from 'fae61b36be35b068532fbd9e29dc10f2' then
-    raise exception 'Migration 139: crm_security.action_label differs from its 136 body; rebuild 139 on the live definition'
+    raise exception 'Migration 138: crm_security.action_label differs from its 136 body; rebuild 138 on the live definition'
       using errcode = '55000';
   end if;
   if (select md5(prosrc) from pg_proc where oid = 'public.create_charge_payment(jsonb)'::regprocedure)
      is distinct from '2263c8d7c1ba4b41f0c863c81b82edd8' then
-    raise exception 'Migration 139: create_charge_payment differs from its 127 body; rebuild 139 on the live definition'
+    raise exception 'Migration 138: create_charge_payment differs from its 127 body; rebuild 138 on the live definition'
       using errcode = '55000';
   end if;
   if to_regclass('public.crm_tasks_one_open_per_lead') is null then
-    raise exception 'Migration 139: needs migration 137 (one next action enforced)' using errcode = '55000';
+    raise exception 'Migration 138: needs migration 137 (one next action enforced)' using errcode = '55000';
   end if;
 end $$;
 
@@ -317,7 +318,7 @@ begin
     'replayed_enrollment', v_replayed,
     'replayed_payment', coalesce((v_pay->>'replayed')::boolean, false));
 end $function$;
-revoke all on function public.crm_enroll_and_collect(uuid, jsonb) from public, anon;
+revoke all on function public.crm_enroll_and_collect(uuid, jsonb) from public, anon, service_role;
 grant execute on function public.crm_enroll_and_collect(uuid, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -483,12 +484,15 @@ exception
   when check_violation or not_null_violation then
     raise exception 'Invalid reservation fields' using errcode = '22023', hint = 'crm_enrollment.record_rejected';
 end $$;
-revoke all on function public.crm_reserve_without_payment(uuid, jsonb) from public, anon;
+revoke all on function public.crm_reserve_without_payment(uuid, jsonb) from public, anon, service_role;
 grant execute on function public.crm_reserve_without_payment(uuid, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. The label of « Encaisser l'acompte » (one label in every view, invariant 9).
---    The 136 body, verbatim except the enrollment_followup line.
+--    The 136 body, verbatim except the enrollment_followup line. The marker is the
+--    task's source key, written by crm_reserve_without_payment through
+--    set_next_action ('reservation:<lead>:<request>:next-action'); a reschedule
+--    keeps it and an edited instruction does not change the label.
 -- ---------------------------------------------------------------------------
 create or replace function crm_security.action_label(t public.crm_tasks)
  returns text language sql stable set search_path to 'pg_catalog','pg_temp' as $function$
@@ -501,7 +505,7 @@ create or replace function crm_security.action_label(t public.crm_tasks)
    when 'confirm_placement_test' then 'Confirmer le test de niveau'
    when 'post_test_followup' then 'Proposer l’inscription'
    when 'center_visit' then 'Rendez-vous au centre'
-   when 'enrollment_followup' then case when t.instructions like 'Encaisser l’acompte%' then 'Encaisser l’acompte' else 'Finaliser l’inscription' end
+   when 'enrollment_followup' then case when t.source_kind='enrollment' and t.source_key like 'reservation:%' then 'Encaisser l’acompte' else 'Finaliser l’inscription' end
    when 'awaiting_prospect' then 'En attente du prospect'
    else t.task_type end
   ||case when t.due_at is null then ''
@@ -525,8 +529,12 @@ $function$;
 --     is written on the charge. « Inscrire et encaisser » links the prospect to
 --     its new enrollment before paying, so its own receipt passes; a prospect that
 --     is closed without enrolling leaves an ordinary commitment.
+--     SECURITY DEFINER (owner decision on the PR #216 review, 2026-11-25): it reads
+--     reservations and prospects, which the service role cannot read, so a receipt
+--     on an unreserved charge is written exactly as at 137 by every role. Its
+--     search_path is pinned and no API role can execute it.
 create function crm_security.reserved_commitment_receipt_guard() returns trigger
-language plpgsql set search_path = pg_catalog, pg_temp as $$
+language plpgsql security definer set search_path = pg_catalog, pg_temp as $$
 begin
   if new.charge_id is not null and exists (
       select 1 from public.crm_charge_reservations r join public.crm_leads l on l.id = r.lead_id
