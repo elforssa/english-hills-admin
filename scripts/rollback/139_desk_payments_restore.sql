@@ -10,7 +10,10 @@
 -- re-creates crm_security.action_label in its exact 136 body (« Encaisser l'acompte »
 -- is labelled « Finaliser l'inscription » again),
 -- and drops get_open_balances, find_duplicate_receipts, crm_reserve_without_payment,
--- the crm_charge_reservations table and its append-only trigger function.
+-- the crm_charge_reservations table and its append-only trigger function, and the
+-- receipt guard on reserved commitments with its trigger function; re-creates
+-- public.create_charge_payment in its exact 127 body (no « second charge at
+-- Encaisser » check) with its grants.
 --
 -- What it keeps on purpose: every charge a reservation created stays (an ordinary
 -- open commitment of the learner, still collected from « Encaisser »), and every
@@ -36,6 +39,9 @@ do $$ begin
   end if;
 end $$;
 
+-- The section 7 receipt guard first: it reads crm_charge_reservations.
+drop trigger receipts_reserved_commitment_guard on public.receipts;
+drop function crm_security.reserved_commitment_receipt_guard();
 drop function public.crm_reserve_without_payment(uuid, jsonb);
 drop function public.find_duplicate_receipts(uuid, uuid, numeric, date);
 drop function public.get_open_balances(uuid);
@@ -192,6 +198,215 @@ end $function$
 revoke all on function public.crm_enroll_and_collect(uuid, jsonb) from public, anon;
 grant execute on function public.crm_enroll_and_collect(uuid, jsonb) to authenticated;
 
+-- create_charge_payment: the 127 body, verbatim (prosrc md5 2263c8d7c1ba4b41f0c863c81b82edd8).
+CREATE OR REPLACE FUNCTION public.create_charge_payment(p_payload jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+declare
+  v_result jsonb;
+  v_charge public.charges%rowtype;
+  v_enrollment public.enrollments%rowtype;
+  v_requested_id uuid := nullif(p_payload->>'enrollment_id','')::uuid;
+  v_enrollment_id uuid;
+  v_prior_request public.financial_requests%rowtype;
+  v_crm_matches integer;
+  v_matches uuid[];
+  v_year text;
+  v_constraint text;
+  v_free boolean := false;
+  v_lead public.crm_leads%rowtype;
+  v_last_clear timestamptz;
+begin
+  -- Same staff boundary as the inner financial command; never trust caller roles.
+  perform operational_security.require_capability('manage_finance_operations');
+  -- Payments share this lock with other payments, preserving the existing
+  -- financial idempotency/charge serialization. CRM linkage takes it exclusively.
+  if nullif(p_payload->>'student_id','') is not null and not pg_try_advisory_xact_lock_shared(
+    hashtextextended('crm:enrollment-intent:'||(p_payload->>'student_id')::uuid,0)) then
+    raise exception 'Inscription ou paiement en cours. Actualisez les inscriptions puis réessayez.' using errcode='PT409';
+  end if;
+  -- Lock before inner charge/receipt foreign-key reads to avoid lock upgrades
+  -- between simultaneous payments for the same student. Existing locks remain.
+  perform 1 from public.students where id=nullif(p_payload->>'student_id','')::uuid for update;
+  -- The inner function enforces staff authorization, payment validation and
+  -- idempotency before the wrapper makes any academic changes.
+  v_result := public.create_charge_payment_financial(p_payload);
+  if coalesce((v_result->>'replayed')::boolean, false) then
+    select * into v_prior_request from public.financial_requests
+    where idempotency_key = (p_payload->>'idempotency_key')::uuid;
+    if v_prior_request.requested_enrollment_id is distinct from v_requested_id then
+      raise exception 'Idempotency key conflict: selected enrollment changed.';
+    end if;
+    return v_result;
+  end if;
+  update public.financial_requests set requested_enrollment_id = v_requested_id
+  where idempotency_key = (p_payload->>'idempotency_key')::uuid;
+  if (v_result->>'receipt_id') is null then
+    -- EAP (D2, Q1 = A): a zero payment stays a commitment without an enrollment,
+    -- except when this request created a new tuition charge discounted at 100 %
+    -- with its reason: that agreement confirms the enrollment without a receipt
+    -- (the director sees it in the discounts section of Contrôles).
+    if nullif(p_payload->>'charge_id','') is not null then
+      return v_result;
+    end if;
+    select * into v_charge from public.charges
+    where id = (v_result->>'charge_id')::uuid for update;
+    if v_charge.session_type = 'Other' or v_charge.legacy or v_charge.gross_amount <= 0
+       or v_charge.discount_amount is distinct from v_charge.gross_amount
+       or not exists (select 1 from public.charge_discount_reasons dr where dr.charge_id = v_charge.id) then
+      return v_result;
+    end if;
+    v_free := true;
+  else
+    select * into v_charge from public.charges
+    where id = (v_result->>'charge_id')::uuid for update;
+  end if;
+  if nullif(p_payload->>'student_id','') is null then
+    update public.students set session_type = v_charge.session_type,
+      niveau_cefr = coalesce(v_charge.level, niveau_cefr)
+    where id = v_charge.student_id;
+  end if;
+  -- EGC (D3-A, FIN-10): a receipt no longer sets the learner's status; an Other
+  -- or legacy receipt changes none, a tuition receipt confirms an enrollment.
+  if v_charge.session_type = 'Other' or v_charge.legacy then
+    if v_requested_id is not null then
+      raise exception 'This service cannot be linked to a tuition enrollment.';
+    end if;
+    return v_result || jsonb_build_object('student_enrolled', false);
+  end if;
+
+  -- Lock the student across different charges in the same request period.
+  perform 1 from public.students where id = v_charge.student_id for update;
+  if v_charge.enrollment_id is not null and v_requested_id is not null
+    and v_charge.enrollment_id <> v_requested_id then
+    raise exception 'Charge is already linked to another enrollment.';
+  end if;
+  v_enrollment_id := coalesce(v_charge.enrollment_id, v_requested_id);
+
+  if v_enrollment_id is null then
+    -- Guard only the implicit tuition-enrollment creation branch. Explicit charge
+    -- or request links retain 074 validation. Exceptions roll back the entire
+    -- inner financial transaction, including receipt/event/student side effects.
+    select count(*) into v_crm_matches
+    from public.crm_leads l join public.enrollments e on e.id=l.enrollment_id
+    join public.students s on s.id=e.student_id
+    where e.student_id=v_charge.student_id and s.deleted_at is null
+      and e.status is distinct from 'Rejected' and e.status is distinct from 'Ended' and l.merged_into_lead_id is null
+      and coalesce(e.session_type,s.session_type)=v_charge.session_type
+      -- Unknown year on an old charge cannot establish a distinct intent.
+      and (v_charge.school_year is null or crm_security.enrollment_year(e)=v_charge.school_year);
+    if v_crm_matches>0 then
+      raise exception '%',case when v_crm_matches=1
+        then 'Une inscription CRM existe pour ce programme et cette année. Sélectionnez-la avant d’enregistrer le paiement.'
+        else 'Plusieurs inscriptions CRM correspondent. Sélectionnez explicitement l’inscription à payer.' end
+        using errcode='22023';
+    end if;
+    -- EGC (D-5, I3): reuse the learner's single active enrollment of this
+    -- programme and year that is not CRM-linked. An undated (pre-057) charge
+    -- matches an undated enrollment or one of the current school year, which
+    -- the new or confirmed enrollment receives (I9).
+    v_year := coalesce(v_charge.school_year, academic_security.school_year_on(academic_security.today()));
+    select array_agg(e.id order by e.id) into v_matches from public.enrollments e
+    where e.student_id = v_charge.student_id and e.session_type = v_charge.session_type
+      and e.status in ('Submitted','Under Review','Confirmed','Validated','Trial')
+      and (e.school_year = v_charge.school_year
+        or (v_charge.school_year is null and (e.school_year is null or e.school_year = v_year)))
+      and not exists (select 1 from public.crm_leads l where l.enrollment_id = e.id);
+    if cardinality(v_matches) > 1 then
+      raise exception 'Plusieurs inscriptions correspondent. Sélectionnez l’inscription à payer.' using errcode='22023';
+    end if;
+    v_enrollment_id := v_matches[1];
+  end if;
+
+  begin
+  if v_enrollment_id is not null then
+    select * into v_enrollment from public.enrollments
+    where id = v_enrollment_id for update;
+    if not found or v_enrollment.student_id is distinct from v_charge.student_id
+      or v_enrollment.status = 'Rejected'
+      -- An ended enrollment only takes payments on its own charge (an old balance).
+      or (v_enrollment.status = 'Ended' and v_charge.enrollment_id is distinct from v_enrollment.id)
+      or (v_enrollment.session_type is not null
+          and v_enrollment.session_type <> v_charge.session_type)
+      or (v_enrollment.school_year is not null and v_charge.school_year is not null
+          and v_enrollment.school_year <> v_charge.school_year) then
+      raise exception 'Selected enrollment does not match this student, session and school year.';
+    end if;
+    if v_enrollment.status is distinct from 'Ended' then
+      update public.enrollments set
+        session_type = v_charge.session_type,
+        school_year = coalesce(v_charge.school_year, v_enrollment.school_year, crm_security.enrollment_year(v_enrollment)),
+        level = coalesce(v_enrollment.level, v_charge.level),
+        status = case
+          when status in ('Submitted','Under Review') then
+            case when group_id is null then 'Confirmed' else 'Validated' end
+          when status = 'Trial' then 'Validated'
+          else status end
+      where id = v_enrollment_id;
+    end if;
+  else
+    insert into public.enrollments
+      (student_id, status, date_inscription, session_type, school_year, level)
+    values (v_charge.student_id, 'Confirmed',
+            public.business_date(), v_charge.session_type, v_year, v_charge.level)
+    returning id into v_enrollment_id;
+  end if;
+  exception when unique_violation then
+    get stacked diagnostics v_constraint = constraint_name;
+    if v_constraint = 'enrollments_one_active_programme_year' then perform academic_security.duplicate(); end if;
+    raise;
+  end;
+
+  update public.charges set enrollment_id = v_enrollment_id
+  where id = v_charge.id and enrollment_id is distinct from v_enrollment_id;
+  update public.receipts set enrollment_id = v_enrollment_id
+  where id = (v_result->>'receipt_id')::uuid;
+  select * into v_enrollment from public.enrollments where id = v_enrollment_id;
+
+  -- E-2 (P1.4, Q1 = B): this payment is live and linked; clear a review flag only
+  -- when a payment-cancellation review follows the last clear, no review of the
+  -- lead was ever raised for another reason (all time: an enrollment downgrade's
+  -- activity is timestamped at its command start and may predate a later clear),
+  -- and the conversion was not from LOST/NOT_QUALIFIED. Leads are locked last.
+  if not v_free and v_enrollment.status in ('Confirmed','Validated') then
+    for v_lead in select * from public.crm_leads
+      where enrollment_id = v_enrollment_id and merged_into_lead_id is null and conversion_review_required
+      order by id for update
+    loop
+      select max(occurred_at) into v_last_clear from public.crm_activities
+      where lead_id = v_lead.id and event_type = 'conversion_review_cleared';
+      if exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
+          and a.event_type = 'conversion_review_required' and (v_last_clear is null or a.occurred_at > v_last_clear))
+        and not exists (select 1 from public.crm_activities a where a.lead_id = v_lead.id
+          and a.event_type = 'conversion_review_required' and a.details->>'reason' is distinct from 'payment_voided')
+        and not exists (select 1 from public.crm_activities c where c.id = v_lead.conversion_activity_id
+          and c.from_status in ('LOST','NOT_QUALIFIED')) then
+        insert into public.crm_activities(lead_id, enrollment_id, receipt_id, occurred_at, actor_id, actor_kind,
+          event_type, source_key, body, details)
+        values (v_lead.id, v_enrollment_id, (v_result->>'receipt_id')::uuid, clock_timestamp(), auth.uid(),
+          case when auth.uid() is null then 'system' else 'user' end, 'conversion_review_cleared',
+          'payment-review-cleared:'||(v_result->>'receipt_id'),
+          'Paiement de remplacement enregistré : vérification levée.',
+          jsonb_build_object('receipt_id', v_result->>'receipt_id'));
+        update public.crm_leads set conversion_review_required = false, version = version + 1, updated_at = now()
+        where id = v_lead.id;
+      end if;
+    end loop;
+  end if;
+
+  return v_result || jsonb_build_object('enrollment_id', v_enrollment_id,
+                                       'enrollment_confirmed', v_enrollment.status in ('Confirmed','Validated'),
+                                       'free_enrollment', v_free,
+                                       'group_pending', v_enrollment.status = 'Confirmed' and v_enrollment.group_id is null,
+                                       'student_enrolled', v_enrollment.status in ('Confirmed','Validated'));
+end;
+$function$;
+revoke all on function public.create_charge_payment(jsonb) from public, anon;
+grant execute on function public.create_charge_payment(jsonb) to authenticated;
+
 do $$ begin
   if (select md5(prosrc) from pg_proc where oid = 'public.crm_enroll_and_collect(uuid,jsonb)'::regprocedure)
      is distinct from '84babfb6f1305fb2cab565bfdf9e5e07' then
@@ -200,6 +415,10 @@ do $$ begin
   if (select md5(prosrc) from pg_proc where oid = 'crm_security.action_label(public.crm_tasks)'::regprocedure)
      is distinct from 'fae61b36be35b068532fbd9e29dc10f2' then
     raise exception 'Restore 139: crm_security.action_label is not the 136 body after the restore' using errcode = 'XX000';
+  end if;
+  if (select md5(prosrc) from pg_proc where oid = 'public.create_charge_payment(jsonb)'::regprocedure)
+     is distinct from '2263c8d7c1ba4b41f0c863c81b82edd8' then
+    raise exception 'Restore 139: create_charge_payment is not the 127 body after the restore' using errcode = 'XX000';
   end if;
 end $$;
 

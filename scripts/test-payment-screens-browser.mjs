@@ -229,11 +229,15 @@ try {
   await page.goto(`${app}/receipts?q=${encodeURIComponent(`Solde ${run}`)}`);
   const rows = name => page.getByRole('row').filter({ hasText: name });
   await rows(`Solde ${run} réglé`).first().waitFor();
+  await rows(`Solde ${run} ouvert`).nth(2).waitFor();
   assert.equal(await rows(`Solde ${run} ouvert`).count(), 3);
   await page.getByRole('button', { name: 'Avec solde', exact: true }).click();
   await page.waitForURL(url => url.searchParams.get('solde') === '1');
   await rows(`Solde ${run} réglé`).first().waitFor({ state: 'detached' });
+  // The filtered list reloads (briefly empty on a slow runner): wait for its rows, then count.
+  await rows(`Solde ${run} ouvert`).nth(2).waitFor();
   assert.equal(await rows(`Solde ${run} ouvert`).count(), 3, 'receipts of a charge with a balance stay');
+  assert.equal(await rows(`Solde ${run} réglé`).count(), 0, 'the settled learner’s receipts are filtered out');
   await page.getByText(/Reste aujourd’hui : /).first().waitFor();
   console.log('PASS « Avec solde »: only receipts whose charge still has a balance');
 

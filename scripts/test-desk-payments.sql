@@ -284,6 +284,10 @@ select pg_temp.refused(format('select public.crm_reserve_without_payment(gen_ran
 select pg_temp.owner();
 
 -- ── 5. « Inscrire et encaisser » with an unlinked commitment ────────────────
+-- A payment at the « Encaisser » screen (create_charge_payment), as the SQL text pg_temp.refused runs.
+create function pg_temp.desk_pay(s uuid, extra jsonb) returns text language sql as $$
+  select format('select public.create_charge_payment(%L)', jsonb_build_object('student_id', s, 'payment_amount', 500,
+    'payment_method', 'Espèces', 'payment_date', public.business_date(), 'idempotency_key', gen_random_uuid()) || extra) $$;
 create function pg_temp.enrol_existing(l uuid, s uuid, payment jsonb) returns jsonb language sql as $$
   select jsonb_build_object('enrollment', jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
     'student_choice', 'existing', 'student_id', s, 'session_type', 'Yearly', 'school_year', '2026/2027', 'level', 'Child 2'),
@@ -315,6 +319,12 @@ select pg_temp.put('ns', public.crm_enroll_and_collect(gen_random_uuid(), pg_tem
   jsonb_build_object('gross_amount', 3000, 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date(), 'new_session', true))));
 select pg_temp.owner();
 select pg_temp.ok(pg_temp.n_charges(pg_temp.uid_of('s1')) = 2 and pg_temp.get('ns')->>'receipt_id' is not null, 'explicit new session creates its own charge');
+-- « Nouvelle session » belongs to « Inscrire et encaisser »: the Encaisser screen is still
+-- refused a new charge without a chosen enrollment next to the reserved commitment.
+select pg_temp.act(3);
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.uid_of('s1'), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser after a new session: still one commitment rule');
+select pg_temp.owner();
 rollback to savepoint new_session;
 
 -- « Encaisser sur cet engagement »: pay 1000 on the reserved charge.
@@ -406,6 +416,112 @@ select pg_temp.refused(format('select public.crm_reserve_without_payment(gen_ran
   'session_type', 'Yearly', 'school_year', '2026/2027', 'level', 'Child 2', 'gross_amount', 3000, 'due_date', public.business_date() + 2)),
   '22023', 'eap.reservation_already_enrolled', 'already enrolled');
 select pg_temp.owner();
+
+-- ── 8. Payment guards on every path (owner review of PR #216) ──────────────
+-- Every charge and receipt is written by create_charge_payment_financial, which is not
+-- API-executable; it is reached through create_charge_payment, crm_enroll_and_collect and
+-- crm_reserve_without_payment. A row trigger on receipts holds the reservation rule on all
+-- of them and on service-role writes; each command holds the one-commitment rule.
+select pg_temp.ok((select count(*) = 1 from pg_trigger where not tgisinternal and tgenabled = 'O'
+  and tgrelid = 'public.receipts'::regclass and tgname = 'receipts_reserved_commitment_guard'), 'the receipt guard is an enabled row trigger');
+select pg_temp.ok(not has_function_privilege(r, 'crm_security.reserved_commitment_receipt_guard()', 'execute'), 'receipt guard not executable by ' || r)
+from unnest(array['anon', 'authenticated', 'service_role']) r;
+select pg_temp.ok(not has_function_privilege(r, 'public.create_charge_payment_financial(jsonb)', 'execute'), 'financial command not executable by ' || r)
+from unnest(array['anon', 'authenticated']) r;
+select pg_temp.ok(not exists (select 1 from pg_proc p where p.prosrc ~* 'insert\s+into\s+(public\.)?(charges|receipts)\M'
+  and p.oid <> 'public.create_charge_payment_financial(jsonb)'::regprocedure), 'only the financial command inserts charges and receipts');
+
+-- (a) A commitment reserved for an open prospect is paid only through « Inscrire et
+--     encaisser » on that prospect (ADR-015): never at the Encaisser screen, by any role.
+select pg_temp.put('l8', to_jsonb(pg_temp.lead(8)));
+select pg_temp.act(3);
+select pg_temp.put('r8', public.crm_reserve_without_payment(gen_random_uuid(), pg_temp.reserve_new(pg_temp.uid_of('l8'), 8)));
+select pg_temp.owner();
+select pg_temp.put('s8', pg_temp.get('r8')->'student'->'id');
+select pg_temp.put('ch8', pg_temp.get('r8')->'charge'->'id');
+select pg_temp.act(i), pg_temp.refused(pg_temp.desk_pay(pg_temp.uid_of('s8'), jsonb_build_object('charge_id', pg_temp.uid_of('ch8'))),
+  '22023', 'eap.reservation_collect_on_prospect', 'Encaisser on a reserved commitment, role ' || i)
+from unnest(array[1, 2, 3]) i;
+select pg_temp.owner();
+-- Nor by a service-role write.
+select pg_temp.refused(format($q$insert into public.receipts(student_id, charge_id, date, nom_prenom, montant_total, montant_paye, mode_paiement)
+  values (%L, %L, public.business_date(), 'DP child 8', 3000, 500, 'Espèces')$q$, pg_temp.uid_of('s8'), pg_temp.uid_of('ch8')),
+  '22023', 'eap.reservation_collect_on_prospect', 'service-role receipt on a reserved commitment');
+-- Nor through another prospect of the same learner.
+select pg_temp.put('l11', to_jsonb(pg_temp.lead(11)));
+select pg_temp.act(3);
+select pg_temp.refused(format('select public.crm_enroll_and_collect(gen_random_uuid(), %L)', pg_temp.enrol_existing(pg_temp.uid_of('l11'), pg_temp.uid_of('s8'),
+  jsonb_build_object('charge_id', pg_temp.uid_of('ch8'), 'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date()))),
+  '22023', 'eap.reservation_collect_on_prospect', 'another prospect of the learner');
+select pg_temp.owner();
+select pg_temp.ok(not exists (select 1 from public.receipts where charge_id = pg_temp.uid_of('ch8'))
+  and not exists (select 1 from public.enrollments where student_id = pg_temp.uid_of('s8'))
+  and (select enrollment_id is null and status = 'QUALIFIED' from public.crm_leads where id = pg_temp.uid_of('l8')), 'refused payments wrote nothing');
+-- A prospect closed without enrolling leaves an ordinary commitment: Encaisser takes it
+-- and the payment confirms an enrollment, as for any commitment (ADR-015).
+select pg_temp.act(3);
+select public.crm_close_prospect(gen_random_uuid(), jsonb_build_object('lead_id', pg_temp.uid_of('l8'),
+  'expected_version', pg_temp.ver(pg_temp.uid_of('l8')), 'status', 'LOST', 'reason', 'not_interested'));
+select pg_temp.put('p8', public.create_charge_payment(jsonb_build_object('student_id', pg_temp.uid_of('s8'), 'charge_id', pg_temp.uid_of('ch8'),
+  'payment_amount', 500, 'payment_method', 'Espèces', 'payment_date', public.business_date(), 'idempotency_key', gen_random_uuid())));
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.get('p8')->>'receipt_id' is not null
+  and (select e.status = 'Confirmed' from public.charges c join public.enrollments e on e.id = c.enrollment_id where c.id = pg_temp.uid_of('ch8')),
+  'closed prospect: an ordinary commitment, paid with its enrollment');
+
+-- (b) No second charge (NF-4) at the Encaisser screen: a new tuition charge without a
+--     chosen enrollment next to a live unlinked commitment of the same programme and year.
+insert into public.students(id, full_name, status, session_type) values (pg_temp.id(680), 'DP T one commitment', 'Prospect', 'Yearly');
+select pg_temp.act(3);
+select pg_temp.put('b80', jsonb_build_object('student_id', pg_temp.id(680), 'session_type', 'Yearly', 'school_year', '2026/2027',
+  'gross_amount', 3000, 'payment_amount', 0, 'due_date', public.business_date() + 5, 'idempotency_key', gen_random_uuid()));
+select pg_temp.put('c80', create_charge_payment(pg_temp.get('b80')));
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: a paid second charge');
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000, 'payment_amount', 0)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: a second commitment');
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000, 'new_session', true)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: new_session in the payload is no override');
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000,
+  'discount_amount', 3000, 'discount_reason_code', 'director_approval', 'payment_amount', 0)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: a 100 % discounted second charge');
+select pg_temp.act(1);
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 3000)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser: the director too');
+select pg_temp.owner();
+select pg_temp.act(3);
+select pg_temp.put('o80', create_charge_payment(jsonb_build_object('student_id', pg_temp.id(680), 'session_type', 'Other', 'school_year', '2026/2027',
+  'service_detail', 'Manuel', 'gross_amount', 200, 'payment_amount', 200, 'payment_method', 'Espèces', 'payment_date', public.business_date(),
+  'idempotency_key', gen_random_uuid())));
+select pg_temp.put('y80', create_charge_payment(jsonb_build_object('student_id', pg_temp.id(680), 'session_type', 'Yearly', 'school_year', '2027/2028',
+  'gross_amount', 3000, 'payment_amount', 0, 'idempotency_key', gen_random_uuid())));
+-- A retry of the commitment's own request still replays (the rule never refuses it).
+select pg_temp.put('c80r', create_charge_payment(pg_temp.get('b80')));
+select pg_temp.owner();
+select pg_temp.ok((pg_temp.get('c80r')->>'replayed')::boolean and pg_temp.get('c80r')->>'charge_id' = pg_temp.get('c80')->>'charge_id', 'retry replays');
+select pg_temp.ok(pg_temp.get('o80')->>'receipt_id' is not null and pg_temp.get('y80')->>'charge_id' is not null, '« Autre » and another year are outside the rule');
+select pg_temp.ok(pg_temp.n_charges(pg_temp.id(680)) = 3, 'the commitment, « Autre » and another year');
+-- The commitment itself is collected at Encaisser (it is not reserved for a prospect).
+select pg_temp.act(3);
+select pg_temp.put('p80', create_charge_payment(jsonb_build_object('student_id', pg_temp.id(680), 'charge_id', pg_temp.get('c80')->>'charge_id',
+  'payment_amount', 1000, 'payment_method', 'Espèces', 'payment_date', public.business_date(), 'idempotency_key', gen_random_uuid())));
+select pg_temp.owner();
+select pg_temp.ok(pg_temp.get('p80')->>'receipt_id' is not null and pg_temp.n_charges(pg_temp.id(680)) = 3
+  and (select enrollment_id is not null from public.charges where id = (pg_temp.get('c80')->>'charge_id')::uuid), 'commitment paid at Encaisser with its enrollment');
+-- A next-session commitment and a charge paid onto the current enrollment the staff chose
+-- (the « Clôturer le cours » shape, 128): a deliberate link passes; without it, refused.
+select pg_temp.put('e80', to_jsonb((select enrollment_id from public.charges where id = (pg_temp.get('c80')->>'charge_id')::uuid)));
+select pg_temp.act(3);
+select pg_temp.put('n80', create_charge_payment(jsonb_build_object('student_id', pg_temp.id(680), 'session_type', 'Yearly', 'school_year', '2026/2027',
+  'gross_amount', 1500, 'payment_amount', 0, 'due_date', public.business_date() + 30, 'idempotency_key', gen_random_uuid())));
+select pg_temp.put('x80', create_charge_payment(jsonb_build_object('student_id', pg_temp.id(680), 'enrollment_id', pg_temp.uid_of('e80'),
+  'session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 400, 'payment_amount', 100, 'payment_method', 'Espèces',
+  'payment_date', public.business_date(), 'idempotency_key', gen_random_uuid())));
+select pg_temp.refused(pg_temp.desk_pay(pg_temp.id(680), jsonb_build_object('session_type', 'Yearly', 'school_year', '2026/2027', 'gross_amount', 400)),
+  '22023', 'eap.unlinked_commitment_exists', 'Encaisser without a chosen enrollment next to the next-session commitment');
+select pg_temp.owner();
+select pg_temp.ok((select enrollment_id from public.charges where id = (pg_temp.get('x80')->>'charge_id')::uuid) = pg_temp.uid_of('e80')
+  and (select enrollment_id is null from public.charges where id = (pg_temp.get('n80')->>'charge_id')::uuid), 'chosen enrollment passes; the commitment stays open');
 
 set constraints all immediate;
 rollback;

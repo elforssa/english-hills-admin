@@ -3,7 +3,9 @@
 // second charge when two staff members act on the same learner at once. Covers « Encaisser »
 // (create_charge_payment), « Inscrire et encaisser » (crm_enroll_and_collect, with and
 // without « Encaisser sur cet engagement »), « Réserver sans paiement »
-// (crm_reserve_without_payment) and the director's void (void_financial_receipt).
+// (crm_reserve_without_payment) and the director's void (void_financial_receipt), and the 139
+// payment guards (no receipt on a commitment reserved for an open prospect outside its card,
+// no second charge from « Encaisser ») with two staff members at once.
 // Synthetic rows only; run on a database at the current migrations (139 or later). Never
 // reads .env.local or accepts a URL from the environment. Booking and due dates come from
 // scripts/lib/centre-days.mjs (weekday-independent).
@@ -192,6 +194,45 @@ const check = (cond, label) => { assert(cond, label); checks += 1; console.log(`
       student_choice: 'existing', student_id: s3, session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', gross_amount: 3000, due_date: dueDate } }));
   check([r1, r2].filter(r => !r.error).length === 1 && [r1, r2].every(r => !r.error || OK_CONFLICT.has(r.error.code)), 'two staff reserve at once: one wins');
   check(count(`select count(*) from charges where student_id=${q(s3)}`) === 1, 'two staff reserve at once: one charge');
+}
+
+// ── 4. The 139 payment guards with two staff members at once ────────────────
+{
+  // Two « Encaisser » openings create a tuition charge for the same learner, programme and
+  // year at once (a commitment and a payment): one charge, the other refused.
+  const s = newStudent(`RID guard ${tag}`);
+  const terms = { session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', gross_amount: 3000 };
+  const [a, b] = await both(
+    () => rpc(reception, 'create_charge_payment', { p_payload: pay(s, { ...terms, payment_amount: 0, due_date: dueDate, idempotency_key: randomUUID() }) }),
+    () => rpc(reception2, 'create_charge_payment', { p_payload: pay(s, { ...terms, payment_amount: 0, due_date: dueDate, idempotency_key: randomUUID() }) }));
+  check([a, b].filter(r => !r.error).length === 1 && [a, b].every(r => !r.error || OK_CONFLICT.has(r.error.code)), 'two staff, two commitments at once: one wins');
+  check([a, b].some(r => r.error?.hint === 'eap.unlinked_commitment_exists' || r.error?.code === 'PT409'), 'two staff: the other is refused (no second charge)');
+  check(count(`select count(*) from charges where student_id=${q(s)}`) === 1, 'two staff, two commitments at once: one charge');
+  const later = await rpc(admin, 'create_charge_payment', { p_payload: pay(s, { ...terms, idempotency_key: randomUUID() }) });
+  check(later.error?.hint === 'eap.unlinked_commitment_exists', 'Encaisser: no paid second charge next to the commitment');
+
+  // A commitment reserved for a prospect: one staff member collects it from the prospect's
+  // card while another tries « Encaisser » on it. Every receipt on it belongs to the
+  // prospect's own enrollment; the screen is refused while the prospect is open.
+  const lead = qualifiedLead(4);
+  const name = `RID child ${tag} 4`;
+  const reserved = await rpc(reception, 'crm_reserve_without_payment', { p_request_key: randomUUID(), p_data: { lead_id: lead, expected_version: version(lead),
+    student_choice: 'new', learner_name: name, birth_date: '2015-03-04', candidate_review: token(lead, name, '2015-03-04'), confirm_new: true,
+    session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2', gross_amount: 3000, due_date: dueDate } });
+  assert.ifError(reserved.error);
+  const charge = reserved.data.charge.id, student = reserved.data.student.id;
+  const direct = await rpc(director, 'create_charge_payment', { p_payload: pay(student, { charge_id: charge, idempotency_key: randomUUID() }) });
+  check(direct.error?.hint === 'eap.reservation_collect_on_prospect', 'Encaisser on a reserved commitment: refused, even for the director');
+  const [x, y] = await both(
+    () => rpc(reception, 'crm_enroll_and_collect', { p_request_key: randomUUID(), p_data: { enrollment: { lead_id: lead, expected_version: version(lead),
+      student_choice: 'existing', student_id: student, session_type: 'Yearly', school_year: '2026/2027', level: 'Child 2' },
+      payment: { charge_id: charge, payment_amount: 1000, payment_method: 'Espèces', payment_date: today } } }),
+    () => rpc(reception2, 'create_charge_payment', { p_payload: pay(student, { charge_id: charge, idempotency_key: randomUUID() }) }));
+  check([x, y].every(r => !r.error || OK_CONFLICT.has(r.error.code)), 'collect and Encaisser at once: clean answers');
+  check(sql(`select status from crm_leads where id=${q(lead)}`) === 'CONVERTED' || Boolean(x.error), 'collected from the card: prospect converted');
+  check(count(`select count(*) from receipts r where r.charge_id=${q(charge)} and r.voided_at is null
+    and r.enrollment_id is distinct from (select enrollment_id from crm_leads where id=${q(lead)})`) === 0, 'every receipt on the reserved commitment is the prospect’s enrollment');
+  check(count(`select count(*) from charges where student_id=${q(student)} and voided_at is null`) === 1, 'reserved learner: one charge');
 }
 
 // Invariant 13 over the run: no receipt shares an idempotency key, no request two receipts.

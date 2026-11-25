@@ -140,11 +140,15 @@ do $$ declare c record; begin
   if coalesce((select (result->>'replayed')::boolean from test_results where name='retry'),false) is not true then raise exception 'Idempotent retry did not replay'; end if;
 end $$;
 
--- Every current catalog session accepts a charge without level/group.
+-- Every current catalog session accepts a charge without level/group. These are open
+-- commitments (no payment, no enrollment); they use their own school year because from
+-- migration 139 (RWR-r5 C1, NF-4) « Encaisser » refuses a second charge without a chosen
+-- enrollment next to an unlinked commitment of the same programme and year, which the
+-- 2026/2027 payments below would otherwise be.
 do $$ declare session_name text; result jsonb; begin
   foreach session_name in array array['Yearly','Adults','Summer Camp','Communication Junior','Communication Adult','One-to-One','Mise à niveau','Other'] loop
     result := public.create_charge_payment(jsonb_build_object(
-      'student_id','20000000-0000-0000-0000-000000000001','session_type',session_name,'school_year','2026/2027',
+      'student_id','20000000-0000-0000-0000-000000000001','session_type',session_name,'school_year','2028/2029',
       'service_detail',case when session_name='Other' then 'Autre service synthétique' else null end,
       'plan_type','Standard','gross_amount','1.25','discount_amount','0.25','discount_reason_code','promotion','payment_amount','0',
       'payment_method','Espèces','idempotency_key',gen_random_uuid()));

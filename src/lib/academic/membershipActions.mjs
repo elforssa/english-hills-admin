@@ -63,6 +63,9 @@ export const EAP_REASON_TEXT = {
   reservation_due_required: 'Indiquez la date d’échéance de l’acompte.',
   reservation_due_invalid: 'L’échéance doit être entre aujourd’hui et dans un an.',
   reservation_already_enrolled: 'Cet apprenant a déjà une inscription pour ce programme et cette année : encaissez sur son inscription.',
+  // The 139 payment guards: a reserved commitment is collected only from its prospect's card.
+  reservation_collect_on_prospect: 'Cet engagement est réservé pour un prospect : encaissez-le depuis la fiche du prospect avec « Inscrire et encaisser ».',
+  reservation_append_only: 'Une réservation ne se modifie pas et ne se supprime pas.',
 };
 
 export function eapReason(hint) {

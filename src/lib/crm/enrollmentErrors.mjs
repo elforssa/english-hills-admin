@@ -69,6 +69,10 @@ export const EAP_REASONS = {
   reservation_due_required: { message: EAP_REASON_TEXT.reservation_due_required, step: 3, field: 'dueDate', submit: true, recovery: 'correct' },
   reservation_due_invalid: { message: EAP_REASON_TEXT.reservation_due_invalid, step: 3, field: 'dueDate', submit: true, recovery: 'correct' },
   reservation_already_enrolled: { message: EAP_REASON_TEXT.reservation_already_enrolled, step: 2, field: null, submit: true, recovery: 'enrollments' },
+  // A commitment reserved for another open prospect of this learner: the balances are
+  // re-read; « Nouvelle session » stays available. A reservation is never edited.
+  reservation_collect_on_prospect: { message: EAP_REASON_TEXT.reservation_collect_on_prospect, step: 3, field: null, submit: true, recovery: 'balances' },
+  reservation_append_only: { message: EAP_REASON_TEXT.reservation_append_only, step: null, field: null, submit: false, recovery: 'escalate' },
 };
 export const PAID_LINK_REFUSED_MESSAGE = 'Aucun paiement n’est enregistré pour cette inscription : saisissez le paiement pour la confirmer.';
 // Payment refusals of create_charge_payment (122) carry no hint. The desk guard answers
