@@ -204,6 +204,11 @@ try {
   assert.equal(sql(`select string_agg(task_type||':'||coalesce(instructions,''),',') from public.crm_tasks where lead_id=${q(leadR)} and status='open'`), 'enrollment_followup:Encaisser l’acompte', 'one next action: « Encaisser l’acompte »');
   await dialog().getByRole('button', { name: 'Terminé', exact: true }).click();
   await page.getByTestId('next-action-panel').getByTestId('next-action-label').filter({ hasText: 'Encaisser l’acompte' }).waitFor();
+  // Invariant 9: the Opportunités list row shows the same server label as the card and drawer.
+  await page.goto(`${app}/crm/leads?layout=list&q=${encodeURIComponent(`Contact R ${run}`)}`);
+  const listRow = page.getByTestId('opportunity-row').filter({ hasText: `Contact R ${run}` });
+  await listRow.getByText(/^Encaisser l’acompte /).waitFor();
+  assert.equal(await listRow.getByText('Finaliser l’inscription', { exact: false }).count(), 0, 'the list row never shows « Finaliser l’inscription » for it');
 
   await encaisser(studentR);
   const reservedRow = page.locator(`[data-balance-id="${chargeR}"]`);

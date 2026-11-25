@@ -1129,6 +1129,7 @@ Migration 138: C1 merges first and PR B1 rebases onto it as 139 (owner, 2026-11-
 - **`crm_enroll_and_collect`.** Re-created from the 127 body. The payment may name `charge_id` (an unlinked live commitment of the same learner, programme and year, validated under lock, else `eap.commitment_unavailable`); without it, a new tuition charge next to an unlinked live charge of the same programme and year is refused (`eap.unlinked_commitment_exists`) unless `new_session` is true. A zero payment on a commitment is refused (`eap.payment_required`). No `service_role` EXECUTE (as at 127).
 - **`crm_reserve_without_payment(request_key, data)`.** Enrolment-intent lock, replay through `crm_command_requests`, prospect, programme, level, price and due-date checks (due date from the business date to one year), new or existing learner as in `crm_start_enrollment`, refusals next to an unlinked commitment or an active enrollment, then the charge through `create_charge_payment_financial` (payment 0, stable key), the reservation row, one primary history entry and the next action through `crm_security.set_next_action` (`enrollment_followup`, reminder, due on the due date, instructions « Encaisser l’acompte »). The 137 index and deferred triggers check the result; no bypass. Granted to `authenticated` only (no `service_role` EXECUTE, as for `crm_enroll_and_collect`).
 - **`crm_security.action_label`.** The 136 body with one change: the enrolment action written by `crm_reserve_without_payment` is labelled « Encaisser l’acompte » on every view (invariant 9). The marker is structured: the task's source key (`reservation:<lead>:<request>:next-action`, source kind `enrollment`), not the instruction text, so a reschedule keeps the label and an edited instruction does not change it.
+- **`crm_security.set_next_action`.** The 137 body (prosrc md5 `0b48aedd…`, checked in the precondition) with one block: when an « Encaisser l’acompte » action is replaced by another enrolment action (« Changer » to a new date, or an exchange that keeps the enrolment step) while its reservation is open (a live charge without an enrollment), the new action carries the marker (source kind `enrollment`, key `reservation:<lead>:moved:<command>:next-action`). A different kind of action, a close or the payment ends it. The restore file re-creates the 137 body and checks its md5.
 - **Rows.** The migration writes no row. **Restore file:** `scripts/rollback/138_desk_payments_restore.sql` (refuses while reservation rows exist unless exported; restores the 127 and 136 bodies and checks their md5; keeps reserved charges and open actions as ordinary rows). Restore and re-apply were run on the private stack.
 
 **Application.**
@@ -1182,10 +1183,17 @@ The reviewer's full text was not pasted into the implementation session; the fix
 - **Nits.** `crm_reserve_without_payment` and `crm_enroll_and_collect` have no `service_role` EXECUTE (tested). The server label uses the task's source key (above, tested both ways).
 - **Renumbered** to 138 with its restore file, every test that names it and the upgrade-lane ceilings (`max = 138`, 138 in the lists).
 
+**Re-review of PR #216 at `84e8432` (2026-11-25): CHANGES REQUIRED, one finding (invariant 9).** The Opportunités list rendered `taskTitle(lead.next_task)`, whose payload has no instructions or source key, so it showed « Finaliser l’inscription » where the card, drawer, Tâches and calendar show « Encaisser l’acompte ». Fixed as the reviewer proposed: the list renders `lead.next_action.label` (as `OpportunityCard` does), the action dialog's result card renders `result.next_action.label`, `taskTitle` lost its instruction-text branch, and `test-payment-screens-browser.mjs` checks the list row.
+
+**Owner decision (Maroine, 2026-11-25), verbatim:**
+
+> Owner decision (Maroine, 2026-11-25): moving an « Encaisser l'acompte » action to a new date with « Changer » (same enrolment kind, same open reservation) keeps the « Encaisser l'acompte » label on every screen. The marker carries over to the new action. Only a different kind of action, a close or a payment ends it. Implement it in 138 (not applied yet) through set_next_action, with a test. Record my decision verbatim in the plan's implementation record.
+
+Implemented in 138 through `set_next_action` (above). `test-desk-payments.sql` moves the action twice with `crm_change_next_action` (one open action each time, a new action carrying the marker, the label kept, the previous action replaced), then checks that another kind of action, a close (and a reopen to an enrolment action) and the payment end it.
+
 **Residuals (not in this PR).**
 
 - Prices are typed (no catalogue until PR B2).
-- The client-side `taskTitle` fallback (the action dialog's result card, which reads `crm_list_open_tasks`) still recognises « Encaisser l’acompte » by the instruction text: that read carries the instructions but not the source key, and adding it means re-creating one more read function. The server label (card, drawer, Tâches, calendar) uses the structured marker. The Opportunités list's `next_task` carries neither field and shows « Finaliser l’inscription » for that action. Listed per the owner's nit.
 - Integration with PR B1 (E.164 for the reservation's new learner, reservations following prospect merges) is B1's, as migration 139.
 
 **Tests.**

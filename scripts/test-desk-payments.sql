@@ -270,6 +270,55 @@ select pg_temp.ok((select count(*) = 1 from public.crm_activities where lead_id 
   and is_primary and command_key like 'reservation:%'), 'one primary history entry');
 select pg_temp.ok((select count(*) = 1 from public.crm_tasks where lead_id = pg_temp.uid_of('l1') and status <> 'open'
   and task_type = 'enrollment_followup'), 'the previous « Finaliser l''inscription » was replaced, not left open');
+
+-- Owner decision (2026-11-25): « Changer » to a new date (same enrolment kind, same
+-- open reservation) keeps « Encaisser l'acompte » on every screen; the marker carries
+-- over through set_next_action. A different kind of action or a close ends it.
+savepoint moved;
+create function pg_temp.change(l uuid, nxt jsonb) returns jsonb language plpgsql as $$ begin
+  return public.crm_change_next_action(gen_random_uuid(), jsonb_build_object('lead_id', l, 'expected_version', pg_temp.ver(l),
+    'expected_action_id', (select id from pg_temp.open_tasks(l)), 'next', nxt));
+end $$;
+select pg_temp.put('t_before', to_jsonb((select id from pg_temp.open_tasks(pg_temp.uid_of('l1')))));
+select pg_temp.act(3);
+select pg_temp.change(pg_temp.uid_of('l1'), jsonb_build_object('task_type', 'enrollment_followup', 'due_at', now() + interval '3 days'));
+select pg_temp.owner();
+select pg_temp.ok((select count(*) = 1 from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'moved: still one open action');
+select pg_temp.ok((select id <> pg_temp.uid_of('t_before') and source_kind = 'enrollment' and source_key like 'reservation:%:moved:%:next-action'
+  and due_at > now() + interval '2 days' from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'moved: a new action that carries the marker');
+select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'label' like 'Encaisser l’acompte %'), 'moved: still « Encaisser l''acompte »');
+select pg_temp.ok((select status = 'cancelled' from public.crm_tasks where id = pg_temp.uid_of('t_before')), 'moved: the previous action is replaced');
+-- Moved twice: the marker carries over again.
+select pg_temp.act(3);
+select pg_temp.change(pg_temp.uid_of('l1'), jsonb_build_object('task_type', 'enrollment_followup', 'due_at', now() + interval '5 days'));
+select pg_temp.owner();
+select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'label' like 'Encaisser l’acompte %'
+  and (select count(*) = 1 from pg_temp.open_tasks(pg_temp.uid_of('l1')))), 'moved twice: still « Encaisser l''acompte »');
+-- A different kind of action ends it; coming back to an enrolment action is « Finaliser l'inscription ».
+savepoint other_kind;
+select pg_temp.act(3);
+select pg_temp.change(pg_temp.uid_of('l1'), jsonb_build_object('task_type', 'callback', 'schedule_kind', 'reminder', 'due_preset', 'tomorrow',
+  'cancel_enrollment_reason', 'Le contact rappellera'));
+select pg_temp.owner();
+select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'label' not like 'Encaisser%'), 'another kind: the label ends');
+select pg_temp.act(3);
+select pg_temp.change(pg_temp.uid_of('l1'), jsonb_build_object('task_type', 'enrollment_followup', 'due_at', now() + interval '4 days'));
+select pg_temp.owner();
+select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'label' like 'Finaliser l’inscription %'
+  and (select source_key not like 'reservation:%' from pg_temp.open_tasks(pg_temp.uid_of('l1')))), 'after another kind: « Finaliser l''inscription »');
+rollback to savepoint other_kind;
+-- A close ends it: reopened to an enrolment action, it is « Finaliser l'inscription ».
+select pg_temp.act(3);
+select public.crm_close_prospect(gen_random_uuid(), jsonb_build_object('lead_id', pg_temp.uid_of('l1'),
+  'expected_version', pg_temp.ver(pg_temp.uid_of('l1')), 'status', 'LOST', 'reason', 'not_interested'));
+select pg_temp.owner();
+select pg_temp.ok(not exists (select 1 from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'closed: no open action');
+select pg_temp.act(3);
+select public.crm_reopen_prospect(gen_random_uuid(), jsonb_build_object('lead_id', pg_temp.uid_of('l1'), 'expected_version', pg_temp.ver(pg_temp.uid_of('l1')),
+  'reason', 'Revient', 'next', jsonb_build_object('task_type', 'enrollment_followup', 'due_preset', 'tomorrow')));
+select pg_temp.owner();
+select pg_temp.ok((select crm_security.next_action(pg_temp.uid_of('l1'))->>'label' like 'Finaliser l’inscription %'), 'after a close: « Finaliser l''inscription »');
+rollback to savepoint moved;
 -- « Encaisser » sees the reservation and its prospect (collected from the CRM card).
 select pg_temp.act(3);
 select pg_temp.ok((select r->>'reserved_lead_id' = pg_temp.get('l1') #>> '{}' and r->>'enrollment_id' is null
@@ -365,6 +414,7 @@ select pg_temp.ok(pg_temp.n_charges(pg_temp.uid_of('s1')) = 1, 'no second charge
 select pg_temp.ok((select enrollment_id = (pg_temp.get('r2')->'enrollment'->>'id')::uuid from public.charges where id = pg_temp.uid_of('ch1')),
   'commitment linked to the enrollment');
 select pg_temp.ok((select status = 'CONVERTED' from public.crm_leads where id = pg_temp.uid_of('l1')), 'prospect converted at payment (ADR-015)');
+select pg_temp.ok(not exists (select 1 from pg_temp.open_tasks(pg_temp.uid_of('l1'))), 'the payment ends « Encaisser l''acompte »: no open action');
 select pg_temp.ok((select status = 'Confirmed' from public.enrollments where id = (pg_temp.get('r2')->'enrollment'->>'id')::uuid), 'enrollment confirmed');
 select pg_temp.act(3);
 select pg_temp.ok((select r->>'reserved_lead_id' is null and (r->>'balance')::numeric = 2000

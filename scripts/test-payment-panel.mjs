@@ -10,7 +10,7 @@ import {
   paymentAmounts, paymentErrors, reservedElsewhere, reservedForProspect, selectableCommitments, unlinkedCommitments,
 } from '../src/lib/finance/paymentPanel.mjs';
 import { enrollmentFailure } from '../src/lib/crm/enrollmentErrors.mjs';
-import { DEPOSIT_ACTION, taskTitle } from '../src/lib/crm/presentation.mjs';
+import { taskTitle } from '../src/lib/crm/presentation.mjs';
 
 let count = 0;
 const test = (name, fn) => { fn(); count += 1; };
@@ -114,8 +114,8 @@ test('new refusals map to French texts and recoveries', () => {
   for (const hint of ['eap.reservation_price_required', 'eap.reservation_due_invalid']) assert.doesNotMatch(failure(hint).message, /[A-Z][a-z]+ [a-z]+ required/);
 });
 
-test('« Encaisser l’acompte » label', () => {
-  assert.equal(taskTitle({ task_type: 'enrollment_followup', instructions: 'Encaisser l’acompte' }), DEPOSIT_ACTION);
+test('« Encaisser l’acompte » is the server label, never read from the instruction text', () => {
+  assert.equal(taskTitle({ task_type: 'enrollment_followup', instructions: 'Encaisser l’acompte' }), 'Finaliser l’inscription');
   assert.equal(taskTitle({ task_type: 'enrollment_followup', instructions: 'Finaliser l’inscription avec le contact.' }), 'Finaliser l’inscription');
 });
 
