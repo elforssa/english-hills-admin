@@ -638,7 +638,7 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
   - **The two risks, owner's words (closeout review, 2026-11-23), verbatim:**
 
     > Before « go » I was told the PR has no rollback file and no Production backup exists, and I accepted both.
-- **Data step D1 — APPROVED and DONE (2026-11-23).** Done: `d1_apply` committed 11:39:41 UTC with exactly the approved counts (a 19 prospects / 45 actions, 26 cancelled; b 0; c 18; d 0; tests cancelled 0; open actions 186 → 178); journal 99 rows (37 / 26 / 36: each of the 18 created actions is journalled twice by design); Q04, Q05, Q07 and Q29 = 0; a full backup verified by a restore before the write, kept by the owner outside the repository ([D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23)). `d1_revert` stays available until M-A2, only on the owner's request. **Next: A2**, with its own approvals.
+- **Data step D1 — APPROVED and DONE (2026-11-23).** Done: `d1_apply` committed 11:39:41 UTC with exactly the approved counts (a 19 prospects / 45 actions, 26 cancelled; b 0; c 18; d 0; tests cancelled 0; open actions 186 → 178); journal 99 rows (37 / 26 / 36: each of the 18 created actions is journalled twice by design); Q04, Q05, Q07 and Q29 = 0; a full backup verified by a restore before the write, kept by the owner outside the repository ([D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23)). `d1_revert` was available until M-A2, which dropped it on 2026-11-24. **Next (at the time): A2** — done 2026-11-24 ([A2 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-a2--2026-11-24)).
   - **Gates, as the owner recorded them:** the default owner set in Settings at 11:07 UTC (« Reception EH », a receptionist account); A1 released; the backup, the fresh `d1_plan()` counts and the time window as in the approvals below.
   - **Preparation approval, owner's words, verbatim excerpt** (the full text is in the [D1 record](../architecture/plans/receptionist-workflow.md#release-record-data-step-d1--2026-11-23); the backup folder's path is left out of this public repository):
 
@@ -657,6 +657,23 @@ Plan: [receptionist workflow](../architecture/plans/receptionist-workflow.md), r
     > Stop and roll back on any mismatch. Must finish before 15:00 centre time; if not, stop safely and tell me. Not authorized: M-A2, any migration, hours or policy changes, d1_revert unless I ask. Report the results, then stop; documentation of D1 is a separate change.
 
   - **Not authorized:** M-A2 and A2's implementation, any migration, hours or follow-up policy changes, `d1_revert` unless the owner asks; each needs a separate approval.
+- **PR A2 release (M-A2, migration 137) — APPROVED and DONE (2026-11-24).** Done: PR #214 squash-merged at approved head `9d67598` as `0bb8f27` at 15:51:54 UTC and deployed (GitHub `Production` deployment `8033071523` `success` 15:53:13 UTC); 137 applied 15:54:10–12 UTC; acceptance clean ([A2 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-a2--2026-11-24)). **Release A (A1, D1, A2) is complete and enforced in the database.** The owner accepted that `d1_revert` disappears with 137; undoing 137 (restore file plus ledger row 137) needs the owner's separate approval and does not bring D1 back.
+  - **Release approval and window, owner's words, verbatim excerpt** (full text in the [A2 release record](../architecture/plans/receptionist-workflow.md#release-record-pr-a2--2026-11-24)):
+
+    > Owner release approval (Maroine, 2026-11-24): I approve releasing PR #214 (RWR-r5 PR A2) at exact head 9d67598227e628c571bd8fa2544a753e6c158085. The independent review verdict on that head is READY FOR FINAL REVIEW; Verify run 45419634414 is green (attempt 2; attempt 1 was a registry outage). I confirm the D1 results are fine and I accept that d1_revert disappears with 137.
+    >
+    > Window: do it now
+    >
+    > […]
+    >
+    > Not authorized: any other migration or data step, changing hours or policy, the 24-table hardening. Hand off with the merge SHA, deployed SHA, ledger, acceptance results and recovery notes; documentation is a separate change.
+
+  - **« go », owner's words, verbatim:**
+
+    > Go
+
+  - **Next:** B1 and C1 (they can run in parallel), then B2 (needs the 2026/2027 programme prices, OD-16), C2 and data steps D3–D7; each needs the owner's separate approval.
+  - **Not authorized:** any other migration or data step, hours or follow-up policy changes, the hardening of the 24 public tables that grant `DELETE` and `TRUNCATE` to `anon` and `authenticated` (a separate PR, not started).
 
 ## Deferred backlog after RCC-r1
 
