@@ -50,10 +50,20 @@ create function pg_temp.booking(l uuid) returns jsonb language sql as $$
  'task_id',(select id from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1),
  'expected_task_version',(select version from public.crm_tasks where lead_id=l and status='open' and task_type='confirm_placement_test' order by due_at,id limit 1))
 $$;
+-- Weekday-independent move target (Verify run 45784920732, a Thursday: the booking lands on
+-- Saturday and « date_test+1 » on the closed Sunday). The server picks it, as
+-- scripts/lib/centre-days.mjs does for the Node suites: the first centre date from `from_day`
+-- on which hh:mm is inside the current policy's opening hours (closed dates included).
+create function pg_temp.open_day(from_day date,hhmm text) returns date language sql as $$
+ select d from (select from_day+n d from generate_series(0,30) n) x
+ where crm_security.window_at(crm_security.current_policy_id(),'opening',(d+hhmm::time) at time zone public.centre_utc_offset())
+       =(d+hhmm::time) at time zone public.centre_utc_offset()
+ order by d limit 1
+$$;
 create function pg_temp.center_counts() returns jsonb language sql as $$
  select jsonb_build_array((select count(*) from public.students),(select count(*) from public.enrollments),(select count(*) from public.charges),(select count(*) from public.receipts))
 $$;
-do $$ declare l uuid:=pg_temp.qualified(); req uuid:=gen_random_uuid(); d jsonb:=pg_temp.booking(l); r jsonb; p uuid; before_counts jsonb:=pg_temp.center_counts(); before_time timestamptz; q jsonb; t public.crm_tasks%rowtype; version bigint; other uuid; begin
+do $$ declare l uuid:=pg_temp.qualified(); req uuid:=gen_random_uuid(); d jsonb:=pg_temp.booking(l); r jsonb; p uuid; before_counts jsonb:=pg_temp.center_counts(); before_time timestamptz; q jsonb; t public.crm_tasks%rowtype; version bigint; other uuid; moved date; begin
  r:=public.crm_book_placement_test(req,d);p:=(r->'placement'->>'id')::uuid;
  perform pg_temp.ok(pg_temp.center_counts()=before_counts,'booking never creates student/enrollment/charge/receipt');
  perform pg_temp.ok((select student_id is null and crm_lead_id=l and status='Planifié' and niveau_recommande is null from public.placement_tests where id=p),'nullable student and no fake A1');
@@ -74,9 +84,12 @@ do $$ declare l uuid:=pg_temp.qualified(); req uuid:=gen_random_uuid(); d jsonb:
  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',req,q||'{"notes":"changed"}'));
  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q||'{"expected_updated_at":"1970-01-01T00:00:00Z"}'),'PT409');
  perform pg_temp.denied(format('select public.crm_update_placement_test(%L,%L)',gen_random_uuid(),q||jsonb_build_object('crm_lead_id',l)));
- -- Ordinary generic edits must preserve and audit the same row.
+ -- Ordinary generic edits must preserve and audit the same row. The move goes to the
+ -- next open day at 11:30 (never the closed Sunday), chosen before the role switch.
+ moved:=pg_temp.open_day((select date_test from public.placement_tests where id=p)+1,'11:30');
+ perform pg_temp.ok(moved is not null,'an open day at 11:30 for the move');
  execute 'set local role authenticated';
- update public.placement_tests set date_test=date_test+1,heure='11:30' where id=p;
+ update public.placement_tests set date_test=moved,heure='11:30' where id=p;
  perform pg_temp.denied(format('update public.placement_tests set crm_lead_id=null where id=%L',p),'42501');
  delete from public.placement_tests where id=p;
  perform pg_temp.ok((select count(*)=1 from public.placement_tests where id=p),'receptionist delete is denied by RLS');
